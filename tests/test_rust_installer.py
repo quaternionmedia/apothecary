@@ -414,6 +414,24 @@ def test_an_archive_member_that_leaves_its_folder_is_refused(tmp_path):
         ri.unpack(badzip, tmp_path / "into")
 
 
+@pytest.mark.parametrize("link", ["sym", "hard"])
+def test_a_link_in_a_tarball_is_refused_where_python_has_no_data_filter(
+    tmp_path, monkeypatch, link
+):
+    """Before Python 3.11.4 tarfile has no ``data`` filter, which alone sees where a link
+    points: there a link member is refused rather than unpacked."""
+    archive = tmp_path / "links.tar.xz"
+    with tarfile.open(archive, "w:xz") as tf:
+        member = tarfile.TarInfo("pkg/escape")
+        member.type = tarfile.SYMTYPE if link == "sym" else tarfile.LNKTYPE
+        member.linkname = "../../../etc/passwd" if link == "sym" else "pkg/other"
+        tf.addfile(member)
+    monkeypatch.delattr(tarfile, "data_filter", raising=False)
+    with pytest.raises(ri.InstallError, match="is a link"):
+        ri.unpack(archive, tmp_path / "out")
+    assert not (tmp_path / "out" / "pkg" / "escape").exists()
+
+
 def test_a_machine_without_a_linker_is_refused_with_what_installs_one(tmp_path, monkeypatch):
     monkeypatch.setattr(ri.shutil, "which", lambda name: None)
     monkeypatch.setenv("ProgramFiles(x86)", str(tmp_path))
