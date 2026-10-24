@@ -56,7 +56,7 @@ cover it:
 
     >>> from apothecary.preflight import LOCAL_DIFFERENCES
     >>> sorted(LOCAL_DIFFERENCES)
-    ['one-pr-check.yml', 'pytest.yml']
+    ['one-pr-check.yml', 'pytest.yml', 'rust.yml']
     >>> "uv run pytest" in LOCAL_DIFFERENCES["pytest.yml"].covered_by
     True
 
@@ -64,6 +64,13 @@ cover it:
 run has none; the body is checked by the same script before it is posted:
 
     >>> "check_pr_voice.py" in LOCAL_DIFFERENCES["one-pr-check.yml"].covered_by
+    True
+
+`rust.yml` runs the runner's own stable `cargo`, which a machine with no Rust on
+its PATH has not; the same check, run at the root with any stable Rust, covers
+it:
+
+    >>> "cargo check --workspace" in LOCAL_DIFFERENCES["rust.yml"].covered_by
     True
 
 That is the rule `apothecary/preflight.py` holds. An excuse with no local
