@@ -37,6 +37,7 @@ doctests, run by `pytest walkthrough`. Start there, at page 00.
 |---|---|
 | [The viewer](viewer.md) | The page's own controls: the header and ⚙ View, the world and its faded walls and badges, the ring and its addresses, the windows, the part editor and the SCAD editor, the keys |
 | [Windows and focused systems](windows-and-systems.md) | For an author: a window of the page -- where it opens, what a browser remembers, an empty one -- and a focused system's registry entry, its widget's hook, and the tests that hold each |
+| [Lighting](lighting.md) | A site's lighting rig -- fixture types, a patch, live levels -- the theatre site that uses it, another console's exports in its place, and a console's levels by sACN or OSC |
 | [OpenSCAD](openscad.md) | Installing a snapshot with Manifold on each platform, which OpenSCAD a render uses, what 2021.01 cannot do, how many run at once |
 | [Scene JSON format](scene-json.md) | Scenes, primitives, booleans and transforms as JSON |
 | [Parts authoring](parts-authoring.md) | How to add a part, override its parameters, and check it |
@@ -81,7 +82,7 @@ Open plans: each says what is decided and what is not built.
 | [Reviewed: the systems, the tests and the docs](plans/review-2026-10-24.md) | The whole read once for gaps at the top of the stack: safety, the code's shape, what the tests run and where, their duplication and time, the docs against the page, and what stands on origin; each gap with its evidence and a next step |
 | [Focused systems](plans/focused-systems-2026-10-22.md) | The Airgap as the standard for a focused layout, the Part and the Machine on it, one registry every system is configured through, and Board, Lighting, Fit and build and Bench after them |
 | [Landing the stack on main](plans/landing-the-stack-2026-10-20.md) | Every open pull request and the governance records it pins: what goes on origin first, the review of the whole once, the merge order and how each pull request merges, and the check that the order still merges |
-| [The documentation, swept](plans/timeless-docs-2026-10-12.md) | Every durable text brought under the governance record on durable text: present tense, no internal history, no ornament; the triage by area and the order |
+| [The documentation, swept](plans/timeless-docs-2026-10-12.md) | Every durable text brought under the governance record on durable text: present tense, no internal history, no ornament; the triage by area and the order; its notes on each area in [its folder](plans/timeless-docs-2026-10-12/) |
 
 ## History
 
@@ -130,3 +131,4 @@ page is at its path under `/docs/`:
 |---|---|
 | Fractal zoom viewer | `docs/generated/fractal-viewer/fractal-viewer.md` |
 | Boards and printers: a board's Machine, the Bench | `docs/generated/printer-monitor/printer-monitor.md` |
+| Which pictures went together: the gathering map, light and dark | `docs/generated/gathering/which-pictures-went-together.png` and `-dark.png`, written by every browser run of `tests/e2e/test_gathering_map_in_a_browser.py`, not by `docs generate` |
