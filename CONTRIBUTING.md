@@ -120,6 +120,9 @@ a message that ends a step names the next one.
 - A slicer module: a subclass of `SlicerModule` in a file of its own under
   `apothecary/slicer/modules/`, registered in `_registry` there
   ([docs/slicer.md](docs/slicer.md#another-slicer)), tested in `tests/test_slicer.py`.
+- A window of the page, or a focused system of windows (a subject with its sections):
+  [docs/windows-and-systems.md](docs/windows-and-systems.md) says what to write and the tests
+  that hold it.
 - A decision: a `DRAFT-*.md` in `governance/qm/adr/`, following
   `governance/qm/adr/README.md`. A human ratifies it.
 - A change a user would notice: one line in [CHANGELOG.md](CHANGELOG.md).
