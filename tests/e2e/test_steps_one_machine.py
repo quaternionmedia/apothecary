@@ -6,8 +6,8 @@ disarmed and a jog refused; then the devkit's Machine opened in its place, and l
 
 Each step first checks that the page is where the step before it leaves it, then acts as
 a person does and holds what the page says. Control lapses after minutes without a
-command, so a step that needs it arms it again when it has lapsed, as a person would. In
-the suite every step runs in order on a server of the test's own: the simulated printer
+command, so a step that needs it arms it again when it has lapsed, as a person would. Under
+``--steps`` every step runs in order on a server of the test's own: the simulated printer
 idle on ``/dev/ttyFAKE1`` pinned to printer_1's mainboard, and the simulated devkit on
 ``/dev/ttyFAKE2`` flashed with the Arduino esp32_blink, as the demo's are. Given ``--step
 N`` and ``--base-url`` naming the demo, only step N runs, on the demo's walk tab, and the
