@@ -16,7 +16,7 @@ camera is allowed before the page loads and Allow never appears; nothing here is
 covered there.
 
 Every camera and view a test adds is taken back after it, and garage is reset
-(tests/e2e/test_picture_in_the_world.py's fixture).
+(conftest's leaves_garage_as_found).
 """
 
 from __future__ import annotations
@@ -24,10 +24,14 @@ from __future__ import annotations
 import re
 
 import pytest
+from garage import open_garage as _open_garage
+from garage import said as _said
+from garage import status as _status
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import expect
-from test_picture_in_the_world import leaves_garage_as_found  # noqa: F401 - a fixture
-from test_the_loop import _labels, _open_garage, _press, _ring_on, _said, _status
+from rings import labels as _labels
+from rings import open_on_row as _ring_on
+from rings import press as _press
 
 
 @pytest.fixture
@@ -57,7 +61,7 @@ def _add_at_the_bench(page) -> str:
 def test_allow_before_the_yes_is_refused_and_says_what_to_do(
     page,
     base_url: str,
-    leaves_garage_as_found,  # noqa: F811
+    leaves_garage_as_found,
 ):
     """Selected names the way in at a bare bench; Camera › Add here adds a camera
     without asking the browser; its Device offers Allow; Allow, with the prompt
@@ -95,7 +99,7 @@ def test_allow_before_the_yes_is_refused_and_says_what_to_do(
 def test_the_yes_makes_the_one_camera_its_device_and_a_picture_follows(
     page,
     base_url: str,
-    leaves_garage_as_found,  # noqa: F811
+    leaves_garage_as_found,
 ):
     """With the ring open at Allow, the person's yes: Allow makes the one camera the
     camera part's device at once and names Take picture; Selected says which it is;
@@ -139,7 +143,7 @@ def test_the_yes_makes_the_one_camera_its_device_and_a_picture_follows(
 def test_a_yes_given_elsewhere_names_the_camera_under_device(
     page,
     base_url: str,
-    leaves_garage_as_found,  # noqa: F811
+    leaves_garage_as_found,
 ):
     """The camera allowed for the site with no ring open -- the address bar's way:
     the page notices, and the camera part's next Device names the camera in place

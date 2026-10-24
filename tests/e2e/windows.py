@@ -41,6 +41,8 @@ def from_the_windows_menu(page: Page, pid: str) -> None:
 # of its sections (``machine-<section>``), which live while it is open.
 MACHINE = ".panel[data-panel='machine']"
 MACHINE_WINDOWS = ".panel[data-panel^='machine']"
+# The Bench: every toolchain's sketches, built and flashed from one window.
+BENCH = ".panel[data-panel='bench']"
 
 
 def machine(page: Page):

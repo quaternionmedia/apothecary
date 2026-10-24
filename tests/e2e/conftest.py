@@ -10,6 +10,7 @@ import re
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -17,15 +18,17 @@ import httpx
 import pytest
 from playwright.sync_api import Error as PlaywrightError
 
-# tests/ itself, for helpers shared with the unit tests (firmware_helpers).
+# tests/ itself, for helpers shared with the unit tests (firmware_helpers, views_helpers).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import garage  # noqa: E402
 from browsers import launch, launched  # noqa: E402
 from doc_capture import GENERATED_DOCS_ROOT, DocRecorder, Walkthrough  # noqa: E402
 from firmware_helpers import write_fake_arduino_cli  # noqa: E402
 from parts_built import described  # noqa: E402
 from ports import refuse_a_held_port  # noqa: E402
 from shards import shard_of  # noqa: E402
+from views_helpers import HIGH, SHAPES, WIDE  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -428,6 +431,67 @@ def unasked_page(_unasked_browser, base_url):
     )
     yield context.new_page()
     context.close()
+
+
+@pytest.fixture(scope="module")
+def drawing_camera_browser(browser_type):
+    """Chromium with its fake camera playing garage.py's drawing, from ``garage.DRAWING``.
+    Written whole and moved into place, so a run beside this one never reads half."""
+    garage.DRAWING.parent.mkdir(parents=True, exist_ok=True)
+    fd, part = tempfile.mkstemp(dir=garage.DRAWING.parent, suffix=".y4m")
+    os.close(fd)
+    garage.y4m(part)
+    os.replace(part, garage.DRAWING)
+    browser = launch(
+        browser_type,
+        args=[
+            "--use-fake-ui-for-media-stream",
+            "--use-fake-device-for-media-stream",
+            f"--use-file-for-fake-video-capture={garage.DRAWING}",
+        ],
+    )
+    yield browser
+    browser.close()
+
+
+@pytest.fixture
+def fixture_picture(picture_folder):
+    """The stated picture (tests/views_helpers.py) in the server's picture folder, as
+    garage.NAME, its shapes stated beside it; its file name. Taken away after."""
+    (picture_folder / f"{garage.NAME}.png").write_bytes(garage.picture())
+    (picture_folder / f"{garage.NAME}.shapes.json").write_text(
+        json.dumps(
+            {"name": garage.NAME, "pixel_width": WIDE, "pixel_height": HIGH, "shapes": SHAPES}
+        ),
+        encoding="utf-8",
+    )
+    yield f"{garage.NAME}.png"
+    (picture_folder / f"{garage.NAME}.png").unlink(missing_ok=True)
+    (picture_folder / f"{garage.NAME}.shapes.json").unlink(missing_ok=True)
+
+
+@pytest.fixture
+def leaves_garage_as_found(page, base_url: str):
+    """After the test: garage's views, cameras and kept pictures it added are taken
+    back, and its layout is the code's again. ``page`` is the test module's own,
+    where it has one."""
+    api = page.request
+    attached = api.get(f"{base_url}/sites/garage/attached").json()
+    views = {vw["id"] for vw in attached["views"]}
+    cameras = {c["name"] for c in attached["cameras"]}
+    pictures = {p["path"] for p in api.get(f"{base_url}/photos/pictures").json()}
+    yield
+    attached = api.get(f"{base_url}/sites/garage/attached").json()
+    for view in attached["views"]:
+        if view["id"] not in views:
+            api.delete(f"{base_url}/sites/garage/views/{view['id']}")
+    for camera in attached["cameras"]:
+        if camera["name"] not in cameras:
+            api.delete(f"{base_url}/sites/garage/cameras/{camera['name']}")
+    for picture in api.get(f"{base_url}/photos/pictures").json():
+        if picture["path"] not in pictures and picture["kept"]:
+            api.delete(f"{base_url}/photos/pictures/{picture['path']}")
+    api.post(f"{base_url}/sites/garage/reset")
 
 
 @pytest.fixture

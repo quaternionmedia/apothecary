@@ -18,11 +18,12 @@ import time
 
 import pytest
 import windows
+from boards import BOARD
 from doc_capture import FOLDER, TEMPERATURE, moments
+from garage import select as _select
 from playwright.sync_api import Page, expect
 from viewer_ready import by_hand
 
-BOARD = "printer_1.frame_system.mainboard"
 UNO = "/dev/ttyFAKE0"
 MACHINE = windows.MACHINE
 
@@ -49,10 +50,6 @@ CHANGING = (
     f"{windows.MACHINE_WINDOWS} #chart",
     f"{windows.MACHINE_WINDOWS} #b-print",
 )
-
-
-def _select(page: Page, name: str):
-    page.locator("#contents-list .contents-item", has_text=name).first.click()
 
 
 def _expand_to(page: Page, path: str):

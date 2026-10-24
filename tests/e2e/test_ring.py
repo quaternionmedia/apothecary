@@ -22,12 +22,13 @@ from pathlib import Path
 import httpx
 import pytest
 import windows
+from boards import PRINTER
+from garage import open_garage, select
 from playwright.sync_api import Page, expect
 from rings import cells as _wedges
 
 from apothecary.systems import by_id
 
-PRINTER = "/dev/ttyFAKE1"
 MACHINE = windows.MACHINE
 # The arrow rule as vectors, generated from menu.py's resolver; tests/test_menu.py
 # fails when the file is missing or stale.
@@ -53,12 +54,11 @@ CAPTURE = (
 )
 
 
-def _open_viewer(page: Page, url: str, node: str = "printer_1"):
+def _open_on(page: Page, url: str, node: str = "printer_1"):
+    """The viewer on garage, the intents it carries captured, ``node`` selected."""
     page.add_init_script(CAPTURE)
-    page.goto(f"{url}/viewer/sites/garage")
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    page.locator("#contents-list .contents-item", has_text=node).first.click()
-    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_be_visible(timeout=5000)
+    open_garage(page, url, settle=False)
+    select(page, node)
 
 
 def _title(page: Page) -> str:
@@ -72,7 +72,7 @@ def _intents(page: Page) -> list:
 @pytest.mark.e2e
 def test_key_m_opens_the_node_ring_in_its_cells(page: Page, ring_url: str):
     """m on a selected node: eight wedges, options cardinals first, the hub is 5."""
-    _open_viewer(page, ring_url)
+    _open_on(page, ring_url)
     expect(
         page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
     ).to_be_visible(timeout=10000)
@@ -107,7 +107,7 @@ def test_key_m_opens_the_node_ring_in_its_cells(page: Page, ring_url: str):
 
 @pytest.mark.e2e
 def test_the_toolbar_button_and_ctrl_right_click_open_it_too(page: Page, ring_url: str):
-    _open_viewer(page, ring_url)
+    _open_on(page, ring_url)
     page.locator("#ring-open").click()
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     assert _title(page) == "printer_1"
@@ -142,7 +142,7 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     and so does the page."""
     # Device's cells: Open (the board's Machine), Flash, ..., and Control, after Link,
     # in cell 7.
-    _open_viewer(page, ring_url)
+    _open_on(page, ring_url)
     expect(
         page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
     ).to_be_visible(timeout=10000)
@@ -212,7 +212,7 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
 @pytest.mark.e2e
 def test_arrows_reach_the_nearest_occupied_cell(page: Page, ring_url: str):
     """The browser's rule, vector by vector, against the resolver's table."""
-    _open_viewer(page, ring_url)
+    _open_on(page, ring_url)
     vectors = json.loads(VECTORS.read_text(encoding="utf-8"))["nearest"]
     assert len(vectors) >= 20
     wrong = []
@@ -265,7 +265,7 @@ def test_arrows_reach_the_nearest_occupied_cell(page: Page, ring_url: str):
 
 @pytest.mark.e2e
 def test_five_backs_out_and_escape_closes(page: Page, ring_url: str):
-    _open_viewer(page, ring_url)
+    _open_on(page, ring_url)
     expect(
         page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
     ).to_be_visible(timeout=10000)
@@ -293,7 +293,7 @@ def test_five_backs_out_and_escape_closes(page: Page, ring_url: str):
 @pytest.mark.e2e
 def test_the_pointer_uses_the_same_cells(page: Page, ring_url: str):
     """Hover in the band highlights the compass wedge; a click commits; the hub backs out."""
-    _open_viewer(page, ring_url)
+    _open_on(page, ring_url)
     page.locator("#contents-list .contents-item[data-path='printer_1']").click(
         button="right", modifiers=["Control"]
     )

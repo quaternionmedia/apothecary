@@ -23,14 +23,15 @@ import time
 import httpx
 import pytest
 import windows
+from boards import BOARD, PRINTER
+from garage import open_garage
+from garage import select as _select
 from playwright.sync_api import Page, expect
 from rings import by_label as _wedges
 from rings import open_on_row as _ring_on
 from rings import press as _choose
 
-PRINTER = "/dev/ttyFAKE1"
 UNO = "/dev/ttyFAKE0"
-BOARD = "printer_1.frame_system.mainboard"
 POLL_MS = 2000  # the Machine's default interval
 STATUS = "/firmware/printers/status"
 
@@ -57,16 +58,6 @@ def _disarmed(request):
         )
 
 
-def _open_viewer(page: Page, url: str) -> None:
-    page.goto(f"{url}/viewer/sites/garage")
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-
-
-def _select(page: Page, path: str) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{path}']").click()
-    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_be_visible(timeout=5000)
-
-
 MACHINE = windows.MACHINE
 
 
@@ -74,7 +65,7 @@ MACHINE = windows.MACHINE
 def test_the_device_rings_open_is_the_one_cell_that_opens_the_machine(page: Page, url: str):
     """The Device ring holds one cell for a board's Machine, Open, and no Watch or
     Monitor. Chosen, the Machine opens as a tab beside Pictures, the printer's."""
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     _ring_on(page, "printer_1")
     _choose(page, "Device")
     cells = _wedges(page)
@@ -95,7 +86,7 @@ def test_the_device_rings_open_is_the_one_cell_that_opens_the_machine(page: Page
 def test_selected_says_one_line_and_open_opens_the_machine(page: Page, url: str):
     """Selected's Device section is one line -- the port and what the board is doing --
     with Open, which opens its Machine; the printer's row speaks for the board inside it."""
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     _select(page, "printer_1")
     section = page.locator("#selected-body .device-section")
     expect(section.locator(".device-line")).to_have_count(1, timeout=8000)
@@ -114,7 +105,7 @@ def test_one_poller_per_board_whatever_draws_it(page: Page, url: str):
     ring's Open is chosen as well: one status request each period, and every drawer
     says what that one poll said."""
     page.clock.install()
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     badge = page.locator(".world-badge[data-path='printer_1']")
     expect(badge).to_be_visible(timeout=15000)
     _select(page, "printer_1")
@@ -158,7 +149,7 @@ def test_one_log_with_one_query_box_in_the_machine(page: Page, url: str):
     """The board's log is in its Machine, with the one box that asks it for a report:
     no log panel of its own, no second box; a report answered lands there, poll
     traffic stays out until asked for, and a refused code says so."""
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     page.locator(".world-badge[data-path='printer_1']").click()
     machine = windows.machine(page)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
@@ -187,7 +178,7 @@ def test_a_refusal_reaches_the_status_bar(page: Page, url: str):
     """A verb the Machine refuses -- a jog while control is not armed, chosen from the
     ring -- is said in the status bar as an error, with its label and address once, and
     in the log in the same words."""
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     page.locator(".world-badge[data-path='printer_1']").click()
     machine = windows.machine(page)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
@@ -217,7 +208,7 @@ def test_no_serial_overlay_and_no_scan_on_a_schedule(page: Page, url: str):
     )
     scans = []
     page.on("request", lambda r: scans.append(r.url) if "/devices?fresh=1" in r.url else None)
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     for gone in ("#serial-overlay", "#serial-toggle", "#devices-auto", "#devices-interval"):
         expect(page.locator(gone)).to_have_count(0)
     expect(page.locator(".world-badge[data-path='printer_1']")).to_be_visible(timeout=15000)
@@ -248,7 +239,7 @@ def test_a_devkit_has_a_machine_with_what_it_should_run_and_what_it_says(page: P
     its serial output in the one log once Listen opens the port, and its Flashing card."""
     url = start_server()
     _flash(url, "footpedal", UNO)
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     _select(page, "footpedal")
     section = page.locator("#selected-body .device-section")
     expect(section).to_contain_text(UNO, timeout=8000)
@@ -301,7 +292,7 @@ def test_a_printers_device_ring_holds_flash_disabled_in_cell_2_and_control_in_7(
     a devkit's device ring gives them -- Control at 7, so from a printer's node 2 7 2 8
     is Control › Jog › Y+. A printer keeps its own firmware: its Flash
     holds the cell and cannot be chosen."""
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     _ring_on(page, "printer_1")
     _choose(page, "Device")
     assert _wedges(page) == {
@@ -336,7 +327,7 @@ def test_a_machine_s_ring_is_its_device_ring(page: Page, url: str):
     at 7 -- and the Machine's buttons wear its cells: Control ›
     Arm ⌗77, E-STOP ⌗71, Link › Reconnect ⌗18; armed, the control pad popped out over
     the world wears Jog › Y+ ⌗728 and Pause ⌗796, and its ring is the device ring too."""
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     page.locator(".world-badge[data-path='printer_1']").click()
     machine = windows.machine(page)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
@@ -389,7 +380,7 @@ def test_a_devkit_s_machine_opens_no_port_until_listen(page: Page, start_server)
         "request",
         lambda r: opened.append(r.url) if any(p in r.url for p in PORT_OPENERS) else None,
     )
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     badge = page.locator(".world-badge[data-path='footpedal']")
     expect(badge).to_be_visible(timeout=15000)
     badge.click()
@@ -441,7 +432,7 @@ def test_device_flash_opens_the_machine_at_its_card_and_uploads_then_identifies(
     _flash(url, "footpedal", UNO)
     asked = []
     page.on("request", lambda r: asked.append(r.url) if "/firmware/devices/" in r.url else None)
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     expect(page.locator(".world-badge[data-path='footpedal']")).to_be_visible(timeout=15000)
     _ring_on(page, "footpedal")
     _choose(page, "Device")

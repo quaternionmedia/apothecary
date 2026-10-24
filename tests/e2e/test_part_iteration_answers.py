@@ -23,6 +23,8 @@ import httpx
 import part_editing
 import pytest
 import rings
+from boards import BOARD, PRINTER
+from garage import status as _status
 from playwright.sync_api import Page, expect
 from rings import press as _press
 from slicer_helpers import write_fake_orcaslicer
@@ -32,8 +34,6 @@ from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
 from apothecary.projects.parts.stl_renderer import params_sidecar_path
 
 PART = "calibration_cube"
-PRINTER = "/dev/ttyFAKE1"
-BOARD = "printer_1.frame_system.mainboard"
 TALLER = "translate([0, 0, size]) cube(size / 2);"
 
 
@@ -94,10 +94,6 @@ def _ring(page: Page, part: str, *labels: str) -> None:
 
 def _edit(page: Page, part: str = PART) -> None:
     part_editing.edit(page, part)
-
-
-def _status(page: Page):
-    return page.locator("#status")
 
 
 def _save(page: Page, url: str, name: str, scad: str | None = None, params=None) -> None:

@@ -31,6 +31,7 @@ import subprocess
 import pytest
 import windows
 from doc_capture import all_words
+from garage import status as _status
 from playwright.sync_api import Page, expect
 from rings import RING_MS, on_row
 from rings import press as _press
@@ -179,11 +180,7 @@ def _said_on_the_page(page: Page) -> str:
     return RUN_CLONE.sub("<the test server's variants repository>", _status(page).inner_text())
 
 
-def _status(page: Page):
-    return page.locator("#status")
-
-
-def _said(page: Page):
+def _scad_said(page: Page):
     return page.locator(".scad-said")
 
 
@@ -347,7 +344,7 @@ def test_editing_a_parts_scad_twice_round(
     _ring(page, "Part", "Edit")
     windows.part_view(page)
     expect(_code(page)).to_be_visible(timeout=20000)
-    expect(_said(page)).to_contain_text("The part's own SCAD: edit it here")
+    expect(_scad_said(page)).to_contain_text("The part's own SCAD: edit it here")
     expect(page.locator("#part-saved")).to_contain_text("no variants saved yet")
     # The name Save keeps it under, greyed in the box until one is typed.
     expect(page.locator("#scad-name")).to_have_value("")
@@ -375,7 +372,7 @@ def test_editing_a_parts_scad_twice_round(
         arg=refused_line,
         timeout=15000,
     )
-    expect(_said(page)).to_contain_text("Not rendered until it reads", timeout=10000)
+    expect(_scad_said(page)).to_contain_text("Not rendered until it reads", timeout=10000)
     page.wait_for_timeout(1500)  # past when a check that passed would render: nothing
     assert asked == {"check": 1, "render": 0}, asked
     marked = page.locator(".scad-editor .cm-line:has(.cm-lintRange-error)")
@@ -528,7 +525,7 @@ def test_editing_a_parts_scad_twice_round(
     expect(_status(page)).to_contain_text(
         "a variant named taller is saved already. Save again to replace it", timeout=10000
     )
-    expect(_said(page)).to_contain_text("Save again to replace it")
+    expect(_scad_said(page)).to_contain_text("Save again to replace it")
     asked_first = _status(page).inner_text()
     name.fill("short-top")
     _into_code(page)
@@ -570,7 +567,7 @@ def test_editing_a_parts_scad_twice_round(
     _into_code(page)
     page.keyboard.press("Control+End")
     page.keyboard.insert_text("\n" + REFUSED)
-    expect(_said(page)).to_contain_text("Not rendered until it reads", timeout=15000)
+    expect(_scad_said(page)).to_contain_text("Not rendered until it reads", timeout=15000)
     asked = []
 
     def leave(dialog):
@@ -603,7 +600,7 @@ def test_editing_a_parts_scad_twice_round(
     page.locator("#kept-restore").click()
     expect(offer).to_be_hidden()
     assert _text(page).endswith(REFUSED)
-    expect(_said(page)).to_contain_text("Not rendered until it reads", timeout=15000)
+    expect(_scad_said(page)).to_contain_text("Not rendered until it reads", timeout=15000)
 
     # Another part edited, and back: the editor as it was left, its undo with it.
     page.locator("#contents-list .contents-item[data-path='v_slot']").click(

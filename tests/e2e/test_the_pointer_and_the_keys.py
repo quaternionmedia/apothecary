@@ -19,13 +19,13 @@ import re
 import httpx
 import pytest
 import windows
+from boards import PRINTER
 from playwright.sync_api import Page, expect
 from rings import by_label
 from rings import press as _ring_labels
 from viewer_ready import FREE_SPOT, settled
 
 ROW = "#contents-list .contents-item[data-path='{}']"
-PRINTER = "/dev/ttyFAKE1"
 
 
 @pytest.fixture(scope="module")

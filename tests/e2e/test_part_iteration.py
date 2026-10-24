@@ -23,6 +23,7 @@ import part_editing
 import pytest
 import rings
 import windows
+from garage import status as _status
 from playwright.sync_api import Page, expect
 from viewer_ready import settled
 
@@ -83,10 +84,6 @@ def _edit(page: Page, part: str = PART) -> None:
 
 def _param(page: Page, field: str):
     return part_editing.param(page, field)
-
-
-def _status(page: Page):
-    return page.locator("#status")
 
 
 def _summary(page: Page):

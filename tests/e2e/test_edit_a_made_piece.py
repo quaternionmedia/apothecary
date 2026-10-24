@@ -4,10 +4,10 @@ the stage bar validates, Apply rebuilds the piece where it stands -- its outline
 its thread stay -- and the found candidate returns it. A part in the parts library
 gets the same editor from the same cell.
 
-The picture is tests/e2e/test_picture_in_the_world.py's stated fixture, pinned at the
-bench at 1800 mm through the API, and shape 1 (the coin, 54 by 54 mm, its thickness
-guessed at 8.1) made through the API too, so no camera is opened. Everything a test
-adds is taken back after it, and garage is reset.
+The picture is the stated one (tests/views_helpers.py; conftest's fixture_picture),
+pinned at the bench at 1800 mm through the API, and shape 1 (the coin, 54 by 54 mm,
+its thickness guessed at 8.1) made through the API too, so no camera is opened.
+Everything a test adds is taken back after it, and garage is reset.
 """
 
 from __future__ import annotations
@@ -16,14 +16,13 @@ import re
 
 import pytest
 import windows
+from garage import open_garage as _open_garage
+from garage import pin as _pin
+from garage import said as _said
 from playwright.sync_api import expect
-from test_picture_in_the_world import (  # noqa: F401 - a fixture
-    _open_garage,
-    _pin,
-    fixture_picture,
-    leaves_garage_as_found,  # noqa: F401 - a fixture
-)
-from test_the_loop import _labels, _press, _ring_on, _said
+from rings import labels as _labels
+from rings import open_on_row as _ring_on
+from rings import press as _press
 
 MESH = """(key) => {
     const mesh = window.fractalViewer.meshByName[key];
@@ -78,7 +77,7 @@ def _made_piece(page, base_url: str, picture: str) -> str:
 def test_a_made_piece_is_edited_from_its_ring_and_the_found_candidate_returns_it(
     page,
     base_url: str,
-    fixture_picture,  # noqa: F811 - the fixture's value, the picture's name
+    fixture_picture,
 ):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))

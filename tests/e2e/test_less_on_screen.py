@@ -4,7 +4,7 @@ problems said once, the hint bar and faded walls.
 A busy bench, on a server of its own from the conftest's ``start_server``:
 printer_1's mainboard pinned to the simulated printer (``/dev/ttyFAKE1``,
 identified), the footpedal to the scripted Uno (``/dev/ttyFAKE0``), a view pinned
-at the workbench with three stated shapes (tests/e2e/test_picture_in_the_world.py's
+at the workbench with three stated shapes (tests/views_helpers.py's
 picture), and a camera added above the floor beside the garage. Nothing here opens a
 real port. (A camera above the bench stands in its badges' way at the garage's top
 level, and three badges in one another's way merge into a count there.)
@@ -24,14 +24,14 @@ import re
 import httpx
 import pytest
 import windows
+from boards import BOARD, PRINTER
+from garage import select as _select
 from PIL import Image, ImageDraw
 from playwright.sync_api import Page, expect
 from rings import open_from_key as _canvas_ring
 from viewer_ready import FRAMES, OCCLUSION_TESTED, settled
 
-PRINTER = "/dev/ttyFAKE1"
 UNO = "/dev/ttyFAKE0"
-BOARD = "printer_1.frame_system.mainboard"
 PICTURE = "busy_bench"
 SHAPES = [
     {"kind": "rect", "min": [0.135, 0.41], "max": [0.235, 0.51], "label": "block"},
@@ -123,10 +123,6 @@ PAN_TO_EDGE = """(edge) => {
     }
     v.orbitControls.update();
 }"""
-
-
-def _select(page: Page, path: str) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{path}']").click()
 
 
 @pytest.mark.e2e

@@ -6,7 +6,7 @@ forgotten; and the floor, reached from the canvas ring's Pictures › Floor.
 
 The browser is Chromium with its fake camera fed a drawn picture
 (``--use-file-for-fake-video-capture``): a dark rectangle, disc and triangle on a
-light ground, 640 by 480, as tests/e2e/test_camera.py draws them, so the plain
+light ground, 640 by 480, tests/e2e/garage.py's drawing, so the plain
 finder has shapes to find in every frame and no real camera is ever opened.
 
 The camera's deviceId is this browser context's: nothing here reloads the page
@@ -14,7 +14,7 @@ between choosing a camera's device and using it, since Chromium may hand a
 reloaded page other ids for its fake devices.
 
 Every view, camera, kept picture and made piece a test adds is taken back after
-it (tests/e2e/test_picture_in_the_world.py's fixture), and garage is reset.
+it (conftest's leaves_garage_as_found), and garage is reset.
 """
 
 from __future__ import annotations
@@ -23,61 +23,24 @@ import re
 
 import pytest
 import windows
-from browsers import launch
-from PIL import Image, ImageDraw
+from garage import attached as _attached
+from garage import drawing
+from garage import drawn as _drawn
+from garage import open_garage as _open_garage
+from garage import said as _said
+from garage import status as _status
 from playwright.sync_api import expect
 from rings import labels as _labels
 from rings import open_from_key as _canvas_ring
 from rings import open_on_row as _ring_on
 from rings import press as _press
-from test_picture_in_the_world import leaves_garage_as_found  # noqa: F401 - a fixture
 from viewer_ready import settled
-
-STATE = "() => window.apothecaryPictures.state()"
-WIDE, HIGH = 640, 480
-
-
-def _drawing() -> Image.Image:
-    img = Image.new("L", (WIDE, HIGH), 245)
-    pen = ImageDraw.Draw(img)
-    pen.rectangle((40, 40, 260, 160), fill=30)
-    pen.ellipse((360, 60, 520, 220), fill=20)
-    pen.polygon([(80, 420), (300, 420), (190, 280)], fill=25)
-    return img
-
-
-def _y4m(path) -> None:
-    """The drawing as a Y4M stream Chromium's fake camera plays in a loop."""
-    ycbcr = _drawing().convert("RGB").convert("YCbCr")
-    y, cb, cr = ycbcr.split()
-    half = (WIDE // 2, HIGH // 2)
-    planes = y.tobytes() + cb.resize(half).tobytes() + cr.resize(half).tobytes()
-    with open(path, "wb") as out:
-        out.write(f"YUV4MPEG2 W{WIDE} H{HIGH} F10:1 Ip A1:1 C420jpeg\n".encode())
-        for _ in range(3):
-            out.write(b"FRAME\n" + planes)
-
-
-@pytest.fixture(scope="module")
-def _drawn_camera_browser(browser_type, tmp_path_factory):
-    stream = tmp_path_factory.mktemp("fake_camera") / "drawn.y4m"
-    _y4m(stream)
-    browser = launch(
-        browser_type,
-        args=[
-            "--use-fake-ui-for-media-stream",
-            "--use-fake-device-for-media-stream",
-            f"--use-file-for-fake-video-capture={stream}",
-        ],
-    )
-    yield browser
-    browser.close()
 
 
 @pytest.fixture
-def page(_drawn_camera_browser, base_url):
+def page(drawing_camera_browser, base_url):
     """A page whose camera sees the drawing, allowed, in a context of its own."""
-    context = _drawn_camera_browser.new_context(
+    context = drawing_camera_browser.new_context(
         viewport={"width": 1280, "height": 800}, base_url=base_url
     )
     context.grant_permissions(["camera"], origin=base_url)
@@ -85,29 +48,9 @@ def page(_drawn_camera_browser, base_url):
     context.close()
 
 
-def _open_garage(page, base_url: str) -> None:
-    page.goto(f"{base_url}/viewer/sites/garage")
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
-    settled(page)
-
-
 def _close_ring(page) -> None:
     page.keyboard.press("Escape")
     expect(page.locator("#ring-overlay")).to_be_hidden(timeout=3000)
-
-
-def _drawn(page, host: str):
-    return next((entry for entry in page.evaluate(STATE) if entry["host"] == host), None)
-
-
-def _status(page):
-    return page.locator("#status")
-
-
-def _said(page, text: str) -> None:
-    expect(_status(page)).to_contain_text(text, timeout=20000)
-    expect(_status(page)).not_to_have_class(re.compile(r"\berror\b"))
 
 
 def _add_a_camera(page, *path: str) -> str:
@@ -124,15 +67,11 @@ def _add_a_camera(page, *path: str) -> str:
     return name
 
 
-def _attached(page, base_url: str) -> dict:
-    return page.request.get(f"{base_url}/sites/garage/attached").json()
-
-
 @pytest.mark.e2e
 def test_take_picture_pins_a_view_and_find_shapes_is_its_own_step(
     page,
     base_url: str,
-    leaves_garage_as_found,  # noqa: F811
+    leaves_garage_as_found,
 ):
     """A camera's device chosen names Take picture; Take picture keeps a frame that
     lies on the bench as a view with no shapes, and names Find shapes; Find shapes
@@ -186,7 +125,7 @@ def test_take_picture_pins_a_view_and_find_shapes_is_its_own_step(
 
 
 @pytest.mark.e2e
-def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_as_found):  # noqa: F811
+def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_as_found):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     _open_garage(page, base_url)
@@ -343,7 +282,7 @@ def test_the_loop_at_the_bench_from_the_ring(page, base_url: str, leaves_garage_
 
 
 @pytest.mark.e2e
-def test_the_floor_from_the_canvas_ring(page, base_url: str, leaves_garage_as_found):  # noqa: F811
+def test_the_floor_from_the_canvas_ring(page, base_url: str, leaves_garage_as_found):
     """Pictures › Floor on the canvas ring, with nothing pinned there: a camera added
     above the floor, a picture taken that lies on it, its shapes found, the floor's
     mat drawn beside the site, sized, and a shape made there."""
@@ -398,12 +337,12 @@ def test_a_dropped_file_is_pinned_where_it_lands(
     page,
     base_url: str,
     tmp_path,
-    leaves_garage_as_found,  # noqa: F811
+    leaves_garage_as_found,
 ):
     """Dropped on a child while zoomed in, one file is pinned at its root and the view
     steps out; two dropped at once are two views, the last drawn; on empty canvas, the
     floor; a view's row in the pins list unpins it."""
-    _drawing().save(tmp_path / "bench_drop.png")
+    drawing().save(tmp_path / "bench_drop.png")
     data = (tmp_path / "bench_drop.png").read_bytes()
     _open_garage(page, base_url)
 

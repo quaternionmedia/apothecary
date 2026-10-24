@@ -17,11 +17,12 @@ import re
 
 import pytest
 import windows
+from boards import ended as _ended
 from firmware_helpers import write_fake_arduino_cli
+from garage import open_garage
 from playwright.sync_api import Page, expect
 from rings import by_label as _wedges
-
-BENCH = ".panel[data-panel='bench']"
+from windows import BENCH
 
 
 @pytest.fixture(scope="module")
@@ -33,17 +34,6 @@ def url(start_server, tmp_path_factory):
     return start_server({"APOTHECARY_TOOLS_DIR": str(tools)})
 
 
-def _open_viewer(page: Page, url: str) -> None:
-    page.goto(f"{url}/viewer/sites/garage")
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-
-
-def _ended(bench, title: str, timeout: int = 10000):
-    """The task log says the task of this title succeeded."""
-    expect(bench.locator(".task-title")).to_contain_text(title, timeout=timeout)
-    expect(bench.locator(".task-title")).to_contain_text("succeeded", timeout=timeout)
-
-
 @pytest.mark.e2e
 def test_the_bench_is_a_tab_beside_pictures_behind_it_until_pressed(page: Page, url: str):
     """Registered at start as a tab beside Pictures, behind it until pressed; its body is
@@ -51,7 +41,7 @@ def test_the_bench_is_a_tab_beside_pictures_behind_it_until_pressed(page: Page, 
     then."""
     asked = []
     page.on("request", lambda r: asked.append(r.url) if "/firmware/status" in r.url else None)
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     expect(windows.tab(page, "bench")).to_be_visible()
     expect(page.locator(BENCH)).to_be_hidden()
     state = windows.state(page, "bench")
@@ -69,7 +59,7 @@ def test_the_bench_lists_the_sketches_and_installs_with_the_scripted_cli(page: P
     cores, the sketches under parts/ each with its board; Update says the one installed
     is kept, a core and a library install through the scripted cli, and a compile runs
     -- each a task whose output is in the log and whose row is in Recent tasks."""
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     page.evaluate("() => window.apothecaryPanels.open('bench')")
     bench = page.locator(BENCH)
     status = bench.locator(".tc-status")
@@ -122,7 +112,7 @@ def test_the_bench_lists_the_sketches_and_installs_with_the_scripted_cli(page: P
 def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     """Panels › Bench holds the panel and its verbs, and the Bench's buttons wear their
     addresses; Compile from the ring compiles what the Bench has chosen."""
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     page.locator("#viewer-canvas").click(
         button="right", modifiers=["Control"], position={"x": 30, "y": 30}
     )
