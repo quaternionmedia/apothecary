@@ -22,6 +22,8 @@ from types import SimpleNamespace
 import pytest
 import windows
 from playwright.sync_api import expect
+from rings import cells as _wedges
+from rings import press as _press
 from viewer_ready import OCCLUSION_TESTED, by_hand, settled
 
 # A lid, one inch by two by half an inch, drawn Y-up as a game or web tool
@@ -36,29 +38,6 @@ LID = [
 
 def _part_row(page):
     return page.locator("#selected-body .prop-row", has_text="Part")
-
-
-WEDGES = (
-    "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
-    ".filter((w) => !w.classList.contains('empty'))"
-    ".map((w) => [w.dataset.cell, w.getAttribute('aria-label')]))"
-)
-
-
-def _wedges(page) -> dict:
-    """The open ring's wedges: cell -> label."""
-    return page.evaluate(WEDGES)
-
-
-def _press(page, label: str) -> None:
-    """Press the wedge of the open ring that reads this label."""
-    page.wait_for_function(
-        "(label) => [...document.querySelectorAll('#ring-overlay .wedge')]"
-        ".some((w) => w.getAttribute('aria-label') === label)",
-        arg=label,
-        timeout=5000,
-    )
-    page.keyboard.press(next(c for c, got in _wedges(page).items() if got == label))
 
 
 def _camera_marks_visible(page):

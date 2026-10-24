@@ -19,6 +19,7 @@ import pytest
 import windows
 from firmware_helpers import write_fake_arduino_cli
 from playwright.sync_api import Page, expect
+from rings import by_label as _wedges
 
 BENCH = ".panel[data-panel='bench']"
 
@@ -35,15 +36,6 @@ def url(start_server, tmp_path_factory):
 def _open_viewer(page: Page, url: str) -> None:
     page.goto(f"{url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-
-
-def _wedges(page: Page) -> dict:
-    """label -> cell of every wedge of the open ring that holds something."""
-    return page.evaluate(
-        """() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]
-            .filter((w) => !w.classList.contains('empty'))
-            .map((w) => [w.getAttribute('aria-label'), w.dataset.cell]))"""
-    )
 
 
 def _ended(bench, title: str, timeout: int = 10000):

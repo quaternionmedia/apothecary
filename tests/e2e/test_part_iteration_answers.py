@@ -24,6 +24,7 @@ import part_editing
 import pytest
 import rings
 from playwright.sync_api import Page, expect
+from rings import press as _press
 from slicer_helpers import write_fake_orcaslicer
 from viewer_ready import settled
 
@@ -85,10 +86,6 @@ def _open(page: Page, url: str, site: str = "parts_library", part: str = PART) -
         timeout=60000,
     )
     settled(page)
-
-
-def _press(page: Page, *labels: str) -> None:
-    rings.press(page, *labels)
 
 
 def _ring(page: Page, part: str, *labels: str) -> None:

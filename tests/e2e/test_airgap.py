@@ -17,9 +17,17 @@ machine's OpenSCAD; nothing here reaches the network.
 
 from __future__ import annotations
 
+import functools
+
 import pytest
 import windows
 from playwright.sync_api import Page, expect
+from rings import RING_MS, on_world
+from rings import press as _press
+
+# The airgap's world, clear of its pieces.
+_canvas_ring = functools.partial(on_world, at=(60, 60))
+
 
 PART = "airgap"
 PANEL = ".panel[data-panel='airgap']"
@@ -29,12 +37,6 @@ SECTIONS = windows.AIRGAP_SECTIONS
 def _section(page: Page, sid: str):
     """An Airgap section's window: its body."""
     return windows.panel(page, f"airgap-{sid}")
-
-
-RING_MS = 15000
-WEDGES = """() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]
-    .filter((w) => !w.classList.contains('empty'))
-    .map((w) => [w.dataset.cell, w.getAttribute('aria-label')]))"""
 
 
 @pytest.fixture(scope="module")
@@ -51,28 +53,9 @@ def _open(page: Page, url: str) -> None:
     )
 
 
-def _press(page: Page, *labels: str) -> None:
-    for label in labels:
-        page.wait_for_function(
-            f"() => [...document.querySelectorAll('#ring-overlay .wedge')]"
-            f".some((w) => w.getAttribute('aria-label') === {label!r})",
-            timeout=RING_MS,
-        )
-        cell = next(c for c, got in page.evaluate(WEDGES).items() if got == label)
-        page.keyboard.press(cell)
-
-
 def _part_ring(page: Page, *labels: str) -> None:
     page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(
         button="right", modifiers=["Control"]
-    )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
-    _press(page, *labels)
-
-
-def _canvas_ring(page: Page, *labels: str) -> None:
-    page.locator("#viewer-canvas").click(
-        button="right", modifiers=["Control"], position={"x": 60, "y": 60}
     )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
     _press(page, *labels)

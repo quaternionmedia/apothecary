@@ -18,12 +18,9 @@ import re
 import pytest
 from PIL import Image, ImageDraw
 from playwright.sync_api import expect
+from rings import cells
+from rings import press as _press
 
-WEDGES = (
-    "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
-    ".filter((w) => !w.classList.contains('empty'))"
-    ".map((w) => [w.dataset.cell, w.getAttribute('aria-label')]))"
-)
 OLD = "oldest.png"
 NEWER = [f"a_newer_picture_{i}.png" for i in range(8)]
 
@@ -38,16 +35,6 @@ def _png(offset: int) -> bytes:
     out = io.BytesIO()
     _drawn(offset).save(out, format="PNG")
     return out.getvalue()
-
-
-def _press(page, label: str) -> None:
-    page.wait_for_function(
-        "(label) => [...document.querySelectorAll('#ring-overlay .wedge')]"
-        ".some((w) => w.getAttribute('aria-label') === label)",
-        arg=label,
-        timeout=5000,
-    )
-    page.keyboard.press(next(c for c, got in page.evaluate(WEDGES).items() if got == label))
 
 
 def _open(page, base_url: str) -> None:
@@ -87,7 +74,7 @@ def _folder_on_the_bench(page) -> dict:
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     _press(page, "Picture")
     _press(page, "Folder")
-    return page.evaluate(WEDGES)
+    return cells(page)
 
 
 def _marked(page) -> list:

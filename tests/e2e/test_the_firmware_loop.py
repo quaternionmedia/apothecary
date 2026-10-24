@@ -29,7 +29,18 @@ import windows
 from doc_capture import FOLDER, all_words
 from firmware_helpers import write_fake_arduino_cli, write_fake_cargo, write_fake_espflash
 from playwright.sync_api import Page, expect
+from rings import RING_MS, open_on_world, press_cells
+from rings import open_on_row as _ring_on
+from rings import press as _choose
 from viewer_ready import settled
+
+
+def _canvas_ring(page: Page, *digits: str) -> None:
+    """The ring on the world, nothing chosen, and the cells named by their digits."""
+    page.wait_for_function("() => !!window.apothecaryRing", timeout=RING_MS)
+    open_on_world(page, at=(30, 30))
+    press_cells(page, *digits)
+
 
 DEVKIT = "/dev/ttyFAKE2"
 NODE = "esp32_blink"
@@ -79,43 +90,10 @@ def _select(page: Page, path: str) -> None:
     expect(page.locator("#selected-body .prop-row", has_text="Name")).to_be_visible(timeout=5000)
 
 
-def _wedges(page: Page) -> dict:
-    return page.evaluate(
-        """() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]
-            .filter((w) => !w.classList.contains('empty'))
-            .map((w) => [w.getAttribute('aria-label'), w.dataset.cell]))"""
-    )
-
-
-def _choose(page: Page, *labels: str) -> None:
-    for label in labels:
-        cells = _wedges(page)
-        assert label in cells, f"no {label!r} in this ring: {sorted(cells)}"
-        page.keyboard.press(cells[label])
-
-
-def _ring_on(page: Page, path: str) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{path}']").click(
-        button="right", modifiers=["Control"]
-    )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-
-
 def _ended(where, title: str, timeout: int = 15000) -> None:
     """The task log says the task of this title succeeded."""
     expect(where.locator(".task-title")).to_contain_text(title, timeout=timeout)
     expect(where.locator(".task-title")).to_contain_text("succeeded", timeout=timeout)
-
-
-def _canvas_ring(page: Page, *digits: str) -> None:
-    """The ring on the world, nothing chosen, and the cells named by their digits."""
-    page.wait_for_function("() => !!window.apothecaryRing", timeout=15000)
-    page.locator("#viewer-canvas").click(
-        button="right", modifiers=["Control"], position={"x": 30, "y": 30}
-    )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=15000)
-    for digit in digits:
-        page.keyboard.press(digit)
 
 
 # What differs on every run whatever the page does, blanked in the pictures: the

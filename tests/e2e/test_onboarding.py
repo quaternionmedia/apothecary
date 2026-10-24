@@ -17,6 +17,10 @@ import re
 import pytest
 import windows
 from playwright.sync_api import Page, expect
+from rings import labels as _labels
+from rings import open_from_key as _canvas_ring
+from rings import open_on_row as _ring_on
+from rings import press as _press
 from slicer_helpers import write_fake_orcaslicer
 from test_picture_in_the_world import (  # noqa: F401 - fixtures, and a pin of a picture
     _pin,
@@ -28,12 +32,6 @@ from viewer_ready import settled
 PRINTER = "/dev/ttyFAKE1"
 BOARD = "printer_1.frame_system.mainboard"
 MACHINE = windows.MACHINE
-
-WEDGES = (
-    "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
-    ".filter((w) => !w.classList.contains('empty'))"
-    ".map((w) => [w.dataset.cell, w.getAttribute('aria-label')]))"
-)
 
 
 @pytest.fixture(scope="module")
@@ -64,36 +62,6 @@ def _said(page: Page, text: str, timeout: int = 20000) -> None:
 
 def _row(page: Page, path: str):
     return page.locator(f"#contents-list .contents-item[data-path='{path}']")
-
-
-def _ring_on(page: Page, path: str) -> None:
-    _row(page, path).click(button="right", modifiers=["Control"])
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-
-
-def _canvas_ring(page: Page) -> None:
-    page.evaluate(
-        "() => { document.activeElement && document.activeElement.blur(); "
-        "const v = window.fractalViewer; v.selectedName = null; v.renderSelectedPanel(); }"
-    )
-    page.keyboard.press("m")
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-
-
-def _labels(page: Page) -> list:
-    wedges = page.evaluate(WEDGES)
-    return [wedges[cell] for cell in "86249317" if cell in wedges]
-
-
-def _press(page: Page, *labels: str) -> None:
-    for label in labels:
-        page.wait_for_function(
-            f"() => [...document.querySelectorAll('#ring-overlay .wedge')]"
-            f".some((w) => w.getAttribute('aria-label') === {label!r})",
-            timeout=5000,
-        )
-        cell = next(c for c, got in page.evaluate(WEDGES).items() if got == label)
-        page.keyboard.press(cell)
 
 
 def _close_ring(page: Page) -> None:

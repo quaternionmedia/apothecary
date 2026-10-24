@@ -26,6 +26,7 @@ import pytest
 import windows
 from PIL import Image, ImageDraw
 from playwright.sync_api import Page, expect
+from rings import open_from_key as _canvas_ring
 from viewer_ready import FRAMES, OCCLUSION_TESTED, settled
 
 PRINTER = "/dev/ttyFAKE1"
@@ -474,16 +475,6 @@ ONE_ROW = """() => {
         .filter((r) => r.width > 0).map((r) => (r.top + r.bottom) / 2);
     return { spread: Math.max(...mids) - Math.min(...mids), height: bar.offsetHeight };
 }"""
-
-
-def _canvas_ring(page: Page) -> None:
-    """The canvas ring, from the key, with nothing selected."""
-    page.evaluate(
-        "() => { document.activeElement && document.activeElement.blur(); "
-        "const v = window.fractalViewer; v.selectedName = null; v.renderSelectedPanel(); }"
-    )
-    page.keyboard.press("m")
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
 
 
 @pytest.mark.e2e
