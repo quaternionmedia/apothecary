@@ -521,8 +521,13 @@ class PrintRecord(BaseModel):
     lines: List[str] = Field(default_factory=list)  # the tail of what the firmware said
 
 
+# A kept print file's id: its keeping time and its name's stem, so never a dot first
+# (no hidden file, no "." or ".."), and no separator.
+PRINT_FILE_ID = r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,119}$"
+
+
 class PrintRequest(ProbeRequest):
-    file_id: str = Field(..., pattern=r"^[A-Za-z0-9_.\-]{1,120}$")
+    file_id: str = Field(..., pattern=PRINT_FILE_ID)
     # The part or piece the print makes: a node's path in the printer's site.
     part: Optional[str] = Field(None, pattern=r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,199}$")
 
