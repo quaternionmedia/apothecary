@@ -275,7 +275,7 @@ def test_a_reload_keeps_a_lasting_systems_sections_and_forgets_a_passing_ones(
     # ?machine=) is a link a reload follows, and opens what a link asks for.
     first = system.window(next((s for s in sections if not s.on_link), sections[0]).id)
     windows.from_the_windows_menu(page, first)
-    page.wait_for_timeout(400)  # the layout is remembered a moment after it changes
+    windows.remembered(page)
     page.reload()
     _loaded(page)
     state = windows.state(page, first)

@@ -30,6 +30,12 @@ def open_window(page: Page, pid: str) -> None:
     page.evaluate("(id) => window.apothecaryPanels.open(id)", pid)
 
 
+def remembered(page: Page) -> None:
+    """The layout as it stands remembered by the browser: panels.js writes it a moment
+    after a change, and says whether what it holds is the layout as it stands."""
+    page.wait_for_function("() => window.apothecaryPanels.remembered()", timeout=5000)
+
+
 def from_the_windows_menu(page: Page, pid: str) -> None:
     """A window chosen in the header's ⊞ Windows, as a person chooses it."""
     page.locator("#windows-menu > summary").click()

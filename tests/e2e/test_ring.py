@@ -26,6 +26,7 @@ from boards import PRINTER
 from garage import open_garage, select
 from playwright.sync_api import Page, expect
 from rings import cells as _wedges
+from rings import past_the_chord
 
 from apothecary.systems import by_id
 
@@ -236,7 +237,7 @@ def test_arrows_reach_the_nearest_occupied_cell(page: Page, ring_url: str):
     def walk(key: str, cell: str) -> None:
         page.keyboard.press(key)
         expect(hot).to_have_attribute("data-cell", cell)
-        page.wait_for_timeout(300)  # past the chord window, so the next arrow is a walk
+        past_the_chord(page)
 
     for key, cell in (("ArrowUp", "8"), ("ArrowLeft", "7"), ("ArrowDown", "4"), ("ArrowDown", "1")):
         walk(key, cell)
@@ -249,7 +250,7 @@ def test_arrows_reach_the_nearest_occupied_cell(page: Page, ring_url: str):
         "window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })))"
     )
     expect(hot).to_have_attribute("data-cell", "9")
-    page.wait_for_timeout(300)
+    past_the_chord(page)
     for key, cell in (
         ("ArrowDown", "6"),
         ("ArrowDown", "3"),

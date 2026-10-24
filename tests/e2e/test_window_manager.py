@@ -457,7 +457,7 @@ def test_a_window_made_for_the_moment_keeps_its_state_through_a_view(wm: Page, w
 
 
 def _reload(page: Page, **extra) -> None:
-    page.wait_for_timeout(300)  # remembered a moment after a change
+    page.wait_for_function("() => P.remembered()", timeout=5000)
     page.reload()
     page.wait_for_function("() => window.__ready === true")
     _mount(page, **extra)
@@ -467,7 +467,7 @@ def _reload(page: Page, **extra) -> None:
 def test_a_layout_is_remembered_and_a_window_made_for_the_moment_is_not(wm: Page):
     _mount(wm, transient=["m"])
     _js(wm, "() => { H.reg('m', { home: 'beside' }); P.close('t2'); P.open('b'); }")
-    wm.wait_for_timeout(300)  # remembered a moment after a change
+    wm.wait_for_function("() => P.remembered()", timeout=5000)
     saved = _js(wm, "() => localStorage.getItem('windows.test')")
     assert '"componentType":"b"' in saved and '"componentType":"m"' not in saved
     _reload(wm, transient=["m"])
@@ -753,7 +753,7 @@ def test_a_remembered_section_comes_back_drawn(wm: Page):
     registered by the system all the same, and drawn."""
     _systems(wm)
     _js(wm, "() => S.alpha.showSection('one')")
-    wm.wait_for_timeout(300)  # remembered a moment after a change
+    wm.wait_for_function("() => P.remembered()", timeout=5000)
     wm.reload()
     wm.wait_for_function("() => window.__ready === true")
     _systems(wm)

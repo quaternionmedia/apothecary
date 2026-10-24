@@ -240,10 +240,12 @@ def _rendered(page: Page, height: float) -> None:
 
 
 def _settled_render(page: Page) -> None:
-    """Whatever check and render the last edit brought has answered."""
+    """Whatever check and render the last edit brought has answered: the page says so
+    of the stage (``answered``), and what it drew is the text, or the text does not read."""
     page.wait_for_function(
         "() => { const s = window.fractalViewer.scadStages['part:calibration_cube'];"
-        " return !s || s.text === s.drawnText || (s.check && !s.check.valid); }",
+        " return !s || (s.answered !== false"
+        " && (s.text === s.drawnText || (s.check && !s.check.valid))); }",
         timeout=60000,
     )
     expect(_status(page)).not_to_contain_text("Applying", timeout=60000)

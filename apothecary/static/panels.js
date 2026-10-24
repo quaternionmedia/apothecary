@@ -191,16 +191,19 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     // Remembered a moment after a change, so a drag is saved once; and at once when
     // the page goes, so a window closed just before a reload stays closed.
     let saving = null;
+    // The layout as it stands, as it is remembered: null when none can be.
+    function remembering() {
+        const out = kept(JSON.parse(JSON.stringify(layout.saveLayout())), knownTypes, TRANSIENT);
+        if (!out) return null;
+        unminimisedIn(out.root);
+        out.panels = [...records.values()].filter((r) => r.registered && !TRANSIENT.has(r.id)).map((r) => r.id);
+        return JSON.stringify(out);
+    }
     function save() {
         saving = null;
         try {
-            const resolved = layout.saveLayout();
-            const out = kept(JSON.parse(JSON.stringify(resolved)), knownTypes, TRANSIENT);
-            if (out) {
-                unminimisedIn(out.root);
-                out.panels = [...records.values()].filter((r) => r.registered && !TRANSIENT.has(r.id)).map((r) => r.id);
-                localStorage.setItem(storageKey, JSON.stringify(out));
-            }
+            const out = remembering();
+            if (out) localStorage.setItem(storageKey, out);
         } catch (e) { /* private window, blocked storage: the layout still works */ }
     }
     function remember() {
@@ -750,6 +753,15 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         list() { return [WORLD, ...records.keys()].map((id) => this.state(id)); },
         /* The page's own layout again, whatever a person made of it. */
         reset() { return this.applyView("default"); },
+        /* Whether the browser holds the layout as it stands: false while a change is
+         * waiting to be written, and while one has been made that the layout has not
+         * yet said it made. True where nothing can be remembered. */
+        remembered() {
+            try {
+                const out = remembering();
+                return !saving && (!out || localStorage.getItem(storageKey) === out);
+            } catch (e) { return true; }
+        },
         /* A view: a named arrangement of windows, the page's own ("default") or one a
          * page defines -- `layout` in rows, columns and stacks of window ids (see
          * resolveView), the window it cannot be laid out without (`requires`) and how a
