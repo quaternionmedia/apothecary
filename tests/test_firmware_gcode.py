@@ -986,10 +986,12 @@ def test_simulated_dwells_scale_with_the_speed_setting(monkeypatch):
     monkeypatch.delenv("APOTHECARY_SIMULATED_SPEED", raising=False)
     assert gcode.SimulatedPrinter("/dev/ttySIM", 115200).dwell_scale == 1.0
     monkeypatch.setenv("APOTHECARY_SIMULATED_SPEED", "0.1")
-    started = time.monotonic()
-    # 1.5 s, and 9 s capped at 2 s: 3.5 s at full length, 0.35 s at a tenth.
-    gcode.SimulatedPrinter("/dev/ttySIM", 115200).write(b"G4 P1500\nG4 S9\n")
-    assert 0.3 < time.monotonic() - started < 2.0
+    printer = gcode.SimulatedPrinter("/dev/ttySIM", 115200)
+    slept = []
+    monkeypatch.setattr(gcode.time, "sleep", slept.append)
+    # 1.5 s, and 9 s capped at 2 s: at a tenth, 0.15 s and 0.2 s.
+    printer.write(b"G4 P1500\nG4 S9\n")
+    assert slept == pytest.approx([0.15, 0.2])
 
 
 def test_a_simulated_bed_is_the_same_at_a_place_however_many_polls_came_before():

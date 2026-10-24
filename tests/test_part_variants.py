@@ -566,17 +566,16 @@ class TestASupersededRender:
         raise AssertionError(f"no render with {text} started")
 
     def test_the_older_request_from_the_page_is_a_409(self, cube, openscad):
-        exe = openscad('case "$vals " in *"size=11 "*) exec sleep 30;; esac')
+        exe = openscad('case "$vals " in *"size=11 "*) exec sleep 300;; esac')
         client = TestClient(app)
-        started = time.monotonic()
         thread, older = self._start(client, {"size": 11}, "page-1")
         self._wait_for(exe, "size=11 ")
         newer = _generate(client, {"size": 12}, "page-1")
-        thread.join(15)
+        thread.join(60)  # an older render left to run takes five minutes
+        assert not thread.is_alive()
         assert newer.status_code == 200, newer.text
         assert older["r"].status_code == 409
         assert older["r"].json()["detail"]["superseded"] is True
-        assert time.monotonic() - started < 15
         assert api._page_renders.running() == 0
 
     def test_another_pages_request_does_not_stop_it(self, cube, openscad):

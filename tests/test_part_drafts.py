@@ -395,16 +395,16 @@ class TestTheRenderRoute:
         older = threading.Thread(
             target=lambda: out.update(r=_render(client, SCAD + "// SLEEP\n", page="page-1"))
         )
-        started = time.monotonic()
         older.start()
         deadline = time.monotonic() + 10
         while not renders(exe) and time.monotonic() < deadline:
             time.sleep(0.02)
         newer = _render(client, SCAD + "// quick\n", page="page-1")
-        older.join(15)
+        older.join(60)  # an older render left to run takes five minutes
+        assert not older.is_alive()
         assert newer.status_code == 200, newer.text
         assert out["r"].status_code == 409 and out["r"].json()["detail"]["superseded"] is True
-        assert time.monotonic() - started < 15 and _beside(block) == []
+        assert _beside(block) == []
 
 
 class TestAPartBuiltByPython:
