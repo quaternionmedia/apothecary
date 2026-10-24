@@ -3,11 +3,12 @@ name: 🚶 Step-through tests
 # The step-through tests (tests/e2e/test_steps_*.py) walk loops other browser tests
 # hold end to end -- a picture to a print, firmware, one machine -- a step at a time,
 # as a person walks them on the demo with --step N. Every other run skips them; here
-# they run whole once a week, and on demand, each on a server of its own. A schedule
-# and a manual run start from the default branch's copy of this file.
+# they run whole at a version tag, and on demand, each on a server of its own. No cap
+# of this file's: it has no record yet to take one from.
 on:
-  schedule:
-  - cron: "37 6 * * 1"
+  push:
+    tags:
+    - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -17,7 +18,6 @@ jobs:
   steps:
     name: 🚶 The step-through tests, whole
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
     steps:
     - name: 📰 Checkout
       uses: actions/checkout@v6

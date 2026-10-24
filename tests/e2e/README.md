@@ -36,7 +36,7 @@ not answer `/health` stops the run.
 | `--slow` | Also runs tests marked `slow`: full renders and accuracy benches. |
 | `--generate-docs` | Runs the tests marked `docs`, which skip without it, and turns on their `doc_recorder` screenshots (below). Pass it through `apothecary docs generate`, not by hand. |
 | `--step N` | With `--base-url` naming the demo (`apothecary serve --demo`): a step-through test (`test_steps_*.py`) runs only its step N, on the demo, in the visible Chromium answering DevTools at 127.0.0.1:9222 (or the address `APOTHECARY_WALK_DEVTOOLS` names), in its tab named `apothecary-walk`, and leaves the tab there, its picture in `.cache/walk/<loop>-step-N.png`. Each step first checks that the tab is where the step before leaves it, and does nothing otherwise. What they share is `stepping.py`. |
-| `--steps` | The step-through tests (`test_steps_*.py`) run whole, every step in order on a server of their own. With neither this nor `--step N` they skip: each walks a loop another browser test holds end to end (a picture to a print, firmware, one machine). The weekly `steps.yml` workflow passes it, and so can `apothecary test all --steps`. |
+| `--steps` | The step-through tests (`test_steps_*.py`) run whole, every step in order on a server of their own. With neither this nor `--step N` they skip: each walks a loop another browser test holds end to end (a picture to a print, firmware, one machine). The `steps.yml` workflow, at a version tag, passes it, and so can `apothecary test all --steps`. |
 | `--headed`, `--slowmo 500`, `--tracing on` | pytest-playwright's own flags, for debugging. Open a trace with `uv run playwright show-trace test-results/<test>/trace.zip`. |
 
 Every server comes from one factory, the `start_server` fixture in

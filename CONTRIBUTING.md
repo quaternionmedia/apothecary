@@ -83,7 +83,7 @@ is not a member: it is its own Cargo project, built by its own toolchain
 Nothing else is a gate. Formatting is not checked in CI.
 `docs-generate.yml` runs at a `v*` tag and on demand, and gates nothing: `apothecary docs
 generate` runs the doc-capture tests, which nothing else runs, and keeps `docs/generated/`
-as the run's artifact. `steps.yml` runs once a week and on demand too, and gates nothing:
+as the run's artifact. `steps.yml` runs at a `v*` tag and on demand too, and gates nothing:
 the step-through tests (`tests/e2e/test_steps_*.py`), whole, under `--steps`; every other
 run skips them, since each walks a loop another browser test holds end to end. A job's cap
 is twice its median over the runs GitHub records for it; one with no record has GitHub's
