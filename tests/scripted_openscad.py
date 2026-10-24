@@ -10,7 +10,8 @@ It reads the SCAD it is given, so a draft is answered by what is in it:
 - a line holding ``SYNTAX ERROR`` is a parser error there; ``assert(false)`` a
   failed assertion, and ``assert(name < N)`` one when ``name`` (as ``-D`` sets
   it, else as the text assigns it) is N or more; ``WARN`` a warning -- each said by file and line, as
-  OpenSCAD says them; ``SLEEP`` makes a render take half a minute;
+  OpenSCAD says them; ``SLEEP`` makes a render take five minutes, longer than any
+  test waits, so one a test does not stop never ends while it watches;
 - a render with a failed assertion exits 1 and writes nothing, as 2021.01
   does, or, as a snapshot does, writes its geometry and exits 0 (``partial``);
 - the CSG export (``--export-format=csg``) prints the text without its
@@ -181,7 +182,7 @@ if fmt == "csg":
 for s in said:
     print(s, file=sys.stderr)
 if "SLEEP" in text:
-    time.sleep(30)
+    time.sleep(300)
 if failed and not PARTIAL:
     print("Current top level object is empty.", file=sys.stderr)
     sys.exit(1)

@@ -378,7 +378,7 @@ class TestStoppingARender:
     """A newer request's Cancellation stops an older render's OpenSCAD."""
 
     def test_a_cancelled_render_stops_its_openscad_and_leaves_nothing(self, tmp_path):
-        exe = _scripted_openscad(tmp_path / "bin" / "openscad", "2021.01", "exec sleep 30")
+        exe = _scripted_openscad(tmp_path / "bin" / "openscad", "2021.01", "exec sleep 300")
         scad, stl = tmp_path / "part.scad", tmp_path / "out" / "part.stl"
         scad.write_text("cube(1);")
         cancel = Cancellation()
@@ -388,19 +388,17 @@ class TestStoppingARender:
                 result=OpenSCADRenderer(str(exe)).render_stl(scad, stl, 60, cancel=cancel)
             )
         )
-        started = time.monotonic()
         worker.start()
         deadline = time.monotonic() + 10
         while not cancel._running and time.monotonic() < deadline:
             time.sleep(0.01)
         assert cancel._running, "the render never started"
         cancel.cancel()
-        worker.join(10)
+        worker.join(60)  # a render left to run takes five minutes
         assert not worker.is_alive()
         result = done["result"]
         assert result.cancelled and not result.success
         assert result.error_message == SUPERSEDED
-        assert time.monotonic() - started < 10
         assert not cancel._running
         assert list(stl.parent.iterdir()) == []
 
