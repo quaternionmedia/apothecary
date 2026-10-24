@@ -63,8 +63,30 @@ def _expand_to(page: Page, path: str):
     page.locator(f"#contents-list .contents-item[data-path='{path}']").click()
 
 
+def _pins(page: Page, base_url: str) -> set:
+    bindings = page.request.get(f"{base_url}/sites/garage/devices").json()["bindings"]
+    return {b["path"] for b in bindings if b.get("binding_source") == "manual"}
+
+
+def _print_files(page: Page, base_url: str) -> set:
+    return {f["id"] for f in page.request.get(f"{base_url}/firmware/printers/prints").json()}
+
+
+@pytest.fixture
+def leaves_the_boards_as_found(page: Page, base_url: str):
+    """After the test, however it ends: a board it pinned in garage is unpinned, and a
+    print file it kept is deleted."""
+    pinned, kept = _pins(page, base_url), _print_files(page, base_url)
+    yield
+    for path in _pins(page, base_url) - pinned:
+        page.request.delete(f"{base_url}/sites/garage/nodes/{path}/device")
+    for file_id in _print_files(page, base_url) - kept:
+        page.request.delete(f"{base_url}/firmware/printers/prints/{file_id}")
+
+
 @pytest.mark.e2e
 @pytest.mark.docs
+@pytest.mark.usefixtures("leaves_the_boards_as_found")
 def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     """Pin the simulated printer to printer_1, see the node follow its state, open
     its Machine and query it, open a devkit's Machine and listen to it, follow the

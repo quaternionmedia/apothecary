@@ -82,7 +82,7 @@ and a feature's test does not break when the layout around it changes:
 | Focused systems (`test_focused_systems.py`) | Every system the registry names, in the viewer, parameterized over the registry: it opens its main window alone, each section shows its part, a ring verb opens the section it acts on, its view lays everything out, a reload keeps or forgets it | the browser suite |
 | Features and loops (the rest) | What a person does with a part, a board, a picture, end to end, and the walkthrough pages and pictures the loops write | the browser suite |
 
-Four rules keep it so:
+Five rules keep it so:
 
 - **A feature's test asserts what the feature does, not where a window stands.**
   It opens what it needs through the shared helpers -- `windows.py` (a window, a
@@ -95,6 +95,12 @@ Four rules keep it so:
   with the unit tests) -- and leaves where a window opens to the window manager's
   tests. A walk, whose pictures show what a person pressed, lays a view out from
   the ring (`by_hand=True`).
+- **A file leaves the shared server as it found it.** Which files share the
+  session's server follows the shards, which `--record-durations` moves, so a file
+  that pins a board, keeps a picture, moves a piece, lights the theatre or adds a
+  view, camera, print file or slice takes it back after it. `tests/e2e/conftest.py`
+  compares what the server shows before and after each file that asks for it, and
+  fails the file that left something changed, naming what.
 - **A test module shares nothing by being imported.** A helper or a fixture two
   files use lives in one of those modules or in a conftest, and
   `tests/test_e2e_helpers.py` refuses a test file that keeps its own copy of one,
