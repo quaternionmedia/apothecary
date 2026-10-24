@@ -40,7 +40,8 @@ def drawn_picture(picture_folder):
     pen.rectangle((470, 380, 720, 425), fill=35)
     path = folder / "bench.png"
     picture.save(path)
-    return path
+    yield path
+    path.unlink(missing_ok=True)
 
 
 @pytest.fixture

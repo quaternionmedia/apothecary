@@ -8,6 +8,7 @@ simulator's own sweep, PUT to the server the way a bridge would send them.
 
 import json
 
+import httpx
 import pytest
 from playwright.sync_api import expect
 
@@ -20,6 +21,18 @@ pytestmark = pytest.mark.e2e
 STATS = "window.fractalViewer.lighting.stats()"
 RIG = load_theatre_rig()
 LOCATED = [p for p in RIG.patches if p.location is not None]
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _the_theatre_dark_again(base_url):
+    """After the file: every level the console fed is back at nought, as the theatre
+    was before it, for the next file on the server."""
+    yield
+    with httpx.Client(base_url=base_url, timeout=15.0) as http:
+        channels = http.get("/sites/theatre/lighting/state").json()["channels"]
+        dark = {ch: {param: 0.0 for param in params} for ch, params in channels.items()}
+        if dark:
+            http.put("/sites/theatre/lighting/state", json={"levels": dark}).raise_for_status()
 
 
 def _feed(page, base_url: str, t: float) -> None:
