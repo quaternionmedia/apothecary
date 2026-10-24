@@ -3,7 +3,7 @@ first checking that the page is where the step before it leaves it.
 
 Under ``--steps`` a step-through test runs every step, in order, on a server of its own in
 its own browser; with neither flag it skips, since each walks a loop another browser test
-holds end to end, and the weekly steps workflow (.github/workflows/steps.yml) passes
+holds end to end, and the steps workflow (.github/workflows/steps.yml, at a version tag) passes
 ``--steps``. Given ``--step N`` and ``--base-url`` naming the demo (``apothecary serve
 --demo``), it runs only step N, on the demo, in the visible Chromium answering DevTools at
 127.0.0.1:9222 (started with ``--remote-debugging-port=9222``), in its tab named

@@ -36,7 +36,7 @@ not answer `/health` stops the run.
 | `--slow` | Also runs tests marked `slow`: full renders and accuracy benches. |
 | `--generate-docs` | Runs the tests marked `docs`, which skip without it, and turns on their `doc_recorder` screenshots (below). Pass it through `apothecary docs generate`, not by hand. |
 | `--step N` | With `--base-url` naming the demo (`apothecary serve --demo`): a step-through test (`test_steps_*.py`) runs only its step N, on the demo, in the visible Chromium answering DevTools at 127.0.0.1:9222 (or the address `APOTHECARY_WALK_DEVTOOLS` names), in its tab named `apothecary-walk`, and leaves the tab there, its picture in `.cache/walk/<loop>-step-N.png`. Each step first checks that the tab is where the step before leaves it, and does nothing otherwise. What they share is `stepping.py`. |
-| `--steps` | The step-through tests (`test_steps_*.py`) run whole, every step in order on a server of their own. With neither this nor `--step N` they skip: each walks a loop another browser test holds end to end (a picture to a print, firmware, one machine). The weekly `steps.yml` workflow passes it, and so can `apothecary test all --steps`. |
+| `--steps` | The step-through tests (`test_steps_*.py`) run whole, every step in order on a server of their own. With neither this nor `--step N` they skip: each walks a loop another browser test holds end to end (a picture to a print, firmware, one machine). The `steps.yml` workflow, at a version tag, passes it, and so can `apothecary test all --steps`. |
 | `--headed`, `--slowmo 500`, `--tracing on` | pytest-playwright's own flags, for debugging. Open a trace with `uv run playwright show-trace test-results/<test>/trace.zip`. |
 
 Every server comes from one factory, the `start_server` fixture in
@@ -63,7 +63,7 @@ A file's tests run in order and on one server: the walkthroughs and the ring bui
 on the steps before them. So parallel runs keep files whole. `-n auto --dist
 loadfile` gives each worker its own server on a free port (`--server-port` is
 refused with `-n`). `--shard K/N` runs the K-th of N shards, files placed
-heaviest first onto the lightest shard by `durations.json`; CI runs three. A
+heaviest first onto the lightest shard by `durations.json`; CI runs three, at a version tag. A
 file missing from `durations.json` counts as the average test for each of its
 tests. `--record-durations` writes a run's times into it -- each file run replaces
 its entries, the rest are kept -- so when the shards drift apart, `uv run
@@ -122,9 +122,9 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   or `test_docs_bench_walkthrough.py`. Each numbered step is written as the run
   reaches it, after the assertions before it. The page's opening, its notes and
   its list of what it does not show are the test's fixed words: nothing checks
-  them against the run, so they are kept true by whoever edits the test. CI
-  fails when a page a run rewrote differs from the committed one (`git diff
-  --exit-code -- 'walkthrough/*.md'` in `pytest.yml`), so a page's words carry
+  them against the run, so they are kept true by whoever edits the test. CI, at
+  a version tag, fails when a page a run rewrote differs from the committed one
+  (`git diff --exit-code -- 'walkthrough/*.md'` in `pytest.yml`), so a page's words carry
   nothing that changes from run to run -- a temporary folder, a time, a count
   that varies -- and a step that would show one names it instead. A screenshot
   is rewritten only when its pixels change; commit the page and pictures when
