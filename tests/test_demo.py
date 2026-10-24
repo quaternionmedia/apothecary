@@ -109,6 +109,25 @@ def test_the_demo_slices_with_the_persons_orcaslicer_read_where_it_is(
     assert made.orcaslicer is None and "APOTHECARY_ORCASLICER" not in made.env
 
 
+@pytest.mark.parametrize("failure", ["missing", "hung"])
+def test_a_git_that_is_missing_or_does_not_answer_leaves_the_demo_without_saves(
+    tmp_path, monkeypatch, failure
+):
+    """The demo's variants repository is made by git, each call given a time: a git that
+    is not there, or does not answer in time, leaves the demo running without one."""
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append(kwargs.get("timeout"))
+        if failure == "missing":
+            raise FileNotFoundError("git")
+        raise subprocess.TimeoutExpired(argv, kwargs.get("timeout"))
+
+    monkeypatch.setattr(demo.subprocess, "run", run)
+    assert demo._variants_repo(tmp_path / "variants.git") is None
+    assert calls and all(t == demo.GIT_TIMEOUT_S for t in calls)
+
+
 def test_the_seed_refuses_outside_the_demo(monkeypatch):
     monkeypatch.delenv(demo.DEMO_ENV, raising=False)
     with pytest.raises(RuntimeError, match="demo's environment only"):
