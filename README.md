@@ -135,7 +135,6 @@ Start the server and visit http://127.0.0.1:8000:
 | `/parts/{name}/scad`         | Download OpenSCAD source                |
 | `/parts/{name}/stl`          | Download STL file                       |
 | `/parts/{name}/stl/generate` | Generate STL from SCAD                  |
-| `/openscad/status`           | Check OpenSCAD availability             |
 | `/health`                    | Health check                            |
 
 ## 🐍 Python API

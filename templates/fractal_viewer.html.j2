@@ -232,10 +232,8 @@
         .contents-item.selected { background: #0d3a66; color: #9cd2ff; }
         .contents-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
 
-        /* Category filter chips: bulk "expand this whole subsystem, at any
-           depth beneath the current level" toggles -- the finer-grained,
-           per-subsystem replacement for the old all-or-nothing "show all
-           levels" checkbox. */
+        /* Category filter chips: each expands one whole subsystem, at any
+           depth beneath the current level. */
         .category-filters { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.6rem; }
         .category-chip {
             display: flex; align-items: center; gap: 0.3rem;
@@ -437,8 +435,12 @@
         <div class="toolbar">
             <h1>🧪 Apothecary</h1>
             <span class="badge">FRACTAL VIEWER — unratified prototype</span>
-            <select id="site-select"{{ select_disabled }}>
-                {{ site_options | safe }}
+            <select id="site-select"{% if not site_names %} disabled{% endif %}>
+                {% for name in site_names %}
+                <option value="{{ name }}"{% if name == default_site %} selected{% endif %}>{{ name }}</option>
+                {% else %}
+                <option value="" disabled>No sites found</option>
+                {% endfor %}
             </select>
             <button type="button" id="load-btn">Load</button>
             <button type="button" id="zoom-out-btn" title="Zoom out one level (Backspace)" disabled>⤴ Zoom Out</button>
@@ -505,7 +507,7 @@
                     <div class="panel-header">Contents</div>
                     <div class="panel-body">
                         <div id="category-filters" class="category-filters"
-                             title="Expand every node of a subsystem at once, at any depth beneath the current level -- at the cost of render time, same tradeoff 'show all levels' used to offer, now scoped per subsystem instead of all-or-nothing"></div>
+                             title="Expand every node of a subsystem at once, at any depth beneath the current level, at the cost of render time"></div>
                         <ul id="contents-list" class="contents-list contents-tree"></ul>
                     </div>
                 </div>
@@ -580,6 +582,9 @@
         const DEFAULT_SITE = {{ default_site | tojson }};
         const INITIAL_FOCUS = {{ focus_path | tojson }};
 
+        // Anything from the server that is written into markup goes through this.
+        const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
         // Subsystem colors -- a node's own ``category`` if set, else
         // whatever the nearest ancestor's was (already resolved server-side,
         // see api.py's _assembly_tree docstring on category inheritance).
@@ -644,6 +649,7 @@
 
         const PLACEHOLDER_SIZE = 40;   // mm -- box size for a child with no footprint
         const PLACEHOLDER_PITCH = 60;  // mm -- spacing between footprint-less siblings
+        const WAVE_CONCURRENCY = 3;    // real-geometry loads in flight at once
         const WHEEL_RESISTANCE_THRESHOLD = 500;
         const SNAP_INCREMENT = 50;    // mm -- matches WALL_THICKNESS; fine enough for by-hand placement
 
@@ -737,6 +743,12 @@
             position.needsUpdate = true;
         }
 
+        // Frees an object's GPU buffers and those of everything under it: a
+        // mesh's 'edges' outline is a child with a geometry of its own.
+        function disposeDeep(object) {
+            object.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+        }
+
         // A node's own bounds if it has any (a real footprint, or a leaf
         // primitive); otherwise, for a composite node with no footprint of
         // its own (e.g. a building shell around everything it contains, which
@@ -771,10 +783,10 @@
             return fullPathToParent ? `${fullPathToParent}.${childName}` : childName;
         }
 
-        // Every leaf beneath a node, recursively -- what "show all levels"
-        // renders instead of just the current focus's direct children.
-        // ``fullPathToNode`` is the caller-supplied full address of ``node``
-        // itself (see pathForChild); each collected leaf carries its own
+        // Every leaf beneath a node, recursively -- what an expanded category
+        // renders instead of the node itself. ``fullPathToNode`` is the
+        // caller-supplied full address of ``node`` itself (see
+        // pathForChild); each collected leaf carries its own
         // full ``_path`` because bare names collide across siblings in this
         // exact example: all three printers have their own
         // "belt_tensioner_boss". A plain name-keyed mesh registry would
@@ -838,9 +850,7 @@
                 this.renderNodeByKey = {};    // nodeKey() -> node data for every node in the
                                               // hierarchy tree (not just what's rendered),
                                               // rebuilt each renderFocus()
-                this.expandedCategories = new Set();  // categories rendered at full depth --
-                                                       // the per-subsystem replacement for the
-                                                       // old single "show all levels" toggle
+                this.expandedCategories = new Set();  // categories rendered at full depth
                 this.treeExpanded = new Set();  // paths expanded for *browsing* in the
                                                  // hierarchy tree -- independent of whether
                                                  // that subtree is actually rendered
@@ -857,6 +867,10 @@
                 this.loadGeneration = 0;  // guards against a slow real-geometry
                                           // fetch upgrading a mesh after the
                                           // user has already navigated away
+                this.partStages = {};      // part name -> { staged, committed } parameter values
+                this.partSection = null;   // the Selected panel's section for the part being edited
+                this.nodeLoads = new Map();  // nodeKey() -> token of its newest load
+                this.waveDone = Promise.resolve();  // settles when the level's geometry has loaded
 
                 this.initThreeJS();
                 this.bindEvents();
@@ -1008,12 +1022,13 @@
                 this.bindingsInFlight = false;
                 this.queryResult = null;  // last "Query" answer shown in the Device section
                 // Auto-refresh: rescan + re-poll on a schedule (self-scheduled,
-                // never overlapping, paused while the tab is hidden).
+                // never overlapping, paused while the tab is hidden). Off until
+                // ticked: each round runs arduino-cli and polls every held printer.
                 this.autoEl = document.getElementById('devices-auto');
                 this.intervalEl = document.getElementById('devices-interval');
                 this.autoTimer = null;
                 try {
-                    this.autoEl.checked = localStorage.getItem('apothecary.devices.auto') !== '0';
+                    this.autoEl.checked = localStorage.getItem('apothecary.devices.auto') === '1';
                     const iv = localStorage.getItem('apothecary.devices.interval');
                     if (iv) this.intervalEl.value = iv;
                 } catch (e) { /* storage blocked: defaults */ }
@@ -1090,6 +1105,8 @@
 
             async loadSite(name, focusPathStr = '') {
                 if (!name) return;
+                this.closeMachine();
+                this.whereByPort = {};
                 this.setStatus(`Loading ${name}...`, 'loading');
                 try {
                     const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(name)}`);
@@ -1258,16 +1275,12 @@
                 return node;
             }
 
-            // The standardized "+1" control: zooming in only makes sense for
-            // a node that itself has something inside it -- a true leaf (no
-            // children) has nowhere to go.
+            // The standardized "+1" control, onto a direct child of the focus.
             zoomIn(name) {
                 const focus = this.currentFocusNode();
                 const child = findChild(focus, name);
-                // A leaf is a legitimate destination: it renders as itself, and
-                // reaching one is how the parts library gives back the old
-                // part-viewer experience. Refusing childless nodes made every
-                // entry in a catalog of leaves un-navigable.
+                // A leaf is a destination too: it renders as itself, which is
+                // how a part in the parts library is reached.
                 if (!child) return;
                 this.focusPath = [...this.focusPath, name];
                 this.selectedName = null;
@@ -1296,15 +1309,11 @@
                 this.renderFocus();
             }
 
-            // Category expansion (see expandedCategories, toggled from the
-            // Contents panel's category chips) replaces the old all-or-
-            // nothing "show all levels" checkbox: each direct child of focus
-            // renders collapsed (its own single box/mesh) unless its
-            // (inherited) category is expanded, in which case its whole
-            // subtree renders instead, every leaf at its true global
-            // position -- same "at the cost of render time" tradeoff as
-            // before, now scoped per subsystem instead of applying to
-            // everything at once. Every node handed back here carries a
+            // Each direct child of focus renders collapsed (its own single
+            // box/mesh) unless its (inherited) category is expanded from the
+            // Contents panel's chips, in which case its whole subtree renders
+            // instead, every leaf at its true global position, at the cost of
+            // render time. Every node handed back here carries a
             // full, site-rooted _path (see pathForChild/collectLeaves),
             // since that path is also each node's address for a
             // real-geometry fetch (both the STL and the node-render routes
@@ -1381,20 +1390,13 @@
 
             clearScene() {
                 this.transformControls.detach();
-                for (const mesh of Object.values(this.meshByName)) {
-                    this.scene.remove(mesh);
-                    mesh.geometry.dispose();
-                    mesh.material.dispose();
-                }
-                for (const mesh of Object.values(this.buildVolumeMeshByName)) {
-                    this.scene.remove(mesh);
-                    mesh.geometry.dispose();
-                    mesh.material.dispose();
-                }
-                for (const overlay of Object.values(this.compoundOverlayByKey)) {
-                    this.scene.remove(overlay);
-                    overlay.geometry.dispose();
-                    overlay.material.dispose();
+                for (const object of [
+                    ...Object.values(this.meshByName),
+                    ...Object.values(this.buildVolumeMeshByName),
+                    ...Object.values(this.compoundOverlayByKey),
+                ]) {
+                    this.scene.remove(object);
+                    disposeDeep(object);
                 }
                 this.meshByName = {};
                 this.buildVolumeMeshByName = {};
@@ -1554,9 +1556,9 @@
                 });
             }
 
-            // ``key`` indexes meshByName/selectedName (nodeKey() -- a dotted
-            // path in "show all levels" mode, since bare names collide
-            // across siblings there); violation membership is checked
+            // ``key`` indexes meshByName/selectedName (nodeKey(), a dotted
+            // path, since bare names collide across siblings of an expanded
+            // category); violation membership is checked
             // against ``node.name`` instead, since that's what the server
             // reports and, in this example, violations only ever occur
             // between uniquely-named root-level Structures anyway.
@@ -1694,10 +1696,12 @@
                 const gridDivisions = Math.min(200, Math.max(10, rawDivisions));
 
                 this.scene.remove(this.gridHelper);
+                disposeDeep(this.gridHelper);
                 this.gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x444444, 0x2a2a2a);
                 this.scene.add(this.gridHelper);
 
                 this.scene.remove(this.axesHelper);
+                disposeDeep(this.axesHelper);
                 this.axesHelper = new THREE.AxesHelper(Math.max(20, span * 0.4));
                 this.scene.add(this.axesHelper);
             }
@@ -1749,8 +1753,7 @@
             // present anywhere beneath the current focus (not a fixed list --
             // a site that never uses "fluid" shouldn't show a dead chip for
             // it), each toggling expandedCategories and triggering a full
-            // renderFocus() (the rendered set genuinely changes, same as the
-            // old "show all levels" checkbox did).
+            // renderFocus() (the rendered set genuinely changes).
             renderCategoryFilters() {
                 this.categoryFiltersEl.innerHTML = '';
                 // renderNodeByKey (rebuilt just before this is called --
@@ -1884,7 +1887,7 @@
             // Position/status editing only works when the selected node is a
             // *direct* child of the root: /layout and /status only ever
             // address a site's direct children. Normally that's the same
-            // thing as focusPath being empty, but "show all levels" can
+            // thing as focusPath being empty, but an expanded category can
             // render (and let you select) a leaf many levels deeper while
             // still focused at the root, so both conditions are checked.
             isEditableSelection(focus, node) {
@@ -1915,8 +1918,8 @@
             // a parts-library leaf always gets the absorbed part view
             // (regardless of depth); otherwise, position/status editing only
             // works for a direct child of the root (see isEditableSelection),
-            // so anything deeper -- or any leaf shown via "show all levels"
-            // that isn't itself a direct child -- gets a read-only panel.
+            // so anything deeper -- or any leaf of an expanded category that
+            // isn't itself a direct child -- gets a read-only panel.
             renderSelectedPanel() {
                 if (this.cameraWidget) this.cameraWidget.renderPlacement();  // "Place at selected" follows the selection
                 const focus = this.currentFocusNode();
@@ -1943,7 +1946,7 @@
 
             zoomInAffordanceHtml(node) {
                 if (!node.children.length) return '';
-                return `<button type="button" class="zoom-in-btn">⤵ Zoom into ${node.name} (${node.children.length})</button>`;
+                return `<button type="button" class="zoom-in-btn">⤵ Zoom into ${esc(node.name)} (${node.children.length})</button>`;
             }
 
             bindZoomInAffordance(node) {
@@ -1991,33 +1994,31 @@
                 if (existing) {
                     this.transformControls.detach();
                     this.scene.remove(existing);
-                    existing.geometry.dispose();
-                    existing.material.dispose();
+                    disposeDeep(existing);
                     delete this.meshByName[key];
                 }
                 const overlay = this.compoundOverlayByKey[key];
                 if (overlay) {
                     this.scene.remove(overlay);
-                    overlay.geometry.dispose();
-                    overlay.material.dispose();
+                    disposeDeep(overlay);
                     delete this.compoundOverlayByKey[key];
                 }
                 const index = this.currentRenderNodes(this.currentFocusNode())
                     .findIndex((n) => nodeKey(n) === key);
                 this.buildChildMeshes([node], Math.max(0, index));
-                if (this.effectiveDetailFor(node, key) === DETAIL_FULL) {
-                    this.scheduleWaveLoad([node]);
-                }
+                // This node alone: the rest of the level's wave keeps loading.
+                if (this.effectiveDetailFor(node, key) === DETAIL_FULL) this.addToWave(this.loadAndUpgrade(node, this.loadGeneration));
+                else this.nextLoadToken(key);  // a load already under way for it is stale
                 this.renderSelectedPanel();
             }
 
             renderGenericPanel(node) {
                 this.selectedBodyEl.innerHTML = `
-                    <div class="prop-row"><label>Name</label><span>${node.name}</span></div>
-                    <div class="prop-row"><label>Role</label><span>${node.role}</span></div>
+                    <div class="prop-row"><label>Name</label><span>${esc(node.name)}</span></div>
+                    <div class="prop-row"><label>Role</label><span>${esc(node.role)}</span></div>
                     <div class="prop-readonly">
-                        Material: ${node.material ?? '—'}<br>
-                        Comment: ${node.comment ?? '—'}<br>
+                        Material: ${esc(node.material ?? '—')}<br>
+                        Comment: ${esc(node.comment ?? '—')}<br>
                         Footprint: ${node.footprint ? node.footprint.max.map((v, i) => (v - node.footprint.min[i]).toFixed(0)).join(' × ') + ' mm' : '—'}
                     </div>
                     ${this.detailAffordanceHtml(node)}
@@ -2036,13 +2037,13 @@
                        </div>`
                     : '';
                 this.selectedBodyEl.innerHTML = `
-                    <div class="prop-row"><label>Name</label><span>${node.name}</span></div>
+                    <div class="prop-row"><label>Name</label><span>${esc(node.name)}</span></div>
                     ${statusRow}
                     <div class="prop-row"><label>X (mm)</label><input type="number" id="pos-x" step="10" value="${node.position.x}"></div>
                     <div class="prop-row"><label>Y (mm)</label><input type="number" id="pos-y" step="10" value="${node.position.y}"></div>
                     <div class="prop-row"><label>Z (mm)</label><input type="number" id="pos-z" step="10" value="${node.position.z}"></div>
                     <div class="prop-readonly">
-                        Material: ${node.material ?? '—'}<br>
+                        Material: ${esc(node.material ?? '—')}<br>
                         Footprint: ${node.footprint ? node.footprint.max.map((v, i) => (v - node.footprint.min[i]).toFixed(0)).join(' × ') + ' mm' : '—'}<br>
                         Build volume: ${node.build_volume
                             ? node.build_volume.map((v) => v.toFixed(0)).join(' × ') + ' mm '
@@ -2069,13 +2070,22 @@
             }
 
             appendPartPanel(node, full = true) {
-                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
                 if (!full) {
                     this.selectedBodyEl.insertAdjacentHTML('beforeend', `
                         <div class="prop-row"><label>Part</label><span title="The part this machine is drawn as">${esc(node.part_ref)}</span></div>`);
                     return;
                 }
-                this.selectedBodyEl.insertAdjacentHTML('beforeend', `
+                // The part being edited keeps its section across a redraw of the
+                // panel (re-selecting it, a right-click, a pin): nothing is
+                // fetched again and the sliders stay where they were.
+                if (this.partSection && this.partSection.dataset.part === node.part_ref) {
+                    this.selectedBodyEl.appendChild(this.partSection);
+                    return;
+                }
+                this.partSection = document.createElement('div');
+                this.partSection.dataset.part = node.part_ref;
+                this.selectedBodyEl.appendChild(this.partSection);
+                this.partSection.innerHTML = `
                     <div class="prop-row"><label>Part</label><span>${esc(node.part_ref)}</span></div>
                     <div class="envelope" id="part-envelope"></div>
                     <div class="part-actions">
@@ -2095,7 +2105,7 @@
                     <div id="part-params">Loading…</div>
                     <div class="code-header">SCAD Source (the absorbed part view)</div>
                     <div id="part-scad-content" class="code-content">Loading…</div>
-                `);
+                `;
                 this.loadPartScad(node.part_ref);
                 this.loadPartChecklist(node.part_ref);
                 this.loadPartParams(node.part_ref);
@@ -2248,23 +2258,14 @@
             }
 
             bindStageActions(name) {
-                const apply = document.getElementById('apply-btn');
-                const revert = document.getElementById('revert-btn');
-                if (apply) {
-                    apply.onclick = async () => {
-                        if (!this.stagedValid) return;
-                        await this.regeneratePart(name);
-                        // What rendered is now what is committed.
-                        this.committedParams = { ...this.partParams };
-                        this.refreshStage();
-                    };
-                }
-                if (revert) {
-                    revert.onclick = () => {
-                        this.partParams = { ...this.committedParams };
-                        this.loadPartParams(name);
-                    };
-                }
+                const stage = this.partStages[name];
+                document.getElementById('apply-btn').onclick = () => {
+                    if (this.stagedValid) this.regeneratePart(name);
+                };
+                document.getElementById('revert-btn').onclick = () => {
+                    Object.assign(stage.staged, stage.committed);
+                    this.loadPartParams(name);
+                };
             }
 
             // The part's parameters, as controls, in the one panel that already
@@ -2272,16 +2273,19 @@
             // entry point onto the same object, and this viewer is the only one.
             async loadPartParams(name) {
                 const host = document.getElementById('part-params');
-                // `committed` is what the STL on disk was rendered from;
-                // `staged` is what the sliders currently say. Nothing renders
-                // until the difference has been validated and applied.
-                this.partParams = {};
-                this.committedParams = {};
+                // Kept per part, so a part left and come back to has what was
+                // staged on it. `committed` is what the STL on disk was rendered
+                // from; `staged` is what the sliders say. Nothing renders until
+                // the difference has been validated and applied.
+                const stage = (this.partStages[name] ??= { staged: {}, committed: {} });
+                this.partParams = stage.staged;
+                this.committedParams = stage.committed;
                 this.partParamsFor = name;
                 this.stagedValid = true;
                 try {
                     const response = await fetch(
                         `${BASE_URL}/parts/${encodeURIComponent(name)}/params`);
+                    if (this.partParamsFor !== name) return;  // another part was chosen meanwhile
                     if (!response.ok) { host.textContent = 'No parameters declared.'; return; }
                     const spec = await response.json();
                     this.showEnvelope(spec.bounds);
@@ -2291,9 +2295,9 @@
                     const ordered = [...spec.fields].sort(
                         (a, b) => b.contested.length - a.contested.length);
                     for (const field of ordered) {
-                        this.partParams[field.name] = field.default;
-                        this.committedParams[field.name] = field.default;
-                        host.appendChild(this.buildParamControl(field));
+                        stage.committed[field.name] ??= field.default;
+                        stage.staged[field.name] ??= stage.committed[field.name];
+                        host.appendChild(this.buildParamControl(field, stage.staged[field.name]));
                     }
                     this.bindStageActions(name);
                     this.refreshStage();
@@ -2311,7 +2315,7 @@
                     : '';
             }
 
-            buildParamControl(field) {
+            buildParamControl(field, value) {
                 const wrap = document.createElement('div');
                 wrap.className = 'param' + (field.contested.length ? ' is-contested' : '');
                 const head = document.createElement('div');
@@ -2335,10 +2339,10 @@
                     for (const option of (field.pattern.match(/\w+/g) || [])) {
                         const el = document.createElement('option');
                         el.value = el.textContent = option;
-                        if (option === field.default) el.selected = true;
+                        if (option === value) el.selected = true;
                         select.appendChild(el);
                     }
-                    val.textContent = field.default;
+                    val.textContent = value;
                     select.onchange = () => {
                         this.partParams[field.name] = select.value;
                         val.textContent = select.value;
@@ -2350,8 +2354,8 @@
                     input.type = 'range';
                     input.min = field.min; input.max = field.max;
                     input.step = (field.max - field.min) / 200;
-                    input.value = field.default;
-                    val.textContent = Number(field.default).toFixed(2);
+                    input.value = value;
+                    val.textContent = Number(value).toFixed(2);
                     input.oninput = () => {
                         this.partParams[field.name] = Number(input.value);
                         val.textContent = Number(input.value).toFixed(2);
@@ -2368,8 +2372,8 @@
                     button.className = 'cand';
                     button.dataset.value = candidate.value;
                     button.innerHTML =
-                        `<b>${candidate.value}</b><span class="src">${candidate.source}</span>`
-                        + (candidate.note ? `<span class="note">${candidate.note}</span>` : '');
+                        `<b>${esc(candidate.value)}</b><span class="src">${esc(candidate.source)}</span>`
+                        + (candidate.note ? `<span class="note">${esc(candidate.note)}</span>` : '');
                     button.onclick = () => {
                         this.partParams[field.name] = candidate.value;
                         if (wrap._input) wrap._input.value = candidate.value;
@@ -2407,7 +2411,8 @@
                 try {
                     // Whatever the controls are set to, so turning a contested
                     // number and pressing regenerate shows what it does.
-                    const params = this.partParamsFor === name ? (this.partParams ?? {}) : {};
+                    const stage = this.partStages[name];
+                    const params = { ...(stage?.staged ?? {}) };
                     const response = await fetch(
                         `${BASE_URL}/parts/${encodeURIComponent(name)}/stl/generate?force=true`,
                         {
@@ -2422,10 +2427,16 @@
                     }
                     const body = await response.json();
                     this.showEnvelope(body.bounds);
-                    // The mesh on screen is the old geometry until it reloads.
-                    const target = Object.values(this.renderNodeByKey ?? {})
-                        .find((n) => n.part_ref === name);
-                    if (target) this.rebuildSingleMesh(target);
+                    // What rendered is now what is committed.
+                    if (stage) Object.assign(stage.committed, params);
+                    if (this.partParamsFor === name) this.refreshStage();
+                    // Every piece on screen drawn from this part loads the new STL.
+                    const url = `${BASE_URL}/parts/${encodeURIComponent(name)}/stl?t=${Date.now()}`;
+                    const reloads = Object.values(this.renderNodeByKey)
+                        .filter((n) => n.part_ref === name && this.meshByName[nodeKey(n)]
+                            && this.effectiveDetailFor(n, nodeKey(n)) === DETAIL_FULL)
+                        .map((n) => this.loadAndUpgrade(n, this.loadGeneration, () => this.loadSTLMesh(n, url)));
+                    await this.addToWave(Promise.all(reloads));
                     this.setStatus(`${name} regenerated`, 'success');
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
@@ -2524,7 +2535,11 @@
                     z: worldMinApZ - node.footprint.min[2],
                 };
                 this.recomputeWorldBounds(node);
-                this.renderSelectedPanel();
+                // Every frame of a drag: only the numbers move, not the panel.
+                for (const axis of ['x', 'y', 'z']) {
+                    const input = document.getElementById(`pos-${axis}`);
+                    if (input) input.value = node.position[axis];
+                }
             }
 
             commitCurrentDrag() {
@@ -2598,6 +2613,7 @@
             async loadBindings(fresh = false) {
                 if (!this.siteName || this.bindingsInFlight) return;
                 this.bindingsInFlight = true;
+                if (fresh) this.whereByPort = {};  // a rescan asks again where each printer is pinned
                 try {
                     const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/devices${fresh ? '?fresh=1' : ''}`);
                     if (!response.ok) throw new Error(`devices (${response.status})`);
@@ -2734,12 +2750,13 @@
                 // The machines' badges are this method's; a camera's badge is
                 // syncCameras', and stays whichever of the two runs last.
                 for (const key of this.anchors.keys()) if (!wanted.has(key) && !key.startsWith('camera:')) this.anchors.remove(key);
-                for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key)) { m.marks.destroy(); delete this.marks[key]; }
+                for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key)) { m.marks?.destroy(); delete this.marks[key]; }
+                // The machine's popup goes with its badge: nothing is left polling it unseen.
+                if (this.machine && !wanted.has(this.machine.path)) this.closeMachine();
             }
 
             fillBadge(badge, row, isPrinter) {
                 const st = row.printer_status;
-                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
                 badge.classList.remove('printing', 'offline', 'job');
                 if (!isPrinter) {
                     // What apothecary last flashed to it; what it says it runs is
@@ -2780,19 +2797,23 @@
                 this.panels.register('machine', {
                     title: `${bearer} · ${port}`, where: 'free', open: true,
                     body: (slot) => { handle = mountMachine(slot, { base: BASE_URL, port, host: 'popup', logRoot: logSlot }); },
+                    onClose: () => this.closeMachine(),  // its ✕: the polling stops with it
                 });
                 this.panels.tether('machine', bearer);
                 this.machine = { port, path: bearer, handle };
                 window.apothecaryMachine = handle;
                 return true;
             }
+            // Stops the machine's polling and takes its two panels away. Called
+            // again from inside (the panel's onClose), it does nothing.
             closeMachine() {
-                if (!this.machine) return;
-                this.machine.handle.destroy();
-                this.panels.unregister('machine');
-                this.panels.unregister('log');
+                const machine = this.machine;
+                if (!machine) return;
                 this.machine = null;
                 window.apothecaryMachine = null;
+                machine.handle.destroy();
+                this.panels.unregister('machine');
+                this.panels.unregister('log');
             }
 
             // A printer's marks at its node, from what GET /firmware/printers/where
@@ -2808,8 +2829,11 @@
                     return;
                 }
                 if (this.whereByPort[port] === undefined) {
-                    this.whereByPort[port] = fetch(`${BASE_URL}/firmware/printers/where?port=${encodeURIComponent(port)}`)
-                        .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+                    // A failed answer is not kept: the next sync asks again.
+                    const asked = fetch(`${BASE_URL}/firmware/printers/where?port=${encodeURIComponent(port)}`)
+                        .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+                        .then((where) => { if (!where && this.whereByPort[port] === asked) delete this.whereByPort[port]; return where; });
+                    this.whereByPort[port] = asked;
                 }
                 this.marks[path] = { marks: null, port, pending: true };
                 this.whereByPort[port].then(async (where) => {
@@ -2999,7 +3023,6 @@
 
             deviceSectionHtml(path) {
                 const { row, via } = this.bindingFor(path);
-                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
                 const viaLine = via
                     ? `<div class="device-line" style="color:#777">via <a href="#" class="dev-via" data-path="${esc(path + '.' + via)}" style="color:#9cd2ff">${esc(via)}</a> — the board inside; its polls drive this node's status</div>`
                     : '';
@@ -3102,6 +3125,7 @@
                     // rather than paying for another arduino-cli scan.
                     const row = await response.json();
                     if (row.binding_source) this.bindings[path] = row; else delete this.bindings[path];
+                    this.whereByPort = {};  // where a printer stands follows its pin
                     this.queryResult = null;
                     this.renderDeviceViews();
                     this.setStatus(identity ? `${path} ← ${identity}` : `${path}: device unpinned`, 'success');
@@ -3140,7 +3164,6 @@
             renderJobs() {
                 this.jobListEl.innerHTML = '';
                 // A job's name is whatever was posted; everything from the server is escaped here.
-                const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
                 for (const job of this.jobs) {
                     const li = document.createElement('li');
                     li.className = 'job-item';
@@ -3269,15 +3292,12 @@
                 if (key) this.selectChild(key);
             }
 
+            // A mesh is keyed by its full path and zoomIn takes a bare name:
+            // only a direct child of the focus is one step in.
             onDoubleClick(event) {
-                // zoomIn expects a direct child's bare name; a "show all
-                // levels" key can be a deeper dotted path instead, but
-                // zoomIn only ever acts on a node with children to zoom
-                // into, and every node this renders is a leaf (zero
-                // children) in that mode -- so this is always a safe no-op
-                // there, not a crash.
                 const key = this.raycastChild(event);
-                if (key) this.zoomIn(key);
+                const node = key && this.renderNodeByKey[key];
+                if (node && key === pathForChild(this.focusPath.join('.'), node.name)) this.zoomIn(node.name);
             }
 
             // Scroll dollies the camera as usual; once OrbitControls clamps
@@ -3450,17 +3470,16 @@
                 });
             }
 
-            // Swaps a placeholder box for real geometry in place -- disposes
-            // the old mesh, re-tags the new one so raycasting/selection keep
-            // working, and re-applies the same status/violation/selection
-            // coloring every mesh gets.
+            // Swaps what is drawn for a node (its placeholder box, or older
+            // geometry) for real geometry in place -- disposes the old mesh and
+            // its edges, re-tags the new one so raycasting/selection keep
+            // working, and re-applies the coloring every mesh gets.
             upgradeMesh(node, realMesh) {
                 const key = nodeKey(node);
                 const existing = this.meshByName[key];
-                if (!existing) return; // navigated away since the wave started
+                if (!existing) { disposeDeep(realMesh); return; }  // no longer on screen
                 this.scene.remove(existing);
-                existing.geometry.dispose();
-                existing.material.dispose();
+                disposeDeep(existing);
                 realMesh.userData.key = key;
                 this.scene.add(realMesh);
                 this.meshByName[key] = realMesh;
@@ -3468,28 +3487,53 @@
                 if (this.selectedName === key) this.transformControls.attach(realMesh);
             }
 
-            // The wave is exactly the set of nodes with a mesh on screen
-            // right now (renderFocus's renderNodes -- direct children
-            // normally, every leaf when "show all levels" is on). Upgrading
-            // anything not currently rendered has nowhere to land until a
-            // geometry cache exists to carry a prefetch across a zoom, which
-            // is real future work, not this increment. Within that set,
-            // "wave" is the sequential await order below: each mesh upgrades
-            // as its own load resolves, not all-or-nothing.
-            async scheduleWaveLoad(renderNodes) {
-                // A generation counter: if the user navigates again before a
-                // slow STL fetch resolves, that stale result must not
-                // upgrade a mesh belonging to the level they've since left.
+            // Every load of a node takes a token; only the newest may land.
+            nextLoadToken(key) {
+                const token = (this.nodeLoads.get(key) ?? 0) + 1;
+                this.nodeLoads.set(key, token);
+                return token;
+            }
+
+            // One node's geometry, loaded and swapped in -- unless the level
+            // has been left, or a newer load of the node started, by the time
+            // it arrives.
+            async loadAndUpgrade(node, generation, load = () => this.loadNodeGeometry(node)) {
+                const key = nodeKey(node);
+                const token = this.nextLoadToken(key);
+                const mesh = await load().catch((err) => { console.warn(`No geometry for ${key}:`, err); return null; });
+                if (!mesh) return;
+                if (generation === this.loadGeneration && this.nodeLoads.get(key) === token) this.upgradeMesh(node, mesh);
+                else disposeDeep(mesh);
+            }
+
+            // A load outside the level's wave (one node's detail, a
+            // regenerated part) is waited for by waveDone too.
+            addToWave(load) {
+                this.waveDone = Promise.all([this.waveDone, load]).then(() => {});
+                return load;
+            }
+
+            // The wave: real geometry for every node on screen at this level,
+            // WAVE_CONCURRENCY at a time (a composite node is an OpenSCAD render
+            // on the server). Leaving the level stops it before its next fetch.
+            // waveDone settles once it, and any load added since, have finished.
+            scheduleWaveLoad(renderNodes) {
                 const generation = ++this.loadGeneration;
-                for (const node of renderNodes) {
-                    // A node the user asked to see as a black box or a dot is
-                    // the one case where not fetching is the point: skipping
-                    // here is what makes the control save the render, rather
-                    // than just draw something else over it.
-                    if (this.effectiveDetailFor(node, nodeKey(node)) !== DETAIL_FULL) continue;
-                    const mesh = await this.loadNodeGeometry(node);
-                    if (mesh && generation === this.loadGeneration) this.upgradeMesh(node, mesh);
-                }
+                this.nodeLoads.clear();
+                const queue = [...renderNodes];
+                const worker = async () => {
+                    while (queue.length) {
+                        if (generation !== this.loadGeneration) return;
+                        const node = queue.shift();
+                        const key = nodeKey(node);
+                        // Black box and dot are the point of not fetching; a node
+                        // loaded (or set aside) since the wave began is handled.
+                        if (this.effectiveDetailFor(node, key) !== DETAIL_FULL || this.nodeLoads.has(key)) continue;
+                        await this.loadAndUpgrade(node, generation);
+                    }
+                };
+                this.waveDone = Promise.all(Array.from({ length: WAVE_CONCURRENCY }, worker)).then(() => {});
+                return this.waveDone;
             }
         }
 
@@ -3728,9 +3772,7 @@
     <script type="module">
     // The ring. Drawing and keys live in /static/ring.js; this is only the
     // wiring: what the ring opens on, what each chosen verb calls, and the
-    // addresses written onto the controls the page already has. No
-    // addEventListener here on purpose -- the census reads this file, and the
-    // ring's own listeners are the ring's, counted once behind `ring-open`.
+    // addresses written onto the controls the page already has.
     import { installRing, annotate, resolveRing } from '/static/ring.js';
 
     (() => {
@@ -3849,12 +3891,10 @@
                     const id = action.slice('panel:toggle:'.length);
                     const open = viewer.panels.toggle(id) && viewer.panels.isOpen(id);
                     viewer.setStatus(`${open ? 'Opened' : 'Closed'} the ${id} panel${tail}`, 'success');
-                } else if (action === 'fit' || action === 'fit-selection') {
-                    const focus = viewer.currentFocusNode();
-                    const nodes = viewer.currentRenderNodes(focus);
-                    const chosen = action === 'fit-selection' ? nodes.filter((n) => intent.context.targets.includes(n._path)) : nodes;
-                    viewer.frameCameraForChildren(chosen.length ? chosen : nodes);
-                    viewer.setStatus(`Framed ${chosen.length || nodes.length} piece(s)${tail}`, 'success');
+                } else if (action === 'fit') {
+                    const nodes = viewer.currentRenderNodes(viewer.currentFocusNode());
+                    viewer.frameCameraForChildren(nodes);
+                    viewer.setStatus(`Framed ${nodes.length} piece(s)${tail}`, 'success');
                 } else if (action === 'explain') {
                     const node = viewer.renderNodeByKey[path] || viewer.nodeByPath(path);
                     viewer.setStatus(node ? `${path}: a ${node.role}${node.category ? ' in ' + node.category : ''}${node.part_ref ? ', from part ' + node.part_ref : ''}, ${node.children.length} inside${tail}` : `${path}: not on screen${tail}`, 'success');

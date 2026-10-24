@@ -3,7 +3,6 @@ which is also the parts browser: the parts library is a site like any other."""
 
 import pytest
 from playwright.sync_api import Page, expect
-from viewer_ready import WAVE_DONE
 
 
 def _open(page: Page, url: str) -> None:
@@ -163,10 +162,8 @@ def test_viewer_integrated_loads_without_critical_errors(page: Page, base_url: s
     device bindings."""
     console_errors = []
     page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
-    page.add_init_script(WAVE_DONE)
 
-    # The viewer's own "Loaded" status, not networkidle: the device panel
-    # rescans ports on a schedule, so the page is never idle for long.
+    # The viewer's own signals, not networkidle.
     _open(page, f"{base_url}/viewer/sites/garage")
     page.evaluate("() => window.fractalViewer.waveDone")
     page.wait_for_function("() => window.fractalViewer.bindingsLoaded")

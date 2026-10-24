@@ -23,7 +23,7 @@ from __future__ import annotations
 import html
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -445,12 +445,3 @@ def pages() -> List[str]:
             for p in sorted(root.rglob("*.md")):
                 found.append(f"{prefix}/{p.relative_to(root).as_posix()}")
     return found
-
-
-def written_at() -> Optional[str]:
-    """When the generated docs were last written (their newest page), ISO, or None."""
-    newest = 0.0
-    if GENERATED_ROOT.is_dir():
-        for p in GENERATED_ROOT.rglob("*.md"):
-            newest = max(newest, p.stat().st_mtime)
-    return datetime.fromtimestamp(newest, timezone.utc).isoformat() if newest else None

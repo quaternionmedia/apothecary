@@ -12,6 +12,7 @@ cp1252 console, where the fancier glyph sets are exactly what breaks.
 
 from __future__ import annotations
 
+import sys
 from contextlib import contextmanager
 from typing import Iterable, Optional
 
@@ -72,7 +73,7 @@ def progress(items: Iterable, label: str, show: Optional[bool] = None):
     """
     items = list(items)
     if show is None:
-        show = click.get_text_stream("stdout").isatty() and len(items) > 1
+        show = sys.stdout.isatty() and len(items) > 1
 
     if not show:
         yield items
@@ -94,7 +95,7 @@ def iterate(items: Iterable, label: str):
     keep printing per-item lines as it goes.
     """
     items = list(items)
-    if not click.get_text_stream("stdout").isatty() or len(items) < 2:
+    if not sys.stdout.isatty() or len(items) < 2:
         yield from items
         return
     with click.progressbar(items, label=click.style(label, bold=True), show_eta=True) as bar:

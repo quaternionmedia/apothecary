@@ -1,7 +1,6 @@
 """`apothecary problems` and `apothecary solutions`.
 
-The two indexes on the command line. Same source as the API routes, so the
-terminal and the viewer cannot disagree about what is open.
+The two indexes of apothecary/spaces.py on the command line.
 """
 
 from __future__ import annotations

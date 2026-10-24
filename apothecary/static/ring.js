@@ -144,8 +144,7 @@ export function addressOf(ring, target) {
 
 /* Write the address onto the page's own controls, where they already are.
  * `pairs` is [[element, action], ...]; an action not on the ring leaves its
- * element as it was. Ids and classes are never touched: the census keys on
- * them.
+ * element as it was. Ids and classes are never touched.
  */
 export function annotate(ring, pairs) {
     const map = addresses(ring);
@@ -330,7 +329,7 @@ class RingInstance {
             }
             const label = option ? esc(option.label) + (option.children ? " ›" : "") : "";
             parts.push(
-                `<path class="${cls.join(" ")}" data-cell="${cell}" role="menuitem"`
+                `<path id="ring-cell-${cell}" class="${cls.join(" ")}" data-cell="${cell}" role="menuitem"`
                 + ` aria-label="${option ? esc(option.label) : "empty"}"`
                 + `${option ? "" : ' aria-disabled="true"'} d="${wedgePath(slot, r0, r1)}"></path>`
                 + (option ? `<text class="label" x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${label}</text>` : "")
@@ -346,6 +345,7 @@ class RingInstance {
         );
         this.svg.innerHTML = parts.join("");
         if (this.highlight != null) this.el.setAttribute("aria-activedescendant", `ring-cell-${this.highlight}`);
+        else this.el.removeAttribute("aria-activedescendant");
     }
 
     setHighlight(cell) {
@@ -538,5 +538,3 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
     window.apothecaryRing = api;
     return api;
 }
-
-export default { openRing, installRing, nearest, addressOf, addresses, angleToIndex, annotate, resolveRing };

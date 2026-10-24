@@ -10,7 +10,7 @@ A picture is flat and a thing you build is not, so a thickness has to come from
 somewhere. It is a guess, it is written down as a guess in every node's note,
 and it is the first thing to replace once real measurements exist.
 
-PROTOTYPE — not ratified. See ``docs/plans/features/scale-references.md``.
+PROTOTYPE — not ratified.
 """
 
 from __future__ import annotations

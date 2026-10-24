@@ -57,6 +57,7 @@ def look_at_each(finder: ShapeFinder, paths: Sequence[Path]) -> Looked:
                     path=path,
                     shapes_found=0,
                     readable=False,
+                    opened=False,
                     because=f"the finder could not read it: {exc}",
                 )
             )

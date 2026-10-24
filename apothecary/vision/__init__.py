@@ -6,7 +6,8 @@ shapes are matched to *words* — named, reusable pieces from
 ``apothecary.vocabulary`` — and the words are placed into an arrangement.
 
 Nothing here reaches the network, and nothing here writes outside the folder it
-is given. See ``docs/plans/proposals/runs-and-stays-local.md``.
+is given; ``apothecary/stays_local.py`` holds the process to the first, under
+the draft record *Personal data stays on the device*.
 
 PROTOTYPE — not ratified.
 """

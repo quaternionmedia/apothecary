@@ -226,7 +226,8 @@ def as_sheet(
         lines.append("# say so and it will be used anyway.")
         for reading in unreadable:
             lines.append(f"#   {reading.picture}: {reading.because}")
-            lines.append(f"# {reading.picture} is worth using anyway")
+            if reading.opened:  # a file that would not open cannot be used, whatever is said
+                lines.append(f"# {reading.picture} is worth using anyway")
         lines.append("")
 
     if not questions:

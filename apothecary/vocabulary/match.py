@@ -3,8 +3,7 @@
 A plain table, read top to bottom, first match wins. Deliberately not clever:
 the rule is legible, arguing with it is easy, and changing it is one line. When
 this stops being good enough the answer is a written decision about fitting
-shapes properly, not a cleverer table — see
-``docs/plans/features/word-parameters.md``.
+shapes properly, not a cleverer table.
 
 PROTOTYPE — not ratified.
 """

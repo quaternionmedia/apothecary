@@ -1,5 +1,6 @@
-from apothecary.projects.parts.rc.snowplow import snowplow_assembly
 from apothecary import Scene
+from apothecary.projects.parts.rc.snowplow import snowplow_assembly
+
 
 def test_snowplow_assembly_renders():
     scene = Scene(name="test_snowplow", objects=[snowplow_assembly()])

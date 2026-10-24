@@ -277,8 +277,12 @@ def test_the_pointer_uses_the_same_cells(page: Page, ring_url: str):
     expect(page.locator("#ring-overlay .wedge.hot")).to_have_attribute("data-cell", "8")
     page.mouse.move(cx + 72, cy)  # right: cell 6
     expect(page.locator("#ring-overlay .wedge.hot")).to_have_attribute("data-cell", "6")
+    # The menu names its highlighted item by that item's id.
+    expect(page.locator("#ring-overlay")).to_have_attribute("aria-activedescendant", "ring-cell-6")
+    expect(page.locator("#ring-cell-6")).to_have_attribute("data-cell", "6")
     page.mouse.move(cx - 51, cy - 51)  # up-left: cell 7, empty on this ring, so nothing
     expect(page.locator("#ring-overlay .wedge.hot")).to_have_count(0)
+    assert page.locator("#ring-overlay").get_attribute("aria-activedescendant") is None
     page.mouse.move(cx, cy + 72)
     page.mouse.click(cx, cy + 72)  # down: Device, a submenu
     assert _title(page) == "Device"

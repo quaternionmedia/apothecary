@@ -1,112 +1,66 @@
-"""Count the ways this application accepts a command.
+"""Count the ways a page accepts a command.
 
-The claim this exists to hold up is that a page full of controls of its own
-becomes one ring. A number somebody wrote down once is not a measurement — the
-next person counts differently and both numbers are worthless. So the count is
-taken here, from the page itself, by a rule written down beside it.
-
-## An earlier version of this file was wrong, and how
-
-The first attempt reported "twelve controls, fourteen ways in". An independent
-reviewer took it apart and was right to. Three faults, all fatal to the figure:
-
-- **It counted names, not controls.** Two different buttons on a job — one that
-  gives the job out, one that finishes it — were fetched the same way and counted
-  once. Three boxes for typing a position into counted once. A count that cannot
-  tell one button from two is not a count.
-- **Its own rule did not produce its own number.** Stepping out of a piece was
-  called a control; clicking the trail to step out of the same piece was called
-  moving your attention. Same three lines of code either way. Applied evenly the
-  rule gives nine, or sixteen, but never twelve. Twelve was the answer already
-  written in the plan, arrived at backwards.
-- **A new control could hide inside an old one.** Adding a delete button to a row
-  of a list produced no complaint, because it was attached the same way as the
-  buttons already there. The gate only caught new *names*, and the names in play
-  were `li`, `chip` and `caret`.
-
-What follows is the repair. It counts two different things two different ways and
-does not add them together, because adding them was where the arbitrariness got
-in.
+A report, not a gate: `apothecary census` prints it, and one test holds the
+viewer's count under a ceiling. The count is taken from the page itself, by
+the rule written down here.
 
 ## What is counted, and how
 
 **Controls of its own.** Every button, drop-down, tick-box, typing box, form and
-link written into the page. Found by reading the page's own markup, so a control
-counts whether or not anything is currently listening to it — one drop-down for
-choosing a printer has no listener at all and was invisible to the first attempt.
-Each is counted separately. Three typing boxes are three.
+link written into the page, found by reading its markup, so a control counts
+whether or not anything listens to it. Each is counted separately: three
+typing boxes are three.
 
 **Places the page listens.** Every point where the page waits for something a
-person does. Each is identified by three things together: what it listens on,
-what it listens for, and *the first thing it then does*. That third part is what
-makes two buttons in the same row of a list two entries rather than one, and it
-is what makes a new control impossible to hide inside an old one.
+person does, identified by three things together: what it listens on, what it
+listens for, and *the first thing it then does*. The third part makes two
+buttons in the same row of a list two entries, so a new control cannot hide
+inside an old one.
 
-Every one of both kinds is looked up in a table below. **Anything not in the
-table stops the count and is named, with its line.** A new control cannot appear
-without somebody deciding, in writing, what kind of thing it is.
+Each is looked up in a table below. Anything not in the table is counted as
+`unclassified` and listed with its line; an unclassified control in the markup
+still counts toward the meter, so adding one raises the number whether or not
+anybody filed it.
 
 ## The two questions asked of each one
 
-They are kept apart on purpose. Mixing them is what let the first attempt call
-the same behaviour two different things depending on which answer it needed.
-
 **What kind of surface is it?**
 
-- `widget` — a control of its own, occupying space, invented for one job. **This
-  is the meter.** Unifying means this number falls. It falls to zero, not to a
-  smaller pile: a ring that leaves five buttons behind has not replaced them.
-- `gesture` — something done to the scene itself: the wheel, a double tap, a key.
-- `list` — the trails, trees and rows beside the scene.
-- `drag` — taking hold of the thing on screen and moving it. Kept on purpose;
-  this is not a menu problem.
-- `ring` — the one ring of options. The destination. One thing is filed here:
-  the button that opens it. The ring's own listeners — the `m` key, right-click,
-  the arrows and digits once it is open — live in `/static/ring.js`, a module
-  the page imports, and are the ring's rather than the page's; they are counted
-  once, behind that button, and a test holds the module to that.
-- `automatic` — the page reacting to itself. Nobody told it anything.
+- `widget` -- a control of its own, invented for one job. **This is the
+  meter.** Unifying means it falls to zero, not to a smaller pile.
+- `gesture` -- something done to the scene itself: the wheel, a double tap, a key.
+- `list` -- the trails, trees and rows beside the scene.
+- `drag` -- taking hold of the thing on screen and moving it.
+- `ring` -- the button that opens the ring. The ring's own listeners live in
+  `/static/ring.js` and are counted once, behind that button.
+- `automatic` -- the page reacting to itself.
+
+**What does it change?**
+
+- `what-is-there` -- the arrangement itself, or the machine is told to change
+  something.
+- `what-you-see` -- which part you are looking at, what is picked out, what is
+  folded away. The arrangement is the same afterwards, though the machine may
+  have fetched and built shapes to show it.
 
 ## Ring-backed
 
 A control of its own that does the same thing as a cell of the ring is
-**ring-backed**: `RING_BACKED` names the ring action beside the control's name,
-and the sentence says how many of the meter's controls are also on the ring.
-The meter does not fall because a control is ring-backed. It falls when the
-ring-backed control is deleted, which is the whole migration in one line: a
-control gains its ⌗ address, is used from the ring for a while, and goes.
-The table is checked against the ring's own vocabulary, so a control cannot
-claim to be backed by a verb no ring produces.
-
-**What does it change?**
-
-- `what-is-there` — the arrangement itself, or the machine is told to change
-  something.
-- `what-you-see` — which part you are looking at, what is picked out, what is
-  folded away. The arrangement is the same afterwards.
-
-Note that `what-you-see` does **not** mean "nothing happens". Moving your
-attention makes this application fetch and build shapes, and building a shape
-writes a file. It was called harmless in an earlier version of this file and that
-was wrong. The line is whether the *arrangement* is different afterwards, not
-whether the machine did work.
+**ring-backed**: `RING_BACKED` names the ring action beside the control's name.
+The meter does not fall because a control is ring-backed; it falls when the
+control is deleted.
 
 ## What this cannot see
 
-Said plainly so nobody mistakes it for more than it is.
-
 - It reads the page as text. A listener written inside a comment or a quoted
   string would be counted.
-- It sees listening done with `addEventListener` and not a handler assigned to
-  `.onclick`. The monitor page assigns most of its handlers that way; its
-  buttons are still counted, from the markup, which is why the markup is the
-  meter and the listening is the check on it.
-- The drawing library brings its own listeners — turning and sliding the view by
-  dragging are real and are not in this count and cannot be.
-- It is one page at a time. Anything a person can command from elsewhere — the
-  command line, a request made straight to the machine, the other page — is not
-  in this number. The viewer and the monitor are counted separately and never
-  added together.
+- It sees listening done with `addEventListener`, not a handler assigned to
+  `.onclick`. Such a control is still counted from the markup, which is why the
+  markup is the meter.
+- The drawing library's own listeners (turning and sliding the view) are not in
+  this count.
+- It is one page at a time, plus the widget modules the page imports. The
+  command line, direct requests and the other pages are not in the number.
 - It refuses when it finds nothing, because a page it failed to read and a page
   with no controls must not produce the same answer.
 """
@@ -141,21 +95,15 @@ NOTHING = "nothing"
 
 EFFECTS = (WHAT_IS_THERE, WHAT_YOU_SEE, NOTHING)
 
-
-class Unclassified(Exception):
-    """The page has something nobody has said anything about.
-
-    Raised rather than guessed. A census that quietly assumes a kind for
-    something it has never seen reports whatever number keeps it quiet.
-    """
+# Both the surface and the effect of something in neither table.
+UNCLASSIFIED = "unclassified"
 
 
 class NothingFound(Exception):
     """The page was read and nothing was found in it.
 
-    This is a refusal, not an answer of zero. A page that could not be read and
-    a page with no controls in it must not produce the same number, or the day
-    the reading breaks is the day the count silently becomes perfect.
+    A refusal, not an answer of zero: a page that could not be read and a page
+    with no controls in it must not produce the same number.
     """
 
 
@@ -501,10 +449,8 @@ BY_WHAT_IT_CARRIES: Sequence[Tuple[re.Pattern, str]] = (
 )
 
 # A markup control with neither an id nor a class is named by where its link
-# goes, because there is nothing else to call it. Read after the id and the
-# class, not before: an anchor that has a class and also a link is the thing
-# its class says, and naming it by the link alone let two of the Device
-# section's links count as the recipe download.
+# goes. Read after the id and the class: an anchor that has a class and also a
+# link is the thing its class says.
 BY_SHAPE: Sequence[Tuple[re.Pattern, str]] = (
     (re.compile(r"\bhref=[\"'][^\"']*/scad[\"']"), "part-scad-download"),
     (re.compile(r"\bhref=[\"'][^\"']*/firmware/monitor[\"']"), "monitor-link"),
@@ -754,12 +700,15 @@ class Census:
     def of_surface(self, surface: str) -> Tuple[Found, ...]:
         return tuple(f for f in self.found if f.surface == surface)
 
-    def of_effect(self, effect: str) -> Tuple[Found, ...]:
-        return tuple(f for f in self.found if f.effect == effect)
-
     def controls_of_its_own(self) -> Tuple[Found, ...]:
-        """The meter. Unifying means this reaches nothing."""
-        return tuple(f for f in self.of_surface(WIDGET) if f.how == "markup")
+        """The meter: widgets in the markup, and markup nobody has classified yet."""
+        return tuple(
+            f for f in self.found if f.how == "markup" and f.surface in (WIDGET, UNCLASSIFIED)
+        )
+
+    def unclassified(self) -> Tuple[Found, ...]:
+        """What is in neither table, markup and listening alike."""
+        return self.of_surface(UNCLASSIFIED)
 
     def ring_backed(self) -> Tuple[Found, ...]:
         """The part of the meter that is also on the ring, and so can go."""
@@ -789,11 +738,8 @@ def _statement_tail(before: str) -> str:
     """The text since the last statement ended.
 
     Reading stops at a statement boundary so a label mentioned in the line above
-    cannot claim a listener belonging to something else.
-
-    A gap filled in as the page is written — `pos-${axis}` — is not a statement
-    boundary, however much its brackets look like one. Those are stepped over,
-    because one of them once cut a name in half and produced an entry called `?`.
+    cannot claim a listener belonging to something else. A gap filled in as the
+    page is written -- `pos-${axis}` -- is not a boundary, and is stepped over.
     """
     tail = before[-400:]
     protected = {
@@ -807,11 +753,7 @@ def _statement_tail(before: str) -> str:
 
 
 def _handler_body(after: str) -> str:
-    """Just the handler, stopping where the listening call closes.
-
-    Reading a fixed number of characters ran off the end of a short handler into
-    whatever came next, and reported the next line's work as this one's.
-    """
+    """Just the handler, stopping where the listening call closes."""
     depth = 1
     for index, char in enumerate(after):
         if char == "(":
@@ -894,18 +836,16 @@ def _line_of(text: str, position: int) -> int:
     return text.count("\n", 0, position) + 1
 
 
-def _from_markup(text: str) -> Tuple[List[Found], List[str]]:
+def _from_markup(text: str) -> List[Found]:
     found: List[Found] = []
-    unknown: List[str] = []
     for match in MARKUP.finditer(text):
         tag, attributes = match.group(1).lower(), match.group(2)
         name = _name_in_markup(attributes, text, match.start())
         if name is None:
             continue
-        if name not in CONTROLS:
-            unknown.append(f"line {_line_of(text, match.start())}: <{tag}> called {name!r}")
-            continue
-        surface, effect, description = CONTROLS[name]
+        surface, effect, description = CONTROLS.get(
+            name, (UNCLASSIFIED, UNCLASSIFIED, f"a <{tag}> in neither table")
+        )
         found.append(
             Found(
                 name=name,
@@ -918,22 +858,20 @@ def _from_markup(text: str) -> Tuple[List[Found], List[str]]:
                 ring_action=RING_BACKED.get(name),
             )
         )
-    return found, unknown
+    return found
 
 
-def _from_listening(text: str) -> Tuple[List[Found], List[str]]:
+def _from_listening(text: str) -> List[Found]:
     found: List[Found] = []
-    unknown: List[str] = []
     for match in LISTENS.finditer(text):
         name = _name_for(text[: match.start()])
         event = match.group(1)
         verb = _verb_in(_handler_body(text[match.end() :]))
         key = f"{name}:{event}:{verb}"
         line = _line_of(text, match.start())
-        if key not in LISTENING:
-            unknown.append(f"line {line}: {key}")
-            continue
-        surface, effect, description = LISTENING[key]
+        surface, effect, description = LISTENING.get(
+            key, (UNCLASSIFIED, UNCLASSIFIED, "a listener in neither table")
+        )
         found.append(
             Found(
                 name=name,
@@ -946,7 +884,7 @@ def _from_listening(text: str) -> Tuple[List[Found], List[str]]:
                 ring_action=RING_BACKED.get(key),
             )
         )
-    return found, unknown
+    return found
 
 
 WIDGETS = TEMPLATES.parent / "apothecary" / "static" / "widgets"
@@ -972,28 +910,10 @@ def take(page: Path | None = None) -> Census:
     sources = [(page, "")] + [(w, w.name) for w in widgets_of(page) if w.is_file()]
     from_markup: List[Found] = []
     from_listening: List[Found] = []
-    unknown: List[str] = []
     for path, label in sources:
         text = path.read_text(encoding="utf-8")
-        markup, unknown_markup = _from_markup(text)
-        listening, unknown_listening = _from_listening(text)
-        if label:
-            markup = [replace(f, source=label) for f in markup]
-            listening = [replace(f, source=label) for f in listening]
-            unknown_markup = [f"{label}: {u}" for u in unknown_markup]
-            unknown_listening = [f"{label}: {u}" for u in unknown_listening]
-        from_markup += markup
-        from_listening += listening
-        unknown += unknown_markup + unknown_listening
-    if unknown:
-        raise Unclassified(
-            f"The page has {len(unknown)} thing(s) nobody has classified:\n  "
-            + "\n  ".join(unknown)
-            + "\nAdd each to CONTROLS or LISTENING in apothecary/census.py, saying "
-            "what kind of surface it is and what it changes. The count is refused "
-            "until then, because a control nobody has decided about is exactly the "
-            "one that makes the number wrong."
-        )
+        from_markup += [replace(f, source=label) for f in _from_markup(text)]
+        from_listening += [replace(f, source=label) for f in _from_listening(text)]
     if not from_markup and not from_listening:
         raise NothingFound(
             "Nothing at all was found in this page — no controls in the markup and "
@@ -1013,7 +933,8 @@ HEADINGS = {
 def report(page: Path | None = None) -> str:
     """The census as something to read. Every entry, none folded away."""
     census = take(page)
-    lines = [census.sentence(), ""]
+    unclassified = census.unclassified()
+    lines = [census.sentence(), f"unclassified: {len(unclassified)}", ""]
     for how in ("markup", "listening"):
         lines.append(HEADINGS[how])
         for surface in SURFACES:
@@ -1026,5 +947,14 @@ def report(page: Path | None = None) -> str:
                 lines.append(
                     f"    line {entry.line:>5}  {entry.effect:<14}  {entry.description}{backed}"
                 )
+        lines.append("")
+    if unclassified:
+        lines.append(
+            "Unclassified -- add each to CONTROLS or LISTENING in apothecary/census.py, "
+            "saying what kind of surface it is and what it changes:"
+        )
+        for entry in unclassified:
+            where = f"{entry.source}: " if entry.source else ""
+            lines.append(f"    {where}line {entry.line:>5}  {entry.key}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"

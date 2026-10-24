@@ -1,8 +1,7 @@
 """The five words we start with.
 
 Chosen without a photograph in hand, which makes them a guess. They are meant to
-be replaced once somebody has pointed a camera at a real workbench. See the note
-at the end of ``docs/plans/HANDOFF.md``.
+be replaced once somebody has pointed a camera at a real workbench.
 
 Each is built out of pieces the tool already had — nothing new was invented to
 make a word possible.

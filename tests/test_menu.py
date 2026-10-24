@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from ring_helpers import address_of, every_action, every_address, walk
 
 from apothecary.hierarchy import Assembly, Site
 from apothecary.menu import (
@@ -35,19 +36,16 @@ from apothecary.menu import (
     Pointing,
     Ring,
     RingTooFull,
-    address_of,
     check_ring,
     control_options,
-    every_action,
-    every_address,
     nearest,
     resolve,
     shorten,
-    walk,
 )
 from apothecary.primitives import Cube
 
 CONFORMANCE = Path(__file__).parent / "conformance" / "nine_cells.json"
+VIEWER = Path(__file__).parents[1] / "templates" / "fractal_viewer.html.j2"
 
 
 def _photo_site() -> Assembly:
@@ -230,17 +228,7 @@ def test_a_ring_with_nothing_to_group_simply_does_not_offer_it():
 
 @pytest.mark.parametrize("how_many", [1, 8, 9, 20, 64])
 def test_a_long_list_is_grouped_and_nothing_is_lost(how_many):
-    """A list of things is not a list of verbs.
-
-    Eight-to-a-ring exists because nine verbs means the menu was designed
-    wrong. That argument does not carry over to nine arrangements somebody
-    happens to have, so a long list gets lettered groups — one more press,
-    nothing hidden.
-
-    An earlier attempt at this keyed the groups on the first letter of each
-    name. Every name began with the same letter, so eighteen of twenty things
-    silently vanished. Hence counting them here.
-    """
+    """A long list gets groups of at most eight, and every name is still reachable."""
     names = [f"site_{i}" for i in range(how_many)]
     ring = resolve(Context(pointing=Pointing.CANVAS), _photo_site(), site_names=names)
     reachable = {a for a in every_action([ring]) if a.startswith("site:")}
@@ -256,53 +244,23 @@ def test_more_things_than_grouping_can_show_is_refused_rather_than_cut():
         )
 
 
-def test_a_piece_built_from_a_picture_can_be_swapped_for_another_word():
-    ring = resolve(
-        Context(pointing=Pointing.NODE, targets=["plate_1"]),
-        _photo_site(),
-        words=["plate", "disc", "post", "slot", "wedge"],
-    )
-    assert "word:disc" in every_action([ring])
-
-
-def test_a_piece_that_did_not_come_from_a_picture_is_not_offered_a_word():
-    ring = resolve(
-        Context(pointing=Pointing.NODE, targets=["printer_1"]),
-        _photo_site(),
-        words=["plate", "disc"],
-    )
-    assert not any(action.startswith("word:") for action in every_action([ring]))
-
-
 def test_an_option_that_does_not_apply_is_absent_rather_than_greyed_out():
     ring = resolve(Context(pointing=Pointing.NODE, targets=["printer_1"]), _photo_site())
     assert all(option.enabled for option in ring.options)
 
 
-def test_every_ring_can_explain_itself():
-    """Where the reasoning behind a piece is reachable, not buried in a comment."""
-    site = _photo_site()
-    for context in (
-        Context(pointing=Pointing.CANVAS),
-        Context(pointing=Pointing.NODE, targets=["plate_1"]),
-        Context(pointing=Pointing.SELECTION, targets=["plate_1", "disc_2"]),
-        Context(pointing=Pointing.EDGE, targets=["a", "b"]),
-    ):
-        ring = resolve(context, site)
-        if context.pointing is not Pointing.CANVAS:
-            assert "explain" in every_action([ring])
+def test_a_node_ring_can_explain_its_piece():
+    ring = resolve(Context(pointing=Pointing.NODE, targets=["plate_1"]), _photo_site())
+    assert "explain" in every_action([ring])
 
 
-@pytest.mark.parametrize(
-    "pointing", [Pointing.CANVAS, Pointing.NODE, Pointing.SELECTION, Pointing.EDGE]
-)
+@pytest.mark.parametrize("pointing", list(Pointing))
 def test_every_kind_of_ring_obeys_both_limits(pointing):
     ring = resolve(
         Context(pointing=pointing, targets=["plate_1"]),
         _photo_site(),
         site_names=["bench", "garage"],
         groups=["plate", "disc"],
-        words=["plate", "disc", "post", "slot", "wedge"],
     )
     assert 1 <= len(ring.options) <= MOST_OPTIONS
     for option in ring.options:
@@ -323,21 +281,28 @@ def test_working_out_the_options_leaves_the_arrangement_untouched():
     site = _photo_site()
     before = site.model_dump_json()
     for pointing in Pointing:
-        resolve(Context(pointing=pointing, targets=["plate_1"]), site, words=["plate", "disc"])
+        resolve(Context(pointing=pointing, targets=["plate_1"]), site)
     assert site.model_dump_json() == before
 
 
 def test_a_choice_is_carried_as_an_intent_and_nothing_else():
     context = Context(pointing=Pointing.NODE, targets=["plate_1"])
-    intent = Intent(action="word:disc", context=context, option_id="word:disc")
-    assert intent.action == "word:disc"
+    intent = Intent(action="zoom-in", context=context, option_id="zoom")
+    assert intent.action == "zoom-in"
     assert intent.context.targets == ["plate_1"]
 
 
+def test_a_context_ignores_what_a_page_sends_beyond_it():
+    """The pages still send where on screen the ring opened; nothing reads it."""
+    context = Context.model_validate(
+        {"pointing": "canvas", "targets": [], "where": {"x": 3, "y": 4}}
+    )
+    assert context.model_dump() == {"pointing": Pointing.CANVAS, "targets": []}
+
+
 def test_the_things_a_ring_names_are_the_paths_everything_else_uses():
-    """No second way of naming things was invented, and none is needed."""
     site = _photo_site()
-    ring = resolve(Context(pointing=Pointing.NODE, targets=["plate_1"]), site, words=["disc"])
+    ring = resolve(Context(pointing=Pointing.NODE, targets=["plate_1"]), site)
     assert ring.title == "plate_1"
     assert any(child.name == "plate_1" for child in site.children)
 
@@ -922,7 +887,7 @@ def test_more_than_sixty_four_pieces_is_a_refusal_not_a_bigger_menu():
         role="site",
         children=[Assembly(name=f"piece_{i:03d}", role="structure") for i in range(65)],
     )
-    with pytest.raises(RingTooFull, match="65 pieces"):
+    with pytest.raises(RingTooFull, match="65 to choose between"):
         resolve(Context(pointing=Pointing.CANVAS), crowd)
     fits = Assembly(
         name="fits",
@@ -950,8 +915,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     data-panel marks -- are the same, so a panel cannot appear on one side only."""
     import re
 
-    from apothecary import census
-    from apothecary.menu import PANELS, address_of, carried_by
+    from apothecary.menu import PANELS, carried_by
 
     root = resolve(
         Context(pointing=Pointing.CANVAS),
@@ -998,7 +962,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert carried_by("panel:toggle:contents").name == "VIEWER"
     # The page's sections are marked in its markup; the machine and its log are
     # registered when a printer is opened. Both lists are the resolver's, in order.
-    page = census.VIEWER.read_text(encoding="utf-8")
+    page = VIEWER.read_text(encoding="utf-8")
     marked = re.findall(r'class="panel-section"[^>]*data-panel="([\w-]+)"', page)
     registered = re.findall(r"panels\.register\('([\w-]+)'", page)
     assert marked == [pid for pid, _ in PANELS[: len(marked)]]

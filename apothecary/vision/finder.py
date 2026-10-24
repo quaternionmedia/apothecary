@@ -8,8 +8,8 @@ Two finders ship. That is on purpose — one implementation is an interface with
 a single caller wearing a disguise, and it proves nothing about whether the
 connection is real.
 
-Every finder must work with the network switched off. See
-``docs/plans/proposals/runs-and-stays-local.md``.
+Every finder must work with the network switched off
+(``apothecary/stays_local.py``).
 
 PROTOTYPE — not ratified.
 """

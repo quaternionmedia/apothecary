@@ -305,14 +305,15 @@ def test_manual_pin_poll_now_and_auto_refresh(page: Page, printer_url: str):
     expect(badge).to_contain_text("/", timeout=5000)  # temps, not the bare 🖨
     expect(page.locator("#serial-overlay")).to_be_hidden()
 
-    # Auto-refresh, on by default, at 5 s: one fresh scan each interval, none once off.
+    # Auto-refresh, off until ticked, at 5 s: one fresh scan each interval, none once off.
     # A scan is in flight from the moment its timer fires until the next is scheduled.
     scans = []
     page.on("request", lambda r: scans.append(r.url) if "/devices?fresh=1" in r.url else None)
     scan_done = "() => !window.fractalViewer.bindingsInFlight"
     _hold_clock(page)
     page.wait_for_function(scan_done)
-    expect(page.locator("#devices-auto")).to_be_checked()
+    expect(page.locator("#devices-auto")).not_to_be_checked()
+    page.locator("#devices-auto").check()
     page.locator("#devices-interval").select_option("5000")  # the next scan is 5 s away
     before = len(scans)
     for n in (1, 2):
@@ -413,7 +414,8 @@ def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
     section.locator(".dev-poll").click()
     # The page applies a poll's sync only if that poll changed the server's node; an
     # earlier request already had, so printer_1 turns "printing" at the next device
-    # refresh (10 s at most).
+    # refresh: 10 s after the auto-refresh is ticked.
+    page.locator("#devices-auto").check()
     page.clock.fast_forward(10_000)
     expect(page.locator("#status-select")).to_have_value("printing", timeout=5000)
 
@@ -647,6 +649,29 @@ def test_the_firmware_page_draws_the_newest_reading(page: Page, printer_url: str
         timeout=10000,
     )
     expect(card.locator(".board-view-note")).to_contain_text("drawn ×")
+
+
+@pytest.mark.e2e
+def test_a_card_keeps_its_view_however_often_the_cards_are_redrawn(page: Page, printer_url: str):
+    """The firmware page redraws its cards on every banner and button. A pinned port
+    keeps the one view it has, moved into its new card, and overlapping redraws make no
+    second one."""
+    _pin(printer_url, BOARD)
+    page.goto(f"{printer_url}/firmware")
+    card = page.locator(".device[data-port='/dev/ttyFAKE1']")
+    expect(card.locator(".board-view canvas")).to_have_count(1, timeout=10000)
+    page.evaluate(
+        """() => {
+            window.__view = window.apothecaryBoardViews.get('/dev/ttyFAKE1');
+            document.querySelector(".device[data-port='/dev/ttyFAKE1']").dataset.before = "1";
+            for (let i = 0; i < 3; i++) window.dispatchEvent(new CustomEvent("apothecary:devices-rendered"));
+        }"""
+    )
+    page.locator("#refresh-btn").click()
+    redrawn = page.locator(".device[data-port='/dev/ttyFAKE1']:not([data-before])")
+    expect(redrawn.locator(".board-view canvas")).to_have_count(1, timeout=10000)
+    expect(redrawn.locator(".board-view-note")).to_contain_text("garage › printer_1")
+    assert page.evaluate("() => window.apothecaryBoardViews.get('/dev/ttyFAKE1') === window.__view")
 
 
 # Seconds to stream, dwell or no dwell: each line is a round trip to the simulator, a

@@ -34,7 +34,7 @@ const MARKUP = `
     <div class="row">
         <select id="cam-pick" title="The browser's cameras"><option value="">— no camera —</option></select>
         <button type="button" id="cam-allow" title="Ask the browser to use its cameras; their names appear once allowed, and the chosen one shows here">Allow cameras</button>
-        <button type="button" id="cam-refresh" title="List the cameras again">⟳</button>
+        <button type="button" id="cam-refresh" title="List the cameras again: this browser's, and every one placed in the world">⟳</button>
     </div>
     <video id="cam-preview" autoplay muted playsinline hidden></video>
     <div class="note" id="cam-note">No camera in use. Allow cameras, then pick one.</div>
@@ -125,7 +125,7 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
             if (first && !state.chosen) { $("cam-pick").value = first.deviceId; await useCamera(first.deviceId); }
         } catch (e) { say(`the browser did not allow it: ${e.message}`, "bad"); }
     };
-    $("cam-refresh").onclick = listCameras;
+    $("cam-refresh").onclick = () => { listCameras(); loadPlaced(); };
     $("cam-pick").addEventListener("change", () => useCamera($("cam-pick").value));
 
     function frame() {
@@ -160,19 +160,21 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
     };
 
     // --- the camera in the world ----------------------------------------------------------
+    // Drawn from what is known; the page calls it on every selection, so it asks nothing.
     function renderPlacement() {
         const placed = world && world.placed ? world.placed() : [];
         const mine = placed.find((c) => c.id === state.chosen);
         $("cam-place-note").textContent = !state.chosen ? "no camera chosen" : (mine ? `placed at ${mine.path} in ${mine.site}` : "not placed in the world");
         $("cam-place").disabled = !state.chosen || !(world && world.selectedPath && world.selectedPath());
         $("cam-unplace").disabled = !mine;
-        loadPlaced();
+        renderPlaced();
     }
     // Every camera placed in the world, whatever site it stands in and whichever
-    // browser placed it -- each one taken back from here.
+    // browser placed it -- each one taken back from here. Asked for when the
+    // panel is mounted, after a place or an unplace from it, and on ⟳.
     async function loadPlaced() {
         try { state.placed = await api("/cameras"); } catch (e) { state.placed = []; }
-        renderPlaced();
+        renderPlacement();
     }
     function renderPlaced() {
         const list = $("cam-placed");
@@ -182,7 +184,8 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
     }
     async function unplace(id) {
         await api(`/cameras/${encodeURIComponent(id)}`, { method: "DELETE" });
-        if (world && world.refreshCameras) await world.refreshCameras(); else await loadPlaced();
+        if (world && world.refreshCameras) await world.refreshCameras();
+        await loadPlaced();
     }
     $("cam-placed").addEventListener("click", async (ev) => {
         const b = ev.target.closest("button.cam-unplace-one"); if (!b) return;
@@ -196,14 +199,13 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
             await api(`/cameras/${encodeURIComponent(state.chosen)}`, { method: "PUT", body: JSON.stringify({ label: (cam && cam.label) || "camera", site: world.siteName(), path }) });
             say(`camera placed at ${path}`);
             if (world.refreshCameras) await world.refreshCameras();
-            renderPlacement();
+            await loadPlaced();
         } catch (e) { say(e.message, "bad"); }
     };
     $("cam-unplace").onclick = async () => {
         try {
             await unplace(state.chosen);
             say("camera taken out of the world");
-            renderPlacement();
         } catch (e) { say(e.message, "bad"); }
     };
 
@@ -326,7 +328,7 @@ export function mountCamera(root, { base = "", world = null, log = null } = {}) 
 
     listCameras().catch(() => {});
     loadPictures();
-    renderPlacement();
+    loadPlaced();
     loadPins();
 
     // A verb chosen on the ring goes through the same button a click would.

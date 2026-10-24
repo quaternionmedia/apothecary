@@ -38,6 +38,7 @@ Ownership is the boundary between the two repositories, made machine-readable:
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from importlib import import_module
 from typing import Dict, List, Optional
 
 APOTHECARY = "apothecary"
@@ -47,6 +48,7 @@ MEASUREMENT = "measurement"
 
 # Problem kinds, and who is able to close each by construction.
 KIND_OWNER = {
+    "broken": APOTHECARY,
     "contested": HUMAN,
     "drift": APOTHECARY,
     "unbounded": APOTHECARY,
@@ -182,6 +184,19 @@ def _site_problems(name: str, report) -> List[Problem]:
     ]
 
 
+def _broken(subject: str, exc: Exception) -> Problem:
+    """A part or site that raised while being read: reported, never skipped."""
+    return Problem(
+        id=f"broken:{subject}",
+        kind="broken",
+        subject=subject,
+        summary=f"{subject}: raised {type(exc).__name__} when read",
+        owner=KIND_OWNER["broken"],
+        closes_with="fix what raised; the detail is its message",
+        detail=str(exc),
+    )
+
+
 def problems(build_volume: Optional[tuple] = None) -> List[Problem]:
     """Every open question this repository can state, worst-owned first."""
     from .projects.parts.readiness import assess
@@ -195,12 +210,12 @@ def problems(build_volume: Optional[tuple] = None) -> List[Problem]:
         key=lambda p: p.name,
     ):
         try:
-            module = __import__(entry.wrapper, fromlist=["DEFAULT"])
-            part = module.DEFAULT
-        except Exception:  # pragma: no cover - a broken wrapper is its own problem
-            continue
-        found.extend(_contested_problems(part))
-        found.extend(_readiness_problems(part, assess(part, build_volume=build_volume)))
+            part = import_module(entry.wrapper).DEFAULT
+            open_here = _contested_problems(part)
+            open_here += _readiness_problems(part, assess(part, build_volume=build_volume))
+        except Exception as exc:  # any failure to read a part is the problem to report
+            open_here = [_broken(entry.name, exc)]
+        found.extend(open_here)
 
     # Sites carry layout constraints that parts do not.
     from .api import _site_store
@@ -209,8 +224,8 @@ def problems(build_volume: Optional[tuple] = None) -> List[Problem]:
         try:
             site = _site_store.get(name)
             found.extend(_site_problems(name, _site_store.validator(name)(site)))
-        except Exception:  # pragma: no cover - defensive
-            continue
+        except Exception as exc:  # any failure to build or check a site is the problem
+            found.append(_broken(name, exc))
 
     order = {HUMAN: 0, MEASUREMENT: 1, APOTHECARY: 2, DATUM: 3}
     return sorted(found, key=lambda p: (order.get(p.owner, 9), p.kind, p.subject))
@@ -231,9 +246,8 @@ def capabilities() -> List[Capability]:
         key=lambda p: p.name,
     ):
         try:
-            module = __import__(entry.wrapper, fromlist=["DEFAULT"])
-            part = module.DEFAULT
-        except Exception:  # pragma: no cover
+            part = import_module(entry.wrapper).DEFAULT
+        except Exception:  # problems() reports it as broken; it offers nothing
             continue
         found.append(
             Capability(

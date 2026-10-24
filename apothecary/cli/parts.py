@@ -596,13 +596,9 @@ def parts_elephant_walk(output: Path | None, gap: int, ensure_stl: bool):
         apothecary parts elephant-walk -o preview.scad
         apothecary parts elephant-walk --gap 20
     """
-    # Not parts/elephant_walk.scad: that file is tracked, and this is a build product.
+    # A build product: it goes in the cache, not in parts/.
     output = output or ROOT / ".cache" / "elephant_walk.scad"
-    parts_in_line = [
-        _part_of(p)
-        for p in scan_projects(ROOT)
-        if p.kind == "part" and "elephant" not in p.name.lower()
-    ]
+    parts_in_line = [_part_of(p) for p in scan_projects(ROOT) if p.kind == "part"]
     if not parts_in_line:
         raise click.ClickException("No parts found")
 

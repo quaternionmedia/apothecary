@@ -16,10 +16,12 @@ import json
 import mimetypes
 import os
 import re
+import threading
+import time
+import weakref
 from contextlib import asynccontextmanager, suppress
 from importlib import import_module
 from pathlib import Path
-from random import choice
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
@@ -51,11 +53,12 @@ from .firmware.toolchains import ToolchainError
 from .hierarchy import Assembly
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
-from .primitives import Cube, Cylinder, Sphere
+from .primitives import Cube, Cylinder, Sphere, absolute_imports
+from .projects.parts.base import BasePart
 from .projects.parts.skeleton import ROOT
+from .projects.parts.stl_renderer import build_stl
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
-from .projects.parts.stl_renderer import write_params_sidecar
-from .projects.registry import _sanitize_module_name, scan_projects, stl_output_for
+from .projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
 from .routes.pictures import router as pictures_router
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
@@ -65,44 +68,41 @@ from .transforms import Translate
 from .viewer import render_fractal_viewer_page
 
 
-async def _generate_missing_stls():
-    """Generate STL files for all parts that don't have one.
+def _registered_part(item: ProjectInfo) -> BasePart:
+    """A registry entry's part: its wrapper's DEFAULT, or a bare part for a SCAD with none."""
+    if item.wrapper:
+        return import_module(item.wrapper).DEFAULT
+    return BasePart(name=item.name, source_file=item.path)
 
-    This runs at startup to ensure all parts have viewable STL files.
-    STL files are not committed to git, so they need to be generated locally.
+
+async def _generate_missing_stls():
+    """Build the STL of every registered part that has none.
+
+    STLs are build products a fresh checkout does not have. Each goes through
+    build_stl on a worker thread, one part at a time; a part that cannot be
+    built on this machine is skipped with its reason.
     """
-    # Check if auto-generation is disabled
     if os.environ.get("APOTHECARY_SKIP_STL_GENERATION", "").lower() in ("1", "true", "yes"):
         print("STL generation skipped (APOTHECARY_SKIP_STL_GENERATION=1)")
         return
 
-    renderer = get_stl_renderer()
-
-    if not renderer.is_available:
+    if not get_stl_renderer().is_available:
         print("OpenSCAD not found - STL generation skipped")
         print("Install OpenSCAD to enable automatic STL generation")
         return
 
-    parts = [p for p in scan_projects(ROOT) if p.kind == "part"]
-    missing = []
-
-    for part in parts:
-        stl_path = stl_output_for(part)
-        if not stl_path.exists():
-            missing.append(part)
-
+    parts = [_registered_part(p) for p in scan_projects(ROOT) if p.kind == "part"]
+    missing = [part for part in parts if not part.get_stl_output_path().exists()]
     if not missing:
         return
 
     print(f"Generating {len(missing)} missing STL file(s)...")
-
     for part in missing:
-        stl_path = stl_output_for(part)
         print(f"  Generating {part.name}...", end=" ", flush=True)
-
-        result = await renderer.render_stl_async(part.path, stl_path, timeout=120)
-
-        if result.success:
+        result = await asyncio.to_thread(build_stl, part, timeout=120)
+        if result.skipped == "refused":
+            print(f"skipped: {result.error_message}")
+        elif result.success:
             print(f"OK ({result.render_time_seconds:.1f}s)")
         else:
             print(f"FAILED: {result.error_message}")
@@ -118,20 +118,12 @@ async def _generate_missing_stls_in_background():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan handler - runs on startup and shutdown.
+    """Start building missing part STLs in the background; cancel it on shutdown.
 
-    STL generation for missing parts runs as a background task, not
-    awaited here. Real OpenSCAD renders can take tens of seconds per part
-    (CGAL boolean ops -- one part in this repo's own library takes ~39s),
-    and _generate_missing_stls() renders every missing part sequentially;
-    awaiting it here meant /health -- and every other route -- was
-    unreachable until all of them finished, which starved every client
-    that polls /health with a short timeout (apothecary test all,
-    tests/e2e's --start-server fixture, and a plain first-run
-    `apothecary serve` alike). Parts already handle "not generated yet"
-    gracefully (placeholder geometry in the viewer, on-demand
-    /parts/{name}/stl/generate), so backgrounding this is a strict
-    improvement, not a behavior change callers need to adapt to.
+    Not awaited: a render can take tens of seconds per part, and /health has to
+    answer meanwhile for whatever polls it with a short timeout (`apothecary
+    docs`, tests/e2e's --start-server fixture). The viewer draws a placeholder
+    for a part with no STL yet and asks /parts/{name}/stl/generate for it.
     """
     # Startup
     stl_task = asyncio.create_task(_generate_missing_stls_in_background())
@@ -185,11 +177,6 @@ renderer = TemplateRenderer()
 # =============================================================================
 # Parts Registry Helpers
 # =============================================================================
-
-
-def _sanitize_part_name(name: str) -> str:
-    """Convert part name to valid Python module name."""
-    return name.lower().replace("-", "_").replace(" ", "_").replace(".", "_")
 
 
 def _part_template() -> str:
@@ -293,22 +280,15 @@ def _part_metadata(part) -> Dict[str, object]:
         "has_params": bool(part.params_model),
     }
 
-    # Check if this part has special STL generation requirements
-    stl_can_generate = True
-    stl_note = None
-    if hasattr(part, "can_generate_stl"):
-        stl_can_generate, stl_note = part.can_generate_stl()
-
-    # Add file availability info
+    stl_can_generate, stl_note = part.can_generate_stl()
     metadata["files"] = {
         "scad": {"exists": part.source_file.exists(), "url": f"/parts/{part.name}/scad"},
-        "jscad": {"exists": False, "url": f"/parts/{part.name}/jscad"},  # Generated on demand
         "stl": {
             "exists": part.stl_file is not None,
             "url": f"/parts/{part.name}/stl" if part.stl_file else None,
             "generate_url": f"/parts/{part.name}/stl/generate",
             "can_generate": stl_can_generate,
-            "note": stl_note,
+            "note": stl_note or None,
         },
     }
 
@@ -359,45 +339,19 @@ def render_scene(scene: Scene):
 
 
 @app.get("/parts")
-async def list_parts():
+def list_parts():
     names = _available_part_names()
     return [_part_metadata(_load_part_wrapper(name)) for name in names]
 
 
-@app.get("/parts/random")
-async def random_part(params: str | None = Query(None, alias="params")):
-    names = _available_part_names()
-    if not names:
-        raise HTTPException(status_code=404, detail="No parts available")
-    picked = choice(names)
-    payload = _part_payload(_load_part_wrapper(picked), params)
-    payload["random_source"] = picked
-    return payload
-
-
-@app.get("/parts/random/scad", response_class=PlainTextResponse)
-async def random_part_scad():
-    names = _available_part_names()
-    if not names:
-        raise HTTPException(status_code=404, detail="No parts available")
-    picked = choice(names)
-    part = _load_part_wrapper(picked)
-    try:
-        return PlainTextResponse(
-            part.source_file.read_text(encoding="utf-8"), headers={"x-part-name": part.name}
-        )
-    except OSError as exc:  # pragma: no cover - IO failure is rare
-        raise HTTPException(status_code=500, detail=f"Failed to read SCAD: {exc}") from exc
-
-
 @app.get("/parts/{name}")
-async def get_part(name: str, params: str | None = Query(None, alias="params")):
+def get_part(name: str, params: str | None = Query(None, alias="params")):
     part = _load_part_wrapper(name)
     return _part_payload(part, params)
 
 
 @app.get("/parts/{name}/scad", response_class=PlainTextResponse)
-async def get_part_scad(name: str):
+def get_part_scad(name: str):
     part = _load_part_wrapper(name)
     try:
         return PlainTextResponse(part.source_file.read_text(encoding="utf-8"))
@@ -405,56 +359,8 @@ async def get_part_scad(name: str):
         raise HTTPException(status_code=500, detail=f"Failed to read SCAD: {exc}") from exc
 
 
-@app.get("/parts/{name}/jscad", response_class=PlainTextResponse)
-async def get_part_jscad(name: str, params: str | None = Query(None, alias="params")):
-    """Generate a JSCAD JavaScript module from a part's SCAD file.
-
-    Since raw SCAD files can't be directly converted to JSCAD, this creates
-    a simple JSCAD module with a placeholder shape and the SCAD code as documentation.
-    """
-    part = _load_part_wrapper(name)
-    _, params_json = _normalize_params(part, params)
-
-    try:
-        scad_code = part.source_file.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to read SCAD: {exc}") from exc
-
-    # Create a JSCAD module with documentation
-    jscad_code = f"""/**
- * {part.name}
- * @category {part.category or "Parts"}
- * @description {part.description or "No description"}
- * @tags {", ".join(part.tags) if part.tags else "apothecary"}
- */
-
-const jscad = require('@jscad/modeling')
-const {{ cube, sphere }} = jscad.primitives
-const {{ translate }} = jscad.transforms
-
-// OpenSCAD source:
-/*
-{scad_code}
-*/
-
-const main = () => {{
-    // Placeholder: display info about the part
-    // The actual geometry would require OpenSCAD -> JSCAD conversion
-
-    const info = cube({{ size: [50, 30, 2] }})
-    const marker = translate([0, 0, 5], sphere({{ radius: 3 }}))
-
-    return [info, marker]
-}}
-
-module.exports = {{ main }}
-"""
-
-    return PlainTextResponse(jscad_code, media_type="application/javascript")
-
-
 @app.get("/parts/{name}/stl")
-async def get_part_stl(name: str):
+def get_part_stl(name: str):
     """
     Download the STL file for a part.
 
@@ -494,100 +400,48 @@ class StlGenerateRequest(BaseModel):
 
 
 @app.post("/parts/{name}/stl/generate")
-async def generate_part_stl(
+def generate_part_stl(
     name: str,
     force: bool = Query(False),
     body: Optional[StlGenerateRequest] = None,
 ):
-    """
-    Generate an STL file from the part's SCAD source.
+    """Build a part's STL through build_stl, as `apothecary parts generate-stl` does.
 
-    Requires OpenSCAD to be installed on the server.
-
-    Args:
-        name: Part name
-        force: If True, regenerate even if STL already exists
-        params: Parameter overrides, validated against the part's own model
-            before rendering. Supplying any implies a regeneration, since the
-            STL on disk was rendered from something else.
-
-    Returns:
-        Generation status with download URL on success
+    ``params`` are checked against what the part declares (422 on an unknown
+    name or a bad value). An STL newer than its sources and rendered from the
+    same parameters is kept unless ``force`` (``regenerated: false``). No
+    OpenSCAD, or a part that cannot be built on this machine, is a 503.
     """
     part = _load_part_wrapper(name)
-    renderer = get_stl_renderer()
-
-    if not renderer.is_available:
+    try:
+        overrides = part.validate_overrides(body.params if body else None)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    if not get_stl_renderer().is_available:
         raise HTTPException(
             status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
         )
 
-    # OpenSCAD accepts any -D name, defined or not, so an unrecognised
-    # parameter would render the defaults and report success. Reject it here.
-    params = body.params if body else {}
-    overrides = {}
-    if params:
-        model_cls = getattr(part, "params_model", None)
-        if model_cls is not None:
-            unknown = sorted(set(params) - set(model_cls.model_fields))
-            if unknown:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"unknown parameter(s): {', '.join(unknown)}",
-                )
-            try:
-                validated = model_cls(**params)
-            except ValidationError as exc:
-                raise HTTPException(status_code=422, detail=exc.errors()) from exc
-            overrides = {key: getattr(validated, key) for key in params}
-        else:
-            overrides = dict(params)
-
-    # Check if this part has special requirements
-    if hasattr(part, "can_generate_stl"):
-        can_gen, reason = part.can_generate_stl()
-        if not can_gen:
-            raise HTTPException(
-                status_code=503, detail=f"Cannot generate STL for '{name}': {reason}"
-            )
-
-    # Check if we already have an up-to-date STL
-    if not force and not overrides and part.stl_file and part.stl_file.exists():
-        return {
-            "success": True,
-            "message": "STL already exists (use force=true to regenerate)",
-            "stl_url": f"/parts/{name}/stl",
-            "regenerated": False,
-        }
-
-    # Use part-specific OpenSCAD path if available (e.g., nightly build)
-    part_renderer = renderer
-    if hasattr(part, "get_openscad_path"):
-        custom_path = part.get_openscad_path()
-        if custom_path and custom_path != renderer.openscad_path:
-            from apothecary.projects.parts.stl_renderer import OpenSCADRenderer
-
-            part_renderer = OpenSCADRenderer(openscad_path=str(custom_path))
-
-    # Generate STL - the part's own output path, and whatever overrides were
-    # validated above; a part naming its own renderer must still honour them.
-    stl_path = part.get_stl_output_path()
-    result = await part_renderer.render_stl_async(
-        part.source_file, stl_path, params=overrides or None
-    )
-
+    result = build_stl(part, overrides, force=force)
+    if result.skipped == "refused":
+        raise HTTPException(
+            status_code=503, detail=f"Cannot generate STL for '{name}': {result.error_message}"
+        )
     if not result.success:
         raise HTTPException(
             status_code=500, detail=f"STL generation failed: {result.error_message}"
         )
 
-    write_params_sidecar(stl_path, overrides)
-
+    regenerated = result.skipped != "fresh"
     return {
         "success": True,
-        "message": f"STL generated successfully in {result.render_time_seconds:.1f}s",
+        "message": (
+            f"STL generated in {result.render_time_seconds:.1f}s"
+            if regenerated
+            else "STL is up to date (force=true rebuilds it)"
+        ),
         "stl_url": f"/parts/{name}/stl",
-        "regenerated": True,
+        "regenerated": regenerated,
         "render_time_seconds": result.render_time_seconds,
         "params": jsonable_encoder(overrides),
         "bounds": jsonable_encoder(part.get_bounds(overrides or None)),
@@ -595,7 +449,7 @@ async def generate_part_stl(
 
 
 @app.get("/parts/{name}/params")
-async def get_part_params(name: str):
+def get_part_params(name: str):
     """What a part accepts, in a form a control surface can build itself from.
 
     Types, defaults and bounds come from the part's own Pydantic model, so the
@@ -675,7 +529,7 @@ def _parse_build_volume(raw: Optional[str]):
 
 
 @app.get("/parts/{name}/checklist")
-async def get_part_checklist(name: str, build_volume: Optional[str] = Query(None)):
+def get_part_checklist(name: str, build_volume: Optional[str] = Query(None)):
     """Whether this part is ready to print and check against a real one.
 
     The same assessment `apothecary parts checklist` prints, so the viewer and
@@ -701,7 +555,7 @@ async def get_part_checklist(name: str, build_volume: Optional[str] = Query(None
 
 
 @app.post("/parts/{name}/validate")
-async def validate_part_params(name: str, body: Optional[StlGenerateRequest] = None):
+def validate_part_params(name: str, body: Optional[StlGenerateRequest] = None):
     """Check a staged parameter set without rendering anything.
 
     The step between moving a slider and spending thirty seconds of OpenSCAD on
@@ -754,20 +608,6 @@ async def validate_part_params(name: str, body: Optional[StlGenerateRequest] = N
     }
 
 
-@app.get("/parts/{name}/files")
-async def get_part_files(name: str, request: Request):
-    """
-    Get detailed file information for a part.
-
-    Returns status and URLs for all file formats (SCAD, JSCAD, STL).
-    """
-    part = _load_part_wrapper(name)
-    part_files = part.get_files()
-    base_url = str(request.base_url).rstrip("/")
-
-    return part_files.to_api_dict(base_url)
-
-
 # =============================================================================
 # Site/Structure/Substructure/Feature hierarchy (prototype, unratified)
 #
@@ -775,6 +615,11 @@ async def get_part_files(name: str, request: Request):
 # across requests, unlike /render's stateless Scene handling. Known
 # limitation: in-memory only, lost on restart, not shared across worker
 # processes -- fine for a single-process dev server.
+#
+# Routes that change a site or a job stay `async def`: they run one at a time
+# on the event loop, which is all that serializes the stores' plain dicts
+# until they have a lock. Routes that only read, and do filesystem, parse or
+# render work, are plain `def` and run on the threadpool.
 # =============================================================================
 
 _site_store = SiteStore(
@@ -827,24 +672,26 @@ def _find_node_by_path(site: Assembly, path: str) -> Optional[Assembly]:
     return node
 
 
-_NODE_STL_CACHE_DIR = ROOT / ".cache" / "node_stl"
+# Node renders kept in the cache. A key includes the node's position, so every
+# layout drag of a structure adds one; the least recently served go first.
+NODE_STL_KEEP = 500
+
+# One lock per render key, gone once nobody holds it.
+_NODE_STL_LOCKS: "weakref.WeakValueDictionary[str, threading.Lock]" = weakref.WeakValueDictionary()
+_NODE_STL_LOCKS_GUARD = threading.Lock()
+
+
+def _node_stl_cache_dir() -> Path:
+    """``$APOTHECARY_CACHE_DIR/node_stl``, by default under the checkout's ignored ``.cache``."""
+    return Path(os.environ.get("APOTHECARY_CACHE_DIR") or ROOT / ".cache") / "node_stl"
 
 
 def _node_stl_cache_paths(scad_text: str) -> tuple[Path, Path]:
-    """Content-hash-keyed cache location for a dynamically-addressed node's
-    render. Unlike a registered part (which has a fixed source file to key
-    off of), an arbitrary Assembly subtree has no path of its own on disk --
-    the rendered SCAD text itself is the only stable identity available.
+    """(scratch SCAD, STL) for a node's render, both in the cache, keyed by content.
 
-    A scene referring to registered parts imports them by repository-relative
-    path, and OpenSCAD resolves a relative ``import()`` against the *source
-    file's* own directory rather than the process working directory. So the
-    source has to sit at the repository root to render at all, while the STL
-    it produces belongs in the cache. It is scratch: written, rendered, removed.
-
-    A mesh the text imports is part of the identity too: the same
-    ``import("parts/ender3/ender3.stl")`` after the file was regenerated is a
-    different render, so each imported file's size and mtime go into the key.
+    A node has no source file of its own, so the SCAD text is its identity.
+    Each imported mesh's size and mtime go into the key too: the same
+    ``import()`` over a regenerated file is a different render.
     """
     digest = hashlib.sha256(scad_text.encode("utf-8"))
     for match in re.finditer(r'import\("([^"]+)"', scad_text):
@@ -856,11 +703,77 @@ def _node_stl_cache_paths(scad_text: str) -> tuple[Path, Path]:
         except OSError:
             digest.update(f"{match.group(1)}:missing".encode())
     key = digest.hexdigest()[:20]
-    return ROOT / f".node-stl-{key}.scad", _NODE_STL_CACHE_DIR / f"{key}.stl"
+    cache = _node_stl_cache_dir()
+    return cache / f"{key}.scad", cache / f"{key}.stl"
 
 
-async def _build_parts_referred_to(node: Assembly) -> None:
-    """Generate the STL of every registered part the subtree refers to and lacks."""
+def _node_stl_lock(key: str) -> threading.Lock:
+    with _NODE_STL_LOCKS_GUARD:
+        lock = _NODE_STL_LOCKS.get(key)
+        if lock is None:
+            lock = _NODE_STL_LOCKS[key] = threading.Lock()
+        return lock
+
+
+def _served_node_stl(stl_path: Path) -> Optional[bytes]:
+    """A cached render's bytes, its atime set to now; None when there is none."""
+    try:
+        mtime_ns = stl_path.stat().st_mtime_ns
+        os.utime(stl_path, ns=(time.time_ns(), mtime_ns))
+        return stl_path.read_bytes()
+    except FileNotFoundError:
+        return None
+
+
+def _render_node_stl(scad_text: str, scad_path: Path, stl_path: Path) -> None:
+    """Render ``scad_text`` to ``stl_path``; the scratch SCAD is removed either way."""
+    renderer = get_stl_renderer()
+    if not renderer.is_available:
+        raise HTTPException(
+            status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
+        )
+    scad_path.parent.mkdir(parents=True, exist_ok=True)
+    scad_path.write_text(scad_text, encoding="utf-8")
+    try:
+        result = renderer.render_stl(scad_path, stl_path, timeout=60)
+    finally:
+        scad_path.unlink(missing_ok=True)
+    if not result.success:
+        raise HTTPException(
+            status_code=500, detail=f"STL generation failed: {result.error_message}"
+        )
+    if result.dropped:
+        # A node is the whole of what it holds; a mesh OpenSCAD could not
+        # read back is missing from what it wrote, and that is not served.
+        stl_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=500,
+            detail="OpenSCAD dropped part of this node's geometry: "
+            + "; ".join(result.dropped)[:400],
+        )
+
+
+def _trim_node_stl_cache(cache: Path, keep: int = NODE_STL_KEEP) -> None:
+    """Remove all but the ``keep`` most recently served renders.
+
+    A render still being written is a dot-file (OpenSCADRenderer.render_stl)
+    and is left alone.
+    """
+    served = []
+    for stl in cache.glob("*.stl"):
+        if stl.name.startswith("."):
+            continue
+        try:
+            served.append((stl.stat().st_atime_ns, stl))
+        except FileNotFoundError:
+            continue
+    served.sort(reverse=True)
+    for _, stl in served[keep:]:
+        stl.unlink(missing_ok=True)
+
+
+def _build_parts_referred_to(node: Assembly) -> None:
+    """Build the STL of every registered part the subtree refers to and lacks."""
     wanted = set()
 
     def visit(n: Assembly) -> None:
@@ -870,19 +783,15 @@ async def _build_parts_referred_to(node: Assembly) -> None:
             visit(child)
 
     visit(node)
-    if not wanted:
-        return
-    renderer = get_stl_renderer()
-    if not renderer.is_available:
+    if not wanted or not get_stl_renderer().is_available:
         return
     by_name = {p.name: p for p in scan_projects(ROOT) if p.kind == "part"}
     for ref in sorted(wanted):
-        item = by_name.get(ref)
-        if item is None:
+        if ref not in by_name:
             continue
-        stl_path = stl_output_for(item)
-        if not stl_path.exists():
-            await renderer.render_stl_async(item.path, stl_path, timeout=120)
+        part = _registered_part(by_name[ref])
+        if not part.get_stl_output_path().exists():
+            build_stl(part, timeout=120)
 
 
 def _bounds_dict(bounds: BoundingBox3D | None) -> Dict[str, List[float]] | None:
@@ -1380,7 +1289,7 @@ async def list_sites():
 
 
 @app.get("/sites/{name}")
-async def get_site(name: str):
+def get_site(name: str):
     site = _get_site_or_404(name)
     validator = _site_store.validator(name)
     return _site_payload(site, validator(site))
@@ -1445,75 +1354,46 @@ async def reset_site_layout(name: str):
 
 
 @app.get("/sites/{name}/nodes/{path}/stl")
-async def get_node_stl(name: str, path: str):
-    """Render any addressable Assembly node's own subtree to STL, on demand.
+def get_node_stl(name: str, path: str):
+    """Render one node's subtree to STL through OpenSCAD, cached by content.
 
-    This is the real-geometry upgrade path for *composite* nodes in the
-    fractal viewer (a wall with a window cutout, a whole Structure) --
-    leaves already get exact primitives from ``_primitive_descriptor`` or,
-    for parts-library leaves, ``/parts/{part_ref}/stl``; anything with
-    nested booleans needs an actual CSG evaluation. Rather than a second,
-    bespoke geometry engine, this reuses the same OpenSCAD CLI pipeline
-    already serving ``/parts/{name}/stl`` -- the node's ``to_scad_object()``
-    is exactly the OpenSCAD subtree the site's own render already produces
-    for it, just rendered in isolation. Cached by content hash, since a
-    dynamically-addressed node (unlike a registered part) has no fixed file
-    path of its own to key a cache off of.
+    For composite nodes (a wall with a cutout, a whole Structure): leaves are
+    drawn from ``_primitive_descriptor`` or their part's STL. The SCAD is the
+    node's ``to_scad_object()``, what the site's own render produces for it,
+    written into the cache with absolute import paths and rendered there. One
+    render per key at a time; the cache keeps the NODE_STL_KEEP most
+    recently served.
     """
     site = _get_site_or_404(name)
     node = _find_node_by_path(site, path)
     if node is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
 
-    # A part the subtree refers to is imported by its STL, which is a build
-    # artifact a fresh clone has not made yet. Build what is missing first,
-    # as the viewer does for a part_ref leaf, so the node renders on the
-    # first request rather than answering that nobody has run generate-stl.
-    await _build_parts_referred_to(node)
+    # A part the subtree imports is a build product a fresh clone lacks.
+    _build_parts_referred_to(node)
 
     try:
-        scad_text = node.to_scad_object(strict=True).render()
+        with absolute_imports(ROOT):
+            scad_text = node.to_scad_object(strict=True).render()
     except ValueError as exc:
         raise HTTPException(
             status_code=422, detail=f"Node '{path}' has no renderable geometry: {exc}"
         ) from None
 
     scad_path, stl_path = _node_stl_cache_paths(scad_text)
-    if not stl_path.exists():
-        renderer = get_stl_renderer()
-        if not renderer.is_available:
-            raise HTTPException(
-                status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
-            )
-        stl_path.parent.mkdir(parents=True, exist_ok=True)
-        scad_path.write_text(scad_text, encoding="utf-8")
-        try:
-            result = await renderer.render_stl_async(scad_path, stl_path, timeout=60)
-        finally:
-            scad_path.unlink(missing_ok=True)
-        if not result.success:
-            raise HTTPException(
-                status_code=500, detail=f"STL generation failed: {result.error_message}"
-            )
-        if result.dropped:
-            # A node is the whole of what it holds; a mesh OpenSCAD could not
-            # read back is missing from what it wrote, and that is not served.
-            stl_path.unlink(missing_ok=True)
-            raise HTTPException(
-                status_code=500,
-                detail="OpenSCAD dropped part of this node's geometry: "
-                + "; ".join(result.dropped)[:400],
-            )
-
-    try:
-        stl_data = stl_path.read_bytes()
-        return Response(
-            content=stl_data,
-            media_type="application/sla",
-            headers={"Content-Disposition": f'attachment; filename="{node.name}.stl"'},
-        )
-    except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to read STL: {exc}") from exc
+    with _node_stl_lock(stl_path.stem):
+        stl_data = _served_node_stl(stl_path)
+        if stl_data is None:
+            _render_node_stl(scad_text, scad_path, stl_path)
+            stl_data = _served_node_stl(stl_path)
+            _trim_node_stl_cache(stl_path.parent)
+    if stl_data is None:
+        raise HTTPException(status_code=500, detail="OpenSCAD wrote no STL for this node")
+    return Response(
+        content=stl_data,
+        media_type="application/sla",
+        headers={"Content-Disposition": f'attachment; filename="{node.name}.stl"'},
+    )
 
 
 # -----------------------------------------------------------------------
@@ -1675,7 +1555,7 @@ def every_pin(fresh: bool = False):
         if site_known:
             try:
                 node = _find_node_by_path(_site_store.get(binding.site), binding.path)
-            except Exception:  # a site that will not build is a site with no nodes
+            except KeyError:  # forgotten, or its picture left the shelf, since names()
                 node = None
             node_found = node is not None
         device = device_for_identity(binding.identity, found)
@@ -1758,13 +1638,21 @@ def _site_devices_payload(name: str, site: Assembly, fresh: bool = False) -> Dic
     }
 
 
-def _binding_row_or_404(name: str, path: str) -> Dict[str, object]:
-    site = _get_site_or_404(name)
-    rows = _site_devices_payload(name, site)["bindings"]
-    row = next((r for r in rows if r["path"] == path), None)
+def _binding_row(name: str, site: Assembly, path: str) -> Dict[str, object]:
+    """The one row a pin change touches, from the cached port scan.
+
+    No printer is polled: a pin is a state write. GET /sites/{name}/devices
+    refreshes the held printer links.
+    """
+    try:
+        found = firmware_devices.detected_devices()
+    except ToolchainError:
+        found = []
+    rows = bindings_for_site(name, site, devices=found)
+    row = next((r for r in rows if r.path == path), None)
     if row is None:
-        raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
-    return row
+        return {"path": path, "name": path.rsplit(".", 1)[-1], "binding_source": None}
+    return row.model_dump(mode="json")
 
 
 @app.get("/sites/{name}/devices")
@@ -1792,7 +1680,7 @@ def attach_device(name: str, path: str, body: DeviceAttachRequest):
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
     identity = firmware_devices.stable_identity(body.identity)
     firmware_devices.get_state().set_binding(name, path, identity)
-    return _binding_row_or_404(name, path)
+    return _binding_row(name, site, path)
 
 
 @app.delete("/sites/{name}/nodes/{path}/device")
@@ -1802,9 +1690,7 @@ def detach_device(name: str, path: str):
     if _find_node_by_path(site, path) is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
     firmware_devices.get_state().clear_binding(name, path)
-    rows = _site_devices_payload(name, site)["bindings"]
-    row = next((r for r in rows if r["path"] == path), None)
-    return row or {"path": path, "name": path.rsplit(".", 1)[-1], "binding_source": None}
+    return _binding_row(name, site, path)
 
 
 # -----------------------------------------------------------------------
@@ -1847,7 +1733,7 @@ def _job_summary(job: Job, site: Assembly) -> Dict[str, object]:
 
 
 @app.get("/sites/{name}/jobs")
-async def list_jobs(name: str):
+def list_jobs(name: str):
     site = _get_site_or_404(name)
     return [_job_summary(job, site) for job in _job_store.list_for_site(name)]
 
@@ -1951,7 +1837,7 @@ async def viewer_home():
 
 
 @app.get("/viewer/sites/{name}", response_class=HTMLResponse)
-async def site_viewer(name: str, request: Request, focus: str = Query(default="")):
+def site_viewer(name: str, request: Request, focus: str = Query(default="")):
     """Fractal zoom viewer: navigates any registered site's Assembly tree at
     any depth with standardized controls (prototype).
 
@@ -1977,7 +1863,7 @@ async def site_viewer(name: str, request: Request, focus: str = Query(default=""
 
 
 @app.get("/viewer/parts/{name}")
-async def part_view(name: str):
+def part_view(name: str):
     """A part is reached by navigating to it, not by a second viewer.
 
     This deep-link survives because links to it were handed out, but it now
@@ -1995,64 +1881,6 @@ async def part_view(name: str):
     return RedirectResponse(
         f"/viewer/sites/parts_library?focus={quote(canonical, safe='')}", status_code=307
     )
-
-
-@app.get("/problems")
-async def get_problems(
-    owner: Optional[str] = Query(None, description="apothecary | datum | human | measurement"),
-    kind: Optional[str] = Query(None),
-    build_volume: Optional[str] = Query(None),
-):
-    """Every open question this repository can state, and who can close it.
-
-    Derived from models that already exist -- contested values, the build
-    checklist, layout validators, the black-box seam -- so it cannot drift from
-    the repository the way a hand-maintained list does.
-    """
-    from .spaces import problems as open_problems
-
-    volume = _parse_build_volume(build_volume)
-    found = open_problems(build_volume=volume)
-    if owner:
-        found = [p for p in found if p.owner == owner]
-    if kind:
-        found = [p for p in found if p.kind == kind]
-    return {"count": len(found), "problems": [p.to_dict() for p in found]}
-
-
-@app.get("/solutions")
-async def get_solutions(kind: Optional[str] = Query(None)):
-    """What this repository offers against those problems."""
-    from .spaces import capabilities
-
-    found = capabilities()
-    if kind:
-        found = [c for c in found if c.kind == kind]
-    return {"count": len(found), "capabilities": [c.to_dict() for c in found]}
-
-
-@app.get("/spaces")
-async def get_spaces(build_volume: Optional[str] = Query(None)):
-    """Both spaces at a glance, and any problem kind nothing here addresses."""
-    from .spaces import summary
-
-    return summary(build_volume=_parse_build_volume(build_volume))
-
-
-@app.get("/openscad/status")
-async def openscad_status():
-    """
-    Check OpenSCAD availability and version.
-
-    Returns information about the OpenSCAD installation used for STL generation.
-    """
-    renderer = get_stl_renderer()
-
-    return {
-        "available": renderer.is_available,
-        "version": renderer.get_version(),
-        "path": str(renderer.openscad_path) if renderer.openscad_path else None,
-    }
 
 
 # The project's first APIRouter, mounted last. Its handlers reach back into the

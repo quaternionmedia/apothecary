@@ -934,3 +934,20 @@ def test_a_file_saved_by_an_ordinary_editor_is_read(a_folder, tmp_path):
     said = _run(a_folder, "--answers", answers)
     assert said.exit_code == 0, said.output
     assert "What you told it" in said.output
+
+
+def test_a_file_that_would_not_open_is_not_offered_as_worth_using():
+    """The sheet lists it with its reason; 'worth using anyway' is for a picture
+    that opened and showed nothing, not for one nothing could read at all."""
+    from apothecary.gathering.models import Reading
+
+    opened = Reading(picture="blank", shapes_found=0, readable=False, because="nothing found")
+    unopened = Reading(
+        picture="broken", shapes_found=0, readable=False, opened=False, because="not a picture"
+    )
+    gathering = gather([])
+    gathering = gathering.model_copy(update={"readings": [opened, unopened]})
+    sheet = as_sheet(gathering, [])
+    assert "blank is worth using anyway" in sheet
+    assert "broken is worth using anyway" not in sheet
+    assert "broken: not a picture" in sheet
