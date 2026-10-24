@@ -164,7 +164,7 @@ def _the_shared_server_as_found(request):
     if request.config.getoption("--step") is not None or not any(
         "base_url" in item.fixturenames
         for item in request.session.items
-        if item.module is request.module
+        if getattr(item, "module", None) is request.module  # a page's doctest has none
     ):
         yield
         return
