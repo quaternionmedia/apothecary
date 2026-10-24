@@ -328,3 +328,22 @@ def world(tmp_path, monkeypatch):
         _site_store.reset(name)
     yield root
     forget_cameras()
+
+
+# --- a real OpenSCAD that lists parameters --------------------------------------------
+#
+# A snapshot lists a SCAD's parameters (--export-format=param); 2021.01 cannot. Found
+# once, the first time a test asks, among the OpenSCADs a render would use.
+
+
+@pytest.fixture(scope="session")
+def listing_openscad():
+    """The OpenSCAD on this machine that lists a SCAD's parameters; a test that asks for
+    it skips where there is none."""
+    from apothecary.projects.parts import stl_renderer
+    from apothecary.projects.parts.customizer import lists_parameters
+
+    found = next((p for p in stl_renderer._openscad_candidates() if lists_parameters(p)), None)
+    if found is None:
+        pytest.skip("no OpenSCAD here lists parameters (`apothecary openscad install`)")
+    return found
