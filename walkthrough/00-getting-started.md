@@ -118,7 +118,7 @@ Where each starts:
 - **A picture to a print** starts at the bench in the garage: its ring,
   Camera › Add here, then the camera's Device. With no camera, the bench's
   Picture › Add pins a picture from disk instead;
-  `examples/shapes.png` is three shapes the finder
+  `examples/pictures/shapes.png` is three shapes the finder
   reads. Each step's message names the next one.
 - **Firmware** starts at the Bench, a tab beside Pictures, or the canvas ring's
   Panels › Bench › Bench: the sketches under `parts/`, each named with its

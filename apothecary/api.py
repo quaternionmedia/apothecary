@@ -98,6 +98,7 @@ from .projects.parts.variants import (
 from .projects.parts.variants import wants as request_wants
 from .projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
 from .routes import lighting as lighting_routes
+from .routes.airgap import router as airgap_router
 from .routes.cameras import router as cameras_router
 from .routes.jobs import router as jobs_router
 from .routes.lighting import router as lighting_router
@@ -198,7 +199,8 @@ app = FastAPI(
         "parts, rendered by OpenSCAD and kept as variants; photos, the views pinned "
         "from them, the cameras that take them and the shapes found in them; firmware "
         "for the boards and printers, with their control and prints; the slicer; jobs; "
-        "the ring's menu; and the documentation and walkthrough it serves."
+        "the airgap part's metrics document, its schema and its check; the ring's menu; "
+        "and the documentation and walkthrough it serves."
     ),
     lifespan=lifespan,
     # /docs is the project's documentation (docs_site.py). FastAPI's own Swagger
@@ -255,6 +257,8 @@ app.include_router(slicer_router)
 # A part's SCAD edited: drafts checked and rendered, and saves as variants in git.
 app.include_router(part_edits_router)
 app.include_router(lighting_router)
+# The Airgap panel's metrics document: its schema, and a copied document read back.
+app.include_router(airgap_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 

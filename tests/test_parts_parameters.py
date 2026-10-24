@@ -39,6 +39,11 @@ class TestScadLiteral:
     def test_embedded_quote_is_escaped(self):
         assert scad_literal('a"b') == '"a\\"b"'
 
+    def test_a_newline_is_an_escape_not_a_line_break(self):
+        # OpenSCAD's lexer drops a raw newline inside a literal; the escape survives.
+        assert scad_literal("A: 0:50\nB: 30:50") == '"A: 0:50\\nB: 30:50"'
+        assert scad_literal("a\tb\r") == '"a\\tb\\r"'
+
     def test_unrepresentable_values_are_refused(self):
         with pytest.raises(ValueError):
             scad_literal(float("inf"))

@@ -1,0 +1,61 @@
+/* The Airgap panel (widgets/airgap.js): a rotor/stator pair as a field, torque and dynamics
+ * model, in a window of the page's layout. Scoped to .airgap-ui; the palette is the widget's own, read by
+ * its canvases from these custom properties, so the page's rules are left alone. */
+.airgap-ui {
+    --paper: #0e1217; --card: #161c24; --ink: #e4e8ee; --ink-2: #98a5b5; --line: #2c3644; --line-2: #222b36;
+    --steel: #8696aa; --copper: #d4894d; --copper-2: #f0b27a; --verdigris: #5fb3a8; --verdigris-2: #9ad9cf;
+    --stage: #090c11; --stage-ink: #e4e8ee; --stage-dim: #8d9aab; --stage-line: #222b36;
+    --iron-s: #3b4756; --iron-r: #262e3a;
+    --ph1: #d9925a; --ph2: #4fb3a6; --ph3: #6f9ad8; --ph4: #b57bd1; --ph5: #b7c45a; --ph6: #e07a9a;
+    --sph1: #d9925a; --sph2: #4fb3a6; --sph3: #6f9ad8; --sph4: #b57bd1; --sph5: #b7c45a; --sph6: #e07a9a;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8rem; color: var(--ink); display: flex; flex-direction: column; gap: 0.4rem; min-width: 0;
+}
+.airgap-ui [hidden] { display: none !important; }
+.airgap-ui .airgap-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.airgap-ui select, .airgap-ui input[type=text], .airgap-ui textarea, .airgap-ui button {
+    font: inherit; font-size: 0.78rem; background: #232823; color: #ddd; border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.45rem;
+}
+.airgap-ui button { cursor: pointer; }
+.airgap-ui button:hover { border-color: var(--copper); }
+.airgap-ui .airgap-preset { flex: 1; min-width: 0; }
+.airgap-ui .airgap-source { font: 0.68rem var(--font-mono); color: var(--ink-2); }
+.airgap-ui .airgap-verbs { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.airgap-ui .airgap-verbs button { font-size: 0.72rem; padding: 0.15rem 0.4rem; }
+.airgap-ui .airgap-source.following { color: var(--verdigris); }
+.airgap-ui .airgap-stage { background: var(--stage); color: var(--stage-ink); border-radius: 6px; padding: 0.5rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.airgap-ui .stage-head { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; align-items: center; }
+.airgap-ui .chk { display: inline-flex; gap: 0.3rem; align-items: center; font: 0.72rem var(--font-mono); color: var(--stage-dim); cursor: pointer; }
+.airgap-ui .chk input { accent-color: var(--copper); margin: 0; }
+.airgap-ui .ramp { display: inline-flex; align-items: center; gap: 0.3rem; font: 0.68rem var(--font-mono); color: var(--stage-dim); margin-right: auto; }
+.airgap-ui .ramp i { display: inline-block; width: 48px; height: 7px; border-radius: 2px; background: linear-gradient(90deg, #1a2230, #5b3a26 35%, #c9833f 70%, #ffe4bb); }
+.airgap-ui .ramp i.div { background: linear-gradient(90deg, #3fa096, #2a3340 50%, #e09a52); }
+.airgap-ui .legend { display: flex; flex-wrap: wrap; gap: 0.2rem 0.6rem; font: 0.68rem var(--font-mono); color: var(--stage-dim); min-height: 1em; }
+.airgap-ui .legend span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin-right: 3px; vertical-align: -1px; }
+.airgap-ui .view { position: relative; width: 100%; aspect-ratio: 1; }
+.airgap-ui .view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.airgap-ui .scrub { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.4rem; align-items: center; }
+.airgap-ui .scrub .airgap-play { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--stage-line); background: transparent; color: var(--stage-ink); padding: 0; font-size: 0.7rem; display: grid; place-items: center; }
+.airgap-ui .scrub input[type=range] { width: 100%; accent-color: var(--copper); margin: 0; }
+.airgap-ui .scrub output { font: 0.7rem var(--font-mono); color: var(--copper-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.airgap-ui .airgap-fold { border-top: 1px solid var(--line-2); padding: 0.2rem 0; }
+.airgap-ui .airgap-fold > summary { cursor: pointer; font: 0.68rem var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); padding: 0.25rem 0; }
+.airgap-ui .airgap-fold canvas { display: block; width: 100%; height: 180px; }
+.airgap-ui .airgap-fold canvas[data-airgap="gapmap"], .airgap-ui .airgap-fold canvas[data-airgap="sweep"] { height: 220px; }
+.airgap-ui .airgap-fold canvas[data-airgap="dynOrbit"] { height: 200px; }
+.airgap-ui .hover, .airgap-ui .cap { margin: 0.2rem 0 0; font-size: 0.7rem; color: var(--ink-2); }
+.airgap-ui .hover { font-family: var(--font-mono); min-height: 1.2em; }
+.airgap-ui .cap code { font-size: 0.68rem; }
+.airgap-ui .readouts { display: flex; flex-direction: column; gap: 0.35rem; }
+.airgap-ui .mgroup h4 { margin: 0 0 0.15rem; font: 0.66rem var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.airgap-ui .mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 0.15rem 0.6rem; margin: 0; }
+.airgap-ui .metric { display: grid; grid-template-columns: 1fr; padding: 0.1rem 0.25rem; border-radius: 3px; transition: background 0.5s; }
+.airgap-ui .metric.changed { background: #2c3644; transition: none; }
+.airgap-ui .metric dt { font-size: 0.66rem; color: var(--ink-2); }
+.airgap-ui .metric dd { margin: 0; font: 0.76rem var(--font-mono); color: var(--copper-2); font-variant-numeric: tabular-nums; }
+.airgap-ui .metric dd small { display: block; font-size: 0.62rem; color: var(--ink-2); }
+.airgap-ui .airgap-rig { width: 100%; min-height: 11em; resize: vertical; font-family: var(--font-mono); font-size: 0.7rem; line-height: 1.35; }
+.airgap-ui .msg { font: 0.7rem var(--font-mono); color: var(--verdigris); min-height: 1.1em; }
+.airgap-ui .msg.bad { color: #ff8080; }
+.airgap-ui .sweep-row { display: flex; gap: 0.35rem; align-items: center; margin-bottom: 0.3rem; }
+.airgap-ui .sweep-row .airgap-sweep { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 0.7rem; }

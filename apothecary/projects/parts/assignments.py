@@ -238,10 +238,18 @@ def literal_text(value: Any) -> str:
             raise ValueError(f"{value!r} has no OpenSCAD literal")
         return str(int(value)) if value.is_integer() and abs(value) < 1e15 else repr(value)
     if isinstance(value, str):
-        return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+        return '"' + escaped(value) + '"'
     if isinstance(value, (list, tuple)):
         return "[" + ", ".join(literal_text(v) for v in value) + "]"
     raise TypeError(f"no OpenSCAD literal for {type(value).__name__}: {value!r}")
+
+
+def escaped(value: str) -> str:
+    """A string's characters as OpenSCAD source spells them: a quote, a backslash, and a
+    newline, tab or return as escapes -- a raw newline inside a literal is dropped by
+    OpenSCAD's lexer, so a slot string typed over two lines would lose its second."""
+    out = value.replace("\\", "\\\\").replace('"', '\\"')
+    return out.replace("\n", "\\n").replace("\t", "\\t").replace("\r", "\\r")
 
 
 # --- the customizer's comment --------------------------------------------------------------
