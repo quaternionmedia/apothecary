@@ -76,11 +76,12 @@ addopts = "--doctest-glob=*.md"
 testpaths = ["walkthrough", "tests"]
 # A deprecation warning raised from apothecary's own code fails the run.
 filterwarnings = ["error::DeprecationWarning:apothecary"]
-# Each test's limit, setup included: the slowest browser loop takes a minute and a
-# half here, so ten minutes fails only a test that has stopped, and fails it alone
-# rather than the CI job's twenty minutes. A test that needs longer says so with
-# @pytest.mark.timeout(...).
-timeout = 600
+# Each test's limit, setup included: above twice the slowest browser test recorded
+# (tests/e2e/durations.json), and short enough that the heaviest shard's own time
+# with one test hung to its limit is still inside the CI job's, so a hung wait fails
+# that test alone and its traceback names it. tests/test_cli_testing.py holds both.
+# A test that needs longer says so with @pytest.mark.timeout(...).
+timeout = 240
 markers = [
     "e2e: end-to-end tests using Playwright",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
