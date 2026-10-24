@@ -352,8 +352,6 @@ def test_a_movable_thing_selected_wears_one_compact_set_of_handles(page: Page, b
 # The Machine: a tab beside Pictures
 # --------------------------------------------------------------------------
 
-MACHINE = windows.MACHINE
-
 
 def _tabbed_machine(page: Page):
     """The Machine shown: a tab of the stack Pictures, the Bench and Settings are in,
@@ -367,12 +365,12 @@ def _tabbed_machine(page: Page):
 
 
 @pytest.mark.e2e
-def test_the_machine_opens_beside_pictures_and_stays_where_it_is_dragged(page: Page, bench: str):
+def test_every_way_into_a_machine_shows_it_as_a_tab_beside_pictures(page: Page, bench: str):
     """Every way into a Machine -- its badge, Selected's Open, the ring's Device › Open,
     the monitor's address -- shows it as a tab beside Pictures, the Bench and Settings,
-    in front, over none of the world; dragged to a window of its own beside the world,
-    opened again it stays where a person put it; closed and opened, it is beside Pictures
-    again."""
+    in front, over none of the world. A window a person moves stays where it is put,
+    and goes home when closed and opened again: the window manager's
+    (tests/e2e/test_window_manager.py)."""
     _open(page, bench)
     page.locator(BOARD_BADGE).click()
     machine = _tabbed_machine(page)
@@ -397,25 +395,6 @@ def test_the_machine_opens_beside_pictures_and_stays_where_it_is_dragged(page: P
     page.goto(f"{bench}/firmware/monitor?port={PRINTER}")
     expect(page).to_have_url(re.compile(r"machine="))
     expect(_tabbed_machine(page).locator("#c-state")).to_contain_text("printing", timeout=15000)
-
-    # Dragged by its tab onto the world's left edge: a window of its own there; opened
-    # again, it stays there.
-    world = page.locator(windows.WORLD).bounding_box()
-    windows.drag(
-        page, windows.tab(page, "machine"), (world["x"] + 30, world["y"] + world["height"] / 2)
-    )
-    moved = page.locator(MACHINE)
-    page.wait_for_function(
-        f'() => document.querySelector("{MACHINE}").getBoundingClientRect().x < 2'
-    )
-    assert windows.state(page, "machine")["stack"] == ["machine"]
-    _select(page, "printer_1")
-    page.locator("#selected-body .dev-open").click()
-    expect(moved).to_be_visible()
-    assert moved.bounding_box()["x"] < 2
-    page.evaluate("() => window.fractalViewer.closeMachine()")
-    page.evaluate("() => window.fractalViewer.openMachine('printer_1')")
-    _tabbed_machine(page)
 
 
 @pytest.mark.e2e

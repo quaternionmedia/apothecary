@@ -532,19 +532,6 @@ def _open_panels(page: Page, url: str):
     return page.locator(windows.WORLD)
 
 
-def _second_tab(page: Page):
-    """A second tab among Pictures', as a Machine is: registered the way the page
-    registers one, with a body of its own."""
-    page.evaluate(
-        """() => {
-            const el = document.createElement('div');
-            el.id = 'second-body';
-            el.textContent = 'a second tab';
-            window.apothecaryPanels.register('second', { title: 'Second', body: el });
-        }"""
-    )
-
-
 def _panels_ring(page: Page) -> dict:
     """The canvas ring opened on Panels: its cells."""
     page.locator("#viewer-canvas").click(
@@ -560,8 +547,9 @@ def _panels_ring(page: Page) -> dict:
 def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url: str):
     """The world and every panel are windows of one layout: Site above Selected in the
     column on the world's right, Pictures, the Bench and Settings tabs below them, the
-    first in front. A panel the page registers later joins those tabs behind the one in
-    front; a tab pressed brings its panel in front."""
+    first in front; a piece chosen in Site's tree fills Selected and moves nothing in
+    Site. Where a window opens, and what a tab does, are the window manager's
+    (tests/e2e/test_window_manager.py)."""
     world = _open_panels(page, ring_url)
     ids = page.evaluate("() => window.apothecaryPanels.list().map((p) => p.id)")
     assert ids == [
@@ -598,12 +586,6 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
     expect(windows.panel(page, "bench")).to_be_hidden()
     pictures_y = windows.panel(page, "pictures").bounding_box()["y"]
     assert pictures_y > selected.bounding_box()["y"]  # below Selected
-    # Registered later: a tab of the same stack, behind the one in front.
-    _second_tab(page)
-    expect(windows.tab(page, "second")).to_have_count(1)
-    assert windows.state(page, "second")["stack"] == ["pictures", "bench", "settings", "second"]
-    expect(windows.panel(page, "second")).to_be_hidden()
-    expect(windows.panel(page, "pictures")).to_be_visible()
     # Selecting a piece from Site's tree fills Selected and moves nothing in Site.
     before = site.bounding_box()
     row = page.locator("#contents-list .contents-item[data-path='printer_1']")
@@ -612,20 +594,11 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
     expect(selected.locator("#pos-x")).to_be_visible(timeout=5000)
     assert site.bounding_box() == before and row.bounding_box() == at
 
-    # A tab pressed: its panel in front, the other behind it.
-    windows.show(page, "second")
-    expect(page.locator("#second-body")).to_be_visible()
-    expect(windows.panel(page, "pictures")).to_be_hidden()
-    windows.show(page, "pictures")
-    expect(page.locator("#pictures-list")).to_be_visible(timeout=5000)
-    expect(windows.tab(page, "pictures")).to_have_class(re.compile(r"\blm_active\b"))
-
 
 @pytest.mark.e2e
 def test_a_closed_window_stays_closed_and_the_ring_reopens_it(page: Page, ring_url: str):
     """A window closed by its tab's ✕ stays closed after a reload; the ring's Panels
-    reaches it by address and opens it in front; with every panel closed the world has
-    the whole width."""
+    reaches it by address and opens it in front."""
     world = _open_panels(page, ring_url)
     windows.close(page, "site")
     expect(windows.panel(page, "site")).to_have_count(0)
@@ -662,51 +635,15 @@ def test_a_closed_window_stays_closed_and_the_ring_reopens_it(page: Page, ring_u
     expect(windows.panel(page, "bench")).to_be_visible(timeout=5000)
     expect(windows.panel(page, "pictures")).to_be_hidden()
 
-    # Every panel closed: the world has the whole width.
-    for state in page.evaluate("() => window.apothecaryPanels.list()")[1:]:
-        page.evaluate("(id) => window.apothecaryPanels.close(id)", state["id"])
-    expect(page.locator(".panel")).to_have_count(0)
-    windows.world_is(page, page.viewport_size["width"])
-    # The world alone in the layout, a panel opens beside it again, after a reload too.
-    page.wait_for_timeout(400)  # the layout is remembered a moment after it changes
-    page.reload()
-    expect(world).to_be_visible(timeout=15000)
-    errors = []
-    page.on("pageerror", lambda e: errors.append(str(e)))
-    inner = _panels_ring(page)
-    page.keyboard.press(next(cell for cell, label in inner.items() if label == "Site"))
-    page.keyboard.press(next(cell for cell, label in _wedges(page).items() if label == "Site"))
-    expect(windows.panel(page, "site")).to_be_visible(timeout=5000)
-    expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()
-    assert world.bounding_box()["width"] < page.viewport_size["width"] - 100
-    assert errors == [], errors
-
 
 @pytest.mark.e2e
-def test_a_window_dragged_beside_the_world_is_remembered_until_the_layout_is_reset(
-    page: Page, ring_url: str
-):
-    """Pictures' tab dragged onto the world's left edge: a window of its own on the
-    world's left, the world narrower; a reload finds it there. Panels › Windows ›
-    Reset layout puts every window where the page puts it."""
+def test_the_rings_reset_layout_lays_the_pages_own_out_again(page: Page, ring_url: str):
+    """Panels › Windows holds the views, World alone and Reset layout; Reset layout lays
+    the page's own layout out again and says so. What a person moved, and what a reset
+    does with it, are the window manager's (tests/e2e/test_window_manager.py)."""
     world = _open_panels(page, ring_url)
-    wb = world.bounding_box()
-    windows.drag(page, windows.tab(page, "pictures"), (wb["x"] + 30, wb["y"] + wb["height"] / 2))
-    pictures = windows.panel(page, "pictures")
-    expect(pictures).to_be_visible()
-    page.wait_for_function(
-        "() => document.querySelector(\".panel[data-panel='pictures']\").getBoundingClientRect().x < 2"
-    )
-    # The world on its right.
-    assert world.bounding_box()["x"] >= pictures.bounding_box()["width"] - 1
-    assert windows.state(page, "pictures")["stack"] == ["pictures"]
-    assert windows.state(page, "bench")["stack"] == ["bench", "settings"]
-    page.wait_for_timeout(400)  # the layout is remembered a moment after it changes
-    page.reload()
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    assert pictures.bounding_box()["x"] < 2
-    assert windows.state(page, "pictures")["stack"] == ["pictures"]
-    expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()  # still no tab of its own
+    page.evaluate("() => window.apothecaryPanels.applyView('part')")
+    assert windows.state(page, "pictures")["open"] is False
 
     inner = _panels_ring(page)
     page.keyboard.press(next(cell for cell, label in inner.items() if label == "Windows"))
@@ -719,15 +656,6 @@ def test_a_window_dragged_beside_the_world_is_remembered_until_the_layout_is_res
     expect(page.locator("#status")).to_contain_text("The page's own layout again")
     assert windows.state(page, "pictures")["stack"] == ["pictures", "bench", "settings"]
     assert world.bounding_box()["x"] <= 1
-
-    # A tab dropped on the world's own right quarter: a window of its own there, with
-    # its tab to drag, close and find it by; the world's window still has none.
-    wb = world.bounding_box()
-    to = (wb["x"] + wb["width"] * 0.85, wb["y"] + wb["height"] / 2)
-    windows.drag(page, windows.tab(page, "bench"), to)
-    page.wait_for_function("() => window.apothecaryPanels.state('bench').stack.length === 1")
-    expect(windows.tab(page, "bench")).to_be_visible()
-    expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()
 
 
 @pytest.mark.e2e
@@ -822,24 +750,3 @@ def test_the_tilde_shows_the_world_alone_and_the_ring_does_too(page: Page, ring_
     page.evaluate("() => window.apothecaryPanels.open('selected')")
     expect(windows.panel(page, "selected")).to_be_visible()
     windows.world_is(page, before)
-
-
-@pytest.mark.e2e
-def test_the_splitter_beside_the_world_is_dragged_and_remembered(page: Page, ring_url: str):
-    """The splitter between the world and the column drags the column wider; the
-    width it was dragged to is what it has after a reload."""
-    world = _open_panels(page, ring_url)
-    before = windows.world_width(page)
-    splitter = page.locator(".lm_root > .lm_row > .lm_splitter").first
-    sb = splitter.bounding_box()
-    windows.drag(page, splitter, (sb["x"] - 120, sb["y"] + sb["height"] / 2))
-    page.wait_for_function(
-        "(w) => document.querySelector('.viewer-panel').offsetWidth < w - 80", arg=before
-    )
-    narrower = windows.world_width(page)
-    page.wait_for_timeout(400)  # the layout is remembered a moment after it changes
-    page.reload()
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    windows.world_is(page, narrower)
-    assert world.bounding_box()["width"] < before - 80
-    expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()  # still no tab of its own
