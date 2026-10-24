@@ -1,8 +1,8 @@
 """A view drawn where it was pinned: the picture as a mat on the bench's top or on
 the floor beside the site, its shapes as outlines, a place badge over each.
 
-The fixture is a stated description of a picture 1000 by 500 pixels (the one
-tests/test_views_api.py states), pinned at node ``workbench`` in site ``garage``
+The fixture is a stated description of a picture 1000 by 500 pixels
+(tests/views_helpers.py's, conftest's fixture_picture), pinned at node ``workbench`` in site ``garage``
 through ``POST /sites/garage/views`` with the page's own request context, at a
 width of 1800 mm: the bench's top is x 0..1800, y 0..600 at z 780, and the mat is
 laid in its clear stretch between ``printer_1`` and the footpedal, centred at
@@ -12,44 +12,22 @@ behind them.
 
 Every view, camera and kept picture a test adds is taken back after it, and the
 bench is put back where the site's code has it, so a later test finds the server
-as it would alone.
+as it would alone (conftest's leaves_garage_as_found).
 """
 
 from __future__ import annotations
 
 import io
-import json
 
 import pytest
-from PIL import Image, ImageDraw
+from garage import drawn as _drawn
+from garage import open_garage as _open_garage
+from garage import picture as _picture
+from garage import pin as _pin
+from PIL import Image
 from playwright.sync_api import expect
 from viewer_ready import OCCLUSION_TESTED, settled
-
-WIDE, HIGH = 1000, 500
-NAME = "world_bench"
-SHAPES = [
-    {
-        "kind": "rect",
-        "min": [0.135, 0.41],
-        "max": [0.235, 0.51],
-        "label": "block",
-        "points": [[0.135, 0.41], [0.235, 0.41], [0.235, 0.51], [0.135, 0.51]],
-    },
-    {
-        "kind": "disc",
-        "min": [0.585, 0.7478],
-        "max": [0.615, 0.8078],
-        "label": "coin",
-        "confidence": 0.9,
-    },
-    {
-        "kind": "rect",
-        "min": [0.3178, 0.1578],
-        "max": [0.3378, 0.1978],
-        "label": "bar",
-        "confidence": 0.8,
-    },
-]
+from views_helpers import SHAPES
 
 # Where a fraction of a drawn view's picture lands on the page, in page pixels.
 PROJECT = """([view, fx, fy]) => {
@@ -69,7 +47,6 @@ LOOK_DOWN = """([x, y, z, height]) => {
     v.orbitControls.update();
 }"""
 
-STATE = "() => window.apothecaryPictures.state()"
 FOUND_COLOR, OVER_COLOR = 0xFFCC66, 0xFF5544  # picture_marks.js: a shape found, and one flagged
 
 
@@ -93,77 +70,6 @@ UNDER_THE_PRINTER = """([view, box]) => {
     }
     return null;
 }"""
-
-
-def _picture(pen_shapes: bool = True) -> bytes:
-    img = Image.new("L", (WIDE, HIGH), 245)
-    pen = ImageDraw.Draw(img)
-    if pen_shapes:
-        pen.rectangle((40, 40, 260, 160), fill=30)
-        pen.polygon([(80, 420), (300, 420), (190, 280)], fill=25)
-    out = io.BytesIO()
-    img.save(out, format="PNG")
-    return out.getvalue()
-
-
-@pytest.fixture
-def fixture_picture(picture_folder):
-    (picture_folder / f"{NAME}.png").write_bytes(_picture())
-    (picture_folder / f"{NAME}.shapes.json").write_text(
-        json.dumps({"name": NAME, "pixel_width": WIDE, "pixel_height": HIGH, "shapes": SHAPES}),
-        encoding="utf-8",
-    )
-    yield f"{NAME}.png"
-    (picture_folder / f"{NAME}.png").unlink(missing_ok=True)
-    (picture_folder / f"{NAME}.shapes.json").unlink(missing_ok=True)
-
-
-@pytest.fixture
-def leaves_garage_as_found(page, base_url: str):
-    """After the test: garage's views, cameras and kept pictures it added are taken
-    back, and its layout is the code's again."""
-    api = page.request
-    attached = api.get(f"{base_url}/sites/garage/attached").json()
-    views = {vw["id"] for vw in attached["views"]}
-    cameras = {c["name"] for c in attached["cameras"]}
-    pictures = {p["path"] for p in api.get(f"{base_url}/photos/pictures").json()}
-    yield
-    attached = api.get(f"{base_url}/sites/garage/attached").json()
-    for view in attached["views"]:
-        if view["id"] not in views:
-            api.delete(f"{base_url}/sites/garage/views/{view['id']}")
-    for camera in attached["cameras"]:
-        if camera["name"] not in cameras:
-            api.delete(f"{base_url}/sites/garage/cameras/{camera['name']}")
-    for picture in api.get(f"{base_url}/photos/pictures").json():
-        if picture["path"] not in pictures and picture["kept"]:
-            api.delete(f"{base_url}/photos/pictures/{picture['path']}")
-    api.post(f"{base_url}/sites/garage/reset")
-
-
-def _pin(page, base_url: str, host: str, picture: str, mm_across: float | None = None) -> dict:
-    """Pin the picture as a view and Find shapes in it with the stated finder."""
-    body = {"host": host, "picture": picture}
-    if mm_across:
-        body["mm_across"] = mm_across
-    answer = page.request.post(f"{base_url}/sites/garage/views", data=body)
-    assert answer.status == 201, answer.text()
-    found = page.request.post(
-        f"{base_url}/sites/garage/views/{answer.json()['id']}/find", data={"finder": "stated"}
-    )
-    assert found.status == 200, found.text()
-    return found.json()
-
-
-def _open_garage(page, base_url: str) -> None:
-    page.goto(f"{base_url}/viewer/sites/garage")
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    page.evaluate("() => localStorage.removeItem('apothecary.layout')")
-    settled(page)
-
-
-def _drawn(page, host: str):
-    return next((entry for entry in page.evaluate(STATE) if entry["host"] == host), None)
 
 
 def _at(page, view: str, fx: float, fy: float) -> dict:

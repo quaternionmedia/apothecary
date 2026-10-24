@@ -30,12 +30,12 @@ import time
 import httpx
 import pytest
 import windows
+from boards import BOARD, PRINTER
+from garage import select as _select
 from playwright.sync_api import Page, expect
 from viewer_ready import FRAMES
 
-PRINTER = "/dev/ttyFAKE1"
 UNO = "/dev/ttyFAKE0"
-BOARD = "printer_1.frame_system.mainboard"
 POLL_MS = 2000  # the Machine's default interval
 WITHIN_A_POLL = POLL_MS + 3000  # an expect's timeout: the next poll and its round trip
 MONITOR = "window.apothecaryMachine.state"  # the open Machine's polling state
@@ -121,10 +121,6 @@ def _hold_clock(page: Page):
     fast_forward, which fires each due timer once: run_for would also draw every
     animation frame in between, seconds of software GL on the viewer."""
     page.clock.pause_at(page.evaluate("Date.now()") + 1000)
-
-
-def _select(page: Page, name: str):
-    page.locator("#contents-list .contents-item", has_text=name).first.click()
 
 
 def _expand_to(page: Page, path: str):

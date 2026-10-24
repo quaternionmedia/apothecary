@@ -23,12 +23,11 @@ import httpx
 import pytest
 import rings
 import windows
+from boards import PRINTER
 from playwright.sync_api import Page, expect
 from rings import RING_MS
 
 from apothecary.systems import SYSTEMS, by_id
-
-PRINTER = "/dev/ttyFAKE1"
 
 
 @dataclass(frozen=True)

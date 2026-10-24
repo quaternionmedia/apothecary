@@ -19,6 +19,7 @@ import re
 import part_editing
 import pytest
 import rings
+from garage import status as _status
 from playwright.sync_api import Page, expect
 from viewer_ready import settled
 
@@ -102,10 +103,6 @@ def _type_over(page: Page, old: str, new: str) -> None:
         page.keyboard.insert_text(new)
     else:
         page.keyboard.press("Delete")
-
-
-def _status(page: Page):
-    return page.locator("#status")
 
 
 def _summary(page: Page):

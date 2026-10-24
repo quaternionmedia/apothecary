@@ -2082,15 +2082,12 @@ def test_the_canvas_and_a_hosts_ring_offer_no_camera_allow_capture_or_place():
 # --- carried by the server: the intent route's picture arms --------------------------
 
 
-from test_views_api import world  # noqa: E402, F401 - the views world, as a fixture here
-
-
 @pytest.fixture
-def carried(world):  # noqa: F811 - the fixture imported above
-    """The views world of tests/test_views_api.py, with the bench's view pinned
-    and sized: a client, and the view as the page has it."""
+def carried(world):
+    """The views world (tests/conftest.py), with the bench's view pinned and sized:
+    a client, and the view as the page has it."""
     from fastapi.testclient import TestClient
-    from test_views_api import _pin
+    from views_helpers import pin as _pin
 
     from apothecary.api import app
 
@@ -2280,7 +2277,7 @@ def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(car
             body["site"] = site
         return client.post("/menu/intent", json=body)
 
-    from test_views_api import _pin
+    from views_helpers import pin as _pin
 
     unsized = _pin(client)
     cases = {

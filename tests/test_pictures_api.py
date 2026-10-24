@@ -368,7 +368,7 @@ def test_cameras_are_parts_kept_in_the_state_folder_and_the_old_file_is_not_read
         assert c.delete(f"/sites/garage/cameras/{name}").json()["removed"] == name
         assert c.delete(f"/sites/garage/cameras/{name}").status_code == 404
     finally:
-        from test_views_api import forget_cameras
+        from views_helpers import forget_cameras
 
         forget_cameras()
 

@@ -3,7 +3,7 @@ print, and a made piece's Print cell.
 
 The Print cell's server is this module's own: the simulated printer, idle, identified
 and pinned to printer_1's mainboard as the bench's real board is, and a picture folder
-holding only test_picture_in_the_world.py's stated picture, so its piece is made
+holding only the stated picture (tests/views_helpers.py), so its piece is made
 through the API and no camera is opened. No real serial port is opened.
 """
 
@@ -15,12 +15,18 @@ from types import SimpleNamespace
 import httpx
 import pytest
 import windows
+from boards import BOARD, PRINTER
+from garage import NAME
+from garage import open_garage as _open_garage
+from garage import picture as _picture
+from garage import pin as _pin
+from garage import said as _said
 from playwright.sync_api import expect
-from test_picture_in_the_world import HIGH, NAME, SHAPES, WIDE, _open_garage, _picture, _pin
-from test_the_loop import _labels, _press, _ring_on, _said
+from rings import labels as _labels
+from rings import open_on_row as _ring_on
+from rings import press as _press
+from views_helpers import HIGH, SHAPES, WIDE
 
-PRINTER = "/dev/ttyFAKE1"
-BOARD = "printer_1.frame_system.mainboard"
 MACHINE = windows.MACHINE
 
 

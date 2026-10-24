@@ -36,6 +36,7 @@ import sys
 import pytest
 import windows
 from doc_capture import moments
+from garage import status as _status
 from playwright.sync_api import Page, expect
 from rings import RING_MS
 from rings import press as _press
@@ -290,10 +291,6 @@ def _size_line(page: Page) -> str:
     """The SCAD's size assignment, as the part's SCAD editor has it."""
     text = page.evaluate("() => window.fractalViewer.scadEditor.text()")
     return next(line for line in text.splitlines() if line.startswith("size ="))
-
-
-def _status(page: Page):
-    return page.locator("#status")
 
 
 def _ring_on_the_part(page: Page, *labels: str) -> None:

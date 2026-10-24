@@ -17,7 +17,7 @@ what it writes, its pictures taken as it goes, so the page shows the loop as it 
 It is the browser suite's alone, unmarked `walkthrough`, so `apothecary test run`
 stays quick; CI's browser shards write it and check it against what is committed.
 
-The browser is Chromium with its fake camera playing tests/e2e/test_the_loop.py's
+The browser is Chromium with its fake camera playing tests/e2e/garage.py's
 drawing (a dark rectangle, disc and triangle on a light ground), so the plain finder
 has shapes to find in every frame and no real camera is ever opened. The server is
 this module's own: the simulated printer, idle, answers on ``/dev/ttyFAKE1``,
@@ -32,44 +32,31 @@ running before it ends.
 
 from __future__ import annotations
 
-import os
 import re
-import tempfile
-from pathlib import Path
 
 import httpx
 import pytest
 import windows
-from browsers import launch
+from boards import BOARD, DWELL, LAYERS, PRINTER
 from doc_capture import TEMPERATURE, moments
+from garage import DRAWING
+from garage import attached as _attached
+from garage import drag_handle as _drag
+from garage import found as _found
+from garage import kept as _kept
+from garage import make as _make
+from garage import open_garage as _open_garage
+from garage import row as _row
+from garage import said as _said
+from garage import status as _status
 from playwright.sync_api import expect
+from rings import labels as _labels
+from rings import open_on_row as _ring_on
+from rings import press as _press
 from slicer_helpers import write_fake_orcaslicer
-from test_camera import _drag
-from test_the_loop import _labels, _open_garage, _press, _ring_on, _said, _status, _y4m
 from viewer_ready import UNDER_THE_STAGE_BAR, by_hand, settled
 
-PRINTER = "/dev/ttyFAKE1"
-BOARD = "printer_1.frame_system.mainboard"
 MACHINE = windows.MACHINE
-
-
-# The scripted slicer's layers, each move followed by a dwell of this many ms: a few
-# seconds of printing on the simulated printer, seen running before it ends.
-LAYERS, DWELL = "15", "60"
-
-
-def _kept(page, url: str, piece: str) -> dict:
-    """The newest slice of ``piece`` (GET /slicer/slices) and the file it kept, as the
-    Print card lists it: its id, its name and the lines a print of it streams."""
-    record = next(
-        r for r in page.request.get(f"{url}/slicer/slices").json() if r["made"]["name"] == piece
-    )
-    (kept,) = [
-        f
-        for f in page.request.get(f"{url}/firmware/printers/prints").json()
-        if f["id"] == record["file_id"]
-    ]
-    return {"record": record, **kept}
 
 
 # The widths the page is laid out for: the column of windows beside the world, and the
@@ -133,72 +120,15 @@ def url(base_url, start_server, tmp_path_factory):
     return url
 
 
-# Chromium names a fake camera by the file it plays, and the page shows that name
-# (the status line, the camera's card): a path that is the same on every run keeps
-# the walkthrough the same when nothing else changed.
-DRAWING = Path(tempfile.gettempdir()) / "apothecary-e2e" / "three-shapes.y4m"
-
-
-@pytest.fixture(scope="module")
-def _drawing_camera_browser(browser_type):
-    """Chromium with its fake camera playing test_the_loop.py's drawing, from ``DRAWING``.
-    Written whole and moved into place, so a run beside this one never reads half."""
-    DRAWING.parent.mkdir(parents=True, exist_ok=True)
-    fd, part = tempfile.mkstemp(dir=DRAWING.parent, suffix=".y4m")
-    os.close(fd)
-    _y4m(part)
-    os.replace(part, DRAWING)
-    browser = launch(
-        browser_type,
-        args=[
-            "--use-fake-ui-for-media-stream",
-            "--use-fake-device-for-media-stream",
-            f"--use-file-for-fake-video-capture={DRAWING}",
-        ],
-    )
-    yield browser
-    browser.close()
-
-
 @pytest.fixture
-def page(_drawing_camera_browser, url):
+def page(drawing_camera_browser, url):
     """A page on this module's server whose camera sees the drawing, allowed."""
-    context = _drawing_camera_browser.new_context(
+    context = drawing_camera_browser.new_context(
         viewport={"width": 1280, "height": 800}, base_url=url
     )
     context.grant_permissions(["camera"], origin=url)
     yield context.new_page()
     context.close()
-
-
-def _attached(page, url: str) -> dict:
-    return page.request.get(f"{url}/sites/garage/attached").json()
-
-
-def _row(page, path: str):
-    return page.locator(f"#contents-list .contents-item[data-path='{path}']")
-
-
-def _make(page, url: str, word: str) -> str:
-    """Picture › Make on the bench's ring, the found shape whose label starts with
-    ``word``; the piece it made, as Site lists it."""
-    before = set(_attached(page, url)["made"])
-    _ring_on(page, "workbench")
-    _press(page, "Picture", "Make")
-    labels = _labels(page)
-    assert labels[0] == "Make all", labels
-    label = next((got for got in labels[1:] if got.startswith(word)), labels[1])
-    _press(page, label)
-    page.wait_for_function(
-        "(n) => Object.keys(window.apothecaryPictures.attached().made || {}).length === n",
-        arg=len(before) + 1,
-        timeout=10000,
-    )
-    (piece,) = set(_attached(page, url)["made"]) - before
-    expect(_row(page, piece)).to_be_visible(timeout=10000)
-    # Make selects the piece it made, as Add here selects the camera it added.
-    page.wait_for_function("(p) => window.fractalViewer.selectedName === p", arg=piece)
-    return piece
 
 
 def _adjust(page, piece: str, field: str, value: float) -> float:
@@ -252,15 +182,6 @@ def _undated(row: str) -> str:
 def _mm(value: float) -> str:
     """A number as the page's status and facts write it: to a tenth, no trailing zero."""
     return f"{round(value, 1):g}"
-
-
-def _found(page, host: str = "workbench") -> None:
-    """Picture › Find shapes on the bench's ring; its outlines drawn."""
-    _ring_on(page, host)
-    _press(page, "Picture")
-    assert _labels(page)[-1] == "Find shapes", _labels(page)
-    _press(page, "Find shapes")
-    _said(page, f"found at {host}")
 
 
 @pytest.mark.e2e

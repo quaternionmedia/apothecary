@@ -27,14 +27,15 @@ from typing import Callable, List, Tuple
 import httpx
 import pytest
 import windows
+from boards import ARDUINO, BOARD, DEVKIT, NODE, PRINTER
+from garage import said as _said
 from playwright.sync_api import Page, expect
+from rings import open_on_row as _ring_on
+from rings import press as _press
 from stepping import ROOT, chosen, where
-from test_the_firmware_loop import ARDUINO, DEVKIT, MACHINE, NODE
-from test_the_loop import _press, _ring_on, _said
 from viewer_ready import settled
+from windows import MACHINE
 
-PRINTER = "/dev/ttyFAKE1"
-BOARD = "printer_1.frame_system.mainboard"
 DRY_RUN = ROOT / "docs" / "validation" / "dry-run-square.gcode"
 WITHIN_A_POLL = 10000  # the Machine polls every 2 s; a slow page gets a few
 

@@ -11,14 +11,13 @@ import re
 import httpx
 import pytest
 import windows
+from boards import BOARD, PRINTER
 from playwright.sync_api import Page, expect
 from viewer_ready import settled
 
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.stl_renderer import get_renderer, params_sidecar_path
 
-PRINTER = "/dev/ttyFAKE1"
-BOARD = "printer_1.frame_system.mainboard"
 POLL_MS = 2000  # the Machine's default interval (widgets/machine.js)
 POLLS = ("/firmware/printers/status", "/firmware/printers/log")
 
