@@ -39,12 +39,14 @@ uv run --group preflight apothecary preflight   # the CI workflows, run here, be
 ```
 
 `apothecary test run` is the one to run before a commit; it runs the window manager's
-browser tests too, which start no server. A browser test needs a server of
-its own (`--start-server`) or one named for it (`--base-url`); with neither it skips, and it
-never uses a server that happens to be listening. Each test has a limit of its own
-(pyproject's `timeout`, pytest-timeout), short enough that a CI shard with one test hung to
-it still ends inside its job's limit, so a hung wait fails that test alone and names it; one
-that needs longer says so with `@pytest.mark.timeout(...)`.
+browser tests too, which start no server. Before a pull request is marked ready,
+`apothecary test all` runs here, and its body says what ran and what it said: a pull
+request's CI runs the governance checks and lint alone, and the tests run in CI at a version
+tag. A browser test needs a server of its own (`--start-server`) or one named for it
+(`--base-url`); with neither it skips, and it never uses a server that happens to be
+listening. No limit is chosen by hand: in CI a browser test's cap is twice the time recorded
+for it, so a hung wait fails that test and names it, and a job's is twice its recorded
+median. Run here, nothing is capped.
 
 `walkthrough/` is executable: its pages are doctests. Pages 01 and 02 are written by their
 browser tests, and a loop's page (03, 04, 05, 06) by the browser suite alone; commit what a
@@ -66,7 +68,7 @@ is not a member: it is its own Cargo project, built by its own toolchain
 
 | Workflow | Fails on |
 |---|---|
-| `pytest.yml` | On Python 3.11: a finding from `ruff check apothecary tests`; the walkthrough; the unit tests with `--slow`, rendering with a pinned OpenSCAD snapshot so the tests that need one run, their coverage measured and kept as the run's artifact (no threshold); the walkthrough and the unit tests again on the newest Python (3.14); the wheel failing to install and render a scene. In three more jobs, in parallel: the browser tests, a third each by recorded time (`--shard K/3`), and a walkthrough page they rewrote |
+| `pytest.yml` | At a `v*` tag and on demand. On Python 3.11: a finding from `ruff check apothecary tests`; the walkthrough; the unit tests with `--slow`, rendering with a pinned OpenSCAD snapshot so the tests that need one run, their coverage measured and kept as the run's artifact (no threshold); the walkthrough and the unit tests again on the newest Python (3.14); the wheel failing to install and render a scene. In three more jobs, in parallel: the browser tests, a third each by recorded time (`--shard K/3`), and a walkthrough page they rewrote |
 | `reuse-lint.yml` | A file with no copyright or licence information (`reuse lint`) |
 | `license-check.yml` | A third-party dependency whose licence is not on the OSI/FSF allowlist, or that has a known vulnerability (`pip-audit`) |
 | `adr-lint.yml` | A record in `governance/qm/adr/`: a draft that narrates its own revisions, a numbered one not ratified, a ratified body edited outside its Amendments, or an index that disagrees with the directory |
@@ -75,15 +77,17 @@ is not a member: it is its own Cargo project, built by its own toolchain
 | `one-pr-check.yml` | A pull request that is ready while its base is another open pull request's branch, and a pull request body that addresses its own contributor (the corpus's seed checks, run out of `governance/qm/project-seed/ci/`) |
 | `integrates.yml` | A pull request whose head conflicts with the open pull requests merged before it, depth first from their base and oldest first on each, and every pull request stacked on it (`.github/ci/check_integrates.py`): it is fixed in its own branch before it merges |
 | `timeless-check.yml` | On a pull request into `main` and a push to it: a line it adds that sets a phrase in capitals or only narrates how the text came to be, unless the line says `timeless: allow` and why (the corpus's seed check) |
-| `rust.yml` | The Rust workspace at the root (`crates/`) failing `cargo check --workspace --all-targets --locked` |
+| `rust.yml` | At a `v*` tag and on demand: the Rust workspace at the root (`crates/`) failing `cargo check --workspace --all-targets --locked` |
 | `tag-claims.yml` | A pushed `v*` tag that is lightweight, or whose annotation does not name the review, the manual test against the real runtime and what the automated gate did not cover (the corpus's seed check) |
 
 Nothing else is a gate. Formatting is not checked in CI.
-`docs-generate.yml` runs once a week and on demand, and gates nothing: `apothecary docs
+`docs-generate.yml` runs at a `v*` tag and on demand, and gates nothing: `apothecary docs
 generate` runs the doc-capture tests, which nothing else runs, and keeps `docs/generated/`
-as the run's artifact. `steps.yml` runs once a week and on demand too, and gates nothing:
+as the run's artifact. `steps.yml` runs at a `v*` tag and on demand too, and gates nothing:
 the step-through tests (`tests/e2e/test_steps_*.py`), whole, under `--steps`; every other
-run skips them, since each walks a loop another browser test holds end to end.
+run skips them, since each walks a loop another browser test holds end to end. A job's cap
+is twice its median over the runs GitHub records for it; one with no record has GitHub's
+own. `tests/test_ci_workflows.py` holds what runs when.
 
 ## Commits and pull requests
 
