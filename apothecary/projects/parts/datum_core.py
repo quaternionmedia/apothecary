@@ -85,10 +85,6 @@ class Params(BaseModel):
     def outer_z(self) -> float:
         return self.floor_t + self.standoff_h + self.board_t + self.headroom
 
-    def to_scad_overrides(self) -> Dict[str, float]:
-        """The ``-D name=value`` set for rendering this iteration."""
-        return {k: float(v) for k, v in self.model_dump().items()}
-
 
 def params_for(board: BlackBox, **overrides: float) -> Params:
     """Derive tray parameters from a black box.

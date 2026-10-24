@@ -41,6 +41,11 @@ class ToolchainError(RuntimeError):
     """The engine is missing, or returned an error we could not act on."""
 
 
+class PortHeld(ToolchainError):
+    """Something else has the port, or the file on it: a print, a bed reading,
+    a task, or another program. Waiting or letting go of it resolves this."""
+
+
 def tools_dir() -> Path:
     """Where Apothecary keeps toolchains it installed itself.
 
@@ -167,15 +172,6 @@ class ArduinoCli:
         result = _run(self.argv("version", "--json"), timeout=20)
         data = _json_or_error(result, "version")
         return (data or {}).get("VersionString") or (data or {}).get("version")
-
-    def config_path(self) -> Optional[Path]:
-        """The config file arduino-cli is using: the managed one, if it runs at all."""
-        if not self.is_available:
-            return None
-        result = _run(self.argv("config", "dump", "--json"), timeout=20)
-        if result.returncode != 0:
-            return None
-        return self.config_file
 
     def board_list(self) -> List[BoardInfo]:
         data = _json_or_error(_run(self.argv("board", "list", "--json"), timeout=30), "board list")
@@ -369,9 +365,6 @@ class Esptool:
             tail = [ln for ln in text.splitlines() if ln.strip()][-3:]
             raise ToolchainError("esptool could not talk to the chip: " + " | ".join(tail))
         return parse_esptool_probe(text)
-
-    def chip_id_argv(self, port: str, chip: str = "auto") -> List[str]:
-        return self._base(port, chip) + ["chip_id"]
 
     def erase_argv(self, port: str, chip: str = "auto") -> List[str]:
         return self._base(port, chip) + ["erase_flash"]

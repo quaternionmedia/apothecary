@@ -72,22 +72,6 @@ class TestCalibrationCubePart:
         assert DEFAULT.preview_color is not None
         assert DEFAULT.preview_color.to_hex() == "#808080"
 
-    def test_calibration_targets(self):
-        """Calibration targets are calculated."""
-        targets = DEFAULT.get_calibration_targets()
-
-        assert "external_dimensions" in targets
-        assert targets["external_dimensions"]["x"] == 10  # Default size is 10mm
-        assert "verification_steps" in targets
-        assert len(targets["verification_steps"]) > 0
-
-    def test_calibration_targets_custom_size(self):
-        """Calibration targets reflect custom parameters."""
-        targets = DEFAULT.get_calibration_targets({"size": 40, "wall_thickness": 4})
-
-        assert targets["external_dimensions"]["x"] == 40
-        assert targets["internal_dimensions"]["x"] == 32  # 40 - 2*4
-
     def test_geometry_dict(self):
         """Geometry dict has expected structure."""
         geo = DEFAULT.to_geometry_dict()
@@ -96,15 +80,3 @@ class TestCalibrationCubePart:
         assert "color" in geo
         assert "color_hex" in geo
         assert geo["bounds"]["size"] is not None
-
-
-class TestRecommendedPrintSettings:
-    """Test print settings recommendations."""
-
-    def test_has_print_settings(self):
-        """Part provides print settings."""
-        settings = DEFAULT.get_recommended_print_settings()
-
-        assert settings.nozzle_diameter == 0.4
-        assert settings.layer_height == 0.2
-        assert settings.tolerance == 0.1  # Tight for calibration

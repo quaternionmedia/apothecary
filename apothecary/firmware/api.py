@@ -6,6 +6,10 @@ binds to localhost by default and this router does nothing to change that:
 these endpoints run binaries and write to serial ports on the machine
 hosting the server, so they are a local workbench control, not a service to
 expose.
+
+Every route answers the seam's exceptions the same way (``FirmwareRoute``):
+something else has the port, the latch is down or a task runs (409); the
+engine is missing or failed (503); the request cannot be done as asked (422).
 """
 
 from __future__ import annotations
@@ -14,10 +18,12 @@ import asyncio
 import json
 import queue
 import threading
-from typing import List
+from typing import List, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.routing import APIRoute
 from jinja2 import Environment, FileSystemLoader
 
 from ..projects.parts.skeleton import ROOT
@@ -31,6 +37,7 @@ from .models import (
     LevelingRequest,
     LibraryInstallRequest,
     ListenRequest,
+    Port,
     PrinterControlArmRequest,
     PrinterControlRequest,
     PrinterIdentifyRequest,
@@ -42,9 +49,32 @@ from .models import (
 )
 from .sketches import discover_sketches, find_sketch
 from .tasks import TaskBusy, get_task_runner
-from .toolchains import SUGGESTED_CORES, ToolchainError, get_arduino_cli, get_esptool
+from .toolchains import SUGGESTED_CORES, PortHeld, ToolchainError, get_arduino_cli, get_esptool
 
-router = APIRouter(prefix="/firmware", tags=["firmware"])
+
+class FirmwareRoute(APIRoute):
+    """Maps the seam's exceptions to one status each, for every route on the router."""
+
+    def get_route_handler(self):
+        handler = super().get_route_handler()
+
+        async def answer(request: Request):
+            try:
+                return await handler(request)
+            except (PortHeld, gcode.ControlNotArmed, TaskBusy) as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            except ToolchainError as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        return answer
+
+
+router = APIRouter(prefix="/firmware", tags=["firmware"], route_class=FirmwareRoute)
+
+# A port filter: one port, or "" for every port.
+PortOrAll = Port | Literal[""]
 
 _env = Environment(loader=FileSystemLoader(str(ROOT / "templates")), autoescape=False)
 
@@ -61,27 +91,11 @@ def _start(kind: str, title: str, steps: List[List[str]], on_done=None, port=Non
     if port:
         # Only the port being written to: releasing every printer link would
         # reset every printer (DTR) the next time it is polled.
-        _release_or_409(port)
-    try:
-        task = get_task_runner().run(kind, title, steps, env=env_for_arduino(), on_done=on_done)
-    except TaskBusy as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        gcode.get_printer_links().close(port)
+    task = get_task_runner().run(
+        kind, title, steps, env=env_for_arduino(), on_done=on_done, port=port
+    )
     return task.snapshot()
-
-
-def _start_callable(kind: str, title: str, fn):
-    try:
-        task = get_task_runner().run_callable(kind, title, fn)
-    except TaskBusy as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return task.snapshot()
-
-
-def _engine(fn):
-    try:
-        return fn()
-    except ToolchainError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 # -- page ----------------------------------------------------------------------
@@ -134,17 +148,17 @@ def firmware_status():
 
 @router.get("/boards")
 def firmware_boards():
-    return [b.model_dump() for b in _engine(lambda: get_arduino_cli().board_list())]
+    return [b.model_dump() for b in get_arduino_cli().board_list()]
 
 
 @router.get("/boards/all")
 def firmware_boards_all():
-    return [b.model_dump() for b in _engine(lambda: get_arduino_cli().board_listall())]
+    return [b.model_dump() for b in get_arduino_cli().board_listall()]
 
 
 @router.get("/cores")
 def firmware_cores():
-    return [c.model_dump() for c in _engine(lambda: get_arduino_cli().core_list())]
+    return [c.model_dump() for c in get_arduino_cli().core_list()]
 
 
 @router.get("/sketches")
@@ -160,33 +174,36 @@ async def firmware_install(body: InstallRequest):
     spec = InstallSpec(
         version=body.version, force=body.force, cores=body.cores, libraries=body.libraries
     )
-    return _start_callable("install", "Install arduino-cli", lambda log: service.install(spec, log))
+    task = get_task_runner().run_callable(
+        "install", "Install arduino-cli", lambda log: service.install(spec, log)
+    )
+    return task.snapshot()
 
 
 @router.post("/cores/install", status_code=202)
 async def firmware_core_install(body: CoreInstallRequest):
     cli = get_arduino_cli()
-    steps = _engine(lambda: [cli.core_update_index_argv([body.id]), cli.core_install_argv(body.id)])
+    steps = [cli.core_update_index_argv([body.id]), cli.core_install_argv(body.id)]
     return _start("core-install", f"Install core {body.id}", steps)
 
 
 @router.post("/libraries/install", status_code=202)
 async def firmware_library_install(body: LibraryInstallRequest):
-    steps = _engine(lambda: [get_arduino_cli().lib_install_argv(body.names)])
+    steps = [get_arduino_cli().lib_install_argv(body.names)]
     return _start("lib-install", "Install libraries " + ", ".join(body.names), steps)
 
 
 @router.post("/sketches/{name}/compile", status_code=202)
 async def firmware_compile(name: str, body: CompileRequest):
     sketch = _sketch_or_404(name)
-    steps = _engine(lambda: service.compile_steps(sketch, body.fqbn))
+    steps = service.compile_steps(sketch, body.fqbn)
     return _start("compile", f"Compile {sketch.name} ({body.fqbn})", steps)
 
 
 @router.post("/sketches/{name}/upload", status_code=202)
 async def firmware_upload(name: str, body: UploadRequest):
     sketch = _sketch_or_404(name)
-    steps = _engine(lambda: service.upload_steps(sketch, body.fqbn, body.port))
+    steps = service.upload_steps(sketch, body.fqbn, body.port)
 
     def remember(task, status):
         if status.value == "succeeded":
@@ -200,14 +217,11 @@ async def firmware_upload(name: str, body: UploadRequest):
 @router.post("/esptool/flash", status_code=202)
 async def firmware_esptool_flash(body: EsptoolFlashRequest):
     esptool = get_esptool()
-
-    def build():
-        images = [(img.offset, service.resolve_image_path(img.path)) for img in body.images]
-        steps = []
-        if body.erase:
-            steps.append(esptool.erase_argv(body.port, body.chip))
-        steps.append(esptool.write_flash_argv(body.port, images, body.chip, body.baud))
-        return steps
+    images = [(img.offset, service.resolve_image_path(img.path)) for img in body.images]
+    steps = []
+    if body.erase:
+        steps.append(esptool.erase_argv(body.port, body.chip))
+    steps.append(esptool.write_flash_argv(body.port, images, body.chip, body.baud))
 
     def remember(task, status):
         if status.value == "succeeded":
@@ -216,38 +230,26 @@ async def firmware_esptool_flash(body: EsptoolFlashRequest):
             )
 
     return _start(
-        "esptool-flash",
-        f"esptool flash → {body.port}",
-        _engine(build),
-        on_done=remember,
-        port=body.port,
+        "esptool-flash", f"esptool flash → {body.port}", steps, on_done=remember, port=body.port
     )
 
 
 # -- devices: detected / probed / expected / observed -----------------------------
 
 
-def _release_or_409(port: str) -> bool:
-    try:
-        return gcode.get_printer_links().close(port)
-    except ToolchainError as exc:  # a print streams over it
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-
-def _no_print_or_409(port: str) -> None:
+def _no_print(port: str) -> None:
     job = devices.print_job(port)
     if job is not None and job.finished is None:
-        raise HTTPException(
-            status_code=409, detail=f"{port}: a print holds the port -- cancel it first"
-        )
+        raise PortHeld(f"{port}: a print holds the port -- cancel it first")
 
 
-def _busy_guard():
+def _busy_guard(port: str):
+    """Refused while a running task writes to ``port`` (an upload, a flash). A
+    compile or an install holds no port, so a printer's poll and its emergency
+    stop still go while a sketch compiles."""
     active = get_task_runner().active
-    if active is not None:
-        raise HTTPException(
-            status_code=409, detail=f"task {active.id} ({active.title}) holds the port"
-        )
+    if active is not None and active.port == port:
+        raise PortHeld(f"task {active.id} ({active.title}) holds {port}")
 
 
 def _device_view(d):
@@ -261,7 +263,7 @@ def firmware_devices(fresh: bool = False):
 
     The port scan is cached for a couple of seconds; ``fresh`` forces one.
     """
-    found = _engine(lambda: devices.detected_devices(fresh=fresh))
+    found = devices.detected_devices(fresh=fresh)
     return {
         "devices": [_device_view(d) for d in found],
         "streaming": devices.get_streams().open_ports,
@@ -272,39 +274,32 @@ def firmware_devices(fresh: bool = False):
 @router.post("/devices/probe")
 def firmware_probe(body: ProbeRequest):
     """Identify the chip with esptool (resets the board); cached for later views."""
-    _busy_guard()
+    _busy_guard(body.port)
     devices.get_streams().close(body.port)
-    return _device_view(_engine(lambda: devices.probe_device(body.port)))
+    return _device_view(devices.probe_device(body.port))
 
 
 @router.post("/devices/listen")
 def firmware_listen(body: ListenRequest):
     """Capture a few seconds of serial output; with ``reset`` the boot banner is included."""
-    _busy_guard()
+    _busy_guard(body.port)
     if body.reset:
-        _engine(lambda: devices.probe_device(body.port))
-    result = _engine(lambda: devices.listen(body.port, body.seconds, body.baud))
-    return result.model_dump(mode="json")
+        devices.probe_device(body.port)
+    return devices.listen(body.port, body.seconds, body.baud).model_dump(mode="json")
 
 
 @router.post("/devices/identify")
 def firmware_identify(body: PrinterIdentifyRequest):
     """Ask ``M115``: is this a printer mainboard, and which firmware? ``reset`` reboots it first."""
-    _busy_guard()
-    return _device_view(
-        _engine(lambda: devices.identify_printer(body.port, body.baud, reset=body.reset))
-    )
+    _busy_guard(body.port)
+    return _device_view(devices.identify_printer(body.port, body.baud, reset=body.reset))
 
 
 @router.get("/printers/status")
-def firmware_printer_status(port: str, baud: int = Query(None, ge=300, le=2000000)):
+def firmware_printer_status(port: Port, baud: int = Query(None, ge=300, le=2000000)):
     """One poll of a printer over its held-open link (opened on first use)."""
-    try:
-        validate_port(port)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    _busy_guard()
-    status = _engine(lambda: devices.printer_status(port, baud))
+    _busy_guard(port)
+    status = devices.printer_status(port, baud)
     data = status.model_dump(mode="json")
     data["heating"] = status.heating
     # A failed poll drops the link (and with it the control latch): say so, so
@@ -320,22 +315,6 @@ def _control_state(port: str) -> dict:
         "port": port,
         "armed": latch.armed(port),
         "seconds_left": round(latch.seconds_left(port)),
-    }
-
-
-@router.get("/printers/controls")
-async def firmware_printer_controls():
-    """The control lines the command route accepts (regex + purpose) and their bounds."""
-    return {
-        "codes": [{"pattern": p.pattern, "does": what} for p, what in gcode.CONTROL_CODES],
-        "emergency_stop": gcode.EMERGENCY_STOP,
-        "bounds": {
-            "hotend_max_c": gcode.HOTEND_MAX_C,
-            "bed_max_c": gcode.BED_MAX_C,
-            "jog_max_mm": gcode.JOG_MAX_MM,
-            "feed_max": gcode.FEED_MAX,
-            "latch_ttl_s": gcode.CONTROL_TTL_S,
-        },
     }
 
 
@@ -355,11 +334,7 @@ async def firmware_printer_control_arm(body: PrinterControlArmRequest):
 
 
 @router.get("/printers/control")
-async def firmware_printer_control_state(port: str):
-    try:
-        validate_port(port)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+async def firmware_printer_control_state(port: Port):
     return _control_state(port)
 
 
@@ -367,18 +342,9 @@ async def firmware_printer_control_state(port: str):
 def firmware_printer_command(body: PrinterControlRequest):
     """Send one allowlisted control line -- heaters, fan, homing, bounded jogs, SD
     pause/resume/abort -- while the latch is armed. ``M112`` (emergency stop) always goes."""
-    try:
-        gcode.normalise_control(body.command)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    _busy_guard()
-    try:
-        result = devices.printer_control(body.port, body.command)
-    except gcode.ControlNotArmed as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except ToolchainError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    data = result.model_dump(mode="json")
+    if gcode.normalise_control(body.command) != gcode.EMERGENCY_STOP:
+        _busy_guard(body.port)
+    data = devices.printer_control(body.port, body.command).model_dump(mode="json")
     data["control"] = _control_state(body.port)
     return data
 
@@ -389,35 +355,20 @@ def firmware_printer_command(body: PrinterControlRequest):
 @router.post("/printers/level", status_code=202)
 def firmware_printer_level(body: LevelingRequest):
     """Start a bed reading: home, probe (``G29``, latch required) and read, or just read."""
-    _busy_guard()
-    try:
-        job = devices.start_leveling(body.port, probe=body.probe, note=body.note)
-    except gcode.ControlNotArmed as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except ToolchainError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return job.snapshot()
+    _busy_guard(body.port)
+    return devices.start_leveling(body.port, probe=body.probe, note=body.note).snapshot()
 
 
 @router.get("/printers/level")
-async def firmware_printer_level_status(port: str):
+async def firmware_printer_level_status(port: Port):
     """The current (or last) bed-reading job on ``port``, if any."""
-    try:
-        validate_port(port)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
     job = devices.leveling_job(port)
     return job.snapshot() if job else {"port": port, "running": False, "stage": None}
 
 
 @router.get("/printers/leveling")
-async def firmware_printer_leveling(port: str = ""):
+async def firmware_printer_leveling(port: PortOrAll = ""):
     """Saved bed readings, newest first (all ports when ``port`` is empty); no raw lines."""
-    if port:
-        try:
-            validate_port(port)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
     return [
         r.model_dump(mode="json", exclude={"lines", "subdivided"})
         for r in devices.leveling_records(port or None)
@@ -456,16 +407,14 @@ async def firmware_print_upload(
         raise HTTPException(
             status_code=413, detail=f"larger than {PRINT_FILE_MAX // (1024 * 1024)} MB"
         )
-    return devices.save_print_file(name, data).model_dump(mode="json")
+    # Checking and writing 60 MB takes seconds: off the event loop, so polls keep going.
+    kept = await run_in_threadpool(devices.save_print_file, name, data)
+    return kept.model_dump(mode="json")
 
 
 @router.delete("/printers/prints/{file_id}")
 async def firmware_print_delete(file_id: str):
-    try:
-        found = devices.delete_print_file(file_id)
-    except ToolchainError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    if not found:
+    if not devices.delete_print_file(file_id):
         raise HTTPException(status_code=404, detail="no such print file")
     return {"id": file_id, "deleted": True}
 
@@ -473,21 +422,13 @@ async def firmware_print_delete(file_id: str):
 @router.post("/printers/print", status_code=202)
 def firmware_print_start(body: PrintRequest):
     """Stream a kept file to the printer (latch required); the job's first snapshot."""
-    _busy_guard()
-    try:
-        job = devices.start_print(body.port, body.file_id)
-    except (gcode.ControlNotArmed, ToolchainError) as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return job.snapshot()
+    _busy_guard(body.port)
+    return devices.start_print(body.port, body.file_id).snapshot()
 
 
 @router.get("/printers/print")
-async def firmware_print_status(port: str):
+async def firmware_print_status(port: Port):
     """The current (or last) host print on ``port``, if any."""
-    try:
-        validate_port(port)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
     job = devices.print_job(port)
     return job.snapshot() if job else {"port": port, "running": False, "stage": None}
 
@@ -497,9 +438,7 @@ def _print_verb(port: str, verb: str) -> dict:
     if job is None or job.finished is not None:
         raise HTTPException(status_code=409, detail=f"{port}: no print is running")
     if verb == "resume" and not gcode.get_printer_links().control.armed(port):
-        raise HTTPException(
-            status_code=409, detail=f"{port}: resuming moves the machine -- arm control first"
-        )
+        raise gcode.ControlNotArmed(f"{port}: resuming moves the machine -- arm control first")
     getattr(job, verb)()
     if verb != "cancel":
         gcode.get_printer_links().control.renew(port)
@@ -525,13 +464,8 @@ def firmware_print_cancel(body: ProbeRequest):
 
 
 @router.get("/printers/print/records")
-async def firmware_print_records(port: str = ""):
+async def firmware_print_records(port: PortOrAll = ""):
     """Prints streamed from here, newest first (all ports when ``port`` is empty)."""
-    if port:
-        try:
-            validate_port(port)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
     return [
         r.model_dump(mode="json", exclude={"lines"}) for r in devices.print_records(port or None)
     ]
@@ -554,23 +488,14 @@ async def firmware_printer_queries():
 @router.post("/printers/query")
 def firmware_printer_query(body: PrinterQueryRequest):
     """Send one allowlisted report code (``M503``, ``M119``, ``M20`` ...) over the held link."""
-    try:
-        gcode.normalise_query(body.command)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    _busy_guard()
-    result = _engine(lambda: devices.printer_query(body.port, body.command))
-    return result.model_dump(mode="json")
+    _busy_guard(body.port)
+    return devices.printer_query(body.port, body.command).model_dump(mode="json")
 
 
 @router.get("/printers/info")
-def firmware_printer_info(port: str):
+def firmware_printer_info(port: Port):
     """Everything the monitor page needs at once: device, held link, last poll."""
-    try:
-        validate_port(port)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    found = _engine(devices.detected_devices)
+    found = devices.detected_devices()
     device = next((d for d in found if d.port == port), None)
     link = gcode.get_printer_links().get(port)
     last = devices.last_statuses().get(port)
@@ -587,12 +512,8 @@ def firmware_printer_info(port: str):
 
 
 @router.get("/printers/log")
-async def firmware_printer_log(port: str, since: int = Query(0, ge=0)):
+async def firmware_printer_log(port: Port, since: int = Query(0, ge=0)):
     """The port's comms log from index ``since`` on (tx/rx/boot/sys entries)."""
-    try:
-        validate_port(port)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
     links = gcode.get_printer_links()
     data = links.log_for(port).since(since)
     data["port"] = port
@@ -603,9 +524,9 @@ async def firmware_printer_log(port: str, since: int = Query(0, ge=0)):
 @router.post("/printers/reconnect")
 def firmware_printer_reconnect(body: PrinterIdentifyRequest):
     """Release and reopen the link (no reset), then poll."""
-    _busy_guard()
-    _no_print_or_409(body.port)
-    status = _engine(lambda: devices.printer_reconnect(body.port, body.baud))
+    _busy_guard(body.port)
+    _no_print(body.port)
+    status = devices.printer_reconnect(body.port, body.baud)
     data = status.model_dump(mode="json")
     data["heating"] = status.heating
     return data
@@ -614,31 +535,27 @@ def firmware_printer_reconnect(body: PrinterIdentifyRequest):
 @router.post("/printers/reset")
 def firmware_printer_reset(body: ProbeRequest):
     """Reboot the board deliberately (DTR pulse); returns its boot banner."""
-    _busy_guard()
-    _no_print_or_409(body.port)
-    return {"port": body.port, "boot_lines": _engine(lambda: devices.printer_reset(body.port))}
+    _busy_guard(body.port)
+    _no_print(body.port)
+    return {"port": body.port, "boot_lines": devices.printer_reset(body.port)}
 
 
 @router.post("/printers/release")
 def firmware_printer_release(body: ProbeRequest):
     """Drop the held link so another tool (a slicer, OctoPrint) can open the port."""
-    return {"port": body.port, "released": _release_or_409(body.port)}
+    return {"port": body.port, "released": gcode.get_printer_links().close(body.port)}
 
 
 @router.get("/devices/stream")
 async def firmware_stream(
-    request: Request, port: str, baud: int = Query(115200, ge=300, le=2000000)
+    request: Request, port: Port, baud: int = Query(115200, ge=300, le=2000000)
 ):
     """Server-sent events: live serial lines until the client leaves or a task takes the port."""
-    try:
-        validate_port(port)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    _busy_guard()
+    _busy_guard(port)
     cli = get_arduino_cli()
     if not cli.is_available:
-        raise HTTPException(status_code=503, detail="arduino-cli is not installed")
-    _release_or_409(port)  # one holder per port (the monitor resets it anyway)
+        raise ToolchainError("arduino-cli is not installed")
+    gcode.get_printer_links().close(port)  # one holder per port (the monitor resets it anyway)
 
     q: queue.Queue = queue.Queue()
     stop = threading.Event()

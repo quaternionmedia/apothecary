@@ -23,13 +23,12 @@ from random import choice
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
-from fastapi import Body, FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
-from .booleans import Difference, Intersection, Union
 from .core import OpenSCADObject
 from .datum_core_site import create_datum_core_site, validate_datum_core
 from .docs_site import router as docs_router
@@ -56,13 +55,13 @@ from .primitives import Cube, Cylinder, Sphere
 from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.parts.stl_renderer import write_params_sidecar
-from .projects.registry import resolve_wrapper_module, scan_projects, stl_output_for
+from .projects.registry import _sanitize_module_name, scan_projects, stl_output_for
 from .routes.pictures import router as pictures_router
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
 from .stays_local import LocalOnly
 from .templates import TemplateRenderer
-from .transforms import Rotate, Scale, Translate
+from .transforms import Translate
 from .viewer import render_fractal_viewer_page
 
 
@@ -145,131 +144,6 @@ async def lifespan(app: FastAPI):
             await stl_task
 
 
-def _vec(data):
-    return Vector3D(x=data.get("x", 0), y=data.get("y", 0), z=data.get("z", 0))
-
-
-def _rehydrate_stated(t, obj_dict):
-    """Build the shape the description says it is, or None if the name is unknown.
-
-    Returning None rather than raising leaves an unrecognised name to the
-    guessing below, which is what a hand-written document with a typo in it
-    used to get.
-    """
-    comment = obj_dict.get("comment")
-    size = obj_dict.get("size")
-
-    def kids():
-        # Built only for the shapes that hold other shapes. Building it for
-        # every shape made a bad child break a parent that never looks at one.
-        return [_rehydrate(k) if isinstance(k, dict) else k for k in obj_dict.get("children", [])]
-
-    if t == "cube":
-        return Cube(
-            size=_vec(size) if isinstance(size, dict) else (1.0 if size is None else size),
-            center=obj_dict.get("center", False),
-            comment=comment,
-        )
-    if t == "sphere":
-        return Sphere(r=obj_dict.get("r", 1.0), fn=obj_dict.get("fn"), comment=comment)
-    if t == "cylinder":
-        return Cylinder(
-            h=obj_dict.get("h", 1.0),
-            r=obj_dict.get("r"),
-            r1=obj_dict.get("r1"),
-            r2=obj_dict.get("r2"),
-            center=obj_dict.get("center", False),
-            fn=obj_dict.get("fn"),
-            comment=comment,
-        )
-    if t == "union":
-        return Union(children=kids(), comment=comment)
-    if t == "difference":
-        return Difference(children=kids(), comment=comment)
-    if t == "intersection":
-        return Intersection(children=kids(), comment=comment)
-    if t == "translate" and "v" in obj_dict:
-        return Translate(v=_vec(obj_dict["v"]), children=kids(), comment=comment)
-    if t == "rotate" and "a" in obj_dict:
-        a = obj_dict["a"]
-        return Rotate(
-            a=_vec(a) if isinstance(a, dict) else a,
-            v=_vec(obj_dict["v"]) if isinstance(obj_dict.get("v"), dict) else None,
-            children=kids(),
-            comment=comment,
-        )
-    if t == "scale" and "v" in obj_dict:
-        return Scale(v=_vec(obj_dict["v"]), children=kids(), comment=comment)
-    return None
-
-
-def _rehydrate(obj_dict):
-    """Best-effort reconstruction of OpenSCAD objects from a plain dict.
-
-    Keeps logic intentionally minimal; adds a 'type' discriminator if present,
-    otherwise infers by field set.
-    """
-    t = obj_dict.get("type")
-
-    # A stated type wins outright. The guesses below overlap — a tube and a ball
-    # both carry a radius — so mixing "what it says" with "what it looks like"
-    # let the first matching guess answer for a shape that had already said what
-    # it was. `docs/scene-json.md` promises the stated type is honoured.
-    if t is not None:
-        try:
-            stated = _rehydrate_stated(t, obj_dict)
-        except Exception:
-            # An unbuildable description falls through to the guessing below,
-            # which is what it got before the stated name was honoured at all.
-            # Turning "renders something odd" into an error is a separate
-            # decision; see docs/plans/features/scene-document-validation.md.
-            stated = None
-        if stated is not None:
-            return stated
-
-    if t == "cube" or ("size" in obj_dict and isinstance(obj_dict.get("size"), dict)):
-        size = obj_dict.get("size")
-        size_val = _vec(size) if isinstance(size, dict) else size
-        return Cube(
-            size=size_val, center=obj_dict.get("center", False), comment=obj_dict.get("comment")
-        )
-    if t == "sphere" or "r" in obj_dict:
-        return Sphere(
-            r=obj_dict.get("r", 1.0), fn=obj_dict.get("fn"), comment=obj_dict.get("comment")
-        )
-    if t == "cylinder" or any(k in obj_dict for k in ("r", "r1", "r2")):
-        return Cylinder(
-            h=obj_dict.get("h", 1.0),
-            r=obj_dict.get("r"),
-            r1=obj_dict.get("r1"),
-            r2=obj_dict.get("r2"),
-            center=obj_dict.get("center", False),
-            fn=obj_dict.get("fn"),
-            comment=obj_dict.get("comment"),
-        )
-    if t in ("union", "difference", "intersection") or "children" in obj_dict:
-        kids = [_rehydrate(k) if isinstance(k, dict) else k for k in obj_dict.get("children", [])]
-        if t == "difference":
-            return Difference(children=kids, comment=obj_dict.get("comment"))
-        if t == "intersection":
-            return Intersection(children=kids, comment=obj_dict.get("comment"))
-        return Union(children=kids, comment=obj_dict.get("comment"))
-    if t == "translate" and "v" in obj_dict:
-        kids = [_rehydrate(k) if isinstance(k, dict) else k for k in obj_dict.get("children", [])]
-        return Translate(v=_vec(obj_dict["v"]), children=kids, comment=obj_dict.get("comment"))
-    if t == "rotate" and "a" in obj_dict:
-        kids = [_rehydrate(k) if isinstance(k, dict) else k for k in obj_dict.get("children", [])]
-        a = obj_dict["a"]
-        a_val = _vec(a) if isinstance(a, dict) else a
-        v = _vec(obj_dict["v"]) if isinstance(obj_dict.get("v"), dict) else None
-        return Rotate(a=a_val, v=v, children=kids, comment=obj_dict.get("comment"))
-    if t == "scale" and "v" in obj_dict:
-        kids = [_rehydrate(k) if isinstance(k, dict) else k for k in obj_dict.get("children", [])]
-        return Scale(v=_vec(obj_dict["v"]), children=kids, comment=obj_dict.get("comment"))
-    # Fallback: produce a comment-only union wrapper for unknown structure
-    return Union(children=[], comment="unrecognized object")
-
-
 app = FastAPI(
     title="Apothecary API",
     version="0.1.0",
@@ -326,11 +200,28 @@ def _part_template() -> str:
 
 
 def _load_part_wrapper(name: str):
-    full = resolve_wrapper_module(name, ROOT)
-    try:
-        module = import_module(full)
-    except ModuleNotFoundError as exc:  # pragma: no cover - error path
-        raise HTTPException(status_code=404, detail=f"Part '{name}' not found") from exc
+    # Only a registered part: a name from a URL is never turned into an import
+    # path (GET /parts/stl_renderer used to import that module and answer 500).
+    # Spellings a link may carry: the registry's name in any case of - and _
+    # (datum-core), or a nested part's package path (rc.snowplow). Each resolves
+    # to a registered wrapper, never to a module constructed from the URL.
+    wanted = _sanitize_module_name(name)
+    full = next(
+        (
+            p.wrapper
+            for p in scan_projects(ROOT)
+            if p.kind == "part"
+            and p.wrapper
+            and (
+                _sanitize_module_name(p.name) == wanted
+                or p.wrapper == f"apothecary.projects.parts.{name}"
+            )
+        ),
+        None,
+    )
+    if full is None:
+        raise HTTPException(status_code=404, detail=f"Part '{name}' not found")
+    module = import_module(full)
     if not hasattr(module, "DEFAULT"):
         raise HTTPException(status_code=500, detail=f"Wrapper '{full}' missing DEFAULT part")
     part = module.DEFAULT
@@ -456,81 +347,15 @@ async def health():
 
 
 @app.post("/render")
-async def render_scene(scene: Scene):
-    """Render a scene to OpenSCAD code.
-
-    Attempts direct render; if underlying objects were deserialized without
-    type info, rehydrate heuristically.
-    """
-    try:
-        return {
-            "success": True,
-            "scene_name": scene.name,
-            "code": scene.render(),
-            "object_count": len(scene.objects),
-        }
-    except Exception:  # fallback path
-        try:
-            # FastAPI/Pydantic may coerce children into base-class instances or dicts.
-            # Normalize everything to dicts and rehydrate best-effort.
-            normalized = []
-            for o in scene.objects:
-                if isinstance(o, dict):
-                    normalized.append(o)
-                elif hasattr(o, "model_dump"):
-                    try:
-                        normalized.append(o.model_dump())
-                    except Exception:  # pragma: no cover - defensive
-                        normalized.append({})
-                else:
-                    normalized.append({})
-            rebuilt = [_rehydrate(o) for o in normalized]
-            scene.objects = rebuilt  # mutate for simplicity
-            return {
-                "success": True,
-                "scene_name": scene.name,
-                "code": scene.render(),
-                "object_count": len(scene.objects),
-                "rehydrated": True,
-            }
-        except Exception as e:  # pragma: no cover
-            raise HTTPException(status_code=500, detail=f"render failed: {e}") from e
-
-
-@app.post("/render/template")
-async def render_scene_with_template(scene: Scene, template: str = Body("{{ scene_code }}")):
-    """Render a scene using a Jinja2 template"""
-    try:
-        rendered_code = renderer.render_scene_template(scene, template)
-        return {
-            "success": True,
-            "scene_name": scene.name,
-            "code": rendered_code,
-            "object_count": len(scene.objects),
-        }
-    except Exception:
-        # Fallback: rehydrate best-effort like /render
-        try:
-            normalized = []
-            for o in scene.objects:
-                if isinstance(o, dict):
-                    normalized.append(o)
-                elif hasattr(o, "model_dump"):
-                    normalized.append(o.model_dump())
-                else:
-                    normalized.append({})
-            rebuilt = [_rehydrate(o) for o in normalized]
-            scene.objects = rebuilt
-            rendered_code = renderer.render_scene_template(scene, template)
-            return {
-                "success": True,
-                "scene_name": scene.name,
-                "code": rendered_code,
-                "object_count": len(scene.objects),
-                "rehydrated": True,
-            }
-        except Exception as e:  # pragma: no cover
-            raise HTTPException(status_code=500, detail=str(e)) from e
+def render_scene(scene: Scene):
+    """Render a scene to OpenSCAD code. Each object says what it is (``type``);
+    one that does not, or says something unknown, is a 422 from validation."""
+    return {
+        "success": True,
+        "scene_name": scene.name,
+        "code": scene.render(),
+        "object_count": len(scene.objects),
+    }
 
 
 @app.get("/parts")
@@ -1125,8 +950,7 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
         return {"type": "cube", "size": [size.x, size.y, size.z], "bounds": _bounds_dict(bounds)}
 
     if isinstance(obj, Cylinder):
-        r1 = obj.r if obj.r is not None else (obj.r1 if obj.r1 is not None else 1.0)
-        r2 = obj.r if obj.r is not None else (obj.r2 if obj.r2 is not None else r1)
+        r1, r2 = obj.radii()
         max_r = max(r1, r2)
         z0 = -obj.h / 2 if obj.center else 0.0
         local_min = Vector3D(x=-max_r, y=-max_r, z=z0)
@@ -1997,7 +1821,9 @@ class Dimensions(BaseModel):
 
 class CreateJobRequest(BaseModel):
     # A name is letters, digits and a little punctuation: what a page shows, never markup.
-    name: str = Field(..., min_length=1, max_length=80, pattern=r"^[\w][\w .+\-/]*$")
+    # No slash: a job's name is a path segment of its own routes, and one with a
+    # slash could be created and never assigned, completed or found again.
+    name: str = Field(..., min_length=1, max_length=80, pattern=r"^[\w][\w .+\-]*$")
     required_volume: Dimensions
 
 
@@ -2055,6 +1881,12 @@ async def assign_job(name: str, job_name: str, body: AssignJobRequest):
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found") from None
 
+    if job.status != "queued":
+        # Re-assigning an assigned job overwrote its printer and left the first
+        # one "printing" forever; a done job is done.
+        raise HTTPException(
+            status_code=409, detail=f"Job '{job_name}' is {job.status}, not queued"
+        )
     printer = next((s for s in site.children if s.name == body.printer), None)
     if printer is None or printer.build_volume is None:
         raise HTTPException(status_code=404, detail=f"Printer '{body.printer}' not found")
@@ -2093,11 +1925,14 @@ async def complete_job(name: str, job_name: str):
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found") from None
 
-    if job.assigned_printer:
-        printer = next((s for s in site.children if s.name == job.assigned_printer), None)
-        if printer is not None:
-            printer.status = "idle"
-
+    if job.status != "assigned":
+        # Completing a job twice freed a printer that had since started another.
+        raise HTTPException(
+            status_code=409, detail=f"Job '{job_name}' is {job.status}, not assigned"
+        )
+    printer = next((s for s in site.children if s.name == job.assigned_printer), None)
+    if printer is not None and printer.status == "printing":
+        printer.status = "idle"
     job.status = "done"
     return _job_summary(job, site)
 

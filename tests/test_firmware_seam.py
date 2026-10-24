@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from firmware_helpers import fake_cli_calls
 
-from apothecary.firmware import installer, service
+from apothecary.firmware import installer, service, tasks
 from apothecary.firmware.models import (
     CompileRequest,
     EsptoolFlashRequest,
@@ -460,6 +460,14 @@ def test_task_runner_callable_logs_and_reports_errors():
 
     bad = _wait(runner.run_callable("install", "bad", boom))
     assert bad.status == TaskStatus.failed and bad.lines == ["starting", "ERROR: nope"]
+
+
+def test_task_runner_keeps_only_the_newest_tasks(monkeypatch):
+    monkeypatch.setattr(tasks, "MAX_TASKS", 2)
+    runner = TaskRunner()
+    ids = [_wait(runner.run_callable("install", str(n), lambda log: None)).id for n in range(3)]
+    assert [t.id for t in runner.list()] == ids[:0:-1]
+    assert runner.get(ids[0]) is None and set(runner._tasks) == set(ids[1:])
 
 
 # --- service ---------------------------------------------------------------------

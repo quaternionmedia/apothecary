@@ -22,32 +22,32 @@ Two things distinguish this from ``devices.SerialStreams``:
   left asserted on close, and the board is only ever rebooted on purpose
   (``Transport.pulse_reset``, behind ``reset=True``). Anything else that
   opens the port (``arduino-cli monitor``, an upload) may reset it, so one
-  holder per port is the rule and the API enforces it.
+  holder per port is the rule: the API enforces it inside the server, and
+  the port is opened exclusively, so another program's open fails while
+  the link holds it.
 * **It is request/response.** A poll sends ``M105``/``M114``/``M27`` and
   reads until ``ok``; nothing streams unless the firmware autoreports
   (``M155``), and those lines are simply carried in the same reads.
 
 The byte transport is an engine slot (``Transport``), chosen by
-``serial_engine()``: **pyserial** when importable (any baud, every platform)
-else the stdlib's **termios** (POSIX, standard baud table only -- enough
-for a 115200 board with nothing installed). ``APOTHECARY_SERIAL_ENGINE``
-pins one, and ``simulated`` selects an in-process pretend Marlin for demos
-and browser tests with no hardware. Everything above the slot is
+``serial_engine()``: **pyserial** (any baud, every platform) unless
+``APOTHECARY_SERIAL_ENGINE=simulated`` selects an in-process pretend Marlin
+for demos and browser tests with no hardware. Everything above the slot is
 engine-agnostic.
 """
 
 from __future__ import annotations
 
+import errno
 import os
 import re
-import select
 import threading
 import time
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Protocol, Tuple
 
 from .models import Heater, PrinterInfo, PrinterStatus
-from .toolchains import ToolchainError
+from .toolchains import PortHeld, ToolchainError
 
 # --- parsers: Marlin's documented replies -------------------------------------
 
@@ -189,76 +189,6 @@ class Transport(Protocol):
 RESET_PULSE_S = 0.05
 
 
-class TermiosTransport:
-    """A raw 8N1 serial port via the stdlib; POSIX only."""
-
-    def __init__(self, port: str, baud: int):
-        import termios
-
-        flag = getattr(termios, f"B{baud}", None)
-        if flag is None:
-            raise ToolchainError(
-                f"{baud} baud is not in the standard termios table; "
-                "115200 is Marlin's usual rate (250000 needs pyserial)"
-            )
-        try:
-            self.fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
-        except OSError as exc:
-            raise ToolchainError(f"cannot open {port}: {exc.strerror}") from exc
-        try:
-            attr = termios.tcgetattr(self.fd)
-            attr[0] = 0  # iflag: no CR/NL mangling, no flow control
-            attr[1] = 0  # oflag: raw
-            attr[2] = (
-                termios.CS8 | termios.CREAD | termios.CLOCAL
-            )  # no HUPCL: DTR stays up on close
-            attr[3] = 0  # lflag: no echo, no canonical mode
-            attr[4] = attr[5] = flag
-            termios.tcsetattr(self.fd, termios.TCSANOW, attr)
-            termios.tcflush(self.fd, termios.TCIOFLUSH)
-        except termios.error as exc:
-            os.close(self.fd)
-            raise ToolchainError(f"{port} is not a serial port: {exc}") from exc
-
-    def write(self, data: bytes) -> None:
-        while data:
-            _, w, _ = select.select([], [self.fd], [], 2.0)
-            if not w:
-                raise ToolchainError("serial write timed out")
-            try:
-                n = os.write(self.fd, data)
-            except OSError as exc:
-                raise ToolchainError(f"serial write failed: {exc}") from exc
-            data = data[n:]
-
-    def read(self, timeout: float) -> bytes:
-        try:
-            r, _, _ = select.select([self.fd], [], [], timeout)
-            if not r:
-                return b""
-            return os.read(self.fd, 4096)
-        except BlockingIOError:
-            return b""
-        except OSError as exc:
-            raise ToolchainError(f"serial read failed: {exc}") from exc
-
-    def pulse_reset(self) -> None:
-        import fcntl
-        import struct
-        import termios
-
-        dtr = struct.pack("I", termios.TIOCM_DTR)
-        fcntl.ioctl(self.fd, termios.TIOCMBIC, dtr)
-        time.sleep(RESET_PULSE_S)
-        fcntl.ioctl(self.fd, termios.TIOCMBIS, dtr)
-
-    def close(self) -> None:
-        try:
-            os.close(self.fd)
-        except OSError:
-            pass
-
-
 def keep_dtr_on_close(fd: Optional[int]) -> bool:
     """Clear HUPCL on an open tty so closing it leaves DTR asserted.
 
@@ -283,22 +213,52 @@ def keep_dtr_on_close(fd: Optional[int]) -> bool:
         return False
 
 
+def hold_exclusively(fd: Optional[int], hold: bool = True) -> bool:
+    """Set (or clear) TIOCEXCL: while set, any other open() of the tty fails with EBUSY.
+
+    pyserial's ``exclusive=True`` is an advisory lock that only programs
+    taking the same lock respect; a plain open() -- arduino-cli's monitor, a
+    terminal -- does not. False on a port that is not a tty (``loop://``) or
+    a platform without the ioctl. Root is not stopped by it.
+    """
+    if fd is None:
+        return False
+    try:
+        import fcntl
+        import termios
+
+        fcntl.ioctl(fd, termios.TIOCEXCL if hold else termios.TIOCNXCL)
+        return True
+    except (ImportError, AttributeError, OSError):
+        return False
+
+
 class PySerialTransport:
     """The pyserial engine: any baud (250000 included), Linux/macOS/Windows.
 
     ``serial_for_url`` so tests can hand it ``loop://``; a device path is
-    passed through unchanged.
+    passed through unchanged. The port is held exclusively until ``close``.
     """
 
     def __init__(self, port: str, baud: int):
         import serial
 
         try:
-            self._s = serial.serial_for_url(port, baudrate=baud, timeout=0.5, write_timeout=2.0)
+            self._s = serial.serial_for_url(
+                port, baudrate=baud, timeout=0.5, write_timeout=2.0, exclusive=True
+            )
             self._s.reset_input_buffer()
         except (serial.SerialException, OSError, ValueError) as exc:
+            # EBUSY: another program set TIOCEXCL; EAGAIN: it holds pyserial's lock.
+            if getattr(exc, "errno", None) in (errno.EBUSY, errno.EAGAIN):
+                raise PortHeld(
+                    f"{port} is held by another program (a serial monitor, a slicer, "
+                    "another server): close it there first"
+                ) from exc
             raise ToolchainError(f"cannot open {port}: {exc}") from exc
-        keep_dtr_on_close(getattr(self._s, "fd", None))
+        fd = getattr(self._s, "fd", None)
+        hold_exclusively(fd)
+        keep_dtr_on_close(fd)
 
     def write(self, data: bytes) -> None:
         import serial
@@ -334,6 +294,7 @@ class PySerialTransport:
             raise ToolchainError(f"{self._s.port}: {exc}") from exc
 
     def close(self) -> None:
+        hold_exclusively(getattr(self._s, "fd", None), hold=False)
         try:
             self._s.close()
         except Exception:  # noqa: BLE001 -- a vanished USB device raises whatever the OS likes
@@ -365,11 +326,11 @@ class SimulatedPrinter:
         self.paused_at = 0.0
         self.hot_target = 210.0 if self.printing else 0.0
         self.bed_target = 60.0 if self.printing else 0.0
-        self.fan = 0
         self.pos = {"X": 0.0, "Y": 0.0, "Z": 0.0}
         self.relative = False
         self.halted = False
-        self._heat_t0 = time.monotonic()
+        # Multiplies every G4 dwell: 1 is real time, 0 skips them.
+        self.dwell_scale = float(os.environ.get("APOTHECARY_SIMULATED_SPEED", "1"))
 
     def _progress(self) -> float:
         # A print that goes round: a browser suite that runs longer than one
@@ -385,10 +346,6 @@ class SimulatedPrinter:
             self.hot_target = float(args.get("S", 0))
         elif code == "M140":
             self.bed_target = float(args.get("S", 0))
-        elif code == "M106":
-            self.fan = int(args.get("S", 255))
-        elif code == "M107":
-            self.fan = 0
         elif code == "G28":
             for axis in "XYZ" if len(parts) == 1 else [a for a in "XYZ" if a in args]:
                 self.pos[axis] = 0.0
@@ -426,7 +383,7 @@ class SimulatedPrinter:
             # A dwell takes the time it says (capped), so a streamed file takes
             # time to stream and a pause has something to interrupt.
             ms = float(args.get("P", 0)) or 1000 * float(args.get("S", 0))
-            time.sleep(min(2.0, ms / 1000))
+            time.sleep(min(2.0, ms / 1000) * self.dwell_scale)
         elif code == "G29":
             # A probe takes a while; the busy lines are what Marlin prints while it does.
             return ["echo:busy: processing", "echo:busy: processing", *self._grid_lines(), "ok"]
@@ -541,29 +498,18 @@ class SimulatedPrinter:
 TransportFactory = Callable[[str, int], Transport]
 ENGINES: Dict[str, TransportFactory] = {
     "pyserial": PySerialTransport,
-    "termios": TermiosTransport,
     "simulated": SimulatedPrinter,
 }
 
 
-def pyserial_available() -> bool:
-    try:
-        import serial  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
 def serial_engine() -> str:
-    """``APOTHECARY_SERIAL_ENGINE`` if set; else pyserial when importable, else termios."""
-    wanted = os.environ.get("APOTHECARY_SERIAL_ENGINE", "").strip().lower()
-    if wanted:
-        if wanted not in ENGINES:
-            raise ToolchainError(
-                f"APOTHECARY_SERIAL_ENGINE={wanted!r}; known engines: {', '.join(ENGINES)}"
-            )
-        return wanted
-    return "pyserial" if pyserial_available() else "termios"
+    """``APOTHECARY_SERIAL_ENGINE`` if set, else pyserial."""
+    wanted = os.environ.get("APOTHECARY_SERIAL_ENGINE", "").strip().lower() or "pyserial"
+    if wanted not in ENGINES:
+        raise ToolchainError(
+            f"APOTHECARY_SERIAL_ENGINE={wanted!r}; known engines: {', '.join(ENGINES)}"
+        )
+    return wanted
 
 
 def open_transport(port: str, baud: int) -> Transport:
@@ -645,6 +591,11 @@ class GcodeLink:
         self.engine = type(transport).__name__
         self.log.add("sys", f"opened {port} @ {baud} via {self.engine}")
 
+    # Every wait on the board -- a reply, a quiet line, a boot banner -- is
+    # multiplied by this. 1 against hardware; the tests' scripted boards answer
+    # at once, and waiting out real silences cost the unit suite a minute.
+    time_scale: float = 1.0
+
     def _read_line(self, timeout: float) -> Optional[str]:
         end = time.monotonic() + timeout
         while b"\n" not in self._buf:
@@ -661,10 +612,10 @@ class GcodeLink:
     def drain(self, quiet: float = 0.3, limit: float = 5.0) -> List[str]:
         """Read until the board has been silent for ``quiet`` seconds (or ``limit``)."""
         out: List[str] = []
-        end = time.monotonic() + limit
+        end = time.monotonic() + limit * self.time_scale
         with self._lock:
             while time.monotonic() < end:
-                line = self._read_line(quiet)
+                line = self._read_line(quiet * self.time_scale)
                 if line is None:
                     break
                 out.append(line)
@@ -679,10 +630,10 @@ class GcodeLink:
         carry on -- ``M115`` does not need a banner.
         """
         lines: List[str] = []
-        end = time.monotonic() + limit
+        end = time.monotonic() + limit * self.time_scale
         with self._lock:
             while time.monotonic() < end:
-                line = self._read_line(first if not lines else quiet)
+                line = self._read_line((first if not lines else quiet) * self.time_scale)
                 if line is None:
                     break
                 lines.append(line)
@@ -691,7 +642,11 @@ class GcodeLink:
         return lines
 
     def reset(self, limit: float = 6.0) -> List[str]:
-        """Reboot the board on purpose and return its boot banner."""
+        """Reboot the board on purpose and return its boot banner. Refused while a
+        job (a print, a bed reading) holds the link: rebooting under it leaves the
+        host streaming moves to a cold, unhomed board."""
+        if self.job is not None:
+            raise PortHeld(f"{self.port}: a {self.job.get('kind')} holds the port -- not resetting")
         with self._lock:
             self._buf = b""
             self.log.add("sys", "reset: DTR pulse")
@@ -727,7 +682,7 @@ class GcodeLink:
                 self.log.add("tx", cmd, origin)
             self._t.write((cmd + "\n").encode())
             lines: List[str] = []
-            end = time.monotonic() + timeout
+            end = time.monotonic() + timeout * self.time_scale
             while True:
                 left = end - time.monotonic()
                 if left <= 0:
@@ -746,7 +701,7 @@ class GcodeLink:
                         self.log.add("tx", cmd, origin)  # the line it objected to, for the record
                     self.log.add("rx", line, origin)
                 if BUSY_RE.match(line):
-                    end = time.monotonic() + timeout  # heating/homing: keep waiting
+                    end = time.monotonic() + timeout * self.time_scale  # heating/homing
                 elif OK_RE.match(line):
                     return lines
                 elif objected:
@@ -795,24 +750,34 @@ class PrinterLinks:
             return self._links.get(port)
 
     def open(self, port: str, baud: int) -> GcodeLink:
-        """The existing link for ``port`` at that baud, else a fresh one (resets the board)."""
+        """The existing link for ``port`` at that baud, else a fresh one (resets the board).
+
+        A link a job holds is never replaced: reopening at another baud would
+        drop the print under its own thread."""
         with self._lock:
             link = self._links.get(port)
             if link is not None and link.baud == baud:
                 return link
             if link is not None:
+                if link.job is not None:
+                    raise PortHeld(
+                        f"{port}: a {link.job.get('kind')} holds the port -- not reopening it"
+                    )
                 link.close()
             link = GcodeLink(port, baud, self.factory(port, baud), log=self.log_for(port))
             self._links[port] = link
         link.settle()
         return link
 
-    def close(self, port: str, force: bool = False) -> bool:
-        """Drop the link; refused while a print streams over it unless ``force``."""
+    def close(self, port: str) -> bool:
+        """Drop the link. Refused while a job holds it, with no way around: only the
+        job lets go of its link, after its own safe-off."""
         with self._lock:
             link = self._links.get(port)
-            if link is not None and not force and link.job and link.job.get("kind") == "print":
-                raise ToolchainError(f"{port}: a print holds the port -- cancel it first")
+            if link is not None and link.job is not None:
+                raise PortHeld(
+                    f"{port}: a {link.job.get('kind')} holds the port -- cancel it first"
+                )
             self.control.disarm(port)  # a dropped link never stays armed
             self._links.pop(port, None)
         if link is None:
@@ -954,7 +919,6 @@ GRID_HEADER_RE = re.compile(r"^\s*(\d+(?:\s+\d+)+)\s*$")
 GRID_ROW_RE = re.compile(r"^\s*(\d+)((?:\s+[-+]?\d+\.\d+)+)\s*$")
 G29_POINT_RE = re.compile(r"G29 W I(\d+) J(\d+) Z([-+]?\d+\.\d+)")
 PROBE_OFFSET_RE = re.compile(r"M851 X([-+]?\d+\.?\d*) Y([-+]?\d+\.?\d*) Z([-+]?\d+\.?\d*)")
-G30_RE = re.compile(r"Bed X:\s*([-+]?\d+\.?\d*)\s*Y:\s*([-+]?\d+\.?\d*)\s*Z:\s*([-+]?\d+\.?\d*)")
 LEVELING_STATE_RE = re.compile(r"Bed Leveling (ON|OFF)")
 
 
@@ -1040,14 +1004,6 @@ def mesh_stats(mesh: List[List[float]]) -> dict:
 def parse_probe_offset(lines: List[str]) -> Optional[dict]:
     for line in lines:
         m = PROBE_OFFSET_RE.search(line)
-        if m:
-            return {"x": float(m.group(1)), "y": float(m.group(2)), "z": float(m.group(3))}
-    return None
-
-
-def parse_g30(lines: List[str]) -> Optional[dict]:
-    for line in lines:
-        m = G30_RE.search(line)
         if m:
             return {"x": float(m.group(1)), "y": float(m.group(2)), "z": float(m.group(3))}
     return None
@@ -1166,7 +1122,7 @@ class ControlLatch:
             self.arm(port, ttl)
 
 
-class LinkBusy(ToolchainError):
+class LinkBusy(PortHeld):
     """The link is held by a long exchange and the caller would not wait."""
 
 

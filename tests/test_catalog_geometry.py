@@ -1,45 +1,48 @@
 """A catalog leaf refers to a part instead of describing its own shape.
 
-`to_scad_object()` knew only how to build geometry from `base`, `additions`
-and `children`, so every node in the parts library raised. One missing case
-emptied three surfaces of the viewer at once: the canvas got 422 from the
-node-STL route, the contents list had no meshes to show, and the generated
-OpenSCAD panel kept its placeholder because the layout route 500'd before it
-could return any.
+Its geometry is the part's STL, imported. The viewer's canvas (the node-STL
+route), its contents list and its generated-OpenSCAD panel all depend on it.
 """
 
 from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from rendered_parts import built_stl_fixture  # noqa: F401
 
+from apothecary import meshes
 from apothecary.api import app
 from apothecary.example_parts_library import create_parts_library_site
 from apothecary.hierarchy import Assembly, part_stl_path
 from apothecary.primitives import Import
-from apothecary.projects.parts.stl_renderer import get_renderer
+from apothecary.projects.parts.base import BasePart
+from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
+from apothecary.projects.parts.datum_core import DEFAULT as CORE
 
 client = TestClient(app)
 
+UNIT_CUBE = (
+    "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nv 0 0 1\nv 1 0 1\nv 1 1 1\nv 0 1 1\n"
+    "f 1 2 3 4\nf 5 6 7 8\nf 1 2 6 5\nf 2 3 7 6\nf 3 4 8 7\nf 4 1 5 8\n"
+)
+
+
+def _build_to(mp: pytest.MonkeyPatch, part: BasePart, stl) -> None:
+    """Make ``stl`` the part's output path, for this part's class alone."""
+    assert type(part) is not BasePart, "patching BasePart would move every part"
+    mp.setattr(type(part), "get_stl_output_path", lambda self: stl)
+
 
 @pytest.fixture(scope="module", autouse=True)
-def datum_core_is_built():
-    """These tests read a part's STL, and an STL is a build artifact.
-
-    A fresh checkout has none -- they are gitignored -- so assuming a populated
-    working tree is what made this module pass on a developer machine and fail
-    in CI. Build the one part it needs, once.
-    """
-    from apothecary.projects.parts.skeleton import ROOT
-
-    stl = ROOT / "parts" / "datum_core" / "datum_core.stl"
-    if stl.exists():
-        return
-    renderer = get_renderer()
-    if not renderer.is_available:
-        pytest.skip("OpenSCAD not installed; cannot build the STL these tests read")
-    result = renderer.render_stl(stl.with_suffix(".scad"), stl, timeout=300)
-    assert result.success, result.error_message
+def datum_core_stl(tmp_path_factory):
+    """These tests read datum_core's STL, a build artifact a fresh checkout does
+    not have. A cube in a temp directory stands in for it; nothing is built into
+    the repository. Yields the path a render imports."""
+    stl = tmp_path_factory.mktemp("catalog") / "datum_core.stl"
+    meshes.write_stl(meshes.read_obj(UNIT_CUBE), stl)
+    with pytest.MonkeyPatch.context() as mp:
+        _build_to(mp, CORE, stl)
+        yield stl.as_posix()
 
 
 class TestImportPrimitive:
@@ -58,20 +61,27 @@ class TestImportPrimitive:
 
 
 class TestPartStlPath:
-    def test_registered_part_resolves_repository_relative(self):
+    def test_the_part_says_where_its_stl_is(self, datum_core_stl):
+        # Not the SCAD's own name with .stl: gridfinity's source is in a submodule
+        # and its STL is not.
+        assert part_stl_path("datum_core") == datum_core_stl
+
+    def test_inside_the_repository_the_path_is_relative(self, monkeypatch):
         # Never absolute: generated SCAD is shown to people and an absolute
-        # path there leaks the local layout of whoever generated it.
-        assert part_stl_path("datum_core") == "parts/datum_core/datum_core.stl"
+        # path there leaks the local layout of whoever generated it. Any file
+        # under the root that exists stands in for a built STL.
+        _build_to(monkeypatch, CORE, CORE.source_file)
+        assert part_stl_path("datum_core") == "parts/datum_core/datum_core.scad"
 
     def test_unregistered_part_is_none(self):
         assert part_stl_path("no-such-part") is None
 
 
 class TestCatalogLeafCompiles:
-    def test_part_ref_leaf_imports_its_geometry(self):
+    def test_part_ref_leaf_imports_its_geometry(self, datum_core_stl):
         leaf = Assembly(name="datum_core", role="part", part_ref="datum_core")
         rendered = leaf.to_scad_object().render()
-        assert 'import("parts/datum_core/datum_core.stl"' in rendered
+        assert f'import("{datum_core_stl}"' in rendered
 
     def test_missing_stl_names_the_command_that_fixes_it(self):
         """Asking for one node's geometry is a direct request, so it fails."""
@@ -92,11 +102,10 @@ class TestCatalogLeafCompiles:
         with pytest.raises(ValueError, match="has no base, additions, or children"):
             bare.to_scad_object()
 
-    def test_the_whole_catalog_renders(self):
-        # This is the one that was failing: a site made entirely of part_ref
-        # leaves could not render at all.
+    def test_the_whole_catalog_renders(self, datum_core_stl):
+        # A site made entirely of part_ref leaves.
         scad = create_parts_library_site().render()
-        assert "parts/datum_core/datum_core.stl" in scad
+        assert datum_core_stl in scad
 
     def test_the_catalog_survives_a_part_nobody_has_built(self):
         from apothecary.hierarchy import Site
@@ -106,7 +115,7 @@ class TestCatalogLeafCompiles:
 
 
 class TestViewerSurfaces:
-    def test_layout_returns_generated_scad(self):
+    def test_layout_returns_generated_scad(self, datum_core_stl):
         """The panel says 'Load a site to see generated OpenSCAD' until this
         response carries a `scad` key, so an error here reads as a blank panel.
         """
@@ -117,38 +126,36 @@ class TestViewerSurfaces:
 
         body = response.json()
         assert body["is_valid"] is True
-        assert "parts/datum_core/datum_core.stl" in body["scad"]
+        assert datum_core_stl in body["scad"]
 
     @pytest.mark.slow
-    def test_node_stl_renders_a_catalog_leaf(self):
-        if not get_renderer().is_available:
-            pytest.skip("OpenSCAD not installed")
+    def test_node_stl_renders_a_catalog_leaf(self, built_stl, monkeypatch):
+        _build_to(monkeypatch, CORE, built_stl(CORE))
         response = client.get("/sites/parts_library/nodes/datum_core/stl")
         assert response.status_code == 200, response.text
         assert len(response.content) > 1000
 
     @pytest.mark.slow
-    def test_node_render_leaves_no_scratch_behind(self):
-        if not get_renderer().is_available:
-            pytest.skip("OpenSCAD not installed")
+    def test_node_render_leaves_no_scratch_behind(self, built_stl, monkeypatch):
         from apothecary.projects.parts.skeleton import ROOT
 
-        client.get("/sites/parts_library/nodes/calibration_cube/stl")
+        _build_to(monkeypatch, CUBE, built_stl(CUBE))
+        assert client.get("/sites/parts_library/nodes/calibration_cube/stl").status_code == 200
         assert list(ROOT.glob(".node-stl-*.scad")) == []
 
 
 class TestSitePayloadCarriesScad:
     """The viewer's code panel reads `scad` off an ordinary site read."""
 
-    def test_get_site_includes_generated_scad(self):
+    def test_get_site_includes_generated_scad(self, datum_core_stl):
         body = client.get("/sites/parts_library").json()
-        assert "parts/datum_core/datum_core.stl" in body["scad"]
+        assert datum_core_stl in body["scad"]
 
-    def test_layout_still_includes_it(self):
+    def test_layout_still_includes_it(self, datum_core_stl):
         site = client.get("/sites/parts_library").json()
         positions = {s["name"]: s["position"] for s in site["structures"]}
         body = client.post("/sites/parts_library/layout", json={"positions": positions}).json()
-        assert "parts/datum_core/datum_core.stl" in body["scad"]
+        assert datum_core_stl in body["scad"]
 
     def test_a_site_that_cannot_compile_reports_it_rather_than_500ing(self, monkeypatch):
         """One uncompilable node must not take the whole page down with it."""

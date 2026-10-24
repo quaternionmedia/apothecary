@@ -81,9 +81,10 @@ by `pytest walkthrough`. Start there.
 `/walkthrough`): a Markdown page is rendered, a screenshot or recording is
 served as it is, and links between pages work because the URL is the path.
 The bar on every page says when the generated walkthroughs were last
-refreshed; the server regenerates them in the background each time it
-starts (`--no-refresh-docs` to skip; the run's output is in
-`docs/generated/refresh.log`). The HTTP API is described at `/openapi.json`;
+refreshed; `apothecary serve --refresh-docs` regenerates them in the
+background (a headless browser run; its output is in
+`docs/generated/refresh.log`), and `apothecary docs generate` does it in
+the foreground. The HTTP API is described at `/openapi.json`;
 nothing on these pages is loaded from anywhere but this server.
 
 The server answers this machine only -- a request from another address, a

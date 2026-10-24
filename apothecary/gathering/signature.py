@@ -129,7 +129,6 @@ def signature_of(picture: Picture, *, path: Optional[Path] = None) -> Signature:
         picture=picture.name,
         marks=marks,
         tone=tone_of(path),
-        wideness=picture.pixel_width / picture.pixel_height,
     )
 
 

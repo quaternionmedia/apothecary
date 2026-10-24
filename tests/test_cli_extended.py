@@ -7,8 +7,6 @@ from apothecary.cli import cli
 
 
 def test_cli_validate_with_example_scene(tmp_path):
-    # Use the example scene JSON written by testrun as a stand-in
-    # Build a small scene JSON manually to avoid validation issues
     scene_json = {
         "name": "vtest",
         "objects": [{"type": "cube", "size": {"x": 1, "y": 2, "z": 3}, "center": False}],
@@ -96,12 +94,6 @@ def test_cli_parts_info_missing_wrapper_errors():
     r = CliRunner().invoke(cli, ["parts", "info", "nonexistent_part"])
     assert r.exit_code != 0
     assert "No wrapper module found" in r.output
-
-
-def test_cli_inventory_templates_lists_templates():
-    r = CliRunner().invoke(cli, ["inventory", "templates"])  # uses repo templates/
-    assert r.exit_code == 0
-    assert "template:" in r.output or "No templates found." in r.output
 
 
 def test_cli_parts_render_refuses_to_overwrite_source(tmp_path):

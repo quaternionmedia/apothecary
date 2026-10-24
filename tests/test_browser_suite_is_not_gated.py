@@ -1,19 +1,4 @@
-"""The browser suite must not be switched off by one fixture.
-
-This exists because it already went wrong once. The fixture naming the picture
-folder skips when nobody has said which folder to use. Starting the server was
-made to depend on it, and starting the server is what every browser test depends
-on — so a single skip quietly took the whole browser suite with it, and the run
-still reported success. Nothing failed. Twenty-six tests simply stopped
-happening.
-
-A count of passing tests cannot catch that: the number it would have to notice
-is a number of tests that were never there. So this checks the shape instead —
-nothing the server is built on may be a thing that skips.
-
-It reads the setup file rather than running it, so it needs no browser, no
-server, and none of the things that file imports.
-"""
+"""Nothing the browser tests' server rests on may skip: that skip would silently skip them all."""
 
 import ast
 from pathlib import Path

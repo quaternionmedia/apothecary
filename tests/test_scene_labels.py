@@ -1,24 +1,15 @@
-"""Rebuilding a shape from a saved description honours the label.
-
-`docs/scene-json.md` promises a saved shape may say which family it belongs to,
-and that the label is used. It was not: the test for "is this a ball" asked
-whether a radius was present, and a tube has a radius too, so a tube labelled a
-tube came back a ball.
-
-These tests were written against the fault and watched failing before it was
-fixed. The two marked as the documented looseness are a separate question and
-are not fixed here — see
-``docs/plans/features/scene-document-validation.md``.
-"""
+"""A scene document is JSON in and the same geometry out: each object says what it
+is with ``type``, and a dump carries that tag so it loads back as itself."""
 
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
-from apothecary.api import _rehydrate
+from apothecary.example_hierarchy import create_example_site
+from apothecary.hierarchy import Assembly
 from apothecary.primitives import Cube, Cylinder, Sphere
-
-# ------------------------------------------------- the label must be believed
+from apothecary.scene import Scene, load_scene_from_json
 
 
 @pytest.mark.parametrize(
@@ -26,42 +17,48 @@ from apothecary.primitives import Cube, Cylinder, Sphere
     [
         ({"type": "cylinder", "h": 10, "r": 5}, Cylinder),
         ({"type": "cylinder", "h": 10, "r1": 3, "r2": 5}, Cylinder),
-        ({"type": "cylinder", "h": 2, "r": 0.5, "center": True}, Cylinder),
-        ({"type": "sphere", "r": 5}, Sphere),
         ({"type": "sphere", "r": 5, "fn": 64}, Sphere),
         ({"type": "cube", "size": {"x": 1, "y": 2, "z": 3}}, Cube),
     ],
 )
 def test_a_labelled_shape_comes_back_as_that_shape(saved, expected):
-    assert isinstance(_rehydrate(saved), expected)
+    (built,) = Scene.model_validate({"objects": [saved]}).objects
+    assert isinstance(built, expected)
 
 
-def test_a_labelled_tube_keeps_its_measurements():
-    tube = _rehydrate({"type": "cylinder", "h": 10, "r": 5})
-    assert tube.h == 10 and tube.r == 5
-    assert "cylinder" in tube.render()
+def test_a_dump_loads_back_as_the_same_scene():
+    doc = {
+        "objects": [
+            {"type": "hull", "children": [{"type": "sphere", "r": 1}, {"type": "cube", "size": 2}]},
+            {"type": "rotate", "a": {"x": 0, "y": 0, "z": 45}, "children": [{"type": "cube"}]},
+            {"type": "import", "file": "parts/x/x.stl", "scale": 25.4},
+        ]
+    }
+    scene = Scene.model_validate(doc)
+    again = Scene.model_validate_json(scene.model_dump_json())
+    assert again.render() == scene.render()
+    assert "hull()" in scene.render() and 'import("parts/x/x.stl"' in scene.render()
 
 
-def test_the_label_wins_even_when_the_measurements_suit_another_shape():
-    """A radius alone used to be taken as proof of a ball."""
-    assert isinstance(_rehydrate({"type": "cylinder", "r": 5, "h": 1}), Cylinder)
-    assert isinstance(_rehydrate({"type": "sphere", "r": 5, "h": 1}), Sphere)
+def test_a_site_survives_a_round_trip_through_json():
+    """Assembly.base holds geometry too; a saved site loads back and renders the same."""
+    site = create_example_site()
+    back = Assembly.model_validate_json(site.model_dump_json())
+    assert back.to_scad_object().render() == site.to_scad_object().render()
 
 
-def test_a_labelled_shape_with_a_size_that_suits_a_cube_still_obeys_the_label():
-    assert isinstance(
-        _rehydrate({"type": "sphere", "size": {"x": 1, "y": 1, "z": 1}, "r": 2}), Sphere
+@pytest.mark.parametrize("bad", [{"r": 5}, {"h": 10, "r": 5}, {"type": "blob"}])
+def test_an_object_that_does_not_say_what_it_is_is_refused(bad):
+    with pytest.raises(ValidationError):
+        Scene.model_validate({"objects": [bad]})
+
+
+def test_the_cli_loader_reads_the_documented_example(tmp_path):
+    path = tmp_path / "scene.json"
+    path.write_text(
+        '{"name": "json_demo", "objects": [{"type": "cube", '
+        '"size": {"x": 15, "y": 15, "z": 10}, "center": true}]}'
     )
-
-
-# ------------------------------------------------- unlabelled stays as it was
-
-
-def test_without_a_label_a_radius_alone_is_still_read_as_a_ball():
-    """The documented looseness, unchanged. Tightening it is a separate decision."""
-    assert isinstance(_rehydrate({"r": 5}), Sphere)
-
-
-def test_without_a_label_a_height_and_radius_is_still_read_as_a_ball():
-    """Wrong, and knowingly left alone: changing it changes a written promise."""
-    assert isinstance(_rehydrate({"h": 10, "r": 5}), Sphere)
+    assert (
+        "cube([15.0, 15.0, 10.0], center=true);" in load_scene_from_json(scene_file=path).render()
+    )

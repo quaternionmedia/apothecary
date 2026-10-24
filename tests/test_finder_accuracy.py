@@ -7,9 +7,6 @@ do not lower the number.
 
 Marked slow: these draw and examine hundreds of pictures. Run the whole file
 before claiming a change to the finder is an improvement.
-
-The measured numbers, and their honest reading, are in
-``docs/plans/features/finder-accuracy.md``.
 """
 
 from __future__ import annotations
@@ -81,7 +78,7 @@ def test_the_same_pictures_give_the_same_score_twice():
     assert (first.found_rate, first.kind_rate) == (second.found_rate, second.kind_rate)
 
 
-def test_a_finder_that_reports_nothing_scores_zero():
+def test_a_finder_that_reports_nothing_scores_zero(tmp_path):
     """The harness must be able to fail something, or it measures nothing."""
     from pathlib import Path
 
@@ -95,13 +92,11 @@ def test_a_finder_that_reports_nothing_scores_zero():
         def look(self, image: Path) -> Picture:
             return Picture(name=image.stem, pixel_width=10, pixel_height=10, finder="blind")
 
-    import tempfile
-
-    cases = draw_cases(Path(tempfile.mkdtemp()), count=6)
+    cases = draw_cases(tmp_path, count=6)
     assert score(SeesNothing(), cases).found_rate == 0.0
 
 
-def test_a_finder_that_reports_rubbish_everywhere_is_caught_as_spurious():
+def test_a_finder_that_reports_rubbish_everywhere_is_caught_as_spurious(tmp_path):
     """Flooding the picture with guesses must not look like success."""
     from pathlib import Path
 
@@ -127,8 +122,6 @@ def test_a_finder_that_reports_rubbish_everywhere_is_caught_as_spurious():
                 name=image.stem, pixel_width=10, pixel_height=10, shapes=grid, finder="noisy"
             )
 
-    import tempfile
-
-    cases = draw_cases(Path(tempfile.mkdtemp()), count=6)
+    cases = draw_cases(tmp_path, count=6)
     result = score(GuessesEverywhere(), cases)
     assert result.spurious > 50, "carpeting the picture in guesses went unnoticed"

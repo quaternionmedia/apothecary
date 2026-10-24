@@ -29,12 +29,24 @@ def _plate(name: str, shape: WordShape) -> Assembly:
     )
 
 
+def _corner_at_origin(shape: WordShape, round_thing) -> Translate:
+    """Every word is built with one corner at the origin (compose.py shifts each
+    piece onto its middle). A cylinder is centred on its axis, so a round word
+    stands on the middle of its box -- without this, every disc, post and wedge
+    was drawn half its size away from where it was seen."""
+    return Translate(
+        v=Vector3D(x=shape.width / 2, y=shape.depth / 2, z=0.0), children=[round_thing]
+    )
+
+
 def _disc(name: str, shape: WordShape) -> Assembly:
     """A round flat piece. The default reading of a circle."""
     return Assembly(
         name=name,
         role="word",
-        base=Cylinder(h=shape.height, r=max(shape.width, shape.depth) / 2),
+        base=_corner_at_origin(
+            shape, Cylinder(h=shape.height, r=max(shape.width, shape.depth) / 2)
+        ),
     )
 
 
@@ -43,7 +55,9 @@ def _post(name: str, shape: WordShape) -> Assembly:
     return Assembly(
         name=name,
         role="word",
-        base=Cylinder(h=shape.height, r=max(shape.width, shape.depth) / 2),
+        base=_corner_at_origin(
+            shape, Cylinder(h=shape.height, r=max(shape.width, shape.depth) / 2)
+        ),
     )
 
 
@@ -66,7 +80,10 @@ def _wedge(name: str, shape: WordShape) -> Assembly:
     return Assembly(
         name=name,
         role="word",
-        base=Cylinder(h=shape.height, r1=max(shape.width, shape.depth) / 2, r2=0.001, fn=3),
+        base=_corner_at_origin(
+            shape,
+            Cylinder(h=shape.height, r1=max(shape.width, shape.depth) / 2, r2=0.001, fn=3),
+        ),
     )
 
 

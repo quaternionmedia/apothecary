@@ -38,6 +38,7 @@ from pathlib import Path
 import click
 
 from ..projects.parts.skeleton import ROOT
+from .server import _loopback_or_die
 
 GENERATED_DOCS_ROOT = ROOT / "docs" / "generated"
 
@@ -100,12 +101,7 @@ def generate(host: str, port: int, keep_raw_video: bool, real_devices: bool):
     state in a temp dir, so the screenshots are the same on every machine
     and never depend on -- or touch -- a real board.
     """
-    from ..stays_local import require_loopback
-
-    try:
-        host = require_loopback(host)
-    except ValueError as exc:
-        raise click.ClickException(str(exc)) from None
+    host = _loopback_or_die(host)
     # A previous invocation's raw recordings (especially from a run that
     # failed before reaching cleanup, below) must not still be here --
     # _extract_workflow_videos picks "the" video for a given test out of
@@ -213,7 +209,6 @@ def _simulated_device_env(env: dict) -> dict:
 def _start_server(host: str, port: int, simulated_devices: bool = True):
     env = os.environ.copy()
     env["APOTHECARY_SKIP_STL_GENERATION"] = "1"
-    env["APOTHECARY_VIEWER_PATH"] = ""
     # The picture walkthrough asks the server to look at a picture, and the
     # server reads pictures from one folder and refuses everywhere else. Both
     # sides have to agree which folder that is, so it is decided here and
@@ -234,8 +229,10 @@ def _start_server(host: str, port: int, simulated_devices: bool = True):
         "--port",
         str(port),
     ]
+    # DEVNULL, not PIPE: nothing reads these, and an unread pipe fills and
+    # blocks the server mid-run.
     server_proc = subprocess.Popen(
-        server_cmd, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        server_cmd, cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
 
     base_url = f"http://{host}:{port}"

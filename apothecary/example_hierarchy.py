@@ -95,10 +95,6 @@ TOP_BAR_Z = 440.0
 PRINTER_X_POSITIONS = [100.0, 620.0, 1140.0]
 PRINTER_Y_POSITION = 150.0
 
-# Usable print area (mm) -- smaller than the printer's physical footprint,
-# the same way a real desktop FDM printer's chassis is bigger than its bed.
-PRINTER_BUILD_VOLUME = Vector3D(x=220.0, y=220.0, z=250.0)
-
 # Every printer Structure.status is one of these; enforced at the API layer
 # (see api.py's PRINTER_STATUSES-checking endpoint), not in hierarchy.py --
 # a Structure's status is a free-form string there, this is the scenario's
@@ -378,7 +374,7 @@ def _build_printer(name: str, *, x: float, y: float, status: str = "idle") -> As
                 x=PRINTER_WIDTH - 2.0, y=PRINTER_DEPTH + PRINTER_FRONT, z=PRINTER_HEIGHT
             ),
         ),
-        build_volume=PRINTER_BUILD_VOLUME,
+        build_volume=ender3.BUILD,
         build_origin=ender3.BUILD_ORIGIN,
         status=status,
         category="mechanical",
@@ -753,9 +749,6 @@ def validate_garage_layout(site: Assembly) -> LayoutReport:
             )
 
     return LayoutReport(violations=violations)
-
-
-JOB_STATUSES = ["queued", "assigned", "printing", "done"]
 
 
 class Job(BaseModel):

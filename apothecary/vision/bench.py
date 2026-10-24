@@ -15,8 +15,7 @@ drawing, so a good score means "handles the easy case", not "works". A real
 photograph brings shadow, texture, blur and overlap, none of which appear below.
 That limit is the honest reading of any number this produces.
 
-Runs on your own machine with nothing fetched. See
-``docs/plans/proposals/runs-and-stays-local.md``.
+Runs on your own machine with nothing fetched.
 """
 
 from __future__ import annotations
@@ -116,8 +115,8 @@ def draw_cases(
     *,
     count: int = 24,
     seed: int = 20260814,
-    turn: bool = True,
-    speckle: bool = True,
+    turn: bool = False,
+    speckle: bool = False,
     blur: float = 0.0,
     faintness: float = 0.0,
     smallest: float = 0.14,
@@ -126,10 +125,12 @@ def draw_cases(
 ) -> List[Case]:
     """Draw a set of pictures with known answers.
 
-    ``blur`` softens every edge, ``faintness`` from 0 to 1 pulls the shapes
-    towards the background colour, and ``smallest``/``largest``/``crowd`` control
-    how small and how many the shapes get. Each one makes the job harder in a
-    different way, so a drop in the score says which way.
+    With no settings the shapes are upright and clean. ``turn`` turns every third
+    picture's shapes, ``speckle`` dots every fourth picture with specks, ``blur``
+    softens every edge, ``faintness`` from 0 to 1 pulls the shapes towards the
+    background colour, and ``smallest``/``largest``/``crowd`` control how small
+    and how many the shapes get. Each one makes the job harder in a different
+    way, so a drop in the score says which way.
     """
     from PIL import Image, ImageDraw, ImageFilter
 

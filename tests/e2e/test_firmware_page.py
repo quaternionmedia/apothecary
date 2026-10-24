@@ -1,7 +1,8 @@
 """End-to-end test for the firmware page (templates/firmware.html.j2).
 
-Runs whether or not a real arduino-cli is installed on the host: the page
-must load and be honest about toolchain state either way.
+The test server runs the scripted arduino-cli (tests/firmware_helpers.py):
+version 9.9.9, an Uno on /dev/ttyFAKE0 and an unnamed board on /dev/ttyFAKE1,
+which the simulated serial engine answers as a Marlin printer mid-print.
 """
 
 import pytest
@@ -14,12 +15,9 @@ def test_firmware_page_loads_and_reports_toolchain(page: Page, base_url: str):
     expect(page).to_have_title("Apothecary Firmware")
     expect(page.locator(".toolbar h1")).to_contain_text("Apothecary")
 
-    pill = page.locator("#status-pill")
-    expect(pill).not_to_have_text("checking…", timeout=10000)
-    assert pill.inner_text().startswith("arduino-cli") or "missing" in pill.inner_text()
+    expect(page.locator("#status-pill")).to_have_text("arduino-cli 9.9.9", timeout=10000)
 
-    # The repo's own sketches are discovered regardless of toolchain state; picking
-    # one fills its firmware.json default FQBN.
+    # The repo's own sketches are listed; picking one fills its firmware.json default FQBN.
     expect(page.locator("#sketches li.selected")).to_be_visible()
     page.locator("#sketches li[data-name='footpedal']").click()
     expect(page.locator("#sketches li.selected")).to_contain_text("footpedal")
@@ -27,7 +25,7 @@ def test_firmware_page_loads_and_reports_toolchain(page: Page, base_url: str):
     page.locator("#sketches li[data-name='esp32_blink']").click()
     expect(page.locator("#fqbn-input")).to_have_value("esp32:esp32:esp32")
 
-    # Suggested cores are always offered; the toolchain card names the tool either way.
+    # Suggested cores are offered; the toolchain card names the tool.
     assert page.locator("#cores li").count() >= 5
     expect(page.locator("#toolchain")).to_contain_text("arduino-cli")
 
@@ -68,9 +66,20 @@ def test_viewer_serial_overlay_toggle(page: Page, base_url: str):
 
 @pytest.mark.e2e
 def test_firmware_page_devices_panel(page: Page, base_url: str):
-    """Runs against whatever is plugged in: nothing, a devkit (Probe), or a printer
-    (Poll and Monitor -- a printer is monitored, never probed or flashed)."""
+    """Each detected board has a card: a devkit can be probed; a printer, once asked,
+    has Poll and Monitor and nothing that would take its port (it is monitored, never
+    probed or flashed)."""
     page.goto(f"{base_url}/firmware")
-    expect(page.locator("#devices")).not_to_have_text("–", timeout=10000)
-    text = page.locator("#devices").inner_text()
-    assert "No devices detected" in text or "Probe" in text or "Monitor" in text
+    expect(page.locator("#devices .device")).to_have_count(2, timeout=10000)
+
+    uno = page.locator(".device[data-port='/dev/ttyFAKE0']")
+    expect(uno).to_contain_text("Arduino Uno")
+    expect(uno.locator(".dev-probe")).to_be_visible()
+
+    # "Printer?" asks M115, or "Poll" if an earlier test already asked: a printer either way.
+    printer = page.locator(".device[data-port='/dev/ttyFAKE1']")
+    printer.locator(".dev-printer").click()
+    expect(printer.locator(".printer-status")).to_contain_text("printing", timeout=10000)
+    expect(printer.locator(".dev-monitor")).to_be_visible()
+    expect(printer.locator(".dev-probe")).to_have_count(0)
+    expect(printer.locator(".dev-live")).to_have_count(0)

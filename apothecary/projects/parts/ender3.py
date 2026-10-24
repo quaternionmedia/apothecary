@@ -27,7 +27,7 @@ from .skeleton import ROOT
 FRAME = Vector3D(x=400.0, y=410.0, z=440.0)  # the base frame and the top of the crossbar
 OVERALL = Vector3D(x=470.0, y=454.0, z=570.0)  # with the LCD, the PSU and a spool on the holder
 BED_TOP_Z = 95.0
-BUILD = Vector3D(x=220.0, y=220.0, z=250.0)
+BUILD = Vector3D(x=220.0, y=220.0, z=250.0)  # the printable volume
 BED_PLATE = 235.0
 NOZZLE_Y = 100.0  # 30 mm in front of the X gantry (upright_y - rail - 30)
 BUILD_ORIGIN = Vector3D(x=(FRAME.x - BED_PLATE) / 2 + 7.5, y=NOZZLE_Y, z=BED_TOP_Z)

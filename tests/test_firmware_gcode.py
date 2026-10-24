@@ -5,6 +5,7 @@ The scripted transport replays what a Creality mainboard running Marlin
 parsers are tested against real output, not an idealised one.
 """
 
+import errno
 import json
 import os
 import threading
@@ -17,7 +18,7 @@ from fastapi.testclient import TestClient
 from apothecary.api import app
 from apothecary.cli import cli
 from apothecary.firmware import devices, gcode
-from apothecary.firmware.toolchains import ToolchainError
+from apothecary.firmware.toolchains import PortHeld, ToolchainError
 
 BOOT = [
     "start",
@@ -203,16 +204,15 @@ def test_links_registry_reuses_and_releases(scripted_links):
 
 def test_engine_selection(monkeypatch):
     monkeypatch.delenv("APOTHECARY_SERIAL_ENGINE", raising=False)
-    monkeypatch.setattr(gcode, "pyserial_available", lambda: True)
     assert gcode.serial_engine() == "pyserial"
-    monkeypatch.setattr(gcode, "pyserial_available", lambda: False)
-    assert gcode.serial_engine() == "termios"
     monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "PySerial")
     assert gcode.serial_engine() == "pyserial"
     monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "usbmuxd")
     with pytest.raises(ToolchainError, match="known engines"):
         gcode.serial_engine()
-    assert set(gcode.ENGINES) == {"pyserial", "termios", "simulated"}
+    monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "termios")
+    with pytest.raises(ToolchainError, match="known engines: pyserial, simulated"):
+        gcode.serial_engine()
 
 
 def test_simulated_engine_is_a_plausible_marlin(monkeypatch):
@@ -230,7 +230,6 @@ def test_simulated_engine_is_a_plausible_marlin(monkeypatch):
 
 
 def test_pyserial_engine_round_trip_on_loopback():
-    pytest.importorskip("serial")
     t = gcode.PySerialTransport("loop://", 115200)
     t.write(b"M105\n")
     assert t.read(0.5) == b"M105\n" and t.read(0.1) == b""
@@ -247,7 +246,6 @@ def test_pyserial_engine_leaves_dtr_up_on_close():
     Creality board reboots on the next program's open -- the very reset the
     seam promises not to cause.
     """
-    pytest.importorskip("serial")
     termios = pytest.importorskip("termios")
     master, slave = os.openpty()
     try:
@@ -264,14 +262,46 @@ def test_pyserial_engine_leaves_dtr_up_on_close():
     assert gcode.keep_dtr_on_close(None) is False
 
 
-def test_termios_engine_rejects_odd_rates_and_missing_ports():
-    pytest.importorskip("termios")
-    with pytest.raises(ToolchainError, match="standard termios table"):
-        gcode.TermiosTransport("/dev/null", 250000)
-    with pytest.raises(ToolchainError, match="cannot open"):
-        gcode.TermiosTransport("/dev/ttyDOES_NOT_EXIST", 115200)
-    with pytest.raises(ToolchainError, match="not a serial port"):
-        gcode.TermiosTransport("/dev/null", 115200)
+@pytest.mark.skipif(os.name != "posix" or os.geteuid() == 0, reason="TIOCEXCL; root ignores it")
+def test_pyserial_engine_holds_the_port_against_other_programs():
+    """While the seam holds a port, no other program can open it: a plain open()
+    meets TIOCEXCL, and a pyserial user meets the lock. Closing lets go of both."""
+    master, slave = os.openpty()
+    path = os.ttyname(slave)
+
+    def plain_open():
+        os.close(os.open(path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK))
+
+    try:
+        held = gcode.PySerialTransport(path, 115200)
+        with pytest.raises(OSError) as refused:
+            plain_open()
+        assert refused.value.errno == errno.EBUSY
+        with pytest.raises(PortHeld, match="held by another program"):
+            gcode.PySerialTransport(path, 115200)  # EBUSY, from TIOCEXCL
+        assert gcode.hold_exclusively(held._s.fd, hold=False)
+        with pytest.raises(PortHeld, match="held by another program"):
+            gcode.PySerialTransport(path, 115200)  # EAGAIN, from the lock
+        held.close()
+        plain_open()
+        gcode.PySerialTransport(path, 115200).close()
+    finally:
+        os.close(master)
+        os.close(slave)
+    assert gcode.hold_exclusively(None) is False
+
+
+def test_a_port_another_program_holds_is_a_conflict(fake_arduino_cli, scripted_links):
+    def held_elsewhere(port, baud):
+        raise PortHeld(f"{port} is held by another program")
+
+    scripted_links.factory = held_elsewhere
+    c = TestClient(app)
+    for r in (
+        c.post("/firmware/devices/identify", json={"port": "/dev/ttyFAKE1"}),
+        c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE1"}),
+    ):
+        assert r.status_code == 409 and "another program" in r.json()["detail"]
 
 
 # --- identify / poll ----------------------------------------------------------------
@@ -373,10 +403,18 @@ def test_upload_releases_only_its_own_printer_link(
         and time.time() < deadline
     ):
         time.sleep(0.02)
-    # And while a task holds the toolchain, polls are refused rather than racing it.
-    fresh_task_runner.run("x", "hold", [["/bin/sleep", "2"]])
+    # A task writing to a port holds that port and no other: its polls and
+    # identify are refused, the other printer's are not, and a compile (no port)
+    # holds nothing. The emergency stop goes through whatever holds the port.
+    fresh_task_runner.run("upload", "hold", [["/bin/sleep", "2"]], port="/dev/ttyFAKE1")
     assert c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE1"}).status_code == 409
     assert c.post("/firmware/devices/identify", json={"port": "/dev/ttyFAKE1"}).status_code == 409
+    assert c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE0"}).status_code != 409
+    stop = c.post("/firmware/printers/command", json={"port": "/dev/ttyFAKE1", "command": "M112"})
+    assert stop.status_code != 409, stop.text
+    fresh_task_runner.cancel(fresh_task_runner.active.id)
+    fresh_task_runner.run("compile", "a compile", [["/bin/sleep", "2"]])
+    assert c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE1"}).status_code == 200
     fresh_task_runner.cancel(fresh_task_runner.active.id)
 
 
@@ -639,7 +677,7 @@ def test_monitor_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
 
     info = c.get("/firmware/printers/info", params={"port": "/dev/ttyFAKE1"}).json()
     assert info["detected"] and info["link"] is None and info["last_status"] is None
-    assert info["engine"] in ("pyserial", "termios", "simulated")
+    assert info["engine"] in ("pyserial", "simulated")
     c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE1"})
     info = c.get("/firmware/printers/info", params={"port": "/dev/ttyFAKE1"}).json()
     assert info["link"]["baud"] == 115200 and info["link"]["engine"] == "ScriptedTransport"
@@ -782,7 +820,6 @@ def test_control_latch_arms_renews_and_lapses(monkeypatch):
 def test_control_route_requires_the_latch(fake_arduino_cli, fresh_task_runner, scripted_links):
     c = TestClient(app)
     port = "/dev/ttyFAKE1"
-    assert c.get("/firmware/printers/controls").json()["bounds"]["hotend_max_c"] == 300
     assert c.get("/firmware/printers/control", params={"port": port}).json()["armed"] is False
 
     r = c.post("/firmware/printers/command", json={"port": port, "command": "M104 S200"})
@@ -847,6 +884,16 @@ def test_simulator_honours_controls(monkeypatch):
         gcode.control_printer(link, "M112")
     with pytest.raises(ToolchainError, match="halted"):
         gcode.poll_printer(link)
+
+
+def test_simulated_dwells_scale_with_the_speed_setting(monkeypatch):
+    monkeypatch.delenv("APOTHECARY_SIMULATED_SPEED", raising=False)
+    assert gcode.SimulatedPrinter("/dev/ttySIM", 115200).dwell_scale == 1.0
+    monkeypatch.setenv("APOTHECARY_SIMULATED_SPEED", "0.1")
+    started = time.monotonic()
+    # 1.5 s, and 9 s capped at 2 s: 3.5 s at full length, 0.35 s at a tenth.
+    gcode.SimulatedPrinter("/dev/ttySIM", 115200).write(b"G4 P1500\nG4 S9\n")
+    assert 0.3 < time.monotonic() - started < 2.0
 
 
 # --- review fixes: the monitor page never reflects a raw port; polls carry the latch -------
@@ -979,15 +1026,9 @@ def test_mesh_stats_reports_range_tilt_and_corners():
     assert gcode.mesh_stats([[0.3]])["tilt_x"] == 0.0
 
 
-def test_parse_probe_offset_single_probe_and_leveling_state():
+def test_parse_probe_offset_and_leveling_state():
     assert gcode.parse_probe_offset(LEVELING["M851"]) == {"x": -44.0, "y": -10.0, "z": -3.15}
     assert gcode.parse_probe_offset(["ok"]) is None
-    assert gcode.parse_g30(["Bed X: 110.00 Y: 110.00 Z: 0.12", "ok"]) == {
-        "x": 110.0,
-        "y": 110.0,
-        "z": 0.12,
-    }
-    assert gcode.parse_g30(["ok"]) is None
     assert gcode.parse_leveling_state(MESH_REPORT) is True
     assert gcode.parse_leveling_state(["echo:Bed Leveling OFF"]) is False
     assert gcode.parse_leveling_state(["ok"]) is None
@@ -1013,8 +1054,9 @@ def test_simulator_answers_the_leveling_codes(monkeypatch):
     stats = gcode.mesh_stats(grids[0])
     assert 0.3 < stats["range"] < 1.2 and stats["tilt_x"] > 0 > stats["tilt_y"]
     assert gcode.parse_probe_offset(link.command("M851")) == {"x": -44.0, "y": -10.0, "z": -3.15}
-    hit = gcode.parse_g30(gcode.control_printer(link, "G30 X110 Y110"))
-    assert hit["x"] == 110.0 and hit["y"] == 110.0 and abs(hit["z"]) < 0.5
+    hit = gcode.control_printer(link, "G30 X110 Y110")
+    assert hit[0].startswith("Bed X: 110.00 Y: 110.00 Z: ") and hit[-1] == "ok"
+    assert abs(float(hit[0].rsplit(" ", 1)[1])) < 0.5
 
 
 def test_leveling_job_homes_probes_reads_and_saves(fake_arduino_cli, scripted_links):
@@ -1044,11 +1086,11 @@ def test_leveling_job_homes_probes_reads_and_saves(fake_arduino_cli, scripted_li
     # it, queries and controls are refused, the emergency stop is not.
     st = devices.printer_status(port, links=scripted_links)
     assert st.job["kind"] == "leveling" and st.job["stage"] == "probing"
-    with pytest.raises(ToolchainError, match="bed reading holds the port"):
+    with pytest.raises(PortHeld, match="bed reading holds the port"):
         devices.printer_query(port, "M105", links=scripted_links)
-    with pytest.raises(ToolchainError, match="bed reading holds the port"):
+    with pytest.raises(PortHeld, match="bed reading holds the port"):
         devices.printer_control(port, "G28", links=scripted_links)
-    with pytest.raises(ToolchainError, match="already probing"):
+    with pytest.raises(PortHeld, match="already probing"):
         devices.start_leveling(port, probe=False, links=scripted_links)
     gate.set()
     job.thread.join(5)
@@ -1103,6 +1145,10 @@ def test_leveling_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
     assert c.get("/firmware/printers/leveling", params={"port": port}).json() == []
     assert c.get("/firmware/printers/leveling/nope").status_code == 404
     assert c.get("/firmware/printers/level", params={"port": "bad port"}).status_code == 422
+    # The listing filters take one port or "" for every port, and nothing else.
+    assert c.get("/firmware/printers/leveling", params={"port": ""}).json() == []
+    assert c.get("/firmware/printers/leveling", params={"port": "bad"}).status_code == 422
+    assert c.get("/firmware/printers/print/records", params={"port": "bad"}).status_code == 422
 
     r = c.post("/firmware/printers/level", json={"port": port, "probe": True})
     assert r.status_code == 409 and "arm control" in r.json()["detail"]
@@ -1192,7 +1238,7 @@ def test_print_job_streams_pauses_resumes_and_polls_between_lines(fake_arduino_c
     with pytest.raises(gcode.ControlNotArmed):
         devices.start_print(port, kept.id, links=scripted_links)
     scripted_links.control.arm(port)
-    with pytest.raises(ToolchainError, match="no such print file"):
+    with pytest.raises(ValueError, match="no such print file"):
         devices.start_print(port, "nope", links=scripted_links)
     gate.clear()
     job = devices.start_print(port, kept.id, links=scripted_links)
@@ -1208,15 +1254,15 @@ def test_print_job_streams_pauses_resumes_and_polls_between_lines(fake_arduino_c
     assert st.state == "printing" and 0 < st.job["progress"] < 1
     # A second print, a bed reading, a release, a reset: all refused; a query and a
     # heater change wait their turn; motion is the job's.
-    with pytest.raises(ToolchainError, match="already holds the port"):
+    with pytest.raises(PortHeld, match="already holds the port"):
         devices.start_print(port, kept.id, links=scripted_links)
-    with pytest.raises(ToolchainError, match="a print holds the port"):
+    with pytest.raises(PortHeld, match="a print holds the port"):
         devices.start_leveling(port, probe=False, links=scripted_links)
-    with pytest.raises(ToolchainError, match="cancel it first"):
+    with pytest.raises(PortHeld, match="cancel it first"):
         scripted_links.close(port)
-    with pytest.raises(ToolchainError, match="not resetting"):
+    with pytest.raises(PortHeld, match="not resetting"):
         devices.printer_reset(port, links=scripted_links)
-    with pytest.raises(ToolchainError, match="a print holds the port"):
+    with pytest.raises(PortHeld, match="a print holds the port"):
         devices.printer_control(port, "G28", links=scripted_links)
     job.pause()
     assert job.stage == "paused"
@@ -1337,14 +1383,14 @@ def test_print_refuses_a_file_with_problems_and_a_card_that_is_printing(
     empty = devices.save_print_file("empty.gcode", b"; nothing\n")
     good = devices.save_print_file("ok.gcode", b"G28\n")
     scripted_links.control.arm(port)
-    with pytest.raises(ToolchainError, match="may not be sent"):
+    with pytest.raises(ValueError, match="may not be sent"):
         devices.start_print(port, bad.id, links=scripted_links)
-    with pytest.raises(ToolchainError, match="nothing to send"):
+    with pytest.raises(ValueError, match="nothing to send"):
         devices.start_print(port, empty.id, links=scripted_links)
     devices.printer_status(port, links=scripted_links)
     ScriptedTransport.instances[0].replies = PRINTING
     devices.printer_status(port, links=scripted_links)
-    with pytest.raises(ToolchainError, match="the card is printing"):
+    with pytest.raises(PortHeld, match="the card is printing"):
         devices.start_print(port, good.id, links=scripted_links)
 
 
@@ -1370,7 +1416,7 @@ def test_print_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
     c.post("/firmware/printers/control", json={"port": port, "armed": True})
     assert (
         c.post("/firmware/printers/print", json={"port": port, "file_id": "nope"}).status_code
-        == 409
+        == 422
     )
     r = c.post("/firmware/printers/print", json={"port": port, "file_id": file_id})
     assert r.status_code == 202 and r.json()["kind"] == "print" and r.json()["total"] == 12
@@ -1416,6 +1462,9 @@ def test_release_reconnect_reset_and_upload_are_refused_mid_print(
     assert c.post("/firmware/printers/release", json={"port": port}).status_code == 409
     assert c.post("/firmware/printers/reconnect", json={"port": port}).status_code == 409
     assert c.post("/firmware/printers/reset", json={"port": port}).status_code == 409
+    # Moving the machine under a print is a conflict (409), not a failed engine (503).
+    r = c.post("/firmware/printers/command", json={"port": port, "command": "G28"})
+    assert r.status_code == 409 and "print holds the port" in r.json()["detail"]
     r = c.post(
         "/firmware/sketches/footpedal/upload", json={"fqbn": "arduino:avr:uno", "port": port}
     )
@@ -1428,13 +1477,13 @@ def test_release_reconnect_reset_and_upload_are_refused_mid_print(
     assert (
         c.post("/firmware/printers/print/resume", json={"port": port}).json()["stage"] == "printing"
     )
+    # Cancel while G1 X2 is still unanswered: once the gate opens, the last two
+    # lines can finish the print before a cancel arrives, and that is a 409.
+    r = c.post("/firmware/printers/print/cancel", json={"port": port})
+    assert r.json()["stage"] == "cancelling"
     gate.set()
-    assert c.post("/firmware/printers/print/cancel", json={"port": port}).json()["stage"] in (
-        "cancelling",
-        "cancelled",
-        "done",
-    )
     devices.print_job(port).thread.join(5)
+    assert devices.print_job(port).stage == "cancelled"
     assert c.get("/firmware/printers/print", params={"port": port}).json()["running"] is False
     assert c.post("/firmware/printers/release", json={"port": port}).status_code == 200
 
@@ -1521,3 +1570,98 @@ def test_where_answers_before_anyone_has_opened_the_viewer(fake_arduino_cli, gar
     where = c.get("/firmware/printers/where", params={"port": "/dev/ttyFAKE1"}).json()
     assert where["site"] == "garage" and where["board"]["path"] == BOARD
     assert "garage" in api_module._site_store.loaded()
+
+
+# --- a job's link is the job's: nothing drops, reopens or resets it under a print ---
+
+
+class _LossyBoard:
+    """Answers every line; ``lose_next_m105`` swallows one poll reply, as a
+    garbled USB line would."""
+
+    def __init__(self, port, baud):
+        self.pending, self.sent, self.closed, self.lose_next_m105 = b"", [], False, False
+
+    def write(self, data):
+        if self.closed:
+            raise ToolchainError("port closed")
+        cmd = data.decode().strip()
+        self.sent.append(cmd)
+        if cmd == "M105" and self.lose_next_m105:
+            self.lose_next_m105 = False
+            return
+        self.pending += b"ok T:200.0 /200.0 B:60.0 /60.0\n" if cmd == "M105" else b"ok\n"
+
+    def read(self, timeout):
+        if not self.pending:
+            time.sleep(min(timeout, 0.002))
+            return b""
+        out, self.pending = self.pending, b""
+        return out
+
+    def pulse_reset(self):
+        self.sent.append("<DTR>")
+
+    def close(self):
+        self.closed = True
+
+
+def _printing(tmp_path, monkeypatch, lines=400):
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    boards = []
+    links = gcode.PrinterLinks(factory=lambda p, b: boards.append(_LossyBoard(p, b)) or boards[-1])
+    monkeypatch.setattr(gcode, "line_timeout", lambda cmd: 1.0)
+    links.open("/dev/ttyJOB", 115200)
+    kept = devices.save_print_file("p.gcode", ("M104 S200\n" + "G1 X1\n" * lines).encode())
+    links.control.arm("/dev/ttyJOB")
+    job = devices.start_print("/dev/ttyJOB", kept.id, links=links)
+    return links, boards[0], job
+
+
+def test_a_lost_poll_reply_mid_print_keeps_the_link_and_the_print(tmp_path, monkeypatch):
+    """One lost reply used to force-close the link under the print thread: the
+    print died, the safe-off was never sent, and the heaters stayed on."""
+    links, board, job = _printing(tmp_path, monkeypatch)
+    board.lose_next_m105 = True
+    for _ in range(40):  # until a poll reaches the board between two streamed lines
+        status = devices.printer_status("/dev/ttyJOB", links=links)
+        if not board.lose_next_m105:
+            break
+    assert not board.lose_next_m105, "no poll reached the board"
+    assert links.get("/dev/ttyJOB") is not None and status.state == "printing"
+    job.thread.join(20)
+    assert job.stage == "done" and job.sent == job.total
+
+
+def test_nothing_resets_reopens_or_closes_a_link_a_print_holds(tmp_path, monkeypatch):
+    links, board, job = _printing(tmp_path, monkeypatch, lines=3000)
+    link = links.get("/dev/ttyJOB")
+    for attempt in (
+        link.reset,
+        lambda: links.open("/dev/ttyJOB", 250000),
+        lambda: links.close("/dev/ttyJOB"),
+    ):
+        with pytest.raises(PortHeld, match="holds the port"):
+            attempt()
+    assert "<DTR>" not in board.sent and links.get("/dev/ttyJOB") is link
+    job.cancel()
+    job.thread.join(20)
+
+
+def test_every_safe_off_line_is_tried_when_one_is_not_answered(tmp_path, monkeypatch):
+    """The safe-off used to stop at its first unanswered line, leaving the rest --
+    the heaters among them -- unsent."""
+    links, board, job = _printing(tmp_path, monkeypatch, lines=3000)
+    first = devices.PRINT_SAFE_OFF[0]
+    real_write = board.write
+
+    def mute_first_safe_off(data):
+        if data.decode().strip() == first:
+            board.sent.append(first)  # sent, never answered
+            return
+        real_write(data)
+
+    board.write = mute_first_safe_off
+    job.cancel()
+    job.thread.join(30)
+    assert [c for c in board.sent if c in devices.PRINT_SAFE_OFF] == list(devices.PRINT_SAFE_OFF)

@@ -39,8 +39,7 @@ def toolchain_status(
         except ToolchainError as exc:
             status.problems.append(f"arduino-cli does not run: {exc}")
         if status.arduino_cli_ok:
-            cfg = cli.config_path()
-            status.config_file = str(cfg) if cfg else None
+            status.config_file = str(cli.config_file)
             try:
                 status.cores = cli.core_list()
             except ToolchainError as exc:
@@ -95,8 +94,10 @@ def install_libraries(names: List[str], log: Log) -> None:
     _check(stream(cli.lib_install_argv(names), log, env_for_arduino()), "lib install")
 
 
-# Out-of-tree build output, so ``parts/`` never fills with object files.
-BUILD_ROOT = ROOT / "build" / "firmware"
+# Out-of-tree build output, so ``parts/`` never fills with object files. Not
+# build/: that is setuptools' staging directory, and clearing it must not
+# throw away compiled firmware.
+BUILD_ROOT = ROOT / ".cache" / "firmware"
 
 
 def build_dir(sketch: SketchInfo) -> Path:

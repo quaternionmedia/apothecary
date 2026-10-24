@@ -1,527 +1,64 @@
-"""Testing-related CLI commands: test group and subcommands.
+"""`apothecary test`: run the suite with pytest and exit with pytest's own code.
 
-Every command here signals failure with ``raise SystemExit(code)``, never
-``return code``. Click discards a command's return value, so a ``return 1``
-leaves the process exiting 0 and a failing suite reports success -- which is
-exactly how the CI test gate stayed green while tests were failing. If you add
-a command, exit the same way.
+Click ignores a command's return value, so each command exits through SystemExit.
 """
 
-import os
 import subprocess
 import sys
-import tempfile
-import time
-from datetime import datetime
-from pathlib import Path
 
 import click
 
 from ..projects.parts.skeleton import ROOT
-from .utils import _safe_echo
+from .retired import retired
 
-# The one walkthrough this repository carries. Named on every command line that
-# runs tests, because a page nobody names does not run, and a walkthrough that
-# does not run is prose about behaviour with nothing holding it to the
-# behaviour.
+# Named on every argv: pytest ignores testpaths once it is given a path.
 WALKTHROUGH = "walkthrough"
 
-# The marker on the run that writes the walkthrough. Same word as the directory,
-# deliberately: there is one demonstration, and its run and its page share a name.
-# It is selected by the ordinary test command even though it drives a browser,
-# because a page produced only when somebody remembers a flag is stale by default.
-DEMONSTRATION = "walkthrough"
+
+def run_command(e2e: bool = False, slow: bool = False) -> list[str]:
+    """The argv `apothecary test run` executes."""
+    # The walkthrough's demonstration drives a browser, so the server is always asked for.
+    argv = [sys.executable, "-m", "pytest", WALKTHROUGH, "tests", "--start-server"]
+    if not e2e:
+        argv += ["-m", "not e2e or walkthrough"]
+    if slow:
+        argv.append("--slow")
+    return argv
+
+
+def _pytest(argv: list[str]) -> int:
+    return subprocess.run(argv, cwd=ROOT).returncode
 
 
 @click.group()
 def test():
-    """Commands for testing and test setup."""
+    """Run the test suite."""
 
 
-@test.command("setup-e2e")
-def test_setup_e2e():
-    """Set up Playwright browsers for E2E testing."""
-    click.secho("Playwright E2E Test Setup", bold=True)
-    click.echo("")
-
-    # Check if playwright is installed
-    try:
-        import importlib.util
-
-        if importlib.util.find_spec("playwright") is not None:
-            try:
-                from importlib.metadata import version
-
-                pw_version = version("playwright")
-                _safe_echo(f"✓ Playwright installed (version {pw_version})")
-            except Exception:
-                _safe_echo("✓ Playwright installed")
-    except ImportError:
-        _safe_echo("✗ Playwright not installed", fg="red")
-        click.echo("  Run: uv sync")
-        raise SystemExit(1)
-
-    click.echo("")
-    click.echo("Installing Playwright browsers (chromium)...")
-
-    try:
-        result = subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium"],
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-
-        if result.returncode == 0:
-            _safe_echo("✓ Chromium browser installed successfully", fg="green", bold=True)
-            click.echo("")
-            click.echo("Setup complete! Run E2E tests with:")
-            click.echo("  apothecary test run-e2e")
-            click.echo("  or: pytest tests/e2e/ -v")
-        else:
-            _safe_echo("✗ Browser installation failed", fg="red")
-            if result.stderr:
-                click.echo(f"  Error: {result.stderr[:200]}")
-            raise SystemExit(1)
-    except subprocess.TimeoutExpired:
-        _safe_echo("✗ Installation timed out after 5 minutes", fg="red")
-        raise SystemExit(1)
-    except Exception as e:
-        _safe_echo(f"✗ Error: {e}", fg="red")
-        raise SystemExit(1)
-
-
-@test.command("validate-e2e")
-def test_validate_e2e():
-    """Validate E2E test setup."""
-    click.secho("Validating E2E Test Setup", bold=True)
-    click.echo("=" * 50)
-    click.echo("")
-
-    all_checks_passed = True
-
-    # Check files
-    click.echo("Checking required files...")
-    required_files = [
-        "tests/e2e/conftest.py",
-        "tests/e2e/test_viewer.py",
-        "tests/e2e/test_api.py",
-    ]
-
-    missing_files = []
-    for file in required_files:
-        file_path = ROOT / file
-        if not file_path.exists():
-            missing_files.append(file)
-
-    if missing_files:
-        _safe_echo("✗ Missing files:", fg="red")
-        for f in missing_files:
-            click.echo(f"   - {f}")
-        all_checks_passed = False
-    else:
-        _safe_echo("✓ All required files present")
-    click.echo("")
-
-    # Check Playwright dependency
-    click.echo("Checking Playwright installation...")
-    try:
-        import importlib.util
-
-        if importlib.util.find_spec("playwright") is not None:
-            try:
-                from importlib.metadata import version
-
-                pw_version = version("playwright")
-                _safe_echo(f"✓ Playwright installed (version {pw_version})")
-            except Exception:
-                _safe_echo("✓ Playwright installed")
-    except ImportError:
-        _safe_echo("✗ Playwright not installed", fg="red")
-        click.echo("   Run: uv sync")
-        all_checks_passed = False
-    click.echo("")
-
-    # Check browsers
-    click.echo("Checking Playwright browsers...")
-    try:
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as p:
-            try:
-                browser = p.chromium.launch(headless=True)
-                browser.close()
-                _safe_echo("✓ Chromium browser installed")
-            except Exception as e:
-                _safe_echo(f"✗ Chromium not installed: {e}", fg="red")
-                click.echo("   Run: apothecary test:setup-e2e")
-                all_checks_passed = False
-    except Exception as e:
-        _safe_echo(f"✗ Error checking browsers: {e}", fg="red")
-        all_checks_passed = False
-    click.echo("")
-
-    # Summary
-    click.echo("=" * 50)
-    if all_checks_passed:
-        _safe_echo("✓ All checks passed!", fg="green", bold=True)
-        click.echo("")
-        click.echo("Run E2E tests with:")
-        click.echo("  apothecary test run-e2e")
-        raise SystemExit(0)
-    else:
-        _safe_echo("✗ Some checks failed", fg="red", bold=True)
-        click.echo("")
-        click.echo("Run setup with:")
-        click.echo("  apothecary test setup-e2e")
-        raise SystemExit(1)
-
-
-@test.command("run-e2e")
-@click.option("--headed", is_flag=True, help="Run tests with visible browser")
-@click.option("--slowmo", type=int, default=0, help="Slow down operations by N milliseconds")
-@click.option("--browser", default="chromium", help="Browser to use (chromium, firefox, webkit)")
-@click.option("--base-url", default="http://127.0.0.1:8765", help="Base URL for test server")
-def test_run_e2e(headed: bool, slowmo: int, browser: str, base_url: str):
-    """Run E2E tests with Playwright.
-
-    Note: Server must be running before tests. Start with:
-        apothecary serve --port 8765
-    """
-    click.secho("Running E2E Tests", bold=True)
-    click.echo(f"Server URL: {base_url}")
-    click.echo("")
-
-    # Build pytest command
-    cmd = [sys.executable, "-m", "pytest", "tests/e2e/", "-v", f"--base-url={base_url}"]
-
-    if headed:
-        cmd.append("--headed")
-
-    if slowmo > 0:
-        cmd.append(f"--slowmo={slowmo}")
-
-    if browser != "chromium":
-        cmd.append(f"--browser={browser}")
-
-    click.echo(f"Running: {' '.join(cmd)}")
-    click.echo("")
-
-    try:
-        result = subprocess.run(cmd, cwd=ROOT)
-        raise SystemExit(result.returncode)
-    except Exception as e:
-        _safe_echo(f"✗ Error running tests: {e}", fg="red")
-        raise SystemExit(1)
-
-
-def run_command(e2e: bool = False, coverage: bool = False) -> list[str]:
-    """The argv `apothecary test run` executes. A function so a guard can read it.
-
-    Its first version was a block of code inside the command, and the guard on it
-    scanned that code for a word. The word was in the command's own docstring, so
-    the guard passed with the command gutted -- caught by breaking it on purpose.
-    Returning the argv lets the guard assert on what will actually be run.
-    """
-    # --start-server always, because the demonstration drives a real browser
-    # against a real server and the command that runs it has to supply one.
-    # Leaving that to the reader is what turned the viewer half of the
-    # walkthrough into a command somebody had to remember.
-    cmd = [
-        sys.executable,
-        "-m",
-        "pytest",
-        "-v",
-        "--doctest-glob=*.md",
-        "--start-server",
-    ]
-
-    # The walkthrough directory is named rather than left to `testpaths`, because
-    # a page that is not named does not run.
-    cmd.extend(["tests/", WALKTHROUGH])
-
-    if not e2e:
-        # Everything that is not a browser test, plus the one browser test that
-        # writes the walkthrough. Excluding it here would leave the page to
-        # whoever remembered to ask for it.
-        cmd.extend(["-m", f"not e2e or {DEMONSTRATION}"])
-
-    if coverage:
-        cmd.extend(["--cov=apothecary", "--cov-report=html"])
-
-    return cmd
-
-
-@test.command("run")
-@click.option("--e2e", is_flag=True, help="Include E2E tests")
-@click.option("--coverage", is_flag=True, help="Run with coverage report")
-def test_run(e2e: bool, coverage: bool):
-    """Run unit tests, the demonstration, and optionally the rest of the browser tests."""
-    click.secho("Running Tests", bold=True)
-    click.echo("")
-
-    cmd = run_command(e2e=e2e, coverage=coverage)
-
-    if not e2e:
-        click.echo("Running unit tests and the demonstration...")
-    else:
-        click.echo("Running everything (unit, demonstration, browser)...")
-
-    click.echo("")
-
-    try:
-        result = subprocess.run(cmd, cwd=ROOT)
-
-        if coverage and result.returncode == 0:
-            click.echo("")
-            click.echo("Coverage report generated: htmlcov/index.html")
-
-        raise SystemExit(result.returncode)
-    except Exception as e:
-        _safe_echo(f"✗ Error running tests: {e}", fg="red")
-        raise SystemExit(1)
+@test.command("run", context_settings={"ignore_unknown_options": True})
+@click.option("--e2e", is_flag=True, help="Run every browser test, not only the walkthrough's.")
+@click.option("--slow", is_flag=True, help="Also run tests marked slow.")
+@click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
+def test_run(e2e: bool, slow: bool, pytest_args: tuple[str, ...]):
+    """Unit tests and the walkthrough; any further arguments go to pytest."""
+    raise SystemExit(_pytest(run_command(e2e=e2e, slow=slow) + list(pytest_args)))
 
 
 @test.command("all")
-@click.option("--port", default=8765, type=int, help="Port for test server")
-@click.option("--coverage", is_flag=True, help="Run with coverage report")
-@click.option("--headed", is_flag=True, help="Run E2E tests with visible browser")
-@click.option("--fail-fast", "-x", is_flag=True, help="Stop on first failure")
-def test_all(port: int, coverage: bool, headed: bool, fail_fast: bool):
-    """Run full test suite (unit + E2E) with aggregate summary.
+@click.option("--slow", is_flag=True, help="Also run unit tests marked slow.")
+def test_all(slow: bool):
+    """Unit tests and the walkthrough, then every browser test."""
+    unit = [sys.executable, "-m", "pytest", WALKTHROUGH, "tests", "--ignore=tests/e2e"]
+    if slow:
+        unit.append("--slow")
+    unit_code = _pytest(unit)
+    browser_code = _pytest([sys.executable, "-m", "pytest", "tests/e2e", "--start-server"])
+    raise SystemExit(unit_code or browser_code)
 
-    Automatically starts a test server, runs all tests, and produces
-    a combined report for velocity review.
-    """
-    import re
-    import urllib.request
 
-    click.secho("=" * 60, fg="cyan", bold=True)
-    click.secho("  APOTHECARY FULL TEST SUITE", fg="cyan", bold=True)
-    click.secho("=" * 60, fg="cyan", bold=True)
-    click.echo(f"  Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    click.echo(f"  Test server port: {port}")
-    click.echo("")
-
-    results = {
-        "unit": {"passed": 0, "failed": 0, "skipped": 0, "time": 0},
-        "e2e": {"passed": 0, "failed": 0, "skipped": 0, "time": 0},
-    }
-    server_proc = None
-    overall_start = time.time()
-
-    try:
-        # ─────────────────────────────────────────────────────────────
-        # Phase 1: Unit Tests
-        # ─────────────────────────────────────────────────────────────
-        click.secho("─" * 60, fg="blue")
-        click.secho("  PHASE 1: Unit Tests", fg="blue", bold=True)
-        click.secho("─" * 60, fg="blue")
-        click.echo("")
-
-        unit_start = time.time()
-        unit_cmd = [
-            sys.executable,
-            "-m",
-            "pytest",
-            # `walkthrough` is named here, not left to testpaths: pytest ignores
-            # testpaths the moment it receives a path argument, and "tests/" is
-            # one. Without this the executable pages are collected by nobody
-            # while this command still reports green.
-            "walkthrough",
-            "tests/",
-            "--ignore=tests/e2e",
-            "-v",
-            "--tb=short",
-            "-q",  # Quieter output
-        ]
-        if fail_fast:
-            unit_cmd.append("-x")
-        if coverage:
-            unit_cmd.extend(["--cov=apothecary", "--cov-report=term-missing:skip-covered"])
-
-        unit_result = subprocess.run(unit_cmd, cwd=ROOT, capture_output=True, text=True)
-        results["unit"]["time"] = time.time() - unit_start
-
-        # Parse pytest output for counts. The lines that name a failing test
-        # ("FAILED tests/...", "ERROR tests/...") are echoed too: a CI log that
-        # says "3 failed" and nothing else cannot be acted on.
-        for line in unit_result.stdout.split("\n"):
-            if any(mark in line for mark in ("passed", "failed", "error", "FAILED ", "ERROR ")):
-                click.echo(line)
-            # Parse summary line like "55 passed in 0.97s"
-            if " passed" in line:
-                match = re.search(r"(\d+) passed", line)
-                if match:
-                    results["unit"]["passed"] = int(match.group(1))
-                match = re.search(r"(\d+) failed", line)
-                if match:
-                    results["unit"]["failed"] = int(match.group(1))
-                match = re.search(r"(\d+) skipped", line)
-                if match:
-                    results["unit"]["skipped"] = int(match.group(1))
-
-        unit_ok = unit_result.returncode == 0
-
-        if unit_ok:
-            _safe_echo(f"\n✓ Unit tests PASSED ({results['unit']['time']:.1f}s)")
-        else:
-            _safe_echo(f"\n✗ Unit tests FAILED ({results['unit']['time']:.1f}s)", fg="red")
-            # The tail of the run: the tracebacks, so the log says why.
-            click.echo("\n".join(unit_result.stdout.split("\n")[-80:]))
-            if fail_fast:
-                click.echo("\nStopping due to --fail-fast")
-                raise SystemExit(1)
-
-        click.echo("")
-
-        # ─────────────────────────────────────────────────────────────
-        # Phase 2: Start Test Server
-        # ─────────────────────────────────────────────────────────────
-        click.secho("─" * 60, fg="blue")
-        click.secho("  PHASE 2: Starting Test Server", fg="blue", bold=True)
-        click.secho("─" * 60, fg="blue")
-        click.echo("")
-
-        # Set environment for viewer. The suite's server runs on state and
-        # pictures of its own, never the person's (`test run` and `docs
-        # generate` do the same): a test never reads a real serial number
-        # or writes a frame where the person keeps theirs.
-        env = os.environ.copy()
-        env["APOTHECARY_VIEWER_PATH"] = ""  # Disable viewer for faster startup
-        fenced = Path(tempfile.mkdtemp(prefix="apothecary-test-all-"))
-        env["APOTHECARY_STATE_DIR"] = str(fenced / "state")
-        env["APOTHECARY_PICTURE_ROOT"] = str(fenced / "pictures")
-        (fenced / "pictures").mkdir()
-
-        server_cmd = [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "apothecary.api:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-        ]
-
-        # DEVNULL, not PIPE: nothing here ever reads server_proc.stdout/stderr,
-        # and an unread PIPE deadlocks once its OS buffer fills -- confirmed by
-        # direct reproduction, the server stops responding after ~68 requests'
-        # worth of uvicorn access-log lines once background STL generation
-        # lets the E2E phase actually run long enough to hit it.
-        server_proc = subprocess.Popen(
-            server_cmd,
-            cwd=ROOT,
-            env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
-        # Wait for server to be ready
-        base_url = f"http://127.0.0.1:{port}"
-        for _attempt in range(30):
-            try:
-                urllib.request.urlopen(f"{base_url}/health", timeout=1)
-                _safe_echo(f"✓ Server ready at {base_url}")
-                break
-            except Exception:
-                time.sleep(0.5)
-        else:
-            _safe_echo("✗ Server failed to start", fg="red")
-            raise SystemExit(1)
-
-        click.echo("")
-
-        # ─────────────────────────────────────────────────────────────
-        # Phase 3: E2E Tests
-        # ─────────────────────────────────────────────────────────────
-        click.secho("─" * 60, fg="blue")
-        click.secho("  PHASE 3: E2E Tests", fg="blue", bold=True)
-        click.secho("─" * 60, fg="blue")
-        click.echo("")
-
-        e2e_start = time.time()
-        e2e_cmd = [
-            sys.executable,
-            "-m",
-            "pytest",
-            "tests/e2e/",
-            "-v",
-            "--tb=short",
-            f"--base-url={base_url}",
-        ]
-        if fail_fast:
-            e2e_cmd.append("-x")
-        if headed:
-            e2e_cmd.append("--headed")
-
-        # The browser tests are told the server's picture folder, as `docs
-        # generate` tells its own, so the photo and camera tests run rather
-        # than skip -- against that folder, never the person's.
-        e2e_result = subprocess.run(e2e_cmd, cwd=ROOT, capture_output=True, text=True, env=env)
-        results["e2e"]["time"] = time.time() - e2e_start
-
-        # Parse E2E results
-        for line in e2e_result.stdout.split("\n"):
-            if "passed" in line or "failed" in line or "PASSED" in line or "FAILED" in line:
-                click.echo(line)
-            elif line.startswith(("E ", "tests/e2e/")):
-                click.echo(line)  # the assertion and where it is, not only that it failed
-            if " passed" in line:
-                match = re.search(r"(\d+) passed", line)
-                if match:
-                    results["e2e"]["passed"] = int(match.group(1))
-                match = re.search(r"(\d+) failed", line)
-                if match:
-                    results["e2e"]["failed"] = int(match.group(1))
-
-        e2e_ok = e2e_result.returncode == 0
-
-        if e2e_ok:
-            _safe_echo(f"\n✓ E2E tests PASSED ({results['e2e']['time']:.1f}s)")
-        else:
-            _safe_echo(f"\n✗ E2E tests FAILED ({results['e2e']['time']:.1f}s)", fg="red")
-            click.echo(e2e_result.stderr[-500:] if e2e_result.stderr else "")
-
-    finally:
-        # Cleanup server
-        if server_proc:
-            server_proc.terminate()
-            try:
-                server_proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                server_proc.kill()
-
-    # ─────────────────────────────────────────────────────────────
-    # Aggregate Summary
-    # ─────────────────────────────────────────────────────────────
-    total_time = time.time() - overall_start
-    total_passed = results["unit"]["passed"] + results["e2e"]["passed"]
-    total_failed = results["unit"]["failed"] + results["e2e"]["failed"]
-
-    click.echo("")
-    click.secho("=" * 60, fg="cyan", bold=True)
-    click.secho("  AGGREGATE TEST SUMMARY", fg="cyan", bold=True)
-    click.secho("=" * 60, fg="cyan", bold=True)
-    click.echo("")
-    click.echo(f"  {'Test Suite':<15} {'Passed':>10} {'Failed':>10} {'Time':>10}")
-    click.echo(f"  {'-' * 15} {'-' * 10} {'-' * 10} {'-' * 10}")
-    click.echo(
-        f"  {'Unit':<15} {results['unit']['passed']:>10} {results['unit']['failed']:>10} {results['unit']['time']:>9.1f}s"
-    )
-    click.echo(
-        f"  {'E2E':<15} {results['e2e']['passed']:>10} {results['e2e']['failed']:>10} {results['e2e']['time']:>9.1f}s"
-    )
-    click.echo(f"  {'-' * 15} {'-' * 10} {'-' * 10} {'-' * 10}")
-    click.echo(f"  {'TOTAL':<15} {total_passed:>10} {total_failed:>10} {total_time:>9.1f}s")
-    click.echo("")
-
-    if total_failed == 0:
-        _safe_echo(f"  ✓ ALL {total_passed} TESTS PASSED", fg="green", bold=True)
-        click.echo("")
-        raise SystemExit(0)
-    else:
-        _safe_echo(f"  ✗ {total_failed} TEST(S) FAILED", fg="red", bold=True)
-        click.echo("")
-        raise SystemExit(1)
+for _name, _instead in (
+    ("setup-e2e", "use `uv run playwright install chromium`"),
+    ("validate-e2e", "use `apothecary test run --e2e`"),
+    ("run-e2e", "use `apothecary test run --e2e`"),
+):
+    test.add_command(retired(f"test {_name}", _instead), name=_name)

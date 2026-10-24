@@ -1,14 +1,9 @@
 """Worked example: the registered ``parts/`` library as a fractal tree.
 
-PROTOTYPE — migrates the existing ``parts/`` registry (``elephant_walk``,
-``star_cookiecutter``, ...) into the same ``Assembly`` shape the garage
-example uses, as leaf (``role="part"``) nodes under one Site. This is what
-lets the fractal zoom viewer reach "the old part-viewer experience" by
-navigating down to a leaf, rather than keeping parts browsing as a separate
-page: a part leaf is not spatially laid out for any physical constraint (see
-``validate_parts_library`` below) -- it's a catalog, not a build -- but it is
-still just an ``Assembly``, addressable and zoomable the same way every other
-node in this codebase is.
+PROTOTYPE — every registered part as a leaf (``role="part"``) under one Site,
+in the same ``Assembly`` shape the garage example uses, so the fractal viewer
+reaches a part by navigating down to it. The layout is a catalog grid, not a
+build: nothing constrains where a leaf sits (see ``validate_parts_library``).
 """
 
 from __future__ import annotations
@@ -34,12 +29,11 @@ CELL_PITCH = 300.0
 FALLBACK_BOUNDS = BoundingBox3D.for_cube(40.0)
 
 
-def _registered_part_names() -> list[str]:
-    """Every part name with a loadable wrapper module (same filter as api.py's
-    ``_available_part_names``, duplicated rather than imported from api.py
-    to avoid an example module depending on the API layer).
-    """
-    return sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper})
+def _registered_wrappers() -> dict[str, str]:
+    """Every registered part that has a wrapper module, by name (the same filter
+    as api.py's ``_available_part_names``; not imported, so an example does not
+    depend on the API layer)."""
+    return {p.name: p.wrapper for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper}
 
 
 def _load_part_bounds(wrapper_module: str) -> BoundingBox3D:
@@ -55,21 +49,17 @@ def _grid_position(index: int) -> Vector3D:
 
 def create_parts_library_site() -> Assembly:
     """A Site made entirely of part leaves -- one per registered ``parts/`` entry."""
-    entries_by_name = {p.name: p for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper}
-
-    leaves = []
-    for index, name in enumerate(_registered_part_names()):
-        wrapper_module = entries_by_name[name].wrapper
-        leaves.append(
-            Assembly(
-                name=name,
-                role="part",
-                part_ref=name,
-                position=_grid_position(index),
-                footprint=_load_part_bounds(wrapper_module),
-            )
+    wrappers = _registered_wrappers()
+    leaves = [
+        Assembly(
+            name=name,
+            role="part",
+            part_ref=name,
+            position=_grid_position(index),
+            footprint=_load_part_bounds(wrappers[name]),
         )
-
+        for index, name in enumerate(sorted(wrappers))
+    ]
     return Site(name="Parts Library", structures=leaves)
 
 
