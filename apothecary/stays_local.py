@@ -1,7 +1,7 @@
 """Personal data stays on this machine -- by the shape of the program, not by
 a setting.
 
-Four things, none of them a flag, an environment variable, a config file or
+Five things, none of them a flag, an environment variable, a config file or
 a button, so neither a person nor an agent can switch them off without
 editing this code and having that edit reviewed:
 
