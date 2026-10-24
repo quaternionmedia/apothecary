@@ -29,7 +29,7 @@ uv run apothecary test all --workers 2 -k part  # the browser part on two worker
 uv run apothecary test all --record-durations   # the same, the browser tests' times written into tests/e2e/durations.json
 uv run apothecary test all --steps              # the same, and the step-through tests, which every other run skips
 uv run apothecary test run --slow               # the ordinary command, with full renders and accuracy benches
-uv run pytest                                   # the quick inner loop: unit tests and the walkthrough; browser tests skip
+uv run pytest                                   # the quick inner loop: unit tests, the walkthrough and the window manager's page; other browser tests skip
 uv run pytest --slow                            # also full renders and accuracy benches
 uv run pytest tests/e2e --start-server          # the browser tests, on a server of their own
 uv run pytest tests/e2e --start-server -n auto --dist loadfile   # the same, a worker per core, files kept whole
@@ -39,9 +39,10 @@ uv run --group preflight apothecary preflight   # the CI workflows, run here, be
 ```
 
 `apothecary test run` is the one to run before a commit; it runs the window manager's
-browser tests too, which start no server. A browser test needs a server of
-its own (`--start-server`) or one named for it (`--base-url`); with neither it skips, and it
-never uses a server that happens to be listening. Each test has a limit of its own
+browser tests too. Those need no server, only Chromium, so `uv run pytest` runs them as well
+wherever Playwright has installed it. Every other browser test needs a server of its own
+(`--start-server`) or one named for it (`--base-url`); with neither it skips, and it never
+uses a server that happens to be listening. Each test has a limit of its own
 (pyproject's `timeout`, pytest-timeout), short enough that a CI shard with one test hung to
 it still ends inside its job's limit, so a hung wait fails that test alone and names it; one
 that needs longer says so with `@pytest.mark.timeout(...)`.

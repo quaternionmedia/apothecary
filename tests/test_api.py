@@ -137,6 +137,27 @@ def test_every_listed_part_serves_its_scad():
         assert r.text.strip(), name
 
 
+def test_the_root_leads_to_the_viewer():
+    r = TestClient(app).get("/", follow_redirects=False)
+    assert r.status_code in (302, 307) and r.headers["location"].startswith("/viewer")
+
+
+def test_a_listed_part_and_its_detail_carry_what_a_client_reads():
+    """Every part the listing gives names what a client lists it by; a part's detail
+    says what it takes, how to include it and where its SCAD is."""
+    client = TestClient(app)
+    listed = client.get("/parts").json()
+    assert listed
+    for part in listed:
+        missing = {"name", "description", "category", "tags", "source_file", "has_params"} - set(
+            part
+        )
+        assert not missing, (part.get("name"), missing)
+    detail = client.get(f"/parts/{listed[0]['name']}").json()
+    assert detail["name"] == listed[0]["name"]
+    assert {"params", "include", "download_url"} <= set(detail)
+
+
 def test_viewer_home_redirects_to_the_named_default_site():
     """/viewer redirects to the fractal viewer for api.py's DEFAULT_VIEWER_SITE, a
     site named, so registering another site never moves the front door (parts are
