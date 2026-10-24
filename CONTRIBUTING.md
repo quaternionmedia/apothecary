@@ -26,6 +26,8 @@ trying it, and names the optional installs: the slicer and each firmware toolcha
 uv run apothecary test run                      # the ordinary command: unit tests and the walkthrough, whose demonstration drives Chromium
 uv run apothecary test all                      # the same, then every browser test
 uv run apothecary test all --workers 2 -k part  # the browser part on two workers; further arguments narrow both parts
+uv run apothecary test all --record-durations   # the same, the browser tests' times written into tests/e2e/durations.json
+uv run apothecary test run --slow               # the ordinary command, with full renders and accuracy benches
 uv run pytest                                   # the quick inner loop: unit tests and the walkthrough; browser tests skip
 uv run pytest --slow                            # also full renders and accuracy benches
 uv run pytest tests/e2e --start-server          # the browser tests, on a server of their own

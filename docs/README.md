@@ -120,7 +120,7 @@ committed, from the browser tests marked `docs`, `test_docs_fractal_viewer.py`
 and `test_docs_printer_monitor.py`: each `docs.step(...)` in them is an
 assertion and a paragraph. Those tests run only under `--generate-docs`,
 which the command passes; an ordinary browser run skips them.
-`apothecary serve --refresh-docs` does the same in the background. (Walkthrough
+`apothecary serve --refresh-docs` does the same in the background, and `apothecary docs clean` removes the folder. (Walkthrough
 pages 01 and 02 come from the two other `test_docs_*.py` files, which are
 marked `walkthrough` and write `walkthrough/`, not `docs/generated/`.)
 
