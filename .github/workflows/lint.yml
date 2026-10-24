@@ -1,0 +1,33 @@
+name: 🧹 Lint
+
+# Every pull request's push, beside the governance checks: `ruff check`, at the
+# version uv.lock pins (tests/test_ci_workflows.py holds the two equal), with nothing
+# else installed. The tests run here before a pull request is ready, and in
+# pytest.yml at a version tag.
+on:
+  pull_request:
+  push:
+    branches:
+    - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    name: 🧹 ruff check
+    runs-on: ubuntu-24.04
+    # No cap of this file's: it has no record yet to take one from.
+    steps:
+    - name: 📰 Checkout
+      uses: actions/checkout@v6
+
+    - name: 😎 Setup uv
+      uses: astral-sh/setup-uv@v7
+
+    - name: 🧹 Lint
+      run: uvx ruff@0.14.5 check apothecary tests
