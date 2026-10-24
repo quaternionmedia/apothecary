@@ -1,7 +1,10 @@
 """``/firmware`` routes: toolchain status, boards, sketches, and compile/upload/flash tasks.
 
-Every endpoint that runs an engine returns a task id immediately; the GUI
-polls ``GET /firmware/tasks/{id}?since=N`` for new log lines. The server
+Every endpoint that runs an engine returns a task id immediately; the
+viewer's Bench and a board's Machine poll ``GET /firmware/tasks/{id}?since=N``
+for new log lines. The pages this router served -- ``/firmware`` and
+``/firmware/monitor`` -- are the Bench and a board's Machine in front of the
+world now, and their addresses lead there (``apothecary/api.py``). The server
 binds to localhost by default and this router does nothing to change that:
 these endpoints run binaries and write to serial ports on the machine
 hosting the server, so they are a local workbench control, not a service to
@@ -15,18 +18,15 @@ engine is missing or failed (503); the request cannot be done as asked (422).
 from __future__ import annotations
 
 import asyncio
-import json
 import queue
 import threading
 from typing import List, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from fastapi.routing import APIRoute
-from jinja2 import Environment, FileSystemLoader
 
-from ..projects.parts.skeleton import ROOT
 from . import devices, gcode, service
 from .installer import InstallSpec, env_for_arduino
 from .models import (
@@ -45,7 +45,6 @@ from .models import (
     PrintRequest,
     ProbeRequest,
     UploadRequest,
-    validate_port,
 )
 from .sketches import discover_sketches, find_sketch
 from .tasks import TaskBusy, get_task_runner
@@ -76,8 +75,6 @@ router = APIRouter(prefix="/firmware", tags=["firmware"], route_class=FirmwareRo
 # A port filter: one port, or "" for every port.
 PortOrAll = Port | Literal[""]
 
-_env = Environment(loader=FileSystemLoader(str(ROOT / "templates")), autoescape=False)
-
 
 def _sketch_or_404(name: str):
     sketch = find_sketch(name)
@@ -87,7 +84,7 @@ def _sketch_or_404(name: str):
 
 
 def _start(kind: str, title: str, steps: List[List[str]], on_done=None, port=None):
-    devices.get_streams().stop_all()  # a live serial overlay must not hold the port
+    devices.get_streams().stop_all()  # a devkit's Machine listening must not hold the port
     if port:
         # Only the port being written to: releasing every printer link would
         # reset every printer (DTR) the next time it is polled.
@@ -96,37 +93,6 @@ def _start(kind: str, title: str, steps: List[List[str]], on_done=None, port=Non
         kind, title, steps, env=env_for_arduino(), on_done=on_done, port=port
     )
     return task.snapshot()
-
-
-# -- page ----------------------------------------------------------------------
-
-
-@router.get("/monitor", response_class=HTMLResponse, include_in_schema=False)
-async def monitor_page(request: Request, port: str = ""):
-    """The focused printer monitor: one port, its status, comms log and controls.
-
-    ``port`` is validated by shape and emitted as JSON: the template runs with
-    autoescape off, so a raw query string must never reach a script literal.
-    """
-    try:
-        validate_port(port) if port else None
-    except ValueError:
-        port = ""
-    base_url = str(request.base_url).rstrip("/")
-    template = _env.get_template("monitor.html.j2")
-    return HTMLResponse(template.render(base_url=base_url, port_json=json.dumps(port)))
-
-
-@router.get("", response_class=HTMLResponse, include_in_schema=False)
-async def firmware_page(request: Request):
-    base_url = str(request.base_url).rstrip("/")
-    template = _env.get_template("firmware.html.j2")
-    return HTMLResponse(
-        template.render(
-            base_url=base_url,
-            suggested_cores=SUGGESTED_CORES,
-        )
-    )
 
 
 # -- status / catalogue ----------------------------------------------------------
@@ -421,9 +387,11 @@ async def firmware_print_delete(file_id: str):
 
 @router.post("/printers/print", status_code=202)
 def firmware_print_start(body: PrintRequest):
-    """Stream a kept file to the printer (latch required); the job's first snapshot."""
+    """Stream a kept file to the printer (latch required), as a print job naming the
+    part it makes, if one is named; the print's first snapshot, with its ``job_id``.
+    The printer's jobs are ``GET /jobs?machine=``."""
     _busy_guard(body.port)
-    return devices.start_print(body.port, body.file_id).snapshot()
+    return devices.start_print(body.port, body.file_id, part=body.part).snapshot()
 
 
 @router.get("/printers/print")
@@ -463,22 +431,6 @@ def firmware_print_cancel(body: ProbeRequest):
     return _print_verb(body.port, "cancel")
 
 
-@router.get("/printers/print/records")
-async def firmware_print_records(port: PortOrAll = ""):
-    """Prints streamed from here, newest first (all ports when ``port`` is empty)."""
-    return [
-        r.model_dump(mode="json", exclude={"lines"}) for r in devices.print_records(port or None)
-    ]
-
-
-@router.get("/printers/print/records/{record_id}")
-async def firmware_print_record(record_id: str):
-    record = devices.print_record(record_id)
-    if record is None:
-        raise HTTPException(status_code=404, detail="no such print")
-    return record.model_dump(mode="json")
-
-
 @router.get("/printers/queries")
 async def firmware_printer_queries():
     """The report-only G-code the query route accepts, with what each reports."""
@@ -494,7 +446,7 @@ def firmware_printer_query(body: PrinterQueryRequest):
 
 @router.get("/printers/info")
 def firmware_printer_info(port: Port):
-    """Everything the monitor page needs at once: device, held link, last poll."""
+    """Everything a board's Machine needs at once: device, held link, last poll."""
     found = devices.detected_devices()
     device = next((d for d in found if d.port == port), None)
     link = gcode.get_printer_links().get(port)

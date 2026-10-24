@@ -326,23 +326,31 @@ def test_an_arrangement_renders_to_drawing_instructions():
 # ---------------------------------------------------------------- commands
 
 
-def test_look_reports_what_was_found(three_shapes):
-    result = CliRunner().invoke(cli, ["photo", "look", str(three_shapes)])
+def test_find_reports_what_was_found(three_shapes):
+    result = CliRunner().invoke(cli, ["photo", "find", str(three_shapes)])
     assert result.exit_code == 0, result.output
     assert "3 shape(s)" in result.output
     assert "Nothing above is a measurement" in result.output
 
 
-def test_look_can_use_the_stated_finder(stated_picture):
-    result = CliRunner().invoke(cli, ["photo", "look", str(stated_picture), "--finder", "stated"])
+def test_find_can_use_the_stated_finder(stated_picture):
+    result = CliRunner().invoke(cli, ["photo", "find", str(stated_picture), "--finder", "stated"])
     assert result.exit_code == 0, result.output
     assert "2 shape(s)" in result.output
 
 
-def test_look_explains_an_unknown_finder(three_shapes):
-    result = CliRunner().invoke(cli, ["photo", "look", str(three_shapes), "--finder", "magic"])
+def test_find_explains_an_unknown_finder(three_shapes):
+    result = CliRunner().invoke(cli, ["photo", "find", str(three_shapes), "--finder", "magic"])
     assert result.exit_code != 0
     assert "plain" in result.output and "stated" in result.output
+
+
+def test_photo_look_is_retired_and_names_photo_find(three_shapes):
+    """The viewer calls this step Find shapes; the command took the same word."""
+    result = CliRunner().invoke(cli, ["photo", "look", str(three_shapes)])
+    assert result.exit_code == 1
+    assert "apothecary photo find" in result.output
+    assert "look" not in CliRunner().invoke(cli, ["photo", "--help"]).output.split("Commands:")[1]
 
 
 def test_build_says_plainly_when_nothing_is_measured(three_shapes):

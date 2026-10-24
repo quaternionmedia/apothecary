@@ -31,15 +31,13 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse,
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
+from . import jobs
 from .core import OpenSCADObject
 from .datum_core_site import create_datum_core_site, validate_datum_core
 from .docs_site import router as docs_router
 from .example_hierarchy import (
     PRINTER_STATUSES,
-    Job,
-    JobStore,
     create_example_site,
-    job_fits_printer,
     validate_garage_layout,
 )
 from .example_parts_library import create_parts_library_site, validate_parts_library
@@ -48,7 +46,7 @@ from .firmware import gcode as firmware_gcode
 from .firmware.api import _device_view as firmware_device_view
 from .firmware.api import router as firmware_router
 from .firmware.bindings import bindings_for_site, device_for_identity, same_device
-from .firmware.models import DeviceAttachRequest
+from .firmware.models import DeviceAttachRequest, validate_port
 from .firmware.toolchains import ToolchainError
 from .hierarchy import Assembly
 from .models.bounds import BoundingBox3D
@@ -66,8 +64,9 @@ from .projects.parts.skeleton import ROOT
 from .projects.parts.stl_renderer import build_stl
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
-from .routes.looks import router as looks_router
+from .routes.jobs import router as jobs_router
 from .routes.pictures import router as pictures_router
+from .routes.views import router as views_router
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
 from .stays_local import LocalOnly
@@ -162,7 +161,7 @@ app = FastAPI(
 # the network switched off, fetching it meant the viewer never loaded at all.
 # A CDN copy is also exactly what an ad blocker or a corporate proxy drops --
 # and when it goes, the page's script never executes, so the canvas, the
-# contents list and the code panel come up empty together while the static
+# Site panel's tree and its SCAD come up empty together while the static
 # markup still reads "Layout valid". Frontend dependencies are vendored per
 # the house-stack record for the same reason.
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
@@ -176,8 +175,10 @@ app.include_router(docs_router)
 # are matched before /photos/{name} can take "pictures" for a name. The router
 # reaches back into this module only inside its handlers.
 app.include_router(pictures_router)
-# Looks: a picture pinned at a place in a site, and the pieces made from its shapes.
-app.include_router(looks_router)
+# Views: a picture pinned at a place in a site, and the pieces made from its shapes.
+app.include_router(views_router)
+# Jobs: what the machines ran, of every kind; each is started by its machine's own route.
+app.include_router(jobs_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 
@@ -540,9 +541,9 @@ def validate_part_params(name: str, body: Optional[StlGenerateRequest] = None):
 # limitation: in-memory only, lost on restart, not shared across worker
 # processes -- fine for a single-process dev server.
 #
-# Routes that change a site or a job stay `async def`: they run one at a time
-# on the event loop, which is all that serializes the stores' plain dicts
-# until they have a lock. Routes that only read, and do filesystem, parse or
+# Routes that change a site stay `async def`: they run one at a time on the
+# event loop, which is all that serializes the store's plain dicts until it
+# has a lock. Routes that only read, and do filesystem, parse or
 # render work, are plain `def` and run on the threadpool.
 # =============================================================================
 
@@ -553,8 +554,6 @@ _site_store = SiteStore(
         "datum_core": (create_datum_core_site, validate_datum_core),
     }
 )
-_job_store = JobStore()
-
 # The site /viewer opens on. Named rather than "whichever sorts first", so that
 # registering a new site cannot silently move the front door.
 DEFAULT_VIEWER_SITE = "garage"
@@ -789,7 +788,12 @@ def _primitive_descriptor(obj: OpenSCADObject, offset: Vector3D) -> Dict[str, ob
         local_min = Vector3D(x=-max_r, y=-max_r, z=z0)
         local_max = Vector3D(x=max_r, y=max_r, z=z0 + obj.h)
         bounds = BoundingBox3D(min_point=local_min + offset, max_point=local_max + offset)
-        return {"type": "cylinder", "h": obj.h, "r1": r1, "r2": r2, "bounds": _bounds_dict(bounds)}
+        drawn = {"type": "cylinder", "h": obj.h, "r1": r1, "r2": r2, "bounds": _bounds_dict(bounds)}
+        # Its facets, when it names them: a wedge is a cylinder of three, and drawn
+        # without them it was a round cone.
+        if obj.fn:
+            drawn["fn"] = obj.fn
+        return drawn
 
     if isinstance(obj, Sphere):
         r = obj.r
@@ -1263,14 +1267,9 @@ async def update_structure_status(name: str, structure_name: str, body: StatusRe
 
 @app.post("/sites/{name}/reset")
 async def reset_site_layout(name: str):
-    """Discard all edits and rebuild the site fresh from its factory.
-
-    Also clears the site's job queue: a reset re-idles every printer, so a
-    job still marked "assigned" to one would otherwise be stale.
-    """
+    """Discard all edits and rebuild the site fresh from its factory."""
     _get_site_or_404(name)  # validates the name before resetting
     site = _site_store.reset(name)
-    _job_store.reset(name)
     validator = _site_store.validator(name)
     payload = _site_payload(site, validator(site))
     payload["scad"] = site.render()
@@ -1423,35 +1422,89 @@ def printer_where(port: str):
     board (the pinned node) and the printer above it (the nearest
     status-bearing ancestor, or the board itself) with world positions, the
     footprint and build volume, and the base height the build volume sits
-    on -- what ``apothecary/static/board_view.js`` draws. ``board`` is
-    ``None`` when nothing is pinned.
+    on -- what the viewer's marks for a printer (``machine_marks.js``) are
+    made from, and what a printer's Machine sizes its corner moves by.
+    ``board`` is ``None`` when nothing is pinned.
+    """
+    pinned = _pinned_at(port)
+    if pinned is None:
+        return {"port": port, "site": None, "board": None, "printer": None}
+    name, site, path = pinned
+    node = _find_node_by_path(site, path)
+    bearer_path = status_bearer_for(site, path) or path
+    bearer = _find_node_by_path(site, bearer_path) or node
+    return {
+        "port": port,
+        "site": name,
+        "board": _describe_for_view(site, path, node, is_printer=False),
+        "printer": (
+            _describe_for_view(site, bearer_path, bearer, is_printer=True)
+            if bearer_path != path
+            else None
+        ),
+    }
+
+
+def _pinned_at(port: str) -> Optional[tuple[str, Assembly, str]]:
+    """Where the board on ``port`` is pinned: its site's name, the site, and the
+    pinned node's path -- the first pin naming it whose site and node exist.
+
+    Every pin, not just the loaded sites': a link to a board's Machine is often
+    the first page opened after the server starts, and a pin names its site.
     """
     state = firmware_devices.get_state()
     known = firmware_devices.known_device(port, state)
-    # Every pin, not just the loaded sites': the monitor is often the first
-    # page opened after the server starts, and a pin names its site.
     for binding in state.bindings():
         if not same_device(binding.identity, port, known):
             continue
         if binding.site not in _site_store.names():
             continue
-        site = _site_store.get(binding.site)
-        node = _find_node_by_path(site, binding.path)
-        if node is None:
+        try:
+            site = _site_store.get(binding.site)
+        except KeyError:  # forgotten, or its picture left the shelf, since names()
             continue
-        bearer_path = status_bearer_for(site, binding.path) or binding.path
-        bearer = _find_node_by_path(site, bearer_path) or node
-        return {
-            "port": port,
-            "site": binding.site,
-            "board": _describe_for_view(site, binding.path, node, is_printer=False),
-            "printer": (
-                _describe_for_view(site, bearer_path, bearer, is_printer=True)
-                if bearer_path != binding.path
-                else None
-            ),
-        }
-    return {"port": port, "site": None, "board": None, "printer": None}
+        if _find_node_by_path(site, binding.path) is None:
+            continue
+        return binding.site, site, binding.path
+    return None
+
+
+def _parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPart]:
+    """What a job in ``site`` can name as the part it makes, by path: every node
+    built from a part (named for its ``part_ref``) and every piece made from a
+    picture (named for its word), but nothing at or under ``leave_out`` -- the
+    machine itself. Holes cut from a piece are not things made."""
+    from .vision import views as viewing
+
+    made = viewing.store().made_at(site_name)
+    found: Dict[str, str] = {}
+
+    def visit(node: Assembly, prefix: str) -> None:
+        for child in [*node.children, *node.additions]:
+            path = f"{prefix}.{child.name}" if prefix else child.name
+            if path == leave_out or path.startswith(leave_out + "."):
+                continue
+            if child.part_ref:
+                found[path] = child.part_ref
+            elif not prefix and child.name in made:
+                found[path] = made[child.name].word
+            visit(child, path)
+
+    visit(site, "")
+    return [jobs.JobPart(path=path, name=name) for path, name in sorted(found.items())]
+
+
+def _place_of(port: str) -> Optional[jobs.Place]:
+    """Where the machine on ``port`` stands, for a job it starts (``jobs.PLACES``)."""
+    pinned = _pinned_at(port)
+    if pinned is None:
+        return None
+    name, site, path = pinned
+    bearer = status_bearer_for(site, path) or path
+    return jobs.Place(site=name, path=path, parts=_parts_of(name, site, leave_out=bearer))
+
+
+jobs.PLACES.append(_place_of)
 
 
 @app.get("/firmware/pins", tags=["firmware"])
@@ -1540,6 +1593,35 @@ def _sync_printer_status(status) -> List[Dict[str, object]]:
 firmware_devices.STATUS_LISTENERS.append(_sync_printer_status)
 
 
+def _sync_job_status(job: jobs.Job) -> None:
+    """A job running on a machine marks the node its port is pinned to -- or the
+    nearest above it that carries a status -- busy (its kind's ``busy``, "printing"
+    for a print), and its end lets the node go back to idle.
+
+    Registered on ``jobs.LISTENERS`` at import, beside the poll's sync: a running
+    job, not a hand-typed one, is what makes a printer busy, from the moment it
+    begins rather than at the next poll. A hand-set ``maintenance`` is the
+    person's and is left alone, as a poll leaves it.
+    """
+    operation = jobs.operation(job.kind)
+    if operation is None or operation.busy is None or not job.site or not job.machine.path:
+        return
+    if job.site not in _site_store.loaded():
+        return
+    site = _site_store.get(job.site)
+    target = status_bearer_for(site, job.machine.path)
+    node = _find_node_by_path(site, target) if target is not None else None
+    if node is None or node.status == "maintenance":
+        return
+    if job.running:
+        node.status = operation.busy
+    elif node.status == operation.busy:
+        node.status = "idle"
+
+
+jobs.LISTENERS.append(_sync_job_status)
+
+
 def _site_devices_payload(name: str, site: Assembly, fresh: bool = False) -> Dict[str, object]:
     problem = None
     try:
@@ -1558,6 +1640,8 @@ def _site_devices_payload(name: str, site: Assembly, fresh: bool = False) -> Dic
         "bindings": [r.model_dump(mode="json") for r in rows],
         "devices": [firmware_device_view(d) for d in found],
         "streaming": firmware_devices.get_streams().open_ports,
+        # Whose link is held: a page may poll those without opening a port.
+        "printers": links.open_ports,
         "problem": problem,
     }
 
@@ -1617,134 +1701,10 @@ def detach_device(name: str, path: str):
     return _binding_row(name, site, path)
 
 
-# -----------------------------------------------------------------------
-# Jobs: capacity-checked assignment to printer Structures (manufacturing
-# planning, first slice). See example_hierarchy.py's Job/JobStore.
-# -----------------------------------------------------------------------
-
-
-class Dimensions(BaseModel):
-    x: float
-    y: float
-    z: float
-
-
-class CreateJobRequest(BaseModel):
-    # A name is letters, digits and a little punctuation: what a page shows, never markup.
-    # No slash: a job's name is a path segment of its own routes, and one with a
-    # slash could be created and never assigned, completed or found again.
-    name: str = Field(..., min_length=1, max_length=80, pattern=r"^[\w][\w .+\-]*$")
-    required_volume: Dimensions
-
-
-class AssignJobRequest(BaseModel):
-    printer: str
-
-
-def _job_summary(job: Job, site: Assembly) -> Dict[str, object]:
-    compatible = [
-        s.name
-        for s in site.children
-        if s.build_volume is not None and s.status == "idle" and job_fits_printer(job, s)
-    ]
-    return {
-        "name": job.name,
-        "required_volume": [job.required_volume.x, job.required_volume.y, job.required_volume.z],
-        "status": job.status,
-        "assigned_printer": job.assigned_printer,
-        "compatible_printers": compatible,
-    }
-
-
-@app.get("/sites/{name}/jobs")
-def list_jobs(name: str):
-    site = _get_site_or_404(name)
-    return [_job_summary(job, site) for job in _job_store.list_for_site(name)]
-
-
-@app.post("/sites/{name}/jobs")
-async def create_job(name: str, body: CreateJobRequest):
-    site = _get_site_or_404(name)
-    job = Job(
-        name=body.name,
-        required_volume=Vector3D(
-            x=body.required_volume.x, y=body.required_volume.y, z=body.required_volume.z
-        ),
-    )
-    try:
-        _job_store.add(name, job)
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return _job_summary(job, site)
-
-
-@app.post("/sites/{name}/jobs/{job_name}/assign")
-async def assign_job(name: str, job_name: str, body: AssignJobRequest):
-    """Assign a job to a printer, checked against its build volume and idle status.
-
-    Assigning flips the printer's own status to "printing" -- the two
-    concepts (job assignment, printer status) are meant to move together.
-    """
-    site = _get_site_or_404(name)
-    try:
-        job = _job_store.get(name, job_name)
-    except KeyError:
-        raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found") from None
-
-    if job.status != "queued":
-        # Re-assigning an assigned job overwrote its printer and left the first
-        # one "printing" forever; a done job is done.
-        raise HTTPException(
-            status_code=409, detail=f"Job '{job_name}' is {job.status}, not queued"
-        )
-    printer = next((s for s in site.children if s.name == body.printer), None)
-    if printer is None or printer.build_volume is None:
-        raise HTTPException(status_code=404, detail=f"Printer '{body.printer}' not found")
-    if printer.status != "idle":
-        raise HTTPException(
-            status_code=409,
-            detail=f"Printer '{body.printer}' is not idle (status={printer.status})",
-        )
-    if not job_fits_printer(job, printer):
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"Job '{job_name}' (required volume "
-                f"{[job.required_volume.x, job.required_volume.y, job.required_volume.z]}) "
-                f"does not fit printer '{body.printer}''s build volume "
-                f"{[printer.build_volume.x, printer.build_volume.y, printer.build_volume.z]}"
-            ),
-        )
-
-    job.status = "assigned"
-    job.assigned_printer = printer.name
-    printer.status = "printing"
-    return _job_summary(job, site)
-
-
-@app.post("/sites/{name}/jobs/{job_name}/complete")
-async def complete_job(name: str, job_name: str):
-    """Mark a job done and free its printer back to idle.
-
-    ``assigned_printer`` is left in place as a record of which printer did
-    the job, even though the job is no longer occupying it.
-    """
-    site = _get_site_or_404(name)
-    try:
-        job = _job_store.get(name, job_name)
-    except KeyError:
-        raise HTTPException(status_code=404, detail=f"Job '{job_name}' not found") from None
-
-    if job.status != "assigned":
-        # Completing a job twice freed a printer that had since started another.
-        raise HTTPException(
-            status_code=409, detail=f"Job '{job_name}' is {job.status}, not assigned"
-        )
-    printer = next((s for s in site.children if s.name == job.assigned_printer), None)
-    if printer is not None and printer.status == "printing":
-        printer.status = "idle"
-    job.status = "done"
-    return _job_summary(job, site)
+def _default_site() -> str:
+    """The site the viewer opens on when none is named: the garage, else the first."""
+    names = _site_store.names()
+    return DEFAULT_VIEWER_SITE if DEFAULT_VIEWER_SITE in names else names[0]
 
 
 @app.get("/viewer")
@@ -1755,9 +1715,39 @@ async def viewer_home():
     both are absorbed into one viewer (see ``site_viewer`` below); this is
     just its default entry point.
     """
-    names = _site_store.names()
-    default_site = DEFAULT_VIEWER_SITE if DEFAULT_VIEWER_SITE in names else names[0]
-    return RedirectResponse(f"/viewer/sites/{default_site}", status_code=307)
+    return RedirectResponse(f"/viewer/sites/{_default_site()}", status_code=307)
+
+
+# The firmware page and the printer monitor were pages of their own; they are
+# the Bench and a board's Machine in front of the world now (the consolidation
+# plan's Phase 5). Their links were handed out, so each still answers, with the
+# viewer and the right panel open: the viewer reads ``panel`` and ``machine``
+# from its address once the site's boards are known.
+
+
+@app.get("/firmware", include_in_schema=False)
+def firmware_page():
+    """The firmware page is the Bench: the viewer, on the default site, with it open."""
+    return RedirectResponse(f"/viewer/sites/{_default_site()}?panel=bench", status_code=307)
+
+
+@app.get("/firmware/monitor", include_in_schema=False)
+def monitor_page(port: str = ""):
+    """The printer monitor is a board's Machine: the viewer on the site the port is
+    pinned in, its Machine open there -- or, pinned nowhere, on the default site with
+    its Machine floating. A port of the wrong shape is dropped, as the page dropped
+    it: the viewer opens with nothing in front of it."""
+    try:
+        validate_port(port) if port else None
+    except ValueError:
+        port = ""
+    if not port:
+        return RedirectResponse(f"/viewer/sites/{_default_site()}", status_code=307)
+    pinned = _pinned_at(port)
+    site = pinned[0] if pinned is not None else _default_site()
+    return RedirectResponse(
+        f"/viewer/sites/{quote(site, safe='')}?machine={quote(port, safe='')}", status_code=307
+    )
 
 
 @app.get("/viewer/sites/{name}", response_class=HTMLResponse)

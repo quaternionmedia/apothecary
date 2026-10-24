@@ -1,11 +1,32 @@
 # Pictures in the world: a look is pinned where it was seen
 
-*Nothing in this page is built. It works inside the frame of
+*It works inside the frame of
 [one-screen-2026-09-20.md](one-screen-2026-09-20.md) (anchors, popups,
 panels; the world is never replaced; every action has a cell; the census is
 the meter) and under the draft record* Personal data stays on the device
 *(§6: the picture root, `captures/` and `uploads/`, and what a page may
 forget).*
+
+*Built: Phases 0, 2, 3 and 4. The consolidation plan
+([consolidation-2026-10-03.md](consolidation-2026-10-03.md)) changed what
+followed:*
+
+- *A look is a **view** (`/sites/{s}/views`, `apothecary/vision/views.py`,
+  Picture › Views). Camera › Look is Camera › Take picture, which pins a view
+  and finds nothing; Picture › Find shapes finds, as a step of its own;
+  Camera › Keep is gone; `apothecary photo look` is `apothecary photo find`.*
+- *Kept is gone, and Phase 5's one Kept panel is not built: Site's
+  **Pinned** lists every site's pins -- cameras, views, boards -- each taken
+  back from its row, and **Pictures**, a tab of the rail's strip, lists every
+  picture under the picture root, the folder's and the kept ones, with Forget
+  on a kept one, Purge, and the gathering as a section. A row chosen in
+  Pictures is pinned from the ring's Picture › Folder. The row buttons no
+  ring backs are Pinned's Unpin and Pictures' Forget (`census.TAKEN_BACK`).*
+- *Phase 1 waits on the next round (`todo.md`). Phase 6 is not built:
+  Selected stays in the one rail. Phase 7 is open: `POST /photos` and the
+  album routes answer, and walkthrough 11 runs on them.*
+
+*This page keeps the words it was decided in.*
 
 ## The end state
 
@@ -279,7 +300,7 @@ picture-shaped is stored in the browser, its HTTP cache included.
 | `/photos/pictures*` | Stay; `POST` gains `site`, `host`, `camera` (keep and pin in one request); forget and purge cascade | §6's file layer, now joined |
 | `/cameras` | Stay; `PUT` gains `mm_across` and accepts the floor | The pin store is right |
 | Board pin routes, Selected › Device | Unchanged; listed through `GET /placed` | Firmware's own |
-| `photo look / build / words / finders / check` | Stay; `build` uses `piece_from_shape` | Terminal tools, not windows |
+| `photo find / build / words / finders / check` | Stay; `build` uses `piece_from_shape` | Terminal tools, not windows |
 | `photo view`, `photo gather --open` | Deleted (Phase 1 for `--open`, Phase 7 for `view`): `apothecary serve`, then drop the file on a structure | Each starts a second server on the same port and can cover a built-in site |
 | `photo gather`, `gather-check`, the gathering map | The `[photos]` extra | Decided |
 | Walkthroughs 11 and 12 | Rewritten to drive the world, not `page.request` | Chapter 11's captions for steps 14-15 say more than its screenshots show |
@@ -742,5 +763,5 @@ offset, inherited like `mm_across`, is the follow-up if that proves costly);
 pictures standing upright on a wall; looks below the root; a gathering face
 in the browser (when the extra grows one, it pins a look at a host, never a
 site); a finder chosen by a model; persistence across restart, until the
-record allows it; the CLI's `photo look` and `build` reading paths outside
+record allows it; the CLI's `photo find` and `build` reading paths outside
 the picture root.

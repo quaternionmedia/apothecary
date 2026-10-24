@@ -64,9 +64,9 @@ def _mm(value: float) -> str:
 
 
 def _made_piece(page, base_url: str, picture: str) -> str:
-    look = _pin(page, base_url, "workbench", picture, mm_across=1800)
+    view = _pin(page, base_url, "workbench", picture, mm_across=1800)
     answer = page.request.post(
-        f"{base_url}/sites/garage/looks/{look['id']}/make", data={"shape": 1}
+        f"{base_url}/sites/garage/views/{view['id']}/make", data={"shape": 1}
     )
     assert answer.status == 200, answer.text()
     return answer.json()["made"][0]

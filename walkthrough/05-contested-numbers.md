@@ -56,12 +56,12 @@ which is the difference between fitting an opening and not:
 
 ## Where you turn them
 
-In the viewer. Select a part and its panel carries every parameter as a
+In the viewer. Select a part and Selected carries every parameter as a
 control, contested ones first, each candidate a button that sets it. Turn the
-number, press Regenerate, watch the envelope move.
+number and the declared envelope follows; Apply renders the part with it.
 
-There is one viewer and no second page onto the same object, so a link to a
-part lands there:
+The viewer is the one page, and there is no second page onto the same object,
+so a link to a part lands there:
 
     >>> from fastapi.testclient import TestClient
     >>> from apothecary.api import app

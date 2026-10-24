@@ -294,6 +294,15 @@ def test_photographs_into_pieces(
     page.goto(f"{base_url}/viewer/sites/{SITE}")
     expect(page.locator(".toolbar h1")).to_contain_text("Apothecary")
     page.wait_for_timeout(700)
+    # Each piece is drawn as the word builds it: a wedge, a cylinder of three facets,
+    # is a triangle in the world, as the picture's was, not a disc.
+    page.evaluate("() => window.fractalViewer.waveDone")
+    facets = page.evaluate(
+        "() => { const v = window.fractalViewer; return v.tree.children"
+        ".filter((c) => c.category === 'wedge')"
+        ".map((c) => v.meshByName[c.name].geometry.parameters.radialSegments); }"
+    )
+    assert facets and set(facets) == {3}, facets
     story.shows(
         "The arrangement opens in the viewer the tool already had",
         "No drawing code was written for any of this. An arrangement built from a "
@@ -334,6 +343,10 @@ def test_photographs_into_pieces(
     expect(selected).to_contain_text(f"found by {album['finder']}")
     expect(selected).to_contain_text(f"at {piece['confidence']:.2f} confidence")
     expect(selected).to_contain_text("thickness is a guess")
+    # The provenance runs past the rail's lower half: scrolled into view, whole.
+    provenance = selected.locator(".prop-readonly", has_text="thickness is a guess")
+    provenance.evaluate("(el) => el.scrollIntoView({ block: 'center' })")
+    expect(provenance).to_be_in_viewport(ratio=0.99)  # whole, but for a fraction of a pixel
     page.wait_for_timeout(400)
     story.shows(
         "Choosing a piece shows where it came from",

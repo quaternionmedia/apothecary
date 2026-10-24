@@ -7,7 +7,7 @@ the output of a program: the next run puts it back.
 
 A mesh made in another program is brought in measured, not trusted; a part can be a folder with a sidecar and no Python; the garage's printers are Ender 3s from published dimensions and its boards are the boards. A camera placed at a piece is drawn there, at the level where that piece is, and nowhere else. And nothing here leaves the machine, by construction rather than by anyone's care.
 
-**Runtime-bound.** The model half runs in this process. The browser half drives a real browser against a real server; the browser is launched with a fake camera so there is one to place. It needs no network, and it refuses one.
+**Runtime-bound.** The model half runs in this process. The browser half drives a real browser against a real server of its own, whose picture folder holds only the pictures this page puts there; the browser is launched with a fake camera so there is one to place. It needs no network, and it refuses one.
 
 ---
 
@@ -73,7 +73,7 @@ esp32_blink is a sketch and the board it runs on, drawn as the board: the descri
 
 ## 9. A camera pinned at the bench is drawn there
 
-Pinned from the bench's own ring -- Camera, Pin here, and this browser's camera by its name -- the camera gets a place badge above the bench and a frustum looking down onto its top, kept on the server so every browser looking at this site sees it standing there.
+Pinned from the bench's own ring -- Camera, Pin here, and this browser's camera by its name -- the camera gets a place badge above the bench and a frustum looking down onto its top, kept on the server so every browser looking at this site sees it standing there. The status bar names the next step, Camera › Take picture, which keeps a frame and pins it at the bench as a view.
 
 ![A camera pinned at the bench is drawn there](screenshots/12-09-a-camera-pinned-at-the-bench-is-drawn-there.png)
 
@@ -93,7 +93,7 @@ GET /cameras?site=garage -> []
 
 ## 12. What the browser put here, it can take back
 
-Kept lists what a page pinned -- cameras, looks, boards -- every site's, and the pictures the browser kept, the ones added from the file picker kept as they were named under the picture folder's uploads/. Each row names its site and carries the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen.
+Site's Pinned lists what a page pinned -- cameras, views, boards -- every site's, each row naming its site and carrying the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen. Pictures lists every picture in the picture folder, the folder's own and the ones the browser kept -- those added from its file picker kept as they were named under uploads/ -- each with where it is pinned as a view, and Forget on a kept one. A picture kept and pinned nowhere waits to be chosen: a row clicked is chosen, as shelf.png is here, and the ring's Picture › Folder pins it where the ring stands -- the seven newest by name, an older one as its last cell -- as the status bar says.
 
 ![What the browser put here, it can take back](screenshots/12-12-what-the-browser-put-here-it-can-take-back.png)
 

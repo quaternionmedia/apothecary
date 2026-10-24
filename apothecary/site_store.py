@@ -1,10 +1,10 @@
 """In-memory, single-process store for Site instances (prototype).
 
 Sites carry no real persistence layer yet -- this is a process-lifetime
-singleton, not a database. It exists so that edits (position moves, and in
-later phases printer status and job assignments) survive across requests
-instead of being rebuilt fresh each time, unlike /render's stateless Scene
-handling, which fits because a Scene has no state to keep between calls.
+singleton, not a database. It exists so that edits (position moves, and a
+printer's status) survive across requests instead of being rebuilt fresh
+each time, unlike /render's stateless Scene handling, which fits because a
+Scene has no state to keep between calls.
 
 Known limitations, stated rather than hidden: state is lost on server
 restart, and is not shared across multiple worker processes (each Uvicorn
@@ -97,11 +97,11 @@ class SiteStore:
         """Discard all edits and rebuild the site fresh from its factory.
 
         Pieces made from pictures are layout edits and go with the rest, so
-        their records go too and their shapes read as found again; the looks
-        stay pinned (``apothecary/vision/looks.py``)."""
+        their records go too and their shapes read as found again; the views
+        stay pinned (``apothecary/vision/views.py``)."""
         factory, _validator = self._entry(name)
         self._sites[name] = factory()
-        from .vision.looks import forget_made
+        from .vision.views import forget_made
 
         forget_made(name)
         return self._sites[name]
@@ -110,7 +110,7 @@ class SiteStore:
 def with_made_overlaps(name: str, site: Assembly, report: LayoutReport) -> LayoutReport:
     """``report``, plus each overlap among the site's roots that names a made piece and
     that the report does not already hold (garage's validator already holds them)."""
-    from .vision.looks import made_names
+    from .vision.views import made_names
 
     made = made_names(name)
     if not made:

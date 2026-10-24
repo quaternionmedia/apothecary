@@ -1,0 +1,35 @@
+/* The Bench (widgets/toolchain.js, sketches.js, tasks.js) and a board's Flashing
+ * card, which mounts the same form and task log inside its Machine. Scoped to
+ * .bench-ui, so the page's own rules and the Machine's are left alone. */
+.bench-ui { font-size: 0.8rem; color: #c8d0c8; display: flex; flex-direction: column; gap: 0.35rem; }
+.bench-ui [hidden] { display: none !important; }
+.bench-ui .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #7a867a; margin-top: 0.45rem; }
+.bench-ui .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; margin: 0.15rem 0; }
+.bench-ui .grow { flex: 1; min-width: 0; }
+.bench-ui .meta { color: #7a867a; font-size: 0.72rem; }
+.bench-ui .note { color: #8a9a8a; font-size: 0.72rem; font-style: italic; }
+.bench-ui .empty { color: #666; font-style: italic; }
+.bench-ui .ok { color: #6fdb75; } .bench-ui .warn { color: #ffcc66; } .bench-ui .bad { color: #ff8080; }
+.bench-ui .kv { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; line-height: 1.5; word-break: break-all; }
+.bench-ui button, .bench-ui input:not([type=checkbox]), .bench-ui select, .bench-ui textarea {
+    font: inherit; font-size: 0.78rem; background: #232823; color: #ddd; border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.45rem;
+}
+.bench-ui button { cursor: pointer; }
+.bench-ui button:hover { background: #2f382f; }
+.bench-ui button:disabled { opacity: 0.45; cursor: not-allowed; }
+.bench-ui select.grow, .bench-ui input.grow { width: 100%; }
+.bench-ui input.esp-chip { width: 6rem; } .bench-ui input.esp-baud { width: 6.5rem; }
+.bench-ui textarea { width: 100%; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; }
+.bench-ui .upload-btn, .bench-ui .esp-flash-btn { border-color: #7a5a1a; }
+.bench-ui ul { list-style: none; margin: 0; padding: 0; }
+.bench-ui li { display: flex; align-items: center; gap: 0.35rem; padding: 0.15rem 0.2rem; border-radius: 3px; }
+.bench-ui .tc-cores .meta { white-space: nowrap; }
+.bench-ui .task-history li[data-id] { cursor: pointer; }
+.bench-ui .task-history li[data-id]:hover { background: #262d26; }
+.bench-ui .task-title { font-size: 0.78rem; }
+.bench-ui .task-log {
+    margin: 0.2rem 0 0; padding: 0.35rem 0.5rem; max-height: 220px; min-height: 3.2rem; overflow: auto; background: #0f120f; border: 1px solid #2a302a; border-radius: 4px;
+    font: 0.7rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; color: #b8c8b8; white-space: pre-wrap; word-break: break-all;
+}
+.bench-ui .task-log:empty { display: none; }
+.bench-ui .task-log .cmd { color: #9cd2ff; } .bench-ui .task-log .err { color: #ff8080; }

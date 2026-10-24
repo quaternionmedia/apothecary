@@ -516,7 +516,7 @@ def open_transport(port: str, baud: int) -> Transport:
     return ENGINES[serial_engine()](port, baud)
 
 
-# --- comms log: everything said on a port, for the monitor page ------------------------
+# --- comms log: everything said on a port, for a board's Machine ---------------------
 
 
 class CommsLog:

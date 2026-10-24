@@ -194,6 +194,8 @@ const STYLE = `
 .apothecary-ring .wedge.destructive { fill: #3a2020; }
 .apothecary-ring .wedge.hot { fill: #4c6a4c; }
 .apothecary-ring .wedge.destructive.hot { fill: #7a2a2a; }
+.apothecary-ring .wedge.marked { fill: #23384a; stroke: #6fb3e8; }
+.apothecary-ring .wedge.marked.hot { fill: #33557a; }
 .apothecary-ring .hub { fill: #141614; stroke: #3a443a; stroke-width: 1.5; cursor: pointer; }
 .apothecary-ring text { fill: #d8e0d8; pointer-events: none; user-select: none; }
 .apothecary-ring .label { font-size: 12px; text-anchor: middle; }
@@ -332,12 +334,14 @@ class RingInstance {
             else {
                 if (option.enabled === false) cls.push("disabled");
                 if (option.destructive) cls.push("destructive");
+                if (option.marked) cls.push("marked");  // the one chosen elsewhere (a picture chosen in Pictures)
                 if (this.highlight === cell) cls.push("hot");
             }
-            const label = option ? esc(option.label) + (option.children ? " ›" : "") : "";
+            const label = option ? (option.marked ? "• " : "") + esc(option.label) + (option.children ? " ›" : "") : "";
             parts.push(
                 `<path id="ring-cell-${cell}" class="${cls.join(" ")}" data-cell="${cell}" role="menuitem"`
                 + ` aria-label="${option ? esc(option.label) : "empty"}"`
+                + (option && option.marked ? ' aria-current="true"' : "")
                 + `${option ? "" : ' aria-disabled="true"'} d="${wedgePath(slot, r0, r1)}"></path>`
                 + (option ? `<text class="label" x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${label}</text>` : "")
                 + `<text class="digit${option ? "" : " empty-digit"}" x="${dx.toFixed(1)}" y="${(dy + 3).toFixed(1)}">${cell}</text>`

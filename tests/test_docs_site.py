@@ -121,6 +121,19 @@ def test_the_root_docs_name_only_files_that_exist():
     assert not missing, "\n".join(missing)
 
 
+def test_the_docs_index_links_every_plan_and_record():
+    """docs/README.md is where a reader finds the plans and the validation records;
+    one written and not indexed is a page nobody reaches from it."""
+    index = (ROOT / "docs" / "README.md").read_text(encoding="utf-8")
+    linked = {href.split("#", 1)[0] for _, href in docs_site.LINK.findall(index)}
+    pages = sorted(
+        str(page.relative_to(ROOT / "docs"))
+        for folder in ("plans", "validation")
+        for page in (ROOT / "docs" / folder).glob("*.md")
+    )
+    assert pages and not [page for page in pages if page not in linked]
+
+
 def test_the_parts_authoring_wrapper_builds_a_part():
     """The wrapper docs/parts-authoring.md gives, run as a module of the parts
     package, builds a part whose bounds follow its parameters."""

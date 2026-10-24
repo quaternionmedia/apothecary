@@ -518,11 +518,11 @@ def test_the_picture_root_is_a_folder_of_pictures_never_everything(monkeypatch, 
     assert here.get("/photos/pictures/file", params={"path": "fake.png"}).status_code == 415
 
 
-def test_looks_write_nothing_outside_the_root_its_two_folders_and_the_state_folder(
+def test_views_write_nothing_outside_the_root_its_two_folders_and_the_state_folder(
     monkeypatch, tmp_path
 ):
-    """Pinning, sizing, making, dropping and forgetting a look keeps nothing anywhere
-    but the picture root's own two folders and the state folder (cameras.json): looks,
+    """Pinning, finding, sizing, making, dropping and forgetting a view keeps nothing anywhere
+    but the picture root's own two folders and the state folder (cameras.json): views,
     made pieces and the finder cache are held in memory. And no picture the server
     answers with -- whole, or at a size for a mat -- may enter the browser's disk cache."""
     import io
@@ -531,13 +531,13 @@ def test_looks_write_nothing_outside_the_root_its_two_folders_and_the_state_fold
 
     from apothecary.api import _site_store
     from apothecary.vision import cache as cache_module
-    from apothecary.vision import looks as looks_module
+    from apothecary.vision import views as views_module
 
     root, state = tmp_path / "pics", tmp_path / "state"
     root.mkdir()
     monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(root))
     monkeypatch.setenv("APOTHECARY_STATE_DIR", str(state))
-    monkeypatch.setattr(looks_module, "_store", looks_module.Looks())
+    monkeypatch.setattr(views_module, "_store", views_module.Views())
     monkeypatch.setattr(cache_module, "_cache", cache_module.FinderCache())
     image = Image.new("L", (400, 200), 245)
     ImageDraw.Draw(image).rectangle((40, 40, 160, 120), fill=20)
@@ -568,10 +568,11 @@ def test_looks_write_nothing_outside_the_root_its_two_folders_and_the_state_fold
             params={"name": "frame", "site": "garage", "host": ""},
             content=buf.getvalue(),
         ).json()
-        own = here.post("/sites/garage/looks", json={"host": "workbench", "picture": "own.png"})
-        for look in (kept["look"], captured["look"], own.json()):
-            here.put(f"/sites/garage/looks/{look['id']}/scale", json={"mm_across": 400})
-            made = here.post(f"/sites/garage/looks/{look['id']}/make", json={"all": True}).json()
+        own = here.post("/sites/garage/views", json={"host": "workbench", "picture": "own.png"})
+        for view in (kept["view"], captured["view"], own.json()):
+            here.post(f"/sites/garage/views/{view['id']}/find", json={})
+            here.put(f"/sites/garage/views/{view['id']}/scale", json={"mm_across": 400})
+            made = here.post(f"/sites/garage/views/{view['id']}/make", json={"all": True}).json()
             for piece in made["made"][:1]:
                 here.delete(f"/sites/garage/made/{piece}")
         for path in ("own.png", kept["path"]):
@@ -619,15 +620,17 @@ def test_what_is_kept_is_the_persons_alone(monkeypatch, tmp_path):
         assert stat.S_IMODE(folder.stat().st_mode) == 0o700, folder
 
 
-def test_a_job_name_that_is_markup_is_refused():
-    """A job name is letters, digits and a little punctuation."""
+def test_a_part_named_for_a_print_that_is_markup_is_refused():
+    """The part a print names is a path in its site -- letters, digits and a little
+    punctuation -- refused as it arrives, before any port is touched."""
     here = TestClient(app)
-    body = {"required_volume": {"x": 10, "y": 10, "z": 10}}
-    r = here.post("/sites/garage/jobs", json={"name": "small bracket v2", **body})
-    assert r.status_code == 200, r.text
-    for bad in ('<img src=x onerror="fetch(1)">', "a&b", 'x"y', "", " lead", "x" * 81):
-        r = here.post("/sites/garage/jobs", json={"name": bad, **body})
+    for bad in ('<img src=x onerror="fetch(1)">', "a&b", 'x"y', " lead", "x" * 201):
+        r = here.post(
+            "/firmware/printers/print",
+            json={"port": "/dev/ttyFAKE1", "file_id": "f1", "part": bad},
+        )
         assert r.status_code == 422, bad
+        assert r.json()["detail"][0]["loc"] == ["body", "part"], bad
 
 
 def test_a_subprocess_inherits_no_proxy_and_no_arduino_override(monkeypatch):

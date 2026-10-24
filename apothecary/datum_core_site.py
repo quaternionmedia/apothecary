@@ -355,6 +355,7 @@ def validate_datum_core(site: Assembly) -> LayoutReport:
                     f"lid bottom {lid_bottom:.1f} mm, tray top {tray_top:.1f} mm"
                 ),
                 structures=["tray", "lid"],
+                paths=["tray", "lid"],
             )
         )
     return report

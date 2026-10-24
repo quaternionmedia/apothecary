@@ -36,6 +36,7 @@ from apothecary.menu import (
     Pointing,
     Ring,
     RingTooFull,
+    carried_by,
     check_ring,
     control_options,
     nearest,
@@ -419,8 +420,10 @@ def test_walk_and_address_round_trip_through_device_control_jog():
     """Device > Control > Jog > Y+ on a node with a printer pinned to it.
 
     The address is computed, not assumed: Device is the third option on the
-    node ring, Control the eighth on the device ring (Link is the seventh),
-    Jog the third on the control ring, and Y+ the first on the jog pad.
+    node ring, Control the eighth on the device ring (Flash is the third, in
+    the cell Monitor had), Jog the third on the control ring, and Y+ the first
+    on the jog pad: ⌗2728, where hands learned it before Watch and Monitor
+    became Open.
     """
     ring = _node_with_printer()
     expected = "".join(str(PLACEMENT[i]) for i in (2, 7, 2, 0))
@@ -595,20 +598,63 @@ def test_a_bound_device_is_offered_after_move():
     ids = [o.id for o in ring.options]
     assert ids.index("device") == ids.index("move") + 1
     device = walk(ring, address_of(ring, "device"))
-    assert [c.label for c in device.children] == [
-        "Watch",
-        "Poll",
-        "Monitor",
-        "Query",
-        "Unpin",
-        "Rescan",
-        "Link",
-        "Control",
+    assert [(c.label, c.cell) for c in device.children] == [
+        ("Open", 8),
+        ("Poll", 6),
+        ("Flash", 2),
+        ("Query", 4),
+        ("Unpin", 9),
+        ("Rescan", 3),
+        ("Link", 1),
+        ("Control", 7),
     ]
+    # Open is the board's Machine, in the cell Watch had; Watch and Monitor were
+    # two ways into two views of the one board. Flash takes the cell Monitor
+    # freed, so Query, Unpin, Rescan, Link and Control are where they were before
+    # the two became one: Control at 7, jog Y+ from a printer's node ⌗2728.
+    assert device.children[0].action == "device:open"
+    assert device.children[2].action == "device:flash"
+    assert "device:watch" not in set(every_action([ring]))
+    assert "device:monitor" not in set(every_action([ring]))
+    assert address_of(ring, "device:query") == "24"
+    assert address_of(ring, "device:unpin") == "29"
+    assert address_of(ring, "device:rescan") == "23"
+    assert address_of(ring, "device:reconnect") == "218"
+    assert address_of(ring, "control:arm") == "277"
+    assert address_of(ring, "control:estop") == "271"
+    # A printer keeps its own firmware: its Flash holds the cell and cannot be chosen.
+    assert device.children[2].enabled is False
     # Link sits before Control on purpose: cell 1 on a devkit and on a printer alike.
-    assert device.children[6].cell == 1 and device.children[7].cell == 7
     devkit = walk(_node_with_printer(Device(port="/dev/ttyACM0", bound=True)), "2")
     assert devkit.children[-1].label == "Link" and devkit.children[-1].cell == 1
+    assert devkit.children[2].label == "Flash" and devkit.children[2].enabled is True
+
+
+def test_a_devkit_listens_and_probes_from_link_and_a_printer_does_neither():
+    """A devkit's port is opened only when asked: Link › Listen streams it (⌗214 from
+    its node), Link › Probe asks esptool (⌗219). Appended after Release, so Reconnect,
+    Reset and Release keep their cells; a printer is polled over its held link and has
+    neither."""
+    devkit = Device(port="/dev/ttyACM0", bound=True)
+    node = _node_with_printer(devkit)
+    link = walk(node, "21")
+    assert [(c.label, c.action, c.cell) for c in link.children] == [
+        ("Reconnect", "device:reconnect", 8),
+        ("Reset", "device:reset", 6),
+        ("Release", "device:release", 2),
+        ("Listen", "device:listen", 4),
+        ("Probe", "device:probe", 9),
+    ]
+    assert address_of(node, "device:listen") == "214"
+    assert address_of(_device_ring(devkit), "device:listen") == "14"
+    printer = walk(_node_with_printer(), "21")
+    assert [c.action for c in printer.children] == [
+        "device:reconnect",
+        "device:reset",
+        "device:release",
+    ]
+    for verb in ("device:listen", "device:probe", "device:flash"):
+        assert carried_by(verb).name == "VIEWER"
 
 
 def test_control_is_absent_when_the_board_is_not_a_printer():
@@ -936,37 +982,66 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [c.destructive for c in pictures.children] == [False, False, True, False]
     assert carried_by("picture:add:@floor").name == "VIEWER"
     assert carried_by("picture:purge").name == "VIEWER"
-    assert [(c.action, c.cell) for c in panels.children] == [
-        ("panel:toggle:contents", 8),
-        ("panel:toggle:selected", 6),
-        ("panel:toggle:jobs", 2),
-        ("panel:toggle:validation", 4),
-        ("panel:toggle:scad", 9),
-        (None, 3),  # Pictures: Kept and the gathering behind one cell
-        (None, 1),  # Machine: the machine and its comms log behind one cell
-        ("panel:rail:toggle", 7),
+    # Site (Contents, its problems, its SCAD, Pinned, the site's jobs), Selected,
+    # Pictures (every picture, and the gathering) and a board's Machine (its log in
+    # it) each a cell; then the rail, in the cell it has had since Phase 3; then the
+    # Bench, the firmware page's sections, a group of its own: the panel and its
+    # verbs. A print is the job: Jobs is no panel.
+    assert [(c.label, c.action, c.cell) for c in panels.children] == [
+        ("Site", "panel:toggle:site", 8),
+        ("Selected", "panel:toggle:selected", 6),
+        ("Pictures", "panel:toggle:pictures", 2),
+        ("Machine", "panel:toggle:machine", 4),
+        ("Rail", "panel:rail:toggle", 9),
+        ("Bench", None, 3),
     ]
-    kept = next(c for c in panels.children if c.label == "Pictures")
-    assert [(c.label, c.action, c.cell) for c in kept.children] == [
-        ("Kept", "panel:toggle:kept", 8),
-        ("Gather", "panel:toggle:camera", 6),
+    assert address_of(root, "panel:site") == "98"  # by the option's id
+    assert address_of(root, "panel:pictures") == "92"
+    assert address_of(root, "panel:machine") == "94"
+    assert address_of(root, "panel:rail") == "99"
+    bench = panels.children[-1]
+    assert [(c.label, c.action, c.cell) for c in bench.children] == [
+        ("Bench", "panel:toggle:bench", 8),
+        ("Install", "bench:install", 6),
+        ("Compile", "bench:compile", 2),
+        ("Upload", "bench:upload", 4),
+        ("Raw flash", "bench:esptool", 9),
+        ("Cancel", "bench:cancel", 3),
+        ("Cores", None, 1),
+        ("Libraries", "bench:libraries", 7),
     ]
-    assert address_of(root, "panel:kept") == "938"
-    assert carried_by("panel:toggle:kept").name == "VIEWER"
-    machine = next(c for c in panels.children if c.label == "Machine")
-    assert [(c.action, c.cell) for c in machine.children] == [
-        ("panel:toggle:machine", 8),
-        ("panel:toggle:log", 6),
-    ]
-    assert address_of(root, "panel:contents") == "98"  # by the option's id
-    assert carried_by("panel:toggle:contents").name == "VIEWER"
-    # The page's sections are marked in its markup; the machine and its log are
-    # registered when a printer is opened. Both lists are the resolver's, in order.
+    assert address_of(root, "panel:bench") == "938"
+    assert address_of(root, "bench:compile") == "932"
+    # A core by its architecture, one leaf per suggested core.
+    cores = bench.children[6]
+    assert [c.label for c in cores.children] == ["AVR", "ESP32", "ESP8266", "RP2040", "SAMD"]
+    assert address_of(root, "bench:core:arduino:avr") == "9318"
+    assert {o.id for o in bench.children if o.destructive} == {"bench:upload", "bench:esptool"}
+    for pid in ("site", "pictures", "machine", "bench"):
+        assert carried_by(f"panel:toggle:{pid}").name == "VIEWER"
+    for verb in (
+        "install",
+        "compile",
+        "upload",
+        "esptool",
+        "cancel",
+        "libraries",
+        "core:esp32:esp32",
+    ):
+        assert carried_by(f"bench:{verb}").name == "VIEWER"
+    # The retired panels are on no ring: the Comms log is in the Machine.
+    for gone in ("contents", "validation", "scad", "kept", "camera", "jobs", "log"):
+        assert f"panel:toggle:{gone}" not in set(every_action([root])), gone
+    # The page's sections are marked in its markup; Pictures is registered at
+    # start and a board's Machine when one is opened. Both lists are the
+    # resolver's, in order.
     page = VIEWER.read_text(encoding="utf-8")
     marked = re.findall(r'class="panel-section"[^>]*data-panel="([\w-]+)"', page)
     registered = re.findall(r"panels\.register\('([\w-]+)'", page)
     assert marked == [pid for pid, _ in PANELS[: len(marked)]]
     assert sorted(registered) == sorted(pid for pid, _ in PANELS[len(marked) :])
+    for gone in ("contents", "validation", "scad", "kept", "camera", "jobs", "log"):
+        assert f'data-panel="{gone}"' not in page and f"register('{gone}'" not in page
 
 
 # --- pictures and cameras on the ring (pictures plan, Phase 4) -------------------------
@@ -995,11 +1070,11 @@ def _group(ring_or_option, *labels):
     return here
 
 
-def _look(look_id="look_1", *, sized=True, kept=True, shapes=3, picture="bench_top.png"):
-    from apothecary.menu import LookSeen, ShapeSeen
+def _view(view_id="view_1", *, sized=True, kept=True, shapes=3, picture="bench_top.png"):
+    from apothecary.menu import ShapeSeen, ViewSeen
 
-    return LookSeen(
-        id=look_id,
+    return ViewSeen(
+        id=view_id,
         picture=picture,
         sized=sized,
         kept=kept,
@@ -1112,7 +1187,7 @@ def test_a_made_piece_has_picture_with_word_and_drop_and_no_camera():
         "picture:word:post",
     ]
     assert _group(picture, "Drop").destructive
-    # A made piece is not a host: it holds no camera and no look of its own.
+    # A made piece is not a host: it holds no camera and no view of its own.
     assert "picture:add" not in every_action([ring])
 
 
@@ -1154,15 +1229,14 @@ def test_a_host_whose_camera_is_another_browsers_offers_pin_and_unpin_only():
     camera = _group(ring, "Camera")
     assert _ring_labels(camera) == [("Pin here", 8), ("Unpin", 6)]
     assert [c.action for c in _group(camera, "Pin here").children] == ["camera:pin:bench_cam"]
-    # This browser's own: Live (or Still while live), Look, Keep, then Unpin.
+    # This browser's own: Live (or Still while live), Take picture, then Unpin.
     mine = resolve(
         Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=_context()
     )
     assert [c.action for c in _group(mine, "Camera").children] == [
         None,
         "camera:live",
-        "camera:look",
-        "camera:keep",
+        "camera:take-picture",
         "camera:unpin",
     ]
     live = resolve(
@@ -1173,18 +1247,18 @@ def test_a_host_whose_camera_is_another_browsers_offers_pin_and_unpin_only():
     assert _group(live, "Camera", "Still").action == "camera:still"
 
 
-def test_the_picture_group_offers_make_only_on_a_sized_look_and_forget_only_on_a_kept_one():
+def test_the_picture_group_offers_make_only_on_a_sized_view_and_forget_only_on_a_kept_one():
     ring = resolve(
         Context(pointing=Pointing.NODE, targets=["workbench"]),
         _garage(),
-        picture=_context(looks=[_look(sized=False, kept=False)], drawn="look_1"),
+        picture=_context(views=[_view(sized=False, kept=False)], drawn="view_1"),
     )
     picture = _group(ring, "Picture")
     assert [c.label for c in picture.children] == ["Add", "Folder", "Size", "Unpin"]
     sized = resolve(
         Context(pointing=Pointing.NODE, targets=["workbench"]),
         _garage(),
-        picture=_context(looks=[_look()], drawn="look_1"),
+        picture=_context(views=[_view()], drawn="view_1"),
     )
     picture = _group(sized, "Picture")
     assert [(c.label, c.cell) for c in picture.children] == [
@@ -1197,27 +1271,107 @@ def test_the_picture_group_offers_make_only_on_a_sized_look_and_forget_only_on_a
     ]
     # Make › Make all beside each found shape, by index.
     assert [(c.label, c.action) for c in _group(picture, "Make").children] == [
-        ("Make all", "picture:make-all:look_1"),
-        ("disc 0", "picture:make:look_1:0"),
-        ("disc 1", "picture:make:look_1:1"),
-        ("disc 2", "picture:make:look_1:2"),
+        ("Make all", "picture:make-all:view_1"),
+        ("disc 0", "picture:make:view_1:0"),
+        ("disc 1", "picture:make:view_1:1"),
+        ("disc 2", "picture:make:view_1:2"),
     ]
     assert _group(picture, "Forget").destructive
 
 
-def test_find_is_offered_only_where_another_finder_can_read_the_picture():
-    one = _context(looks=[_look()], drawn="look_1")
+def test_find_shapes_on_a_searched_view_is_offered_only_where_another_finder_can_read_it():
+    one = _context(views=[_view()], drawn="view_1")
     one.finders = ["plain"]
-    two = _context(looks=[_look()], drawn="look_1")
+    two = _context(views=[_view()], drawn="view_1")
     two.finders = ["plain", "stated"]
     for told, offered in ((one, False), (two, True)):
         ring = resolve(
             Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told
         )
         labels = [c.label for c in _group(ring, "Picture").children]
-        assert ("Find" in labels) is offered
+        assert ("Find shapes" in labels) is offered
     ring = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=two)
-    assert [c.action for c in _group(ring, "Picture", "Find").children] == ["picture:find:stated"]
+    assert [c.action for c in _group(ring, "Picture", "Find shapes").children] == [
+        "picture:find:stated"
+    ]
+
+
+def test_find_shapes_is_the_step_after_a_view_is_pinned_and_appended_after_unpin():
+    """A view pinned and not yet searched offers Find shapes, the one finder that can
+    read it as a leaf or several behind it; once searched, Find shapes offers only the
+    other finders, and is absent when there are none. Appended last, so Unpin and
+    Forget keep their cells whether it is there or not; and no Make before shapes."""
+    unsearched = _context(views=[_view(shapes=0, sized=False)], drawn="view_1")
+    unsearched.here.views[0].finder = None
+    unsearched.finders = ["plain"]
+    ring = resolve(
+        Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=unsearched
+    )
+    picture = _group(ring, "Picture")
+    assert [(c.label, c.cell) for c in picture.children] == [
+        ("Add", 8),
+        ("Folder", 6),
+        ("Size", 2),
+        ("Unpin", 4),
+        ("Forget", 9),
+        ("Find shapes", 3),
+    ]
+    assert _group(picture, "Find shapes").action == "picture:find:plain"
+    # Two finders can read it: Find shapes › each, by name.
+    unsearched.finders = ["plain", "stated"]
+    ring = resolve(
+        Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=unsearched
+    )
+    assert [c.action for c in _group(ring, "Picture", "Find shapes").children] == [
+        "picture:find:plain",
+        "picture:find:stated",
+    ]
+    # Searched by the only finder there is: nothing more to find.
+    searched = _context(views=[_view()], drawn="view_1")
+    searched.finders = ["plain"]
+    ring = resolve(
+        Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=searched
+    )
+    labels = [c.label for c in _group(ring, "Picture").children]
+    assert "Find shapes" not in labels and labels[-2:] == ["Unpin", "Forget"]
+    # At the floor, the same step under Pictures › Floor › Picture.
+    floor = resolve(Context(pointing=Pointing.CANVAS), _garage(), picture=unsearched)
+    assert [
+        c.action for c in _group(floor, "Pictures", "Floor", "Picture", "Find shapes").children
+    ] == [
+        "picture:find:plain:@floor",
+        "picture:find:stated:@floor",
+    ]
+
+
+def test_keep_is_gone_from_every_ring_and_take_picture_is_in_its_place():
+    """Camera › Keep went: Take picture always pins a view. A camera of this browser's
+    holds Pin here, Live (or Still), Take picture and Unpin, at a host and at the floor."""
+    told = _context(views=[_view()], drawn="view_1")
+    told.finders = ["plain", "stated"]
+    rings = [
+        resolve(Context(pointing=Pointing.CANVAS), _garage(), picture=told),
+        resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told),
+        resolve(
+            Context(pointing=Pointing.NODE, targets=["printer_1"]),
+            _garage(),
+            device=PRINTER,
+            picture=told,
+        ),
+    ]
+    actions = set(every_action(rings))
+    assert not [a for a in actions if a.startswith("camera:keep")], sorted(actions)
+    assert {"camera:take-picture", "camera:take-picture:@floor"} <= actions
+    for ring in rings:
+        for address in every_address(ring):
+            assert walk(ring, address).label != "Keep", address
+    camera = _group(rings[1], "Camera")
+    assert [(c.label, c.cell) for c in camera.children] == [
+        ("Pin here", 8),
+        ("Live", 6),
+        ("Take picture", 2),
+        ("Unpin", 4),
+    ]
 
 
 @pytest.mark.parametrize("how_many", [65, 500])
@@ -1230,25 +1384,78 @@ def test_a_root_with_many_pictures_still_resolves_and_a_chosen_one_fills_the_eig
     assert [c.action for c in folder.children][:7] == [
         f"picture:pin:shot_{i:03d}.png" for i in range(7)
     ]
-    assert (folder.children[-1].label, folder.children[-1].action) == ("More", "picture:kept")
+    # More opens the Pictures panel, where every picture is listed to be chosen.
+    assert (folder.children[-1].label, folder.children[-1].action) == ("More", "picture:more")
     told.chosen_picture = "shot_042.png"
     ring = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told)
     last = _group(ring, "Picture", "Folder").children[-1]
     assert last.action == "picture:pin:shot_042.png" and last.cell == 7
+    assert last.label == "Pin shot_042" and not last.marked
 
 
-def test_a_host_with_more_than_eight_looks_still_resolves_and_a_chosen_look_fills_the_eighth():
-    looks = [_look(f"look_{i:02d}", picture=f"shot_{i:02d}.png") for i in range(12)]
-    told = _context(looks=looks, drawn="look_00")
+def _folder(told, floor: bool = False):
+    """Picture › Folder's cells, at the bench or (floor) under the canvas ring's Pictures › Floor."""
+    if floor:
+        ring = resolve(Context(pointing=Pointing.CANVAS, targets=[]), _garage(), picture=told)
+        return _group(ring, "Pictures", "Floor", "Picture", "Folder").children
     ring = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told)
-    listed = _group(ring, "Picture", "Looks")
-    assert [c.action for c in listed.children] == [
-        *(f"picture:draw:look_{i:02d}" for i in range(7)),
-        "picture:looks",
+    return _group(ring, "Picture", "Folder").children
+
+
+@pytest.mark.parametrize("floor", [False, True], ids=["bench", "floor"])
+def test_a_picture_chosen_in_pictures_older_than_the_seven_is_folders_eighth_cell(floor):
+    """Chosen in Pictures and older than the seven newest, a picture is Folder's eighth
+    cell -- "Pin" and as much of its name as fits -- which pins it where the ring stands.
+    Unchosen, or chosen and gone from the folder, the eighth is More."""
+    told = _context()
+    told.pictures = [f"uploads/bench_shot_{i:02d}.png" for i in range(12)]
+    tail = ":@floor" if floor else ""
+    assert [(o.label, o.action) for o in _folder(told, floor)][-1] == (
+        "More",
+        f"picture:more{tail}",
+    )
+    told.chosen_picture = "uploads/bench_shot_09.png"
+    cells = _folder(told, floor)
+    assert len(cells) == MOST_OPTIONS
+    last = cells[-1]
+    assert (last.cell, last.action) == (7, f"picture:pin:uploads/bench_shot_09.png{tail}")
+    assert last.label.startswith("Pin ") and len(last.label) <= LONGEST_LABEL
+    assert last.label == "Pin bench 09"
+    assert not any(o.marked for o in cells)
+    told.chosen_picture = "uploads/no_longer_there.png"
+    assert _folder(told, floor)[-1].label == "More"
+
+
+def test_a_picture_chosen_among_the_seven_is_marked_in_its_own_cell():
+    """Chosen and among the seven newest, a picture's own cell is marked and nothing else
+    changes: the eighth is still More, or absent when there are no more."""
+    told = _context()
+    told.pictures = [f"shot_{i:02d}.png" for i in range(10)]
+    unchosen = _folder(told)
+    told.chosen_picture = "shot_03.png"
+    cells = _folder(told)
+    assert [o.marked for o in cells] == [o.action == "picture:pin:shot_03.png" for o in cells]
+    assert [(o.label, o.cell, o.action) for o in cells] == [
+        (o.label, o.cell, o.action) for o in unchosen
     ]
-    told.here.chosen_look = "look_10"
+    assert cells[-1].label == "More"
+    told.pictures = told.pictures[:5]
+    cells = _folder(told)
+    assert len(cells) == 5 and [o.label for o in cells if o.marked] == ["shot_03"]
+
+
+def test_a_host_with_more_than_eight_views_still_resolves_and_a_chosen_view_fills_the_eighth():
+    views = [_view(f"view_{i:02d}", picture=f"shot_{i:02d}.png") for i in range(12)]
+    told = _context(views=views, drawn="view_00")
     ring = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told)
-    assert _group(ring, "Picture", "Looks").children[-1].action == "picture:draw:look_10"
+    listed = _group(ring, "Picture", "Views")
+    assert [c.action for c in listed.children] == [
+        *(f"picture:draw:view_{i:02d}" for i in range(7)),
+        "picture:views",
+    ]
+    told.here.chosen_view = "view_10"
+    ring = resolve(Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=told)
+    assert _group(ring, "Picture", "Views").children[-1].action == "picture:draw:view_10"
 
 
 def test_garage_with_sixty_four_made_pieces_still_resolves_the_canvas_ring():
@@ -1271,15 +1478,15 @@ def test_garage_with_sixty_four_made_pieces_still_resolves_the_canvas_ring():
 
 
 def test_the_fullest_context_holds_every_ring_to_eight_and_says_how_deep_it_goes():
-    """A board, a camera, several looks, many shapes, many pictures, several finders:
+    """A board, a camera, several views, many shapes, many pictures, several finders:
     every ring and sub-ring holds eight or fewer. The deepest path on a node ring is
     four rings (Picture › Make › group › shape); on the canvas ring the floor is two
     further down (Pictures › Floor › Picture › Make › group › shape), the level deeper
     the owner's decision accepts for the floor having no ring of its own."""
     from apothecary.menu import CameraSeen
 
-    looks = [_look(f"look_{i:02d}", shapes=32) for i in range(10)]
-    told = _context(looks=looks, drawn="look_00")
+    views = [_view(f"view_{i:02d}", shapes=32) for i in range(10)]
+    told = _context(views=views, drawn="view_00")
     told.pictures = [f"shot_{i:03d}.png" for i in range(500)]
     told.finders = ["plain", "stated"]
     told.words = ["disc", "plate", "post", "slot", "wedge"]
@@ -1312,8 +1519,8 @@ def test_make_make_all_drop_and_a_made_pieces_word_are_the_servers_and_the_rest_
     from apothecary.menu import carried_by
 
     for action in (
-        "picture:make:look_1:0",
-        "picture:make-all:look_1",
+        "picture:make:view_1:0",
+        "picture:make-all:view_1",
         "picture:drop",
         "picture:word:plate",
     ):
@@ -1322,20 +1529,20 @@ def test_make_make_all_drop_and_a_made_pieces_word_are_the_servers_and_the_rest_
         "picture:add",
         "picture:add:@floor",
         "picture:pin:bench_top.png",
-        "picture:draw:look_1",
+        "picture:draw:view_1",
         "picture:size",
+        "picture:find:plain",
         "picture:find:stated:@floor",
         "picture:unpin",
         "picture:forget",
-        "picture:kept",
-        "picture:looks",
+        "picture:more",
+        "picture:views",
         "picture:purge",
         "camera:pin:bench_cam",
         "camera:allow:@floor",
         "camera:live",
         "camera:still",
-        "camera:look",
-        "camera:keep",
+        "camera:take-picture",
         "camera:unpin",
         "camera:gather",
         "fit:@floor",
@@ -1347,7 +1554,7 @@ def test_make_make_all_drop_and_a_made_pieces_word_are_the_servers_and_the_rest_
 
 def test_the_camera_panels_retired_cells_are_off_every_ring():
     """Allow, Capture, Place, Unplace and Open as one left with the camera panel's
-    sections: the camera is pinned, kept and looked at from its host's Camera."""
+    sections: the camera is pinned and takes pictures from its host's Camera."""
     rings = [
         resolve(Context(pointing=Pointing.CANVAS), _garage(), picture=_context()),
         resolve(
@@ -1370,41 +1577,41 @@ def test_the_camera_panels_retired_cells_are_off_every_ring():
 # --- carried by the server: the intent route's picture arms --------------------------
 
 
-from test_looks_api import world  # noqa: E402, F401 - the looks world, as a fixture here
+from test_views_api import world  # noqa: E402, F401 - the views world, as a fixture here
 
 
 @pytest.fixture
 def carried(world):  # noqa: F811 - the fixture imported above
-    """The looks world of tests/test_looks_api.py, with the bench's look pinned
-    and sized: a client, and the look as the page has it."""
+    """The views world of tests/test_views_api.py, with the bench's view pinned
+    and sized: a client, and the view as the page has it."""
     from fastapi.testclient import TestClient
-    from test_looks_api import _pin
+    from test_views_api import _pin
 
     from apothecary.api import app
 
     client = TestClient(app)
-    look = _pin(client, mm_across=1800)
-    return client, look
+    view = _pin(client, mm_across=1800)
+    return client, view
 
 
-def _told_about(look: dict):
-    from apothecary.menu import LookSeen, PictureContext, Place, ShapeSeen
+def _told_about(view: dict):
+    from apothecary.menu import PictureContext, Place, ShapeSeen, ViewSeen
 
     return PictureContext(
         here=Place(
-            looks=[
-                LookSeen(
-                    id=look["id"],
-                    picture=look["picture"],
-                    finder=look["finder"],
-                    sized=bool(look["mat"] and look["mat"]["width"]),
+            views=[
+                ViewSeen(
+                    id=view["id"],
+                    picture=view["picture"],
+                    finder=view["finder"],
+                    sized=bool(view["mat"] and view["mat"]["width"]),
                     shapes=[
                         ShapeSeen(index=s["index"], word=s["word"], status=s["status"])
-                        for s in look["shapes"]
+                        for s in view["shapes"]
                     ],
                 )
             ],
-            drawn=look["id"],
+            drawn=view["id"],
         )
     )
 
@@ -1442,8 +1649,8 @@ def _address(ring: dict, action: str) -> str:
 
 
 def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_route(carried):
-    client, look = carried
-    told = _told_about(look).model_dump(mode="json")
+    client, view = carried
+    told = _told_about(view).model_dump(mode="json")
     ring = client.post(
         "/menu/resolve",
         json={
@@ -1452,8 +1659,8 @@ def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_rout
             "picture": told,
         },
     ).json()
-    make = _address(ring, f"picture:make:{look['id']}:1")
-    assert make.startswith(_address(ring, f"picture:make-all:{look['id']}")[:2])
+    make = _address(ring, f"picture:make:{view['id']}:1")
+    assert make.startswith(_address(ring, f"picture:make-all:{view['id']}")[:2])
     answer = _choose(client, ring, make, ["workbench"])
     assert answer.status_code == 200, answer.text
     body = answer.json()
@@ -1476,7 +1683,7 @@ def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_rout
     answer = _choose(client, ring, _address(ring, "picture:drop"), [piece])
     assert answer.status_code == 200, answer.text
     assert piece not in {s["name"] for s in answer.json()["site"]["structures"]}
-    shapes = client.get("/sites/garage/attached").json()["looks"][0]["shapes"]
+    shapes = client.get("/sites/garage/attached").json()["views"][0]["shapes"]
     assert shapes[1]["status"] == "found"
 
     # Make all, from the same ring once more.
@@ -1488,13 +1695,13 @@ def test_a_shape_is_made_worded_and_dropped_through_the_ring_and_the_intent_rout
             "picture": told,
         },
     ).json()
-    answer = _choose(client, ring, _address(ring, f"picture:make-all:{look['id']}"), ["workbench"])
+    answer = _choose(client, ring, _address(ring, f"picture:make-all:{view['id']}"), ["workbench"])
     assert answer.status_code == 200, answer.text
     assert answer.json()["did"].startswith("made 3 piece(s)")
 
 
 def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(carried):
-    client, look = carried
+    client, view = carried
 
     def send(action, targets=("workbench",), site="garage"):
         intent = {
@@ -1507,19 +1714,18 @@ def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(car
             body["site"] = site
         return client.post("/menu/intent", json=body)
 
-    unsized = client.post(
-        "/sites/garage/looks",
-        json={"host": "workbench", "picture": "bench_top.png", "finder": "stated"},
-    ).json()
+    from test_views_api import _pin
+
+    unsized = _pin(client)
     cases = {
         "picture:make": 400,
         "picture:make:": 400,
-        f"picture:make:{look['id']}:x": 400,
-        f"picture:make:{look['id']}:9": 404,
-        "picture:make:look_nowhere:0": 404,
+        f"picture:make:{view['id']}:x": 400,
+        f"picture:make:{view['id']}:9": 404,
+        "picture:make:view_nowhere:0": 404,
         f"picture:make:{unsized['id']}:0": 409,
         "picture:make-all": 400,
-        "picture:make-all:look_nowhere": 404,
+        "picture:make-all:view_nowhere": 404,
         "picture:drop": 404,
         "picture:word": 400,
         "picture:word:no_such_word": 404,
@@ -1527,8 +1733,8 @@ def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(car
     for action, status in cases.items():
         answer = send(action)
         assert answer.status_code == status, (action, answer.status_code, answer.text)
-    made = send(f"picture:make:{look['id']}:0").json()["did"].split("made ", 1)[1]
-    assert send(f"picture:make:{look['id']}:0").status_code == 409  # already made
+    made = send(f"picture:make:{view['id']}:0").json()["did"].split("made ", 1)[1]
+    assert send(f"picture:make:{view['id']}:0").status_code == 409  # already made
     assert send("picture:word:no_such_word", targets=[made]).status_code == 422
     assert send("picture:drop", site=None).status_code == 400
     assert send("picture:drop", site="no_such_site").status_code == 404

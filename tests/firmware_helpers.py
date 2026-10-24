@@ -66,6 +66,7 @@ FAKE_ARDUINO_CLI = textwrap.dedent(r"""
 
 def _isolate_firmware_state(monkeypatch, tmp_path):
     """Flash records / cached probes go to a per-test file, never ~/.apothecary."""
+    from apothecary import jobs
     from apothecary.firmware import devices
 
     monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
@@ -75,6 +76,7 @@ def _isolate_firmware_state(monkeypatch, tmp_path):
     monkeypatch.setattr(devices, "_LAST_STATUS", {})
     monkeypatch.setattr(devices, "_LEVELING", {})  # a bed reading's job is per process
     monkeypatch.setattr(devices, "_PRINTS", {})
+    monkeypatch.setattr(jobs, "_LIVE", {})  # a running job is read from its thread, per process
 
 
 

@@ -184,3 +184,33 @@ def test_validate_recurses_below_the_root_not_just_at_site_level():
     assert not report.is_valid
     assert report.violations[0].kind == "overlap"
     assert set(report.violations[0].structures) == {"sub_a", "sub_b"}
+
+
+def test_a_problem_names_its_pieces_by_tree_path_where_names_repeat():
+    """Two printers each hold a left and a right post; only the second's overlap. The
+    problem names the posts and, beside the names, the paths that say which printer's:
+    a name alone is the same in both."""
+
+    def printer(name: str, apart: float, at: float) -> Structure:
+        post = BoundingBox3D(max_point=Vector3D(x=10, y=10, z=10))
+        left = Substructure(name="left_post", footprint=post, base=Cube())
+        right = Substructure(
+            name="right_post", position=Vector3D(x=apart), footprint=post, base=Cube()
+        )
+        return Structure(
+            name=name,
+            position=Vector3D(x=at),
+            footprint=BoundingBox3D(max_point=Vector3D(x=60, y=10, z=10)),
+            substructures=[left, right],
+        )
+
+    site = Site(
+        name="bench", structures=[printer("printer_a", 50, 0), printer("printer_b", 5, 100)]
+    )
+    report = site.validate()
+    assert [(v.structures, v.paths) for v in report.violations] == [
+        (["left_post", "right_post"], ["printer_b.left_post", "printer_b.right_post"])
+    ]
+    # Among a site's own pieces, the path is the name.
+    clash = Site(name="bench", structures=[printer("printer_a", 50, 0), printer("printer_c", 50, 30)])
+    assert [v.paths for v in clash.validate().violations] == [["printer_a", "printer_c"]]

@@ -14,8 +14,9 @@ is the catalog every registered part appears in.
     >>> client.get("/sites").json()
     ['datum_core', 'garage', 'parts_library']
 
-Every site read carries its generated OpenSCAD, so the viewer's code panel
-fills on load rather than waiting for someone to drag something:
+Every site read carries its generated OpenSCAD, so the SCAD section of the
+viewer's Site panel fills on load rather than waiting for someone to drag
+something:
 
     >>> body = client.get("/sites/datum_core").json()
     >>> body["is_valid"], "hull()" in body["scad"]
@@ -25,7 +26,7 @@ fills on load rather than waiting for someone to drag something:
 
 Loading three.js from a CDN meant the page worked only for a browser that could
 reach that CDN. When it could not, the module never executed and the canvas,
-the contents list and the code panel came up empty together — while the static
+the Site panel's tree and its SCAD came up empty together — while the static
 markup still read "Layout valid".
 
     >>> page = client.get("/viewer/sites/datum_core").text
@@ -37,6 +38,16 @@ markup still read "Layout valid".
 The library is checked in under `apothecary/static/vendor/three/`, so a fresh
 clone serves it with no install step; the README beside it says how to update it.
 
+## One page
+
+The viewer is the only page. The firmware page's address opens it with the
+Bench in front of the world, and the printer monitor's with that board's
+Machine:
+
+    >>> r = client.get("/firmware", follow_redirects=False)
+    >>> r.status_code, r.headers["location"]
+    (307, '/viewer/sites/garage?panel=bench')
+
 ## Recipes
 
 | | |
@@ -46,3 +57,5 @@ clone serves it with no install step; the README beside it says how to update it
 | The assembly | `/viewer/sites/datum_core` |
 | The catalog | `/viewer/sites/parts_library` |
 | One part, zoomed to | `/viewer/sites/parts_library?focus=datum_core` |
+| The Bench | `/firmware` |
+| A board's Machine | `/firmware/monitor?port=/dev/ttyUSB0` |
