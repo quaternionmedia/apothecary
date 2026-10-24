@@ -34,6 +34,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .hierarchy import Assembly
+from .systems import SYSTEMS
 
 MOST_OPTIONS = 8
 LONGEST_LABEL = 12
@@ -691,6 +692,11 @@ PANELS: Sequence[Tuple[str, str]] = (
     # its cell (_airgap), seated last.
     ("airgap", "Airgap"),
 )
+# The views: each focused system's windows laid out together (systems.py), a cell
+# of Panels › Windows after the layout's own two and an entry of the header's
+# ⊞ Windows. The page defines each from the same entry; a view's windows the page
+# has not got are left out of it.
+VIEWS = tuple((system.id, system.cell) for system in SYSTEMS)
 # The panels seated before the windows' own cell (Panels › Windows, 49); a panel
 # registered after them is seated after it. Site's cell is a ring of Site and its
 # own windows, Pictures' a ring of Pictures and Gather, and Machine's a ring of the
@@ -734,8 +740,8 @@ def _panels() -> Option:
         label="Panels",
         children=[cell(pid, label) for pid, label in PANELS if pid in _BEFORE_WINDOWS]
         # The layout itself: the world alone (its window maximised) and every window
-        # back, as the tilde key does; and the page's own layout again, whatever was
-        # dragged, split or closed.
+        # back, as the tilde key does; the page's own layout again, whatever was
+        # dragged, split or closed; and each view.
         + [
             Option(
                 id="panel:windows",
@@ -745,6 +751,10 @@ def _panels() -> Option:
                     Option(
                         id="panel:layout:reset", label="Reset layout", action="panel:layout:reset"
                     ),
+                ]
+                + [
+                    Option(id=f"panel:view:{vid}", label=label, action=f"panel:view:{vid}")
+                    for vid, label in VIEWS
                 ],
             )
         ]
@@ -1341,8 +1351,9 @@ def _node_ring(
         options.append(_made_picture_group(picture))
     elif camera:
         options.extend(_camera_options(picture))
-    # A part, or a piece made from a picture, is edited in Selected: Part › Edit opens
-    # the one editor there. Appended last, so no cell above moves; a host with a board,
+    # A part, or a piece made from a picture, is edited from Selected: Part › Edit opens
+    # the one editor there and its Parameters window (systems.py's Part). Appended
+    # last, so no cell above moves; a host with a board,
     # children and a part is the fullest node ring, eight, and so is a camera of this
     # browser's. A camera's editor edits its numbers -- its lens's position, its turn,
     # tilt and field of view (vision/camera_part.py,
@@ -1370,13 +1381,13 @@ def _node_ring(
         if seen is not None and seen.editable:
             verbs.append(Option(id="part:save", label="Save", action="part:save"))
         # Two groups, so the ring holds eight at the most: View -- how the part
-        # and its editor are seen: the editor in a window of its own beside the
-        # world or over the whole page, the ghost of what was drawn before beside what is drawn now,
-        # and the part framed with Selected and its editor kept open (f) -- and
-        # History, the staged numbers' undo and redo (Ctrl+Z, Ctrl+Shift+Z).
+        # and its editor are seen: its SCAD window, beside the world, or the editor
+        # over the whole page, the ghost of what was drawn before beside what is
+        # drawn now, and the part framed with Selected kept open (f) -- and History,
+        # the staged numbers' undo and redo (Ctrl+Z, Ctrl+Shift+Z).
         view = []
         if seen is not None:
-            view.append(Option(id="part:popout", label="Pop out", action="part:popout"))
+            view.append(Option(id="part:scad", label="SCAD", action="part:scad"))
             view.append(Option(id="part:fullscreen", label="Fullscreen", action="part:fullscreen"))
         if part_of_the_folder:
             view.append(Option(id="part:ghost", label="Ghost", action="part:ghost"))

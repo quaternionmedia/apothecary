@@ -17,7 +17,9 @@ when it is missing.
 ```bash
 uv run pytest tests/e2e --start-server          # the browser suite
 uv run pytest tests/e2e/test_viewer.py --start-server -k minimap
+uv run pytest tests/e2e/test_window_manager.py --start-server   # the window manager alone: no server is started
 uv run apothecary test all                       # unit, walkthrough and browser tests together
+uv run apothecary test all --workers 2 -k part   # the browser part on two workers, both parts narrowed to `part`
 ```
 
 A browser test runs only against a server of its own (`--start-server`) or one
@@ -60,8 +62,39 @@ loadfile` gives each worker its own server on a free port (`--server-port` is
 refused with `-n`). `--shard K/N` runs the K-th of N shards, files placed
 heaviest first onto the lightest shard by `durations.json`; CI runs three. A
 file missing from `durations.json` counts as the average test for each of its
-tests; refresh the file from a serial run's `--durations=0` when the shards
-drift apart.
+tests. `--record-durations` writes a run's times into it -- each file run replaces
+its entries, the rest are kept -- so when the shards drift apart, `uv run
+apothecary test all --record-durations` (on as many workers as you like) brings it
+up to date.
+
+## What each layer holds
+
+The suite is layered so that a change is held once, by the layer it belongs to,
+and a feature's test does not break when the layout around it changes:
+
+| Layer | What it holds | Runs in |
+|---|---|---|
+| Unit tests (`tests/`) | The registry of focused systems (`test_systems.py`), the ring, the census, the docs | `uv run pytest` |
+| The window manager (`test_window_manager.py`, marked `windows`) | `panels.js` and `systems.js` on a page of their own, served from the checkout by the browser's routing, with windows made up for each case: where a window opens, views, what a browser remembers, a window's life, systems from a registry, a stack's +. No server, no world | `apothecary test run`, and every browser run |
+| Focused systems (`test_focused_systems.py`) | Every system the registry names, in the viewer, parameterized over the registry: it opens its main window alone, each section shows its part, a ring verb opens the section it acts on, its view lays everything out, a reload keeps or forgets it | the browser suite |
+| Features and loops (the rest) | What a person does with a part, a board, a picture, end to end, and the walkthrough pages and pictures the loops write | the browser suite |
+
+Three rules keep it so:
+
+- **A feature's test asserts what the feature does, not where a window stands.**
+  It opens what it needs through the shared helpers -- `windows.py` (a window, a
+  view, ⊞ Windows, a board's Machine laid out once its kind is known),
+  `rings.py` (a ring's cells, from a row or the world), `part_editing.py`
+  (Part › Edit in the Part view, a parameter, the code) -- and leaves where a
+  window opens to the window manager's tests. A walk, whose pictures show what a
+  person pressed, lays a view out from the ring (`by_hand=True`).
+- **A focused system is held by the registry's test.** One added to
+  `apothecary/systems.py` needs a line in each of `test_focused_systems.py`'s
+  tables (how it is opened, what each section shows, a verb that opens one), and
+  `test_every_system_and_section_has_a_line_here` fails until it has them.
+- **A case is a parameter, not a copy.** Where a behaviour has variants -- a
+  window's home, a verb and the section it opens, which window a remembered stack
+  had in front -- they are one parameterized test, each case named.
 
 ## The two recorders
 

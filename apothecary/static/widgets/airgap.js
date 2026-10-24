@@ -14,9 +14,13 @@
  * values written into the part's text), From editor (the text read again), Copy SCAD, Copy
  * metrics, Reset. Nothing here is fetched from outside the page.
  *
- * mountAirgap(slot, { base, say, world }) -> handle { act(verb), textChanged(text), metrics(),
- *   values(), setValues(values), load(), preset(id) }
- * world: { text(): Promise<string>, editing(): bool, write(values): bool, edit(): bool }
+ * mountAirgap(slot, { base, say, world, sections }) -> handle { act(verb), textChanged(text),
+ *   metrics(), values(), setValues(values), load(), preset(id), redraw() }
+ * world: { text(): Promise<string>, editing(): bool, write(values): bool, edit(): bool,
+ *   showSection(id) }
+ * sections: an element per section of the Airgap's entry in apothecary/systems.py, each
+ *   the window the panel fills with that section (each a `data-section` block of the
+ *   markup below); the slot holds the machine, its scrub and the verbs.
  */
 import { parseAssignments, lastOf, writeValues } from '/static/widgets/assignments.js';
 
@@ -31,10 +35,12 @@ const snake = (k) => k.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase());
 const RIG_EXCITE = ['excite', 'current', 'advance'];
 const SWEEP_METRIC = { mean_torque: 'meanT', ripple: 'ripple', peak_b: 'bmax', mean_coenergy: 'meanW', dominant_order: 'dom' };
 
-export function mountAirgap(slot, { base, say, world }) {
+export function mountAirgap(slot, { base, say, world, sections }) {
 const TAU=Math.PI*2, MU0=4e-7*Math.PI;
 const NT=720, NPHI=360, NORD=96, NSHOW=64, MOWN=2880; // polar samples, rotor angles, harmonic orders, orders drawn, own-frame samples
-const $=id=>slot.querySelector('[data-airgap="'+id+'"]');
+// Where the panel's elements are: its slot, and each section's window.
+const roots=[slot];
+const $=id=>{for(const r of roots){const e=r.querySelector('[data-airgap="'+id+'"]');if(e)return e;}return null;};
 const PH_LETTERS='ABCDEF';
 function el(tag,attrs,text){const e=document.createElement(tag);if(attrs)for(const k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;return e;}
 /* ---------- parameter model ---------- */
@@ -516,7 +522,7 @@ const LUT=makeLut(HEAT_STOPS),DLUT=makeLut(DIV_STOPS);
 const heat=t=>LUT[Math.max(0,Math.min(255,Math.round(t*255)))];
 const heatCss=t=>{const c=heat(t);return 'rgb('+c[0]+','+c[1]+','+c[2]+')';};
 const divCss=t=>{const c=DLUT[Math.max(0,Math.min(255,Math.round((t+1)*127.5)))];return 'rgb('+c[0]+','+c[1]+','+c[2]+')';};
-function tokens(){const cs=getComputedStyle(slot);const g=n=>cs.getPropertyValue(n).trim();
+function tokens(){const cs=getComputedStyle(roots.find(r=>r.isConnected)||slot);const g=n=>cs.getPropertyValue(n).trim();
   return {paper:g('--paper'),card:g('--card'),ink:g('--ink'),ink2:g('--ink-2'),line:g('--line'),line2:g('--line-2'),steel:g('--steel'),copper:g('--copper'),copper2:g('--copper-2'),verd:g('--verdigris'),verd2:g('--verdigris-2'),stage:g('--stage'),stageInk:g('--stage-ink'),stageDim:g('--stage-dim'),stageLine:g('--stage-line'),ironS:g('--iron-s'),ironR:g('--iron-r'),mono:g('--font-mono')||'monospace',
     ph:[1,2,3,4,5,6].map(i=>g('--ph'+i)),sph:[1,2,3,4,5,6].map(i=>g('--sph'+i))};}
 
@@ -1032,30 +1038,36 @@ slot.innerHTML=`<div class="airgap-head">
     <output data-airgap="phiOut" for="phi">φ 0.0°</output>
   </div>
 </div>
-<details class="airgap-fold" open><summary>Metrics</summary><div class="readouts" data-airgap="readouts"></div>
-  <p class="cap">One document, <code>airgap/metrics/1</code>: geometry, windings, the static field and torque, the run. Panels › Airgap › Copy metrics copies it; <code>apothecary airgap metrics validate</code> reads it back.</p></details>
-<details class="airgap-fold"><summary>Winding functions and gap field</summary><canvas data-airgap="mmf"></canvas>
-  <p class="cap">Top: each phase's winding function N(θ), the MMF one ampere in that phase puts across the gap at stator angle θ. Bottom: the signed gap flux density at the rotor angle; grey where the stator has no iron.</p></details>
-<details class="airgap-fold"><summary>Gap map g(θ, φ)</summary><canvas data-airgap="gapmap"></canvas><div class="hover" data-airgap="gapHover">hover for g at (θ, φ) · click to set φ</div>
-  <p class="cap">Stator angle θ across, rotor angle φ up. Rotor features sweep as diagonals, stator features stand as verticals; where they cross the gap closes.</p></details>
-<details class="airgap-fold"><summary>Phase inductance and commutation</summary><canvas data-airgap="induct"></canvas>
-  <p class="cap">Each phase's self-inductance against rotor angle, and the currents the rig's excitation applies. Torque comes from the rising flank of L.</p></details>
-<details class="airgap-fold"><summary>Co-energy and torque</summary><canvas data-airgap="energy"></canvas><div class="hover" data-airgap="energyHover">hover for W′ and T at φ · click to set φ</div></details>
-<details class="airgap-fold"><summary>Harmonic overlap</summary><canvas data-airgap="spectra"></canvas>
-  <p class="cap">Ripple at order n needs both surfaces to carry order n. Copper ticks mark the shared orders; the dominant ripple order is labelled.</p></details>
-<details class="airgap-fold"><summary>Run-up: speed and torque</summary><canvas data-airgap="dynSpeed"></canvas><div class="hover" data-airgap="dynHover">hover for t · click to scrub the playback</div></details>
-<details class="airgap-fold"><summary>Rotor orbit and stator modes</summary><canvas data-airgap="dynOrbit"></canvas>
-  <p class="cap">Left: the rotor centre's path in µm; dashed rings are the bearing clearance and the touchdown radius. Right: stator mode displacements, axial excursion and carrier torsion.</p></details>
-<details class="airgap-fold"><summary>Vibration spectrum</summary><canvas data-airgap="dynSpec"></canvas></details>
-<details class="airgap-fold"><summary>Rig</summary>
+<div data-section="metrics"><div class="readouts" data-airgap="readouts"></div>
+  <p class="cap">One document, <code>airgap/metrics/1</code>: geometry, windings, the static field and torque, the run. Panels › Airgap › Copy metrics copies it; <code>apothecary airgap metrics validate</code> reads it back.</p></div>
+<div data-section="field"><canvas data-airgap="mmf"></canvas>
+  <p class="cap">Top: each phase's winding function N(θ), the MMF one ampere in that phase puts across the gap at stator angle θ. Bottom: the signed gap flux density at the rotor angle; grey where the stator has no iron.</p></div>
+<div data-section="gap-map"><canvas data-airgap="gapmap"></canvas><div class="hover" data-airgap="gapHover">hover for g at (θ, φ) · click to set φ</div>
+  <p class="cap">Stator angle θ across, rotor angle φ up. Rotor features sweep as diagonals, stator features stand as verticals; where they cross the gap closes.</p></div>
+<div data-section="inductance"><canvas data-airgap="induct"></canvas>
+  <p class="cap">Each phase's self-inductance against rotor angle, and the currents the rig's excitation applies. Torque comes from the rising flank of L.</p></div>
+<div data-section="torque"><canvas data-airgap="energy"></canvas><div class="hover" data-airgap="energyHover">hover for W′ and T at φ · click to set φ</div></div>
+<div data-section="harmonics"><canvas data-airgap="spectra"></canvas>
+  <p class="cap">Ripple at order n needs both surfaces to carry order n. Copper ticks mark the shared orders; the dominant ripple order is labelled.</p></div>
+<div data-section="run-up"><canvas data-airgap="dynSpeed"></canvas><div class="hover" data-airgap="dynHover">hover for t · click to scrub the playback</div></div>
+<div data-section="orbit"><canvas data-airgap="dynOrbit"></canvas>
+  <p class="cap">Left: the rotor centre's path in µm; dashed rings are the bearing clearance and the touchdown radius. Right: stator mode displacements, axial excursion and carrier torsion.</p></div>
+<div data-section="vibration"><canvas data-airgap="dynSpec"></canvas></div>
+<div data-section="rig">
   <textarea class="airgap-rig" data-airgap="rig" spellcheck="false" aria-label="The rig: excitation, drive, load, bearing, mount, actuation and playback settings, as JSON" title="Excitation, drive, load, bearing, mount, actuation and playback, as one JSON document; a preset sets it"></textarea>
   <div class="msg" data-airgap="rigMsg"></div>
-  <p class="cap">The settings the geometry runs under, one document: a value outside its range is clamped and said, an unknown name refused. Excitation: <code>excite</code> auto · sin · dc · uniform, <code>current</code> A, <code>advance</code> ° el. The rest are the drive, bearing, axial, carrier, yoke and playback settings the presets show.</p></details>
-<details class="airgap-fold"><summary>Sweep</summary>
+  <p class="cap">The settings the geometry runs under, one document: a value outside its range is clamped and said, an unknown name refused. Excitation: <code>excite</code> auto · sin · dc · uniform, <code>current</code> A, <code>advance</code> ° el. The rest are the drive, bearing, axial, carrier, yoke and playback settings the presets show.</p></div>
+<div data-section="sweep">
   <div class="sweep-row"><input type="text" class="airgap-sweep" data-airgap="sweepSpec" spellcheck="false" aria-label="Sweep: x from..to × y from..to → metric" title="Two of the SCAD's names with their ranges, and the metric to map"><button type="button" class="airgap-run" data-airgap="swRun" title="Map the metric over the two ranges (Panels › Airgap › Sweep)">Run</button><span class="msg" data-airgap="swMsg"></span></div>
-  <canvas data-airgap="sweep"></canvas><div class="hover" data-airgap="sweepHover">hover a cell · click to load that geometry</div></details>
+  <canvas data-airgap="sweep"></canvas><div class="hover" data-airgap="sweepHover">hover a cell · click to load that geometry</div></div>
 <p class="cap">The geometry is the airgap part's text: Part › Edit on it, and the panel follows every edit. Panels › Airgap holds the verbs.</p>`;
 
+// Each section's content moves to its window, and the slot keeps the machine.
+slot.classList.add('airgap-panel');
+for(const part of [...slot.querySelectorAll('[data-section]')]){
+  const host=sections[part.dataset.section];
+  host.classList.add('airgap-ui','airgap-section');host.append(...part.childNodes);
+  part.remove();roots.push(host);}
 $('rig').value=rigText(state);$('sweepSpec').value=sweepText(sweepCfg);
 // The panel's own controls, each listened to once; the verb buttons are the ring's cells
 // (Panels › Airgap), so each does what its cell does.
@@ -1101,9 +1113,7 @@ function loadSweepCell(ev){const p=pos(ev,sweepMapEl),c=sweepCell(p.x,p.y,p.w,p.
   const values={[nameOfAxis(SW.ax.id)]:SW.xs[c.xi],[nameOfAxis(SW.ay.id)]:SW.ys[c.yi]};
   if(following&&world.editing()&&world.write(values))return; // the text changes; the panel follows
   setP(state,SW.ax.id,SW.xs[c.xi]);setP(state,SW.ay.id,SW.ys[c.yi]);activePreset=null;syncPreset();following=false;markSource();requestUpdate();}
-// A fold opened draws the pictures in it; a resize draws them all again.
-const foldsEl=slot;
-foldsEl.addEventListener('toggle',()=>requestAnimationFrame(drawAll),true);
+// A resize, a window opened at its size among them, draws the pictures again.
 let rsz=false;const ro=new ResizeObserver(()=>{if(rsz)return;rsz=true;requestAnimationFrame(()=>{rsz=false;drawAll();});});
 for(const id of ['machine','mmf','gapmap','induct','energy','spectra','dynSpeed','dynOrbit','dynSpec','sweep'])ro.observe($(id));
 
@@ -1113,6 +1123,8 @@ const handle={
   async load(){try{const text=await world.text();if(text)takeValues(valuesOfText(text));following=!!(world.editing&&world.editing());markSource();}catch(err){say('Airgap: '+(err&&err.message||err),'error');}
     // The verb buttons wear their ring addresses once the ring knows the panel is on screen.
     if(window.apothecaryRing&&window.apothecaryRing.refreshAddresses)window.apothecaryRing.refreshAddresses();},
+  // A section's window in front again: its pictures drawn at the size it has now.
+  redraw(){requestAnimationFrame(drawAll);},
   metrics(){return METRICS_DOC;},
   values(){return assignmentsOf(state);},
   setValues(values){takeValues(Object.assign({},assignmentsOf(state),values));},
@@ -1122,7 +1134,7 @@ const handle={
   // A verb of Panels › Airgap: what its cell does. A refusal is said and returns false.
   async act(verb){
     if(verb==='play'){setPlaying(!playing);return true;}
-    if(verb==='sweep'){const r=readSweep($('sweepSpec').value);if(r.error){say('Airgap: sweep: '+r.error,'error');return false;}sweepCfg=r.cfg;$('sweep').closest('details').open=true;runSweep();return true;}
+    if(verb==='sweep'){const r=readSweep($('sweepSpec').value);if(r.error){say('Airgap: sweep: '+r.error,'error');return false;}sweepCfg=r.cfg;if(world.showSection)world.showSection('sweep');runSweep();return true;}
     if(verb==='to-editor'){const values=assignmentsOf(state);
       if(!(world.editing&&world.editing())){if(!(world.edit&&await world.edit())){say('Airgap: select the airgap part and open Part › Edit first; its text is where the values go','error');return false;}}
       if(world.write(values)){say('Airgap: the panel\'s values written into the editor\'s text','success');following=true;markSource();return true;}

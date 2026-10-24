@@ -355,7 +355,7 @@ def test_a_movable_thing_selected_wears_one_compact_set_of_handles(page: Page, b
 # The Machine: a tab beside Pictures
 # --------------------------------------------------------------------------
 
-MACHINE = ".panel[data-panel='machine']"
+MACHINE = windows.MACHINE
 
 
 def _tabbed_machine(page: Page):
@@ -424,8 +424,8 @@ def test_the_machine_opens_beside_pictures_and_stays_where_it_is_dragged(page: P
 @pytest.mark.e2e
 def test_a_printers_machine_has_no_flashing(page: Page, start_server):
     """A board pinned inside a printer is the printer's, whatever it has been identified
-    as so far: its Machine folds Flashing away, and Device › Flash -- a cell the ring
-    keeps -- says why instead. A devkit's Machine keeps its Flashing."""
+    as so far: its Machine has no Flashing, and Device › Flash -- a cell the ring keeps --
+    says why instead. A devkit's Machine has its Flashing."""
     url = start_server()
     httpx.put(  # never asked M115: not yet known to be a printer
         f"{url}/sites/garage/nodes/{BOARD}/device", json={"identity": PRINTER}, timeout=15.0
@@ -457,7 +457,9 @@ def test_a_printers_machine_has_no_flashing(page: Page, start_server):
     page.evaluate("() => { window.fractalViewer.rescanDevices(); }")
     expect(page.locator(FOOTPEDAL_BADGE)).to_be_visible(timeout=10000)
     page.evaluate("() => window.fractalViewer.openMachine('footpedal')")
-    expect(_tabbed_machine(page).locator("#flash-card")).to_be_visible(timeout=10000)
+    _tabbed_machine(page)
+    windows.machine_ready(page, "devkit")
+    expect(windows.in_machine(page, "#flash-card")).to_be_visible(timeout=10000)
 
 
 # --------------------------------------------------------------------------
@@ -487,7 +489,7 @@ def _canvas_ring(page: Page) -> None:
 @pytest.mark.e2e
 def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
     """At 1024 px wide the header is one row, at the top of the site and deep in it: the
-    site's drop-down (choosing loads), the trail, ⚙ View,
+    site's drop-down (choosing loads), the trail, ⚙ View, ⊞ (Windows, its sign alone),
     the ring and the problems' count, and a short pill whose tooltip is the whole of it."""
     page.set_viewport_size({"width": 1024, "height": 700})
     _open(page, bench)
@@ -498,6 +500,10 @@ def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
     expect(pill).to_have_attribute("title", "FRACTAL VIEWER — unratified prototype")
     row = page.evaluate(ONE_ROW)
     assert row["spread"] < 4 and row["height"] < 60, row
+    # ⊞ Windows is its sign alone, its name its label, so the trail has the room.
+    windows_menu = page.locator("#windows-menu > summary")
+    expect(windows_menu).to_have_text("⊞", use_inner_text=True)
+    expect(windows_menu).to_have_attribute("aria-label", "Windows")
 
     # Deep in the site the trail is longest; still one row, the level in view.
     page.evaluate("() => window.fractalViewer.selectAtItsLevel('printer_1.frame_system.mainboard')")

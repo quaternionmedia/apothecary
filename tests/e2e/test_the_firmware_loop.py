@@ -35,7 +35,7 @@ DEVKIT = "/dev/ttyFAKE2"
 NODE = "esp32_blink"
 ARDUINO = "esp32_blink@arduino"
 RUST = "esp32_blink@rust-esp32"
-MACHINE = ".panel[data-panel='machine']"
+MACHINE = windows.MACHINE
 BENCH = ".panel[data-panel='bench']"
 
 
@@ -291,7 +291,8 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     expect(bench).to_be_hidden(timeout=5000)
     _ring_on(page, NODE)
     _choose(page, "Device", "Open")
-    machine = page.locator(MACHINE)
+    windows.machine_ready(page, "devkit", by_hand=True)
+    machine = windows.machine(page)
     sketch = machine.locator("#c-sketch")
     log = machine.locator("#log")
     # Which build it should run, its toolchain said.
@@ -307,10 +308,11 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     settled(page)
     story.shows(
         "The board's Machine hears it say hello",
-        "esp32_blink's ring, Device › Open: the board's Machine, with what it should run "
-        "-- esp32_blink@arduino, for its board -- and Device › Query, which listens a few "
-        "seconds for the hello. Heard, the Machine says the board runs what it should. "
-        "Change it next: Device › Flash.",
+        "esp32_blink's ring, Device › Open: the board's Machine, and the world's ring, "
+        "Panels › Windows › Machine view, lays a devkit's sections out beside it: its "
+        "Sketch, with what it should run -- esp32_blink@arduino, for its board -- and its "
+        "Log. Device › Query listens a few seconds for the hello. Heard, the Sketch says "
+        "the board runs what it should. Change it next: Device › Flash.",
         shown=_lines(log, "listening 6 s", "heard esp32_blink say hello")
         + "\n"
         + _lines(sketch, "should run", "observed").replace(
@@ -506,7 +508,8 @@ def test_with_rust_alone_the_loop_goes_round_with_no_arduino_cli(page: Page, rus
     expect(bench).to_be_hidden(timeout=5000)
     _ring_on(page, NODE)
     _choose(page, "Device", "Open")
-    machine = page.locator(MACHINE)
+    windows.machine_ready(page, "devkit")
+    machine = windows.machine(page)
     sketch, log = machine.locator("#c-sketch"), machine.locator("#log")
     expect(machine.locator("#c-board")).to_contain_text("found by rust-esp32", timeout=8000)
     expect(sketch).to_contain_text(f"should run {RUST} · esp32", timeout=8000)

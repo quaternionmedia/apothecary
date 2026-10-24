@@ -99,7 +99,11 @@ def test_site_is_a_window_beside_the_world_and_the_retired_panels_are_gone(page,
         "bench",
         "settings",
         "gather",
+        # The Part's sections, then the Airgap and its sections, each a window of its
+        # own closed until asked for (apothecary/systems.py).
+        *(f"part-{sid}" for sid in windows.PART_SECTIONS),
         "airgap",
+        *(f"airgap-{sid}" for sid in windows.AIRGAP_SECTIONS),
     ]
     assert windows.state(page, "site")["stack"] == ["site", "problems", "pinned", "jobs", "scad"]
     for gone in ("contents", "validation", "kept", "camera"):
@@ -148,7 +152,9 @@ def test_what_the_rail_remembered_is_ignored_and_forgotten(page, base_url: str):
         ("bench", True, False),
         ("settings", True, False),
         ("gather", False, False),  # closed until asked for
+        *((f"part-{sid}", False, False) for sid in windows.PART_SECTIONS),
         ("airgap", False, False),
+        *((f"airgap-{sid}", False, False) for sid in windows.AIRGAP_SECTIONS),
     ]
     assert page.locator(windows.WORLD).bounding_box()["x"] <= 1
     assert page.evaluate("() => localStorage.getItem('apothecary.panels')") is None

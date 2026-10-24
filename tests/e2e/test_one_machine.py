@@ -88,7 +88,7 @@ def _ring_on(page: Page, path: str) -> None:
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
 
 
-MACHINE = ".panel[data-panel='machine']"
+MACHINE = windows.MACHINE
 
 
 @pytest.mark.e2e
@@ -104,8 +104,8 @@ def test_the_device_rings_open_is_the_one_cell_that_opens_the_machine(page: Page
     assert cells["Flash"] == "2"
     page.keyboard.press("8")
     expect(page.locator("#ring-overlay")).to_have_count(0)
-    machine = page.locator(MACHINE)
-    expect(machine).to_be_visible(timeout=5000)
+    machine = windows.machine(page)
+    expect(page.locator(MACHINE)).to_be_visible(timeout=5000)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
     assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "layout"
     expect(windows.tab(page, "machine")).to_have_attribute("title", re.compile("printer_1"))
@@ -126,7 +126,7 @@ def test_selected_says_one_line_and_open_opens_the_machine(page: Page, url: str)
         expect(section.locator(gone)).to_have_count(0)
     section.locator(".dev-open").click()
     expect(page.locator(MACHINE)).to_be_visible(timeout=5000)
-    expect(page.locator(MACHINE).locator("#ident")).to_contain_text("Marlin", timeout=10000)
+    expect(windows.in_machine(page, "#ident")).to_contain_text("Marlin", timeout=10000)
 
 
 @pytest.mark.e2e
@@ -146,9 +146,10 @@ def test_one_poller_per_board_whatever_draws_it(page: Page, url: str):
     _ring_on(page, "printer_1")
     _choose(page, "Device")
     page.keyboard.press("8")
-    machine = page.locator(MACHINE)
-    expect(machine).to_have_count(1)
+    machine = windows.machine(page)
+    expect(page.locator(MACHINE)).to_have_count(1)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
+    windows.machine_ready(page, "printer")
 
     asked = []
     page.on("request", lambda r: asked.append(r.url) if STATUS in r.url else None)
@@ -180,8 +181,9 @@ def test_one_log_with_one_query_box_in_the_machine(page: Page, url: str):
     traffic stays out until asked for, and a refused code says so."""
     _open_viewer(page, url)
     page.locator(".world-badge[data-path='printer_1']").click()
-    machine = page.locator(MACHINE)
+    machine = windows.machine(page)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
+    windows.machine_ready(page, "printer")
     expect(page.locator(".panel[data-panel='log']")).to_have_count(0)
     expect(page.locator("[data-panel='log']")).to_have_count(0)
     expect(page.locator("#log")).to_have_count(1)
@@ -208,8 +210,9 @@ def test_a_refusal_reaches_the_status_bar(page: Page, url: str):
     in the log in the same words."""
     _open_viewer(page, url)
     page.locator(".world-badge[data-path='printer_1']").click()
-    machine = page.locator(MACHINE)
+    machine = windows.machine(page)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
+    windows.machine_ready(page, "printer")
     _ring_on(page, "printer_1")
     _choose(page, "Device", "Control", "Jog", "Y+")
     expect(page.locator("#ring-overlay")).to_have_count(0)
@@ -274,10 +277,11 @@ def test_a_devkit_has_a_machine_with_what_it_should_run_and_what_it_says(page: P
     badge = page.locator(".world-badge[data-path='footpedal']")
     expect(badge).to_be_visible(timeout=15000)
     badge.click()
-    machine = page.locator(MACHINE)
-    expect(machine).to_be_visible(timeout=5000)
+    machine = windows.machine(page)
+    expect(page.locator(MACHINE)).to_be_visible(timeout=5000)
     assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "layout"
     expect(windows.tab(page, "machine")).to_have_attribute("title", re.compile("footpedal"))
+    windows.machine_ready(page, "devkit")
     expect(machine.locator("#c-board")).to_contain_text(UNO)
     expect(machine.locator("#c-board")).to_contain_text("Arduino Uno")
     sketch = machine.locator("#c-sketch")
@@ -355,7 +359,7 @@ def test_a_machine_s_ring_is_its_device_ring(page: Page, url: str):
     the world wears Jog › Y+ ⌗728 and Pause ⌗796, and its ring is the device ring too."""
     _open_viewer(page, url)
     page.locator(".world-badge[data-path='printer_1']").click()
-    machine = page.locator(MACHINE)
+    machine = windows.machine(page)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
     expect(machine.locator("#ctl")).to_have_attribute("data-address", "77", timeout=5000)
     expect(machine.locator("#estop")).to_have_attribute("data-address", "71")
@@ -410,7 +414,8 @@ def test_a_devkit_s_machine_opens_no_port_until_listen(page: Page, start_server)
     badge = page.locator(".world-badge[data-path='footpedal']")
     expect(badge).to_be_visible(timeout=15000)
     badge.click()
-    machine = page.locator(MACHINE)
+    windows.machine_ready(page, "devkit")
+    machine = windows.machine(page)
     expect(machine.locator("#c-sketch")).to_contain_text("should run footpedal", timeout=8000)
     expect(machine.locator("#c-board")).to_contain_text("not listening")
     expect(machine.locator("#c-board")).to_contain_text("Listen opens it")
@@ -464,7 +469,7 @@ def test_device_flash_opens_the_machine_at_its_card_and_uploads_then_identifies(
     assert _wedges(page)["Flash"] == "2"
     page.keyboard.press("2")
     expect(page.locator("#ring-overlay")).to_have_count(0)
-    machine = page.locator(MACHINE)
+    machine = windows.machine(page)
     card = machine.locator("#flash-card")
     expect(card).to_be_visible(timeout=8000)
     expect(page.locator("#status")).to_contain_text("⌗12")
@@ -480,6 +485,9 @@ def test_device_flash_opens_the_machine_at_its_card_and_uploads_then_identifies(
     expect(card.locator(".task-title")).to_contain_text("succeeded", timeout=10000)
     expect(card.locator(".task-log")).to_contain_text("fake upload")
     assert dialogs == ['Compile and upload "footpedal@arduino" to /dev/ttyFAKE0?'], dialogs
+    # What the upload and the listen after it said: the Log and the Sketch, in the
+    # Machine view.
+    windows.machine_ready(page, "devkit")
     log = machine.locator("#log")
     expect(log).to_contain_text(
         "upload of footpedal@arduino (arduino:avr:uno): succeeded", timeout=5000
@@ -498,7 +506,7 @@ def test_the_monitor_address_opens_the_board_s_machine_where_it_is_pinned(page: 
     load, the port kept in the address, so a reload opens it again."""
     page.goto(f"{url}/firmware/monitor?port={PRINTER}")
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?machine=%2Fdev%2FttyFAKE1$"))
-    machine = page.locator(MACHINE)
+    machine = windows.machine(page)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=15000)
     assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "layout"
     expect(windows.tab(page, "machine")).to_have_attribute("title", re.compile("printer_1"))
@@ -527,7 +535,8 @@ def test_a_board_pinned_nowhere_opens_beside_pictures_on_the_default_site(page: 
     )
     page.goto(f"{url}/firmware/monitor?port={UNO}")
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?machine=%2Fdev%2FttyFAKE0$"))
-    machine = page.locator(MACHINE)
+    windows.machine_ready(page, "devkit")
+    machine = windows.machine(page)
     expect(machine.locator("#c-board")).to_contain_text("Arduino Uno", timeout=15000)
     assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "layout"
     expect(windows.tab(page, "machine")).to_have_attribute(

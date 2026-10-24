@@ -24,7 +24,7 @@ from viewer_ready import by_hand
 
 BOARD = "printer_1.frame_system.mainboard"
 UNO = "/dev/ttyFAKE0"
-MACHINE = ".panel[data-panel='machine']"
+MACHINE = windows.MACHINE
 
 # What differs on every run whatever the page does, blanked in the pictures: the times
 # of the log, of a poll and of a job, and how long one took; a temperature to its
@@ -33,16 +33,21 @@ MACHINE = ".panel[data-panel='machine']"
 # the picture is taken. The simulated printer's own print is held still by the doc
 # server (APOTHECARY_SIMULATED_PROGRESS).
 STREAMED = r"\d+/\d+ lines|\(\d+(?:\.\d+)?%\)|\b\d+%|stream\w* \d+|\bG\d+(?: [A-Z][\d.-]+)*"
-WHERE_IT_SHOWS = (MACHINE, "#selected-body .device-section", ".world-badge", "#status")
+WHERE_IT_SHOWS = (
+    windows.MACHINE_WINDOWS,
+    "#selected-body .device-section",
+    ".world-badge",
+    "#status",
+)
 CHANGING = (
     *moments(*WHERE_IT_SHOWS),
     *((where, TEMPERATURE) for where in WHERE_IT_SHOWS),
     *(
-        (f"{MACHINE} {part}", STREAMED)
+        (f"{windows.MACHINE_WINDOWS} {part}", STREAMED)
         for part in ("#print-progress", "#print-history", "#c-state-s")
     ),
-    f"{MACHINE} #chart",
-    f"{MACHINE} #b-print",
+    f"{windows.MACHINE_WINDOWS} #chart",
+    f"{windows.MACHINE_WINDOWS} #b-print",
 )
 
 
@@ -152,17 +157,19 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     )
 
     world_badge.click()
-    machine = page.locator(".panel[data-panel='machine']")
+    windows.machine_ready(page, "printer", by_hand=True)
+    machine = windows.machine(page)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
     expect(machine.locator("#chart-span")).to_contain_text("poll", timeout=10000)
     docs.step(
         "Click the badge, or Open, or Device › Open on the ring, and the printer's Machine "
-        "opens as a tab beside Pictures and the Bench, in front: the monitor's own "
-        "body -- cards, chart, the latch and control pad, the bed reading, the print from "
-        "here -- with the board's one log in it. It is the one place for the board, and "
-        "the one thing that polls it: the badges and Selected's line say what its polls "
-        "said. Dragged by its tab it is a window wherever it is dropped, beside the world "
-        "too; the ring's control verbs go to it",
+        "opens as a tab beside Pictures and the Bench, in front: the board's head -- its "
+        "link verbs, the control latch, E-STOP -- and its state. Its sections are windows "
+        "of their own, closed until asked for -- Status, Temperature, Print from here, Bed "
+        "level and the board's one log -- each from ⊞ Windows or by a verb that acts on "
+        "it, and all of them together by Panels › Windows › Machine view, as here. It is "
+        "the one place for the board, and the one thing that polls it: the badges and "
+        "Selected's line say what its polls said. The ring's control verbs go to it",
         blank=CHANGING,
     )
 
@@ -197,6 +204,7 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     devkit = page.locator(".world-badge[data-path='footpedal']")
     expect(devkit).to_be_visible(timeout=10000)
     devkit.click()
+    windows.machine_ready(page, "devkit", by_hand=True)
     expect(machine.locator("#c-sketch")).to_contain_text(
         "should run footpedal@arduino", timeout=8000
     )
@@ -209,7 +217,8 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         "() => document.querySelector(\"#sketch-card\").scrollIntoView({ block: 'start' })"
     )
     docs.step(
-        "A devkit has a Machine too: its port and board, the sketch it should run against "
+        "A devkit has a Machine too, with a devkit's sections, laid out here by the Machine "
+        "view: its port and board, the sketch it should run against "
         "what it was heard saying (here the scripted board says another sketch's hello, so "
         "they differ) and what changed since it was flashed. Opening it opens no port: "
         "Listen does, saying it may reset the board, and its serial output comes into the "
@@ -222,6 +231,9 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     page.goto(f"{base_url}/firmware/monitor?port=/dev/ttyFAKE1")
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?machine=%2Fdev%2FttyFAKE1$"))
     expect(page.locator("#c-state")).to_contain_text("printing", timeout=15000)
+    machine_state = windows.state(page, "machine")
+    assert machine_state["where"] == "layout" and "pictures" in machine_state["stack"]
+    windows.machine_ready(page, "printer", by_hand=True)
     # A few polls, so the chart and the log have something to show.
     expect(page.locator("#chart-span")).to_contain_text(
         re.compile(r"last ([3-9]|\d\d+) polls"), timeout=15000
@@ -229,8 +241,6 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     page.locator("#q").fill("M119")
     page.locator("#qform button").click()
     expect(page.locator("#log")).to_contain_text("y_min: TRIGGERED", timeout=8000)
-    machine_state = windows.state(page, "machine")
-    assert machine_state["where"] == "layout" and "pictures" in machine_state["stack"]
     # The status cards at the top of the Machine, which the log scrolled away.
     page.locator("#c-state").evaluate(
         "(el) => el.closest('.card').scrollIntoView({ block: 'start' })"
@@ -238,9 +248,10 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     docs.step(
         "The printer monitor's address, /firmware/monitor?port=, opens the viewer on the "
         "site the port is pinned in with the printer's Machine open, a tab beside "
-        "Pictures: status cards, temperature history, the port's comms log with its query "
-        "box, and Reconnect / Reset / Release for the link. A board pinned nowhere opens on the "
-        "default site, its Machine a tab beside Pictures the same way",
+        "Pictures; its view lays out the status cards, the temperature history and the "
+        "port's comms log with its query box, Reconnect / Reset / Release for the link in "
+        "its head. A board pinned nowhere opens on the default site, its Machine a tab "
+        "beside Pictures the same way",
         blank=CHANGING,
     )
 
@@ -276,9 +287,9 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
         " return m && m.marks && m.marks.mesh(); }",
         timeout=10000,
     )
-    # The Machine in front among its tabs, and the world zoomed into the printer, so its
-    # bed is in view.
-    windows.show(page, "machine")
+    # Site again, from ⊞ Windows, and the world zoomed into the printer, so its bed is
+    # in view.
+    windows.from_the_windows_menu(page, "site")
     expect(windows.panel(page, "control")).to_be_visible()
     page.evaluate("() => window.fractalViewer.zoomIn('printer_1')")
     expect(page.locator("#contents-list .contents-item", has_text="gantry_system")).to_be_visible(
@@ -287,9 +298,9 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     docs.step(
         "The reading is drawn in the world too: the printer's marks lay the mesh over its "
         "bed as a relief, stretched so the tilt can be seen and coloured as the heatmap is. "
-        "It follows whichever reading the card shows. Here the Machine is a tab beside "
-        "Pictures, the control pad's window beside the world, and the world is zoomed "
-        "into the printer",
+        "It follows whichever reading the card shows. Here Site is opened again from "
+        "⊞ Windows beside the Machine's windows, the control pad's window beside the "
+        "world, and the world is zoomed into the printer",
         blank=CHANGING,
     )
     page.evaluate("() => window.fractalViewer.jumpTo(0)")

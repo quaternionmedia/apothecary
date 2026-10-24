@@ -49,7 +49,11 @@ class Walk:
 
     @property
     def machine(self):
-        return self.page.locator(MACHINE)
+        """Every window of the open Machine, to look in."""
+        return windows.machine(self.page)
+
+    def machine_open(self) -> bool:
+        return self.page.locator(MACHINE).is_visible()
 
     @property
     def pad(self):
@@ -59,7 +63,7 @@ class Walk:
 
     def on(self, name: str) -> bool:
         """Whether the Machine is open, and is this board's."""
-        return self.machine.is_visible() and name in (
+        return self.machine_open() and name in (
             windows.tab(self.page, "machine").get_attribute("title") or ""
         )
 
@@ -71,22 +75,24 @@ class Walk:
 
 
 def open_(w: Walk) -> None:
-    """printer_1's ring, Device › Open (⌗78): its Machine a tab beside Pictures, idle, at
-    room temperature, the chart filling as it is polled."""
+    """printer_1's ring, Device › Open (⌗78): its Machine a tab beside Pictures; the
+    world's ring, Panels › Windows › Machine view, lays its sections out beside it: idle,
+    at room temperature, the chart filling as it is polled."""
     w.page.goto(f"{w.base}/viewer/sites/garage")
     expect(w.page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     settled(w.page)
     _ring_on(w.page, "printer_1")
     assert _press(w.page, "Device", "Open") == "78"
-    expect(w.machine).to_be_visible(timeout=5000)
+    expect(w.page.locator(MACHINE)).to_be_visible(timeout=5000)
     expect(windows.tab(w.page, "machine")).to_contain_text("printer_1")
     state = windows.state(w.page, "machine")
     assert state["where"] == "layout" and "pictures" in state["stack"], state
+    _said(w.page, "Opened printer_1")
+    windows.machine_ready(w.page, "printer", by_hand=True)
     expect(w.machine.locator("#c-state")).to_contain_text("idle", timeout=WITHIN_A_POLL)
     expect(w.machine.locator("#c-hot")).to_contain_text("/0°")
     expect(w.machine.locator("#c-bed")).to_contain_text("/0°")
     expect(w.machine.locator("#chart-span")).not_to_contain_text("no polls", timeout=WITHIN_A_POLL)
-    _said(w.page, "Opened printer_1")
     settled(w.page)
 
 
@@ -208,13 +214,15 @@ def disarm(w: Walk) -> None:
 
 
 def devkit(w: Walk) -> None:
-    """esp32_blink's ring, Device › Open: the one Machine is the devkit's now, saying what it
-    should run, and no port opened until Listen."""
+    """esp32_blink's ring, Device › Open: the one Machine is the devkit's now, and the
+    Machine view lays out a devkit's sections: what it should run, and no port opened
+    until Listen."""
     where("The devkit's Machine", "printer_1's Machine open", w.on("printer_1"))
     _ring_on(w.page, NODE)
     _press(w.page, "Device", "Open")
-    expect(w.machine).to_have_count(1)
+    expect(w.page.locator(MACHINE)).to_have_count(1)
     expect(windows.tab(w.page, "machine")).to_contain_text(NODE, timeout=5000)
+    windows.machine_ready(w.page, "devkit", by_hand=True)
     expect(w.machine.locator("#c-board")).to_contain_text(DEVKIT)
     expect(w.machine.locator("#c-sketch")).to_contain_text(f"should run {NODE}@", timeout=8000)
     expect(w.machine.locator("#listen")).to_be_visible()

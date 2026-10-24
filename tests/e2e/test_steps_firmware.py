@@ -56,7 +56,11 @@ class Walk:
 
     @property
     def machine(self):
-        return self.page.locator(MACHINE)
+        """Every window of the open Machine, to look in."""
+        return windows.machine(self.page)
+
+    def machine_open(self) -> bool:
+        return self.page.locator(MACHINE).is_visible()
 
     @property
     def card(self):
@@ -132,8 +136,9 @@ def upload(w: Walk) -> None:
 
 
 def hello(w: Walk) -> None:
-    """esp32_blink's ring, Device › Open and Device › Query: its Machine says what it should
-    run, and hears it say hello."""
+    """esp32_blink's ring, Device › Open, and the world's ring's Panels › Windows ›
+    Machine view: its Machine's Sketch says what it should run; Device › Query hears it
+    say hello."""
     where(
         "Hello",
         "esp32_blink wearing the devkit it was uploaded to",
@@ -144,6 +149,7 @@ def hello(w: Walk) -> None:
         expect(w.bench).to_be_hidden(timeout=5000)
     _ring_on(w.page, NODE)
     _choose(w.page, "Device", "Open")
+    windows.machine_ready(w.page, "devkit", by_hand=True)
     sketch = w.machine.locator("#c-sketch")
     expect(sketch).to_contain_text(f"should run {ARDUINO} · esp32:esp32:esp32", timeout=8000)
     expect(w.machine.locator("#c-board")).to_contain_text(DEVKIT)
@@ -162,8 +168,7 @@ def flash(w: Walk) -> None:
     where(
         "Flash",
         "esp32_blink's Machine open, running the Arduino build",
-        w.machine.is_visible()
-        and f"should run {ARDUINO}" in w.machine.locator("#c-sketch").inner_text(),
+        w.machine_open() and f"should run {ARDUINO}" in w.machine.locator("#c-sketch").inner_text(),
     )
     _ring_on(w.page, NODE)
     _choose(w.page, "Device", "Flash")
@@ -225,8 +230,7 @@ def listen(w: Walk) -> None:
     where(
         "Listen",
         "esp32_blink's Machine open, running the Rust build",
-        w.machine.is_visible()
-        and f"should run {RUST}" in w.machine.locator("#c-sketch").inner_text(),
+        w.machine_open() and f"should run {RUST}" in w.machine.locator("#c-sketch").inner_text(),
     )
     log = w.machine.locator("#log")
     w.machine.locator("#listen").click()
@@ -247,8 +251,7 @@ def again(w: Walk) -> None:
     where(
         "Opened again",
         "esp32_blink's Machine open, running the Rust build",
-        w.machine.is_visible()
-        and f"should run {RUST}" in w.machine.locator("#c-sketch").inner_text(),
+        w.machine_open() and f"should run {RUST}" in w.machine.locator("#c-sketch").inner_text(),
     )
     w.page.evaluate("() => window.fractalViewer.closeMachine()")
     expect(w.machine).to_have_count(0)

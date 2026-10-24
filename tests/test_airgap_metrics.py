@@ -26,6 +26,7 @@ from apothecary.airgap_metrics import (
 from apothecary.api import app
 from apothecary.cli import cli
 from apothecary.projects.parts.skeleton import ROOT
+from apothecary.systems import AIRGAP
 
 GOOD = {
     "schema": SCHEMA,
@@ -137,7 +138,6 @@ def client():
 
 
 class TestTheRoutes:
-
     def test_the_schema_is_published(self, client):
         r = client.get("/airgap/metrics/schema")
         assert r.status_code == 200
@@ -178,18 +178,25 @@ class TestTheCommand:
 
 
 class TestThePanelInThePage:
-    """The panel is a tab of the viewer's rail, mounted from its own module, and the
-    module speaks the metrics document this schema reads."""
+    """The panel is a window of the viewer's layout, each of its sections a window of
+    its own, mounted from its own module, and the module speaks the metrics document
+    this schema reads."""
 
     def test_the_page_mounts_the_panel_from_the_vendored_free_module(self):
         page = (ROOT / "templates" / "fractal_viewer.html.j2").read_text(encoding="utf-8")
-        assert "panels.register('airgap'" in page
+        # Its windows are its entry in the focused systems' registry, which the page
+        # turns into windows (static/systems.js); the page mounts the widget into them.
         assert "import { mountAirgap } from '/static/widgets/airgap.js'" in page
+        assert "this.systems = mountSystems(this.panels, SYSTEMS, {" in page
+        assert "airgap: {" in page and "this.mountAirgap(slot, sections)" in page
         assert 'href="{{ base_url }}/static/widgets/airgap.css"' in page
         module = (ROOT / "apothecary" / "static" / "widgets" / "airgap.js").read_text(
             encoding="utf-8"
         )
         assert "export function mountAirgap" in module
+        # The markup's sections are the registry's, in its order: each a block moved
+        # into its window.
+        assert re.findall(r'data-section="([\w-]+)"', module) == [sec.id for sec in AIRGAP.sections]
         assert f"schema:'{SCHEMA}'" in module
         # Nothing of the panel's comes from outside the page.
         assert not re.search(r"https?://", module)

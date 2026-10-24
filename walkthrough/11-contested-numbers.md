@@ -47,7 +47,7 @@ fitting a board and not:
 
 ## Where you turn them
 
-In the viewer: a part's ring, Part › Edit, opens its parameters in Selected, a
+In the viewer: a part's ring, Part › Edit, opens its parameters in Parameters, a
 contested one first, each candidate a button that sets it ([the part
 editor](../docs/viewer.md#the-part-editor)). Turn the number and the declared
 envelope follows; Apply renders the part with it.

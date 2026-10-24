@@ -19,7 +19,10 @@ from __future__ import annotations
 import json
 import re
 
+import part_editing
 import pytest
+import rings
+import windows
 from playwright.sync_api import Page, expect
 from viewer_ready import settled
 
@@ -27,12 +30,6 @@ from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
 from apothecary.projects.parts.stl_renderer import params_sidecar_path
 
 PART = "calibration_cube"
-RING_MS = 15000
-WEDGES = (
-    "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
-    ".filter((w) => !w.classList.contains('empty'))"
-    ".map((w) => [w.getAttribute('aria-label'), w.dataset.cell]))"
-)
 
 
 @pytest.fixture(scope="module")
@@ -77,32 +74,19 @@ def _open(page: Page, url: str) -> None:
 
 
 def _press(page: Page, *labels: str) -> None:
-    for label in labels:
-        page.wait_for_function(
-            f"() => [...document.querySelectorAll('#ring-overlay .wedge')]"
-            f".some((w) => w.getAttribute('aria-label') === {label!r})",
-            timeout=RING_MS,
-        )
-        page.keyboard.press(page.evaluate(WEDGES)[label])
+    rings.press(page, *labels)
 
 
 def _ring(page: Page, *labels: str, part: str = PART) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{part}']").click(
-        button="right", modifiers=["Control"]
-    )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
-    _press(page, *labels)
+    rings.on_row(page, part, *labels)
 
 
 def _edit(page: Page, part: str = PART) -> None:
-    _ring(page, "Part", "Edit", part=part)
-    expect(
-        page.locator(f".part-editor[data-target='part:{part}'] #part-params .param")
-    ).not_to_have_count(0, timeout=15000)
+    part_editing.edit(page, part)
 
 
 def _param(page: Page, field: str):
-    return page.locator(f"#part-params > .param[data-field='{field}']")
+    return part_editing.param(page, field)
 
 
 def _status(page: Page):
@@ -487,7 +471,10 @@ def test_a_part_selected_again_after_a_double_click_shows_what_its_section_read(
     page.evaluate("() => window.fractalViewer.scadLoading")
     page.evaluate("() => window.fractalViewer.editorLoading")
     row.click()
+    # Selected holds the part again; its sections, laid out by the Part view, hold what
+    # the server answered while it was out of the page.
     section = page.locator(f".part-editor[data-target='part:{PART}']")
-    expect(section.locator("#part-checklist .verdict")).to_be_visible()
     expect(section.locator("#part-envelope .measured")).to_contain_text("measured")
-    expect(section.locator("#part-params .param")).not_to_have_count(0)
+    windows.part_view(page)
+    expect(page.locator(f"{part_editing.READINESS} #part-checklist .verdict")).to_be_attached()
+    expect(page.locator(f"{part_editing.PARAMETERS} #part-params .param")).not_to_have_count(0)

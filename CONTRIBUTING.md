@@ -25,6 +25,7 @@ trying it, and names the optional installs: the slicer and each firmware toolcha
 ```bash
 uv run apothecary test run                      # the ordinary command: unit tests and the walkthrough, whose demonstration drives Chromium
 uv run apothecary test all                      # the same, then every browser test
+uv run apothecary test all --workers 2 -k part  # the browser part on two workers; further arguments narrow both parts
 uv run pytest                                   # the quick inner loop: unit tests and the walkthrough; browser tests skip
 uv run pytest --slow                            # also full renders and accuracy benches
 uv run pytest tests/e2e --start-server          # the browser tests, on a server of their own
@@ -34,7 +35,8 @@ uv run ruff check apothecary tests              # kept clean; format only the fi
 uv run --group preflight apothecary preflight   # the CI workflows, run here, before a push
 ```
 
-`apothecary test run` is the one to run before a commit. A browser test needs a server of
+`apothecary test run` is the one to run before a commit; it runs the window manager's
+browser tests too, which start no server. A browser test needs a server of
 its own (`--start-server`) or one named for it (`--base-url`); with neither it skips, and it
 never uses a server that happens to be listening.
 

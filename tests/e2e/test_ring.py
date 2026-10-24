@@ -24,8 +24,10 @@ import pytest
 import windows
 from playwright.sync_api import Page, expect
 
+from apothecary.systems import by_id
+
 PRINTER = "/dev/ttyFAKE1"
-MACHINE = ".panel[data-panel='machine']"  # a board's Machine, in front of the world
+MACHINE = windows.MACHINE
 # The arrow rule as vectors, generated from menu.py's resolver; tests/test_menu.py
 # fails when the file is missing or stale.
 VECTORS = Path(__file__).resolve().parents[1] / "conformance" / "nine_cells.json"
@@ -365,11 +367,12 @@ def test_jog_by_address_on_a_machine_s_device_ring(page: Page, ring_url: str):
     page.add_init_script(CAPTURE)
     page.goto(f"{ring_url}/firmware/monitor?port={PRINTER}")
     expect(page.locator(MACHINE)).to_be_visible(timeout=15000)
+    windows.machine_ready(page, "printer")  # its Log, where what the jog sent is said
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
     expect(page.locator("#ident")).to_contain_text("Marlin", timeout=8000)
     # Disarmed, the device ring's Control > Arm is the way in; the latch shows the address.
     expect(page.locator("#ctl")).to_have_attribute("data-address", "77", timeout=5000)
-    page.locator(f"{MACHINE} #ident").click(button="right", modifiers=["Control"])
+    page.locator(f"{windows.MACHINE_WINDOWS} #ident").click(button="right", modifiers=["Control"])
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     assert _title(page) == "ttyFAKE1"
     assert _wedges(page)["1"] == "Link"
@@ -440,7 +443,7 @@ def test_jog_by_address_on_a_machine_s_device_ring(page: Page, ring_url: str):
             + f"intents: {_intents(page)}"
         ) from None
     # Disarm by address, and the overlay goes.
-    page.locator(f"{MACHINE} #ident").click(button="right", modifiers=["Control"])
+    page.locator(f"{windows.MACHINE_WINDOWS} #ident").click(button="right", modifiers=["Control"])
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("7")
     page.keyboard.press("7")
@@ -581,8 +584,14 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
         "bench",
         "settings",
         "gather",
+        # The Part's sections, then the Airgap and its sections, each a window of its
+        # own closed until asked for (apothecary/systems.py).
+        *(f"part-{sid}" for sid in windows.PART_SECTIONS),
         "airgap",
+        # The Airgap's sections, each a window of its own, closed until asked for.
+        *(f"airgap-{sid}" for sid in windows.AIRGAP_SECTIONS),
     ]
+    assert not any(windows.state(page, f"airgap-{s}")["open"] for s in windows.AIRGAP_SECTIONS)
     expect(page.locator(".lm_goldenlayout")).to_have_count(1)
     expect(windows.tab(page, "world")).to_have_count(0)  # the world's window has no tab
     site, selected = windows.panel(page, "site"), windows.panel(page, "selected")
@@ -709,7 +718,9 @@ def test_a_window_dragged_beside_the_world_is_remembered_until_the_layout_is_res
 
     inner = _panels_ring(page)
     page.keyboard.press(next(cell for cell, label in inner.items() if label == "Windows"))
-    assert sorted(_wedges(page).values()) == ["Reset layout", "World alone"]
+    assert sorted(_wedges(page).values()) == [
+        "Airgap view", "Machine view", "Part view", "Reset layout", "World alone",
+    ]  # fmt: skip
     page.keyboard.press(
         next(cell for cell, label in _wedges(page).items() if label == "Reset layout")
     )
@@ -725,6 +736,61 @@ def test_a_window_dragged_beside_the_world_is_remembered_until_the_layout_is_res
     page.wait_for_function("() => window.apothecaryPanels.state('bench').stack.length === 1")
     expect(windows.tab(page, "bench")).to_be_visible()
     expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()
+
+
+@pytest.mark.e2e
+def test_a_stacks_plus_opens_any_window_there_and_windows_lists_them_by_group(
+    page: Page, ring_url: str
+):
+    """Every stack but the world's wears a + among its buttons: pressed, every window by
+    its group, ● open and ○ closed; a closed one chosen opens as a tab of that stack.
+    The header's ⊞ Windows lists the views and the same windows, the first focused and
+    the arrows moving along them; a window chosen there opens at its place, a view lays
+    its windows out."""
+    world = _open_panels(page, ring_url)
+    expect(page.locator(".lm_stack:has(.world-window) .lm_spawn")).to_have_count(0)
+    plus = page.locator(".lm_stack:has(.lm_tab[data-panel='site']) .lm_spawn")
+    plus.click()
+    spawn = page.locator(".spawn-list")
+    expect(spawn).to_be_visible()
+    groups = spawn.locator(".spawn-group").all_inner_texts()
+    assert [g.lower() for g in groups[:3]] == ["site", "selected", "pictures"]
+    assert "airgap" in [g.lower() for g in groups]
+    expect(spawn.locator(".window-item[data-window='gather']")).to_have_text("○ Gather")
+    expect(spawn.locator(".window-item[data-window='site']")).to_have_text("● Site")
+    page.keyboard.press("Escape")
+    expect(spawn).to_have_count(0)
+    # Gather, closed, chosen from Site's +: a tab among Site's, in front.
+    plus.click()
+    spawn.locator(".window-item[data-window='gather']").click()
+    expect(spawn).to_have_count(0)
+    expect(windows.panel(page, "gather")).to_be_visible()
+    assert windows.state(page, "gather")["stack"][-1] == "gather"
+    assert windows.state(page, "gather")["stack"][0] == "site"
+
+    # ⊞ Windows: the views, then the windows; the first focused, the arrows moving.
+    page.locator("#windows-menu > summary").click()
+    body = page.locator(".windows-menu-body")
+    expect(body.locator(".view-item")).to_have_text(["Default", "Part", "Machine", "Airgap"])
+    expect(body.locator(".window-item[data-window='gather']")).to_have_text("● Gather")
+    assert page.evaluate("() => document.activeElement.dataset.view") == "default"
+    page.keyboard.press("ArrowDown")
+    assert page.evaluate("() => document.activeElement.dataset.view") == "part"
+    page.keyboard.press("Enter")
+    expect(body).to_be_hidden()
+    # The Part view: Selected in front beside the world, Site's below it, the rest closed.
+    assert windows.state(page, "selected")["stack"][0] == "selected"
+    assert windows.state(page, "site")["stack"] == ["site", "problems", "scad"]
+    assert windows.state(page, "gather")["open"] is False
+    expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()
+    share = by_id("part").view["row"][0]["size"] / 100  # the world's, in the registry
+    assert world.bounding_box()["width"] == pytest.approx(
+        page.viewport_size["width"] * share, abs=12
+    )
+    # Default again, from the menu.
+    page.locator("#windows-menu > summary").click()
+    body.locator(".view-item[data-view='default']").click()
+    assert windows.state(page, "pictures")["stack"] == ["pictures", "bench", "settings"]
 
 
 @pytest.mark.e2e

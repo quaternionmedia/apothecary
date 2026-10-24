@@ -2,7 +2,10 @@
 front of the world, following the part's text in the SCAD editor.
 
 The panel is a window, a tab beside Pictures, closed until asked for; its verbs are
-cells of the canvas ring's Panels › Airgap. Opened, it reads the part's own SCAD and computes;
+cells of the canvas ring's Panels › Airgap, and each of its sections (Metrics, the gap
+field, the torque, the run, the rig, the sweep...) is a window of its own, opened from
+the header's ⊞ Windows or a stack's +, all of them together by the Airgap view
+(Panels › Windows › Airgap view). Opened, it reads the part's own SCAD and computes;
 with the part in the editor (Part › Edit) it follows every edit of the text, and a
 preset chosen in it is written into the text, which the editor then checks and renders
 as any edit. The metrics it says are one document, ``airgap/metrics/1``, which
@@ -20,6 +23,14 @@ from playwright.sync_api import Page, expect
 
 PART = "airgap"
 PANEL = ".panel[data-panel='airgap']"
+SECTIONS = windows.AIRGAP_SECTIONS
+
+
+def _section(page: Page, sid: str):
+    """An Airgap section's window: its body."""
+    return windows.panel(page, f"airgap-{sid}")
+
+
 RING_MS = 15000
 WEDGES = """() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]
     .filter((w) => !w.classList.contains('empty'))
@@ -103,15 +114,20 @@ def test_the_airgap_is_a_window_that_computes_the_parts_own_text(page: Page, url
     # The document the panel says is one the server accepts, and renders.
     read = page.request.post(f"{url}/airgap/metrics/validate?format=md", data=doc)
     assert read.ok and read.text().startswith("# Airgap metrics")
-    # The metrics are on the page as a grouped readout, each addressed by group and key.
-    expect(page.locator(PANEL).locator(".metric[data-key='field.mean_torque'] dd")).to_contain_text(
-        "N·m"
-    )
+    # The metrics are a window of their own, opened from ⊞ Windows beside the Airgap: a
+    # grouped readout, each addressed by group and key.
+    expect(windows.tab(page, "airgap-metrics")).to_have_count(0)
+    windows.from_the_windows_menu(page, "airgap-metrics")
+    assert windows.state(page, "airgap-metrics")["stack"][-2:] == ["airgap", "airgap-metrics"]
+    expect(
+        _section(page, "metrics").locator(".metric[data-key='field.mean_torque'] dd")
+    ).to_contain_text("N·m")
 
 
 @pytest.mark.e2e
 def test_the_panel_follows_the_editors_text_and_a_preset_is_written_into_it(page: Page, url: str):
-    """Part › Edit on the airgap part: the panel follows the text as it is typed -- a
+    """Part › Edit on the airgap part, and its SCAD window from ⊞ Windows: the panel
+    follows the text as it is typed -- a
     tooth count changed in the text is the panel's within the frame -- and a preset
     chosen in the panel is written into the text, where the editor's check sees it;
     the panel says it is following."""
@@ -119,6 +135,7 @@ def test_the_panel_follows_the_editors_text_and_a_preset_is_written_into_it(page
     page.evaluate("() => window.apothecaryPanels.open('airgap')")
     _metrics(page)
     _part_ring(page, "Part", "Edit")
+    windows.from_the_windows_menu(page, "part-scad")
     expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
     page.wait_for_function(
         "() => window.apothecaryAirgap.values().stator_teeth_n === 12 && "
@@ -167,27 +184,62 @@ def test_the_verbs_are_cells_of_panels_airgap(page: Page, url: str):
     expect(page.locator(PANEL).locator(".airgap-play")).to_have_attribute("data-address", "476")
     _canvas_ring(page, "Panels", "Airgap", "Play")
     expect(page.locator(PANEL).locator(".airgap-play")).to_have_attribute("aria-label", "Play")
-    # Sweep: the default line maps mean torque over the stator's teeth and the rotor's ribbon.
-    expect(page.locator(PANEL).locator(".airgap-sweep")).to_have_value(
+    # Sweep opens the Sweep window, whose default line maps mean torque over the
+    # stator's teeth and the rotor's ribbon.
+    expect(windows.tab(page, "airgap-sweep")).to_have_count(0)
+    _canvas_ring(page, "Panels", "Airgap", "Sweep")
+    sweep = _section(page, "sweep")
+    expect(sweep).to_be_visible(timeout=5000)
+    expect(sweep.locator(".airgap-sweep")).to_have_value(
         "stator_teeth_n 3..24 × rotor_rib_k 0..12 → mean_torque"
     )
-    _canvas_ring(page, "Panels", "Airgap", "Sweep")
-    expect(page.locator(PANEL).locator("[data-airgap='swMsg']")).to_contain_text(
-        "cells", timeout=60000
-    )
+    expect(sweep.locator("[data-airgap='swMsg']")).to_contain_text("cells", timeout=60000)
     # A sweep line that names nothing is refused with the shape it wants.
-    page.locator(PANEL).locator(".airgap-sweep").fill("nothing here")
-    page.locator(PANEL).locator(".airgap-sweep").press("Enter")
-    expect(page.locator(PANEL).locator("[data-airgap='swMsg']")).to_contain_text("x from..to")
-    # The rig, one document: an unknown setting is refused, a value past its range clamped and said.
-    page.locator(PANEL).locator("details:has(.airgap-rig) > summary").click()
-    rig = page.locator(PANEL).locator(".airgap-rig")
-    rig.fill('{"loadT": 9999, "bogus": 1}')
-    rig.press("Tab")
-    expect(page.locator(PANEL).locator("[data-airgap='rigMsg']")).to_contain_text(
-        "unknown setting bogus"
-    )
-    expect(page.locator(PANEL).locator("[data-airgap='rigMsg']")).to_contain_text("loadT: 0 to 500")
+    sweep.locator(".airgap-sweep").fill("nothing here")
+    sweep.locator(".airgap-sweep").press("Enter")
+    expect(sweep.locator("[data-airgap='swMsg']")).to_contain_text("x from..to")
+    # The rig, one document in a window of its own: an unknown setting is refused, a
+    # value past its range clamped and said.
+    windows.from_the_windows_menu(page, "airgap-rig")
+    rig = _section(page, "rig")
+    rig.locator(".airgap-rig").fill('{"loadT": 9999, "bogus": 1}')
+    rig.locator(".airgap-rig").press("Tab")
+    expect(rig.locator("[data-airgap='rigMsg']")).to_contain_text("unknown setting bogus")
+    expect(rig.locator("[data-airgap='rigMsg']")).to_contain_text("loadT: 0 to 500")
     _canvas_ring(page, "Panels", "Airgap", "Reset")
     expect(page.locator("#status")).to_contain_text("reset to the part's own text", timeout=5000)
-    expect(page.locator(PANEL).locator("[data-airgap='rigMsg']")).to_have_text("")
+    expect(rig.locator("[data-airgap='rigMsg']")).to_have_text("")
+
+
+@pytest.mark.e2e
+def test_the_airgap_view_lays_out_every_section_and_is_remembered(page: Page, url: str):
+    """Panels › Windows › Airgap view: the Airgap, each of its sections in a window and
+    the world among them, every section drawn at its window's size; a reload finds them
+    where they were, and Reset layout puts the page's own layout back, the sections
+    closed."""
+    _open(page, url)
+    _canvas_ring(page, "Panels", "Windows", "Airgap view")
+    expect(page.locator("#status")).to_contain_text("The Airgap view")
+    _metrics(page)
+    stacks = {sid: windows.state(page, f"airgap-{sid}")["stack"] for sid in SECTIONS}
+    assert stacks["metrics"] == ["airgap-metrics", "airgap-rig", "airgap-sweep", "selected"]
+    assert stacks["field"] == ["airgap-field", "airgap-gap-map"]
+    assert stacks["torque"] == ["airgap-torque", "airgap-inductance", "airgap-harmonics"]
+    assert stacks["run-up"] == ["airgap-run-up", "airgap-orbit", "airgap-vibration"]
+    assert windows.state(page, "airgap")["stack"] == ["airgap"]
+    expect(page.locator(windows.WORLD_HEADER)).to_be_hidden()
+    # The section in front of each stack draws its picture across its window.
+    for sid, canvas in (("field", "mmf"), ("torque", "energy"), ("run-up", "dynSpeed")):
+        drawn = _section(page, sid).locator(f"canvas[data-airgap='{canvas}']")
+        expect(drawn).to_be_visible()
+        assert drawn.bounding_box()["height"] > 150
+    page.wait_for_timeout(400)  # the layout is remembered a moment after it changes
+    page.reload()
+    expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
+    expect(_section(page, "field").locator("canvas[data-airgap='mmf']")).to_be_visible(
+        timeout=15000
+    )
+    assert windows.state(page, "airgap-run-up")["stack"] == stacks["run-up"]
+    _canvas_ring(page, "Panels", "Windows", "Reset layout")
+    expect(page.locator("#status")).to_contain_text("The page's own layout again")
+    assert not any(windows.state(page, f"airgap-{sid}")["open"] for sid in SECTIONS)

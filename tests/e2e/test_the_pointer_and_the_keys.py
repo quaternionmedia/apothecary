@@ -18,6 +18,7 @@ import re
 
 import httpx
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 from viewer_ready import FREE_SPOT, settled
 
@@ -614,6 +615,7 @@ def test_one_key_check_for_every_shortcut(page: Page, url: str):
     page.goto(f"{url}/viewer/sites/parts_library")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     page.locator(ROW.format("calibration_cube")).click()
+    windows.part_view(page)  # its Parameters, where the sliders are
     slider = page.locator("#part-params .param-slider").first
     expect(slider).to_be_visible(timeout=20000)
     slider.focus()
@@ -792,6 +794,7 @@ def test_ctrl_s_saves_the_variant_from_anywhere_while_the_editor_is_open(page: P
     page.goto(f"{url}/viewer/sites/parts_library")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     page.locator(ROW.format("calibration_cube")).click()
+    windows.part_view(page)  # its Parameters and its SCAD
     expect(page.locator("#part-params .param-slider").first).to_be_visible(timeout=20000)
     expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
     page.locator("#part-params .param-slider").first.focus()
@@ -873,7 +876,8 @@ def test_rebuild_asks_twice_on_its_wedge_and_the_emergency_stop_never_asks(page:
     badge = page.locator(BADGE)
     expect(badge).to_be_visible(timeout=15000)
     badge.click()
-    machine = page.locator(".panel[data-panel='machine']")
+    windows.machine_ready(page, "printer")
+    machine = windows.machine(page)
     expect(machine.locator("#estop")).to_be_visible(timeout=10000)
     machine.locator("#estop").click()
     expect(machine.locator("#log")).to_contain_text("M112", timeout=10000)
@@ -906,6 +910,7 @@ def test_the_stage_bar_is_pinned_only_while_editing(page: Page, url: str):
     page.goto(f"{url}/viewer/sites/parts_library")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     page.locator(ROW.format("calibration_cube")).click()
+    windows.open_window(page, "part-parameters")
     expect(page.locator("#part-params .param-number").first).to_be_visible(timeout=20000)
     expect(page.locator(f"{PINNED} #stage-bar")).to_have_count(0)
     expect(page.locator("#selected-body .part-editor #stage-bar")).to_have_count(1)

@@ -20,7 +20,9 @@ import json
 import re
 
 import httpx
+import part_editing
 import pytest
+import rings
 from playwright.sync_api import Page, expect
 from slicer_helpers import write_fake_orcaslicer
 from viewer_ready import settled
@@ -31,12 +33,6 @@ from apothecary.projects.parts.stl_renderer import params_sidecar_path
 PART = "calibration_cube"
 PRINTER = "/dev/ttyFAKE1"
 BOARD = "printer_1.frame_system.mainboard"
-RING_MS = 15000
-WEDGES = (
-    "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
-    ".filter((w) => !w.classList.contains('empty'))"
-    ".map((w) => [w.getAttribute('aria-label'), w.dataset.cell]))"
-)
 TALLER = "translate([0, 0, size]) cube(size / 2);"
 
 
@@ -92,28 +88,15 @@ def _open(page: Page, url: str, site: str = "parts_library", part: str = PART) -
 
 
 def _press(page: Page, *labels: str) -> None:
-    for label in labels:
-        page.wait_for_function(
-            f"() => [...document.querySelectorAll('#ring-overlay .wedge')]"
-            f".some((w) => w.getAttribute('aria-label') === {label!r})",
-            timeout=RING_MS,
-        )
-        page.keyboard.press(page.evaluate(WEDGES)[label])
+    rings.press(page, *labels)
 
 
 def _ring(page: Page, part: str, *labels: str) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{part}']").click(
-        button="right", modifiers=["Control"]
-    )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
-    _press(page, *labels)
+    rings.on_row(page, part, *labels)
 
 
 def _edit(page: Page, part: str = PART) -> None:
-    _ring(page, part, "Part", "Edit")
-    expect(
-        page.locator(f".part-editor[data-target='part:{part}'] #part-params .param")
-    ).not_to_have_count(0, timeout=15000)
+    part_editing.edit(page, part)
 
 
 def _status(page: Page):
@@ -489,8 +472,9 @@ def test_slice_and_the_checklist_follow_the_variant_drawn(page: Page, url):
     expect(_status(page)).to_contain_text(
         "slicing footpedal, the variant drawn, for printer_1", timeout=20000
     )
-    machine = page.locator(".panel[data-panel='machine']")
-    expect(machine.locator("#print-slice-said")).to_contain_text(
+    # Slice acts on the Machine's Print, which it opens.
+    printing = page.locator(".panel[data-panel='machine-print']")
+    expect(printing.locator("#print-slice-said")).to_contain_text(
         f"footpedal (the variant {variant[:8]}) sliced for printer_1", timeout=90000
     )
     record = page.request.get(f"{url}/slicer/slices").json()[0]

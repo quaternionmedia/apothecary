@@ -68,6 +68,29 @@ def _keep_this_shard(config, items) -> None:
     items[:] = keep
 
 
+# Each browser test's time this run, for --record-durations: its setup, call and
+# teardown. Under xdist the reports come back to the controller, which writes the file.
+_timed: dict = {}
+
+
+def pytest_runtest_logreport(report):
+    if report.nodeid.startswith("tests/e2e/"):
+        _timed[report.nodeid] = _timed.get(report.nodeid, 0.0) + report.duration
+
+
+def pytest_sessionfinish(session):
+    config = session.config
+    if not config.getoption("--record-durations") or hasattr(config, "workerinput"):
+        return
+    if not _timed:
+        return
+    ran = {nodeid.split("::", 1)[0] for nodeid in _timed}
+    known = json.loads(DURATIONS.read_text()) if DURATIONS.exists() else {}
+    kept = {k: v for k, v in known.items() if k.split("::", 1)[0] not in ran}
+    kept.update({k: round(v, 2) for k, v in _timed.items()})
+    DURATIONS.write_text(json.dumps(dict(sorted(kept.items())), indent=1) + "\n")
+
+
 def pytest_collection_modifyitems(config, items):
     """Keep this shard's files; tests marked docs run only with --generate-docs."""
     _keep_this_shard(config, items)

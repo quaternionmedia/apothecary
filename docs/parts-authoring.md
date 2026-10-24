@@ -217,7 +217,7 @@ save that asks for it is refused, saying what it would do.
 `APOTHECARY_VARIANTS_REPO` names another repository to save into, a
 clone of the checkout; the browser suite's servers save into one of their own.
 
-In the viewer, the part's editor in Selected holds its SCAD
+In the viewer, the part's SCAD window holds its SCAD
 ([viewer.md](viewer.md#the-scad-editor) says how it checks, renders and saves,
 and its keys); walkthrough 06 goes round it.
 
@@ -279,8 +279,8 @@ A shape a finder saw in a picture and a person made into a piece
 (`Picture › Make` on the ring; `apothecary/vision/views.py`) has no file
 and no wrapper, and is a part all the same: `MadePart`
 (`apothecary/vision/piece.py`) wraps its record as a `BasePart`, and the
-viewer edits it in Selected, in the one editor it edits any part in, opened
-from `Part › Edit` on either.
+viewer edits it in the one editor it edits any part in -- Parameters and the
+SCAD window -- opened from `Part › Edit` on either.
 
 What makes that possible is one parameter contract, in core
 (`apothecary/projects/parts/params.py`): `params_spec(part)` reads a

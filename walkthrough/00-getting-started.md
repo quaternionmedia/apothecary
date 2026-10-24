@@ -114,7 +114,8 @@ Where each starts:
 
 - **Designing a part** and **editing its SCAD** start in the catalog,
   `/viewer/sites/parts_library`: a part's ring, Part › Edit. Its parameters
-  open in Selected, with its SCAD in an editor below them.
+  open in Parameters, a window under Selected; Panels › Windows › Part view
+  lays out its SCAD editor beside them.
 - **A picture to a print** starts at the bench in the garage: its ring,
   Camera › Add here, then the camera's Device. With no camera, the bench's
   Picture › Add pins a picture from disk instead;
