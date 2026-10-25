@@ -82,7 +82,7 @@ def test_typing_in_the_scad_editor_draws_nothing_until_it_renders(page: Page, ba
     expect(code).to_be_visible(timeout=20000)
     settled(page, 6)
     page.wait_for_timeout(500)
-    code.click()
+    code.click(position={"x": 24, "y": 8})  # its first line: in view in Selected's window
     page.keyboard.press("Control+End")
     before = page.evaluate(FRAMES)
     # A comment typed a key at a time, faster than the check waits for: nothing drawn.

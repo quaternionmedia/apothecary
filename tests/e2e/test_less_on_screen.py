@@ -1,4 +1,4 @@
-"""Less on the screen: icon badges, handles, the Machine in the rail, one header row,
+"""Less on the screen: icon badges, handles, the Machine a tab beside Pictures, one header row,
 problems said once, the hint bar and faded walls.
 
 A busy bench, on a server of its own from the conftest's ``start_server``:
@@ -23,6 +23,7 @@ import re
 
 import httpx
 import pytest
+import windows
 from PIL import Image, ImageDraw
 from playwright.sync_api import Page, expect
 from viewer_ready import FRAMES, OCCLUSION_TESTED, settled
@@ -317,31 +318,6 @@ def test_an_open_card_keeps_off_the_hint_bar(page: Page, bench: str):
     assert got["t"] >= world["t"] + 8 and got["b"] <= world["b"] - 8, (got, world)
 
 
-@pytest.mark.e2e
-def test_a_floated_panel_keeps_clear_of_the_closed_tabs_the_hint_and_the_ladder(
-    page: Page, bench: str
-):
-    """A panel floated from the rail's strip lands clear of the row where closed
-    panels' tabs stand -- whether a tab stands there yet or not -- and of the
-    header, the hint bar and the depth ladder, as an open card keeps clear of them,
-    and inside the world. Selected, closed after, is a tab beside it, not over it."""
-    _open(page, bench)
-    expect(page.locator("#viewer-hint")).not_to_have_class(re.compile(r"\bfaded\b"))
-    pictures_tab = page.locator(".panel-rail .rail-tab[data-panel='pictures']")
-    pictures_tab.locator(".rail-tab-name").click()
-    pictures_tab.locator(".rail-tab-float").click()
-    free = ".panel-free-layer .panel[data-panel='pictures']"
-    expect(page.locator(free)).to_be_visible(timeout=3000)
-    page.locator(".panel[data-panel='selected'] .panel-close").click()
-    expect(page.locator(".panel-tabs .panel-tab[data-panel='selected']")).to_be_visible()
-    got = _rect(page, free)
-    for other in (".panel-tabs", "#viewer-hint", "#minimap", ".toolbar"):
-        assert not _meet(got, _rect(page, other)), (other, got, _rect(page, other))
-    world = _rect(page, ".viewer-panel")
-    assert world["l"] <= got["l"] and got["r"] <= world["r"], (got, world)
-    assert world["t"] <= got["t"] and got["b"] <= world["b"], (got, world)
-
-
 # --------------------------------------------------------------------------
 # Handles: one compact set on a movable thing
 # --------------------------------------------------------------------------
@@ -376,40 +352,40 @@ def test_a_movable_thing_selected_wears_one_compact_set_of_handles(page: Page, b
 
 
 # --------------------------------------------------------------------------
-# The Machine in the rail
+# The Machine: a tab beside Pictures
 # --------------------------------------------------------------------------
 
 MACHINE = ".panel[data-panel='machine']"
 
 
-def _rail_machine(page: Page):
-    rail = page.locator(".panel-rail")
-    machine = rail.locator(f".panel-tabbody {MACHINE}")
+def _tabbed_machine(page: Page):
+    """The Machine shown: a tab of the stack Pictures, the Bench and Settings are in,
+    in front."""
+    machine = windows.panel(page, "machine")
     expect(machine).to_be_visible(timeout=5000)
-    expect(rail.locator(".rail-tab[data-panel='machine']")).to_have_class(re.compile(r"\bactive\b"))
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
-    expect(page.locator(f".panel-free-layer {MACHINE}")).to_have_count(0)
+    expect(windows.tab(page, "machine")).to_have_class(re.compile(r"\blm_active\b"))
+    state = windows.state(page, "machine")
+    assert state["where"] == "layout" and state["stack"][:3] == ["pictures", "bench", "settings"]
     return machine
 
 
 @pytest.mark.e2e
-def test_the_machine_opens_in_the_rail_and_floats_only_when_floated(page: Page, bench: str):
+def test_the_machine_opens_beside_pictures_and_stays_where_it_is_dragged(page: Page, bench: str):
     """Every way into a Machine -- its badge, Selected's Open, the ring's Device › Open,
-    the monitor's address -- shows it in the rail's tab strip beside Pictures, the
-    Bench and Settings, its tab active, over none of the world; floated from its tab it
-    floats, and opened again while it floats it stays where a person put it; closed and
-    opened, it is in the rail again."""
+    the monitor's address -- shows it as a tab beside Pictures, the Bench and Settings,
+    in front, over none of the world; dragged to a window of its own beside the world,
+    opened again it stays where a person put it; closed and opened, it is beside Pictures
+    again."""
     _open(page, bench)
     page.locator(BOARD_BADGE).click()
-    machine = _rail_machine(page)
-    tabs = page.locator(".panel-rail .rail-tab .rail-tab-name")
-    expect(tabs).to_have_text(["Pictures", "Bench", "Settings", re.compile(r"^printer_1")])
+    machine = _tabbed_machine(page)
+    expect(windows.tab(page, "machine")).to_have_text(re.compile(r"^printer_1"))
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
 
     page.evaluate("() => window.fractalViewer.closeMachine()")
     _select(page, "footpedal")
     page.locator("#selected-body .dev-open").click()
-    machine = _rail_machine(page)
+    machine = _tabbed_machine(page)
     expect(machine.locator("#c-board")).to_contain_text("Arduino Uno", timeout=10000)
 
     page.evaluate("() => window.fractalViewer.closeMachine()")
@@ -419,24 +395,30 @@ def test_the_machine_opens_in_the_rail_and_floats_only_when_floated(page: Page, 
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("7")  # Device, seated last
     page.keyboard.press("8")  # Open
-    _rail_machine(page)
+    _tabbed_machine(page)
 
     page.goto(f"{bench}/firmware/monitor?port={PRINTER}")
     expect(page).to_have_url(re.compile(r"machine="))
-    expect(_rail_machine(page).locator("#c-state")).to_contain_text("printing", timeout=15000)
+    expect(_tabbed_machine(page).locator("#c-state")).to_contain_text("printing", timeout=15000)
 
-    # Floated from its tab, it floats; opened again, it stays floating.
-    page.locator(".panel-rail .rail-tab[data-panel='machine'] .rail-tab-float").click()
-    free = page.locator(f".panel-free-layer {MACHINE}")
-    expect(free).to_be_visible(timeout=3000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "free"
+    # Dragged by its tab onto the world's left edge: a window of its own there; opened
+    # again, it stays there.
+    world = page.locator(windows.WORLD).bounding_box()
+    windows.drag(
+        page, windows.tab(page, "machine"), (world["x"] + 30, world["y"] + world["height"] / 2)
+    )
+    moved = page.locator(MACHINE)
+    page.wait_for_function(
+        f'() => document.querySelector("{MACHINE}").getBoundingClientRect().x < 2'
+    )
+    assert windows.state(page, "machine")["stack"] == ["machine"]
     _select(page, "printer_1")
     page.locator("#selected-body .dev-open").click()
-    expect(free).to_be_visible()
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "free"
+    expect(moved).to_be_visible()
+    assert moved.bounding_box()["x"] < 2
     page.evaluate("() => window.fractalViewer.closeMachine()")
     page.evaluate("() => window.fractalViewer.openMachine('printer_1')")
-    _rail_machine(page)
+    _tabbed_machine(page)
 
 
 @pytest.mark.e2e
@@ -453,7 +435,7 @@ def test_a_printers_machine_has_no_flashing(page: Page, start_server):
     badge = page.locator(f".world-badge[data-path='{BOARD}']")
     expect(badge).to_be_visible(timeout=15000)
     badge.click()
-    machine = _rail_machine(page)
+    machine = _tabbed_machine(page)
     expect(machine.locator("#c-board")).to_be_visible(timeout=10000)
     expect(machine.locator("#flash-card")).to_be_hidden()
     page.locator("#contents-list .contents-item[data-path='printer_1']").click(
@@ -475,7 +457,7 @@ def test_a_printers_machine_has_no_flashing(page: Page, start_server):
     page.evaluate("() => { window.fractalViewer.rescanDevices(); }")
     expect(page.locator(FOOTPEDAL_BADGE)).to_be_visible(timeout=10000)
     page.evaluate("() => window.fractalViewer.openMachine('footpedal')")
-    expect(_rail_machine(page).locator("#flash-card")).to_be_visible(timeout=10000)
+    expect(_tabbed_machine(page).locator("#flash-card")).to_be_visible(timeout=10000)
 
 
 # --------------------------------------------------------------------------
@@ -546,8 +528,9 @@ def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
 
 @pytest.mark.e2e
 def test_the_tab_strip_and_the_hint_are_one_line_at_1024_px(page: Page, bench: str):
-    """At 1024 px wide, with a Machine open, the rail's tab strip is one row -- the
-    Machine's tab names its node, the whole title with the port its tooltip -- and
+    """At 1024 px wide, with a Machine open, its stack's tabs are one row, none of them
+    cut or listed under ▾ -- the Machine's tab names its node, the whole title with the
+    port its tooltip -- and
     the hint bar is one line, nothing of it cut, as it starts and with the longest words
     Settings gives it: Shift for the ring, Page Down to step out."""
     page.set_viewport_size({"width": 1024, "height": 700})
@@ -567,18 +550,21 @@ def test_the_tab_strip_and_the_hint_are_one_line_at_1024_px(page: Page, bench: s
     assert not hint.evaluate(cut)
     assert hint.bounding_box()["height"] < 40
     page.locator(BOARD_BADGE).click()
-    _rail_machine(page)
-    tab = page.locator(".panel-rail .rail-tab[data-panel='machine'] .rail-tab-name")
+    _tabbed_machine(page)
+    tab = windows.tab(page, "machine")
     expect(tab).to_have_text("printer_1")
     expect(tab).to_have_attribute("title", re.compile(re.escape(PRINTER)))
+    # Pictures, the Bench, Settings and the Machine: one row, each in view, no name cut.
+    stack = "document.querySelector(\".lm_stack:has(.panel[data-panel='machine'])\")"
     tops = page.evaluate(
-        "() => [...document.querySelectorAll('.panel-rail .rail-tab')]"
+        f"() => [...{stack}.querySelectorAll('.lm_tabs > .lm_tab')]"
         ".map((t) => Math.round(t.getBoundingClientRect().top))"
     )
     assert len(tops) == 4 and len(set(tops)) == 1, tops
-    # Pictures, the Bench, Settings and the Machine: no name cut.
+    listed = page.evaluate(f"() => {stack}.querySelectorAll('.lm_tabdropdown_list .lm_tab').length")
+    assert listed == 0, listed
     cut = page.evaluate(
-        "() => [...document.querySelectorAll('.panel-rail .rail-tab-name')]"
+        f"() => [...{stack}.querySelectorAll('.lm_tab .lm_title')]"
         ".filter((n) => n.scrollWidth > n.clientWidth).map((n) => n.textContent)"
     )
     assert cut == [], cut
@@ -643,39 +629,44 @@ def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
 
 
 @pytest.mark.e2e
-def test_problems_are_one_folded_line_in_site_and_the_headers_count_opens_it(
+def test_problems_are_counted_in_their_tab_beside_site_and_the_headers_count_opens_them(
     page: Page, start_server
 ):
-    """Site says its problems in one folded line, "N problems ›", above Contents; the
-    header's count opens the fold, and each problem still selects
-    its piece."""
+    """The site's problems are a window of their own, a tab beside Site that counts them,
+    "Problems · N", red while there are any; the header's count brings it in front, and
+    each problem still selects its piece."""
     url = start_server()
     page.goto(f"{url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    problems = page.locator("#site-problems")
-    expect(problems).to_be_hidden()
+    tab = windows.tab(page, "problems")
+    expect(tab).to_have_text("Problems")
+    expect(page.locator("#site-problems-none")).to_be_attached()
     _select(page, "printer_1")
     page.locator("#pos-x").fill("1160")
     page.locator("#pos-x").press("Tab")
     expect(page.locator("#validity-indicator")).to_contain_text("1 violation", timeout=5000)
-    expect(problems).to_be_visible()
-    expect(problems.locator("summary")).to_have_text("1 problem ›")
+    expect(tab).to_have_text("Problems · 1")
+    expect(tab).to_have_class(re.compile(r"\bhas-problems\b"))
     rows = page.locator("#problem-list li")
-    expect(rows.first).to_be_hidden()
-    assert problems.bounding_box()["height"] < 32  # one line, above Contents
-    assert problems.bounding_box()["y"] < page.locator("#contents-list").bounding_box()["y"]
+    expect(rows.first).to_be_hidden()  # behind Site
+    expect(page.locator("#site-problems-none")).to_be_hidden()
 
     page.locator("#validity-indicator").click()
     expect(rows.first).to_be_visible(timeout=2000)
     expect(rows.first).to_have_text("printer_1 and footpedal overlap")
+    # Something else selected from Site's tree, then the problem's row selects its piece.
+    windows.show(page, "site")
     _select(page, "workbench")
+    windows.show(page, "problems")
     rows.first.click()
     assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
 
     page.locator("#pos-x").fill("100")
     page.locator("#pos-x").press("Tab")
     expect(page.locator("#validity-indicator")).to_have_text("Layout valid", timeout=5000)
-    expect(problems).to_be_hidden()
+    expect(tab).to_have_text("Problems")
+    expect(tab).not_to_have_class(re.compile(r"\bhas-problems\b"))
+    expect(page.locator("#site-problems-none")).to_be_visible()
 
 
 # --------------------------------------------------------------------------

@@ -5,7 +5,7 @@
  * of their own; newest first in each, each with the places it is pinned at as a
  * view; Forget on a kept one, and Purge kept. A picture's camera is the one its
  * kept name says (GET /photos/pictures' `camera`), else the one a view of it
- * says. The gathering is a section of it.
+ * says. The gathering is a window of its own, Gather, beside it (`gather`).
  *
  * A row is chosen by a click on it, one at a time, and let go by a click on it
  * again or by Escape. The choice is the ring's to act on: the page tells it with
@@ -32,11 +32,13 @@
  * answered here with the same five sentences the answers file uses. A report
  * only: nothing is built or opened from it.
  *
- * mountPictureList(root, { base, world, log }) renders into root; `world` is
- * what the page offers: siteName(); choose(path) (the picture chosen, or null
- * when none is: what the page tells the ring); showView(id) (its place selected
- * and the view drawn); purge() (Pictures › Purge); changed() (a picture was
- * forgotten, so the world's marks follow). log(text, kind) is the page's status
+ * mountPictureList(root, { base, world, log, gather }) renders the list into root
+ * and the gathering into `gather` (an element of its own; left out, one after the
+ * list); `world` is what the page offers: siteName(); choose(path) (the picture
+ * chosen, or null when none is: what the page tells the ring); showView(id) (its
+ * place selected and the view drawn); purge() (Pictures › Purge); changed() (a
+ * picture was forgotten, so the world's marks follow); showGather() (the
+ * gathering brought in front, as the ring's Gather does). log(text, kind) is the page's status
  * bar, the only place a message is written; kind "bad" is a refusal. The list
  * is fetched when it mounts and after each change; load() fetches it again.
  */
@@ -51,24 +53,29 @@ const MARKUP = `
         <label class="grow">add <input type="file" id="pic-file" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,image/tiff" multiple title="Add pictures from this browser: kept under uploads/ in the picture folder, on this machine, as you named them, and pinned nowhere until one is chosen here and pinned from the ring's Picture › Folder"></label>
         <button type="button" id="pictures-purge" title="Forget every picture the browser put here -- captures and uploads -- pressed twice. The folder's own pictures stay">Purge kept</button>
     </div>
-    <details id="pictures-gather" class="fold">
-        <summary>Gather</summary>
-        <div id="pic-list" class="pics"><span class="empty">none yet</span></div>
-        <div class="row">
-            <label><input type="checkbox" id="pic-all"> all</label>
-            <span class="grow"></span>
-            <button type="button" id="pic-gather" title="Which of the ticked pictures are of the same thing, and what the machine would ask you">Gather</button>
-        </div>
-        <div id="gather-out"></div>
-        <textarea id="gather-answers" rows="3" placeholder="What you know, one sentence a line: 'a and b are the same thing', 'a and b are parts of one thing', 'a and b are not related', 'a is not worth using', 'a is worth using anyway'" title="Your word wins outright, and it carries"></textarea>
-    </details>
+</div>`;
+
+// The gathering: which of the ticked pictures are of one thing, and what a person
+// would be asked.
+const GATHER_MARKUP = `
+<div class="panel-ui pictures-gather">
+    <div id="pic-list" class="pics"><span class="empty">none yet</span></div>
+    <div class="row">
+        <label><input type="checkbox" id="pic-all"> all</label>
+        <span class="grow"></span>
+        <button type="button" id="pic-gather" title="Which of the ticked pictures are of the same thing, and what the machine would ask you">Gather</button>
+    </div>
+    <div id="gather-out"></div>
+    <textarea id="gather-answers" rows="3" placeholder="What you know, one sentence a line: 'a and b are the same thing', 'a and b are parts of one thing', 'a and b are not related', 'a is not worth using', 'a is worth using anyway'" title="Your word wins outright, and it carries"></textarea>
 </div>`;
 
 const HOW_KEPT = { capture: "captured", upload: "added" };
 
-export function mountPictureList(root, { base = "", world = null, log = null } = {}) {
+export function mountPictureList(root, { base = "", world = null, log = null, gather: gatherRoot = null } = {}) {
     root.innerHTML = MARKUP;
-    const $ = (id) => root.querySelector(`#${CSS.escape(id)}`);
+    const gathering = gatherRoot || root.appendChild(document.createElement("div"));
+    gathering.innerHTML = GATHER_MARKUP;
+    const $ = (id) => root.querySelector(`#${CSS.escape(id)}`) || gathering.querySelector(`#${CSS.escape(id)}`);
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     // Every message is said once, where the page says everything: its status
     // bar. A refusal is kind "bad", and the page shows it as an error.
@@ -235,14 +242,14 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
     $("pictures-purge").onclick = () => purge($("pictures-purge")).catch((e) => say(e.message, "bad"));
 
     // --- the gathering ---------------------------------------------------------------------
-    function ticked() { return [...root.querySelectorAll("#pic-list input[type=checkbox]:checked")].map((i) => i.value); }
+    function ticked() { return [...gathering.querySelectorAll("#pic-list input[type=checkbox]:checked")].map((i) => i.value); }
     function renderGatherList() {
         const list = $("pic-list");
         const was = new Set(ticked());
         if (!state.pictures.length) { list.innerHTML = '<span class="empty">no pictures to gather</span>'; return; }
         list.innerHTML = state.pictures.map((p) => `<label class="pic" title="${esc(p.path)} · ${Math.round(p.size / 1024)} kB"><input type="checkbox" value="${esc(p.path)}"${was.has(p.path) ? " checked" : ""}><img src="${base}/photos/pictures/file?path=${encodeURIComponent(p.path)}&px=256" alt="${esc(p.name)}" loading="lazy"><span>${esc(p.name)}${p.kept ? ` · ${HOW_KEPT[p.kept] || "kept"}` : ""}</span></label>`).join("");
     }
-    $("pic-all").addEventListener("change", () => { for (const i of root.querySelectorAll("#pic-list input[type=checkbox]")) i.checked = $("pic-all").checked; });
+    $("pic-all").addEventListener("change", () => { for (const i of gathering.querySelectorAll("#pic-list input[type=checkbox]")) i.checked = $("pic-all").checked; });
     async function gather() {
         const pictures = ticked();
         if (pictures.length < 2) { say("tick at least two pictures to gather", "bad"); return; }
@@ -273,12 +280,12 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
     $("pic-gather").onclick = () => gather();
 
     // A verb chosen on the ring goes through the same button a click would; the
-    // gathering's section opens to show what it does.
+    // gathering's window comes in front to show what it does.
     const BUTTON_FOR = { gather: "pic-gather" };
     function act(verb) {
         const btn = $(BUTTON_FOR[verb]);
         if (!btn) return false;
-        $("pictures-gather").open = true;
+        if (world && world.showGather) world.showGather();
         btn.click();
         return true;
     }
@@ -288,6 +295,6 @@ export function mountPictureList(root, { base = "", world = null, log = null } =
     return {
         state, load, choose, forget, purge, addFiles, gather, act,
         chosen: () => state.chosen,
-        destroy() { window.removeEventListener("keydown", letGo); root.innerHTML = ""; },
+        destroy() { window.removeEventListener("keydown", letGo); root.innerHTML = ""; gathering.innerHTML = ""; },
     };
 }

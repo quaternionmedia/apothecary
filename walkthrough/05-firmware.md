@@ -19,7 +19,7 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ## 1. The Bench lists both builds of esp32_blink, each with its toolchain
 
-Panels › Bench › Bench on the canvas ring opens the Bench, floated here from its tab: arduino-cli's status and its cores, and under them the other modules as installed -- Rust for the ESP32, and the slicer, OrcaSlicer, which this run leaves uninstalled -- and the sketches under parts/, each named with its toolchain: the Arduino esp32_blink and the Rust one next to each other in its drop-down, as listed below with the modules. The Arduino one chosen, its board filled in from its firmware.json, and the devkit's port: Compile is next.
+Panels › Bench › Bench on the canvas ring opens the Bench, maximised here from its stack: arduino-cli's status and its cores, and under them the other modules as installed -- Rust for the ESP32, and the slicer, OrcaSlicer, which this run leaves uninstalled -- and the sketches under parts/, each named with its toolchain: the Arduino esp32_blink and the Rust one next to each other in its drop-down, as listed below with the modules. The Arduino one chosen, its board filled in from its firmware.json, and the devkit's port: Compile is next.
 
 ![The Bench lists both builds of esp32_blink, each with its toolchain](screenshots/05-01-the-bench-lists-both-builds-of-esp32-blink-each-wi.png)
 

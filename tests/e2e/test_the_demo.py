@@ -33,6 +33,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 from slicer_helpers import write_fake_orcaslicer
 from test_picture_to_print import (  # noqa: F401 - a fixture, and the loop's steps
@@ -262,7 +263,7 @@ def test_the_demo_goes_round_the_firmware_loop(page: Page, demo, shots):
     expect(bench.locator(".task-title")).to_contain_text("succeeded", timeout=30000)
     expect(bench.locator(".task-log")).to_contain_text("fake upload")
     assert dialogs == [f'Compile and upload "esp32_blink@arduino" to {DEVKIT}?'], dialogs
-    page.locator(".panel-rail .rail-tab[data-panel='bench'] .rail-tab-name").click()
+    windows.show(page, "pictures")
     expect(page.locator(".world-badge[data-path='esp32_blink']")).to_be_visible(timeout=15000)
     _ring_on(page, "esp32_blink")
     _press(page, "Device", "Query")
@@ -359,7 +360,8 @@ def test_the_demo_goes_round_designing_a_part_and_editing_its_scad(page: Page, d
 
     code = page.locator(".scad-editor .cm-content")
     expect(code).to_be_visible(timeout=20000)
-    code.click()
+    # Pressed near its first line: the code runs on below what Selected's window shows.
+    code.click(position={"x": 24, "y": 8})
     page.keyboard.press("Control+End")
     page.keyboard.insert_text("\ntranslate([0, 0, size]) cube(size / 3);")
     expect(_status(page)).to_contain_text(

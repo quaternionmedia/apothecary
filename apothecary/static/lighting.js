@@ -6,7 +6,11 @@
  * says when the feed is silent. The rig comes from GET /sites/{s}/lighting when
  * the site changes; a site with no rig (rig: null) gets no overlay.
  *
- * mountLighting({ scene, base }) -> { setSite(name), stats(), aim(channel) }
+ * The panel is the host's to place: `onPanel(el)` is told the panel's element when
+ * a rig is drawn, and `onPanel(null)` when the site has none (the page makes it a
+ * window of its layout, Lighting, a tab beside Pictures).
+ *
+ * mountLighting({ scene, base, onPanel }) -> { setSite(name), stats(), aim(channel) }
  *   setSite(name): the page is on this site now; "" or a site with no rig clears it.
  *   stats(): what is drawn, for a test: { placed, lit, unplaced, seq }.
  *   aim(channel): where that fixture's beam points, a unit vector in the site's frame, or null.
@@ -29,18 +33,14 @@ const BEAM_RADIUS_MM = 1500;
 // viewer's sceneAt turns it; site units are mm.
 const toScene = (x, y, z) => new THREE.Vector3(x, z, -y);
 
-export function mountLighting({ scene, base }) {
+export function mountLighting({ scene, base, onPanel = null }) {
   const group = new THREE.Group();
   group.name = "lighting";
   scene.add(group);
 
   const panel = document.createElement("div");
   panel.className = "lighting-panel";
-  panel.hidden = true;
-  panel.style.cssText =
-    "position:fixed;right:12px;bottom:12px;max-height:40vh;overflow:auto;width:260px;" +
-    "background:rgba(20,20,24,0.85);color:#ddd;font:12px/1.4 sans-serif;padding:8px;border-radius:6px;z-index:5";
-  document.body.appendChild(panel);
+  panel.style.cssText = "color:#ddd;font:12px/1.4 sans-serif;";
 
   let site = null;
   let token = 0;
@@ -64,7 +64,7 @@ export function mountLighting({ scene, base }) {
     placed = [];
     unplaced = [];
     rig = null;
-    panel.hidden = true;
+    if (onPanel) onPanel(null);
   };
 
   const build = (r) => {
@@ -94,8 +94,8 @@ export function mountLighting({ scene, base }) {
       group.add(holder);
       placed.push({ channel: p.channel, fixture_type: p.fixture_type, glow, beam, holder });
     }
-    panel.hidden = false;
     renderPanel();
+    if (onPanel) onPanel(panel);
   };
 
   // A list of text, not markup: a label is whatever the rig's export holds.

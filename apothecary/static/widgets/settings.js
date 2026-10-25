@@ -68,7 +68,7 @@ export const FIXED = {
     "?": "Show or hide the hint bar",
     f: "Fit the selection", "Shift+f": "Fit the level",
     p: "Take picture", "Shift+p": "Take picture",
-    "~": "Hide or show the rail", "`": "Hide or show the rail",
+    "~": "The world alone, or every window back", "`": "The world alone, or every window back",
     Escape: "Escape: close, put back, let go",
     ArrowUp: "Pan the view", ArrowDown: "Pan the view", ArrowLeft: "Pan the view", ArrowRight: "Pan the view",
     ...EACH(["Shift"], { ArrowUp: "Turn the view", ArrowDown: "Turn the view", ArrowLeft: "Turn the view", ArrowRight: "Turn the view" }),

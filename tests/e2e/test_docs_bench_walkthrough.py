@@ -20,6 +20,7 @@ import socket
 from types import SimpleNamespace
 
 import pytest
+import windows
 from playwright.sync_api import expect
 from viewer_ready import OCCLUSION_TESTED, by_hand, settled
 
@@ -66,6 +67,15 @@ def _camera_marks_visible(page):
         "() => window.apothecaryPictures.cameraState().filter((c) => c.pyramid)"
         ".map((c) => c.pyramid.visible)"
     )
+
+
+def _pinned_in_front(page):
+    """Site's Pinned, a tab beside Site, brought in front from behind another tab: listed
+    again as it comes in front, every site's cameras and pins, those made elsewhere
+    among them."""
+    windows.show(page, "site")
+    windows.show(page, "pinned")
+    return windows.panel(page, "pinned")
 
 
 @pytest.fixture
@@ -223,7 +233,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     expect(contents.first).to_be_visible(timeout=20000)
     for name in ("workbench", "printer_1", "esp32_blink", "raspberry_pi_4"):
         expect(page.locator("#contents-list")).to_contain_text(name)
-    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
+    page.evaluate("() => localStorage.removeItem('apothecary.layout')")
     # The root frames the whole building; the bench is what this page is about, so the
     # view is brought to it by hand, as a person would: Shift+drag, then the wheel.
     by_hand(page, "workbench", distance=3000)
@@ -237,7 +247,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
 
     page.locator("#contents-list .contents-item[data-path='printer_1']").click()
     expect(_part_row(page)).to_contain_text("ender3", timeout=5000)
-    # Selected's rows run past the rail's lower half: the part row the caption names
+    # Selected's rows run past the foot of its window: the part row the caption names
     # is scrolled into view.
     _part_row(page).evaluate("(el) => el.scrollIntoView({ block: 'center' })")
     expect(_part_row(page)).to_be_in_viewport(ratio=0.99)  # whole, but for a fraction of a pixel
@@ -313,14 +323,13 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     expect(page.locator("#status")).to_contain_text(
         "Take picture (P) keeps a frame where it looks", timeout=5000
     )
-    # Site's Pinned lists it, every site's cameras and pins listed again as the
-    # section unfolds.
-    pinned = page.locator(".panel[data-panel='site'] #site-pinned")
-    pinned.locator("summary").click()
+    # Site's Pinned lists it, every site's cameras and pins listed again as it comes
+    # in front.
+    pinned = _pinned_in_front(page)
     placed = pinned.locator(".pin-row.camera")
     expect(placed).to_have_count(1, timeout=5000)
     expect(placed).to_contain_text("garage › camera_1")
-    pinned.locator("summary").click()  # folded again, for the pictures below
+    windows.show(page, "site")  # Site's tree in front again, for the pictures below
     # The root frames the whole building, where the camera is a few pixels: the view
     # brought to the bench and the camera standing over it by hand, as the bench was.
     by_hand(page, "workbench", distance=3400)
@@ -363,7 +372,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     assert _camera_marks_visible(page) == [False]  # unselected: its body and its badge
     expect(page.locator("#selected-body")).to_contain_text("Click a piece to select it")
     # Removed from its row in Site's Pinned.
-    pinned.locator("summary").click()
+    _pinned_in_front(page)
     placed.locator(".pinned-camera-remove").click()
     expect(badge).to_have_count(0, timeout=5000)
     expect(page.locator("#contents-list .contents-item[data-path='camera_1']")).to_have_count(0)
@@ -395,8 +404,11 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     listed = page.request.get(f"{base_url}/photos/pictures").json()
     pictures_before = len(listed)
     kept_before = len([p for p in listed if p["kept"]])
-    page.evaluate("() => window.apothecaryPanels.open('pictures')")
-    pictures = page.locator(".panel[data-panel='pictures']")
+    # Pictures brought in front from behind Settings: listed again as it comes in front,
+    # the picture put in the folder by hand among them.
+    windows.show(page, "settings")
+    windows.show(page, "pictures")
+    pictures = windows.panel(page, "pictures")
     expect(pictures).to_be_visible(timeout=3000)
     rows = pictures.locator(".picture-row")
     expect(rows).to_have_count(pictures_before, timeout=5000)
@@ -428,20 +440,25 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         data={"identity": "aa:bb:cc:dd:ee:ff"},
     )
     assert board_pin.ok, board_pin.text()
-    # Made outside the page: Pinned lists it when unfolded again.
-    pinned.locator("summary").click()
-    pinned.locator("summary").click()
+    # Made outside the page: Pinned lists it when it comes in front again.
+    _pinned_in_front(page)
     boards = pinned.locator(".pin-row.board")
     expect(boards).to_have_count(1, timeout=5000)
     expect(boards).to_contain_text("garage › esp32_blink")
-    # Pictures floated free of the rail beside Site, so both lists are in view.
-    page.evaluate(
-        """() => {
-            window.apothecaryPanels.float('pictures');
-            const el = document.querySelector(".panel-free-layer .panel[data-panel='pictures']");
-            el.style.left = '16px'; el.style.top = '16px';
-        }"""
+    # Pictures' tab dragged onto the world's left edge: a window of its own beside the
+    # world, as tall as it, and Site's Pinned still in view, so both lists are.
+    wb = page.locator(windows.WORLD).bounding_box()
+    windows.drag(page, windows.tab(page, "pictures"), (wb["x"] + 30, wb["y"] + wb["height"] / 2))
+    page.wait_for_function(
+        "() => document.querySelector(\".panel[data-panel='pictures']\").getBoundingClientRect().x < 2"
     )
+    expect(windows.tab(page, "pictures")).to_be_visible()
+    assert windows.state(page, "pictures")["stack"] == ["pictures"]
+    expect(pictures).to_be_visible()
+    expect(pinned).to_be_visible()
+    # Settings in front of the tabs Pictures left: the Bench, in front of them now, names
+    # the run's own folders, which differ on every run.
+    windows.show(page, "settings")
     # Exactly what this page put in the folder, newest first.
     assert rows.evaluate_all("(rs) => rs.map((r) => r.dataset.path)") == [
         "uploads/shelf_again.png",
@@ -485,7 +502,9 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         "pins the one chosen when that one is older.",
     )
 
-    page.evaluate("() => window.apothecaryPanels.dock('pictures', 'right')")
+    # The page's own layout again: Pictures back among its tabs, in front.
+    page.evaluate("() => window.apothecaryPanels.reset()")
+    expect(pictures).to_be_visible()
     # Forgotten from its row, pressed twice: it cannot be undone.
     forget = pictures.locator(".pictures-forget[data-path='uploads/shelf_again.png']")
     forget.click()
@@ -509,8 +528,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     assert stale_pin.ok, stale_pin.text()
     assert page.request.delete(f"{base_url}/photos/pins_check").ok
     (picture_folder / "pins_check.png").unlink()
-    pinned.locator("summary").click()
-    pinned.locator("summary").click()
+    _pinned_in_front(page)
     rows = boards
     expect(rows).to_have_count(2, timeout=5000)
     gone = rows.filter(has_text="pins_check")
@@ -521,8 +539,10 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     # The pin was made outside the viewer, which learns of it when its devices are
     # refreshed. Unpinned from Site's Pinned, the piece's Device section follows at once.
     page.evaluate("() => window.fractalViewer.rescanDevices()")
+    windows.show(page, "site")
     page.locator("#contents-list .contents-item[data-path='esp32_blink']").click()
     expect(page.locator("#selected-body .device-section .dev-unpin")).to_be_visible(timeout=8000)
+    windows.show(page, "pinned")
     rows.locator(".pinned-board-unpin").click()
     expect(pinned.locator("#pinned-list")).to_contain_text("none pinned", timeout=5000)
     expect(page.locator("#selected-body .dev-pin-manual")).to_be_visible(timeout=3000)

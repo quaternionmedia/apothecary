@@ -36,3 +36,12 @@ precedence = "override"
 SPDX-FileCopyrightText = "Copyright (C) 2016-2024 Marijn Haverbeke and others"
 SPDX-License-Identifier = "MIT"
 
+# GoldenLayout 2.6.0, the page's windows: its build, stylesheets and icons, copied in
+# (apothecary/static/vendor/golden-layout/README.md says how). The README and
+# package.json there are this project's.
+[[annotations]]
+path = ["apothecary/static/vendor/golden-layout/**/*.js", "apothecary/static/vendor/golden-layout/css/*.css", "apothecary/static/vendor/golden-layout/img/*.png", "apothecary/static/vendor/golden-layout/LICENSE"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (c) 2016 deepstream.io"
+SPDX-License-Identifier = "MIT"
+

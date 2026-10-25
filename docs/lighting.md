@@ -3,7 +3,8 @@
 A site can carry a lighting rig: fixture types, a patch (channel, universe and
 address, position, orientation), and live levels from a console. The viewer draws
 each placed fixture in the colour its levels give it, with a beam, and lists the
-patches that have no position in a panel. `apothecary/lighting.py` is the model
+patches that have no position, with the console's own words, in its Lighting
+window, a tab beside Pictures while the site has a rig. `apothecary/lighting.py` is the model
 and is tied to no one theatre; `apothecary/theatre_site.py` is the example that
 uses it, the `theatre` site.
 
@@ -18,6 +19,15 @@ width and height, and the pit's width, length and depth -- and Apply draws the
 resized shell. Every default is a measurement of one real stage house, traced from
 its plan: a few boxes, not the outline, with the house's seating, its back wall
 and the fly tower not drawn.
+
+The site's pieces are its subsystems, as the garage's are. `theatre`, the shell,
+is the building's walls: drawn faded, a click passing through it to what hangs
+inside. `lighting` holds the rig by its hanging positions -- `foh`,
+`1st_electric`, `2nd_electric`, `3rd_electric_cyc`, `groundrow`, `house`, each
+the fixtures whose label names it ("FOH 3" hangs on `foh`) -- so a step into it
+shows the positions and a step into one its fixtures, each named by its channel
+and label (`ch3_FOH_3`). `scenery` holds the scenic elements. Site's chips --
+wall, lighting, scenic -- expand a subsystem at any depth.
 
 The frame: millimetres; the origin is the plaster line's centre on the stage
 floor; +x is to the right as the house sees the stage, +y upstage, +z up. The rig's

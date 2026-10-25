@@ -453,7 +453,7 @@ def test_download_scad_gives_the_edit(page: Page, url, cube_as_it_was):
     _edit(page)
     code = page.locator(".scad-editor .cm-content")
     expect(code).to_be_visible(timeout=20000)
-    code.click()
+    code.click(position={"x": 24, "y": 8})  # its first line: in view in Selected's window
     page.keyboard.press("Control+End")
     page.keyboard.insert_text("\n// downloaded as edited")
     with page.expect_download(timeout=20000) as got:

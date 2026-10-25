@@ -1,7 +1,8 @@
 """The world keeps its proportions when the space it is given changes.
 
-The rail beside the world can be dragged wider, hidden and shown again, all
-without the window changing size. The camera's aspect and the canvas's
+The windows beside the world can be dragged wider by the splitter between them
+and the world, put away by the tilde for the world alone and brought back by it,
+all without the browser's window changing size. The camera's aspect and the canvas's
 drawing buffer must follow the canvas each time, or the world is drawn
 stretched; and since the world is drawn only when something in it changes, a
 frame must be drawn at the new size each time, or what shows is stale.
@@ -14,6 +15,7 @@ drawn at that size.
 from __future__ import annotations
 
 import pytest
+import windows
 from doc_capture import WRAP_WORDS, _blanked, picture, same_picture
 from playwright.sync_api import Page
 from viewer_ready import settled
@@ -59,31 +61,29 @@ def _in_step(page: Page, frames_before: int | None = None) -> dict:
 
 
 @pytest.mark.e2e
-def test_the_world_keeps_its_aspect_as_the_rail_changes(page: Page, base_url: str):
+def test_the_world_keeps_its_aspect_as_the_windows_beside_it_change(page: Page, base_url: str):
     page.set_viewport_size({"width": 1280, "height": 800})
     page.goto(f"{base_url}/viewer/sites/garage")
     settled(page)
     first = _in_step(page)
 
-    # Dragging the rail's edge toward the world makes the world narrower.
-    edge = page.locator(".panel-rail-resizer").bounding_box()
-    assert edge, "the rail has an edge to drag"
-    x, y = edge["x"] + edge["width"] / 2, edge["y"] + edge["height"] / 2
+    # Dragging the splitter beside the world toward it makes the world narrower.
+    splitter = page.locator(".lm_root > .lm_row > .lm_splitter").first
+    edge = splitter.bounding_box()
+    assert edge, "the world has a splitter beside it to drag"
     before = _frames(page)
-    page.mouse.move(x, y)
-    page.mouse.down()
-    page.mouse.move(x - 160, y, steps=8)
-    page.mouse.up()
+    windows.drag(page, splitter, (edge["x"] - 160, edge["y"] + edge["height"] / 2))
     narrower = _in_step(page, before)
     assert narrower["width"] < first["width"] - 100, (first, narrower)
 
-    # Hiding the rail gives the world the page's width; showing it gives it back.
+    # The tilde shows the world alone, the page's width; again, the windows come back.
     before = _frames(page)
-    page.locator(".panel-rail-hide").click()
+    page.keyboard.press("Backquote")
     wider = _in_step(page, before)
     assert wider["width"] > narrower["width"] + 100, (narrower, wider)
+    assert page.evaluate("() => window.apothecaryPanels.isWorldAlone()") is True
     before = _frames(page)
-    page.keyboard.press("Backquote")  # the tilde key shows the rail again
+    page.keyboard.press("Backquote")
     again = _in_step(page, before)
     assert abs(again["width"] - narrower["width"]) <= 2, (narrower, again)
 

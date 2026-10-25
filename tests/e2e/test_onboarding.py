@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 from slicer_helpers import write_fake_orcaslicer
 from test_picture_in_the_world import (  # noqa: F401 - fixtures, and a pin of a picture
@@ -49,7 +50,7 @@ def url(base_url, start_server, tmp_path_factory):
 def _open(page: Page, url: str, site: str = "garage", query: str = "") -> None:
     page.goto(f"{url}/viewer/sites/{site}{query}")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
+    page.evaluate("() => localStorage.removeItem('apothecary.layout')")
     settled(page)
 
 
@@ -157,7 +158,9 @@ def test_a_printers_pin_pins_its_mainboard_where_device_machine_and_slice_find_i
     _press(page, "Device", "Open")
     machine = page.locator(MACHINE)
     expect(machine).to_be_visible(timeout=5000)
-    expect(machine.locator(".panel-name")).to_contain_text(f"printer_1 · {PRINTER}")
+    # Its tab names the printer; its whole title, the tab's tooltip, the port too.
+    expect(windows.tab(page, "machine").locator(".lm_title")).to_have_text("printer_1")
+    expect(windows.tab(page, "machine")).to_have_attribute("title", f"printer_1 · {PRINTER}")
 
     # Slice, on a part standing in the garage, slices for it.
     _ring_on(page, "footpedal")

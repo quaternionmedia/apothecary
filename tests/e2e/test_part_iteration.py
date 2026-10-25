@@ -331,7 +331,7 @@ def test_openscad_s_keys_work_in_the_editor_and_the_browser_s_outside(
     # the page stays.
     _param(page, "size").locator(".param-number").fill("12")
     expect(_summary(page)).to_contain_text("1 change staged, valid", timeout=10000)
-    code.click()
+    code.click(position={"x": 24, "y": 8})  # its first line: in view in Selected's window
     with page.expect_response(lambda r: "/draft/render" in r.url, timeout=60000):
         page.keyboard.press("F6")
     expect(_status(page)).to_contain_text("an applied variant, not saved", timeout=60000)
@@ -433,7 +433,7 @@ def test_a_render_of_older_scad_says_so_and_leaves_the_newer_check_marked(
                 return r;
             }; }"""
     )
-    code.click()
+    code.click(position={"x": 24, "y": 8})  # its first line: in view in Selected's window
     page.keyboard.press("Control+End")
     with page.expect_request(lambda r: "/draft/render" in r.url, timeout=30000):
         page.keyboard.insert_text("\ntranslate([0, 0, size]) cube(2);")

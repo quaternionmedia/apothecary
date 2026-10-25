@@ -22,6 +22,7 @@ import time
 
 import httpx
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 
 PRINTER = "/dev/ttyFAKE1"
@@ -93,7 +94,7 @@ MACHINE = ".panel[data-panel='machine']"
 @pytest.mark.e2e
 def test_the_device_rings_open_is_the_one_cell_that_opens_the_machine(page: Page, url: str):
     """The Device ring holds one cell for a board's Machine, Open, and no Watch or
-    Monitor. Chosen, the Machine opens in the rail's tab strip, the printer's."""
+    Monitor. Chosen, the Machine opens as a tab beside Pictures, the printer's."""
     _open_viewer(page, url)
     _ring_on(page, "printer_1")
     _choose(page, "Device")
@@ -106,8 +107,8 @@ def test_the_device_rings_open_is_the_one_cell_that_opens_the_machine(page: Page
     machine = page.locator(MACHINE)
     expect(machine).to_be_visible(timeout=5000)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
-    expect(machine.locator(".panel-name")).to_contain_text("printer_1")
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "layout"
+    expect(windows.tab(page, "machine")).to_have_attribute("title", re.compile("printer_1"))
     expect(page.locator("#status")).to_contain_text("Opened printer_1")
 
 
@@ -182,7 +183,7 @@ def test_one_log_with_one_query_box_in_the_machine(page: Page, url: str):
     machine = page.locator(MACHINE)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
     expect(page.locator(".panel[data-panel='log']")).to_have_count(0)
-    expect(page.locator(".panel-tab[data-panel='log']")).to_have_count(0)
+    expect(page.locator("[data-panel='log']")).to_have_count(0)
     expect(page.locator("#log")).to_have_count(1)
     expect(machine.locator("#log")).to_have_count(1)
     boxes = page.locator("input[list]")  # a box that suggests report codes
@@ -275,8 +276,8 @@ def test_a_devkit_has_a_machine_with_what_it_should_run_and_what_it_says(page: P
     badge.click()
     machine = page.locator(MACHINE)
     expect(machine).to_be_visible(timeout=5000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
-    expect(machine.locator(".panel-name")).to_contain_text("footpedal")
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "layout"
+    expect(windows.tab(page, "machine")).to_have_attribute("title", re.compile("footpedal"))
     expect(machine.locator("#c-board")).to_contain_text(UNO)
     expect(machine.locator("#c-board")).to_contain_text("Arduino Uno")
     sketch = machine.locator("#c-sketch")
@@ -367,7 +368,7 @@ def test_a_machine_s_ring_is_its_device_ring(page: Page, url: str):
     assert cells["Control"] == "7" and cells["Link"] == "1" and cells["Flash"] == "2", cells
     for digit in ("7", "7"):  # Control › Arm
         page.keyboard.press(digit)
-    # Armed, the pad pops out of the Machine over the world, and is still the Machine's:
+    # Armed, the pad pops out of the Machine into a window of its own, and is still the Machine's:
     # its buttons wear the device ring's cells, and its ring is the device ring.
     pad = page.locator("#control")
     expect(pad).to_be_visible(timeout=5000)
@@ -493,14 +494,14 @@ def test_device_flash_opens_the_machine_at_its_card_and_uploads_then_identifies(
 @pytest.mark.e2e
 def test_the_monitor_address_opens_the_board_s_machine_where_it_is_pinned(page: Page, url: str):
     """/firmware/monitor?port=, the printer monitor's address, is the viewer on the site
-    the port is pinned in, with its Machine open in the rail, the printer's -- on a fresh
+    the port is pinned in, with its Machine open beside Pictures, the printer's -- on a fresh
     load, the port kept in the address, so a reload opens it again."""
     page.goto(f"{url}/firmware/monitor?port={PRINTER}")
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?machine=%2Fdev%2FttyFAKE1$"))
     machine = page.locator(MACHINE)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=15000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
-    expect(machine.locator(".panel-name")).to_contain_text("printer_1")
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "layout"
+    expect(windows.tab(page, "machine")).to_have_attribute("title", re.compile("printer_1"))
     page.reload()
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=15000)
     # Closed, the address lets go of it; a port of the wrong shape opens nothing.
@@ -513,9 +514,9 @@ def test_the_monitor_address_opens_the_board_s_machine_where_it_is_pinned(page: 
 
 
 @pytest.mark.e2e
-def test_a_board_pinned_nowhere_opens_in_the_rail_on_the_default_site(page: Page, start_server):
+def test_a_board_pinned_nowhere_opens_beside_pictures_on_the_default_site(page: Page, start_server):
     """The monitor's address for a board pinned nowhere: the default site, its Machine
-    in the rail as every Machine is. The Uno, never asked, is a devkit's Machine -- Probe and
+    beside Pictures as every Machine is. The Uno, never asked, is a devkit's Machine -- Probe and
     Listen, no Poll, its port closed -- and the printer, asked M115, a printer's: Poll,
     and nothing that would take its port."""
     url = start_server()
@@ -528,8 +529,10 @@ def test_a_board_pinned_nowhere_opens_in_the_rail_on_the_default_site(page: Page
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?machine=%2Fdev%2FttyFAKE0$"))
     machine = page.locator(MACHINE)
     expect(machine.locator("#c-board")).to_contain_text("Arduino Uno", timeout=15000)
-    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "rail"
-    expect(machine.locator(".panel-name")).to_contain_text("pinned nowhere in garage")
+    assert page.evaluate("() => window.apothecaryPanels.state('machine').where") == "layout"
+    expect(windows.tab(page, "machine")).to_have_attribute(
+        "title", re.compile("pinned nowhere in garage")
+    )
     for shown in ("#probe", "#listen", "#identify", "#flash-card"):
         expect(machine.locator(shown)).to_be_visible()
     for hidden in ("#poll", "#qform", "#ctl-label", "#estop"):

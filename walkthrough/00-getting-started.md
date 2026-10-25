@@ -85,7 +85,7 @@ checkout, kept between runs; deleting it starts the demo afresh. Without
 `--demo`, `serve` is the same viewer on your own state and the boards plugged
 into this machine.
 
-The page opens on the garage: the world, a rail of panels beside it, and the
+The page opens on the garage: the world, its panels as windows beside it, and the
 ring, `m` or Ctrl+right-click, which holds every verb of what it opens on, the
 digits pressed to reach one its address. A right-click alone is the camera's.
 [The viewer](../docs/viewer.md) describes each of its controls.
@@ -120,7 +120,7 @@ Where each starts:
   Picture › Add pins a picture from disk instead;
   `examples/shapes.png` is three shapes the finder
   reads. Each step's message names the next one.
-- **Firmware** starts at the Bench, a tab of the rail, or the canvas ring's
+- **Firmware** starts at the Bench, a tab beside Pictures, or the canvas ring's
   Panels › Bench › Bench: the sketches under `parts/`, each named with its
   toolchain.
 

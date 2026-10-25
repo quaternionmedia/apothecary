@@ -158,7 +158,7 @@ def _pin(page, base_url: str, host: str, picture: str, mm_across: float | None =
 def _open_garage(page, base_url: str) -> None:
     page.goto(f"{base_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
+    page.evaluate("() => localStorage.removeItem('apothecary.layout')")
     settled(page)
 
 
@@ -355,8 +355,8 @@ def test_the_mat_follows_its_bench_when_the_gizmo_moves_it(
     after = page.evaluate("() => window.fractalViewer.anchors.at('place:workbench')")
     assert after["x"] > before["x"]
     point = page.evaluate(PROJECT, [view["id"], 0, 0])
-    # An anchor's point is the canvas's (anchors.js), PROJECT's the page's: the
-    # canvas starts where Site's rail ends.
+    # An anchor's point is the canvas's (anchors.js), PROJECT's the page's: the two
+    # differ by where the world's window starts on the page.
     left = page.evaluate("() => window.fractalViewer.canvas.getBoundingClientRect().left")
     # The badge stands at the picture's top-left corner, its own spot, and not at
     # the middle of the bench, where the printers stand.

@@ -26,14 +26,13 @@
  *
  * A printer's control pad -- heaters, motion, the SD print, leveling -- shows
  * while its latch is armed. It pops out whenever the latch is armed, from here,
- * the ring or another browser: it stands over the world's bottom corner on the
- * Machine's side, wherever the person is looking and whatever tab the rail
- * shows, bordered and named loudly, since a real machine armed can heat and
- * move; the host frames the printer in what the pad leaves clear (onPadOut).
- * Its ⇥ puts it back as the last thing in the Machine's column; its ⧉ pops it
- * out again.
+ * the ring or another browser: into the host's loud window (padWindow), a window
+ * of its own beside the world, wherever the person is looking and whatever tab
+ * is in front, since a real machine armed can heat and move. Its ⇥ Put back, or
+ * its window's ✕, puts it back as the last thing in the Machine's column; its
+ * ⧉ Pop out pops it out again.
  *
- * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, name, say, onPadOut, variantFor })
+ * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, name, say, padWindow, variantFor })
  * renders into `root` and returns the handle the ring drives (carry, pairs,
  * device), the world asks to list its site's parts again when a piece is made,
  * rebuilt or dropped (print.loadChoices), to choose the piece a made piece's
@@ -47,7 +46,7 @@
  * card says what the slice used, each value with where it came from, the
  * slicer's estimate, and its errors and warnings by line. A kept file a slice
  * made says what it was sliced from and for which printer.
- * `host` is "world": the world's page, a tab of its rail or floated, one board and
+ * `host` is "world": the world's page, a window of its layout, one board and
  * everything inline in one column; /firmware/monitor opens the world's page with
  * this Machine.
  * `boards` is the page's model, made here when none is given.
@@ -57,8 +56,11 @@
  * Device › Flash says why. `pin` ({ site, path, how }) is where the board is pinned, or bound
  * by its sketch when `how` is "sketch". `name` is what the world calls the board's
  * Machine (the printer it is in), named on the control pad; left out, the port.
- * `onPadOut(box)` is told each time the pad pops out, with where it stands in the
- * page (its bounding box), so the host can frame the printer clear of it. `say(text,
+ * `padWindow` ({ open(pad, who), close(pad, putBack) }) is where the pad stands
+ * popped out: the host opens a loud window holding it, and closes it when the pad
+ * goes back (`putBack` when a person put it back, not when the latch disarmed);
+ * the window's own ✕ is the handle's padBack(). Without it the pad stays in the
+ * Machine. `say(text,
  * kind)` is the host's status bar: a refusal is said there as an error as well
  * as in the log; a print started is said there, naming where it is followed, and
  * a print that ends, how it ended (failed, and why, as an error). `variantFor(path)`
@@ -264,7 +266,7 @@ const BY_CMD = {
 };
 
 
-export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, say = null, onPadOut = null, variantFor = null } = {}) {
+export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, say = null, padWindow = null, variantFor = null } = {}) {
     const BASE = base;
     const model = boards || mountBoards({ base });
     root.classList.add("machine", `host-${host}`);
@@ -662,8 +664,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // An answer carries the latch as it was when it was asked for. `askedAt` is the
     // model's number for the latest arm or disarm, `pending` the ones in flight: an
     // answer asked before the latest, or while one is in flight, is stale.
-    // `out` is whether the pad stands popped out over the world: it is, each time the
-    // latch is armed.
+    // `out` is whether the pad stands popped out, in the host's window: it is, each
+    // time the latch is armed.
     const ctl = { armed: false, until: 0, step: 10, timer: null, askedAt: 0, pending: 0, out: true };
     const latchFresh = (asked) => asked > ctl.askedAt && ctl.pending === 0;
     function renderControl() {
@@ -684,39 +686,25 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         ctl.until = Date.now() + (c ? c.seconds_left * 1000 : 0);
         if (ctl.armed && !was) ctl.out = true;
         renderControl();
-        if (ctl.armed && !was) { pad.classList.remove("alert"); void pad.offsetWidth; pad.classList.add("alert"); poppedOut(); }
     }
-    // The pad popped out stands in the page, over the world's bottom corner on the side
-    // the rail is (the Machine's), clear of the status bar; put back, or disarmed, it is
-    // the Machine's last child again.
-    function placePad() {
-        const out = ctl.armed && ctl.out;
+    // Popped out, the pad is the host's window's; put back, or disarmed, it is the
+    // Machine's last child again. `padIsOut` is where it stands now, so the host is
+    // asked once per move.
+    let padIsOut = false;
+    function placePad(putBack = false) {
+        const out = !!(ctl.armed && ctl.out && padWindow);
+        const who = name || state.port || "Control";
+        $("ctl-who").textContent = who;
+        const pop = $("ctl-pop");
+        pop.hidden = !padWindow;
+        pop.textContent = ctl.out ? "⇥ Put back" : "⧉ Pop out";
+        pop.title = ctl.out ? "Put the control pad back in the Machine, as its window's ✕ does (Panels › Control pad)" : "The control pad in a loud window of its own beside the world (Panels › Control pad)";
+        if (out === padIsOut) return;
+        padIsOut = out;
         pad.classList.toggle("out", out);
-        const home = out ? document.body : root;
-        if (pad.parentElement !== home) home.appendChild(pad);
-        $("ctl-who").textContent = name || state.port || "Control";
-        $("ctl-pop").textContent = ctl.out ? "⇥" : "⧉";
-        $("ctl-pop").title = ctl.out ? "Put the control pad back in the Machine" : "Pop the control pad out over the world";
-        for (const side of ["left", "right", "bottom", "maxWidth"]) pad.style[side] = "";
-        const world = out && document.getElementById("viewer-canvas");
-        const w = world && world.getBoundingClientRect();
-        if (!w || !w.width) return;  // the stylesheet's corner of the page
-        const gap = 12, railRight = innerWidth - w.right >= w.left;
-        pad.style.bottom = `${Math.max(gap, innerHeight - w.bottom + gap)}px`;
-        if (railRight) pad.style.right = `${innerWidth - w.right + gap}px`;
-        else { pad.style.left = `${w.left + gap}px`; pad.style.right = "auto"; }
-        pad.style.maxWidth = `${Math.max(240, w.width - 2 * gap)}px`;
+        if (out) padWindow.open(pad, who);
+        else { padWindow.close(pad, putBack); root.appendChild(pad); }
     }
-    // Popped out, the host is told where it stands.
-    function poppedOut() {
-        if (onPadOut && pad.classList.contains("out")) onPadOut(pad.getBoundingClientRect());
-    }
-    const onResize = () => { if (pad.classList.contains("out")) placePad(); };
-    window.addEventListener("resize", onResize);
-    onWindow.push(["resize", onResize]);
-    const canvas = document.getElementById("viewer-canvas");
-    const worldResized = canvas && typeof ResizeObserver === "function" ? new ResizeObserver(onResize) : null;
-    if (worldResized) worldResized.observe(canvas);
     async function arm(on) {
         if (!state.port) { $("ctl").checked = false; return; }
         ctl.askedAt = model.tick(); ctl.pending++;
@@ -781,16 +769,25 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     }
     $("ctl").addEventListener("change", () => arm($("ctl").checked));
     $("ctl-disarm").onclick = () => arm(false);
-    // Out over the world, or back in the Machine: the pad's ⇥ and ⧉, and the ring's
-    // Panels › Control pad. What it did, or why it could not.
+    // In its own window, or back in the Machine: the pad's ⧉ Pop out and ⇥ Put back,
+    // and the ring's Panels › Control pad. What it did, or why it could not.
     function togglePad() {
         const who = name || state.port;
         if (!ctl.armed) return { refused: `${who}'s control is not armed: ⚙ Control in its Machine arms it, and its pad pops out` };
+        if (!padWindow) return { refused: `${who}'s control pad has no window to pop out into here` };
         ctl.out = !ctl.out;
+        placePad(true);
+        if (!ctl.out) pad.scrollIntoView({ block: "nearest" });
+        return { said: ctl.out ? `${who}'s control pad is in a loud window of its own beside the world` : `${who}'s control pad put back in its Machine` };
+    }
+    // Its window's ✕: the pad back in the Machine, as ⇥ Put back does.
+    function padBack() {
+        if (!padIsOut) return;
+        padIsOut = false;
+        ctl.out = false;
+        pad.classList.remove("out");
+        root.appendChild(pad);
         placePad();
-        if (ctl.out) poppedOut();
-        else pad.scrollIntoView({ block: "nearest" });
-        return { said: ctl.out ? `${who}'s control pad popped out over the world` : `${who}'s control pad put back in its Machine` };
     }
     $("ctl-pop").onclick = () => togglePad();
     // The emergency stop never asks: heaters and motors off, at once.
@@ -1309,7 +1306,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         identify, listen, probe, showFlashing,
         flashing: () => flash,
         kind: () => state.kind,
-        device, carry, pairs, pad: togglePad,
+        device, carry, pairs, pad: togglePad, padBack,
         level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
         print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart, slice: slicePart, slices: () => prt.slices, slicing: () => slc.running },
         destroy() {
@@ -1318,8 +1315,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             if (flash) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
             if (slc.tasks) { slc.tasks.destroy(); slc.tasks = null; }
             for (const [event, fn] of onWindow) window.removeEventListener(event, fn);
-            if (worldResized) worldResized.disconnect();
             if (!boards) model.destroy();
+            if (padIsOut) { padIsOut = false; padWindow.close(pad, false); }
             pad.remove();
             root.innerHTML = ""; root.classList.remove("machine", `host-${host}`, "kind-printer", "kind-devkit", "in-printer");
         },

@@ -3,21 +3,22 @@ its ring (Part › Edit), its SCAD edited in Selected's editor, an assertion tha
 checked once typing stops and marked on its line with nothing rendered, then a real
 change rendered soon after its check passes and drawn as an applied variant, taller than
 its envelope and said so; saved from the ring (Part › Save) as a variant in git and
-listed in both places, with what it changes; the editor floated over the world
-(Part › View › Float) and made fullscreen (its own button, then Esc). Round two in the
-floated editor: a name typed, another change, saved with Ctrl+S; then the first variant
-drawn from the ring (Part › Variants › its name › Draw), and the editor docked back.
-Round three: the name box letting go of the variant once the text moves on and taking it
-back on Ctrl+Z, Save asking before it replaces a variant, F5 checking and drawing at
-once a change that reaches under the floor; then a draft that does not read kept over a
-reload and restored, and the editor's undo kept while another part is edited. It writes
-walkthrough/06-editing-a-parts-scad.md and its pictures as it goes.
+listed in both places, with what it changes; the editor popped out into a window of its
+own beside the world (Part › View › Pop out) and made fullscreen (its own button, then
+Esc). Round two in the popped-out editor: a name typed, another change, saved with
+Ctrl+S; then the first variant drawn from the ring (Part › Variants › its name › Draw),
+and the editor docked back. Round three: the name box letting go of the variant once the
+text moves on and taking it back on Ctrl+Z, Save asking before it replaces a variant, F5
+checking and drawing at once a change that reaches under the floor; then a draft that
+does not read kept over a reload and restored, and the editor's undo kept while another
+part is edited. It writes walkthrough/06-editing-a-parts-scad.md and its pictures as it
+goes.
 
 The server is this module's own, with this machine's OpenSCAD and a variant cache
 of its own; it saves variants into a clone of the checkout (tests/e2e/conftest.py),
 never this checkout's refs, which the run checks are as they were. Opening the part
 draws its own STL, which a fresh clone does not have, so ``parts/calibration_cube/``
-is put back as it was found. Pictures of the editor docked, floated and fullscreen
+is put back as it was found. Pictures of the editor docked, popped out and fullscreen
 at both widths the page is laid out for, each checked to overlap nothing it must
 not, are written under pytest's temp folder (``scad-loop-shots``).
 """
@@ -26,8 +27,10 @@ from __future__ import annotations
 
 import re
 import subprocess
+from contextlib import nullcontext
 
 import pytest
+import windows
 from doc_capture import all_words
 from playwright.sync_api import Page, expect
 from viewer_ready import (
@@ -82,7 +85,8 @@ OPACITY_THROUGH = """(selector) => {
 }"""
 
 
-# The boxes a floated or fullscreen editor is checked against, in the page's pixels.
+# The boxes the editor is checked against, docked, popped out or fullscreen, in the
+# page's pixels: its own window's, Selected's and the world's.
 LAYOUT = """() => {
     const box = (el) => {
         if (!el || el.hidden) return null;
@@ -93,18 +97,10 @@ LAYOUT = """() => {
     };
     const v = window.fractalViewer;
     return {
-        floated: box(document.querySelector(".panel[data-panel='scad-editor']")),
+        popped: box(document.querySelector(".panel[data-panel='scad-editor']")),
+        selected: box(document.querySelector(".panel[data-panel='selected']")),
         editor: box(document.querySelector('.scad-editor')),
-        buttons: ['#scad-save', '#scad-float', '#scad-fullscreen', '#scad-name'].map((s) => box(document.querySelector(s))),
-        rail: box(document.querySelector('.panel-rail')),
-        keep: {
-            header: box(document.querySelector('.toolbar')),
-            hint: box(v.hintEl),
-            ladder: box(v.minimapEl),
-            tabs: box(document.querySelector('.panel-tabs')),
-            rail: box(document.querySelector('.panel-rail')),
-            status: box(document.getElementById('status')),
-        },
+        buttons: ['#scad-save', '#scad-popout', '#scad-fullscreen', '#scad-name'].map((s) => box(document.querySelector(s))),
         world: box(v.canvas),
         viewport: { r: innerWidth, b: innerHeight },
     };
@@ -175,7 +171,7 @@ def _variant_refs_here() -> str:
 def _open(page: Page, url: str) -> None:
     page.goto(url)
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
-    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
+    page.evaluate("() => localStorage.removeItem('apothecary.layout')")
     settled(page)
     page.wait_for_function(
         f"() => {{ const m = window.fractalViewer.meshByName['{PART}'];"
@@ -225,7 +221,7 @@ def _code(page: Page):
 def _into_code(page: Page) -> None:
     """Into the editor, its text taking the keys that follow, the view of it left as it
     is: a click lands where the code happens to be scrolled -- its middle below what
-    Selected shows of it, a line's start under its gutter or out past the rail's left
+    Selected shows of it, a line's start under its gutter or out past Selected's left
     edge, a line's middle past its right -- and scrolls it, run by run otherwise."""
     page.locator(".scad-editor .cm-content").focus()
 
@@ -293,7 +289,7 @@ def _saved(page: Page, name: str) -> None:
 
 
 def _laid_out(page: Page, width: int, shots, how: str) -> None:
-    """At ``width``, the editor ``how`` it stands -- docked, floated, fullscreen --
+    """At ``width``, the editor ``how`` it stands -- docked, popped out, fullscreen --
     overlaps nothing it must not, its buttons in view; and a picture of it."""
     layout = page.evaluate(LAYOUT)
     view = {"l": 0, "t": 0, **layout["viewport"]}
@@ -301,15 +297,13 @@ def _laid_out(page: Page, width: int, shots, how: str) -> None:
         assert button and _inside(button, view), (how, width, layout["buttons"])
     if how == "docked":
         for button in layout["buttons"]:
-            assert _inside(button, layout["rail"]), (how, width, button, layout["rail"])
-    elif how == "floated":
-        floated = layout["floated"]
-        assert floated and _inside(floated, layout["world"]), (width, floated, layout["world"])
-        for name, box in layout["keep"].items():
-            if box is not None and name != "status":
-                assert not _overlaps(floated, box), (width, name, floated, box)
+            assert _inside(button, layout["selected"]), (how, width, button, layout["selected"])
+    elif how == "popped":
+        popped = layout["popped"]
+        assert popped and _inside(popped, view), (width, popped, view)
+        assert not _overlaps(popped, layout["world"]), (width, popped, layout["world"])
         for button in layout["buttons"]:
-            assert _inside(button, floated), (width, button, floated)
+            assert _inside(button, popped), (width, button, popped)
     else:
         assert _inside(view, layout["editor"], slack=1), (width, layout["editor"])
     page.screenshot(path=str(shots / f"{how}-{width}.png"))
@@ -319,20 +313,23 @@ def _at_both_widths(page: Page, shots, how: str) -> None:
     for width, height in WIDTHS:
         page.set_viewport_size({"width": width, "height": height})
         settled(page)
-        if how == "floated":
-            # Floated afresh at this width, as a person would after resizing: docked
-            # first when it floats already.
-            floated = page.locator(".panel[data-panel='scad-editor']")
-            if floated.count():
-                _ring(page, "Part", "View", "Float")
-                expect(floated).to_have_count(0)
-            _ring(page, "Part", "View", "Float")
-            expect(page.locator(".panel[data-panel='scad-editor'].free")).to_be_visible()
-        elif how == "docked":
-            page.locator(".scad-editor .scad-bar").scroll_into_view_if_needed()
-        page.evaluate("() => window.fractalViewer.scadEditor.measure()")
-        settled(page)
-        _laid_out(page, width, shots, how)
+        if how == "popped":
+            # Popped out afresh at this width, as a person would after resizing: docked
+            # first when it is out already.
+            popped = windows.panel(page, "scad-editor")
+            if popped.count():
+                _ring(page, "Part", "View", "Pop out")
+                expect(popped).to_have_count(0)
+            _ring(page, "Part", "View", "Pop out")
+            expect(popped).to_be_visible()
+        # Docked, Selected given the column, as a person gives it room at this width,
+        # and the editor's bar at the top of what it shows, under the stage bar.
+        with site_folded(page) if how == "docked" else nullcontext():
+            if how == "docked":
+                page.locator(".scad-editor .scad-bar").evaluate(UNDER_THE_STAGE_BAR)
+            page.evaluate("() => window.fractalViewer.scadEditor.measure()")
+            settled(page)
+            _laid_out(page, width, shots, how)
     page.set_viewport_size({"width": WIDTHS[0][0], "height": WIDTHS[0][1]})
     settled(page)
 
@@ -355,9 +352,10 @@ def test_editing_a_parts_scad_twice_round(
             "A part's SCAD edited in the page: the editor where its source stood in "
             "Selected, a failing line checked once typing stops and marked where it is, a "
             "change rendered soon after its check passes and drawn as an applied variant, "
-            "kept as a variant in git and listed with what it changes, the editor floated "
-            "and made fullscreen; then round again, and the first variant drawn once more; "
-            "then the name a save keeps, OpenSCAD's own keys, a draft kept over a reload "
+            "kept as a variant in git and listed with what it changes, the editor popped "
+            "out into a window of its own beside the world and made fullscreen; then round "
+            "again, and the first variant drawn once more; then the name a save keeps, "
+            "OpenSCAD's own keys, a draft kept over a reload "
             "and the editor's undo kept while another part is edited. Every step is the "
             "page's own: a cell of a ring, a key or a button, and every step's words name "
             "the next one."
@@ -404,8 +402,8 @@ def test_editing_a_parts_scad_twice_round(
             "Part › Edit opens the SCAD where its source stood",
             f"{PART}'s ring, Part › Edit: its parameters in Selected and, below them and "
             "the short list of its saved variants (none yet), its SCAD in an editor -- "
-            "Site folded to its title by its ▾ here, so Selected has the rail. Typing in "
-            "it is the next step.",
+            "Site's window and the tabs under Selected dragged short by their splitters "
+            "here, so Selected has the column. Typing in it is the next step.",
         )
 
     # Round one: a line OpenSCAD refuses, checked once typing stops, marked, not rendered.
@@ -438,9 +436,9 @@ def test_editing_a_parts_scad_twice_round(
             f"An assertion typed at the end that this part fails. One check, once typing "
             f"stops: OpenSCAD evaluates the edited SCAD beside the part and renders nothing, "
             f"and its error is marked on line {refused_line}, listed under the stage bar and "
-            "said above the code -- Site folded to its title by its ▾ here, so Selected has "
-            "the rail. Nothing is rendered while it does not read; changing the line is the "
-            "next step.",
+            "said above the code -- Site's window and the tabs under Selected dragged short "
+            "by their splitters here, so Selected has the column. Nothing is rendered while "
+            "it does not read; changing the line is the next step.",
             blank=BLANK,
         )
 
@@ -484,7 +482,7 @@ def test_editing_a_parts_scad_twice_round(
         "Nothing in the checkout changes; a merge would bring it, its values with it, and "
         "merging is yours to do. It is listed under the "
         "part's parameters and, in the editor, with what it changes against the part's "
-        "SCAD and that HEAD does not hold it. Floating the editor is the next step.",
+        "SCAD and that HEAD does not hold it. Popping the editor out is the next step.",
         shown=_said_on_the_page(page),
         blank=BLANK,
     )
@@ -492,22 +490,24 @@ def test_editing_a_parts_scad_twice_round(
     # Docked, at both widths, nothing overlaps.
     _at_both_widths(page, shots, "docked")
 
-    # Part › View › Float: the editor over the world, clear of what it must be clear of.
-    _at_both_widths(page, shots, "floated")
+    # Part › View › Pop out: the editor in a window of its own beside the world, clear of it.
+    _at_both_widths(page, shots, "popped")
     expect(page.locator(".scad-away")).to_be_attached()
+    expect(windows.tab(page, "scad-editor")).to_contain_text(f"SCAD · {PART}")
+    # What Selected says where the editor stood, at the top of what it shows.
+    page.locator(".scad-away").evaluate(UNDER_THE_STAGE_BAR)
     story.shows(
-        "Part › View › Float puts the editor over the world",
-        "Part › View › Float: the editor out of Selected, a panel of its own over the "
-        "world, clear of the header, the hint bar, the depth ladder and the closed "
-        "panels' tabs; where it stood, Selected says where it is. Its Fullscreen is the "
-        "next step.",
+        "Part › View › Pop out puts the editor in a window of its own",
+        "Part › View › Pop out: the editor out of Selected, a window of its own beside the "
+        "world, as tall as the world and clear of it, its tab naming the part; where it "
+        "stood, Selected says where it is. Its Fullscreen is the next step.",
         blank=BLANK,
     )
 
     # Fullscreen, from its own button; Esc puts it back.
     page.locator("#scad-fullscreen").click()
     expect(page.locator(".scad-editor.fullscreen")).to_be_visible()
-    # It covers the page whole: floated, its panel lets the world through, fullscreen not.
+    # It covers the page whole, and nothing of the page shows through it.
     assert page.evaluate(OPACITY_THROUGH, ".scad-editor.fullscreen") == 1
     for width, height in WIDTHS:
         page.set_viewport_size({"width": width, "height": height})
@@ -523,9 +523,9 @@ def test_editing_a_parts_scad_twice_round(
     )
     page.keyboard.press("Escape")
     expect(page.locator(".scad-editor.fullscreen")).to_have_count(0)
-    expect(page.locator(".panel[data-panel='scad-editor'].free")).to_be_visible()
+    expect(windows.panel(page, "scad-editor")).to_be_visible()
 
-    # Round two, in the floated editor: a name typed, a bigger top, Ctrl+S in the editor.
+    # Round two, in the popped-out editor: a name typed, a bigger top, Ctrl+S in the editor.
     page.locator("#scad-name").fill("taller")
     _replace_last_line(page, BIG_TOP)
     _rendered(page, 20)
@@ -538,7 +538,7 @@ def test_editing_a_parts_scad_twice_round(
     page.locator("#part-saved").evaluate(UNDER_THE_STAGE_BAR)
     story.shows(
         "Round two: a name, a change and Save",
-        "In the floated editor: a name typed, taller, and the top made as big as the "
+        "In the popped-out editor: a name typed, taller, and the top made as big as the "
         "cube, rendered once it reads, 20 mm tall; then Ctrl+S in the editor, OpenSCAD's "
         "key, which saves as its Save does. Both variants are listed, newest first. "
         "Drawing the first again is the next step.",
@@ -553,17 +553,17 @@ def test_editing_a_parts_scad_twice_round(
     assert _height(page) == pytest.approx(15, abs=0.05)
     assert _text(page).endswith(SMALL_TOP)
     expect(page.locator("#scad-name")).to_have_value("variant-1")
-    _ring(page, "Part", "View", "Float")
-    expect(page.locator(".panel[data-panel='scad-editor']")).to_have_count(0)
+    _ring(page, "Part", "View", "Pop out")
+    expect(windows.panel(page, "scad-editor")).to_have_count(0)
     expect(page.locator(".part-editor .scad-editor")).to_be_visible()
     page.locator(".scad-editor .scad-bar").scroll_into_view_if_needed()
     by_hand(page, PART, distance=110)
     story.shows(
-        "Part › Variants draws the first again, and Part › View › Float docks it",
+        "Part › Variants draws the first again, and Part › View › Pop out docks it",
         f"{PART}'s ring, Part › Variants › variant-1 › Draw: its SCAD back in the editor, its "
         "values in it and the controls on them, drawn, 15 mm tall again, the name it saves "
         "under its own. "
-        "Part › View › Float again puts the editor back in Selected.",
+        "Part › View › Pop out again puts the editor back in Selected.",
         blank=BLANK,
     )
 
