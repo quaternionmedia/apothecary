@@ -254,8 +254,8 @@ NIGHT = re.compile(
 )
 
 WINDOWS_ON_ARM = (
-    "Windows on ARM is not supported yet (a planned item); set APOTHECARY_OPENSCAD "
-    "to an OpenSCAD you installed"
+    "Windows on ARM is not supported: files.openscad.org publishes no ARM64 Windows "
+    "build; set APOTHECARY_OPENSCAD to an OpenSCAD you installed"
 )
 
 WHAT_INSTALL_DOES = {

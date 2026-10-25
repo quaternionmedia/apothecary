@@ -1130,9 +1130,9 @@
         // renders instead of the node itself. ``fullPathToNode`` is the
         // caller-supplied full address of ``node`` itself (see
         // pathForChild); each collected leaf carries its own
-        // full ``_path`` because bare names collide across siblings in this
-        // exact example: all three printers have their own
-        // "belt_tensioner_boss". A plain name-keyed mesh registry would
+        // full ``_path`` because bare names repeat across branches: in the
+        // garage, workbench, printer_1 and cnc_router each have a
+        // "frame_system". A plain name-keyed mesh registry would
         // silently conflate them; the path is what nodeKey() below uses
         // instead, and what identifies a node to the server.
         function collectLeaves(node, fullPathToNode, acc = []) {

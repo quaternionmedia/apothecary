@@ -235,8 +235,8 @@ def test_the_bar_says_what_makes_the_generated_pages(tmp_path, monkeypatch):
 
 
 def test_the_walkthrough_is_an_index_of_its_pages_in_order():
-    """/walkthrough answered 404 (no README.md there): it is an index of the pages,
-    in order, page 00 (Getting started) first once it is written."""
+    """/walkthrough is an index of the walkthrough's pages, in order, page 00 (Getting
+    started) first; the folder has no README.md to serve in its place."""
     c = TestClient(app)
     for url in ("/walkthrough", "/walkthrough/"):
         r = c.get(url, follow_redirects=False)
