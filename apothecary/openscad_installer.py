@@ -100,20 +100,44 @@ class InstallError(RuntimeError):
     """The snapshot could not be found, fetched, verified, built or put in place."""
 
 
-def _fetch(url: str, timeout: int = 300) -> bytes:
+def _fetch(url: str, timeout: int = 300, agent: str = "apothecary-openscad-installer") -> bytes:
     """A tool fetch: a GET from files.openscad.org, api.github.com or
     codeload.github.com, and nowhere else.
 
     ``tool_fetch`` refuses a URL whose host is not a tool source before
     anything is opened, and holds the sockets under this call to those hosts.
+    The slicer installer (apothecary/slicer/orcaslicer_installer.py) fetches
+    through this one and ``_fetch_to``, naming itself in ``agent``.
     """
     from .stays_local import tool_fetch
 
-    req = urllib.request.Request(url, headers={"User-Agent": "apothecary-openscad-installer"})
+    req = urllib.request.Request(url, headers={"User-Agent": agent})
     # No proxy from the environment: a proxy is a place the fetch would go instead.
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     with tool_fetch(url), opener.open(req, timeout=timeout) as resp:  # noqa: S310
         return resp.read()
+
+
+def _fetch_to(
+    url: str, path: Path, timeout: int = 300, agent: str = "apothecary-openscad-installer"
+) -> str:
+    """``_fetch``, written to ``path`` as it arrives rather than held in memory: the
+    SHA-256 of what arrived. For a download too large to hold whole (an
+    OrcaSlicer release is a quarter of a gigabyte on macOS)."""
+    from .stays_local import tool_fetch
+
+    req = urllib.request.Request(url, headers={"User-Agent": agent})
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    digest = hashlib.sha256()
+    with tool_fetch(url), opener.open(req, timeout=timeout) as resp:  # noqa: S310
+        with open(path, "wb") as out:
+            while True:
+                chunk = resp.read(1 << 20)
+                if not chunk:
+                    break
+                digest.update(chunk)
+                out.write(chunk)
+    return digest.hexdigest()
 
 
 def check_date(text: str) -> str:

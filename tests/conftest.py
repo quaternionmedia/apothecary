@@ -190,3 +190,30 @@ def fresh_task_runner(monkeypatch):
     runner = tasks.TaskRunner()
     monkeypatch.setattr(tasks, "_RUNNER", runner)
     return runner
+
+
+# --- the slicer's fake -----------------------------------------------------------
+#
+# A scripted OrcaSlicer (tests/slicer_helpers.py) with its profiles beside it, named
+# by APOTHECARY_ORCASLICER, and the tools and state folders the test's own: no
+# test runs a person's OrcaSlicer or slices into ~/.apothecary.
+
+
+@pytest.fixture
+def fake_orcaslicer(tmp_path, monkeypatch):
+    """Point the slicer at the scripted OrcaSlicer; yields the program's path."""
+    from slicer_helpers import write_fake_orcaslicer
+
+    program = write_fake_orcaslicer(tmp_path / "orca")
+    monkeypatch.setenv("APOTHECARY_ORCASLICER", str(program))
+    monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tmp_path / "tools"))
+    monkeypatch.delenv("APOTHECARY_SLICER", raising=False)
+    monkeypatch.delenv("FAKE_ORCA", raising=False)
+    _isolate_firmware_state(monkeypatch, tmp_path)
+    from apothecary.slicer import api as slicer_api
+    from apothecary.slicer import modules
+
+    monkeypatch.setattr(slicer_api, "_RUNNER", None)
+    modules.reset_modules()
+    yield program
+    modules.reset_modules()

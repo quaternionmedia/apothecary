@@ -86,6 +86,60 @@ class TaskBusy(RuntimeError):
     """Another firmware task is still running."""
 
 
+class Cancelled(RuntimeError):
+    """A staged task's work was cancelled between or during its processes."""
+
+
+class Running:
+    """What a staged task's work is handed (``TaskRunner.run_staged``): the task's
+    log, and a way to run a process that a cancel of the task reaches."""
+
+    def __init__(self, runner: "TaskRunner", task: FirmwareTask):
+        self._runner = runner
+        self.task = task
+
+    def log(self, line: str) -> None:
+        self.task.lines.append(line)
+
+    @property
+    def cancelled(self) -> bool:
+        return self.task.id in self._runner._cancel_requested
+
+    def run(
+        self,
+        argv: List[str],
+        env: Optional[dict] = None,
+        cwd: Optional[str] = None,
+        hear: Optional[Callable[[str], None]] = None,
+    ) -> int:
+        """Run ``argv`` to completion, each line it prints into the log and handed to
+        ``hear``; its exit code. A cancel signals its process group, as ``run``'s
+        steps are signalled, and raises ``Cancelled`` here; one asked for before it
+        starts never starts it."""
+        runner = self._runner
+        with runner._lock:
+            if self.cancelled:
+                raise Cancelled()
+            self.log("$ " + " ".join(argv))
+            try:
+                proc = _popen(argv, env, cwd, group=True)
+            except OSError as exc:
+                self.log(f"ERROR: {exc}")
+                return 127
+            runner._procs[self.task.id] = proc
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            self.log(line.rstrip("\n"))
+            if hear is not None:
+                hear(line.rstrip("\n"))
+        proc.wait()
+        with runner._lock:
+            runner._procs.pop(self.task.id, None)
+        if self.cancelled:
+            raise Cancelled()
+        return proc.returncode
+
+
 class TaskRunner:
     def __init__(self):
         self._tasks: Dict[str, FirmwareTask] = {}
@@ -136,6 +190,25 @@ class TaskRunner:
         def work(task: FirmwareTask) -> None:
             try:
                 fn(task.lines.append)
+            except Exception as exc:  # noqa: BLE001 - surfaced to the log, not swallowed
+                task.lines.append(f"ERROR: {exc}")
+                self._finish(task, TaskStatus.failed, 1)
+            else:
+                self._finish(task, TaskStatus.succeeded, 0)
+
+        return self._start(kind, title, [], None, work)
+
+    def run_staged(self, kind: str, title: str, fn: Callable[[Running], None]) -> FirmwareTask:
+        """Like ``run_callable``, for Python work that runs processes between its own
+        steps (a slice: the model's STL, the slicer, the file kept): ``fn`` is handed
+        a ``Running``, whose ``run`` a cancel reaches. It fails on an exception, and
+        is cancelled when a cancel lands."""
+
+        def work(task: FirmwareTask) -> None:
+            try:
+                fn(Running(self, task))
+            except Cancelled:
+                self._finish(task, TaskStatus.cancelled, None)
             except Exception as exc:  # noqa: BLE001 - surfaced to the log, not swallowed
                 task.lines.append(f"ERROR: {exc}")
                 self._finish(task, TaskStatus.failed, 1)

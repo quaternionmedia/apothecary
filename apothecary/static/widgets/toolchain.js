@@ -13,10 +13,17 @@
  * The modules are the status's `toolchains`: a module added later is drawn here
  * without a change to this file.
  *
+ * The slicer's modules follow them (GET /slicer/status): OrcaSlicer, what it
+ * slices, where it is and the release pinned, with its own Install -- POST
+ * /slicer/install, the pinned release checked against GitHub's digest and put in
+ * the tools dir -- a task of the slicer's runner, followed in the same task log
+ * (GET /slicer/tasks/{id}). Each is the same Install as a toolchain module's,
+ * and Panels › Bench › Install's cell for it.
+ *
  * mountToolchain(root, { base, tasks, say, onStatus }) renders into `root` and
- * returns { load(), status(), install(), core(id), libraries(), module(id),
- * destroy() }. load() asks GET /firmware/status again and hands it to `onStatus`
- * as well.
+ * returns { load(), status(), slicers(), install(), core(id), libraries(),
+ * module(id), slicer(id), destroy() }. load() asks GET /firmware/status and GET
+ * /slicer/status again and hands the first to `onStatus` as well.
  */
 
 import { esc } from "/static/board_text.js";
@@ -49,7 +56,7 @@ const INSTALLS = {
 export function mountToolchain(root, { base = "", tasks = null, say = null, onStatus = null } = {}) {
     root.innerHTML = MARKUP;
     const $ = (sel) => root.querySelector(sel);
-    let status = null, alive = true;
+    let status = null, slicers = [], alive = true;
 
     async function api(path, opts = {}) {
         const r = await fetch(base + path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -86,8 +93,25 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
             if (!suggested.some((x) => x.id === c.id) && c.installed) items.push(`<li><span>${esc(c.name || c.id)}</span> <span class="meta">${esc(c.id)}</span><span class="grow"></span><span class="ok meta">✓ ${esc(c.installed)}</span></li>`);
         }
         $(".tc-cores").innerHTML = items.join("") || '<li class="empty">–</li>';
-        $(".tc-modules").innerHTML = (s.toolchains || []).filter((m) => m.id !== "arduino").map(renderModule).join("");
+        $(".tc-modules").innerHTML = (s.toolchains || []).filter((m) => m.id !== "arduino").map(renderModule).join("")
+            + slicers.map(renderSlicer).join("");
         enable();
+    }
+    // A slicer module: what it slices, its program as found and the release pinned,
+    // its notes and problems, and its Install.
+    function renderSlicer(m) {
+        const t = m.tool || {};
+        const tool = t.path
+            ? (t.ok ? `<b class="ok">✓ ${esc(t.version)}</b> ${esc(t.path)}` : `<b class="bad">✗ does not run</b> ${esc(t.path)}`)
+            : '<b class="bad">✗ not installed</b>';
+        const said = (m.notes || []).map((n) => `<div class="meta">• ${esc(n)}</div>`).join("")
+            + (m.problems || []).map((p) => `<div class="warn">! ${esc(p)}</div>`).join("");
+        const ok = !!(t.ok && !(m.problems || []).length);
+        const slices = `slices ${(m.inputs || []).join(", ")} into ${(m.writes || []).join(", ")} for ${m.technology} printers`;
+        const title = `Fetch ${m.label} ${m.pinned} from its publisher's GitHub releases into the tools dir, checked against the SHA-256 GitHub publishes for it; installed, it is kept unless forced`;
+        return `<div class="tc-module" data-slicer="${esc(m.id)}"><div class="k">${esc(m.label)} <span class="meta">${esc(slices)}</span></div>`
+            + `<div class="kv"><div><span class="meta">${ok ? "installed" : "not installed"}:</span> pinned ${esc(m.pinned)}</div><div><span class="meta">${esc(t.name || m.label)}:</span> ${tool}</div>${said}</div>`
+            + `<div class="row"><button type="button" class="slicer-install" data-slicer="${esc(m.id)}" title="${esc(title)}">${ok ? "Update" : "Install"} ${esc(m.label)}</button></div></div>`;
     }
     // Another toolchain module: what it builds, its tools as found, its problems,
     // and its Install, which says what it fetches.
@@ -110,6 +134,7 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
         $(".install-btn").disabled = busy;
         $(".lib-btn").disabled = busy || !ok;
         for (const b of root.querySelectorAll(".core-install")) b.disabled = busy || !ok;
+        for (const b of root.querySelectorAll(".slicer-install")) b.disabled = busy;
         for (const b of root.querySelectorAll(".module-install")) {
             const m = ((status && status.toolchains) || []).find((t) => t.id === b.dataset.id);
             b.disabled = busy || !(m && m.installable);
@@ -117,6 +142,7 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
     }
 
     async function load() {
+        try { slicers = (await api("/slicer/status")).slicers || []; } catch (e) { slicers = []; }
         try { status = await api("/firmware/status"); }
         catch (e) { $(".tc-status").innerHTML = `<span class="bad">${esc(e.message)}</span>`; return null; }
         if (!alive) return status;
@@ -125,9 +151,9 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
         return status;
     }
 
-    function run(fn) {
+    function run(fn, route) {
         if (!tasks) return null;
-        const ending = tasks.start(fn);
+        const ending = tasks.start(fn, route);
         enable();
         return ending;
     }
@@ -135,6 +161,9 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
     const core = (id) => run(() => post("/firmware/cores/install", { id }));
     // Another module's tools; force, as for arduino-cli, fetches them again.
     const installModule = (id) => run(() => post(`/firmware/toolchains/${encodeURIComponent(id)}/install`, { force: $(".install-force").checked }));
+    // A slicer: its pinned release, a task of the slicer's own runner; force, as for
+    // arduino-cli, fetches it again.
+    const installSlicer = (id) => run(() => post("/slicer/install", { slicer: id, force: $(".install-force").checked }), "/slicer/tasks");
     // The names typed in the box, comma-separated; none typed, the box is where the cursor goes.
     function libraries() {
         const names = $(".lib-input").value.split(",").map((s) => s.trim()).filter(Boolean);
@@ -157,14 +186,17 @@ export function mountToolchain(root, { base = "", tasks = null, say = null, onSt
     libEl.addEventListener("keydown", (ev) => { if (ev.key === "Enter") libraries(); });
     const modulesEl = $(".tc-modules");
     modulesEl.addEventListener("click", (ev) => {
-        const btn = ev.target.closest(".module-install");
-        if (btn) installModule(btn.dataset.id);
+        const btn = ev.target.closest(".module-install, .slicer-install");
+        if (btn && btn.dataset.slicer) installSlicer(btn.dataset.slicer);
+        else if (btn) installModule(btn.dataset.id);
     });
 
     return {
         load, install, core, libraries, enable,
         module: installModule,
+        slicer: installSlicer,
         status: () => status,
+        slicers: () => slicers,
         destroy() { alive = false; root.innerHTML = ""; },
     };
 }

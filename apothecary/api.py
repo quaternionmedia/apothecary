@@ -83,10 +83,17 @@ from .routes.pictures import router as pictures_router
 from .routes.views import router as views_router
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
+from .slicer import service as slicing
+from .slicer.api import router as slicer_router
+from .slicer.models import Made as SlicedMade
+from .slicer.models import SlicedFor
+from .slicer.modules import SlicerError
+from .slicer.profiles import Declared
 from .stays_local import LocalOnly
 from .templates import TemplateRenderer
 from .transforms import Translate
 from .viewer import render_fractal_viewer_page
+from .vocabulary.word import WORD_PRINT_SETTINGS_STUB
 
 
 def _registered_part(item: ProjectInfo) -> BasePart:
@@ -195,6 +202,8 @@ app.include_router(views_router)
 app.include_router(cameras_router)
 # Jobs: what the machines ran, of every kind; each is started by its machine's own route.
 app.include_router(jobs_router)
+# The slicer: its status and install, and a part or a made piece sliced for a printer.
+app.include_router(slicer_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 
@@ -1417,6 +1426,17 @@ def get_node_stl(name: str, path: str):
     render per key at a time; the cache keeps the NODE_STL_KEEP most
     recently served.
     """
+    stl_data, node = _node_stl(name, path)
+    return Response(
+        content=stl_data,
+        media_type="application/sla",
+        headers={"Content-Disposition": f'attachment; filename="{node.name}.stl"'},
+    )
+
+
+def _node_stl(name: str, path: str) -> tuple[bytes, Assembly]:
+    """One node's STL and the node, as ``get_node_stl`` serves it -- the slicer
+    slices a made piece from it too. Raises the HTTPException that route answers."""
     site = _get_site_or_404(name)
     node = _find_node_by_path(site, path)
     if node is None:
@@ -1442,11 +1462,7 @@ def get_node_stl(name: str, path: str):
             _trim_node_stl_cache(stl_path.parent)
     if stl_data is None:
         raise HTTPException(status_code=500, detail="OpenSCAD wrote no STL for this node")
-    return Response(
-        content=stl_data,
-        media_type="application/sla",
-        headers={"Content-Disposition": f'attachment; filename="{node.name}.stl"'},
-    )
+    return stl_data, node
 
 
 # -----------------------------------------------------------------------
@@ -1639,6 +1655,106 @@ def _place_of(port: str) -> Optional[jobs.Place]:
 
 
 jobs.PLACES.append(_place_of)
+
+
+# -- what the slicer slices, and for which printer (apothecary/slicer/service.py) --
+
+
+def _slice_target(site_name: str, path: str) -> Optional[slicing.Target]:
+    """A node of a site, to slice: a part standing there (its part, at its
+    defaults), or a piece made from a picture (its node's render, declaring no
+    print settings). None for anything else."""
+    from .vision import views as viewing
+
+    try:
+        site = _site_store.get(site_name)
+    except KeyError:  # an UnknownSiteError, or forgotten since
+        return None
+    node = _find_node_by_path(site, path)
+    if node is None:
+        return None
+    if node.part_ref:
+        return slicing.part_target(node.part_ref, site=site_name, path=path)
+    made = viewing.store().made_at(site_name)
+    if "." in path or node.name not in made:
+        return None
+
+    def stl(log) -> bytes:
+        try:
+            data, _node = _node_stl(site_name, path)
+        except HTTPException as exc:
+            raise SlicerError(
+                f"the piece {node.name} could not be rendered: {exc.detail}"
+            ) from None
+        log(f"STL: the piece {node.name}, rendered as its node is")
+        return data
+
+    return slicing.Target(
+        made=SlicedMade(
+            kind="piece", name=node.name, site=site_name, path=path, word=made[node.name].word
+        ),
+        # A word declaring print settings is a stub: the piece slices with the printer's.
+        declared=Declared(
+            by=f"piece {node.name}, made as {made[node.name].word}",
+            note=WORD_PRINT_SETTINGS_STUB,
+        ),
+        stl=stl,
+    )
+
+
+def _printer_to_slice_for(
+    port: Optional[str], site_name: Optional[str], path: Optional[str]
+) -> Optional[SlicedFor]:
+    """The printer a slice is for: the one ``port``'s pin stands under (the status
+    bearer above the pinned board, as a print job's machine is), else ``site``'s
+    node at ``path`` -- with no path, the site's one node built from a part that
+    keeps a slicer profile; only a node built from a part."""
+    if port:
+        pinned = _pinned_at(port)
+        if pinned is None:
+            return None
+        site_name, site, board = pinned
+        path = status_bearer_for(site, board) or board
+    else:
+        if not site_name:
+            return None
+        try:
+            site = _site_store.get(site_name)
+        except KeyError:
+            return None
+        if not path:
+            path = _the_printer_in(site_name, site)
+            if path is None:
+                return None
+    node = _find_node_by_path(site, path)
+    if node is None or not node.part_ref:
+        return None
+    return SlicedFor(part=node.part_ref, name=node.name, site=site_name, path=path, port=port)
+
+
+def _the_printer_in(site_name: str, site: Assembly) -> Optional[str]:
+    """The path of the one node of ``site`` built from a part that keeps a slicer
+    profile; None for none, SlicerError naming them for several."""
+    from .slicer.profiles import printers as keeping_profiles
+
+    keeping = set(keeping_profiles())
+    found: List[str] = []
+
+    def visit(node: Assembly, prefix: str) -> None:
+        for child in [*node.children, *node.additions]:
+            path = f"{prefix}.{child.name}" if prefix else child.name
+            if child.part_ref in keeping:
+                found.append(path)
+            visit(child, path)
+
+    visit(site, "")
+    if len(found) > 1:
+        raise SlicerError(f"{site_name} has printers {', '.join(found)}: name one")
+    return found[0] if found else None
+
+
+slicing.TARGETS.append(_slice_target)
+slicing.PRINTERS.append(_printer_to_slice_for)
 
 
 def printers_in(site_name: str) -> List[str]:

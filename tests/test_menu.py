@@ -1019,9 +1019,12 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [(c.label, c.action, c.cell) for c in install.children] == [
         ("Arduino", "bench:install:arduino", 8),
         ("Rust ESP32", "bench:install:rust-esp32", 6),
+        # The slicer's modules after the toolchain's, from their own registry.
+        ("OrcaSlicer", "bench:install:slicer:orcaslicer", 2),
     ]
     assert address_of(root, "bench:install:arduino") == "9368"
     assert address_of(root, "bench:install:rust-esp32") == "9366"
+    assert address_of(root, "bench:install:slicer:orcaslicer") == "9362"
     # A core by its architecture, one leaf per suggested core.
     cores = bench.children[6]
     assert [c.label for c in cores.children] == ["AVR", "ESP32", "ESP8266", "RP2040", "SAMD"]
@@ -1264,8 +1267,9 @@ def test_a_made_piece_with_a_printer_pinned_in_its_site_ends_with_print():
     without, one = on("disc_1", []), on("disc_1", ["printer_1"])
     assert [o.label for o in without.options][-2:] == ["Picture", "Part"]
     seated = [(o.label, o.cell) for o in one.options]
-    assert seated[:-1] == [(o.label, o.cell) for o in without.options]
-    printing = one.options[-1]
+    # Print, then Slice beside it: neither moves a cell above them.
+    assert seated[:-2] == [(o.label, o.cell) for o in without.options]
+    printing = one.options[-2]
     assert (printing.label, printing.action, printing.children) == (
         "Print",
         "print:piece:printer_1",
@@ -1280,6 +1284,54 @@ def test_a_made_piece_with_a_printer_pinned_in_its_site_ends_with_print():
     for path in ("footpedal", "workbench"):
         assert "Print" not in [o.label for o in on(path, ["printer_1"]).options], path
     assert carried_by("print:piece:printer_1").name == "VIEWER"
+
+
+def test_a_made_piece_and_a_part_slice_for_a_printer_pinned_in_their_site():
+    """Slice is a step of the page (docs/plans/slicer-2026-10-10.md): a made piece's
+    ring has it beside Print, and a part from the parts folder standing in the site has
+    it after Part; it opens the printer's Machine with the piece chosen under makes and
+    slices it there. One printer is the cell itself, several a cell each; with none
+    pinned in the site there is no Slice; a host, a camera and a printer, or anything
+    inside one, have none. Appended last, so no cell above it moves."""
+    from apothecary.menu import PictureContext, carried_by
+
+    site = _garage()
+    site.children.append(Assembly(name="disc_1", role="word", base=Cube(size=10.0)))
+
+    def on(path, printers, cameras=()):
+        told = PictureContext(
+            made=["disc_1"], words=["disc"], printers=printers, camera_parts=list(cameras)
+        )
+        return resolve(Context(pointing=Pointing.NODE, targets=[path]), site, picture=told)
+
+    piece = on("disc_1", ["printer_1"])
+    assert [(o.label, o.action) for o in piece.options][-2:] == [
+        ("Print", "print:piece:printer_1"),
+        ("Slice", "slice:piece:printer_1"),
+    ]
+    part, bare = on("footpedal", ["printer_1"]), on("footpedal", [])
+    assert [o.label for o in bare.options][-1] == "Part" and "Slice" not in [
+        o.label for o in bare.options
+    ]
+    assert [(o.label, o.cell) for o in part.options][:-1] == [
+        (o.label, o.cell) for o in bare.options
+    ]
+    assert (part.options[-1].label, part.options[-1].action) == ("Slice", "slice:piece:printer_1")
+    two = _group(on("footpedal", ["printer_1", "printer_2"]), "Slice")
+    assert [(c.label, c.action) for c in two.children] == [
+        ("printer_1", "slice:piece:printer_1"),
+        ("printer_2", "slice:piece:printer_2"),
+    ]
+    # A host, the printer, a board inside it and a camera have no Slice.
+    for path, cameras in (
+        ("workbench", ()),
+        ("printer_1", ()),
+        ("printer_1.frame_system.mainboard", ()),
+        ("footpedal", ("footpedal",)),
+    ):
+        labels = [o.label for o in on(path, ["printer_1"], cameras).options]
+        assert "Slice" not in labels, path
+    assert carried_by("slice:piece:printer_1").name == "VIEWER"
 
 
 def test_a_made_piece_has_picture_with_word_and_drop_and_no_camera():
@@ -1893,9 +1945,10 @@ def test_the_route_tells_a_made_pieces_ring_of_the_printers_pinned_in_its_site(
         options = ring()
     finally:
         client.delete(f"/sites/garage/nodes/{board}/device")
-    assert [o["label"] for o in options][-3:] == ["Picture", "Part", "Print"]
-    assert options[-1]["action"] == "print:piece:printer_1"
-    assert "Print" not in [o["label"] for o in ring()]
+    assert [o["label"] for o in options][-4:] == ["Picture", "Part", "Print", "Slice"]
+    assert options[-2]["action"] == "print:piece:printer_1"
+    assert options[-1]["action"] == "slice:piece:printer_1"
+    assert not {"Print", "Slice"} & {o["label"] for o in ring()}
 
 
 def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(carried):

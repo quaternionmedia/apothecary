@@ -121,6 +121,22 @@ def check():
 
     click.echo("")
 
+    # The slicer (optional: only needed to slice a part for a printer here)
+    click.secho("Slicer:", bold=True)
+    from ..slicer.modules import modules as slicer_modules
+
+    for module in slicer_modules():
+        found = module.status()
+        if found.ok:
+            _safe_echo(f"  ✓ {found.label} {found.tool.version}: {found.tool.path}")
+        else:
+            _safe_echo(
+                f"  • {found.label} not installed (optional: {found.install}, "
+                f"pinned {found.pinned})",
+                fg="yellow",
+            )
+    click.echo("")
+
     # Firmware toolchain (optional: only needed to program boards)
     click.secho("Firmware toolchain:", bold=True)
     from ..firmware import service as firmware_service
