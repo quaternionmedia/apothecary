@@ -1,0 +1,57 @@
+name: 🚶 Step-through tests
+
+# The step-through tests (tests/e2e/test_steps_*.py) walk loops other browser tests
+# hold end to end -- a picture to a print, firmware, one machine -- a step at a time,
+# as a person walks them on the demo with --step N. Every other run skips them; here
+# they run whole at a version tag, and on demand, each on a server of its own. No cap
+# of this file's: it has no record yet to take one from.
+on:
+  push:
+    tags:
+    - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  steps:
+    name: 🚶 The step-through tests, whole
+    runs-on: ubuntu-24.04
+    steps:
+    - name: 📰 Checkout
+      uses: actions/checkout@v6
+      with:
+        submodules: true
+
+    - name: 😎 Setup uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        python-version: "3.11"
+
+    - name: 📐 Install OpenSCAD
+      # Without it the STL endpoints answer 503 and the page logs failed loads.
+      run: command -v openscad || { sudo apt-get update && sudo apt-get install -y openscad; }
+
+    - name: 🚧 Install dependencies
+      run: uv sync --locked
+
+    - name: 🔖 Locked Playwright version
+      id: playwright
+      run: echo "version=$(uv run python -c 'from importlib.metadata import version; print(version("playwright"))')" >> "$GITHUB_OUTPUT"
+
+    - name: 🗃️ Cache the Playwright browsers
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+    - name: 🎭 Install Chromium
+      # On a runner --with-deps installs the system libraries, which the cache does not
+      # hold; a machine running this here (`apothecary preflight`) runs Chromium already.
+      run: |
+        if [ "$GITHUB_ACTIONS" = true ]; then uv run playwright install --with-deps chromium
+        else uv run playwright install chromium; fi
+
+    - name: 🚶 Every step, in order
+      run: uv run pytest tests/e2e/test_steps_*.py --start-server --steps -q

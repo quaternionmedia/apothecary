@@ -38,6 +38,31 @@ def test_the_shards_are_within_the_largest_file_of_each_other():
     assert max(load) - min(load) <= max(files.values())
 
 
+def _skipped(*args: str) -> str:
+    """A browser run of the firmware steps with no server named, its skips said."""
+    import os
+    import subprocess
+
+    done = subprocess.run(
+        [sys.executable, "-m", "pytest", "tests/e2e/test_steps_firmware.py", "-rs", *args],
+        cwd=Path(__file__).resolve().parents[1],
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
+    return done.stdout
+
+
+def test_the_step_through_tests_skip_unless_asked_for():
+    """Each walks a loop another browser test holds end to end, so a browser run skips
+    them and says how to run them; under --steps they go on to their servers (and here,
+    with none named, skip for that reason instead)."""
+    assert "runs with --steps, or one step with --step N" in _skipped()
+    assert "runs with --steps" not in _skipped("--steps")
+
+
 def test_in_ci_a_recorded_browser_test_is_capped_at_twice_its_time_and_no_other_is():
     """tests/e2e/conftest.py's caps: twice the recorded time, for a recorded test with
     no cap of its own; none for one with no record, or with its own."""

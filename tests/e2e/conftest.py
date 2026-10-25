@@ -65,7 +65,8 @@ def _keep_this_shard(config, items) -> None:
     files: dict = {}
     for item in items:
         path = item.nodeid.split("::", 1)[0]
-        files[path] = files.get(path, 0.0) + known.get(item.nodeid, average)
+        weight = 0.0 if item.get_closest_marker("skip") else known.get(item.nodeid, average)
+        files[path] = files.get(path, 0.0) + weight
     placed = shard_of(files, n)
     keep = [item for item in items if placed[item.nodeid.split("::", 1)[0]] == k - 1]
     config.hook.pytest_deselected(items=[item for item in items if item not in keep])
@@ -95,6 +96,10 @@ def pytest_sessionfinish(session):
     DURATIONS.write_text(json.dumps(dict(sorted(kept.items())), indent=1) + "\n")
 
 
+def _is_step_through(item) -> bool:
+    return item.path.name.startswith("test_steps_")
+
+
 def recorded_caps(items, known: dict) -> dict:
     """In CI, each browser test's own cap: twice the time this suite records for it
     (setup, call and teardown), over its call alone, so a hung wait fails that test
@@ -108,8 +113,21 @@ def recorded_caps(items, known: dict) -> dict:
 
 
 def pytest_collection_modifyitems(config, items):
-    """Keep this shard's files; tests marked docs run only with --generate-docs; in
-    CI, each recorded test has its own cap."""
+    """Tests marked docs run only with --generate-docs, the step-through tests only
+    with --steps or --step N; then this shard's files are kept, what skips weighing
+    nothing; in CI, each recorded test has its own cap."""
+    if not config.getoption("--generate-docs"):
+        skip = pytest.mark.skip(reason="doc capture: runs with --generate-docs (`apothecary docs`)")
+        for item in items:
+            if item.get_closest_marker("docs"):
+                item.add_marker(skip)
+    if not config.getoption("--steps") and config.getoption("--step") is None:
+        later = pytest.mark.skip(
+            reason="a step-through test: runs with --steps, or one step with --step N"
+        )
+        for item in items:
+            if _is_step_through(item):
+                item.add_marker(later)
     _keep_this_shard(config, items)
     if os.environ.get("CI"):
         known = json.loads(DURATIONS.read_text()) if DURATIONS.exists() else {}
@@ -117,12 +135,6 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if item.nodeid in caps:
                 item.add_marker(pytest.mark.timeout(caps[item.nodeid], func_only=True))
-    if config.getoption("--generate-docs"):
-        return
-    skip = pytest.mark.skip(reason="doc capture: runs with --generate-docs (`apothecary docs`)")
-    for item in items:
-        if item.get_closest_marker("docs"):
-            item.add_marker(skip)
 
 
 def _free_port() -> int:

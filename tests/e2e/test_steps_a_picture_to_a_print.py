@@ -3,7 +3,7 @@ Add with examples/pictures/shapes.png, Find shapes, Size it 300 mm across, Make 
 for printer_1, and Send file to print it.
 
 Each step first checks that the page is where the step before it leaves it, then acts as
-a person does and holds what the page says and draws. In the suite every step runs in
+a person does and holds what the page says and draws. Under ``--steps`` every step runs in
 order, on a server of the test's own (the simulated printer on ``/dev/ttyFAKE1`` pinned
 to printer_1's mainboard, the scripted OrcaSlicer) in its own browser, so nothing it adds
 outlives it.

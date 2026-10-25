@@ -27,6 +27,7 @@ uv run apothecary test run                      # the ordinary command: unit tes
 uv run apothecary test all                      # the same, then every browser test
 uv run apothecary test all --workers 2 -k part  # the browser part on two workers; further arguments narrow both parts
 uv run apothecary test all --record-durations   # the same, the browser tests' times written into tests/e2e/durations.json
+uv run apothecary test all --steps              # the same, and the step-through tests, which every other run skips
 uv run apothecary test run --slow               # the ordinary command, with full renders and accuracy benches
 uv run pytest                                   # the quick inner loop: unit tests and the walkthrough; browser tests skip
 uv run pytest --slow                            # also full renders and accuracy benches
@@ -84,8 +85,11 @@ is not a member: it is its own Cargo project, built by its own toolchain
 Nothing else is a gate. Formatting is not checked in CI.
 `docs-generate.yml` runs at a `v*` tag and on demand, and gates nothing: `apothecary docs
 generate` runs the doc-capture tests, which nothing else runs, and keeps `docs/generated/`
-as the run's artifact. A job's cap is twice its median over the runs GitHub records for it;
-one with no record has GitHub's own. `tests/test_ci_workflows.py` holds what runs when.
+as the run's artifact. `steps.yml` runs at a `v*` tag and on demand too, and gates nothing:
+the step-through tests (`tests/e2e/test_steps_*.py`), whole, under `--steps`; every other
+run skips them, since each walks a loop another browser test holds end to end. A job's cap
+is twice its median over the runs GitHub records for it; one with no record has GitHub's
+own. `tests/test_ci_workflows.py` holds what runs when.
 
 ## Commits and pull requests
 
