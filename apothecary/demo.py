@@ -103,20 +103,30 @@ def _openscad() -> Optional[Path]:
     return openscad_override() or managed_openscad()
 
 
+# How long a git call of the demo's may take: a local clone sharing its objects takes
+# seconds; a git that waits on something (a prompt, a lock) is given up on.
+GIT_TIMEOUT_S = 120
+
+
 def _variants_repo(where: Path) -> Optional[Path]:
     """A bare clone of the checkout sharing its objects, made once: a variant saved in
     the demo is a ref there, never in the checkout. Its own identity, so a save is
-    made whoever runs it, and nothing of the person's configuration signs it."""
+    made whoever runs it, and nothing of the person's configuration signs it. None
+    when git is missing, fails or does not answer in time: Save says so."""
     try:
         if not (where / "HEAD").exists():
             cloned = subprocess.run(
                 ["git", "clone", "-q", "--bare", "--shared", str(ROOT), str(where)],
                 capture_output=True,
                 check=False,
+                timeout=GIT_TIMEOUT_S,
             )
             if cloned.returncode != 0:  # a checkout git will not clone: an empty one
                 made = subprocess.run(
-                    ["git", "init", "-q", "--bare", str(where)], capture_output=True, check=False
+                    ["git", "init", "-q", "--bare", str(where)],
+                    capture_output=True,
+                    check=False,
+                    timeout=GIT_TIMEOUT_S,
                 )
                 if made.returncode != 0:
                     return None
@@ -126,9 +136,13 @@ def _variants_repo(where: Path) -> Optional[Path]:
             ("commit.gpgsign", "false"),
         ):
             subprocess.run(
-                ["git", "config", key, value], cwd=where, capture_output=True, check=False
+                ["git", "config", key, value],
+                cwd=where,
+                capture_output=True,
+                check=False,
+                timeout=GIT_TIMEOUT_S,
             )
-    except OSError:  # no git here: Save says so when it is pressed
+    except (OSError, subprocess.TimeoutExpired):  # no git, or none that answers: Save says so
         return None
     return where
 
