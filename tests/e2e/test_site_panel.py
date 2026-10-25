@@ -5,10 +5,9 @@ its Jobs (tests/e2e/test_printer_ui.py prints one and opens its machine from it)
 The problems: a piece a problem names -- by the tree path the server sends
 beside its name -- is red in the tree and its ancestors say something inside is
 invalid; each problem is a row that selects its piece, at its level; the
-toolbar's count opens them. Pinned is what Kept's pins list was
-(the pictures plan's Phase 5): a camera and a view pinned in ``garage`` are
-taken back from their rows while the page shows ``parts_library``, and the site
-on screen and the URL never change.
+toolbar's count opens them. Pinned lists every site's pins: a camera and a view
+pinned in ``garage`` are taken back from their rows while the page shows
+``parts_library``, and the site on screen and the URL never change.
 """
 
 from __future__ import annotations

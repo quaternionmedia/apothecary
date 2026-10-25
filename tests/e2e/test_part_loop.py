@@ -1,17 +1,15 @@
-"""Loop 1, designing a part (docs/plans/ui-flows-2026-10-08.md), gone round in
-the page: the part chosen from its ring (Part › Edit), a parameter moved -- its
-line in the part's SCAD rewritten as it moves, the text the one draft -- and
-checked once the slider rests, its box beside it in step, Apply drawing the
-variant where it stands with the bounds it measured beside the declared ones, a
-reload drawing what the tab had applied (its address keeps the variant),
-OpenSCAD's error shown by line and the refused size put back (Part › Revert),
-then undone and redone (Ctrl+Z, the editor's Redo), the defaults again for
-nothing (Part › Defaults and Part › Apply), and round once more, the size typed
-in its box (Part › Apply, then the editor's Defaults and Apply); an earlier apply
-drawn again from Recent applies; a size staged and not applied kept over a
-reload, in its text, and restored; then two tabs applying different values at once, each
-drawing its own. It writes walkthrough/14-designing-a-part.md and its pictures
-as it goes (the part-iteration plan, docs/plans/part-iteration-2026-10-12.md).
+"""Loop 1, designing a part, gone round in the page: the part chosen from its ring
+(Part › Edit), a parameter moved -- its line in the part's SCAD rewritten as it moves,
+the text the one draft -- and checked once the slider rests, its box beside it in step,
+Apply drawing the variant where it stands with the bounds it measured beside the
+declared ones, a reload drawing what the tab had applied (its address keeps the
+variant), OpenSCAD's error shown by line and the refused size put back (Part › Revert),
+then undone and redone (Ctrl+Z, the editor's Redo), the defaults again for nothing
+(Part › Defaults and Part › Apply), and round once more, the size typed in its box
+(Part › Apply, then the editor's Defaults and Apply); an earlier apply drawn again from
+Recent applies; a size staged and not applied kept over a reload, in its text, and
+restored; then two tabs applying different values at once, each drawing its own. It
+writes walkthrough/14-designing-a-part.md and its pictures as it goes.
 
 The server is this module's own, with an OpenSCAD that is this machine's except
 that it refuses a cube of ``TOO_BIG`` mm or more, saying so as an assertion at
@@ -196,7 +194,7 @@ def _drawn(page: Page) -> None:
 
 
 # How long a ring may take to open: it asks the server what to offer, and on a
-# machine loaded with OpenSCAD runs that answer has been seen to take over 5 s.
+# machine loaded with OpenSCAD runs that answer can take over 5 s.
 RING_MS = 15000
 
 # The widths the page is laid out for (the rail beside the world, and the narrower).
@@ -705,7 +703,7 @@ def test_designing_a_part_twice_round(
 ):
     """The loop, twice round and in two tabs, and walkthrough page 14 written from it.
     Marked e2e and not walkthrough: a loop's page is written by the browser suite
-    only, so `apothecary test run` stays quick (the loops plan)."""
+    only, so `apothecary test run` stays quick."""
     story = walkthrough(
         ordinal="14",
         slug="designing-a-part",

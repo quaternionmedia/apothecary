@@ -4,13 +4,9 @@ This module is the walkthrough. `walkthrough/11-photographs-into-pieces.md` is
 what it writes, and the ordinary test command runs it, so the page is a record
 of a run rather than a description standing beside one.
 
-It used to be two demonstrations. A hand-written page of doctests walked the
-model half and said, in its own closing section, that the viewer "is driven by
-`apothecary docs generate` rather than here, because it needs a server and a
-browser". That sentence was the seam: two pages describing one path, one of them
-produced by a command somebody had to remember, and the remembered one went
-stale. Joining them costs this -- the demonstration now needs a browser and a
-server, everywhere, and the page says so.
+One path is one page: the model half and the viewer half are both here, so
+the demonstration needs a browser and a server, everywhere, and the page says
+so.
 
 Each step below is two things at once: an assertion the run has to satisfy, and
 a sentence of the page. A step cannot describe something that did not just

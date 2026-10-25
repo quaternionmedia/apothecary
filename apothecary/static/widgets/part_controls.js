@@ -1,6 +1,6 @@
 /* The part editor's controls: one for each parameter a part, a piece made from a
  * picture or a camera declares (apothecary/projects/parts/params.py's ParamField),
- * built the same way for each (the part-iteration plan of 2026-10-12, docs/plans/).
+ * built the same way for each.
  *
  * A number is a slider and a number box beside it, the two kept in step: the
  * slider for the reach, the box for the exact value. Each steps on round numbers --

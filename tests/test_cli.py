@@ -45,11 +45,11 @@ def test_cli_testrun_writes_nothing_and_render_does_its_job(tmp_path):
 
 
 def test_safe_echo_falls_back_on_a_legacy_code_page(monkeypatch):
-    """Windows still defaults to cp1252, where writing "✓" raises.
+    """Windows defaults to cp1252, where writing "✓" raises, and `check` starts its
+    lines with one.
 
-    `check` used to die on its first line for that reason. The glyph is kept
-    when the stream can carry it, so this drives the fallback directly rather
-    than asserting the output is always ASCII.
+    The glyph is kept when the stream can carry it, so this drives the fallback
+    directly rather than asserting the output is always ASCII.
     """
     from apothecary.cli import utils
 

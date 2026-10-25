@@ -1,17 +1,15 @@
 """The firmware loop, through the page: choose a sketch, build it, flash it, hear its
 hello in the board's Machine; change it and go round again.
 
-Loop 3 of the flows plan (docs/plans/ui-flows-2026-10-08.md), held end to end:
-round once with the Arduino esp32_blink, then again with the Rust one
-(docs/plans/rust-2026-10-08.md), through the Machine's own controls and the
-ring's cells, asserting what a person sees at each step -- the Flashing card's
-task, the board's one log, the sketch it should run against the sketch it was
-heard saying.
+Loop 3, held end to end: round once with the Arduino esp32_blink, then again with
+the Rust one, through the Machine's own controls and the ring's cells, asserting what
+a person sees at each step -- the Flashing card's task, the board's one log, the
+sketch it should run against the sketch it was heard saying.
 
 This module is a walkthrough page too: `walkthrough/15-firmware.md` is what its
 first test writes, its pictures taken as it goes, so the page shows the loop as
 it is. The browser suite alone writes it -- the test is marked e2e and not
-walkthrough -- so `apothecary test run` stays quick (the loops plan, 2026-10-10).
+walkthrough -- so `apothecary test run` stays quick.
 
 Runs against servers of their own: the scripted arduino-cli, cargo and espflash
 in one folder (tests/firmware_helpers.py), and the simulated devkit they share
@@ -20,8 +18,8 @@ and says that sketch's hello, as esp32_blink does. And a server with Rust alone,
 no arduino-cli anywhere, where the Rust module finds the devkit and listens to it
 itself, through the simulated serial engine (APOTHECARY_SIMULATED_DEVKIT).
 Nothing here opens a real port, builds for real or reaches the network;
-flashing the bench's own ESP32 is a step of the bench checklist
-(docs/validation/2026-09-20-ender-bench.md).
+flashing the bench's own ESP32 is section H of the bench checklist
+(docs/bench-checklist.md).
 """
 
 from __future__ import annotations
@@ -183,8 +181,8 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
         ),
         does_not_show=[
             "**A real board.** The devkit is a simulation that says what esp32_blink "
-            "says; flashing the bench's own ESP32 and hearing it is step G of the bench "
-            "checklist (docs/validation/2026-09-20-ender-bench.md).",
+            "says; flashing the bench's own ESP32 and hearing it is section H of the "
+            "bench checklist (docs/bench-checklist.md).",
             "**A real build.** The scripted cargo writes a stand-in image; a real one is "
             "`apothecary firmware install --rust-esp32` and then the same Compile "
             "(docs/firmware.md).",
@@ -437,7 +435,7 @@ def test_the_bench_lists_the_rust_sketch_and_its_toolchain_beside_arduino(page: 
     expect(install).to_have_attribute("data-address", "4366")  # Panels › Bench › Install › Rust
     expect(install).to_be_enabled()
     assert "vendor every Rust sketch's crates" in (install.get_attribute("title") or "")
-    expect(bench.locator(".tc-status")).to_contain_text("✓ 9.9.9")  # arduino-cli, as it was
+    expect(bench.locator(".tc-status")).to_contain_text("✓ 9.9.9")  # arduino-cli's
 
     select = bench.locator(".sketch-select")
     expect(select.locator(f"option[value='{RUST}']")).to_have_count(1, timeout=10000)

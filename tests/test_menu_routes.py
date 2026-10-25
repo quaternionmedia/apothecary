@@ -110,7 +110,7 @@ def test_a_node_with_a_printer_pinned_offers_the_device_ring_with_cells():
         "Link": 1,
         "Control": 7,
     }
-    # A printer keeps its own firmware: Flash holds Monitor's old cell, not to be chosen.
+    # A printer keeps its own firmware: its Flash holds a cell and cannot be chosen.
     flash = next(c for c in device["children"] if c["id"] == "device:flash")
     assert flash["enabled"] is False
     control = next(c for c in device["children"] if c["id"] == "control")

@@ -1,5 +1,4 @@
-"""What the onboarding review found a newcomer meets, through the page
-(docs/plans/onboarding-2026-10-11.md): a printer's own Pin pinning its mainboard,
+"""What a newcomer meets, through the page: a printer's own Pin pinning its mainboard,
 where its Device, its Machine and Slice find it, and Slice's refusals saying which
 of "not pinned" and "pinned, not connected" it is; no Slice on a devkit's ring; the
 header's Docs and Panels › Docs opening the documentation and the walkthrough's
@@ -277,10 +276,9 @@ def test_the_headers_docs_and_panels_docs_open_the_docs_and_the_walkthrough(page
 
 @pytest.mark.e2e
 def test_the_site_drop_down_keeps_the_address_for_a_reload_and_back(page: Page, url: str):
-    """Choosing parts_library put nothing in the address, so a reload went back to the
-    garage and Apply wrote ?variant= onto the garage's address. The drop-down now puts
-    the site in the address, leaving the old site's focus, Machine and variants behind;
-    a reload stays, and Back and Forward go between the two."""
+    """The site drop-down puts the site it chooses in the address, leaving the old
+    site's focus, Machine and variants behind: a reload stays on that site, and Back
+    and Forward go between the two. The ring's Site chooses the same way."""
     _open(page, url, query="?focus=workbench&variant=calibration_cube:0000000000000000")
     expect(page.locator("#breadcrumb")).to_contain_text("workbench")
     page.locator("#site-select").select_option("parts_library")
@@ -310,8 +308,8 @@ def test_the_site_drop_down_keeps_the_address_for_a_reload_and_back(page: Page, 
 
 @pytest.mark.e2e
 def test_the_benchs_disabled_compile_says_why(page: Page, url: str):
-    """A disabled Compile used to say only what it does; it says why it is disabled,
-    and what to do, and is enabled once that is done."""
+    """A disabled Compile says why it is disabled and what to do, and is enabled once
+    that is done."""
     _open(page, url)
     page.evaluate("() => window.apothecaryPanels.open('bench')")
     bench = page.locator(".panel[data-panel='bench']")
@@ -342,10 +340,10 @@ def bare_url(base_url, start_server):
 def test_with_no_arduino_cli_a_printer_says_why_and_the_bench_asks_for_nothing_missing(
     page: Page, bare_url: str
 ):
-    """A printer's Device section said only "arduino-cli is not installed": it says
-    arduino-cli is wanted there only to find the board. And the Bench asked for the
-    boards arduino-cli knows and for the ports, each a 503 in the console with nothing
-    to answer; it asks for neither now."""
+    """With no arduino-cli, a printer's Device section says arduino-cli is wanted there
+    only to find the board, and the Bench asks for neither the boards arduino-cli knows
+    nor the ports: a tool that is not there would answer each with a 503 in the
+    console."""
     failed: list = []
     page.on(
         "response",
@@ -458,10 +456,9 @@ def test_a_piece_made_from_a_picture_has_no_device_section(
     fixture_picture,  # noqa: F811 - the fixture's value, the picture's name
     leaves_garage_as_found,  # noqa: F811
 ):
-    """Walkthrough 11's last picture showed a Device row -- Query and Pin -- on a word
-    piece of an arrangement built from a picture. A piece made from a picture holds no
-    board: neither it nor a piece made at a place has a Device section, nor the
-    structure it was made on; a printer has one (only where a board belongs)."""
+    """A piece made from a picture holds no board: neither it nor a piece made at a place
+    has a Device section, nor the structure it was made on; a printer has one (only
+    where a board belongs)."""
     answer = page.request.post(
         f"{base_url}/photos",
         data={
@@ -490,7 +487,7 @@ def test_a_piece_made_from_a_picture_has_no_device_section(
         timeout=10000
     )
     expect(page.locator("#selected-body .device-section")).to_have_count(0)
-    # Only where a board belongs (the owner's word): not the workbench it was made on,
+    # Only where a board belongs: not the workbench it was made on,
     # a structure; a printer, yes.
     _row(page, "workbench").click()
     expect(page.locator("#selected-body .prop-row", has_text="workbench")).to_be_visible()

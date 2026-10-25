@@ -32,8 +32,8 @@
             min-width: 160px; padding: 0.5rem; border-radius: 4px;
             border: 1px solid #444; background: #333; color: #e0e0e0;
         }
-        /* As wide as the name of a site can be, not as the longest one there is
-           today: a site made from a picture no longer shifts the whole toolbar. */
+        /* As wide as the name of a site can be, not as the longest one there is, so a
+           site made from a picture never shifts the whole toolbar. */
         #site-select { width: 11rem; }
         .toolbar button, .view-menu > summary {
             padding: 0.45rem 0.8rem; border-radius: 4px; cursor: pointer;
@@ -321,8 +321,7 @@
         .category-chip .chip-swatch { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
         /* The hierarchy tree: a flat list of indented rows (depth encoded as
-           left-padding) rather than nested <ul>s -- same DOM shape as the
-           old one-level Contents list, just deeper. tree-caret expands/
+           left-padding) rather than nested <ul>s. tree-caret expands/
            collapses a row for browsing only, independent of whether that
            subtree is actually instantiated in the 3D view (render-dot). */
         .contents-tree .contents-item { gap: 0.35rem; }
@@ -844,7 +843,7 @@
         // Distinct from PART_COLOR/SUBTRACTION_COLOR/STATUS_COLORS/
         // BUILD_VOLUME_COLOR below, which all still take priority over this
         // (see colorMesh) -- category is what everything *else* falls back
-        // to instead of the flat DEFAULT_COLOR every node used to share.
+        // to, before DEFAULT_COLOR.
         const CATEGORY_COLORS = {
             wall: 0x9c8f7a,
             furniture: 0x8a5a3c,
@@ -856,12 +855,10 @@
 
         // A colour for a group nobody wrote down in advance.
         //
-        // CATEGORY_COLORS above is a fixed list, which was fine while every
-        // group was written into the program. It stopped being fine when groups
-        // started coming from a picture: a word is whatever the vocabulary
-        // holds, and the vocabulary is meant to grow. A group not on the list
-        // got no colour and, worse, no filter chip at all — so it was invisible
-        // rather than merely plain.
+        // CATEGORY_COLORS above is a fixed list, and groups also come from a
+        // picture: a word is whatever the vocabulary holds, and the vocabulary
+        // grows. A group not on the list takes a colour from its name, so it is
+        // drawn, and filtered, like any other.
         //
         // Same name, same colour, every time, so a group does not change colour
         // between one look and the next.
@@ -905,7 +902,7 @@
         const VALIDATE_QUIET_MS = 250;
         // The SCAD editor: a check (evaluated, not rendered) once typing has stopped
         // this long, and a render this long after a check that passes, a newer edit
-        // cancelling it (the part-iteration plan's timings).
+        // cancelling it (docs/viewer.md, "The SCAD editor").
         const SCAD_CHECK_MS = 300;
         const SCAD_RENDER_AFTER_CHECK_MS = 300;
         // The staged numbers' undo: changes to one field this close together are one
@@ -950,8 +947,8 @@
         const ownsItsKeys = (el) => !!el && (el.isContentEditable || /^(TEXTAREA|SELECT)$/.test(el.tagName)
             || (el.tagName === 'INPUT' && !/^(range|checkbox|radio|button|submit|reset|color|file)$/.test(el.type)));
 
-        // Mirrors example_hierarchy.PRINTER_STATUSES -- this prototype has no
-        // endpoint that reports the allowed set, so it's duplicated here.
+        // Mirrors example_hierarchy.PRINTER_STATUSES: no endpoint reports the
+        // allowed set, so it is repeated here.
         const PRINTER_STATUSES = ['idle', 'printing', 'offline', 'maintenance'];
         const STATUS_COLORS = {
             idle: 0x4488cc,
@@ -1010,8 +1007,7 @@
         const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End', ' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
         // The far plane has to clear the furthest the camera can dolly plus the
         // scene's own extent behind the target, or the world is clipped away
-        // exactly when you pull back to look at the largest scale. This used to
-        // be a fixed 20000 while the dolly clamp reached ~54000 on the garage.
+        // exactly when you pull back to look at the largest scale.
         const FAR_PLANE_HEADROOM = 2.5;
         const MIN_FAR_PLANE = 40000;
 
@@ -1058,8 +1054,8 @@
         // swaps two axes while leaving the third fixed -- the transform's
         // determinant is -1). Left uncorrected, a loaded STL's own "up"
         // stays pointed along its OpenSCAD z-axis, which lands on three.js's
-        // depth axis instead of its up axis -- the "off by 90 degrees"
-        // orientation bug. Applying the same swap here keeps a real STL
+        // depth axis instead of its up axis, a quarter turn out. Applying the
+        // same swap here keeps a real STL
         // mesh's internal features (e.g. a wall's off-center door cutout) at
         // the same place, facing the same way, as the placeholder box it
         // replaces -- but a reflection also inverts triangle winding, so
@@ -1154,9 +1150,9 @@
         }
 
         // Standardized navigation over Assembly's fractal tree: the same
-        // click/double-click/scroll/zoom-out controls apply at any depth,
+        // click, double-click, wheel and step-out controls apply at any depth,
         // because every node -- Site, Structure, Substructure, Feature, or a
-        // migrated parts-library leaf -- is the same shape.
+        // parts-library leaf -- is the same shape.
         class FractalViewer {
             constructor() {
                 this.canvas = document.getElementById('viewer-canvas');
@@ -1330,7 +1326,7 @@
                 this.orbitControls.listenToKeyEvents(this.renderer.domElement);
 
                 // The handles a selected movable thing wears: one compact set, shown
-                // and hidden by showHandles and hideHandles alone. Today that is the
+                // and hidden by showHandles and hideHandles alone. These are the
                 // move arrows -- three.js's TransformControls, translating -- drawn
                 // smaller than its default and lighter (each handle's own opacity
                 // scaled once; the one under the pointer still lights up), so they
@@ -1378,11 +1374,11 @@
                     container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene,
                     keepClear: () => [this.hintEl, this.minimapEl],  // no badge's words over these
                 });
-                // The side column's sections become panels in the one rail: Site and
-                // Selected stacked at its top, each one closable, collapsible and
-                // draggable free; what a person did to them is remembered per
-                // browser (panels.js), and a remembered layout naming a panel that
-                // is gone (Jobs), or from before the one rail, is ignored. A panel
+                // The page's sections are panels in the one rail: Site and Selected
+                // stacked at its top, each one closable, collapsible and draggable
+                // free; what a person did to them is remembered per browser
+                // (panels.js), and a remembered panel the page does not register, or
+                // a remembered layout with no rail of its own, is ignored. A panel
                 // floated lands clear of the header, the hint bar and the depth ladder,
                 // as a badge's words do, and of the closed panels' tabs.
                 this.panels = mountPanels({
@@ -1484,8 +1480,8 @@
                     },
                 });
                 // The Bench: the toolchain, the sketches built and uploaded, raw flash
-                // and the task log -- what the firmware page was (widgets/toolchain.js,
-                // sketches.js, tasks.js) -- a tab of the rail's strip, closed until it
+                // and the task log (widgets/toolchain.js, sketches.js, tasks.js) -- a
+                // tab of the rail's strip, closed until it
                 // is pressed, filled the first time it is shown and asked for the
                 // toolchain's state again each time it is shown again. A board's own
                 // flashing is in its Machine; the Bench is for any sketch and any port.
@@ -1648,7 +1644,8 @@
             // mesh, a material or the handles changed, the canvas resized, a live
             // video's frame or a texture arrived, the nozzle moving -- or when asked
             // (invalidate). A machine without a GPU draws a frame in a third of a
-            // second in software; drawn every frame, it had none to spare for typing.
+            // second in software; drawn every frame, it would have none to spare for
+            // typing.
             // The badges are placed on each frame drawn, a few frames after (what
             // hides one is tested every few), and whenever they have something to
             // place of their own (a card under the pointer).
@@ -1934,7 +1931,7 @@
                     // A ?focus= deep link should land on the part, not one
                     // click short of it. /viewer/parts/<name> promises the
                     // parameter controls, and those only exist once a node is
-                    // selected -- focusing alone left the panel unbuilt.
+                    // selected -- focusing alone leaves the panel unbuilt.
                     this.selectFocusedPart();
                     // A part with work this tab kept from before a reload: said, and its
                     // editor offers it back.
@@ -2107,11 +2104,10 @@
             currentRenderNodes(focus) {
                 const focusPrefix = this.focusPath.join('.');
                 const nodes = [];
-                // A leaf has nothing beneath it, and rendering "the focus
-                // node's children" therefore rendered an empty scene for the
-                // one thing a reader was asking to look at -- no meshes, no
-                // contents, no geometry fetched at all. Zooming into a part
-                // shows the part.
+                // A leaf has nothing beneath it, so rendering "the focus node's
+                // children" would draw an empty scene for the one thing a reader
+                // asked to look at: a focused leaf renders itself. Zooming into a
+                // part shows the part.
                 if (!focus.children.length) {
                     return [{ ...focus, _path: focusPrefix }];
                 }
@@ -2211,7 +2207,7 @@
             }
 
             // A node with no footprint (most Substructures/Features -- they
-            // were never given spatial metadata, only geometry) still needs
+            // carry geometry but no spatial metadata) still needs
             // *something* visible and clickable to navigate through. Offset
             // by index so siblings that all lack a footprint don't perfectly
             // overlap.
@@ -2470,10 +2466,9 @@
 
             // Frames every axis, not just the horizontal footprint, and
             // targets the true 3D center (average of min/max on all three
-            // axes) -- a node's position/world_bounds are now a genuinely
-            // consistent global frame (see api.py's _assembly_tree), so this
-            // no longer needs the old maxZ/3 guess, which only happened to
-            // work when everything sat near the world origin.
+            // axes): a node's position and world_bounds share one global frame
+            // (see api.py's _assembly_tree), so the true centre is framed even
+            // far from the world origin.
             frameCameraForChildren(nodes) {
                 if (!nodes.length) return;
                 const bounds = nodes.map((c, i) => this.boundsFor(c, i));
@@ -2523,12 +2518,10 @@
                 this.orbitControls.maxDistance = Math.max(2000, reach.distance * dollyOut);
             }
 
-            // The far plane was a fixed 20000 set once at startup, while the
-            // dolly clamp is derived per level and reaches roughly 9x the
-            // framing distance -- about 54000 on the garage. Everything
-            // between those two numbers was being clipped away, so pulling
-            // back to look at the largest scale emptied the view instead of
-            // widening it. Both ends now move together, per level.
+            // The far plane clears the dolly clamp, which is set per level (a
+            // multiple of the framing distance, Settings' Farthest), plus the
+            // scene's extent, so pulling back to the largest scale widens the view
+            // and clips nothing. Far and near both move per level.
             //
             // Near moves with the scene too: holding near at 1 while far grows
             // past 10^5 spends most of the depth buffer on the first
@@ -2550,13 +2543,11 @@
             // often too small once you're several levels deep (a single
             // Feature might span 10mm) or too small when zoomed out over the
             // whole garage (spans ~1800mm) -- rebuild them to match whatever
-            // is actually in view, the same way the old standalone part
-            // viewer's updateHelpersForSize did for a single loaded part.
+            // is actually in view.
             updateHelpersForSpan(span) {
-                // Reaches further than the old 2.5x so the ground plane does
-                // not simply end mid-view once you dolly out to the new clamp;
-                // divisions are capped because cell count, not extent, is what
-                // costs anything to draw.
+                // Six times the span, so the ground plane does not end mid-view
+                // when the camera dollies out to its clamp; divisions are capped
+                // because cell count, not extent, is what costs anything to draw.
                 const gridSize = Math.max(100, Math.ceil((span * 6) / 50) * 50);
                 const rawDivisions = Math.round(gridSize / (span < 100 ? 5 : 50));
                 const gridDivisions = Math.min(200, Math.max(10, rawDivisions));
@@ -2723,8 +2714,7 @@
             }
 
             // The hierarchy tree: every descendant beneath focus, at every
-            // depth -- not just direct children -- replacing the old flat,
-            // one-level Contents list. Depth is encoded as left-padding on a
+            // depth -- not just direct children. Depth is encoded as left-padding on a
             // flat sequence of rows rather than nested <ul>s (buildTreeRows
             // returns a DocumentFragment, which flattens correctly when
             // appended into another). Each row's disclosure caret only
@@ -2733,8 +2723,8 @@
             // (render-dot, driven by meshByName -- see currentRenderNodes/
             // expandedCategories for what controls that).
             renderContentsList(focus) {
-                // Rebuilt in place, so a list long enough to scroll (a catalog of
-                // twenty parts) stays where the person had scrolled it: a click
+                // Rebuilt in place, so a list long enough to scroll (a catalog's)
+                // stays where the person had scrolled it: a click
                 // re-renders, and the row under the pointer must still be there
                 // for the second click of a double-click.
                 const scroller = this.contentsEl.closest('.panel-body-slot') || this.contentsEl;
@@ -3180,7 +3170,7 @@
                 // A machine drawn as a part shows the one row until Part › Edit asks
                 // for its editor (openEditor); a leaf that is a part has it always.
                 if (selected.part_ref) this.appendPartPanel(selected, selected.children.length === 0 || this.editorOpenFor === this.selectedName);
-                // The Device section stands only where a board belongs (the owner's word):
+                // The Device section stands only where a board belongs:
                 // on a board, on a printer, on what names a sketch, and on anything a
                 // board is pinned to already, so its Unpin stays in reach. A plain printed
                 // part, a bin, a piece made from a picture: none.
@@ -3708,7 +3698,7 @@
                 this.selectedBodyEl.appendChild(this.partSection);
                 // The same element ids for either target; a section the target lacks (a
                 // made piece's checklist, its ghost and its recent applies) is not written.
-                // Apply renders what is staged; Regenerate STL, which was Apply again, is gone.
+                // Apply renders what is staged.
                 this.partSection.innerHTML = `
                     ${target.part ? `<div class="prop-row"><label>Part</label><span>${esc(target.part)}</span></div>
                     <div class="drawn-from" id="part-drawn"></div>` : ''}
@@ -4402,11 +4392,11 @@
 
             // ---- a part's controls and its text, tied together -----------------------
             //
-            // The part-iteration plan's "parameters and text, tied together": for a part
-            // whose SCAD the page edits, the text is the one draft. Its top-level
-            // assignments (assignments.js, the server's grammar) are its controls'
-            // values. A control moved writes its value into its line at once, an edit
-            // Undo takes back; the text typed moves its controls. What is staged is what
+            // For a part whose SCAD the page edits, the text is the one draft
+            // (docs/viewer.md, "The part editor"). Its top-level assignments
+            // (assignments.js, the server's grammar) are its controls' values. A
+            // control moved writes its value into its line at once, an edit Undo
+            // takes back; the text typed moves its controls. What is staged is what
             // the text says otherwise than the text drawn: Defaults puts the part's own
             // text back, Revert the drawn one, and Apply renders the text. The part's
             // model, where it has one, describes the values it names (their ranges,
@@ -5617,11 +5607,10 @@
 
             // ---- the SCAD editor ----------------------------------------
             //
-            // Where the read-only source stood (loop 2, the owner's answer of
-            // 2026-10-10): the target's SCAD in CodeMirror (widgets/scad_editor.js),
-            // its file's name as the API gives it (source_file), which OpenSCAD's
-            // messages name it by. A part's own SCAD is edited; a part built by
-            // Python, and a made piece, are read. Typing is checked once it stops
+            // In Selected's part editor: the target's SCAD in CodeMirror
+            // (widgets/scad_editor.js), its file's name as the API gives it
+            // (source_file), which OpenSCAD's messages name it by. A part's own SCAD
+            // is edited; a part built by Python, and a made piece, are read. Typing is checked once it stops
             // (evaluated, not rendered: POST .../draft/check) and rendered soon after
             // a check that passes, as Apply renders, the draft beside the part. Save
             // keeps it, and the numbers staged, as a variant in git. It floats out
@@ -5725,7 +5714,7 @@
             // a newer edit cancels both. The variant name the text came from is let go of
             // once the text has moved on from it.
             // A control's move, a text put back and the page's Undo are staged ({ staged }):
-            // checked, and drawn when Apply is pressed, as a control's move always was;
+            // checked, and drawn when Apply is pressed, as a control's move is;
             // what is typed is drawn once it reads. Either way the controls follow the text.
             scadChanged(target, text, { staged = false } = {}) {
                 const scad = this.scadStages[target.key];
@@ -6160,10 +6149,9 @@
                 // already-upgraded real mesh (STL or a Three.js primitive)
                 // is already actual-size geometry with scale left at (1,1,1);
                 // re-scaling it here by its own real-world millimeter size
-                // would balloon it into a screen-filling artifact (the bug
-                // this guard fixes: moving *any* item used to corrupt every
-                // already-real mesh currently on screen, not just the one
-                // being moved, since this runs for every rendered node).
+                // would balloon it into a screen-filling artifact. This runs for
+                // every rendered node, not just the one being moved, so every
+                // real mesh on screen goes through this guard.
                 if (mesh.userData.isPlaceholder) {
                     mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
                 }
@@ -6238,7 +6226,8 @@
 
                 // In place: `node` is renderNodeByKey's copy, and its position is
                 // the tree's own object, which submitLayout sends. A new object
-                // here moved the copy only, and the layout sent the old place.
+                // here would move the copy only, and the layout would send the old
+                // place.
                 Object.assign(node.position, {
                     x: worldMinApX - node.footprint.min[0],
                     y: worldMinApY - node.footprint.min[1],
@@ -7593,7 +7582,7 @@
             // already on screen, in the background, without blocking
             // navigation. Two sources of real geometry:
             //   - a part_ref leaf: fetch its real STL (generating on demand if
-            //     missing, same as the old standalone part viewer did).
+            //     missing).
             //   - any other leaf whose own base geometry is a plain
             //     Cube/Cylinder/Sphere (optionally wrapped in one Translate --
             //     see api.py's _primitive_descriptor): build the exact Three.js
@@ -7852,8 +7841,8 @@
             };
         };
 
-        // A board's Machine has a ring of its own, the device ring on its port --
-        // what the monitor page's was: its cells are the Machine's buttons.
+        // A board's Machine has a ring of its own, the device ring on its port: its
+        // cells are the Machine's buttons.
         const machineSpec = (at) => ({
             context: { pointing: 'device', targets: [viewer.machine.port] },
             device: viewer.machine.handle.device(), at,
@@ -8125,7 +8114,7 @@
                     viewer.renderFocus();
                     viewer.setStatus(`${viewer.expandedCategories.has(group) ? 'Expanded' : 'Collapsed'} ${group}${tail}`, 'success');
                 } else if (action === 'device:open') {
-                    // The board's Machine, in front of the world: Watch and Monitor were this.
+                    // The board's Machine, in front of the world.
                     if (viewer.openMachine(path)) viewer.setStatus(`Opened ${path}${tail}`, 'success');
                 } else if (action === 'device:pin') {
                     const picked = viewer.selectedBodyEl.querySelector('.dev-pick')?.value

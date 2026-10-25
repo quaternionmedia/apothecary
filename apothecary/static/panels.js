@@ -15,9 +15,9 @@
  * and resized from its corner. Floated, a panel lands beside where it was docked,
  * or the nearest place clear of the closed panels' tabs and of what the page asks
  * to keep clear (keepClear). What a person did to the panels and the rail
- * is remembered per browser; a remembered panel the page no longer registers
- * is ignored, and forgotten the next time anything is remembered, and a layout
- * remembered from before the one rail (a left and a right rail) is ignored
+ * is remembered per browser; a remembered panel the page does not register is
+ * ignored, and forgotten the next time anything is remembered, and a remembered
+ * layout with no rail of its own (one naming a left and a right rail) is ignored
  * whole.
  *
  * The chrome is the module's: every listener it installs is on the elements
@@ -64,8 +64,8 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
 
     let remembered = {};
     try { remembered = JSON.parse(localStorage.getItem(storageKey) || "{}") || {}; } catch (e) { remembered = {}; }
-    // A layout from before the one rail names a left and a right rail and panels
-    // docked to either: none of it says where anything goes now, so all of it is
+    // A remembered layout with no `_rail` (one naming a left and a right rail and
+    // panels docked to either) says nowhere anything goes on this page: all of it is
     // ignored, and the panels start as they would in a browser that saw none.
     if (typeof remembered !== "object" || !remembered._rail || typeof remembered._rail !== "object") remembered = {};
     if (remembered._rail) {

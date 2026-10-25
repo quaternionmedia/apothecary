@@ -1,8 +1,8 @@
 """G-code seam: parsers, the held-open link, identify/poll, routes and CLI.
 
-The scripted transport replays what a Creality mainboard running Marlin
-(TH3D UFW 2.94a) actually said over /dev/ttyUSB1 on 2026-09-19, so the
-parsers are tested against real output, not an idealised one.
+The scripted transport replays a recording of a Creality mainboard running
+Marlin (TH3D UFW 2.94a), so the parsers are tested against real output, not an
+idealised one.
 """
 
 import errno
@@ -244,9 +244,8 @@ def test_pyserial_engine_round_trip_on_loopback():
 def test_pyserial_engine_leaves_dtr_up_on_close():
     """A real tty (a pty here) is opened with HUPCL cleared, so closing it keeps DTR.
 
-    Seen on the bench: with HUPCL set the kernel drops DTR on close and the
-    Creality board reboots on the next program's open -- the very reset the
-    seam promises not to cause.
+    With HUPCL set the kernel drops DTR on close and the Creality board reboots on
+    the next program's open -- the very reset the seam promises not to cause.
     """
     termios = pytest.importorskip("termios")
     master, slave = os.openpty()
@@ -973,7 +972,7 @@ def test_a_simulated_print_held_at_a_fraction_stays_there(monkeypatch):
     assert byte == pytest.approx(358856 * 0.5, rel=0.01)
 
 
-# --- review fixes: the monitor's address never reflects a raw port; polls carry the latch -
+# --- the monitor's address never reflects a raw port; polls carry the latch ---------------
 
 
 def test_the_monitor_address_drops_a_bad_port_and_quotes_a_good_one(fake_arduino_cli):
@@ -1563,7 +1562,7 @@ def test_print_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
             break
         time.sleep(0.01)
     assert job["stage"] == "done" and job["sent"] == 12 and job["record_id"] == job["job_id"]
-    # Its history is the printer's print jobs; the old record routes are gone.
+    # Its history is the printer's print jobs.
     listed = c.get("/jobs", params={"machine": port, "kind": "print"}).json()
     assert [j["id"] for j in listed] == [job["job_id"]]
     assert listed[0]["outcome"] == "done" and "log" not in listed[0]
@@ -1632,8 +1631,7 @@ def test_release_reconnect_reset_and_upload_are_refused_mid_print(
 def test_a_pin_by_port_is_kept_as_the_board_and_survives_renumbering(
     fake_arduino_cli, fresh_task_runner, scripted_links, garage, monkeypatch
 ):
-    """Seen on the bench: the printer came back as /dev/ttyUSB0 after a night as
-    /dev/ttyUSB1, and the pin made by port name pointed at nothing. A pin is
+    """A port's number can change between one boot or plug and the next, so a pin is
     kept as the bridge's serial number when it has one, and matches the board
     wherever the kernel puts it; a by-id path or a udev name matches too."""
     c = TestClient(app)
@@ -1696,9 +1694,8 @@ def test_a_pin_by_a_path_that_resolves_to_the_port_matches(tmp_path):
 
 
 def test_where_answers_before_anyone_has_opened_the_viewer(fake_arduino_cli, garage):
-    """Seen on the bench: a fresh server, the monitor opened first, and `where`
-    said nothing was pinned because the garage had not been loaded yet. A pin
-    names its site; the route loads it."""
+    """On a fresh server, before the garage has been loaded, `where` still finds the
+    pin: a pin names its site, and the route loads it."""
     from apothecary import api as api_module
 
     c = TestClient(app)
@@ -1757,8 +1754,9 @@ def _printing(tmp_path, monkeypatch, lines=400):
 
 
 def test_a_lost_poll_reply_mid_print_keeps_the_link_and_the_print(tmp_path, monkeypatch):
-    """One lost reply used to force-close the link under the print thread: the
-    print died, the safe-off was never sent, and the heaters stayed on."""
+    """One lost poll reply mid-print keeps the link and the print: closing the link
+    under the print thread would end the print with no safe-off sent and the heaters
+    on."""
     links, board, job = _printing(tmp_path, monkeypatch)
     board.lose_next_m105 = True
     for _ in range(40):  # until a poll reaches the board between two streamed lines
@@ -1787,8 +1785,8 @@ def test_nothing_resets_reopens_or_closes_a_link_a_print_holds(tmp_path, monkeyp
 
 
 def test_every_safe_off_line_is_tried_when_one_is_not_answered(tmp_path, monkeypatch):
-    """The safe-off used to stop at its first unanswered line, leaving the rest --
-    the heaters among them -- unsent."""
+    """Every safe-off line is sent even when one goes unanswered: the heaters, the fan
+    and the motors are each a line of it."""
     links, board, job = _printing(tmp_path, monkeypatch, lines=3000)
     first = devices.PRINT_SAFE_OFF[0]
     real_write = board.write

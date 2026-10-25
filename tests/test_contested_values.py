@@ -1,14 +1,9 @@
 """A number two documents state differently is not settled by editing one.
 
-`datum_core` had three. Two of them -- wall thickness and fit clearance --
-were disputed only by `parts/datum`, the single-piece tray this part replaced,
-which carried lighter values while citing the enclosure record for numbers
-that record does not contain. Retiring that part settled both: the house
-constants now stand unopposed.
-
-What remains is `board_y`, and it is the interesting kind: the datum packet
-gives a bound of 40 mm and the black-box stub the seam serves today gives a
-specific 30 mm board. Both sources are live, no schematic exists to settle
+`datum_core`'s wall thickness and fit clearance have one source, the house
+constants, so nothing disputes them. `board_y` is contested: the datum packet
+gives a bound of 40 mm and the seam's black-box stub gives a specific 30 mm
+board. Both sources are live, no schematic exists to settle
 them, and deleting either would be answering the question by silencing it.
 Each candidate is recorded with its provenance and surfaced as a control in
 the viewer, so the choice is made by looking rather than by whoever edits last.
@@ -31,9 +26,9 @@ class TestContestedAreDeclared:
         assert set(DEFAULT.contested) == {"board_y"}
 
     def test_a_settled_number_is_no_longer_contested(self):
-        """Retiring the part that disagreed is a resolution, and the index has
-        to stop reporting a dispute that no longer has two sides. The house
-        constants are what the part ships; nothing live proposes otherwise.
+        """Wall thickness and fit clearance have one source, the house constants the
+        part ships, and nothing live proposes otherwise, so the index reports no
+        dispute over them.
         """
         assert "walls" not in DEFAULT.contested
         assert "tolerence" not in DEFAULT.contested
@@ -92,9 +87,8 @@ class TestParamsEndpoint:
         assert any("kicad" in s for s in sources)
 
     def test_no_candidate_cites_a_file_that_no_longer_exists(self):
-        """A citation is only provenance while a reader can go and look. The
-        retired part's SCAD was cited by every candidate here, and leaving
-        those in place would have pointed at nothing.
+        """A citation is only provenance while a reader can go and look: every
+        candidate's citation names a file that exists.
         """
         from apothecary.projects.parts.skeleton import ROOT
 
@@ -107,7 +101,7 @@ class TestParamsEndpoint:
     def test_no_slider_offers_a_value_the_model_refuses(self):
         """The claim this endpoint exists to make. `gt=0` arrives as
         exclusiveMinimum, and a slider stopping exactly on it hands the user a
-        value the renderer then rejects -- six of them did.
+        value the renderer then rejects.
         """
         from apothecary.projects.parts.datum_core import Params
 
