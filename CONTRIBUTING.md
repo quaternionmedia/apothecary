@@ -43,7 +43,9 @@ base's tip, before it is marked ready and again before it merges if that tree ha
 Its body says what ran and what it said, and the merge commit says it for the tree that
 landed. A browser test needs a server of its own (`--start-server`) or one named for it
 (`--base-url`); with neither it skips, and it never uses a server that happens to be
-listening.
+listening. No limit is chosen by hand: in CI a browser test's cap is twice the time
+recorded for it, so a hung wait fails that test and names it, and a job's is twice its
+recorded median. Run here, nothing is capped.
 
 `walkthrough/` is executable: its pages are doctests. Pages 01 and 02 are written by their
 browser tests, and a loop's page (03, 04, 05, 06) by the browser suite alone; commit what a
