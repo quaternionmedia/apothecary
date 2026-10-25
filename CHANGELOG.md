@@ -131,6 +131,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Fixed
 
+- A printer's control latch runs on the monotonic clock: a step of the wall clock neither ends an armed window nor lengthens one. ([code](apothecary/firmware/gcode.py))
 - The emergency stop is written at once, ahead of an exchange in flight (a homing, a bed probe), and the board's halt line is its answer rather than an error. ([doc](docs/firmware.md))
 - `apothecary parts render` refuses to write over the part's own source file. ([code](apothecary/cli/parts.py))
 - A string parameter with a newline in it reaches OpenSCAD as the `\n` escape, where a raw newline inside a `-D` literal was dropped by its lexer and the text after it lost. ([code](apothecary/projects/parts/assignments.py))

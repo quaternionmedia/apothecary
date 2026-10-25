@@ -945,6 +945,19 @@ def test_the_emergency_stop_is_written_ahead_of_an_exchange_in_flight():
     assert sent[-2:] == ["G28", "M112"]
 
 
+def test_the_control_latch_runs_on_its_own_clock_not_the_wall_clock(monkeypatch):
+    """A step of the wall clock -- NTP, a suspend -- neither ends an armed window nor
+    lengthens one."""
+    latch = gcode.ControlLatch()
+    latch.arm("/dev/x", ttl=60)
+    wall = time.time
+    monkeypatch.setattr(gcode.time, "time", lambda: wall() + 3600)  # an hour ahead
+    assert latch.armed("/dev/x") is True
+    assert 59 < latch.seconds_left("/dev/x") <= 60
+    monkeypatch.setattr(gcode.time, "time", lambda: wall() - 3600)  # an hour behind
+    assert latch.seconds_left("/dev/x") <= 60
+
+
 def test_simulator_honours_controls(monkeypatch):
     monkeypatch.setenv("APOTHECARY_SIMULATED_PRINTER", "idle")
     link = gcode.GcodeLink("/dev/ttySIM", 115200, gcode.SimulatedPrinter("/dev/ttySIM", 115200))
