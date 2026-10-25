@@ -1,0 +1,43 @@
+name: 📖 Walkthrough
+
+# The walkthrough's hermetic pages, on every pull request's push and on a push to main:
+# the corpus's walkthrough record runs them in CI on every pull request, and counts a
+# page as run only on a job's run on the default branch. They need the locked packages
+# and nothing else -- no OpenSCAD, no browser, no submodule. The pages a browser run
+# writes hold no examples of their own; that run is the machine's before a merge, and
+# pytest.yml's at a version tag. tests/test_ci_workflows.py holds the pages with
+# examples and the pages that say they are hermetic to be the same pages.
+on:
+  pull_request:
+  push:
+    branches:
+    - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  walkthrough:
+    name: 📖 The walkthrough's hermetic pages
+    runs-on: ubuntu-24.04
+    # No cap of this file's: it has no record yet to take one from.
+    steps:
+    - name: 📰 Checkout
+      uses: actions/checkout@v6
+
+    - name: 😎 Setup uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        # The floor of requires-python.
+        python-version: "3.11"
+
+    - name: 🚧 Install dependencies
+      run: uv sync --locked
+
+    - name: 📖 Run the walkthrough
+      # Named on the command line: pytest ignores testpaths once it is given a path.
+      run: uv run pytest walkthrough -q

@@ -4,7 +4,7 @@ name: 🦀 Rust workspace
 # the Cargo.lock committed with it. Nothing else builds it, and the wheel carries
 # neither crate, so without this it could stop compiling unseen.
 # At a version tag and on demand, beside the tests (pytest.yml); a pull request's push
-# runs the governance checks and lint alone.
+# runs the governance checks, lint and the walkthrough's hermetic pages.
 on:
   push:
     tags:

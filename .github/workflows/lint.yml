@@ -2,8 +2,9 @@ name: 🧹 Lint
 
 # Every pull request's push, beside the governance checks: `ruff check`, at the
 # version uv.lock pins (tests/test_ci_workflows.py holds the two equal), with nothing
-# else installed. The tests run here before a pull request is ready, and in
-# pytest.yml at a version tag.
+# else installed. The walkthrough's hermetic pages run beside it (walkthrough.yml); the
+# rest of the tests run here before a pull request is ready, and in pytest.yml at a
+# version tag.
 on:
   pull_request:
   push:

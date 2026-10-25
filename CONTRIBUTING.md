@@ -43,11 +43,14 @@ uv run --group preflight apothecary preflight   # the CI workflows, run here, be
 
 `apothecary test run` is the one to run before a commit; it runs the window manager's
 browser tests too. Those need no server, only Chromium, so `uv run pytest` runs them as well
-wherever Playwright has installed it. A pull request's CI runs the governance checks and
-lint alone, and the tests run in CI at a version tag, so the whole suite runs here before
-every merge: `apothecary test all`, on the pull request's head merged onto its base's tip,
-before it is marked ready and again before it merges if that tree has changed. Its body
-says what ran and what it said, and the merge commit says it for the tree that landed.
+wherever Playwright has installed it. A pull request's CI runs the governance checks, lint
+and the walkthrough's hermetic pages, and the rest of the tests run in CI at a version tag,
+so the whole suite runs here before every merge: `apothecary test all`, on the pull
+request's head merged onto its base's tip, before it is marked ready and again before it
+merges if that tree has changed. Its body says what ran and what it said, and the merge
+commit says it for the tree that landed. A merge skips no CI: its push to `main` runs those
+checks again, and that run is the default branch's evidence the corpus's walkthrough record
+counts.
 `apothecary test changed` is for while working and is never the gate. With `--coverage`,
 `test all` measures each part, the server the browser tests drive included, and says what
 of the package's statements ran and, of those the pull request adds or changes since
@@ -88,6 +91,7 @@ is not a member: it is its own Cargo project, built by its own toolchain
 | `leak-check.yml` | On a pull request into `main` and a push to it: a tracked file naming an account's home folder, a path through one person's home layout or a session's scratch space, a shared-conversation link, or a conversation archive's path (the corpus's seed check, copied to `.github/qm-seed/`) |
 | `one-pr-check.yml` | A pull request that is ready while its base is another open pull request's branch, and a pull request body that addresses its own contributor (the corpus's seed checks, run out of `governance/qm/project-seed/ci/`) |
 | `integrates.yml` | A pull request whose head conflicts with the open pull requests merged before it, depth first from their base and oldest first on each, and every pull request stacked on it (`.github/ci/check_integrates.py`): it is fixed in its own branch before it merges |
+| `walkthrough.yml` | On every pull request and a push to `main`: a hermetic walkthrough page failing (`pytest walkthrough`, the locked packages and nothing else installed). The pages with examples are the pages that say they are hermetic |
 | `timeless-check.yml` | On a pull request into `main` and a push to it: a line it adds that sets a phrase in capitals or only narrates how the text came to be, unless the line says `timeless: allow` and why (the corpus's seed check) |
 | `rust.yml` | At a `v*` tag and on demand: the Rust workspace at the root (`crates/`) failing `cargo check --workspace --all-targets --locked` |
 | `tag-claims.yml` | A pushed `v*` tag that is lightweight, or whose annotation does not name the review, the manual test against the real runtime and what the automated gate did not cover (the corpus's seed check) |

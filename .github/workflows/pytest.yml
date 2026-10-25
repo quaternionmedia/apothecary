@@ -2,7 +2,8 @@ name: 🧪 Test
 
 # At a version tag, the claim a release makes, and on demand: the tests are run here
 # before a pull request is ready, its body saying what ran (CONTRIBUTING.md), and a
-# pull request's push runs the governance checks and lint alone.
+# pull request's push runs the governance checks, lint and the walkthrough's hermetic
+# pages (walkthrough.yml).
 on:
   push:
     tags:
