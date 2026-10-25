@@ -61,7 +61,10 @@ after it see it.
 A file's tests run in order and on one server: the walkthroughs and the ring build
 on the steps before them. So parallel runs keep files whole. `-n auto --dist
 loadfile` gives each worker its own server on a free port (`--server-port` is
-refused with `-n`). `--shard K/N` runs the K-th of N shards, files placed
+refused with `-n`). `--max-worker-restart 0`, which `apothecary test all --workers`
+passes, makes a worker's crash end the run and name its test: a worker started in
+its place leaves the loadfile scheduler waiting on the crashed file forever.
+`--shard K/N` runs the K-th of N shards, files placed
 heaviest first onto the lightest shard by `durations.json`; CI runs three, at a version tag. A
 file missing from `durations.json` counts as the average test for each of its
 tests. `--record-durations` writes a run's times into it -- each file run replaces
