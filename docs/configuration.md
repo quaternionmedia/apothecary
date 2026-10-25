@@ -22,6 +22,8 @@ needed: each has a default.
 | `APOTHECARY_SIMULATED_PROGRESS` | With the simulated engine, holds a print at this fraction, 0 to 1, so pictures of it are the same on every run | The print goes round | `tests/e2e/README.md` |
 | `APOTHECARY_SIMULATED_SPEED` | Multiplies the simulated printer's every dwell (`G4`): 1 is real time, 0 skips them | 1 | |
 | `APOTHECARY_SIMULATED_DEVKIT` | With the simulated engine, the ports the Rust module finds, each a pretend devkit (comma-separated) | None | [firmware.md](firmware.md#setup) |
+| `APOTHECARY_THEATRE_RIG` | The folder of a console's two exports (`patches.csv`, `fixture-parameters.csv`) the theatre site's rig is read from | `examples/theatre-rig/`, a made-up rig | [lighting.md](lighting.md#the-rig-and-another-in-its-place) |
+| `APOTHECARY_CONSOLE_SACN`, `APOTHECARY_CONSOLE_OSC` | Set by `apothecary serve --console-sacn` and `--console-osc` in its server's environment: the server listens for a console's levels on the local network, UDP 5568 and 8001, receive only. Not set by hand | Unset | [lighting.md](lighting.md#getting-levels-in) |
 | `APOTHECARY_DEMO` | The demo's folder, set by `apothecary serve --demo` in its server's environment; the page's banner reads it. Not set by hand | Unset | [viewer.md](viewer.md#the-header) |
 
 ## Other variables Apothecary reads
@@ -31,6 +33,7 @@ needed: each has a default.
 | `ARDUINO_CLI` | The arduino-cli the Arduino module runs, checked first; `none` means none | The tools dir, then `PATH` |
 | `ESPTOOL` | The esptool the Arduino module runs; `none` means none | `PATH`, the `esp32:esp32` core's, or the Python module |
 | `CARGO`, `ESPFLASH` | The cargo and espflash a Rust sketch is built and flashed with; `none` means none | The tools dir, then `PATH` |
+| `FAKE_DEVKIT`, `FAKE_MONITOR` | Read by the scripted arduino-cli the demo and the tests run (`apothecary/firmware/scripted.py`), never by a real one: a devkit in its board list, and a monitor that sends far more than a serial line carries | Unset |
 | `OPENSCADPATH` | OpenSCAD's own library path, read for the files a SCAD includes | Unset |
 
 [firmware.md](firmware.md#setup) says how each toolchain finds its tools. The
