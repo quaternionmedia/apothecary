@@ -173,13 +173,12 @@ A part with no `Params` model still has controls in the viewer where the
 OpenSCAD it renders with can list its SCAD's parameters: a development
 snapshot can (`--export-format=param`), 2021.01 cannot. `GET
 /parts/{name}/params` then answers what OpenSCAD's customizer lists
-(`apothecary/projects/parts/customizer.py`, `source: "customizer"`): the
-top-level assignments before the first module or function, annotated the
-customizer's way -- `width = 34; // [10:100]` a number with its range,
+(`apothecary/projects/parts/customizer.py`, `source: "customizer"`): its
+parameters as [above](#in-the-page-the-text-is-the-truth), each typed by its
+value and its comment -- `width = 34; // [10:100]` a number with its range,
 `hollow = true;` a tick, `label = "hi";` a string, `shape = "round"; //
-[round, square]` a choice, `size = [10, 20];` a vector, `/* [Size] */` the
-group what follows is in, a comment on the line above its caption, and
-`/* [Hidden] */` what is not offered. Where there is nothing to list, the
+[round, square]` a choice, `size = [10, 20];` a vector -- and grouped by a
+`/* [Size] */` above them. Where there is nothing to list, the
 `404`'s `detail` says why, `lists: false` when the OpenSCAD in use cannot
 list at all. `POST /parts/{name}/validate` and `.../stl/generate` check a
 staged set against the same list: a number as a number, a choice one of its
@@ -240,13 +239,10 @@ through them.
 
 `openscad_min_version` is the oldest OpenSCAD that renders the part, as
 `openscad --version` numbers it (`"2021.08.24"`). The first OpenSCAD new
-enough is used, in this order (`stl_renderer.find_openscad`): the one
-`APOTHECARY_OPENSCAD` names, which is then the only one tried; the snapshot
-`apothecary openscad install` made current; the default install (the
-`openscad` CLI on `PATH`); then other development snapshots,
-`openscad-nightly` on `PATH` or one of the usual install locations. With
-none, `can_generate_stl()` names the version needed, every OpenSCAD it
-found, and `apothecary openscad install`.
+enough is used, in the order [openscad.md](openscad.md#which-openscad-a-render-uses)
+gives (`stl_renderer.find_openscad`). With none, `can_generate_stl()` names
+the version needed, every OpenSCAD it found, and `apothecary openscad
+install`.
 `generate-stl --all`, `verify` and server startup skip the part with that
 reason, `checklist` gives it, and a build of that part alone is refused
 with it: `generate-stl NAME` fails, and `POST /parts/{name}/stl/generate`

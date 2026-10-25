@@ -46,25 +46,10 @@ Python 3.11+ and [uv](https://docs.astral.sh/uv/); page 00's first step is the c
 gridfinity library: run `git submodule update --init --recursive`.
 
 Rendering STLs needs OpenSCAD; nothing else does. Run `uv run apothecary openscad install`
-before the first `serve`: it puts a development snapshot into `~/.apothecary/tools`, and
-renders use it, with Manifold. The OpenSCAD most package managers carry, 2021.01, renders
-slowly with CGAL and is too old for the gridfinity bins. Without the snapshot the `openscad`
-CLI on `PATH` is used; `APOTHECARY_OPENSCAD` names another. What it installs is native to
-the machine:
-
-- **Linux x86_64**: the night's AppImage from files.openscad.org; where there is no FUSE,
-  the AppImage is extracted and its `AppRun` used.
-- **macOS**, Intel and Apple Silicon: `OpenSCAD.app`, copied out of the night's disk image
-  (attached read-only with `hdiutil`, then detached). The app is universal.
-- **Windows x64**: the night's portable zip, unpacked; no installer, no admin.
-- **Linux arm64**: no current build is published, so it is built here from OpenSCAD's
-  source at the night's date (cmake, headless, with Manifold; `--jobs N`). What the build
-  needs is checked first, and anything missing is refused with the `sudo apt install` line
-  that adds it; it never runs sudo itself. The build takes long on a small board.
-- **Windows on ARM** is not supported yet; it is a planned item.
-
-`uv run apothecary openscad status` says, for each install, its platform, how it was
-installed, whether it runs natively here, and whether it has Manifold.
+before the first `serve`: it puts a development snapshot with Manifold into the tools
+folder, and renders use it. [docs/openscad.md](docs/openscad.md) says what it installs on
+each platform, which OpenSCAD a render uses, and what 2021.01, the version most package
+managers carry, cannot do.
 
 The rest is optional, each into the same tools folder: the slicer, each firmware
 toolchain and the browser the tests drive. Page 00's
@@ -87,27 +72,11 @@ uv run apothecary problems                          # what is open here, and who
 uv run apothecary photo view examples/shapes.png --width-mm 300 --port 8001   # a picture's pieces, in a viewer of its own
 ```
 
-In the viewer, a picture is taken by a camera, a part of the site. Select a structure (the
-bench, say) and open its ring -- `m`, or Ctrl+right-click on it -- then Camera › Add here: a
-camera stands above the bench, looking straight down, selected. On the camera's own ring,
-Device › Allow asks the browser once, and with one camera it is the camera's device at once.
-Take picture -- on its ring, in Selected, or `P` -- keeps a frame that lies on the bench
-where the camera looks, as a view, and the bench's Picture › Find shapes finds its shapes;
-each step's message names the next. Picture › Make stands a shape up as a piece; its Part ›
-Edit adjusts it. Its ring's Slice brings the pinned printer's Machine forward with the piece
-chosen under *makes* and slices it there with OrcaSlicer, choosing the G-code it kept, and
-▶ Print in Print from here prints it: the print is a job that names the piece
-([walkthrough 13](walkthrough/13-a-picture-to-a-print.md) goes round twice;
-[docs/slicer.md](docs/slicer.md) says what a slice uses). The camera's turn ring and tilt arc
-aim it, and Part › Edit sets its numbers.
-
-Pictures live in one folder: `APOTHECARY_PICTURE_ROOT`, or else the folder `serve` was
-started in, never a home folder or anything above one. A camera's frames are kept in its `captures` folder,
-and the pictures added from the browser in its `uploads` folder. Picture › Add on the bench's ring
-pins a picture from disk instead of a camera's, and Picture › Folder one already in the
-picture folder: the seven newest by modification time, and any other once it is chosen in
-Pictures, a tab of the rail beside the world. The floor's verbs are under the canvas ring's
-Pictures › Floor.
+In the viewer, a camera is a part of the site: Camera › Add here stands one above a
+structure, Take picture (`P`) pins its frame where it looks, Picture › Find shapes finds the
+shapes in it, and Picture › Make stands one up as a piece to slice and print
+([docs/pictures.md](docs/pictures.md); [walkthrough 13](walkthrough/13-a-picture-to-a-print.md)
+goes round twice).
 
 From Python:
 

@@ -57,8 +57,9 @@ footprint is what places it: the viewer centres the mesh in the footprint
 box, the layout check uses it for overlaps, and the site's own OpenSCAD
 render imports the STL at the node's position.
 
-OpenSCAD 2021.01, the version most package managers carry, drops a mesh it
-cannot read back into a boolean ("The given mesh is not closed", a CGAL
+OpenSCAD 2021.01, the version most package managers carry
+([openscad.md](openscad.md#what-openscad-202101-cannot-do) lists what it
+cannot do), drops a mesh it cannot read back into a boolean ("The given mesh is not closed", a CGAL
 assertion) from a union and exits 0, so a render that unions an imported
 mesh with anything else is checked for that, and a node's STL is refused
 rather than served without its body (`RenderResult.dropped`). Its own exports are the usual culprit: parts that
