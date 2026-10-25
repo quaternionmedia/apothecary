@@ -1,5 +1,5 @@
-"""Tests for the parts library as a fractal tree, a prototype: every registered part
-a leaf Assembly node under one Site (apothecary/example_parts_library.py).
+"""Tests for the parts library as a fractal tree, a prototype: every registered part but
+a building a leaf Assembly node under one Site (apothecary/example_parts_library.py).
 """
 
 from apothecary.example_parts_library import (
@@ -16,10 +16,12 @@ def _registered_part_names():
     return {p.name for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper}
 
 
-def test_site_has_one_leaf_per_registered_part():
+def test_site_has_one_leaf_per_registered_part_but_a_building():
+    """A building is tens of metres across, a site's own (the theatre's), not a cell of
+    the bench's catalog."""
     site = create_parts_library_site()
     names = {leaf.name for leaf in site.children}
-    assert names == _registered_part_names()
+    assert names == _registered_part_names() - {"theatre"}
 
 
 def test_every_leaf_is_a_part_role_with_part_ref_and_footprint():

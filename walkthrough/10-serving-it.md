@@ -9,10 +9,11 @@
     {'status': 'healthy', 'version': '0.1.0'}
 
 The registered sites: `datum_core` is the sub-assembly, `garage` the bench as
-it is, and `parts_library` the catalog every registered part appears in.
+it is, `parts_library` the catalog every registered part but a building appears
+in, and `theatre` a theatre's shell with its lighting rig.
 
     >>> client.get("/sites").json()
-    ['datum_core', 'garage', 'parts_library']
+    ['datum_core', 'garage', 'parts_library', 'theatre']
 
 Every site read carries its generated OpenSCAD, so the SCAD section of the
 viewer's Site panel fills on load:

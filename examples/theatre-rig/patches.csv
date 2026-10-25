@@ -1,0 +1,34 @@
+CHANNEL,FIXTURE_TYPE,MANUFACTURER,ADDRESS,LABEL,LOCATION_X,LOCATION_Y,LOCATION_Z,ORIENTATION_X,ORIENTATION_Y,ORIENTATION_Z
+1,ColorSource_SPOT_5ch,ETC,1/1<5,FOH 1,-6.0,-8.0,8.0,59.4,0,0
+2,ColorSource_SPOT_5ch,ETC,1/6<10,FOH 2,-3.6,-8.0,8.0,59.4,0,0
+3,ColorSource_SPOT_5ch,ETC,1/11<15,FOH 3,-1.2,-8.0,8.0,59.4,0,0
+4,ColorSource_SPOT_5ch,ETC,1/16<20,FOH 4,1.2,-8.0,8.0,59.4,0,0
+5,ColorSource_SPOT_5ch,ETC,1/21<25,FOH 5,3.6,-8.0,8.0,59.4,0,0
+6,ColorSource_SPOT_5ch,ETC,1/26<30,FOH 6,6.0,-8.0,8.0,59.4,0,0
+7,ColorSource_PAR_DB_5ch,ETC,1/31<35,1st Electric 1,-6.0,2.0,8.5,13.2,0,0
+8,ColorSource_PAR_DB_5ch,ETC,1/36<40,1st Electric 2,-3.6,2.0,8.5,13.2,0,0
+9,ColorSource_PAR_DB_5ch,ETC,1/41<45,1st Electric 3,-1.2,2.0,8.5,13.2,0,0
+10,ColorSource_PAR_DB_5ch,ETC,1/46<50,1st Electric 4,1.2,2.0,8.5,13.2,0,0
+11,ColorSource_PAR_DB_5ch,ETC,1/51<55,1st Electric 5,3.6,2.0,8.5,13.2,0,0
+12,ColorSource_PAR_DB_5ch,ETC,1/56<60,1st Electric 6,6.0,2.0,8.5,13.2,0,0
+13,ColorSource_SPOT_5ch,ETC,1/61<65,2nd Electric 1,-5.0,7.0,8.5,13.2,0,0
+14,ColorSource_SPOT_5ch,ETC,1/66<70,2nd Electric 2,-1.67,7.0,8.5,13.2,0,0
+15,ColorSource_SPOT_5ch,ETC,1/71<75,2nd Electric 3,1.67,7.0,8.5,13.2,0,0
+16,ColorSource_SPOT_5ch,ETC,1/76<80,2nd Electric 4,5.0,7.0,8.5,13.2,0,0
+17,PLCYC1_MKII_16B,Generic,1/81<95,3rd Electric Cyc 1,-8.0,18.0,8.5,54.9,0,0
+18,PLCYC1_MKII_16B,Generic,1/96<110,3rd Electric Cyc 2,-4.0,18.0,8.5,54.9,0,0
+19,PLCYC1_MKII_16B,Generic,1/111<125,3rd Electric Cyc 3,0.0,18.0,8.5,54.9,0,0
+20,PLCYC1_MKII_16B,Generic,1/126<140,3rd Electric Cyc 4,4.0,18.0,8.5,54.9,0,0
+21,PLCYC1_MKII_16B,Generic,1/141<155,3rd Electric Cyc 5,8.0,18.0,8.5,54.9,0,0
+22,Slimpar_64_3ch,Chauvet,1/156<158,Groundrow 1,-9.0,23.0,0.3,166.2,0,0
+23,Slimpar_64_3ch,Chauvet,1/159<161,Groundrow 2,-5.4,23.0,0.3,166.2,0,0
+24,Slimpar_64_3ch,Chauvet,1/162<164,Groundrow 3,-1.8,23.0,0.3,166.2,0,0
+25,Slimpar_64_3ch,Chauvet,1/165<167,Groundrow 4,1.8,23.0,0.3,166.2,0,0
+26,Slimpar_64_3ch,Chauvet,1/168<170,Groundrow 5,5.4,23.0,0.3,166.2,0,0
+27,Slimpar_64_3ch,Chauvet,1/171<173,Groundrow 6,9.0,23.0,0.3,166.2,0,0
+28,Dimmer,Generic,1/174,House 1,-6.0,-6.0,8.8,0.0,0,0
+29,Dimmer,Generic,1/175,House 2,-2.0,-6.0,8.8,0.0,0,0
+30,Dimmer,Generic,1/176,House 3,2.0,-6.0,8.8,0.0,0,0
+31,Dimmer,Generic,1/177,House 4,6.0,-6.0,8.8,0.0,0,0
+32,Scenic_Element,Generic,,Platform,-3.0,10.0,0.0,,,
+33,Scenic_Element,Generic,,Flat,4.0,14.0,0.0,,,

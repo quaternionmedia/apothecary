@@ -1,7 +1,7 @@
 """Worked example: the registered ``parts/`` library as a fractal tree.
 
-A prototype, under hierarchy.py's draft record: every registered part as a leaf
-(``role="part"``) under one Site, in the same ``Assembly`` shape the garage
+A prototype, under hierarchy.py's draft record: every registered part but a building
+as a leaf (``role="part"``) under one Site, in the same ``Assembly`` shape the garage
 example uses, so the fractal viewer reaches a part by navigating down to it. The layout is a catalog grid, not a
 build: nothing constrains where a leaf sits (see ``validate_parts_library``).
 """
@@ -47,9 +47,18 @@ def _grid_position(index: int) -> Vector3D:
     return Vector3D(x=col * CELL_PITCH, y=row * CELL_PITCH, z=0)
 
 
+# A building is a site's own, not one of the bench's parts: the theatre is tens of
+# metres across, and the library lays every part out on one grid of benchtop cells.
+NOT_ON_THE_BENCH = {"building"}
+
+
 def create_parts_library_site() -> Assembly:
-    """A Site made entirely of part leaves -- one per registered ``parts/`` entry."""
-    wrappers = _registered_wrappers()
+    """A Site made entirely of part leaves -- one per registered ``parts/`` entry but a building."""
+    wrappers = {
+        name: module
+        for name, module in _registered_wrappers().items()
+        if import_module(module).DEFAULT.category not in NOT_ON_THE_BENCH
+    }
     leaves = [
         Assembly(
             name=name,
