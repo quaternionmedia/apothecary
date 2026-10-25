@@ -108,4 +108,8 @@ ignore = ["E501"]
 
 [tool.coverage.run]
 source = ["apothecary"]
-omit = ["apothecary/projects/parts/*"]
+# Matched wherever the run stands: the server the browser tests drive runs in a
+# folder of its own, where a pattern relative to the checkout matches nothing.
+omit = ["*/apothecary/projects/parts/*"]
+# Measured in a process the tests start too: that server.
+patch = ["subprocess"]

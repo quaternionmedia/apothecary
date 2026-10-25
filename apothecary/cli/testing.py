@@ -2,20 +2,22 @@
 
 Click ignores a command's return value, so each command exits through SystemExit.
 
-Each command runs two pytests, one after the other: the unit suite with the
-walkthrough's pages, then the browser part. Two processes, not one: a browser
+Each command that runs the suite runs two pytests, one after the other: the unit
+suite with the walkthrough's pages, then the browser part. Two processes, not one: a browser
 test leaves Playwright's event loop running, and a unit test after it in the
 same process that starts a loop of its own is refused ("asyncio.run() cannot be
 called from a running event loop").
 """
 
 import importlib.util
+import os
 import subprocess
 import sys
 
 import click
 
 from ..projects.parts.skeleton import ROOT
+from . import coverage_summary
 from .retired import retired
 
 # Named on every argv: pytest ignores testpaths once it is given a path.
@@ -53,13 +55,37 @@ def browser_command(every: bool = False, workers: int = 1) -> list[str]:
     return argv
 
 
+# Every part measured into one data file: the unit part starts it, the browser part
+# appends to it (pyproject's [tool.coverage.run] follows the server into its process).
+COVERAGE = ["--cov", "--cov-report="]
+
+
+def all_commands(slow: bool = False, workers: int = 1, coverage: bool = False) -> list[list[str]]:
+    """The argvs `apothecary test all` executes, one pytest each, in order."""
+    unit, browser = unit_command(slow=slow), browser_command(every=True, workers=workers)
+    if coverage:
+        unit += COVERAGE
+        browser += [*COVERAGE, "--cov-append"]
+    return [unit, browser]
+
+
 def run_commands(slow: bool = False) -> list[list[str]]:
     """The argvs `apothecary test run` executes, one pytest each, in order."""
     return [unit_command(slow=slow), browser_command()]
 
 
-def _pytest(argv: list[str]) -> int:
-    return subprocess.run(argv, cwd=ROOT).returncode
+def _pytest(argv: list[str], env: dict | None = None) -> int:
+    return subprocess.run(argv, cwd=ROOT, env=env).returncode
+
+
+def coverage_env() -> dict | None:
+    """The environment a measured run's pytests -- and the server they start -- inherit.
+    From Python 3.12 coverage measures through sys.monitoring, which costs the browser
+    tests next to nothing; its older tracer doubles the server's time, and a window
+    waited for misses its wait."""
+    if sys.version_info < (3, 12):
+        return None
+    return {**os.environ, "COVERAGE_CORE": "sysmon"}
 
 
 # pytest's exit code when it collected nothing (pytest.ExitCode.NO_TESTS_COLLECTED).
@@ -84,7 +110,12 @@ HELP = """Run the test suite, exiting as pytest does.
                         demonstration and the window manager -- in a pytest of
                         its own
   apothecary test all   the same, then every browser test (--workers N in
-                        parallel; further arguments go to pytest)
+                        parallel; further arguments go to pytest); with
+                        --coverage, what it covered
+  apothecary test coverage
+                        what the last `test all --coverage` covered: the
+                        package's statements, and those the change adds or
+                        changes (--markdown: a line for a pull request's body)
   apothecary test changed
                         while working: the unit tests and the walkthrough, then
                         the browser files of the areas a change reaches (--since
@@ -140,19 +171,59 @@ def test_run(slow: bool, pytest_args: tuple[str, ...]):
     show_default=True,
     help="Browser tests in parallel, a file's tests together (pytest-xdist).",
 )
+@click.option(
+    "--coverage",
+    is_flag=True,
+    help="Measure what the run covers, and say it: the package's statements, and those "
+    "the change adds or changes since --since.",
+)
+@click.option(
+    "--since",
+    default=coverage_summary.BASE,
+    show_default=True,
+    help="With --coverage, the base the change is measured against.",
+)
 @click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
-def test_all(slow: bool, workers: int, pytest_args: tuple[str, ...]):
+def test_all(slow: bool, workers: int, coverage: bool, since: str, pytest_args: tuple[str, ...]):
     """The unit tests and the walkthrough, then every browser test in a pytest of its
     own, on a server of its own (--start-server); further arguments go to pytest, to
     both, as `test run`'s do (`-k part` narrows each). --record-durations, passed
     through, writes the browser tests' times into tests/e2e/durations.json, which
     the shards are balanced by; --steps runs the step-through tests too, which skip
-    otherwise."""
+    otherwise. --coverage measures both parts, the server the browser tests drive
+    included, and says what they covered, as `test coverage` does."""
+    env = coverage_env() if coverage else None
     codes = [
-        _pytest(unit_command(slow=slow) + list(pytest_args)),
-        _pytest(browser_command(every=True, workers=workers) + list(pytest_args)),
+        _pytest(argv + list(pytest_args), env=env)
+        for argv in all_commands(slow=slow, workers=workers, coverage=coverage)
     ]
+    if coverage:
+        try:
+            click.echo(_covered(since))
+        except click.ClickException as unread:
+            click.echo(unread.format_message(), err=True)
     raise SystemExit(_first_failure(codes))
+
+
+def _covered(since: str, markdown: bool = False) -> str:
+    measured = coverage_summary.measure(coverage_summary.change_against(since))
+    say = coverage_summary.markdown if markdown else coverage_summary.said
+    return say(measured, since)
+
+
+@test.command("coverage")
+@click.option(
+    "--since",
+    default=coverage_summary.BASE,
+    show_default=True,
+    help="The base the change is measured against: the pull request's.",
+)
+@click.option("--markdown", is_flag=True, help="As a line for a pull request's body.")
+def test_coverage(since: str, markdown: bool):
+    """What the last `test all --coverage` covered: the package's statements, and of
+    the statements this checkout adds or changes since --since, how many ran, naming
+    those that did not. It informs a pull request's reader; nothing fails on a number."""
+    click.echo(_covered(since, markdown=markdown))
 
 
 for _name, _instead in (

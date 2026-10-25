@@ -28,6 +28,8 @@ uv run apothecary test all                      # the same, then every browser t
 uv run apothecary test changed                  # while working: the unit tests and the walkthrough, then the browser files the change reaches
 uv run apothecary test all --workers 2 -k part  # the browser part on two workers; further arguments narrow both parts
 uv run apothecary test all --record-durations   # the same, the browser tests' times written into tests/e2e/durations.json
+uv run apothecary test all --coverage           # the same, measured: what of the package ran, and of what the change adds or changes
+uv run apothecary test coverage --markdown      # the last measured run's coverage, as a line for a pull request's body
 uv run apothecary test all --steps              # the same, and the step-through tests, which every other run skips
 uv run apothecary test run --slow               # the ordinary command, with full renders and accuracy benches
 uv run pytest                                   # the quick inner loop: unit tests, the walkthrough and the window manager's page; other browser tests skip
@@ -46,7 +48,12 @@ lint alone, and the tests run in CI at a version tag, so the whole suite runs he
 every merge: `apothecary test all`, on the pull request's head merged onto its base's tip,
 before it is marked ready and again before it merges if that tree has changed. Its body
 says what ran and what it said, and the merge commit says it for the tree that landed.
-`apothecary test changed` is for while working and is never the gate.
+`apothecary test changed` is for while working and is never the gate. With `--coverage`,
+`test all` measures each part, the server the browser tests drive included, and says what
+of the package's statements ran and, of those the pull request adds or changes since
+`--since` (`origin/main`), how many ran, naming the lines that did not; `apothecary test
+coverage --markdown` puts it as a line for the body. It informs the pull request's reader:
+nothing fails on a number.
 Every other browser test needs a server of its own (`--start-server`) or one named for it
 (`--base-url`); with neither it skips, and it never uses a server that happens to be
 listening. No limit is chosen by hand: in CI a browser test's cap is twice the time
