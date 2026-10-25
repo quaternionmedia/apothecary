@@ -1,0 +1,61 @@
+name: 📸 Generated docs
+
+# The doc-capture tests (tests marked `docs`) run only under --generate-docs, which
+# no other workflow passes: here they run once a week, and on demand, through
+# `apothecary docs generate`, and what they write is kept as an artifact. A schedule
+# and a manual run start from the default branch's copy of this file.
+on:
+  schedule:
+  - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    name: 📸 apothecary docs generate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+    - name: 📰 Checkout
+      uses: actions/checkout@v6
+      with:
+        submodules: true
+
+    - name: 😎 Setup uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        python-version: "3.11"
+
+    - name: 📐 Install OpenSCAD
+      run: command -v openscad || { sudo apt-get update && sudo apt-get install -y openscad; }
+
+    - name: 🚧 Install dependencies
+      run: uv sync --locked
+
+    - name: 🔖 Locked Playwright version
+      id: playwright
+      run: echo "version=$(uv run python -c 'from importlib.metadata import version; print(version("playwright"))')" >> "$GITHUB_OUTPUT"
+
+    - name: 🗃️ Cache the Playwright browsers
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+    - name: 🎭 Install Chromium
+      run: uv run playwright install --with-deps chromium
+
+    - name: 📸 Generate the docs
+      # Its own server, two scripted serial ports and a simulated printer mid-print:
+      # the same pictures on every machine, no real board.
+      run: uv run apothecary docs generate
+
+    - name: 🗂️ Keep what it wrote
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: generated-docs
+        path: docs/generated/
+        retention-days: 30

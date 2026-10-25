@@ -72,6 +72,9 @@ is not a member: it is its own Cargo project, built by its own toolchain
 | `tag-claims.yml` | A pushed `v*` tag that is lightweight, or whose annotation does not name the review, the manual test against the real runtime and what the automated gate did not cover (the corpus's seed check) |
 
 Nothing else is a gate. Formatting is not checked in CI, and neither is the Rust workspace.
+`docs-generate.yml` runs once a week and on demand, and gates nothing: `apothecary docs
+generate` runs the doc-capture tests, which nothing else runs, and keeps `docs/generated/`
+as the run's artifact.
 
 ## Commits and pull requests
 
