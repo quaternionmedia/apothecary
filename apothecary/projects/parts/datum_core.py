@@ -171,18 +171,16 @@ def create(metadata_root: Path) -> DatumCorePart:
             nozzle_diameter=0.4, layer_height=0.2, wall_thickness=3.0, tolerance=0.4
         ),
         preview_color=Color.from_hex("#3E7CB1"),
-        # Three numbers this project's own sources state differently. None is a
-        # typo to be quietly corrected: each has a document behind it, and the
-        # dashboard exists so the choice is made by looking rather than arguing.
-        # `walls` and `tolerence` were contested only by parts/datum, the
-        # single-piece tray this part supersedes. It carried 2.4 and 0.2 while
-        # citing the enclosure record for values that record does not contain.
-        # Retiring it settled both: the house constants stand unopposed, and a
-        # part that wants to differ must now say why, as clause 3 requires.
+        # A number this project's own sources state differently. It is not a
+        # typo to be quietly corrected: each value has a document behind it, and
+        # the dashboard exists so the choice is made by looking rather than
+        # arguing. `walls` and `tolerence` are the house constants and nothing
+        # disputes them; a part that differs from them says why, as the
+        # enclosure record's clause 3 requires.
         #
-        # board_y is not settled and must not look settled. Two live sources
-        # still disagree about how big the board is, and neither is the retired
-        # part -- so the dissent is cited where it actually lives now.
+        # board_y is not settled and must not look settled: two live sources
+        # disagree about how big the board is, and each is cited where a reader
+        # can open it.
         contested={
             "board_y": [
                 ContestedValue(
