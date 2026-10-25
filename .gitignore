@@ -104,3 +104,6 @@ uploads/
 # Local build and scratch output: caches, temporary folders.
 .cache/
 tmp*/
+
+# Rust
+target/

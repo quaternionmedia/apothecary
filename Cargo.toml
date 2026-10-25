@@ -1,0 +1,20 @@
+# The Rust workspace: two stubs that build and do nothing yet. See
+# docs/plans/rust-2026-10-08.md ("Planned and stubbed only"). Neither is built
+# or run by the Python suites or CI, and the wheel carries neither.
+#
+# It sits at the repository root so one `cargo check` and one Cargo.lock cover
+# every crate the repository owns, and the crates live under crates/ so the
+# members are named by a folder that holds nothing else. `exclude` keeps it
+# off parts/: a Cargo project inside a part (a Rust firmware sketch) is its own
+# root, built for its own target by its own toolchain, and Cargo would
+# otherwise refuse it for sitting inside a workspace it is not a member of.
+[workspace]
+resolver = "2"
+members = ["crates/apothecary-service", "crates/apothecary-core"]
+exclude = ["parts"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
