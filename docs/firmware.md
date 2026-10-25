@@ -159,9 +159,8 @@ several it refuses to guess.
 
 ### In the viewer: the Bench
 
-The **Bench** is the same toolchain in front of the world: a tab of the
-viewer's rail (the ring's Panels › Bench; `/firmware` opens the viewer with
-it). It holds arduino-cli and esptool as installed,
+The **Bench** is the same toolchain in front of the world: a tab beside
+Pictures (the ring's Panels › Bench; `/firmware` opens the viewer with it). It holds arduino-cli and esptool as installed,
 with **Install** or **Update** (*force* downloads it again); every other
 toolchain module under them -- Rust for the ESP32, its cargo and espflash as
 found, its problems and what it can do -- with an **Install** of its own (`POST
@@ -392,15 +391,23 @@ A pinned board has one surface in the viewer, its **Machine**
 (`apothecary/static/widgets/machine.js`), opened from the board's badge as a
 tab beside Pictures and the Bench, in front; dragged by its tab anywhere in the
 layout, it opens there again until the page's own layout is put back
-([viewer.md](viewer.md#the-windows)). A printer's Machine holds its
-state cards, temperature chart, link verbs, the control latch and pad, the bed
-reading and the print from here; a devkit's holds its port and board, the
-sketch it should run against the sketch it was heard saying (its
-`apothecary <name>: hello` banner), what changed since it was flashed, and
-its **Flashing** card. Both carry the board's **one log**: a
-printer's comms log, with the one box that asks it for a report code (poll
-traffic hidden unless asked for), or a devkit's serial output. A refusal is
-said in the log and in the status bar.
+([viewer.md](viewer.md#the-windows)). It is a focused system: its main
+window is the board's head -- its link verbs, the control latch and pad,
+⏹ E-STOP -- what the board is, its link and its state; its sections are
+windows of their own, closed until asked for, and those of the board's kind
+alone. A printer's are **Status** (hotend, bed, position, the SD print,
+endstops and filament), **Temperature** (the chart), **Print** (the print
+from here) and **Bed level**; a devkit's are **Sketch** -- what it should
+run against what it was heard saying (its `apothecary <name>: hello`
+banner), and what changed since it was flashed -- and **Flashing**. Both
+kinds have the board's **one log**, **Log**: a printer's comms log, with the
+one box that asks it for a report code (poll traffic hidden unless asked
+for), or a devkit's serial output. A section opens from ⊞ Windows or a
+stack's +, by a verb that acts on it -- Poll opens Status, Query and Listen
+a devkit's Sketch and the Log, Flash its Flashing, a print's or a slice's
+verbs Print, the bed's Bed level -- by a link to the board (below), or with
+every other one by Panels › Windows › Machine view. A refusal is said in the
+log and in the status bar.
 
 A devkit's port is opened only when asked. Opening its Machine shows what is
 known of it and opens no port; **Listen** streams what the board says into
@@ -435,10 +442,13 @@ so a replugged board is found without a reload; it never scans on a timer.
 `/firmware/monitor?port=…` opens the viewer on the site the port is pinned
 in with the Machine of the piece it is pinned to open, or, for a port
 pinned nowhere, on the default site with its Machine open; either way the
-Machine is a tab beside Pictures, as every Machine is. The address
-carries `?machine=` while a Machine is open, so a reload opens it again. `apothecary docs generate` writes all of it step by
-step against the simulated printer into
-[`generated/printer-monitor/printer-monitor.md`](generated/printer-monitor/printer-monitor.md);
+Machine is a tab beside Pictures, as every Machine is. A link is a request:
+it opens a printer's Status and Log, or a devkit's Sketch and Log. The
+address carries `?machine=` while a Machine is open, so a reload opens it,
+and those sections, again. `apothecary docs generate` writes all of it step
+by step against the simulated printer into `docs/generated/printer-monitor/`,
+which that command makes and the repository does not keep
+([docs/README.md](README.md#generated));
 [walkthrough 02](../walkthrough/02-the-bench-as-it-is.md) shows the boards
 drawn where they sit.
 
@@ -447,7 +457,7 @@ nine cells are numbered as a numeric keypad, so the digits pressed to reach
 an option are its address; each device button shows its address in its
 tooltip. Device holds Open (8), Poll (6), Flash (2), Query (4), Unpin (9),
 Rescan (3), Link (1) and, on a printer, Control (7): Open is the board's
-Machine and Flash opens it at its Flashing card -- on a printer the Flash
+Machine and Flash opens it with its Flashing -- on a printer the Flash
 cell holds its place and cannot be chosen -- and a devkit's Link ends with
 Listen and Probe. A board's verbs from the ring -- Poll, Query, Flash, the
 link's, Control's, the bed's, the print's -- go to its Machine, opened for it
@@ -475,7 +485,7 @@ pops out into a loud window of its own beside the world: its tab and frame red,
 headed with the printer it heats and moves and the time left, there whatever
 tab is in front: a real machine is armed. Every arming pops it out, from the
 Machine, the ring or another browser. Its **⇥ Put back**, or its window's ✕,
-puts it back as the last thing in the Machine's column; its **⧉ Pop out** pops
+puts it back in the Machine's window; its **⧉ Pop out** pops
 it out again, and the ring's Panels › Machine › Control pad does either. Disarmed, it
 goes.
 
