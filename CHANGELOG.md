@@ -118,7 +118,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Removed
 
-- `system`, `install`, `testrun`, `dev` and `inventory`: stubs naming what to use. ([code](apothecary/cli/retired.py))
+- `system`, `install`, `submodules`, `testrun`, `dev`, `inventory` and `photo look`: stubs naming what to use. ([code](apothecary/cli/retired.py))
 - `test setup-e2e`, `validate-e2e` and `run-e2e`, also stubs. ([code](apothecary/cli/testing.py))
 - The JSCAD viewer's install step and `package.json`; no route served it. ([code](apothecary/cli/server.py))
 - `/parts/random`, `/parts/{name}/jscad`, `/parts/{name}/files`, `/openscad/status`. ([code](apothecary/api.py))
@@ -126,7 +126,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 - `PartFiles`, the revision-graph prototype, and the uncalled parts of `apothecary.models`. ([doc](docs/models.md))
 - The tutorial; git keeps it. ([docs](docs/README.md))
 - QUICKSTART.md: README.md's *Start here* is where a person begins. ([readme](README.md))
-- The standalone parts browser and `/viewer/random`: `/viewer/parts/{name}` lands in the one viewer, on the parts library focused on that part. ([viewer](templates/fractal_viewer.html.j2))
+- The standalone parts browser and `/viewer/random`: `/viewer/parts/{name}` lands in the one viewer, on the parts library focused on that part, its Parameters open. ([viewer](templates/fractal_viewer.html.j2))
 - Legacy JSCAD viewer endpoints and three orphaned modules. ([code](apothecary/api.py))
 
 ### Fixed

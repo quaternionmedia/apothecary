@@ -406,10 +406,9 @@ Where this OpenSCAD cannot build the part at all (gridfinity on
 editor says so as it opens and **Apply is off** from the start, saying why.
 
 The bar of what is staged -- Apply, Revert, Defaults, Undo, Redo, Ghost --
-stands under the Parameters heading, and Selected shows the piece's name,
-place and facts first. While the piece is being edited -- Part › Edit asked
-for its editor, or something is staged -- the bar stands pinned at the top of
-Selected, above its body, in its own space: in view however far the parameters
+is Selected's, and Selected shows the piece's name, place and facts first.
+While the piece is being edited -- Part › Edit asked for its editor, or
+something is staged -- the bar stands pinned at the top of Selected, above its body, in its own space: in view however far the parameters
 are scrolled, and over none of them. Where Selected is squeezed short (a tab's
 panel open under it), the bar scrolls in itself rather than spill over what is
 below. Whatever control had the focus in Selected has it again when the panel
