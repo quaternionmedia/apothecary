@@ -328,7 +328,9 @@ def _plain_member(name: str) -> bool:
 
 def unpack(archive: Path, into: Path, strip: int = 0) -> None:
     """A .tar.xz or .zip, unpacked into ``into``; ``strip`` leading folders dropped,
-    as espup drops them. A member that would land outside ``into`` is refused."""
+    as espup drops them. A member that would land outside ``into`` is refused; so is
+    a link in a tarball where this Python has no ``data`` filter (before 3.11.4),
+    which alone would see where a link points."""
     into.mkdir(parents=True, exist_ok=True)
     if archive.name.endswith(".zip"):
         with zipfile.ZipFile(archive) as zf:
@@ -354,6 +356,11 @@ def unpack(archive: Path, into: Path, strip: int = 0) -> None:
         for member in tf.getmembers():
             if not _plain_member(member.name):
                 raise InstallError(f"{archive.name}: {member.name!r} leaves its folder")
+            if not hasattr(tarfile, "data_filter") and (member.issym() or member.islnk()):
+                raise InstallError(
+                    f"{archive.name}: {member.name!r} is a link, which this Python cannot "
+                    "unpack safely (3.11.4 or later can)"
+                )
             if strip:
                 parts = Path(member.name).parts[strip:]
                 if not parts:
