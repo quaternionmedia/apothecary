@@ -11,6 +11,7 @@ import re
 import httpx
 import pytest
 from playwright.sync_api import Page, expect
+from viewer_ready import settled
 
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.stl_renderer import get_renderer, params_sidecar_path
@@ -69,6 +70,40 @@ def test_double_clicking_a_piece_below_the_root_zooms_into_it(page: Page, base_u
         timeout=5000,
     )
     expect(page.locator("#breadcrumb")).to_contain_text(point["name"])
+
+
+# Where the floor grid lies, where the middle of a piece is (the site's x and y), and
+# how much of the canvas's height the piece's box takes: its corners through the camera.
+ON_THE_GRID = """(key) => {
+    const v = window.fractalViewer, b = v.renderNodeByKey[key].world_bounds;
+    const ys = [];
+    for (const x of [b.min[0], b.max[0]]) for (const y of [b.min[1], b.max[1]])
+        for (const z of [b.min[2], b.max[2]]) ys.push(v.camera.position.clone().set(x, z, y).project(v.camera).y);
+    return {
+        grid: [v.gridHelper.position.x, v.gridHelper.position.z],
+        middle: [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2],
+        share: (Math.max(...ys) - Math.min(...ys)) / 2,
+    };
+}"""
+
+
+@pytest.mark.e2e
+def test_a_part_stepped_into_stands_on_the_grid_and_fills_the_view(page: Page, base_url: str):
+    """calibration_cube stands in the parts library far from the site's origin. Stepped
+    into, it stands on the floor grid, which lies under the level in view, and is framed
+    near enough to take a good share of the view, as View › Fit frames it."""
+    _open(page, f"{base_url}/viewer/sites/parts_library")
+    page.locator("#contents-list .contents-item[data-path='calibration_cube']").dblclick()
+    page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'calibration_cube'")
+    page.evaluate("() => window.fractalViewer.waveDone")
+    settled(page)
+    seen = page.evaluate(ON_THE_GRID, "calibration_cube")
+    assert abs(seen["middle"][0]) > 100, (
+        f"the cube stands near the origin, which tests nothing: {seen}"
+    )
+    for grid, middle in zip(seen["grid"], seen["middle"], strict=True):
+        assert abs(grid - middle) < 10, f"the grid lies away from the cube: {seen}"
+    assert seen["share"] > 0.2, f"the cube takes {seen['share']:.0%} of the view's height"
 
 
 @pytest.fixture
