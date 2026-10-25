@@ -2,6 +2,8 @@
 
 import os
 import stat
+import threading
+import time
 from enum import IntEnum
 from pathlib import Path
 from unittest.mock import patch
@@ -15,11 +17,16 @@ from apothecary.meshes import bounds, read_mesh
 from apothecary.models import Vector3D
 from apothecary.projects.parts.base import BasePart
 from apothecary.projects.parts.stl_renderer import (
+    SUPERSEDED,
+    Cancellation,
     OpenSCADRenderer,
     RenderResult,
     build_stl,
     get_renderer,
+    has_summary,
     read_params_sidecar,
+    render_part,
+    scad_dependencies,
     scad_literal,
     write_params_sidecar,
 )
@@ -340,3 +347,193 @@ class TestBasePart:
         part = BasePart(name="test", source_file=scad)
 
         assert part.stl_file is None
+
+
+def _scripted_openscad(path: Path, version: str, body: str = "") -> Path:
+    """An `openscad` that reports ``version``, logs its arguments to
+    ``<path>.calls``, runs ``body`` for a render, then writes a stand-in STL
+    where `-o` says and, when asked, a summary measuring 10 x 20 x 3."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "#!/bin/sh\n"
+        f'echo "$@" >> "{path}.calls"\n'
+        f'[ "$1" = --version ] && echo "OpenSCAD version {version}" >&2 && exit 0\n'
+        f"{body}\n"
+        'for arg in "$@"; do case "$arg" in --summary-file=*)\n'
+        '  printf \'{"geometry":{"bounding_box":{"min":[0,0,0],"max":[10,20,3],'
+        '"size":[10,20,3]}}}\' > "${arg#--summary-file=}";; esac; done\n'
+        'printf "solid fake\\nendsolid fake\\n" > "$2"\n'
+    )
+    path.chmod(path.stat().st_mode | stat.S_IEXEC)
+    return path
+
+
+def _renders(executable: Path) -> list[str]:
+    log = Path(f"{executable}.calls")
+    lines = log.read_text().splitlines() if log.exists() else []
+    return [line for line in lines if line.startswith("-o")]
+
+
+class TestStoppingARender:
+    """A newer request's Cancellation stops an older render's OpenSCAD."""
+
+    def test_a_cancelled_render_stops_its_openscad_and_leaves_nothing(self, tmp_path):
+        exe = _scripted_openscad(tmp_path / "bin" / "openscad", "2021.01", "exec sleep 30")
+        scad, stl = tmp_path / "part.scad", tmp_path / "out" / "part.stl"
+        scad.write_text("cube(1);")
+        cancel = Cancellation()
+        done = {}
+        worker = threading.Thread(
+            target=lambda: done.update(
+                result=OpenSCADRenderer(str(exe)).render_stl(scad, stl, 60, cancel=cancel)
+            )
+        )
+        started = time.monotonic()
+        worker.start()
+        deadline = time.monotonic() + 10
+        while not cancel._running and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert cancel._running, "the render never started"
+        cancel.cancel()
+        worker.join(10)
+        assert not worker.is_alive()
+        result = done["result"]
+        assert result.cancelled and not result.success
+        assert result.error_message == SUPERSEDED
+        assert time.monotonic() - started < 10
+        assert not cancel._running
+        assert list(stl.parent.iterdir()) == []
+
+    def test_a_cancelled_render_starts_nothing(self, tmp_path):
+        exe = _scripted_openscad(tmp_path / "bin" / "openscad", "2021.01")
+        scad = tmp_path / "part.scad"
+        scad.write_text("cube(1);")
+        cancel = Cancellation()
+        cancel.cancel()
+        result = OpenSCADRenderer(str(exe)).render_stl(scad, tmp_path / "p.stl", cancel=cancel)
+        assert result.cancelled and _renders(exe) == []
+
+    def test_a_turned_part_does_not_start_its_second_run_once_cancelled(self, tmp_path):
+        exe = _scripted_openscad(tmp_path / "bin" / "openscad", "2021.01")
+        cancel = Cancellation()
+
+        class CancelledAfterOne(OpenSCADRenderer):
+            def render_stl(self, *args, **kwargs):
+                result = super().render_stl(*args, **kwargs)
+                cancel.cancel()
+                return result
+
+        result = render_part(
+            _part(tmp_path),
+            tmp_path / "out.stl",
+            renderer=CancelledAfterOne(str(exe)),
+            rotation=[90, 0, 0],
+            cancel=cancel,
+        )
+        assert result.cancelled
+        assert len(_renders(exe)) == 1
+        assert not (tmp_path / "out.stl").exists()
+
+
+class TestMeasuredBounds:
+    """The bounding box OpenSCAD measured, where its summary says it."""
+
+    def test_an_openscad_with_a_summary_is_asked_for_one(self, tmp_path):
+        exe = _scripted_openscad(tmp_path / "bin" / "openscad", "2026.09.27")
+        scad = tmp_path / "part.scad"
+        scad.write_text("cube([10, 20, 3]);")
+        result = OpenSCADRenderer(str(exe)).render_stl(scad, tmp_path / "out" / "part.stl")
+        assert result.success
+        assert result.measured == {"min": [0, 0, 0], "max": [10, 20, 3], "size": [10, 20, 3]}
+        assert "--summary=all" in _renders(exe)[0]
+        # The summary is read and removed; only the STL is left.
+        assert [p.name for p in (tmp_path / "out").iterdir()] == ["part.stl"]
+
+    def test_2021_01_is_not_asked_and_measures_nothing(self, tmp_path):
+        exe = _scripted_openscad(tmp_path / "bin" / "openscad", "2021.01")
+        scad = tmp_path / "part.scad"
+        scad.write_text("cube(1);")
+        result = OpenSCADRenderer(str(exe)).render_stl(scad, tmp_path / "part.stl")
+        assert result.success and result.measured is None
+        assert "--summary" not in _renders(exe)[0]
+
+    def test_a_turned_part_keeps_the_upright_measurement(self, tmp_path):
+        """Declared bounds are the upright SCAD's (`apothecary parts verify`)."""
+        exe = _scripted_openscad(
+            tmp_path / "bin" / "openscad",
+            "2026.09.27",
+            # The turning run measures something else, which is not kept.
+            'case "$*" in *rotate.scad*) for arg in "$@"; do case "$arg" in '
+            '--summary-file=*) printf \'{"geometry":{"bounding_box":{"min":[0,0,0],'
+            '"max":[1,1,1],"size":[1,1,1]}}}\' > "${arg#--summary-file=}";; esac; done; '
+            'printf "solid t\\nendsolid t\\n" > "$2"; exit 0;; esac',
+        )
+        result = render_part(
+            _part(tmp_path),
+            tmp_path / "out.stl",
+            renderer=OpenSCADRenderer(str(exe)),
+            rotation=[90, 0, 0],
+        )
+        assert result.success
+        assert result.measured["size"] == [10, 20, 3]
+
+    @needs_openscad
+    def test_the_installed_openscad_measures_a_cube_where_it_can(self, tmp_path):
+        if not has_summary(get_renderer().openscad_path):
+            pytest.skip("this OpenSCAD writes no summary")
+        scad = tmp_path / "part.scad"
+        scad.write_text("translate([1, 2, 3]) cube([10, 20, 3]);")
+        result = get_renderer().render_stl(scad, tmp_path / "part.stl")
+        assert result.success, result.stderr
+        assert result.measured == {"min": [1, 2, 3], "max": [11, 22, 6], "size": [10, 20, 3]}
+
+
+class TestIncludes:
+    """What a SCAD reads is part of what its STL is built from."""
+
+    def test_includes_uses_and_imports_are_followed(self, tmp_path):
+        (tmp_path / "lib").mkdir()
+        (tmp_path / "lib" / "a.scad").write_text("include <deeper.scad>\n")
+        (tmp_path / "lib" / "deeper.scad").write_text("module d() cube(1);\n")
+        (tmp_path / "b.scad").write_text("module b() cube(1);\n")
+        (tmp_path / "mesh.stl").write_text("solid m\nendsolid m\n")
+        main = tmp_path / "main.scad"
+        main.write_text(
+            "include <lib/a.scad>\nuse <b.scad>\n// include <commented.scad>\n"
+            '/* use <block.scad> */\nimport("mesh.stl");\nimport(file = "other.stl");\n'
+            "include <missing.scad>\n"
+        )
+        assert scad_dependencies(main) == {
+            "main.scad:lib/a.scad": (tmp_path / "lib" / "a.scad").resolve(),
+            "a.scad:deeper.scad": (tmp_path / "lib" / "deeper.scad").resolve(),
+            "main.scad:b.scad": (tmp_path / "b.scad").resolve(),
+            "main.scad:mesh.stl": (tmp_path / "mesh.stl").resolve(),
+            "main.scad:other.stl": None,
+            "main.scad:missing.scad": None,
+        }
+
+    def test_an_include_found_on_openscadpath(self, tmp_path, monkeypatch):
+        library = tmp_path / "libraries"
+        library.mkdir()
+        (library / "shared.scad").write_text("module s() cube(1);\n")
+        main = tmp_path / "part" / "main.scad"
+        main.parent.mkdir()
+        main.write_text("use <shared.scad>\n")
+        monkeypatch.setenv("OPENSCADPATH", str(library))
+        assert scad_dependencies(main) == {
+            "main.scad:shared.scad": (library / "shared.scad").resolve()
+        }
+
+    def test_an_edited_include_rebuilds_the_stl(self, tmp_path):
+        (tmp_path / "dims.scad").write_text("depth = 20;\n")
+        (tmp_path / "block.scad").write_text(
+            "include <dims.scad>\nx = 10;\ncube([x, depth, 30]);\n"
+        )
+        part, fake = _part(tmp_path), FakeRenderer()
+        build_stl(part, renderer=fake)
+        assert build_stl(part, renderer=fake).skipped == "fresh"
+
+        later = part.get_stl_output_path().stat().st_mtime + 5
+        os.utime(tmp_path / "dims.scad", (later, later))
+        assert build_stl(part, renderer=fake).skipped is None
+        assert len(fake.calls) == 2

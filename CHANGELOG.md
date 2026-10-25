@@ -88,6 +88,8 @@ One line per change, each with a link to where it is described. The format follo
 - `GET /jobs` by site, machine and kind, `GET /jobs/{id}`, and `GET /jobs/choices` for what a job on a machine can name. ([code](apothecary/routes/jobs.py))
 - The Print card names the part a print makes, from the site its printer is pinned in, and its history is the printer's jobs. ([doc](docs/firmware.md))
 - Site lists the jobs of the site's machines, the running ones first; a row selects its machine and opens it. ([test](tests/e2e/test_printer_ui.py))
+- A part's renders are kept in a cache of variants by what made them; Apply draws one in its own tab, whose address keeps it, marked apart from the saved part, and the defaults again render nothing. ([page](walkthrough/14-designing-a-part.md))
+- The part editor starts from what is drawn, checks a staged set once the controls rest, shows OpenSCAD's errors by line and the measured bounds beside the declared ones; Part › Defaults stages a part's own numbers. ([page](walkthrough/14-designing-a-part.md))
 
 ### Changed
 

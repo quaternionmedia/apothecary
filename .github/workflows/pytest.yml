@@ -111,7 +111,7 @@ jobs:
       run: uv run pytest tests/e2e --start-server -q --shard ${{ env.SHARD }}/3
 
     - name: 📝 The committed walkthrough is the one this run wrote
-      # The browser tests write walkthrough pages 11 and 12.
+      # The browser tests write walkthrough pages 11, 12, 14 and 15.
       run: git diff --exit-code -- 'walkthrough/*.md'
 
   e2e-2:
