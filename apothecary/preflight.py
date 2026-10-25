@@ -51,7 +51,7 @@ LOCAL_DIFFERENCES: Dict[str, Difference] = {
             "write; the first step, the stacked-draft check, runs here through `gh`"
         ),
         covered_by=(
-            "`python .github/qm-seed/check_pr_voice.py --body-file BODY --contributor LOGIN` "
+            "`python governance/qm/project-seed/ci/check_pr_voice.py --body-file BODY --contributor LOGIN` "
             "on a pull request's body before it is posted."
         ),
     ),

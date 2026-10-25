@@ -14,7 +14,7 @@
 # An editor named in prose, a process somebody saw, or a quotation is found by
 # a reader, and the check's own output says so.
 #
-# WHAT THIS FAILS, AND WHO CAN FIX IT
+# What this fails, and who can fix it
 #
 # It fails on a tracked file carrying one of those shapes, and prints the
 # finding redacted -- enough to recognise, never enough to use, because a
@@ -25,13 +25,6 @@
 #
 # It reads `git ls-files` and the tracked files, and nothing else: no host,
 # no network, no gitignored companion. That is what lets it run on a runner.
-
-# COPIED from the corpus's main at df1cb51 (project-seed/ci/leak-check.yml),
-# with one change: the script runs from .github/qm-seed/, which holds
-# project-seed/ci/check_leaks.py as it is at that commit, byte for byte.
-# governance/qm is pinned to project/apothecary, whose seed carries no leak
-# check. At a pin whose seed carries it, this file is the seed's, verbatim,
-# and .github/qm-seed/check_leaks.py is removed.
 
 name: Leak check
 
@@ -52,13 +45,19 @@ jobs:
   leaks:
     runs-on: ubuntu-latest
     steps:
+      # Only the governance submodule: `submodules: true` is all-or-nothing, and
+      # a project with a private submodule the runner has no credential for
+      # fails the checkout before the check runs.
       - uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: false
+
+      - name: Check out the governance submodule only
+        run: git submodule update --init --depth 1 governance/qm
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Nothing committed names a person, a machine, or a private conversation
-        run: python .github/qm-seed/check_leaks.py
+        run: python governance/qm/project-seed/ci/check_leaks.py
