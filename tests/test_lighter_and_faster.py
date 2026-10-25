@@ -133,6 +133,18 @@ class TestServedLighter:
         plain = client.get("/parts", headers={"Accept-Encoding": "identity"})
         assert "content-encoding" not in plain.headers
 
+    def test_the_pages_modules_are_asked_again_on_every_load(self):
+        """With no Cache-Control a browser keeps a script on a guess, and may run an older
+        module beside a newer page; /static says no-cache, and a module unchanged since the
+        browser's copy is answered 304."""
+        client = TestClient(app)
+        js = client.get("/static/picture_marks.js")
+        assert js.status_code == 200 and js.headers.get("cache-control") == "no-cache"
+        again = client.get(
+            "/static/picture_marks.js", headers={"If-None-Match": js.headers["etag"]}
+        )
+        assert again.status_code == 304 and again.headers.get("cache-control") == "no-cache"
+
     def test_locality_stays_outermost(self):
         """GZip is inside LocalOnly: a request from elsewhere is still refused first."""
         from apothecary.stays_local import LocalOnly

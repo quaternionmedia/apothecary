@@ -967,8 +967,14 @@
         const WALL_OPACITY = 0.25;
         const HANDLE_SIZE = 0.6;      // the move arrows, against TransformControls' own 1
         const HANDLE_LIGHTNESS = 0.55; // and their opacity, against its own
-        // A point of the site's frame (z up) in three.js's (y up).
-        const sceneAt = (x, y, z) => new THREE.Vector3(x, z, y);
+        // A point of the site's frame (z up) in three.js's (y up): a quarter turn about
+        // x, the site's y running into the screen along three.js's -z. A turn, not a
+        // mirror: what stands on the site's right stands on the scene's right.
+        const sceneAt = (x, y, z) => new THREE.Vector3(x, z, -y);
+        // A point of three.js's frame back in the site's, as [x, y, z].
+        const siteAt = (v) => [v.x, -v.z, v.y];
+        // A box of three.js's frame (a Box3) as the site's bounds.
+        const siteBox = (box) => ({ min: [box.min.x, -box.max.z, box.min.y], max: [box.max.x, -box.min.z, box.max.y] });
         // A selected camera's turn ring and tilt arc, about its lens, in the move
         // arrows' own units: they keep the arrows' size on screen however near the
         // view is, the ring just past the arrows' heads.
@@ -1046,38 +1052,19 @@
                 : (statusColor ?? (node.category ? colorForCategory(node.category) : DEFAULT_COLOR));
         }
 
-        // STLLoader hands back raw OpenSCAD-space geometry: apothecary's own
-        // (x, y, z) with z-up, completely untouched. Every other object in
-        // this scene -- boxes, primitives, camera, grid -- is positioned
-        // using the (x, z, y) swap documented on boxFromBounds, and that
-        // swap is a reflection, not a rotation (there is no rotation that
-        // swaps two axes while leaving the third fixed -- the transform's
-        // determinant is -1). Left uncorrected, a loaded STL's own "up"
-        // stays pointed along its OpenSCAD z-axis, which lands on three.js's
-        // depth axis instead of its up axis, a quarter turn out. Applying the
-        // same swap here keeps a real STL
-        // mesh's internal features (e.g. a wall's off-center door cutout) at
-        // the same place, facing the same way, as the placeholder box it
-        // replaces -- but a reflection also inverts triangle winding, so
-        // every triangle's vertex order is reversed too, keeping the
-        // outward-facing normals computeVertexNormals derives afterward
-        // correct instead of inside-out.
-        function applyScadAxisSwap(geometry) {
+        // STLLoader hands back an STL as OpenSCAD wrote it: the site's (x, y, z), z
+        // up. Each vertex is turned into three.js's frame as sceneAt turns a point,
+        // so a mesh's features (a wall's door, a cube's notch, its engraved text)
+        // stand where its placeholder box stood and read as OpenSCAD draws them. A
+        // turn keeps each triangle's winding, so the normals computeVertexNormals
+        // derives face outward.
+        function applyScadAxisTurn(geometry) {
             const position = geometry.attributes.position;
             for (let i = 0; i < position.count; i++) {
                 const y = position.getY(i);
                 const z = position.getZ(i);
                 position.setY(i, z);
-                position.setZ(i, y);
-            }
-            for (let i = 0; i + 2 < position.count; i += 3) {
-                for (const getSet of [['getX', 'setX'], ['getY', 'setY'], ['getZ', 'setZ']]) {
-                    const [get, set] = getSet;
-                    const b = position[get](i + 1);
-                    const c = position[get](i + 2);
-                    position[set](i + 1, c);
-                    position[set](i + 2, b);
-                }
+                position.setZ(i, -y);
             }
             position.needsUpdate = true;
         }
@@ -1363,6 +1350,7 @@
                 this.gridHelper = new THREE.GridHelper(2000, 40, 0x444444, 0x2a2a2a);
                 this.scene.add(this.gridHelper);
                 this.axesHelper = new THREE.AxesHelper(150);
+                this.axesHelper.rotation.x = -Math.PI / 2;  // the site's axes (updateHelpersForSpan)
                 this.scene.add(this.axesHelper);
 
                 // What stands in front of the world (anchors.js) and what a
@@ -2190,21 +2178,21 @@
                 this.compoundOverlayByKey = {};
             }
 
-            // Axis convention throughout: apothecary (x, y, z) with z-up maps
-            // to three.js (x, z, y) with y-up.
+            // A box of the site's frame as three.js draws it: its size along three.js's
+            // x, y and z, and its centre where sceneAt puts it.
             boxFromBounds(bounds) {
                 const size = [
                     bounds.max[0] - bounds.min[0],
                     bounds.max[2] - bounds.min[2],
                     bounds.max[1] - bounds.min[1],
                 ];
-                const center = [
-                    (bounds.min[0] + bounds.max[0]) / 2,
-                    (bounds.min[2] + bounds.max[2]) / 2,
-                    (bounds.min[1] + bounds.max[1]) / 2,
-                ];
+                const center = sceneAt(...bounds.min.map((v, i) => (v + bounds.max[i]) / 2)).toArray();
                 return { size, center };
             }
+
+            // The site's frame and three.js's, for what reads the scene from outside it.
+            sceneAt(x, y, z) { return sceneAt(x, y, z); }
+            siteAt(v) { return siteAt(v); }
 
             // A node with no footprint (most Substructures/Features -- they
             // carry geometry but no spatial metadata) still needs
@@ -2450,7 +2438,7 @@
                 const centerApY = origin ? node.position.y + origin[1] + bvApY / 2 : (bounds.min[1] + bounds.max[1]) / 2;
                 const baseApZ = origin ? node.position.z + origin[2] : bounds.min[2];
                 const size = [bvApX, bvApZ, bvApY];
-                const center = [centerApX, baseApZ + bvApZ / 2, centerApY];
+                const center = sceneAt(centerApX, centerApY, baseApZ + bvApZ / 2).toArray();
 
                 let mesh = existing;
                 if (!mesh) {
@@ -2485,24 +2473,27 @@
                 const maxSpan = Math.max(spanX, spanY, spanZ);
 
                 const targetX = (minX + maxX) / 2;
-                const targetYAp = (minY + maxY) / 2;  // apothecary Y (depth) -> three Z
-                const targetZAp = (minZ + maxZ) / 2;  // apothecary Z (height) -> three Y
+                const targetYAp = (minY + maxY) / 2;
+                const targetZAp = (minZ + maxZ) / 2;
                 // As near as Part › View › Fit comes (frameBox), so a small part stepped
                 // into fills the view rather than standing small in its middle.
                 const distance = Math.max(30, maxSpan * 1.8);
 
-                this.orbitControls.target.set(targetX, targetZAp, targetYAp);
-                this.camera.position.set(
+                // Seen from the site's front right, above: its +x to the right, its +y
+                // away from the view.
+                const target = sceneAt(targetX, targetYAp, targetZAp);
+                this.orbitControls.target.copy(target);
+                this.camera.position.copy(sceneAt(
                     targetX + distance * 0.7,
-                    targetZAp + distance * 0.55,
-                    targetYAp + distance * 0.7
-                );
+                    targetYAp - distance * 0.7,
+                    targetZAp + distance * 0.55
+                ));
                 this.reach = { span: maxSpan, distance, fitSpan: null };
                 this.applyReach();
                 this.orbitControls.update();
 
                 this.updateCameraClipping(maxSpan);
-                this.updateHelpersForSpan(maxSpan, { x: targetX, z: targetYAp });
+                this.updateHelpersForSpan(maxSpan, { x: target.x, z: target.z });
             }
 
             // How near and how far the camera may dolly at this level: Settings'
@@ -2567,11 +2558,13 @@
                 this.scene.add(this.gridHelper);
 
                 // The axes stand at the site's origin while it is on the grid, else at the
-                // grid's middle, so they are in view with what they orient.
+                // grid's middle, so they are in view with what they orient. They are the
+                // site's, turned as sceneAt turns it: red x, green y, blue z up.
                 const originOnGrid = Math.abs(gridX) <= half && Math.abs(gridZ) <= half;
                 this.scene.remove(this.axesHelper);
                 disposeDeep(this.axesHelper);
                 this.axesHelper = new THREE.AxesHelper(Math.max(20, span * 0.4));
+                this.axesHelper.rotation.x = -Math.PI / 2;
                 if (!originOnGrid) this.axesHelper.position.set(gridX, 0, gridZ);
                 this.scene.add(this.axesHelper);
             }
@@ -2889,13 +2882,15 @@
 
             isCameraNode(node) { return !!node && node.category === 'camera' && node.part_ref === 'webcam'; }
 
-            // A camera's rotation in three.js's frame: its right, back and up --
-            // the webcam's own across, lens-to-back and up-the-picture -- in the
-            // site's frame (projection.py's axes), axes swapped as everything is.
+            // A camera's rotation in three.js's frame: its right, back and the
+            // picture's down -- the webcam's own across, lens-to-back and
+            // down-the-picture, a right-handed frame as the site's is -- in the
+            // site's frame (projection.py's axes), turned as everything is. The body
+            // is the same either way up the picture.
             cameraQuaternion(turn, tilt) {
                 const { right, down, forward } = cameraAxes(turn, tilt);
-                const s = ([x, y, z]) => new THREE.Vector3(x, z, y);
-                const m = new THREE.Matrix4().makeBasis(s(right), s(forward.map((v) => -v)), s(down.map((v) => -v)));
+                const s = ([x, y, z]) => sceneAt(x, y, z);
+                const m = new THREE.Matrix4().makeBasis(s(right), s(forward.map((v) => -v)), s(down));
                 return new THREE.Quaternion().setFromRotationMatrix(m);
             }
 
@@ -3011,10 +3006,10 @@
                 const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, lens);
                 const hit = this.raycaster.ray.intersectPlane(plane, new THREE.Vector3());
                 if (!hit) return null;
-                const v = hit.sub(lens);  // three.js: (x, z up, y)
-                if (kind === 'turn') return Math.atan2(v.z, v.x) * 180 / Math.PI;
-                const along = v.x * -Math.sin(t) + v.z * Math.cos(t);
-                return Math.atan2(along, -v.y) * 180 / Math.PI;
+                const [x, y, z] = siteAt(hit.sub(lens));
+                if (kind === 'turn') return Math.atan2(y, x) * 180 / Math.PI;
+                const along = x * -Math.sin(t) + y * Math.cos(t);
+                return Math.atan2(along, -z) * 180 / Math.PI;
             }
             onCameraHandleDown(event) {
                 if (event.button !== 0) return;
@@ -5455,7 +5450,7 @@
                 if (this.compareMeshes.length) {
                     const box = new THREE.Box3();
                     for (const m of this.compareMeshes) box.expandByObject(m);
-                    this.frameBox({ min: [box.min.x, box.min.z, box.min.y], max: [box.max.x, box.max.z, box.max.y] });
+                    this.frameBox(siteBox(box));
                 }
                 this.invalidate();
             }
@@ -5587,7 +5582,7 @@
                 if (mesh) {
                     const box = new THREE.Box3().setFromObject(mesh);
                     // three.js's (x, y up, z) back to the site's (x, y, z up).
-                    if (!box.isEmpty()) bounds = { min: [box.min.x, box.min.z, box.min.y], max: [box.max.x, box.max.z, box.max.y] };
+                    if (!box.isEmpty()) bounds = siteBox(box);
                 }
                 bounds ??= this.boundsFor(this.renderNodeByKey[key], 0);
                 this.frameBox(bounds);
@@ -6207,18 +6202,18 @@
                 }
             }
 
-            // Axis convention: apothecary (x, y, z) z-up maps to three.js
-            // (x, z, y) y-up -- addOrUpdateMesh-equivalents apply this
-            // forward; this is its inverse (drag position -> apothecary).
+            // Where a drag has put the selection, back in the site's frame (siteAt):
+            // the node's position, which the layout sends.
             onGizmoDrag() {
                 if (!this.selectedName || this.focusPath.length !== 0) return;
                 const node = this.renderNodeByKey[this.selectedName];
                 const mesh = this.meshByName[this.selectedName];
                 if (!node || !mesh || !node.footprint) return;
+                const [atX, atY, atZ] = siteAt(mesh.position);
                 // A camera is dragged by its lens, which its mesh stands at: its
                 // pyramid, its live video and its handles follow as it goes.
                 if (mesh.userData.camera) {
-                    Object.assign(node.position, { x: mesh.position.x, y: mesh.position.z, z: mesh.position.y });
+                    Object.assign(node.position, { x: atX, y: atY, z: atZ });
                     this.recomputeWorldBounds(node);
                     this.pictureMarks.posePreview(mesh.userData.camera, { position: [node.position.x, node.position.y, node.position.z] });
                     this.showCameraHandles(mesh.userData.camera);
@@ -6233,9 +6228,9 @@
                 const halfExtentApY = (node.footprint.max[1] - node.footprint.min[1]) / 2;
                 const halfExtentApZ = (node.footprint.max[2] - node.footprint.min[2]) / 2;
 
-                const worldMinApX = mesh.position.x - halfExtentApX;
-                const worldMinApY = mesh.position.z - halfExtentApY;
-                const worldMinApZ = mesh.position.y - halfExtentApZ;
+                const worldMinApX = atX - halfExtentApX;
+                const worldMinApY = atY - halfExtentApY;
+                const worldMinApZ = atZ - halfExtentApZ;
 
                 // In place: `node` is renderNodeByKey's copy, and its position is
                 // the tree's own object, which submitLayout sends. A new object
@@ -6636,7 +6631,7 @@
                 if (!bounds) return null;
                 const focus = this.focusPath.join('.');
                 if (focus && path !== focus && !path.startsWith(focus + '.') && !focus.startsWith(path + '.')) return null;
-                return new THREE.Vector3((bounds.min[0] + bounds.max[0]) / 2, bounds.max[2], (bounds.min[1] + bounds.max[1]) / 2);
+                return sceneAt((bounds.min[0] + bounds.max[0]) / 2, (bounds.min[1] + bounds.max[1]) / 2, bounds.max[2]);
             }
 
             // One badge for every pinned, connected board, at the board's own spot
@@ -7637,13 +7632,12 @@
                 if (node.primitive.type === 'cube') {
                     geometry = new THREE.BoxGeometry(size[0], size[1], size[2]);
                 } else if (node.primitive.type === 'cylinder') {
-                    // OpenSCAD cylinders are Z-aligned; after the standing
-                    // apothecary(z-up) -> three(y-up) axis swap used
-                    // everywhere else, that's three's own Y axis -- no extra
-                    // rotation needed. Its facets are OpenSCAD's $fn when it
-                    // names one (a wedge is three), the first at +X as OpenSCAD
-                    // puts it: three.js starts a cylinder's circle at +Z, so a
-                    // quarter turn.
+                    // OpenSCAD cylinders are Z-aligned; turned into three.js's
+                    // frame as everything is (sceneAt), that's three's own Y
+                    // axis -- no extra rotation needed. Its facets are
+                    // OpenSCAD's $fn when it names one (a wedge is three), the
+                    // first at +X as OpenSCAD puts it: three.js starts a
+                    // cylinder's circle at +Z, so a quarter turn.
                     const p = node.primitive;
                     geometry = new THREE.CylinderGeometry(p.r2, p.r1, p.h, p.fn || 32, 1, false, Math.PI / 2);
                 } else if (node.primitive.type === 'sphere') {
@@ -7701,7 +7695,7 @@
                     this.stlLoader.load(
                         url,
                         (geometry) => {
-                            applyScadAxisSwap(geometry);
+                            applyScadAxisTurn(geometry);
                             geometry.computeVertexNormals();
                             geometry.center();
                             const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ ...FACE_BEHIND_ITS_EDGES, flatShading: false }));

@@ -63,8 +63,8 @@ PROJECT = """([view, fx, fy]) => {
 # Look down from `height` mm over (x, y, z) in the site's frame, from a little in front.
 LOOK_DOWN = """([x, y, z, height]) => {
     const v = window.fractalViewer;
-    v.orbitControls.target.set(x, z, y);
-    v.camera.position.set(x, z + height, y - height * 0.05);
+    v.orbitControls.target.copy(v.sceneAt(x, y, z));
+    v.camera.position.copy(v.sceneAt(x, y - height * 0.05, z + height));
     v.orbitControls.update();
 }"""
 
