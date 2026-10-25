@@ -411,6 +411,7 @@ class TestGridfinityOpenSCAD:
         self, installed, monkeypatch, tmp_path, capsys
     ):
         import asyncio
+        from concurrent.futures import ThreadPoolExecutor
 
         from apothecary import api
         from apothecary.projects.registry import ProjectInfo
@@ -429,7 +430,10 @@ class TestGridfinityOpenSCAD:
             type(GRIDFINITY), "get_stl_output_path", lambda self: tmp_path / "gridfinity.stl"
         )
         monkeypatch.delenv("APOTHECARY_SKIP_STL_GENERATION", raising=False)
-        asyncio.run(api._generate_missing_stls())
+        # A loop of its own, on a thread of its own: a browser test earlier in the
+        # same process can leave Playwright's loop running on this one.
+        with ThreadPoolExecutor(1) as thread:
+            thread.submit(asyncio.run, api._generate_missing_stls()).result()
         assert "skipped: needs OpenSCAD" in capsys.readouterr().out
         assert _calls(stable) == ["--version"]
         assert not (tmp_path / "gridfinity.stl").exists()

@@ -43,7 +43,10 @@ def _stl_bounds(stl_path: Path):
 
 @click.group()
 def parts():
-    """Commands for part wrappers."""
+    """The parts library: list, describe, render, build, verify and import parts.
+
+    docs/parts-authoring.md says how to add one.
+    """
 
 
 def _is_stub(item: ProjectInfo) -> bool:
@@ -60,8 +63,15 @@ def _is_stub(item: ProjectInfo) -> bool:
 
 
 @parts.command("list")
-@click.option("--json-out/--text", default=False)
+@click.option("--json-out/--text", default=False, help="Every field of each, as JSON.")
 def parts_list(json_out: bool):
+    """List the registered parts, each with the wrapper that describes it.
+
+    A part is a folder under parts/ holding a SCAD named after it, at any depth
+    of category folders (parts/boards/arduino_uno). Its wrapper is a Python
+    module, or the described-part importer for a part.json beside the SCAD, or
+    None; a part.json tagged stub is marked as one.
+    """
     items = [p for p in scan_projects(ROOT) if p.kind == "part"]
     if json_out:
         click.echo(json.dumps([p.to_json() for p in items], indent=2))
@@ -203,10 +213,13 @@ def parts_import(
     )
 
 
-@parts.command("info")
+@parts.command("info", short_help="Everything about one part: its files, parameters and bounds.")
 @click.argument("name")
-@click.option("--json-out/--text", default=False)
+@click.option("--json-out/--text", default=False, help="As JSON, for a script.")
 def parts_info(name: str, json_out: bool):
+    """Everything about one part: its SCAD, category, tags, description, README,
+    parameters, the bounds it declares at its defaults, and the parameters its
+    STL on disk was built with."""
     mod = _load_part_wrapper(name)
     part = mod.DEFAULT
     # A consumer sizing an assembly around this part needs the envelope, not
@@ -259,7 +272,7 @@ def parts_verify(
 ):
     """Check a part's declared bounds against the geometry OpenSCAD produces.
 
-    A wrapper's ``get_bounds`` is hand-written Python beside hand-written
+    A wrapper's get_bounds is hand-written Python beside hand-written
     OpenSCAD, and nothing has been keeping the two honest. Anything consuming
     the declared envelope -- catalog layout, an assembly sizing itself around
     the part -- is wrong by exactly the amount they have drifted apart.
@@ -430,7 +443,7 @@ def parts_checklist(name, check_all, build_volume, tolerance):
         raise SystemExit(1)
 
 
-@parts.command("render")
+@parts.command("render", short_help="Write a SCAD file for one part, at given parameters.")
 @click.argument("name")
 @click.option("--params-json", type=str, help="JSON string of parameter overrides")
 @click.option(
@@ -438,8 +451,20 @@ def parts_checklist(name, check_all, build_volume, tolerance):
     type=click.Path(exists=True, dir_okay=False),
     help="Jinja2 template file for include",
 )
-@click.option("--output", "-o", type=click.Path(dir_okay=False), default="part.scad")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(dir_okay=False),
+    default="part.scad",
+    show_default=True,
+    help="The SCAD file to write; never the part's own source.",
+)
 def parts_render(name: str, params_json: str | None, template: str | None, output: str):
+    """Write a SCAD file for one part: one that includes its source, through a
+    Jinja2 template (templates/part.include.scad.j2 unless --template names
+    another), or, for a part built by Python geometry, that geometry's SCAD at
+    the parameters given. No STL is built: `apothecary parts generate-stl` builds
+    one."""
     mod = _load_part_wrapper(name)
     part = mod.DEFAULT
     params_data = {}
@@ -526,6 +551,7 @@ def parts_generate_stl(
     them. An STL newer than its SCAD, what that SCAD includes, and its
     wrapper, rendered with the same parameters, is kept unless --force is given.
 
+    \b
     Examples:
         apothecary parts generate-stl calibration_cube
         apothecary parts generate-stl --all
@@ -538,8 +564,8 @@ def parts_generate_stl(
     renderer = chosen or get_renderer()
     if not renderer.is_available:
         raise click.ClickException(
-            "OpenSCAD not found. Please install OpenSCAD to generate STL files.\n"
-            "Download from: https://openscad.org/downloads.html"
+            "OpenSCAD not found: `apothecary openscad install` installs one, with Manifold, "
+            "or put the `openscad` CLI on PATH."
         )
 
     if generate_all and param_pairs:
@@ -607,7 +633,8 @@ def parts_elephant_walk(output: Path | None, gap: int, ensure_stl: bool):
     Note: This imports STL files, not SCAD modules, for reliable rendering
     regardless of how individual parts define their modules.
 
-    Example:
+    \b
+    Examples:
         apothecary parts elephant-walk -o preview.scad
         apothecary parts elephant-walk --gap 20
     """

@@ -31,10 +31,16 @@ import sys
 
 import pytest
 from playwright.sync_api import Page, expect
-from viewer_ready import settled
+from viewer_ready import (
+    MARKED_LINE_FIRST,
+    STAGE_BAR_AT_THE_TOP,
+    by_hand,
+    settled,
+    site_folded,
+)
 
 from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
-from apothecary.projects.parts.stl_renderer import get_renderer, params_sidecar_path
+from apothecary.projects.parts.stl_renderer import params_sidecar_path
 
 PART = "calibration_cube"
 TOO_BIG = 60.0
@@ -110,10 +116,11 @@ WEDGES = (
 
 
 @pytest.fixture(scope="module")
-def loop_url(base_url, start_server, tmp_path_factory):
-    """A server of this module's own, whose OpenSCAD refuses a cube too big."""
-    renderer = get_renderer()
-    if not renderer.is_available:
+def loop_url(base_url, start_server, every_stl_built, tmp_path_factory):
+    """A server of this module's own, whose OpenSCAD -- the one every server runs, not a
+    snapshot of the person's -- refuses a cube too big."""
+    real = every_stl_built()["path"]
+    if not real:
         pytest.skip("OpenSCAD not installed")
     folder = tmp_path_factory.mktemp("part-loop")
     openscad = folder / "openscad"
@@ -123,7 +130,7 @@ def loop_url(base_url, start_server, tmp_path_factory):
             too_big=TOO_BIG,
             scad=CUBE.source_file.name,
             line=SIZE_LINE,
-            real=str(renderer.openscad_path),
+            real=real,
         )
     )
     openscad.chmod(openscad.stat().st_mode | stat.S_IEXEC)
@@ -233,6 +240,31 @@ def _mesh(page: Page) -> dict:
     return page.evaluate(MESH, PART)
 
 
+# What the cube's pictures are framed by: the view brought to it by hand, Shift+drag and
+# the wheel, to about this far from its middle (mm).
+NEAR = 110
+
+
+def _framed_on_the_cube(page: Page) -> None:
+    by_hand(page, PART, distance=NEAR)
+
+
+def _envelope(page: Page) -> str:
+    """What the editor says of the part's size: the envelope it declares, and what is
+    drawn measures. It stands below the SCAD, out of a picture of the sizes, so a step
+    that names it carries its words."""
+    return " ".join(page.locator("#part-envelope").inner_text().split())
+
+
+def _shown_whole(page: Page, show) -> None:
+    """``show()``, the picture taken with Site folded to its title by its ▾, so Selected
+    has the rail: the editor from its stage bar down, its sizes and, under them, what
+    the STL measures beside what the part declares."""
+    with site_folded(page):
+        page.evaluate(STAGE_BAR_AT_THE_TOP)
+        show()
+
+
 def _side(page: Page) -> float:
     return max(_mesh(page)["size"])
 
@@ -329,12 +361,16 @@ def _a_round(
     # The slider was dragged through every value; it was checked once, at rest.
     assert len(validations) == 1, validations
     if story:
-        story.shows(
-            "A size dragged is checked once the slider rests",
-            f"The size slider dragged through {len(values)} values without a pause: one "
-            "check, once it rests, against the part's own model, and the envelope the "
-            "staged set would produce. Nothing is rendered yet; Apply is the next step.",
-            shown=summary.inner_text(),
+        said = summary.inner_text()
+        _shown_whole(
+            page,
+            lambda: story.shows(
+                "A size dragged is checked once the slider rests",
+                f"The size slider dragged through {len(values)} values without a pause: one "
+                "check, once it rests, against the part's own model, and the envelope the "
+                "staged set would produce. Nothing is rendered yet; Apply is the next step.",
+                shown=said,
+            ),
         )
 
     answer = _apply(page, from_the_ring)
@@ -349,13 +385,18 @@ def _a_round(
     assert _variant_in_address(page) == answer.json()["variant"]
     _shows_variant(page)
     if story:
-        story.shows(
-            "Apply draws the variant, marked as not saved",
-            "Apply: rendered into the cache of variants and drawn in this tab at the size "
-            "staged, and measured beside the envelope the part declares. The editor's amber "
-            "edge and its words, and an amber dot over the part in the world, say it is an "
-            "applied variant and not the saved part; the status line says so too.",
-            shown=_status(page).inner_text(),
+        said = f"{_status(page).inner_text()}\n{_envelope(page)}"
+        _shown_whole(
+            page,
+            lambda: story.shows(
+                "Apply draws the variant, marked as not saved",
+                "Apply: rendered into the cache of variants and drawn in this tab at the "
+                "size staged, and measured beside the envelope the part declares. The "
+                "editor's amber edge and its words, and an amber dot over the part in the "
+                "world, say it is an applied variant and not the saved part; the status "
+                "line says so too.",
+                shown=said,
+            ),
         )
     return side
 
@@ -449,12 +490,18 @@ def _two_tabs(page: Page, site: str, story) -> None:
             _marked_at_a_glance(tab)
     finally:
         other.close()
-    story.shows(
-        "Two tabs apply at once, and each draws its own",
-        f"A second tab of the same page: this one stages {sides[0]:.2f} mm and the other "
-        f"{sides[1]:.2f} mm, and both Apply, neither waiting. Each renders into a file of "
-        "its own and draws its own variant, its address naming it; each, reloaded, draws "
-        "its own again. This is the first tab, reloaded.",
+    _edit(page)
+    _framed_on_the_cube(page)
+    _shown_whole(
+        page,
+        lambda: story.shows(
+            "Two tabs apply at once, and each draws its own",
+            f"A second tab of the same page: this one stages {sides[0]:.2f} mm and the other "
+            f"{sides[1]:.2f} mm, and both Apply, neither waiting. Each renders into a file "
+            "of its own and draws its own variant, its address naming it; each, reloaded, "
+            "draws its own again. This is the first tab, reloaded, its editor open and the "
+            "view brought to the cube by hand.",
+        ),
     )
 
 
@@ -483,8 +530,8 @@ def test_designing_a_part_twice_round(
         ),
         runtime=(
             "It drives a real browser against a real server of its own, whose OpenSCAD is "
-            "this machine's except that it refuses a cube of "
-            f"{TOO_BIG:.0f} mm or more, as an assertion at the SCAD's size line would, so "
+            "the one every test server runs, wrapped by the test so that it refuses a cube "
+            f"of {TOO_BIG:.0f} mm or more, as an assertion at the SCAD's size line would, so "
             "that the error met is OpenSCAD's own shape. Its cache of variants is a "
             "temporary folder. It needs no network, and refuses one."
         ),
@@ -512,12 +559,22 @@ def test_designing_a_part_twice_round(
     _shows_saved(page)
     assert _measured(page) == pytest.approx(10, abs=0.05)
     assert _variant_in_address(page) is None
-    story.shows(
-        "Part › Edit opens the part's editor at what is drawn",
-        f"{PART}'s row in Site, its ring, Part › Edit: its parameters in Selected. They "
-        "start from what is drawn, the part's own STL as its params sidecar records it, "
-        "and beside the envelope the part declares is what that STL measures. Nothing "
-        "marks it: it is the saved part. A slider is the next step.",
+    _framed_on_the_cube(page)
+    _shown_whole(
+        page,
+        lambda: story.shows(
+            "Part › Edit opens the part's editor at what is drawn",
+            "The parts library, /viewer/sites/parts_library (the site drop-down's "
+            f"parts_library): {PART}'s row in Site, its ring, Part › Edit: its parameters in "
+            "Selected. They "
+            "start from what is drawn, the part's own STL as its params sidecar records it, "
+            "and beside the envelope the part declares is what that STL measures. Nothing "
+            "marks it: it is the saved part. The view is brought to it by hand, Shift+drag "
+            "and the wheel, as the library frames a whole shelf of parts; in this page's "
+            "pictures of the editor, Site is folded to its title by its ▾, so Selected has "
+            "the rail. A slider is the next step.",
+            shown=_envelope(page),
+        ),
     )
 
     # Round one: a size, checked, applied, drawn.
@@ -569,14 +626,21 @@ def test_designing_a_part_twice_round(
 
     # OpenSCAD refuses a size: its error by line; what is drawn stays.
     refused = _refused_by_openscad(page, first)
-    story.shows(
-        "OpenSCAD's refusal, by line",
-        "A size of 70 mm, which this run's OpenSCAD refuses: Apply answers with "
-        "OpenSCAD's own words, listed by file and line under the stage bar, the line "
-        "marked in the part's source below, and carried on the status line. What is "
-        "drawn does not change, and the refused size is still staged.",
-        shown=refused,
-    )
+    # The list in the stage bar, and the marked line first in the code below it.
+    marked = page.locator(".scad-editor .cm-line:has(.cm-lintRange-error)")
+    with site_folded(page):
+        page.evaluate(STAGE_BAR_AT_THE_TOP)
+        marked.evaluate(MARKED_LINE_FIRST)
+        story.shows(
+            "OpenSCAD's refusal, by line",
+            "A size of 70 mm, which this run's OpenSCAD refuses -- the test's stand-in, which "
+            f"refuses a cube of {TOO_BIG:.0f} mm or more where a real OpenSCAD renders it; "
+            "walkthrough 16 meets a refusal of the SCAD's own. Apply answers with OpenSCAD's "
+            "words, listed by file and line under the stage bar, the line marked in the "
+            "part's source below, and carried on the status line. What is drawn does not "
+            "change, and the refused size is still staged.",
+            shown=refused,
+        )
 
     # Revert, from the part's ring: what is staged put back to what is drawn.
     reverted = _reverted_from_the_ring(page, first)

@@ -17,7 +17,7 @@ from ..vision import ScaleReference, get, names
 from ..vision import build as build_arrangement
 from ..vocabulary import starter_words, word_for
 from .retired import retired
-from .server import _loopback_or_die, run_server
+from .server import _loopback_or_die, _port_free_or_die, run_server
 
 
 @click.group()
@@ -336,6 +336,7 @@ def view(
     from ..vision.shelf import shelf
 
     host = _loopback_or_die(host)
+    _port_free_or_die(host, port)  # before the work and the addresses, not after them
     picture = _look_or_explain(finder, image)
     scale = _scale_or_explain(millimetres_across=width_mm) if width_mm is not None else None
     made = build_arrangement(picture, name=name, scale=scale, picture_path=image)
@@ -469,6 +470,7 @@ def gather_pictures(
 
     if open_viewer:
         host = _loopback_or_die(host)  # before the work, not after it
+        _port_free_or_die(host, port)
     paths = _pictures_in(where, pattern)
     if not paths:
         wanted = f"files matching {pattern!r}" if pattern else "pictures"

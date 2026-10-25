@@ -22,14 +22,25 @@ DEMONSTRATION_MODULES = {
 }
 
 
+def _collected(every: bool = False) -> str:
+    """What `apothecary test run` collects (with ``every``, `test all`), its pytests'
+    listings one after the other."""
+    commands = testing.run_commands()
+    if every:
+        commands = [testing.unit_command(), testing.browser_command(every=True)]
+    listings = []
+    for argv in commands:
+        done = subprocess.run(argv + ["--collect-only"], cwd=ROOT, capture_output=True, text=True)
+        assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
+        listings.append(done.stdout)
+    return "\n".join(listings)
+
+
 def test_the_command_collects_the_run_that_writes_the_page():
     """Collection, not the argv's text: the marker expression is what selects the run."""
-    collected = subprocess.run(
-        testing.run_command() + ["--collect-only"], cwd=ROOT, capture_output=True, text=True
-    )
-    assert collected.returncode == 0, collected.stderr[-2000:]
+    collected = _collected()
     for module, run in DEMONSTRATION_MODULES.items():
-        assert run in collected.stdout, f"`test run` does not collect {module.name}::{run}"
+        assert run in collected, f"`test run` does not collect {module.name}::{run}"
 
 
 # A loop's page is written by the browser suite alone (the loops plan, 2026-10-10), so
@@ -56,20 +67,10 @@ LOOP_PAGES = {
 
 
 def test_a_loop_s_page_is_written_by_the_browser_suite_alone():
-    quick = subprocess.run(
-        testing.run_command() + ["--collect-only"], cwd=ROOT, capture_output=True, text=True
-    )
-    assert quick.returncode == 0, quick.stderr[-2000:]
-    browser = subprocess.run(
-        testing.run_command(e2e=True) + ["--collect-only"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
-    assert browser.returncode == 0, browser.stderr[-2000:]
+    quick, browser = _collected(), _collected(every=True)
     for module, (run, page) in LOOP_PAGES.items():
-        assert run not in quick.stdout, f"`test run` collects {module.name}::{run}"
-        assert run in browser.stdout, f"`test run --e2e` does not collect {module.name}::{run}"
+        assert run not in quick, f"`test run` collects {module.name}::{run}"
+        assert run in browser, f"`test all` does not collect {module.name}::{run}"
         assert page.is_file(), f"{page.name} is not written"
         # The page says who writes it, and how to run it alone.
         text = page.read_text(encoding="utf-8")
@@ -78,8 +79,10 @@ def test_a_loop_s_page_is_written_by_the_browser_suite_alone():
 
 
 def test_the_command_supplies_what_the_demonstration_needs():
-    """The demonstration drives a browser against a real server."""
-    assert "--start-server" in testing.run_command()
+    """The demonstration drives a browser against a real server, in a pytest of its own."""
+    unit, browser = testing.run_commands()
+    assert "--start-server" in browser
+    assert "--ignore=tests/e2e" in unit
 
 
 def test_the_demonstration_is_not_a_docs_workflow():

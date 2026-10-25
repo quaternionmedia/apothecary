@@ -410,6 +410,21 @@ def resources_for(version: str) -> Optional[Path]:
     return _in_install(version, "resources")
 
 
+def resources_of_install(program: Path) -> Optional[Path]:
+    """The ``resources`` folder of the install ``program`` is the executable of,
+    wherever that install is, by the ``install.json`` beside it: how an install in
+    another tools folder is read in place (``apothecary serve --demo`` names the
+    person's own). None when no install of this kind holds it."""
+    try:
+        data = json.loads((program.parent / MANIFEST).read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or data.get("executable") != program.name:
+        return None
+    rel = _plain(data.get("resources"))
+    return program.parent / rel if rel else None
+
+
 def current_version() -> Optional[str]:
     """The release ``current`` names, if it is a version; anything else names nothing."""
     try:

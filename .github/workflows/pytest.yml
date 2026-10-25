@@ -110,8 +110,15 @@ jobs:
       # --start-server runs the app on state and pictures of its own (tests/e2e/conftest.py).
       run: uv run pytest tests/e2e --start-server -q --shard ${{ env.SHARD }}/3
 
+    - name: 🖼️ Pictures that differ from the committed ones
+      # A warning naming each walkthrough picture this shard wrote that differs from
+      # the committed one past a tenth of a percent of its pixels; never a failure,
+      # since a picture is judged against its caption by a person.
+      if: ${{ !cancelled() }}
+      run: uv run python tests/e2e/picture_drift.py
+
     - name: 📝 The committed walkthrough is the one this run wrote
-      # The browser tests write walkthrough pages 11, 12, 13, 14 and 15.
+      # The browser tests write walkthrough pages 11 to 16.
       run: git diff --exit-code -- 'walkthrough/*.md'
 
   e2e-2:

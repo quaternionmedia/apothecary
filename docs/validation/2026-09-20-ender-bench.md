@@ -88,8 +88,8 @@ the log too. ✔ as you go.
 
 - [ ] **Home XY**, then **Home Z** (or `G28` all): X and Y home, the EZABL
       probes at the bed centre; the position card reads X0 Y0 and a Z.
-- [ ] Step **10**, **Y+**: the bed moves 10 mm; the nozzle marker in *Board
-      in its printer* moves the moment the button is pressed and the position
+- [ ] Step **10**, **Y+**: the bed moves 10 mm; the nozzle marker over the
+      printer in the world moves the moment the button is pressed and the position
       card confirms within 2 s. From the ring: `7` `2` `8` (⌗728) does the
       same; **Y−** twice, then **Motors off**.
 - [ ] Bed level card, **◣ FL**: four lines (`G90`, `G1 Z5`, `G1 X30 Y30`,

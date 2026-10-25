@@ -19,10 +19,43 @@ from .spaces import problems, solutions
 from .system import check, install, submodules, system
 from .testing import test
 
+# Commands for working on this repository rather than with it: its tests, its CI
+# run here, its generated docs and its own measures. Listed after the rest.
+REPOSITORY_COMMANDS = frozenset(
+    {"census", "docs", "kernel-reference", "preflight", "release", "templategenerate", "test"}
+)
 
-@click.group()
+START = """\b
+Start here:
+  1. apothecary check              what is installed here, and what is missing
+  2. apothecary openscad install   an OpenSCAD with Manifold: fast renders, and the
+                                   parts OpenSCAD 2021.01 is too old to build
+  3. apothecary serve --demo       the viewer, with a simulated printer and board
+walkthrough/00-getting-started.md says each step, then the four loops through the page."""
+
+
+class _Cli(click.Group):
+    """A group whose help lists a person's commands first, then the repository's own."""
+
+    def format_commands(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        listed = [
+            (name, cmd)
+            for name in self.list_commands(ctx)
+            if (cmd := self.get_command(ctx, name)) is not None and not cmd.hidden
+        ]
+        for title, own in (("Commands", False), ("Working on Apothecary itself", True)):
+            section = [(name, cmd) for name, cmd in listed if (name in REPOSITORY_COMMANDS) is own]
+            if not section:
+                continue
+            limit = formatter.width - 6 - max(len(name) for name, _ in section)
+            with formatter.section(title):
+                formatter.write_dl([(name, cmd.get_short_help_str(limit)) for name, cmd in section])
+
+
+@click.group(cls=_Cli, epilog=START)
 def cli():
-    """Apothecary OpenSCAD framework CLI."""
+    """Apothecary: parts as OpenSCAD from Python, a viewer that zooms through them,
+    and the boards, printers, slicer and pictures that make them real."""
 
 
 # Register individual commands

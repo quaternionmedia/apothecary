@@ -122,7 +122,8 @@ A machine drawn as it is needs one more thing than a block: where its build
 volume starts. `build_origin` on a node with a `build_volume` says where
 that volume's (0, 0, 0) is in the node's frame -- the nozzle at home, on the
 bed -- and `GET /firmware/printers/where` carries it to the world's marks
-and the board view, so the bed plane, the nozzle marker and a bed reading's
+and to a printer's Machine, whose level card sizes its corners from it, so
+the bed plane, the nozzle marker and a bed reading's
 relief sit on the Ender 3's bed at 95 mm, not on the floor of its footprint.
 Without it, a viewer centres the volume on the footprint and puts it on the
 floor, which is right for a block.

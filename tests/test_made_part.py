@@ -84,7 +84,11 @@ def test_height_carries_the_guess_and_a_fresh_piece_has_no_other_candidate():
     assert list(contested) == ["height"]
     (guess,) = contested["height"]
     assert guess.value == pytest.approx(54 * THICKNESS_GUESS)
-    assert "THICKNESS_GUESS" in guess.source and "shorter side" in guess.source
+    # Said as what the number is, a guess at a share of the shorter side, never as the
+    # name of the constant it comes from.
+    share = f"{THICKNESS_GUESS:.0%}"
+    assert guess.source == f"a guess: {share} of the shorter side the stated finder measured"
+    assert "THICKNESS_GUESS" not in guess.source
     assert "cannot see thickness" in guess.note
 
 

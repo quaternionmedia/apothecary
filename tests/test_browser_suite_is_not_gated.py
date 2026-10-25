@@ -53,3 +53,18 @@ def test_the_fixture_that_can_skip_still_can():
         "The picture folder fixture no longer skips. Either that is deliberate "
         "and this whole file can go, or the refusal it was guarding has been lost."
     )
+
+
+def test_every_browser_test_is_marked_e2e():
+    """CI's unit job and the quick loop deselect browser tests by the mark; one without
+    it would run there, where nothing serves it."""
+    import subprocess
+    import sys
+
+    collected = subprocess.run(
+        [sys.executable, "-m", "pytest", "tests/e2e", "-m", "not e2e", "--collect-only", "-q"],
+        cwd=E2E_SETUP.parents[2],
+        capture_output=True,
+        text=True,
+    )
+    assert collected.returncode == 5, collected.stdout[-2000:]

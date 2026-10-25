@@ -132,19 +132,21 @@ def _expand_to(page: Page, path: str):
 
 @pytest.mark.e2e
 def test_panel_opens_before_devices_finish_loading(page: Page, printer_url: str):
-    """Selecting a node never waits for the device scan: the panel is up within 1 s."""
+    """Selecting a node never waits for the device scan: the scan is held unanswered,
+    and the panel, its Device section among it, is up all the same."""
+    held = []
+    page.route("**/sites/garage/devices*", lambda route: held.append(route))
     page.goto(f"{printer_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    # dispatch_event, not click(): the bound must cover the viewer's own work,
-    # not Playwright's actionability wait on a page still streaming STLs
-    # through headless software GL.
-    page.locator("#contents-list .contents-item", has_text="printer_1").first.dispatch_event(
-        "click"
-    )
-    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_be_visible(timeout=1000)
-    # The Device section is part of the panel from the first render, and
-    # settles (scan done) within a bounded time rather than blocking it.
-    expect(page.locator("#selected-body .device-section")).to_be_visible(timeout=1000)
+    page.locator("#contents-list .contents-item", has_text="printer_1").first.click()
+    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_be_visible()
+    # The Device section is part of the panel from the first render, and settles
+    # once the scan answers rather than holding the panel up.
+    expect(page.locator("#selected-body .device-section")).to_be_visible()
+    assert held, "the device scan was never asked for"
+    for route in held:
+        route.continue_()
+    page.unroute("**/sites/garage/devices*")
     expect(page.locator("#selected-body .device-section .dev-pick")).to_be_visible(timeout=8000)
     options = page.locator("#selected-body .dev-pick option").all_text_contents()
     assert any("/dev/ttyFAKE1" in o for o in options)
@@ -160,14 +162,16 @@ def _polls_in_the_chart(page: Page, n: int):
 @pytest.mark.e2e
 def test_pin_identify_open_poll_and_sync(page: Page, fresh_url: str):
     """Pin → Open → M115: a poll each period, never stacked, and the node follows. The
-    board was pinned before anyone asked it what it is, so its Machine opens as a
-    devkit's, its port closed until Listen; listened to, it says a hello (the scripted
-    monitor says one on every port). Pinned again once Query has said it is a printer,
-    its Machine is a printer's, polling."""
+    board's own Pin asks it nothing: pinned before anyone asked it what it is, its
+    Machine opens as a devkit's, its port closed until Listen; listened to, it says a
+    hello (the scripted monitor says one on every port). printer_1's own Pin pins the
+    board inside it and, nothing being known to print on it, asks it once what it is
+    (M115): its Machine is a printer's, polling, and printer_1's Selected takes the
+    pin back with its own Unpin."""
     page.clock.install()
     page.goto(f"{fresh_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-    _select(page, "printer_1")
+    _expand_to(page, BOARD)
     section = page.locator("#selected-body .device-section")
     pick = page.locator("#selected-body .dev-pick")
     expect(pick).to_be_visible(timeout=8000)
@@ -176,6 +180,8 @@ def test_pin_identify_open_poll_and_sync(page: Page, fresh_url: str):
     page.locator("#selected-body .dev-pin").click()
     expect(section.locator(".dev-unpin")).to_be_visible(timeout=5000)
     expect(section.locator(".device-line")).to_contain_text("/dev/ttyFAKE1")
+    expect(page.locator("#status")).to_contain_text(f"{BOARD} ← /dev/ttyFAKE1")
+    expect(page.locator("#status")).not_to_contain_text("M115")  # the board's own Pin asks nothing
     expect(
         page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
     ).to_be_visible()
@@ -188,12 +194,18 @@ def test_pin_identify_open_poll_and_sync(page: Page, fresh_url: str):
     page.evaluate("() => window.fractalViewer.closeMachine()")
     section.locator(".dev-unpin").click()
 
-    # Query says it is a printer (M115); pinned, its link held, it is polled once.
+    # printer_1's Pin: its board pinned, and asked once what it is (M115) -- a printer;
+    # its link held, it is polled once.
+    _select(page, "printer_1")
     expect(pick).to_be_visible(timeout=5000)
     pick.select_option("/dev/ttyFAKE1")
-    section.locator(".dev-query").click()
-    expect(section.locator(".device-query")).to_contain_text("Marlin", timeout=8000)
     section.locator(".dev-pin").click()
+    expect(page.locator("#status")).to_contain_text(
+        "asked it once what it is (M115): Marlin Apothecary Simulator 1.0 (simulated)",
+        timeout=8000,
+    )
+    expect(section.locator(".dev-via")).to_have_text("frame_system.mainboard")
+    expect(section.locator(".dev-unpin")).to_be_visible()
     expect(section.locator(".temps")).to_be_visible(timeout=8000)
 
     # Open: one poll at once, then one each period, each after the last has answered.
@@ -442,9 +454,11 @@ def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
     assert badge.get_attribute("title").startswith("via frame_system.mainboard")
     _select(page, "printer_1")
     expect(section).to_contain_text("via frame_system.mainboard")
-    expect(section.locator(".dev-unpin")).to_have_count(
-        0
-    )  # unpin from the board, not through the printer
+    # The printer's Selected takes its board's pin back too: Unpin, the ring's
+    # Device › Unpin on the printer.
+    unpin = section.locator(".dev-unpin")
+    expect(unpin).to_have_attribute("title", re.compile(r"^Take the pin on its board"))
+    expect(unpin).to_have_attribute("data-address", "29", timeout=8000)
     section.locator(".dev-open").click()
     expect(page.locator(MACHINE)).to_be_visible(timeout=5000)
     # The poll's sync lands on the tree even though an earlier request had already
@@ -551,32 +565,40 @@ def test_a_poll_answered_after_arming_does_not_disarm_the_page(page: Page, print
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
     page.locator("#auto").uncheck()  # only the poll this test sends
 
-    # The poll's answer is read at once (disarmed) and handed to the page late,
-    # after the arm has answered: inside the page, so the arm is not held up.
+    # The poll's answer is read at once (disarmed) and handed to the page only once
+    # the arm has answered: inside the page, so the arm is not held up.
     page.evaluate(
         """() => {
             const real = window.fetch;
+            let release;
+            const armed = new Promise((ok) => { release = ok; });
+            window.__release = release;
             window.__held = 0;
+            window.__taken = false;
             window.fetch = async (url, opts) => {
                 const r = await real(url, opts);
                 if (String(url).includes('/firmware/printers/status')) {
                     window.__held++;
-                    await new Promise((ok) => setTimeout(ok, 1500));
+                    await armed;
+                } else if (window.__held && String(url).includes('/firmware/printers/log')) {
+                    window.__taken = true;  // a poll pulls the log once its answer is taken
                 }
                 return r;
             };
         }"""
     )
     page.locator("#poll").click()
+    page.wait_for_function("() => window.__held >= 1")
     page.locator("#ctl").click()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
-    page.wait_for_timeout(2500)  # the held answer has landed by now
-    assert page.evaluate("() => window.__held") >= 1, "the poll was not held"
+    page.evaluate("() => window.__release()")
+    page.wait_for_function("() => window.__taken")
     assert page.locator("#ctl").is_checked()
     expect(page.locator("#control")).to_be_visible()
     page.locator("#ctl-disarm").click()
 
 
+@pytest.mark.e2e
 def test_control_overlay_is_latched(page: Page, printer_url: str):
     """Nothing heats or moves until Control is armed; armed, the effect shows within a poll."""
     _identify(printer_url)

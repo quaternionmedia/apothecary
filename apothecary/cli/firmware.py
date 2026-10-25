@@ -43,9 +43,20 @@ def _run_plan(plan) -> None:
             sys.exit(rc)
 
 
-@click.group()
+@click.group(short_help="Install a firmware toolchain; build and flash sketches to boards.")
 def firmware():
-    """Install the firmware toolchain and program Arduinos, ESP32s and similar."""
+    """Install the firmware toolchain and program Arduinos, ESP32s and similar.
+
+    \b
+    Start with:
+      apothecary firmware install --esp32   arduino-cli and the ESP32 core,
+                                            for parts/esp32_blink
+      apothecary firmware sketches          the sketches kept with the parts
+      apothecary firmware validate          what each toolchain can do here
+
+    --avr adds the core for an Arduino Uno, Nano or Mega (parts/footpedal),
+    and --rust-esp32 Rust for the ESP32. docs/firmware.md has the rest.
+    """
 
 
 @firmware.command("install")
@@ -69,8 +80,9 @@ def firmware():
     "--rust-esp32",
     "rust_esp32",
     is_flag=True,
-    help="Rust for the classic ESP32: rustup, espup's Xtensa toolchain and espflash into the "
-    "tools dir, and every Rust sketch's crates vendored, so builds run offline",
+    help="Rust for the classic ESP32: rustup, Espressif's Xtensa Rust with its LLVM and GCC "
+    "(each checked against what its publisher publishes) and espflash into the tools dir, "
+    "and every Rust sketch's crates vendored, so builds run offline",
 )
 def firmware_install(
     version: str,
@@ -110,7 +122,15 @@ def firmware_install(
 @firmware.command("validate")
 @click.option("--json-out/--text", default=False)
 def firmware_validate(json_out: bool):
-    """Check that arduino-cli (and optionally esptool) are installed and usable. Exit 1 if not."""
+    """Say what each toolchain module has here and what it can do.
+
+    \b
+    Arduino             arduino-cli, its cores, and esptool (optional)
+    Rust for the ESP32  cargo with the Xtensa toolchain, and espflash
+
+    Exits 1 when arduino-cli is not usable; the other modules are reported,
+    not required.
+    """
     status = service.toolchain_status()
     if json_out:
         click.echo(json.dumps(status.model_dump(), indent=2))
@@ -131,12 +151,18 @@ def _print_status(status) -> None:
         if installed:
             click.echo("    cores: " + ", ".join(f"{c.id}@{c.installed}" for c in installed))
     else:
-        click.secho("  ✗ arduino-cli: not installed", fg="red")
+        click.secho("  ✗ arduino-cli: not installed (apothecary firmware install)", fg="red")
     if status.esptool_ok:
         click.echo(f"  ✓ esptool {status.esptool_version}: {status.esptool_path}")
     else:
-        click.secho("  • esptool: not found (optional)", fg="yellow")
-    for problem in status.problems:
+        click.secho(
+            "  • esptool: not found (optional: raw binary flashing needs it; "
+            "arduino-cli uploads to an ESP32 without it)",
+            fg="yellow",
+        )
+    missing = [] if status.arduino_cli_path else ["arduino-cli"]
+    missing += [] if status.esptool_ok else ["esptool"]
+    for problem in _unsaid(status.problems, missing):
         click.secho(f"  ! {problem}", fg="yellow")
     for module in status.toolchains:
         if module.id == "arduino":
@@ -158,8 +184,15 @@ def _print_status(status) -> None:
                 click.secho(f"  ✗ {tool.name}: {tool.path} does not run", fg="red")
             else:
                 click.secho(f"  • {tool.name}: not installed ({module.install})", fg="yellow")
-        for problem in module.problems:
+        missing = [tool.name for tool in module.tools if not tool.path]
+        for problem in _unsaid(module.problems, missing):
             click.secho(f"  ! {problem}", fg="yellow")
+
+
+def _unsaid(problems, missing):
+    """The problems a tool's own line has not already said: a tool reported
+    missing is not reported again as "<tool> not found"."""
+    return [p for p in problems if not any(p.startswith(f"{name} not found") for name in missing)]
 
 
 @firmware.command("boards")
@@ -220,7 +253,7 @@ def firmware_cores(install_id: Optional[str], json_out: bool):
         click.echo(f"{c.id:24s} {c.installed or '-':10s} {c.name}")
 
 
-@firmware.command("libraries")
+@firmware.command("libraries", short_help="Install Arduino libraries by name.")
 @click.option("--install", "names", multiple=True, help="Library name to install (repeatable)")
 def firmware_libraries(names: Tuple[str, ...]):
     """Install Arduino libraries by name (e.g. --install FastLED --install "Control Surface")."""
@@ -235,7 +268,11 @@ def firmware_libraries(names: Tuple[str, ...]):
 @firmware.command("sketches")
 @click.option("--json-out/--text", default=False)
 def firmware_sketches(json_out: bool):
-    """List sketches found under parts/ (a folder holding <folder>.ino)."""
+    """List sketches found under parts/, each by its id (name@toolchain).
+
+    An Arduino sketch is a folder holding <folder>.ino; a Rust one is a Cargo
+    project whose firmware.json names its toolchain (parts/esp32_blink/rust).
+    """
     sketches = discover_sketches()
     if json_out:
         click.echo(json.dumps([s.to_json() for s in sketches], indent=2))
@@ -398,7 +435,12 @@ def firmware_devices(json_out: bool):
 @firmware.command("probe")
 @click.argument("port")
 def firmware_probe(port: str):
-    """Identify the chip on PORT with esptool (resets the board afterwards)."""
+    """Identify the chip on PORT, and remember it (resets the board afterwards).
+
+    esptool asks the chip; without esptool, the toolchain module that found the
+    port asks it if it can (Rust for the ESP32: espflash board-info). A board
+    already known as an AVR, or a printer's mainboard, is not asked.
+    """
     try:
         validate_port(port)
         d = devices.probe_device(port)

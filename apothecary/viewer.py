@@ -21,13 +21,16 @@ def render_fractal_viewer_page(
     default_site: Optional[str] = None,
     focus_path: str = "",
     three_is_vendored: bool = True,
+    demo: Optional[str] = None,
 ) -> str:
     """The viewer page, opened on ``default_site`` and, when ``focus_path`` names a
-    node (``workbench.frame_system``), already zoomed to it."""
+    node (``workbench.frame_system``), already zoomed to it. ``demo`` names the demo's
+    folder when the server is ``apothecary serve --demo``: the page says so."""
     return _ENV.get_template("fractal_viewer.html.j2").render(
         site_names=site_names,
         base_url=base_url.rstrip("/"),
         default_site=default_site or "",
         focus_path=focus_path or "",
         three_is_vendored=three_is_vendored,
+        demo=demo,
     )
