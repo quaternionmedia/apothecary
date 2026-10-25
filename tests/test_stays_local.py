@@ -963,7 +963,7 @@ def test_views_write_nothing_outside_the_root_its_two_folders_and_the_state_fold
         here.delete(f"/photos/pictures/{kept['path']}")
         here.delete("/photos/pictures")
     finally:
-        from test_views_api import forget_cameras
+        from views_helpers import forget_cameras
 
         forget_cameras()
     written = everything() - before
@@ -995,7 +995,7 @@ def test_what_is_kept_is_the_persons_alone(monkeypatch, tmp_path):
         assert here.post("/photos/pictures?name=x", content=buf.getvalue()).status_code == 201
     finally:
         os.umask(old_umask)
-        from test_views_api import forget_cameras
+        from views_helpers import forget_cameras
 
         kept = (tmp_path / "state" / "camera_parts.json").stat()
         forget_cameras()

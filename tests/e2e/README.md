@@ -81,15 +81,23 @@ and a feature's test does not break when the layout around it changes:
 | Focused systems (`test_focused_systems.py`) | Every system the registry names, in the viewer, parameterized over the registry: it opens its main window alone, each section shows its part, a ring verb opens the section it acts on, its view lays everything out, a reload keeps or forgets it | the browser suite |
 | Features and loops (the rest) | What a person does with a part, a board, a picture, end to end, and the walkthrough pages and pictures the loops write | the browser suite |
 
-Three rules keep it so:
+Four rules keep it so:
 
 - **A feature's test asserts what the feature does, not where a window stands.**
   It opens what it needs through the shared helpers -- `windows.py` (a window, a
   view, ⊞ Windows, a board's Machine laid out once its kind is known),
   `rings.py` (a ring's cells, from a row or the world), `part_editing.py`
-  (Part › Edit in the Part view, a parameter, the code) -- and leaves where a
-  window opens to the window manager's tests. A walk, whose pictures show what a
-  person pressed, lays a view out from the ring (`by_hand=True`).
+  (Part › Edit in the Part view, a parameter, the code), `garage.py` (the viewer
+  on garage, a row selected, the status line, a picture pinned, the fake camera's
+  drawing, Find shapes and Make), `boards.py` (the simulated boards' ports, the
+  sketches, a task's end), and `../views_helpers.py` (the stated picture, shared
+  with the unit tests) -- and leaves where a window opens to the window manager's
+  tests. A walk, whose pictures show what a person pressed, lays a view out from
+  the ring (`by_hand=True`).
+- **A test module shares nothing by being imported.** A helper or a fixture two
+  files use lives in one of those modules or in a conftest, and
+  `tests/test_e2e_helpers.py` refuses a test file that keeps its own copy of one,
+  or imports another test file.
 - **A focused system is held by the registry's test.** One added to
   `apothecary/systems.py` needs a line in each of `test_focused_systems.py`'s
   tables (how it is opened, what each section shows, a verb that opens one), and

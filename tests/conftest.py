@@ -280,3 +280,43 @@ def fake_orcaslicer(tmp_path, monkeypatch):
     modules.reset_modules()
     yield program
     modules.reset_modules()
+
+
+# --- the views world -------------------------------------------------------------
+#
+# The stated picture (tests/views_helpers.py) in a picture root of the test's own,
+# a state folder of its own, and fresh view, finder and site stores: what the views,
+# made-part and camera-part tests pin and make in.
+
+
+@pytest.fixture
+def world(tmp_path, monkeypatch):
+    """A picture root with the stated picture, a state folder, and a fresh view store."""
+    import json
+
+    from views_helpers import HIGH, SHAPES, WIDE, forget_cameras, png
+
+    from apothecary.api import _site_store
+    from apothecary.firmware import devices
+    from apothecary.vision import cache as cache_module
+    from apothecary.vision import views as views_module
+
+    root = tmp_path / "pictures"
+    root.mkdir()
+    monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(root))
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    (root / "bench_top.png").write_bytes(png())
+    (root / "bench_top.shapes.json").write_text(
+        json.dumps(
+            {"name": "bench_top", "pixel_width": WIDE, "pixel_height": HIGH, "shapes": SHAPES}
+        ),
+        encoding="utf-8",
+    )
+    (root / "drawn.png").write_bytes(png(shapes="ret"))
+    monkeypatch.setattr(devices, "_STATE", None)  # the boards pinned in this state folder
+    monkeypatch.setattr(views_module, "_store", views_module.Views())
+    monkeypatch.setattr(cache_module, "_cache", cache_module.FinderCache())
+    for name in _site_store.names():
+        _site_store.reset(name)
+    yield root
+    forget_cameras()

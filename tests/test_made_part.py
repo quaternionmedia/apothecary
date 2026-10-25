@@ -4,7 +4,7 @@
 ``BasePart``, so the one parameter contract serves it: its fields default to
 what it is now, its provenance is offered as candidates, its geometry is what
 ``piece_from_shape`` builds, and the made routes answer the shapes the parts
-routes answer. The fixture is tests/test_views_api.py's: a stated picture 1000
+routes answer. The fixture is tests/conftest.py's ``world``: a stated picture 1000
 by 500 pinned at ``workbench`` in ``garage``; at 1800 mm across, shape 1 (the
 coin) is 54 by 54 mm, its thickness guessed at 8.1, standing at (1274, 50, 780).
 """
@@ -15,12 +15,9 @@ import math
 
 import pytest
 from fastapi.testclient import TestClient
-from test_views_api import (  # noqa: F401 - the fixture, used by every test here
-    LAID,
-    _pin,
-    _roots,
-    world,
-)
+from views_helpers import LAID
+from views_helpers import pin as _pin
+from views_helpers import roots as _roots
 
 from apothecary.api import app
 from apothecary.projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged

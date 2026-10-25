@@ -1,6 +1,6 @@
 """A camera is a part standing in a site, aimed where it looks.
 
-The fixture is tests/test_views_api.py's world: the garage, its bench's top at
+The fixture is tests/conftest.py's ``world``: the garage, its bench's top at
 z 780, printer_1 standing at the bench's left end with its top at z 1350, the
 bench's middle clear, and a stated picture 1000 by 500 pixels. A camera added
 above the bench stands 600 mm above its middle; one added at the floor stands
@@ -15,7 +15,9 @@ import re
 
 import pytest
 from fastapi.testclient import TestClient
-from test_views_api import _pin, _roots, forget_cameras, world  # noqa: F401 - the fixture
+from views_helpers import forget_cameras
+from views_helpers import pin as _pin
+from views_helpers import roots as _roots
 
 from apothecary.api import _site_store, app
 from apothecary.vision import cameras
@@ -272,7 +274,7 @@ def test_applying_a_cameras_numbers_moves_it_and_a_field_of_view_is_its_lens():
 def test_a_cameras_frame_is_named_for_it_and_listed_as_its():
     """A frame a camera part took is named for its site and camera, so Pictures knows
     its camera after the views that also say so are gone; any other picture has none."""
-    from test_views_api import _png
+    from views_helpers import png as _png
 
     c = TestClient(app)
     _add(c)
@@ -331,7 +333,7 @@ def _restart():
         _site_store._sites.pop(name, None)
 
 
-def test_a_camera_stands_where_it_stood_after_a_restart(world):  # noqa: F811 - the fixture
+def test_a_camera_stands_where_it_stood_after_a_restart(world):
     c = TestClient(app)
     _add(c)
     c.put("/sites/garage/cameras/camera_1/device", json={"id": "ab12cd", "label": "desk"})

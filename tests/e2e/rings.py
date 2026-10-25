@@ -73,7 +73,9 @@ def open_on_row(page: Page, path: str) -> None:
 
 
 def open_on_world(page: Page, at: tuple[int, int] = (40, 40)) -> None:
-    """The canvas ring, opened on the world away from any piece."""
+    """The canvas ring, opened on the world away from any piece, once the page has its
+    ring."""
+    page.wait_for_function("() => !!window.apothecaryRing", timeout=RING_MS)
     page.locator("#viewer-canvas").click(
         button="right", modifiers=["Control"], position={"x": at[0], "y": at[1]}
     )
@@ -100,3 +102,9 @@ def on_world(page: Page, *labels: str, at: tuple[int, int] = (40, 40)) -> str:
     """The canvas ring, opened on the world, and the cells the labels name."""
     open_on_world(page, at)
     return press(page, *labels)
+
+
+def cells_on_world(page: Page, *digits: str, at: tuple[int, int] = (40, 40)) -> str:
+    """The canvas ring, opened on the world, and the cells named by their digits."""
+    open_on_world(page, at)
+    return press_cells(page, *digits)

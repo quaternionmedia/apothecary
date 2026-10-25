@@ -16,21 +16,17 @@ import re
 
 import pytest
 import windows
+from boards import BOARD, PRINTER
+from garage import pin as _pin
+from garage import said as _said
 from playwright.sync_api import Page, expect
 from rings import labels as _labels
 from rings import open_from_key as _canvas_ring
 from rings import open_on_row as _ring_on
 from rings import press as _press
 from slicer_helpers import write_fake_orcaslicer
-from test_picture_in_the_world import (  # noqa: F401 - fixtures, and a pin of a picture
-    _pin,
-    fixture_picture,
-    leaves_garage_as_found,
-)
 from viewer_ready import settled
 
-PRINTER = "/dev/ttyFAKE1"
-BOARD = "printer_1.frame_system.mainboard"
 MACHINE = windows.MACHINE
 
 
@@ -50,14 +46,6 @@ def _open(page: Page, url: str, site: str = "garage", query: str = "") -> None:
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
     page.evaluate("() => localStorage.removeItem('apothecary.layout')")
     settled(page)
-
-
-def _status(page: Page):
-    return page.locator("#status")
-
-
-def _said(page: Page, text: str, timeout: int = 20000) -> None:
-    expect(_status(page)).to_contain_text(text, timeout=timeout)
 
 
 def _row(page: Page, path: str):
@@ -424,8 +412,8 @@ def test_a_piece_made_from_a_picture_has_no_device_section(
     page: Page,
     base_url: str,
     picture_folder,
-    fixture_picture,  # noqa: F811 - the fixture's value, the picture's name
-    leaves_garage_as_found,  # noqa: F811
+    fixture_picture,
+    leaves_garage_as_found,
 ):
     """A piece made from a picture holds no board: neither it nor a piece made at a place
     has a Device section, nor the structure it was made on; a printer has one (only

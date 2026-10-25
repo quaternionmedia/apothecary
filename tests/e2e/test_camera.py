@@ -12,9 +12,9 @@ picture and the P key are Take picture too; tests/e2e/test_the_loop.py goes on
 from a picture taken to its shapes and the pieces made from them.
 
 Every camera, view and kept picture a test adds is taken back after it, and
-garage is reset (tests/e2e/test_picture_in_the_world.py's fixture). Nothing here
-reloads the page between choosing a device and using it, since Chromium may hand
-a reloaded page other ids for its fake devices. The gathering is a section of
+garage is reset (conftest's leaves_garage_as_found). Nothing here reloads the
+page between choosing a device and using it, since Chromium may hand a reloaded
+page other ids for its fake devices. The gathering is a section of
 Pictures.
 """
 
@@ -25,29 +25,19 @@ import re
 import pytest
 import rings
 import windows
+from garage import drag_handle as _drag
+from garage import open_garage as _open_garage
+from garage import said as _said
+from garage import select as _select
+from garage import status as _status
 from PIL import Image
 from playwright.sync_api import expect
-from test_picture_in_the_world import leaves_garage_as_found  # noqa: F401 - a fixture
-from test_the_loop import _labels, _open_garage, _press, _ring_on, _said, _status
+from rings import labels as _labels
+from rings import open_on_row as _ring_on
+from rings import press as _press
 
 CAMERAS = "() => window.apothecaryPictures.cameraState()"
 PLACES = "() => window.apothecaryPictures.state()"
-
-# Where a point of the selected camera's handles is on the screen: on its turn
-# ring where a turn of `deg` puts the picture's top, or on its tilt arc at a tilt
-# of `deg` (the handles are drawn about the lens, in the site's frame turned to
-# three.js's, y up).
-HANDLE_AT = """([kind, deg]) => {
-    const v = window.fractalViewer, g = v.cameraHandles;
-    const cam = window.apothecaryPictures.camera(g.userData.camera);
-    const t = cam.turn * Math.PI / 180, a = deg * Math.PI / 180;
-    let x, y, z;
-    if (kind === 'turn') { const r = g.userData.turnRadius; x = -Math.sin(a) * r; y = Math.cos(a) * r; z = 0; }
-    else { const r = g.userData.tiltRadius; x = -Math.sin(t) * Math.sin(a) * r; y = Math.cos(t) * Math.sin(a) * r; z = -Math.cos(a) * r; }
-    const p = g.localToWorld(v.sceneAt(x, y, z)).project(v.camera);
-    const box = v.canvas.getBoundingClientRect();
-    return [box.left + (p.x + 1) / 2 * box.width, box.top + (1 - p.y) / 2 * box.height];
-}"""
 
 
 @pytest.fixture
@@ -90,11 +80,6 @@ def _add(page, base_url: str, host: str) -> str:
     return answer.json()["camera"]["name"]
 
 
-def _select(page, path: str) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{path}']").click()
-    page.wait_for_function("(p) => window.fractalViewer.selectedName === p", arg=path)
-
-
 def _pyramid(page, name: str):
     """Whether the camera's pyramid is drawn, or None while it has none."""
     for entry in page.evaluate(CAMERAS):
@@ -125,7 +110,7 @@ def test_a_camera_added_at_the_bench_takes_pictures_where_it_looks(
     page,
     base_url: str,
     picture_folder,
-    leaves_garage_as_found,  # noqa: F811
+    leaves_garage_as_found,
 ):
     """From the bench's ring, Camera › Add here: a camera part stands above the bench,
     selected, in Contents, with its 📷 badge, its handles and its pyramid. Its Device
@@ -248,7 +233,7 @@ MESH = (
 def test_a_camera_removed_from_sites_pinned_leaves_the_tree_and_the_world(
     page,
     base_url: str,
-    leaves_garage_as_found,  # noqa: F811
+    leaves_garage_as_found,
 ):
     """Site's Pinned takes a camera back as its own ring's Remove does: at once, and
     without the site loaded again, its row leaves Site's tree, its body and its badge
@@ -288,21 +273,11 @@ def test_a_camera_removed_from_sites_pinned_leaves_the_tree_and_the_world(
     assert errors == []
 
 
-def _drag(page, kind: str, degrees: list) -> None:
-    """A press on the handle at the first of ``degrees``, moved through the rest, let go."""
-    points = [page.evaluate(HANDLE_AT, [kind, d]) for d in degrees]
-    page.mouse.move(*points[0])
-    page.mouse.down()
-    for point in points[1:]:
-        page.mouse.move(*point, steps=3)
-    page.mouse.up()
-
-
 @pytest.mark.e2e
 def test_a_cameras_ring_and_arc_turn_and_tilt_it_and_its_picture_lies_as_the_server_lays_it(
     page,
     base_url: str,
-    leaves_garage_as_found,  # noqa: F811
+    leaves_garage_as_found,
 ):
     """The selected camera's turn ring and tilt arc: dragged, the camera turns or tilts
     as the pointer goes, its pyramid with it, and on release the pose is the
@@ -377,7 +352,7 @@ def test_a_cameras_ring_and_arc_turn_and_tilt_it_and_its_picture_lies_as_the_ser
 def test_a_device_is_one_cameras_at_a_time(
     page,
     base_url: str,
-    leaves_garage_as_found,  # noqa: F811
+    leaves_garage_as_found,
 ):
     """Device › this browser's camera, chosen for a second camera, is taken off the
     first: the status says so, the first says it has no device, in Selected and on
@@ -403,7 +378,7 @@ def test_a_device_is_one_cameras_at_a_time(
 def test_a_cameras_pyramid_shows_while_it_is_selected_or_live(
     page,
     base_url: str,
-    leaves_garage_as_found,  # noqa: F811
+    leaves_garage_as_found,
 ):
     """Unselected, a camera is its body and its latest picture; selected, or live, its
     pyramid shows from its lens to where it looks. Live, Selected shows its video."""
@@ -439,7 +414,7 @@ def test_a_cameras_pyramid_shows_while_it_is_selected_or_live(
 def test_part_edit_on_a_camera_opens_its_numbers_in_selected(
     page,
     base_url: str,
-    leaves_garage_as_found,  # noqa: F811
+    leaves_garage_as_found,
 ):
     """Part › Edit on a camera: its position, turn, tilt and field of view in
     Selected's editor, under its camera section; a tilt staged and applied is the
@@ -475,7 +450,7 @@ def test_pictures_are_grouped_by_the_camera_that_took_them(
     page,
     base_url: str,
     picture_folder,
-    leaves_garage_as_found,  # noqa: F811
+    leaves_garage_as_found,
 ):
     """Pictures shows thumbnails, grouped by camera: this site's cameras first, each
     with the frames it took, and the pictures no camera took -- added, and the

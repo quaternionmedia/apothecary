@@ -23,11 +23,17 @@ from typing import Callable, List, Optional, Tuple
 import httpx
 import pytest
 import windows
+from boards import BOARD, DWELL, LAYERS, PRINTER
+from garage import attached as _attached
+from garage import make as _make
+from garage import said as _said
+from garage import status as _status
 from playwright.sync_api import Page, expect
+from rings import labels as _labels
+from rings import open_on_row as _ring_on
+from rings import press as _press
 from slicer_helpers import write_fake_orcaslicer
 from stepping import ROOT, chosen, where
-from test_picture_to_print import BOARD, DWELL, LAYERS, PRINTER, _attached, _make
-from test_the_loop import _labels, _press, _ring_on, _said, _status
 from viewer_ready import by_hand, settled
 
 SHAPES_PNG = ROOT / "examples" / "pictures" / "shapes.png"

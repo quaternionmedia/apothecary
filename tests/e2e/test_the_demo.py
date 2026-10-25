@@ -34,25 +34,25 @@ from pathlib import Path
 import httpx
 import pytest
 import windows
+from boards import BOARD, DEVKIT, PRINTER
+from garage import found as _found
+from garage import kept as _kept
+from garage import make as _make
+from garage import open_garage as _open_garage
+from garage import said as _said
+from garage import status as _status
 from playwright.sync_api import Page, expect
+from rings import labels as _labels
+from rings import open_on_row as _ring_on
+from rings import press as _press
 from slicer_helpers import write_fake_orcaslicer
-from test_picture_to_print import (  # noqa: F401 - a fixture, and the loop's steps
-    _drawing_camera_browser,
-    _found,
-    _kept,
-    _make,
-)
-from test_the_loop import _labels, _open_garage, _press, _ring_on, _said, _status
 from viewer_ready import settled
+from windows import BENCH
 
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.stl_renderer import get_renderer
 
-PRINTER = "/dev/ttyFAKE1"
-DEVKIT = "/dev/ttyFAKE2"
-BOARD = "printer_1.frame_system.mainboard"
 MACHINE = windows.MACHINE
-BENCH = ".panel[data-panel='bench']"
 
 # Every Python process the demo starts imports this first. Opening a serial device, by
 # any route Python has, or listing the machine's ports is refused and written down.
@@ -206,10 +206,10 @@ def shots(tmp_path_factory):
 
 
 @pytest.fixture
-def page(_drawing_camera_browser, demo):  # noqa: F811 - the fixture imported above
+def page(drawing_camera_browser, demo):
     """A page on the demo whose camera sees the drawing, allowed."""
     url = demo["url"]
-    context = _drawing_camera_browser.new_context(
+    context = drawing_camera_browser.new_context(
         viewport={"width": 1280, "height": 800}, base_url=url
     )
     context.grant_permissions(["camera"], origin=url)

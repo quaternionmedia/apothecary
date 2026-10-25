@@ -26,28 +26,23 @@ from __future__ import annotations
 
 import pytest
 import windows
+from boards import ARDUINO, DEVKIT, NODE, RUST
+from boards import ended as _ended
 from doc_capture import FOLDER, all_words
 from firmware_helpers import write_fake_arduino_cli, write_fake_cargo, write_fake_espflash
+from garage import open_garage
 from playwright.sync_api import Page, expect
-from rings import RING_MS, open_on_world, press_cells
+from rings import cells_on_world
 from rings import open_on_row as _ring_on
 from rings import press as _choose
 from viewer_ready import settled
+from windows import BENCH
 
 
 def _canvas_ring(page: Page, *digits: str) -> None:
-    """The ring on the world, nothing chosen, and the cells named by their digits."""
-    page.wait_for_function("() => !!window.apothecaryRing", timeout=RING_MS)
-    open_on_world(page, at=(30, 30))
-    press_cells(page, *digits)
-
-
-DEVKIT = "/dev/ttyFAKE2"
-NODE = "esp32_blink"
-ARDUINO = "esp32_blink@arduino"
-RUST = "esp32_blink@rust-esp32"
-MACHINE = windows.MACHINE
-BENCH = ".panel[data-panel='bench']"
+    """The ring on the world, nothing chosen, and the cells named by their digits: at
+    the corner walkthrough 05 pictures it in."""
+    cells_on_world(page, *digits, at=(30, 30))
 
 
 @pytest.fixture(scope="module")
@@ -78,22 +73,6 @@ def rust_only_url(start_server, tmp_path_factory):
             "APOTHECARY_SIMULATED_DEVKIT": DEVKIT,
         }
     )
-
-
-def _open_viewer(page: Page, url: str) -> None:
-    page.goto(f"{url}/viewer/sites/garage")
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
-
-
-def _select(page: Page, path: str) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{path}']").click()
-    expect(page.locator("#selected-body .prop-row", has_text="Name")).to_be_visible(timeout=5000)
-
-
-def _ended(where, title: str, timeout: int = 15000) -> None:
-    """The task log says the task of this title succeeded."""
-    expect(where.locator(".task-title")).to_contain_text(title, timeout=timeout)
-    expect(where.locator(".task-title")).to_contain_text("succeeded", timeout=timeout)
 
 
 # What differs on every run whatever the page does, blanked in the pictures: the
@@ -178,7 +157,7 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     )
     dialogs: list[str] = []
     page.on("dialog", lambda d: (dialogs.append(d.message), d.accept()))
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
 
     # ---------------------------------------------------------------- round one
     # 1. The Bench, from the canvas ring: Panels › Bench › Bench.
@@ -417,7 +396,7 @@ def test_the_bench_lists_the_rust_sketch_and_its_toolchain_beside_arduino(page: 
     """The Bench's toolchain card draws Rust for the ESP32 beside arduino-cli, its tools
     as found and its own Install; the sketches list the Rust esp32_blink beside the
     Arduino one, and the ring's Compile builds whichever the Bench has chosen."""
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     page.evaluate("() => window.apothecaryPanels.open('bench')")
     bench = page.locator(BENCH)
     rust = bench.locator(".tc-module[data-id='rust-esp32']")
@@ -462,7 +441,7 @@ def test_with_rust_alone_the_loop_goes_round_with_no_arduino_cli(page: Page, rus
     url = rust_only_url
     dialogs: list[str] = []
     page.on("dialog", lambda d: (dialogs.append(d.message), d.accept()))
-    _open_viewer(page, url)
+    open_garage(page, url, settle=False)
     _canvas_ring(page, "4", "3", "8")
     bench = page.locator(BENCH)
     expect(bench.locator(".tc-status")).to_contain_text("not installed", timeout=10000)

@@ -21,22 +21,16 @@ from typing import Callable, List, Tuple
 
 import pytest
 import windows
+from boards import ARDUINO, DEVKIT, NODE, RUST
+from boards import ended as _ended
 from firmware_helpers import write_fake_arduino_cli, write_fake_cargo, write_fake_espflash
 from playwright.sync_api import Page, expect
+from rings import cells_on_world as _canvas_ring
+from rings import open_on_row as _ring_on
+from rings import press as _choose
 from stepping import chosen, where
-from test_the_firmware_loop import (
-    ARDUINO,
-    BENCH,
-    DEVKIT,
-    MACHINE,
-    NODE,
-    RUST,
-    _canvas_ring,
-    _choose,
-    _ended,
-    _ring_on,
-)
 from viewer_ready import settled
+from windows import BENCH, MACHINE
 
 ARDUINO_ROW = "esp32_blink@arduino · esp32:esp32:esp32"
 RUST_ROW = "esp32_blink@rust-esp32 · esp32"
