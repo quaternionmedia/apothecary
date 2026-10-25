@@ -86,7 +86,9 @@ def _press(page: Page, *labels: str) -> None:
 
 
 def _ring(page: Page, *labels: str, part: str = PART) -> None:
-    page.locator(f"#contents-list .contents-item[data-path='{part}']").click(button="right")
+    page.locator(f"#contents-list .contents-item[data-path='{part}']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
     _press(page, *labels)
 
@@ -313,15 +315,17 @@ def test_openscad_s_keys_work_in_the_editor_and_the_browser_s_outside(
     _edit(page)
     code = page.locator(".scad-editor .cm-content")
     expect(code).to_be_visible(timeout=20000)
-    # Outside the editor the page takes none of them: what the browser would do stands.
+    # Outside the editor the page takes none of F5, F6 and Ctrl+Enter: what the browser
+    # would do stands. Ctrl+S, while the editor is open, is the page's anywhere
+    # (test_the_pointer_and_the_keys.py), and is pressed here only inside it.
     taken = page.evaluate(
-        """() => ['F5', 'F6', 's', 'Enter'].map((key) => {
-            const e = new KeyboardEvent('keydown', { key, ctrlKey: key === 's' || key === 'Enter', bubbles: true, cancelable: true });
+        """() => ['F5', 'F6', 'Enter'].map((key) => {
+            const e = new KeyboardEvent('keydown', { key, ctrlKey: key === 'Enter', bubbles: true, cancelable: true });
             document.body.dispatchEvent(e);
             return e.defaultPrevented;
         })"""
     )
-    assert taken == [False, False, False, False]
+    assert taken == [False, False, False]
     # Inside it: F6 applies what is staged -- the text, the size written into it -- and
     # the page stays.
     _param(page, "size").locator(".param-number").fill("12")

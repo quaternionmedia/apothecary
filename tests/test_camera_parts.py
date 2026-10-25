@@ -524,7 +524,7 @@ def test_add_here_and_remove_are_carried_by_the_server_and_the_ring_knows_a_came
     ring = c.post("/menu/resolve", json=told).json()
     labels = [o["label"] for o in ring["options"]]
     assert labels == [
-        "Zoom in",
+        "Step in",
         "Move",
         "Why this",
         "Device",

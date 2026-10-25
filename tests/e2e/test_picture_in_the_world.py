@@ -352,6 +352,8 @@ def test_a_forgotten_pictures_view_leaves_the_world(page, base_url: str, leaves_
     card = panel.locator(f".pictures-forget[data-path='{kept['path']}']")
     expect(card).to_be_visible(timeout=5000)
     card.click()
+    expect(card).to_have_text("Again to forget")
+    card.click()
     page.wait_for_function(
         "() => !window.apothecaryPictures.state().some((e) => e.host === 'workbench')",
         timeout=5000,

@@ -66,15 +66,17 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
         "the header goes up to it -- the same at every level"
     )
 
-    # The same navigation from the ring: a right-click on empty canvas opens
+    # The same navigation from the ring: a Ctrl+right-click on empty canvas opens
     # the canvas ring; Pieces (cell 8) lists this level in groups; digits choose.
     # Empty floor in front of the building, to the right of its front corner: room for
     # the whole ring, which at the world's lower left was clipped by the canvas's edge.
-    page.locator("#viewer-canvas").click(button="right", position={"x": 680, "y": 560})
+    page.locator("#viewer-canvas").click(
+        button="right", modifiers=["Control"], position={"x": 680, "y": 560}
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("8")
     docs.step(
-        "Right-click empty canvas for the ring (or press m), then 8 for Pieces: every "
+        "Ctrl+right-click empty canvas for the ring (or press m), then 8 for Pieces: every "
         "piece at this level, in groups of a keypad's worth, each reachable by its digits"
     )
     address = page.evaluate(

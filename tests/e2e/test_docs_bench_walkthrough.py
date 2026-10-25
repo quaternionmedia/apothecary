@@ -204,7 +204,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     assert mainboard.part_ref == "creality_v422"
     story.says(
         "The printer is an Ender 3 from published dimensions",
-        "A printer node names the part it is, and its children live inside it: the "
+        "A printer piece names the part it is, and its children live inside it: the "
         "Creality mainboard in the electronics box, the gantry at the uprights. "
         "`build_origin` puts the bed where it is, so a job's build volume and a "
         "board's marks stand on the real bed rather than on the floor.",
@@ -258,7 +258,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     settled(page)
     story.shows(
         "Inside it, the mainboard is the Creality V4.2.2",
-        "Double-clicked into the printer, then its frame, from their rows in Site: its "
+        "Stepped into the printer, then its frame, by a double-click on their rows in Site: its "
         "children are drawn and the printer's body is not -- the board in its box, with "
         "the pins that would be pinned to a port. Its outline, holes, headers and jacks "
         "are from the maker's drawing.",
@@ -275,7 +275,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     settled(page)
     story.shows(
         "The DevKitC standing on its pins",
-        "Backspace twice to the root, and a double-click into esp32_blink: a sketch and "
+        "Backspace twice, stepping out to the root, and a double-click stepping into esp32_blink: a sketch and "
         "the board it runs on, drawn as the board -- the described part from the model "
         "half of this page, in the world.",
     )
@@ -286,7 +286,9 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     page.keyboard.press("Backspace")
     expect(page.locator("#minimap .minimap-tick.filled")).to_have_count(1)
     page.evaluate("() => window.apothecaryPictureVerbs.ready")
-    page.locator("#contents-list .contents-item[data-path='workbench']").click(button="right")
+    page.locator("#contents-list .contents-item[data-path='workbench']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     _press(page, "Camera")
     _press(page, "Add here")
@@ -294,7 +296,9 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         "added camera_1 above workbench, looking straight down", timeout=5000
     )
     page.wait_for_function("() => window.fractalViewer.selectedName === 'camera_1'")
-    page.locator("#contents-list .contents-item[data-path='camera_1']").click(button="right")
+    page.locator("#contents-list .contents-item[data-path='camera_1']").click(
+        button="right", modifiers=["Control"]
+    )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     _press(page, "Device")
     _press(page, _wedges(page)["8"])  # this browser's camera, by its name
@@ -339,8 +343,8 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     settled(page)
     story.shows(
         "Looking into a printer, the camera stays in the garage",
-        "A camera is a piece of the site, drawn at the level its site is. Double-clicked "
-        "into the printer, neither its badge nor its pyramid follows; going back out "
+        "A camera is a piece of the site, drawn at the level its site is. Stepped into "
+        "the printer, neither its badge nor its pyramid follows; stepping back out "
         "brings them back.",
     )
 
@@ -349,7 +353,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     page.evaluate("() => window.fractalViewer.jumpTo(0)")
     expect(badge).to_be_visible(timeout=5000)
     assert _camera_marks_visible(page) == [False]  # unselected: its body and its badge
-    expect(page.locator("#selected-body")).to_contain_text("Click a node to select it")
+    expect(page.locator("#selected-body")).to_contain_text("Click a piece to select it")
     # Removed from its row in Site's Pinned.
     pinned.locator("summary").click()
     placed.locator(".pinned-camera-remove").click()
@@ -473,8 +477,11 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     )
 
     page.evaluate("() => window.apothecaryPanels.dock('pictures', 'right')")
-    # Forgotten from its row.
-    pictures.locator(".pictures-forget[data-path='uploads/shelf_again.png']").click()
+    # Forgotten from its row, pressed twice: it cannot be undone.
+    forget = pictures.locator(".pictures-forget[data-path='uploads/shelf_again.png']")
+    forget.click()
+    expect(forget).to_have_text("Again to forget")
+    forget.click()
     expect(kept_pictures).to_have_count(kept_before + 1, timeout=5000)
     assert not (picture_folder / "uploads" / "shelf_again.png").exists()
     # A pin whose site is gone is listed as such, and taken back from its row.
@@ -511,13 +518,16 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     expect(pinned.locator("#pinned-list")).to_contain_text("none pinned", timeout=5000)
     expect(page.locator("#selected-body .dev-pin-manual")).to_be_visible(timeout=3000)
     expect(page.locator("#selected-body .dev-unpin")).to_have_count(0)
-    page.once("dialog", lambda d: d.accept())
-    pictures.locator("#pictures-purge").click()
+    purge = pictures.locator("#pictures-purge")
+    purge.click()
+    expect(purge).to_have_text("Again to purge")
+    purge.click()
     status = page.locator("#status")
     expect(status).to_contain_text("of the folder's own stay", timeout=8000)
     expect(status).not_to_have_class(re.compile(r"\berror\b"))
     # A second purge has nothing to forget, and says so as a refusal.
-    pictures.locator("#pictures-purge").click()
+    purge.click()
+    purge.click()
     expect(status).to_contain_text("nothing kept from the browser to forget", timeout=5000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
     left = page.request.get(f"{base_url}/photos/pictures").json()

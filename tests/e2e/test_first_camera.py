@@ -72,7 +72,7 @@ def test_allow_before_the_yes_is_refused_and_says_what_to_do(
         "⌗ Camera › Add here stands a camera above workbench, looking down"
     )
     expect(facts).to_contain_text("⌗ Picture › Add pins a picture from disk")
-    expect(facts).to_contain_text("m, or right-click, opens the ring")
+    expect(facts).to_contain_text("m, or Ctrl+right-click, opens the ring")
     assert _mine(page) == []
 
     name = _add_at_the_bench(page)

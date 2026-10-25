@@ -106,8 +106,8 @@ def test_apply_draws_what_it_rendered(page: Page, base_url: str, v_slot_as_it_wa
     apply = page.locator("#apply-btn")
     expect(apply).to_have_text("Apply 1 change", timeout=10000)
 
-    # Right-clicking the part to open its ring selects it again; what is staged stays.
-    row.click(button="right")
+    # Ctrl+right-clicking the part to open its ring selects it again; what is staged stays.
+    row.click(button="right", modifiers=["Control"])
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("Escape")
     expect(apply).to_have_text("Apply 1 change")

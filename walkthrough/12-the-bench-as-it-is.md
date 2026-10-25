@@ -42,7 +42,7 @@ electrical; Quaternion Media, MIT; 56 x 28 x 17.1 mm
 
 ## 4. The printer is an Ender 3 from published dimensions
 
-A printer node names the part it is, and its children live inside it: the Creality mainboard in the electronics box, the gantry at the uprights. `build_origin` puts the bed where it is, so a job's build volume and a board's marks stand on the real bed rather than on the floor.
+A printer piece names the part it is, and its children live inside it: the Creality mainboard in the electronics box, the gantry at the uprights. `build_origin` puts the bed where it is, so a job's build volume and a board's marks stand on the real bed rather than on the floor.
 
 ```
 printer_1: part ender3, 470 x 454 x 570 mm overall
@@ -63,13 +63,13 @@ Selecting printer_1 shows its rows and, below them, the part its body is; the vi
 
 ## 7. Inside it, the mainboard is the Creality V4.2.2
 
-Double-clicked into the printer, then its frame, from their rows in Site: its children are drawn and the printer's body is not -- the board in its box, with the pins that would be pinned to a port. Its outline, holes, headers and jacks are from the maker's drawing.
+Stepped into the printer, then its frame, by a double-click on their rows in Site: its children are drawn and the printer's body is not -- the board in its box, with the pins that would be pinned to a port. Its outline, holes, headers and jacks are from the maker's drawing.
 
 ![Inside it, the mainboard is the Creality V4.2.2](screenshots/12-07-inside-it-the-mainboard-is-the-creality-v4-2-2.png)
 
 ## 8. The DevKitC standing on its pins
 
-Backspace twice to the root, and a double-click into esp32_blink: a sketch and the board it runs on, drawn as the board -- the described part from the model half of this page, in the world.
+Backspace twice, stepping out to the root, and a double-click stepping into esp32_blink: a sketch and the board it runs on, drawn as the board -- the described part from the model half of this page, in the world.
 
 ![The DevKitC standing on its pins](screenshots/12-08-the-devkitc-standing-on-its-pins.png)
 
@@ -81,7 +81,7 @@ Added from the bench's own ring -- Camera, Add here -- a camera part stands abov
 
 ## 10. Looking into a printer, the camera stays in the garage
 
-A camera is a piece of the site, drawn at the level its site is. Double-clicked into the printer, neither its badge nor its pyramid follows; going back out brings them back.
+A camera is a piece of the site, drawn at the level its site is. Stepped into the printer, neither its badge nor its pyramid follows; stepping back out brings them back.
 
 ![Looking into a printer, the camera stays in the garage](screenshots/12-10-looking-into-a-printer-the-camera-stays-in-the-gar.png)
 
