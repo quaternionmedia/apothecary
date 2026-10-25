@@ -10,6 +10,7 @@ not a picture.
 from __future__ import annotations
 
 import pytest
+import rings
 import windows
 from playwright.sync_api import Page, expect
 from viewer_ready import by_hand, settled
@@ -63,22 +64,7 @@ def test_a_page_left_alone_draws_nothing_and_a_change_draws(page: Page, base_url
 def test_typing_in_the_scad_editor_draws_nothing_until_it_renders(page: Page, base_url: str):
     page.set_viewport_size({"width": 1280, "height": 800})
     _open(page, f"{base_url}/viewer/sites/parts_library")
-    page.locator("#contents-list .contents-item[data-path='calibration_cube']").click(
-        button="right", modifiers=["Control"]
-    )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=15000)
-    for label in ("Part", "Edit"):
-        page.wait_for_function(
-            f"() => [...document.querySelectorAll('#ring-overlay .wedge')]"
-            f".some((w) => w.getAttribute('aria-label') === {label!r})",
-            timeout=15000,
-        )
-        cell = page.evaluate(
-            "(label) => [...document.querySelectorAll('#ring-overlay .wedge')]"
-            ".find((w) => w.getAttribute('aria-label') === label).dataset.cell",
-            label,
-        )
-        page.keyboard.press(cell)
+    rings.on_row(page, "calibration_cube", "Part", "Edit")
     windows.open_window(page, "part-scad")  # the part's SCAD, in its window
     code = page.locator(".scad-editor .cm-content")
     expect(code).to_be_visible(timeout=20000)

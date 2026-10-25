@@ -26,14 +26,13 @@ import windows
 from browsers import launch
 from PIL import Image, ImageDraw
 from playwright.sync_api import expect
+from rings import labels as _labels
+from rings import open_from_key as _canvas_ring
+from rings import open_on_row as _ring_on
+from rings import press as _press
 from test_picture_in_the_world import leaves_garage_as_found  # noqa: F401 - a fixture
 from viewer_ready import settled
 
-WEDGES = (
-    "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
-    ".filter((w) => !w.classList.contains('empty'))"
-    ".map((w) => [w.dataset.cell, w.getAttribute('aria-label')]))"
-)
 STATE = "() => window.apothecaryPictures.state()"
 WIDE, HIGH = 640, 480
 
@@ -91,52 +90,6 @@ def _open_garage(page, base_url: str) -> None:
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
     page.evaluate("() => localStorage.removeItem('apothecary.panels')")
     settled(page)
-
-
-def _ring_on(page, path: str) -> None:
-    """The node ring on a piece, as a Ctrl+right-click on its row in Contents opens it."""
-    page.locator(f"#contents-list .contents-item[data-path='{path}']").click(
-        button="right", modifiers=["Control"]
-    )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-
-
-def _canvas_ring(page) -> None:
-    """The canvas ring, from the key, with nothing selected."""
-    page.evaluate(
-        "() => { document.activeElement && document.activeElement.blur(); "
-        "const v = window.fractalViewer; v.selectedName = null; v.renderSelectedPanel(); }"
-    )
-    page.keyboard.press("m")
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-
-
-def _wedges(page) -> dict:
-    return page.evaluate(WEDGES)
-
-
-def _press(page, *labels: str) -> str:
-    """Press the wedges these labels name, ring after ring; the address pressed."""
-    address = ""
-    for label in labels:
-        page.wait_for_function(
-            f"() => [...document.querySelectorAll('#ring-overlay .wedge')]"
-            f".some((w) => w.getAttribute('aria-label') === {label!r})",
-            timeout=5000,
-        )
-        cell = next(c for c, got in _wedges(page).items() if got == label)
-        page.keyboard.press(cell)
-        address += cell
-    return address
-
-
-PLACEMENT = "86249317"  # the order a ring seats its options in (apothecary/menu.py)
-
-
-def _labels(page) -> list:
-    """The open ring's labels, in the order its options were given."""
-    wedges = _wedges(page)
-    return [wedges[cell] for cell in PLACEMENT if cell in wedges]
 
 
 def _close_ring(page) -> None:

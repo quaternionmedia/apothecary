@@ -32,14 +32,21 @@ import pytest
 import windows
 from doc_capture import all_words
 from playwright.sync_api import Page, expect
+from rings import RING_MS, on_row
+from rings import press as _press
 from viewer_ready import MARKED_LINE_FIRST, UNDER_THE_STAGE_BAR, by_hand, settled
 
 from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.stl_renderer import params_sidecar_path
 
+
+def _ring(page: Page, *labels: str) -> None:
+    """The part's ring, from its row in Site, and the cells ``labels`` name."""
+    on_row(page, PART, *labels)
+
+
 PART = "calibration_cube"
-RING_MS = 15000
 WIDTHS = ((1280, 800), (1024, 768))
 # Where this run's server keeps its variants: a folder of the run's own, which the
 # server's words name and a page written from them must not -- another run, CI's among
@@ -63,11 +70,6 @@ SMALL_TOP = "translate([0, 0, size]) cube(size / 2);"
 BIG_TOP = "translate([0, 0, size]) cube(size);"
 UNDER = "translate([0, 0, -12]) cube(4);"
 
-WEDGES = (
-    "() => Object.fromEntries([...document.querySelectorAll('#ring-overlay .wedge')]"
-    ".filter((w) => !w.classList.contains('empty'))"
-    ".map((w) => [w.dataset.cell, w.getAttribute('aria-label')]))"
-)
 
 # How opaque an element is drawn: its opacity and every ancestor's, multiplied.
 OPACITY_THROUGH = """(selector) => {
@@ -170,26 +172,6 @@ def _open(page: Page, url: str) -> None:
         timeout=60000,
     )
     settled(page)
-
-
-def _press(page: Page, *labels: str) -> None:
-    for label in labels:
-        page.wait_for_function(
-            f"() => [...document.querySelectorAll('#ring-overlay .wedge')]"
-            f".some((w) => w.getAttribute('aria-label') === {label!r})",
-            timeout=RING_MS,
-        )
-        cell = next(c for c, got in page.evaluate(WEDGES).items() if got == label)
-        page.keyboard.press(cell)
-
-
-def _ring(page: Page, *labels: str) -> None:
-    """The part's ring, from its row in Site, and the cells ``labels`` name."""
-    page.locator(f"#contents-list .contents-item[data-path='{PART}']").click(
-        button="right", modifiers=["Control"]
-    )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
-    _press(page, *labels)
 
 
 def _said_on_the_page(page: Page) -> str:

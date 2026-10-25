@@ -24,11 +24,11 @@ import pytest
 import rings
 import windows
 from playwright.sync_api import Page, expect
+from rings import RING_MS
 
 from apothecary.systems import SYSTEMS, by_id
 
 PRINTER = "/dev/ttyFAKE1"
-RING_MS = 15000
 
 
 @dataclass(frozen=True)
@@ -41,17 +41,6 @@ class Opening:
     url: str
     open: Callable[[Page], None]
     kind: str | None = None
-
-
-def _ring(page: Page, *labels: str) -> None:
-    page.locator("#viewer-canvas").click(
-        button="right", modifiers=["Control"], position={"x": 40, "y": 40}
-    )
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=RING_MS)
-    for label in labels:
-        wedge = page.locator(f"#ring-overlay .wedge[aria-label='{label}']")
-        expect(wedge).to_be_visible(timeout=RING_MS)
-        page.keyboard.press(wedge.get_attribute("data-cell"))
 
 
 UNO = "/dev/ttyFAKE0"
@@ -85,7 +74,9 @@ OPENING = {
     ),
     # The Airgap, Panels › Airgap › Airgap.
     "airgap": Opening(
-        "airgap", "/viewer/parts/airgap", lambda page: _ring(page, "Panels", "Airgap", "Airgap")
+        "airgap",
+        "/viewer/parts/airgap",
+        lambda page: rings.on_world(page, "Panels", "Airgap", "Airgap"),
     ),
 }
 
@@ -267,7 +258,7 @@ def test_each_section_opened_from_windows_shows_its_part_of_the_subject(
 def test_a_systems_view_lays_out_every_window_of_it(page: Page, url: str, case: str):
     _opened(page, url, case)
     system, sections = _sections(case)
-    _ring(page, "Panels", "Windows", system.cell)
+    rings.on_world(page, "Panels", "Windows", system.cell)
     expect(page.locator("#status")).to_contain_text(f"The {system.title} view")
     for window in [system.main, *(system.window(s.id) for s in sections)]:
         assert windows.state(page, window)["open"] is True, window
@@ -326,7 +317,7 @@ def test_a_view_asked_for_without_its_subject_says_how_to_open_it(
     _loaded(page)
     s = by_id(system)
     before = windows.state(page, "site")
-    _ring(page, "Panels", "Windows", s.cell)
+    rings.on_world(page, "Panels", "Windows", s.cell)
     expect(page.locator("#status")).to_contain_text(f"open {s.title} first ({s.opened_by})")
     assert windows.state(page, "site") == before
 
@@ -361,7 +352,7 @@ def test_sections_with_nothing_to_show_are_minimised_until_they_have(
     page.goto(f"{url}{where}")
     _loaded(page)
     system, sections = _sections(case)
-    _ring(page, "Panels", "Windows", system.cell)
+    rings.on_world(page, "Panels", "Windows", system.cell)
     emptied(page)
     for section in sections:
         state = windows.state(page, system.window(section.id))
