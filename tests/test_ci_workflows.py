@@ -24,7 +24,7 @@ ON_A_PULL_REQUEST = {
     "timeless-check.yml",
 }
 # What runs the tests: at a version tag, and on demand.
-AT_A_TAG = {"pytest.yml", "docs-generate.yml"}
+AT_A_TAG = {"pytest.yml", "docs-generate.yml", "rust.yml"}
 
 
 def _triggers(name: str) -> dict:

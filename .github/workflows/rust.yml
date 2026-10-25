@@ -1,0 +1,32 @@
+name: 🦀 Rust workspace
+
+# The workspace at the root (Cargo.toml: two stubs under crates/) compiles, against
+# the Cargo.lock committed with it. Nothing else builds it, and the wheel carries
+# neither crate, so without this it could stop compiling unseen.
+# At a version tag and on demand, beside the tests (pytest.yml); a pull request's push
+# runs the governance checks and lint alone.
+on:
+  push:
+    tags:
+    - 'v*'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: 🦀 cargo check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1  # twice its median over the runs GitHub records for it
+    steps:
+    - name: 📰 Checkout
+      uses: actions/checkout@v6
+
+    - name: 🦀 The workspace compiles
+      # The runner's own stable Rust. --all-targets checks the tests and examples too;
+      # a check links nothing, so the PyO3 extension needs no Python library.
+      run: cargo check --workspace --all-targets --locked
