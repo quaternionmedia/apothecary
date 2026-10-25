@@ -453,6 +453,47 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a button that puts every setting back to its default",
     ),
+    # ---- the Airgap, apothecary/static/widgets/airgap.js ------------------------
+    # The airgap part as a field, torque and dynamics model. Its geometry is the
+    # part's text (the SCAD editor's while the part is edited), so the panel has no
+    # geometry controls of its own: a preset, the scrub, the rig as one document, the
+    # sweep as one line, and the verbs, each a cell of Panels › Airgap.
+    "airgap-preset": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of arrangements to start from, written into the editor's text",
+    ),
+    "airgap-to-editor": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that writes the panel's values into the airgap part's text",
+    ),
+    "airgap-from-editor": (WIDGET, WHAT_YOU_SEE, "a button that reads the part's text again"),
+    "airgap-copy-scad": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that copies the part's text with the panel's values written in",
+    ),
+    "airgap-copy-metrics": (WIDGET, WHAT_YOU_SEE, "a button that copies the metrics document"),
+    "airgap-reset": (WIDGET, WHAT_YOU_SEE, "a button that puts the panel back on the part's text"),
+    "airgap-play": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that spins the rotor, or plays the run, and pauses",
+    ),
+    "airgap-phi": (WIDGET, WHAT_YOU_SEE, "a slider for the rotor angle, or time through the run"),
+    "airgap-rig": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a box holding the rig -- excitation, drive, load, bearing, mount, actuation, "
+        "playback -- as JSON",
+    ),
+    "airgap-sweep": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a line naming two ranges and the metric to map over them",
+    ),
+    "airgap-run": (WIDGET, WHAT_YOU_SEE, "a button that maps the metric the sweep line names"),
 }
 
 # A control of its own that does the same thing as a cell of the ring, and the
@@ -464,6 +505,21 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
 RING_BACKED: Dict[str, str] = {
     # the header's Docs is the canvas ring's Panels › Docs
     "docs-link": "panel:docs",
+    # the Airgap's verbs are the cells of Panels › Airgap
+    "airgap-play": "airgap:play",
+    "playEl:click:setPlaying": "airgap:play",
+    "airgap-run": "airgap:sweep",
+    "runEl:click:act": "airgap:sweep",
+    "airgap-to-editor": "airgap:to-editor",
+    "toEditorEl:click:act": "airgap:to-editor",
+    "airgap-from-editor": "airgap:from-editor",
+    "fromEditorEl:click:act": "airgap:from-editor",
+    "airgap-copy-scad": "airgap:copy-scad",
+    "copyScadEl:click:act": "airgap:copy-scad",
+    "airgap-copy-metrics": "airgap:copy-metrics",
+    "copyMetricsEl:click:act": "airgap:copy-metrics",
+    "airgap-reset": "airgap:reset",
+    "resetEl:click:act": "airgap:reset",
     # the viewer's Device section: Open is Device › Open, the board's Machine
     "dev-open": "device:open",
     "dev-query": "device:query",
@@ -1042,6 +1098,52 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         AUTOMATIC,
         NOTHING,
         "leaving the page stops the polling and lets go of the serial streams",
+    ),
+    # ---- the Airgap (widgets/airgap.js): its controls, and its pictures hovered and clicked
+    "toEditorEl:click:act": (WIDGET, WHAT_YOU_SEE, "the panel's values written into the part's text"),
+    "fromEditorEl:click:act": (WIDGET, WHAT_YOU_SEE, "the part's text read again"),
+    "copyScadEl:click:act": (WIDGET, WHAT_YOU_SEE, "the text with the panel's values copied"),
+    "copyMetricsEl:click:act": (WIDGET, WHAT_YOU_SEE, "the metrics document copied"),
+    "resetEl:click:act": (WIDGET, WHAT_YOU_SEE, "the panel put back on the part's text"),
+    "phiEl:input:scrubTo": (WIDGET, WHAT_YOU_SEE, "the rotor angle, or the run's time, scrubbed"),
+    "playEl:click:setPlaying": (WIDGET, WHAT_YOU_SEE, "the rotor spun or the run played, and paused"),
+    "presetEl:change:choosePreset": (WIDGET, WHAT_YOU_SEE, "a preset's arrangement taken"),
+    "rigEl:change:rigChanged": (WIDGET, WHAT_YOU_SEE, "the rig document read, checked and run"),
+    "sweepEl:change:sweepChanged": (WIDGET, WHAT_YOU_SEE, "the sweep line read and checked"),
+    "runEl:click:act": (WIDGET, WHAT_YOU_SEE, "the metric mapped over the two ranges"),
+    "dynSpeedEl:mousemove:sayRunAt": (
+        GESTURE,
+        NOTHING,
+        "the run's reading at the time under the pointer",
+    ),
+    "dynSpeedEl:click:scrubRunTo": (GESTURE, WHAT_YOU_SEE, "the playback scrubbed to that time"),
+    "gapmapEl:mousemove:sayGapAt": (GESTURE, NOTHING, "the gap at the angles under the pointer"),
+    "gapmapEl:click:setPhiFromGap": (GESTURE, WHAT_YOU_SEE, "the rotor angle set from the map"),
+    "energyEl:mousemove:sayEnergyAt": (
+        GESTURE,
+        NOTHING,
+        "co-energy and torque at the angle under the pointer",
+    ),
+    "energyEl:click:setPhiTo": (GESTURE, WHAT_YOU_SEE, "the rotor angle set from the curve"),
+    "inductEl:click:setPhiFromInductance": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "the rotor angle set from the inductance",
+    ),
+    "sweepMapEl:mousemove:saySweepCell": (
+        GESTURE,
+        NOTHING,
+        "the sweep cell under the pointer read out",
+    ),
+    "sweepMapEl:click:loadSweepCell": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "that cell's two values taken, into the text where it is edited",
+    ),
+    "foldsEl:toggle:requestAnimationFrame": (
+        AUTOMATIC,
+        NOTHING,
+        "a fold opened draws the pictures in it",
     ),
 }
 

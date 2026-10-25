@@ -1008,26 +1008,49 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert carried_by("picture:add:@floor").name == "VIEWER"
     assert carried_by("picture:purge").name == "VIEWER"
     # Site, a ring of Site (its chips and its Contents) and its own windows --
-    # Problems, Pinned, Jobs, SCAD; Selected, Pictures (every picture, and the
-    # gathering) and a board's Machine (its log in it) each a cell; then Windows:
-    # the world alone and the page's own layout again; then the Bench, a group of
-    # its own: the panel and its verbs. Then Docs: the documentation and the
-    # walkthrough in a new tab, as the header's Docs opens them; last, Control pad:
-    # an armed printer's pad in a loud window of its own or back in its Machine.
-    # Each seated after the others so none of them moves.
+    # Problems, Pinned, Jobs, SCAD; Selected; Pictures, a ring of Pictures and the
+    # gathering; Machine, a ring of a board's Machine (its log in it) and an armed
+    # printer's control pad, in a loud window of its own or back in its Machine;
+    # then Windows: the world alone and the page's own layout again; then the
+    # Bench, a group of its own: the panel and its verbs. Then Docs: the
+    # documentation and the walkthrough in a new tab, as the header's Docs opens
+    # them; last, the Airgap, the panel and its verbs.
     assert [(c.label, c.action, c.cell) for c in panels.children] == [
         ("Site", None, 8),
         ("Selected", "panel:toggle:selected", 6),
         ("Pictures", None, 2),
-        ("Machine", "panel:toggle:machine", 4),
+        ("Machine", None, 4),
         ("Windows", None, 9),
         ("Bench", None, 3),
         ("Docs", "panel:docs", 1),
-        ("Control pad", "panel:pad", 7),
+        # The Airgap, the eighth cell and the ring's last: the panel and its verbs.
+        ("Airgap", None, 7),
     ]
     assert address_of(root, "panel:docs") == "41"
+    airgap = next(c for c in panels.children if c.label == "Airgap")
+    assert [(c.label, c.action, c.cell) for c in airgap.children] == [
+        ("Airgap", "panel:toggle:airgap", 8),
+        ("Play", "airgap:play", 6),
+        ("Sweep", "airgap:sweep", 2),
+        ("To editor", "airgap:to-editor", 4),
+        ("From editor", "airgap:from-editor", 9),
+        ("Copy SCAD", "airgap:copy-scad", 3),
+        ("Copy metrics", "airgap:copy-metrics", 1),
+        ("Reset", "airgap:reset", 7),
+    ]
+    assert address_of(root, "panel:airgap") == "478"
+    assert address_of(root, "airgap:to-editor") == "474"
+    assert not any(c.destructive for c in airgap.children)
+    for verb in ("play", "sweep", "to-editor", "from-editor", "copy-scad", "copy-metrics", "reset"):
+        assert carried_by(f"airgap:{verb}").name == "VIEWER"
+    assert carried_by("panel:toggle:airgap").name == "VIEWER"
     assert carried_by("panel:docs").name == "VIEWER"
-    assert address_of(root, "panel:pad") == "47"
+    machine = next(c for c in panels.children if c.label == "Machine")
+    assert [(c.label, c.action, c.cell) for c in machine.children] == [
+        ("Machine", "panel:toggle:machine", 8),
+        ("Control pad", "panel:pad", 6),
+    ]
+    assert address_of(root, "panel:pad") == "446"
     assert carried_by("panel:pad").name == "VIEWER"
     site = next(c for c in panels.children if c.label == "Site")
     assert [(c.label, c.action, c.cell) for c in site.children] == [
@@ -1045,7 +1068,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Gather", "panel:toggle:gather", 6),
     ]
     assert address_of(root, "panel:pictures") == "428"
-    assert address_of(root, "panel:machine") == "44"
+    assert address_of(root, "panel:machine") == "448"
     assert address_of(root, "panel:windows") == "49"
     windows = next(c for c in panels.children if c.label == "Windows")
     assert [(c.label, c.action, c.cell) for c in windows.children] == [

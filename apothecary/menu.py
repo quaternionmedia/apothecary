@@ -685,10 +685,16 @@ PANELS: Sequence[Tuple[str, str]] = (
     # beside Pictures registered at start. Its cell is View's (View › Settings),
     # as ⚙ View › Settings opens it, not one of Panels'.
     ("settings", "Settings"),
+    # The Airgap: the airgap part as a field, torque and dynamics model, a tab
+    # beside Pictures registered at start and shown when asked for; it follows the
+    # part's text while the part is edited. Its verbs are a ring of their own under
+    # its cell (_airgap), seated last.
+    ("airgap", "Airgap"),
 )
 # The panels seated before the windows' own cell (Panels › Windows, 49); a panel
-# registered after them is seated after it, so no address moves. Site's cell is a
-# ring of Site and its own windows, and Pictures' a ring of Pictures and Gather.
+# registered after them is seated after it. Site's cell is a ring of Site and its
+# own windows, Pictures' a ring of Pictures and Gather, and Machine's a ring of the
+# Machine and its control pad.
 _BEFORE_WINDOWS = ("site", "selected", "pictures", "machine")
 _RINGS = {
     "site": ("site", "problems", "pinned", "jobs", "scad"),
@@ -703,6 +709,18 @@ def _panels() -> Option:
     labels = dict(PANELS)
 
     def cell(pid: str, label: str) -> Option:
+        if pid == "machine":
+            # A board's Machine, and an armed printer's control pad in a loud window
+            # of its own or put back in its Machine, as the pad's ⧉ Pop out and
+            # ⇥ Put back do (widgets/machine.js).
+            return Option(
+                id="panels:machine",
+                label=label,
+                children=[
+                    toggle(pid, label),
+                    Option(id="panel:pad", label="Control pad", action="panel:pad"),
+                ],
+            )
         if pid not in _RINGS:
             return toggle(pid, label)
         return Option(
@@ -734,10 +752,9 @@ def _panels() -> Option:
         # The documentation and the walkthrough, in a tab of the browser's own, as
         # the header's Docs opens them. After the others, so no cell before it moves.
         + [Option(id="panel:docs", label="Docs", action="panel:docs")]
-        # An armed printer's control pad, in a loud window of its own or put back in
-        # its Machine, as the pad's ⧉ Pop out and ⇥ Put back do (widgets/machine.js).
-        # Last, so no cell before it moves.
-        + [Option(id="panel:pad", label="Control pad", action="panel:pad")],
+        # The Airgap, a group of its own: the panel and its verbs. The eighth cell,
+        # the ring's last.
+        + [_airgap(toggle("airgap", "Airgap"))],
     )
 
 
@@ -773,6 +790,35 @@ def _view() -> Option:
             Option(id="view:outlines", label="Outlines", action="view:outlines"),
             Option(id="view:walls", label="Select walls", action="view:walls"),
             Option(id="view:settings", label="Settings", action="view:settings"),
+        ],
+    )
+
+
+def _airgap(show: Option) -> Option:
+    """The Airgap's cell under Panels: the panel itself first, then its verbs.
+
+    Each verb acts on the panel as its buttons do, where it has one: Play spins the
+    rotor or plays the run and pauses it; Sweep maps the metric the panel's sweep
+    line names over the two ranges it names. The rest have no button: To editor
+    writes the panel's values into the airgap part's text in the SCAD editor (the
+    text is the truth, so the panel then follows the text), From editor reads that
+    text again (the part's own file while it is not being edited), Copy SCAD copies
+    the part's text with the panel's values written in, Copy metrics copies the
+    metrics document (airgap/metrics/1), and Reset puts the panel back on the
+    part's own text with its rig and sweep as they start.
+    """
+    return Option(
+        id="airgap",
+        label="Airgap",
+        children=[
+            show,
+            Option(id="airgap:play", label="Play", action="airgap:play"),
+            Option(id="airgap:sweep", label="Sweep", action="airgap:sweep"),
+            Option(id="airgap:to-editor", label="To editor", action="airgap:to-editor"),
+            Option(id="airgap:from-editor", label="From editor", action="airgap:from-editor"),
+            Option(id="airgap:copy-scad", label="Copy SCAD", action="airgap:copy-scad"),
+            Option(id="airgap:copy-metrics", label="Copy metrics", action="airgap:copy-metrics"),
+            Option(id="airgap:reset", label="Reset", action="airgap:reset"),
         ],
     )
 
@@ -1609,6 +1655,8 @@ CARRIED_BY: Dict[str, Carries] = {
     # /esptool/flash, /tasks/{id}/cancel), called by the page, never through
     # the intent route.
     "bench": Carries.VIEWER,
+    # The Airgap panel's verbs: the page carries each to the panel (widgets/airgap.js).
+    "airgap": Carries.VIEWER,
     # A camera's verbs: which of this browser's cameras it is (and Allow, to name
     # them), live, a picture taken and made its view, and the gathering's report
     # -- the page's: only the browser can open a camera, and the device and

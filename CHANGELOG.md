@@ -13,6 +13,9 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 - `apothecary serve --demo` goes round every loop with nothing real: printer_1's mainboard pinned to an idle simulated Ender, a simulated ESP32 devkit, the scripted arduino-cli, cargo and espflash, and the OrcaSlicer installed (or Slice says how to install one), on a state folder of its own, `.cache/demo` in the checkout, kept between runs. A line above the header says it is the demo and how to leave it, and no real serial port is opened or listed. ([code](apothecary/demo.py))
 - Walkthrough page 00, *Getting started*: install, `apothecary check`, `apothecary openscad install` before the first serve, `apothecary serve --demo`, then the four loops and what each needs; `apothecary --help` ends with the same steps, and `check` with the next one. ([page](walkthrough/00-getting-started.md))
 - `apothecary parts import` brings an STL or OBJ in as a part. ([doc](docs/geometry-from-elsewhere.md))
+- The `airgap` part: a rotor/stator pair of any base form -- nautilus, Möbius and fractal features, segmented stators, explicit conductor arrangements -- computed in its SCAD from its own assignments, so it is edited as text and a saved variant carries the arrangement; a Python mirror gives its envelope and is held to the SCAD by test. ([part](parts/airgap/README.md))
+- The Airgap panel, a window beside Pictures and the last cell of the canvas ring's Panels: the airgap part as a field, torque and dynamics model computed in the browser from the part's text, following it in the SCAD editor and writing presets back into it; its rig and its sweep as documents; its figures as one metrics document (`airgap/metrics/1`) that `/airgap/metrics/*` and `apothecary airgap metrics` validate and render. ([doc](docs/airgap.md))
+- `examples/` is organized by kind -- `examples/scenes/`, `examples/scripts/`, `examples/pictures/` -- with an index, the scene `apothecary render` falls back to as a file beside the cube, and a test that runs every one; `examples/llms_own/` is a lane for language-model agents' own contributions, each a folder with a scene that renders and a README that says what it is, seeded with a Möbius band and a nautilus of chambers. ([doc](examples/README.md))
 - A `part.json` beside a part's SCAD stands in for a Python wrapper, and such a part's parameters are what its SCAD declares, as OpenSCAD's customizer lists them. ([code](apothecary/projects/parts/customizer.py))
 - The garage bench draws its one printer, an Ender 3, and real boards, from their makers' drawings. ([doc](docs/geometry-from-elsewhere.md))
 - Personal data stays on the device: the server answers this machine only, and the process reaches nothing but a tool fetch -- OpenSCAD (or its source, on Linux arm64), the slicer, the firmware toolchains and a Rust sketch's crates. Two things may arrive: a lighting console's sACN and its OSC status, each on one UDP port, received and never answered. ([code](apothecary/stays_local.py))
@@ -129,6 +132,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 ### Fixed
 
 - `apothecary parts render` refuses to write over the part's own source file. ([code](apothecary/cli/parts.py))
+- A string parameter with a newline in it reaches OpenSCAD as the `\n` escape, where a raw newline inside a `-D` literal was dropped by its lexer and the text after it lost. ([code](apothecary/projects/parts/assignments.py))
 
 ## [0.1.0]
 

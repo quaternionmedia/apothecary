@@ -473,7 +473,7 @@ headed with the printer it heats and moves and the time left, there whatever
 tab is in front: a real machine is armed. Every arming pops it out, from the
 Machine, the ring or another browser. Its **⇥ Put back**, or its window's ✕,
 puts it back as the last thing in the Machine's column; its **⧉ Pop out** pops
-it out again, and the ring's Panels › Control pad does either. Disarmed, it
+it out again, and the ring's Panels › Machine › Control pad does either. Disarmed, it
 goes.
 
 What can be sent is a bounded allowlist, `firmware.gcode.CONTROL_CODES`

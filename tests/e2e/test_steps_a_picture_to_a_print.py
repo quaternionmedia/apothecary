@@ -1,5 +1,5 @@
 """A picture to a print, a step at a time, from the bench's ring with no camera: Picture ›
-Add with examples/shapes.png, Find shapes, Size it 300 mm across, Make the disc, Slice it
+Add with examples/pictures/shapes.png, Find shapes, Size it 300 mm across, Make the disc, Slice it
 for printer_1, and Send file to print it.
 
 Each step first checks that the page is where the step before it leaves it, then acts as
@@ -29,7 +29,7 @@ from test_picture_to_print import BOARD, DWELL, LAYERS, MACHINE, PRINTER, _attac
 from test_the_loop import _labels, _press, _ring_on, _said, _status
 from viewer_ready import by_hand, settled
 
-SHAPES_PNG = ROOT / "examples" / "shapes.png"
+SHAPES_PNG = ROOT / "examples" / "pictures" / "shapes.png"
 WIDTH_MM = 300  # shapes.png across, as the README's photo example has it
 
 
@@ -54,7 +54,7 @@ class Walk:
 
 
 def add(w: Walk) -> None:
-    """The bench's ring, Picture › Add, examples/shapes.png: pinned there as a view, laid
+    """The bench's ring, Picture › Add, examples/pictures/shapes.png: pinned there as a view, laid
     clear of what rests on the bench, nothing found in it yet; the view brought to the
     bench by hand, to look at it."""
     w.page.goto(f"{w.base}/viewer/sites/garage")

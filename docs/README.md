@@ -7,7 +7,7 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 ## The walkthrough
 
 `walkthrough/` is the path through this repository. Pages 01 to 06 are
-written by the browser tests that walk them; page 00 and pages 07 to 16 are
+written by the browser tests that walk them; page 00 and pages 07 to 17 are
 doctests, run by `pytest walkthrough`. Start there, at page 00.
 
 | Page | |
@@ -29,6 +29,7 @@ doctests, run by `pytest walkthrough`. Start there, at page 00.
 | [14 — Problems and solutions](../walkthrough/14-problems-and-solutions.md) | What is unresolved, who can close it, and what exists to close it with |
 | [15 — Running the checks before pushing](../walkthrough/15-preflight.md) | `apothecary preflight`: each CI workflow, run here before a push |
 | [16 — Being depended on](../walkthrough/16-being-depended-on.md) | What a consumer pinning this repository is entitled to |
+| [17 — A part that computes itself](../walkthrough/17-a-part-that-computes-itself.md) | The airgap: a part whose SCAD computes its surfaces from its assignments, the Python mirror that declares its envelope, and the metrics document its panel says |
 
 ## Guides
 
@@ -46,6 +47,7 @@ doctests, run by `pytest walkthrough`. Start there, at page 00.
 | [Configuration](configuration.md) | Every `APOTHECARY_*` variable, and the tool variables, each with its default and the page that explains it |
 | [Firmware](firmware.md) | Programming boards from sketches kept with their parts, Arduino and Rust for the ESP32, from the Bench or a board's Machine; monitoring a G-code printer from its scene node |
 | [The slicer](slicer.md) | OrcaSlicer installed and pinned, the printer's profile kept with its part, a part or a made piece sliced for the pinned printer and kept for the Print card |
+| [The Airgap](airgap.md) | The `airgap` part -- a rotor/stator pair computed in its SCAD -- and the Airgap panel: the part as a field, torque and dynamics model that follows its text in the editor, its verbs on the ring, its rig and sweep as documents, and the metrics document Python reads back |
 | [The bench checklist](bench-checklist.md) | The Ender 3 and an ESP32 for real: pinning, the link, heat, motion, levelling, printing from here, slicing, the emergency stop, and the Rust and Arduino blinks |
 
 ## The Rust workspace

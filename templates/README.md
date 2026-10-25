@@ -6,5 +6,5 @@ Jinja2 templates for generating OpenSCAD.
 
 Example:
 ```bash
-apothecary templategenerate -t @templates/basic.scad.j2 --scene-file examples/scene.json -o out.scad
+apothecary templategenerate -t @templates/basic.scad.j2 --scene-file examples/scenes/cube.json -o out.scad
 ```

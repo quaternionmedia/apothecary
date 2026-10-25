@@ -666,13 +666,14 @@ FRAMED = """(key) => {
 
 
 def _ring_control_pad(page: Page) -> None:
-    """The canvas ring's Panels › Control pad."""
+    """The canvas ring's Panels › Machine › Control pad."""
     page.locator("#viewer-canvas").click(
         button="right", modifiers=["Control"], position={"x": 30, "y": 30}
     )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("4")  # Panels
-    page.keyboard.press("7")  # Control pad
+    page.keyboard.press("4")  # Machine
+    page.keyboard.press("6")  # Control pad
     expect(page.locator("#ring-overlay")).to_have_count(0)
 
 
@@ -684,7 +685,7 @@ def test_armed_the_pad_opens_a_loud_window_beside_the_world_and_goes_back(
     world: its tab red and named for the printer it heats and moves, its frame loud,
     the world narrower with printer_1 framed in the middle of it, and still there with
     another tab in front of the Machine. Its ⇥ Put back, its tab's ✕ and the ring's
-    Panels › Control pad put it back as the Machine's last child, and the world is as
+    Panels › Machine › Control pad put it back as the Machine's last child, and the world is as
     wide as it was; ⧉ Pop out and the ring pop it out again. Disarmed, it goes back;
     armed again, it pops out."""
     _pin(printer_url, BOARD)
@@ -731,8 +732,8 @@ def test_armed_the_pad_opens_a_loud_window_beside_the_world_and_goes_back(
     windows.close(page, "control")
     expect(machine.locator("#control")).to_be_visible()
     windows.world_is(page, width)
-    # The toggle is the canvas ring's Panels › Control pad, and wears its address.
-    expect(pad.locator("#ctl-pop")).to_have_attribute("data-address", "47", timeout=5000)
+    # The toggle is the canvas ring's Panels › Machine › Control pad, and wears its address.
+    expect(pad.locator("#ctl-pop")).to_have_attribute("data-address", "446", timeout=5000)
     _ring_control_pad(page)
     expect(window.locator("#control")).to_be_visible(timeout=5000)
     expect(page.locator("#status")).to_contain_text(

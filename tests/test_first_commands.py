@@ -107,10 +107,10 @@ def test_the_server_builds_a_missing_stl_when_it_starts(monkeypatch, tmp_path):
 
 
 def test_the_example_scene_renders_through_the_cli(tmp_path):
-    """README: `apothecary render --scene-file examples/scene.json -o scene.scad`."""
+    """README: `apothecary render --scene-file examples/scenes/cube.json -o scene.scad`."""
     out = tmp_path / "scene.scad"
     done = subprocess.run(
-        [sys.executable, "-m", "apothecary", "render", "--scene-file", "examples/scene.json"]
+        [sys.executable, "-m", "apothecary", "render", "--scene-file", "examples/scenes/cube.json"]
         + ["-o", str(out)],
         cwd=ROOT,
         capture_output=True,

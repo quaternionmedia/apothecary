@@ -107,7 +107,7 @@ function kept(config, known) {
 export function mountPanels({ host, world, storageKey = "apothecary.layout", known = [] } = {}) {
     const records = new Map();  // id -> the panel: its element, its body, its callbacks
     const knownTypes = new Set([
-        WORLD, "site", "problems", "pinned", "jobs", "scad", "selected", "pictures", "gather", "bench", "settings",
+        WORLD, "site", "problems", "pinned", "jobs", "scad", "selected", "pictures", "gather", "bench", "settings", "airgap",
         ...TRANSIENT, ...known,
     ]);
     const layout = new GoldenLayout(host);
@@ -371,12 +371,15 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             records.delete(id);
             if (ci && r.onClose) r.onClose();
         },
-        /* Open a panel: shown where it is, else opened at its home, its tab in front. */
+        /* Open a panel: shown where it is, else opened at its home, its tab in front,
+         * its body filled before this returns, so a verb sent to it next finds it. */
         open(id) {
             const r = records.get(id);
             if (!r || !r.registered) return false;
             if (!item(id)) addAt(r);
-            return show(id);
+            const shown = show(id);
+            if (shown && r.mount && r.container?.visible) { const mount = r.mount; r.mount = null; mount(r.slot); r.filled = true; }
+            return shown;
         },
         close(id) {
             const ci = item(id);
