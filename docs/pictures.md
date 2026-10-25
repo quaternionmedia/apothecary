@@ -3,9 +3,9 @@
 A picture becomes named, placed pieces you can build: it is pinned at a place
 in a site as a **view**, a finder finds the flat shapes in it, and a shape is
 made into a **piece** standing where it was seen. A **camera** is a part of the
-site that takes the picture. [Walkthrough 13](../walkthrough/13-a-picture-to-a-print.md)
+site that takes the picture. [Walkthrough 03](../walkthrough/03-a-picture-to-a-print.md)
 goes round the loop from a camera's picture to a print, and
-[walkthrough 11](../walkthrough/11-photographs-into-pieces.md) takes photographs
+[walkthrough 01](../walkthrough/01-photographs-into-pieces.md) takes photographs
 into pieces; the ring's cells named here are [the viewer's](viewer.md#the-ring).
 
 ## Where pictures live

@@ -1,4 +1,4 @@
-# 12 — The bench as it is, and a camera looking at it
+# 02 — The bench as it is, and a camera looking at it
 
 Written by `tests/e2e/test_docs_bench_walkthrough.py`, and
 rewritten by the ordinary test command (`uv run apothecary test run`).
@@ -56,37 +56,37 @@ bed at z = 95; mainboard: part creality_v422
 
 The root shows the whole building; here the view is brought to the bench by hand, Shift+drag to the middle and the wheel nearer. Every machine and board is the part it names, drawn from its own STL, and the site places each by its footprint.
 
-![The bench at the garage's root: an Ender 3 at one end, the boards at the other](screenshots/12-05-the-bench-at-the-garage-s-root-an-ender-3-at-one-e.png)
+![The bench at the garage's root: an Ender 3 at one end, the boards at the other](screenshots/02-05-the-bench-at-the-garage-s-root-an-ender-3-at-one-e.png)
 
 ## 6. A printer is the part it names
 
 Selecting printer_1 shows its rows and, below them, the part its body is; the view brought to it by hand. The power supply stands on the right behind the upright, the spool on its bracket over the top bar, the electronics box under the bed at the front.
 
-![A printer is the part it names](screenshots/12-06-a-printer-is-the-part-it-names.png)
+![A printer is the part it names](screenshots/02-06-a-printer-is-the-part-it-names.png)
 
 ## 7. Inside it, the mainboard is the Creality V4.2.2
 
 Stepped into the printer, then its frame, by a double-click on their rows in Site: its children are drawn and the printer's body is not -- the board in its box, with the pins that would be pinned to a port. Its outline, holes, headers and jacks are from the maker's drawing.
 
-![Inside it, the mainboard is the Creality V4.2.2](screenshots/12-07-inside-it-the-mainboard-is-the-creality-v4-2-2.png)
+![Inside it, the mainboard is the Creality V4.2.2](screenshots/02-07-inside-it-the-mainboard-is-the-creality-v4-2-2.png)
 
 ## 8. The DevKitC standing on its pins
 
 Backspace twice, stepping out to the root, and a double-click stepping into esp32_blink: a sketch and the board it runs on, drawn as the board -- the described part from the model half of this page, in the world.
 
-![The DevKitC standing on its pins](screenshots/12-08-the-devkitc-standing-on-its-pins.png)
+![The DevKitC standing on its pins](screenshots/02-08-the-devkitc-standing-on-its-pins.png)
 
 ## 9. A camera added above the bench is drawn there
 
 Added from the bench's own ring -- Camera, Add here -- a camera part stands above the bench looking straight down: its body, its 📷 badge and, while it is selected, its pyramid from the lens to the bench's top, with a ring to turn it and an arc to tilt it beside the move arrows. Its own ring's Device says which of this browser's cameras it is. It is kept on the server, so every browser looking at this site sees it standing there. The status bar names the next step, Take picture (P), which keeps a frame where it looks.
 
-![A camera added above the bench is drawn there](screenshots/12-09-a-camera-added-above-the-bench-is-drawn-there.png)
+![A camera added above the bench is drawn there](screenshots/02-09-a-camera-added-above-the-bench-is-drawn-there.png)
 
 ## 10. Looking into a printer, the camera stays in the garage
 
 A camera is a piece of the site, drawn at the level its site is. Stepped into the printer, neither its badge nor its pyramid follows; stepping back out brings them back.
 
-![Looking into a printer, the camera stays in the garage](screenshots/12-10-looking-into-a-printer-the-camera-stays-in-the-gar.png)
+![Looking into a printer, the camera stays in the garage](screenshots/02-10-looking-into-a-printer-the-camera-stays-in-the-gar.png)
 
 ## 11. Removed, it leaves the world
 
@@ -100,7 +100,7 @@ GET /sites/garage/attached -> cameras: []
 
 Site's Pinned lists what a page pinned -- cameras, views, boards -- every site's, each row naming its site and carrying the button that takes it back, from here, without switching to that site; a pin whose site or piece is gone is shown as such, and this is the one place it can be seen. Pictures lists every picture in the picture folder as thumbnails, grouped by the camera that took them -- here none did -- the folder's own and the ones the browser kept (those added from its file picker kept as they were named under uploads/), each with where it is pinned as a view, and Forget on a kept one. A picture kept and pinned nowhere waits to be chosen: one clicked is chosen, as shelf.png is here, and the ring's Picture › Folder pins it where the ring stands, as the status bar says. Folder holds the 7 newest by modification time; with more in the folder, its last cell pins the one chosen when that one is older.
 
-![What the browser put here, it can take back](screenshots/12-12-what-the-browser-put-here-it-can-take-back.png)
+![What the browser put here, it can take back](screenshots/02-12-what-the-browser-put-here-it-can-take-back.png)
 
 ## 13. And a purge forgets only what the browser put here
 

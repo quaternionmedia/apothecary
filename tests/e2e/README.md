@@ -66,7 +66,7 @@ drift apart.
 
 Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture.py`.
 
-- `walkthrough` writes `walkthrough/11-*.md` and `walkthrough/12-*.md` and
+- `walkthrough` writes `walkthrough/01-*.md` and `walkthrough/02-*.md` and
   their screenshots on every run that includes `test_docs_photo_walkthrough.py`
   or `test_docs_bench_walkthrough.py`. Each numbered step is written as the run
   reaches it, after the assertions before it. The page's opening, its notes and
@@ -82,10 +82,10 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   is taken once the page has drawn under its blanks, at the size they leave it
   (`doc_capture.picture`), so a picture changes only when the page does. A
   loop's page --
-  `walkthrough/13-a-picture-to-a-print.md` from `test_picture_to_print.py`,
-  `walkthrough/14-designing-a-part.md` from `test_part_loop.py`,
-  `walkthrough/15-firmware.md` from `test_the_firmware_loop.py`,
-  `walkthrough/16-editing-a-parts-scad.md` from `test_scad_loop.py` -- is written
+  `walkthrough/03-a-picture-to-a-print.md` from `test_picture_to_print.py`,
+  `walkthrough/04-designing-a-part.md` from `test_part_loop.py`,
+  `walkthrough/05-firmware.md` from `test_the_firmware_loop.py`,
+  `walkthrough/06-editing-a-parts-scad.md` from `test_scad_loop.py` -- is written
   the same way by a test marked `e2e` and not `walkthrough`, which passes
   `browser_suite_only=True` to the fixture: the browser suite writes it,
   `apothecary test run` stays quick, and the page's header and footer say so.

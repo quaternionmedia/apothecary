@@ -219,7 +219,7 @@ clone of the checkout; the browser suite's servers save into one of their own.
 
 In the viewer, the part's editor in Selected holds its SCAD
 ([viewer.md](viewer.md#the-scad-editor) says how it checks, renders and saves,
-and its keys); walkthrough 16 goes round it.
+and its keys); walkthrough 06 goes round it.
 
 A part built by Python geometry (the snowplow) has no SCAD of its own to
 edit: `GET /parts/{name}/scad` answers the SCAD its geometry generates

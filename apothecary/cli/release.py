@@ -3,7 +3,7 @@
 This repository is consumed by pinned downstreams, and the enclosure record
 asks them to depend on a *released* version rather than a commit. That is an
 obligation on this side too: geometry reaches a consumer by publishing
-(walkthrough/10-being-depended-on.md).
+(walkthrough/16-being-depended-on.md).
 """
 
 from __future__ import annotations

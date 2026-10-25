@@ -20,7 +20,7 @@ import click
 from .utils import _safe_echo
 
 # state -> (mark, colour). The marks are ASCII: a Windows console defaults to
-# cp1252, which cannot print a check mark (walkthrough/07).
+# cp1252, which cannot print a check mark (walkthrough/13).
 MARKS = {
     "pass": ("OK  ", "green"),
     "ok": ("OK  ", "green"),

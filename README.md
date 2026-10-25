@@ -75,7 +75,7 @@ uv run apothecary photo view examples/shapes.png --width-mm 300 --port 8001   # 
 In the viewer, a camera is a part of the site: Camera › Add here stands one above a
 structure, Take picture (`P`) pins its frame where it looks, Picture › Find shapes finds the
 shapes in it, and Picture › Make stands one up as a piece to slice and print
-([docs/pictures.md](docs/pictures.md); [walkthrough 13](walkthrough/13-a-picture-to-a-print.md)
+([docs/pictures.md](docs/pictures.md); [walkthrough 03](walkthrough/03-a-picture-to-a-print.md)
 goes round twice).
 
 From Python:

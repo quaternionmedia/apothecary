@@ -2,7 +2,7 @@
 what stays on this machine.
 
 Like the first (`test_docs_photo_walkthrough.py`), this module is the page:
-`walkthrough/12-the-bench-as-it-is.md` is what it writes, the ordinary test
+`walkthrough/02-the-bench-as-it-is.md` is what it writes, the ordinary test
 command runs it, and each step is an assertion the run has to satisfy before
 it becomes a sentence. The model half needs no browser; the browser half runs
 in a browser launched with Chromium's fake camera, so a camera can be placed
@@ -101,7 +101,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
 
     page, base_url, picture_folder = bench.page, bench.url, bench.folder
     story = walkthrough(
-        ordinal="12",
+        ordinal="02",
         slug="the-bench-as-it-is",
         title="The bench as it is, and a camera looking at it",
         intro=(

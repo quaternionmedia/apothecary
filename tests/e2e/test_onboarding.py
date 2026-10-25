@@ -252,7 +252,7 @@ def test_the_headers_docs_and_panels_docs_open_the_docs_and_the_walkthrough(page
     listed = tab.locator("main ul.pages a")
     expect(listed.first).to_have_attribute("href", re.compile(r"^/walkthrough/0[01]-"))
     names = [a.get_attribute("href") for a in listed.all()]
-    assert names == sorted(names) and "/walkthrough/16-editing-a-parts-scad.md" in names
+    assert names == sorted(names) and "/walkthrough/06-editing-a-parts-scad.md" in names
     listed.first.click()
     expect(tab.locator("main h1")).to_be_visible()
     tab.close()
