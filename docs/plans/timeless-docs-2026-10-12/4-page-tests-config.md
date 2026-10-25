@@ -161,7 +161,7 @@ Seed file, identical to qm's `project-seed/ci/submodule-check.yml`. The `echo ":
 
 ### templates/fractal_viewer.html.j2 -- moderate, 35 narrating passages in about 600 comments
 The gate does not read `.j2` (its file types are .py, hash- and slash-commented files and .md), so
-the largest prose file in this area is outside `--all`: line 988's "used to be" would be flagged if it
+the largest prose file in this area is outside `--all`: line 988's "used to be" would be flagged if it <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory -->
 were read. Most of the history lies in the older navigation code (axis swap, far plane, helpers, the
 Contents tree) and is told as "the old ...", "used to", "now", and three duplicates of stories the
 JS modules also tell.
@@ -175,7 +175,7 @@ JS modules also tell.
 | 842-852 | "which was fine while every group was written into the program. It stopped being fine" | history (what was missing before) | retrospective → apothecary: the viewer page | "A group not in CATEGORY_COLORS gets a colour from its name: groups come from a picture's vocabulary, which grows. Same name, same colour." |
 | 891-893, 4119-4134 (x2) | "(the part-iteration plan's timings)"; "The part-iteration plan's "parameters and text, tied together"" | dated plan as provenance | reference → docs/viewer.md | State the rule (the text is the one draft) and drop the plan's name. |
 | 938-939 | "this prototype has no endpoint that reports the allowed set" | stale framing ("prototype"); the fact holds (api.py checks PRINTER_STATUSES, no route lists it; checked) | inline | "No endpoint reports the allowed set (example_hierarchy.PRINTER_STATUSES), so it is repeated here." |
-| 985-988, 2347-2357 (x2) | "This used to be a fixed 20000 while the dolly clamp reached ~54000" | history + numbers from an earlier garage; told twice | retrospective → apothecary: the viewer page | "The far plane clears the dolly clamp plus the scene's extent behind the target; far and near both move per level." |
+| 985-988, 2347-2357 (x2) | "This used to be a fixed 20000 while the dolly clamp reached ~54000" | history + numbers from an earlier garage; told twice | retrospective → apothecary: the viewer page | "The far plane clears the dolly clamp plus the scene's extent behind the target; far and near both move per level." <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
 | 1027-1042 | "the "off by 90 degrees" orientation bug" | history (names a past bug) | inline | "Left uncorrected, a loaded STL's up lies along three.js's depth axis." |
 | 1103-1111 | "in this exact example: all three printers have their own "belt_tensioner_boss"" | stale + count: `example_hierarchy.PRINTER_X_POSITIONS = [100.0]` builds one printer (checked) | inline | "bare names collide across siblings (every printer has its own belt_tensioner_boss)". |
 | 1130-1133 | "or a migrated parts-library leaf" | history | inline | "or a parts-library leaf". |
@@ -393,7 +393,7 @@ sound; strip the provenance and keep the seat each option has.
 
 | line(s) | quote (≤ 15 words) | problem | home | rewrite or note (≤ 25 words) |
 |---|---|---|---|---|
-| 187 | "Only the outer ring used to be counted, so a submenu could hold twenty." | history; **flagged by `check_timeless.py --all`** | inline | "A submenu holds eight at most, as the outer ring does." |
+| 187 | "Only the outer ring used to be counted, so a submenu could hold twenty." | history; **flagged by `check_timeless.py --all`** | inline | "A submenu holds eight at most, as the outer ring does." <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
 | 136-145 | "This is the rule, not a nicety. Without it every dot was treated as a path separator" | history + ornament ("the rule, not a nicety") | inline | "Without it, every dot would be read as a path separator and `nozzle_0.4mm` would come back as `4mm`." |
 | 421-426, 612-615 (x2) | "where hands learned it before Watch and Monitor became Open"; "Flash takes the cell Monitor freed" | history (address moves) | retrospective → apothecary: the ring and its addresses | "Control at 7, jog Y+ from a printer's node ⌗2728: an address people know by hand, so it stays." |
 | 974-975, 986-991, 1020-1021 (x3) | "The canvas ring's Camera became Pictures, in the same seat"; "in the cell it has had since Phase 3"; "(it was 936)" | history | inline | State each seat: "Pictures sits after Pieces, Site, Group and View"; drop "since Phase 3", "it was 936", "no cell moved". |
@@ -586,7 +586,7 @@ through `conftest.py`'s `walkthrough` fixture. `test_docs_fractal_viewer.py` and
 #### tests/e2e/test_docs_photo_walkthrough.py -- moderate, 1 (writes walkthrough page 11)
 | line(s) | quote (≤ 15 words) | problem | home | rewrite or note (≤ 25 words) |
 |---|---|---|---|---|
-| 7-15 | "It used to be two demonstrations. A hand-written page of doctests walked the model half" | history; **flagged by `check_timeless.py --all`** (line 7) | retrospective → apothecary: the walkthrough | "The demonstration needs a browser and a server, everywhere, and the page says so." |
+| 7-15 | "It used to be two demonstrations. A hand-written page of doctests walked the model half" | history; **flagged by `check_timeless.py --all`** (line 7) | retrospective → apothecary: the walkthrough | "The demonstration needs a browser and a server, everywhere, and the page says so." <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
 
 #### tests/e2e/test_edit_a_made_piece.py -- light, 2 (one pattern)
 | line(s) | quote (≤ 15 words) | problem | home | rewrite or note (≤ 25 words) |
@@ -617,7 +617,7 @@ through `conftest.py`'s `walkthrough` fixture. `test_docs_fractal_viewer.py` and
 | line(s) | quote (≤ 15 words) | problem | home | rewrite or note (≤ 25 words) |
 |---|---|---|---|---|
 | 1-2 | "What the onboarding review found a newcomer meets, through the page (docs/plans/onboarding-2026-10-11.md)" | history ("the review found") + dated plan | inline | "What a newcomer meets, through the page: a printer's own Pin ..." |
-| 313-314 | "A disabled Compile used to say only what it does" | history; **flagged by `check_timeless.py --all`** (line 313) | inline | "A disabled Compile says why it is disabled and what to do, and is enabled once that is done." |
+| 313-314 | "A disabled Compile used to say only what it does" | history; **flagged by `check_timeless.py --all`** (line 313) | inline | "A disabled Compile says why it is disabled and what to do, and is enabled once that is done." <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
 | 280-283 | "Choosing parts_library put nothing in the address, so a reload went back to the garage" | history | inline | "The drop-down puts the site in the address, leaving the old site's focus, Machine and variants behind; a reload stays, Back and Forward go between." |
 | 345-349 | "A printer's Device section said only "arduino-cli is not installed" ... it asks for neither now" | history | inline | "A printer says arduino-cli is wanted only to find its board, and the Bench asks for nothing it lacks a tool for." |
 | 461-462 | "Walkthrough 11's last picture showed a Device row -- Query and Pin -- on a word piece" | history | inline | Start at "A piece made from a picture holds no board: ...". |
@@ -658,7 +658,7 @@ through `conftest.py`'s `walkthrough` fixture. `test_docs_fractal_viewer.py` and
 #### tests/e2e/test_picture_in_the_world.py -- light, 2
 | line(s) | quote (≤ 15 words) | problem | home | rewrite or note (≤ 25 words) |
 |---|---|---|---|---|
-| 190 | "Its words: the place, the picture drawn there, and what was found in it." | **flagged by `check_timeless.py --all`** ("was found in"): a false positive, a present description of the finder's result | inline | "... and the shapes in it." (or a `timeless: allow` with a reason) |
+| 190 | "Its words: the place, the picture drawn there, and what was found in it." | **flagged by `check_timeless.py --all`** ("was found in"): a false positive, a present description of the finder's result | inline | "... and the shapes in it." (or a `timeless: allow` with a reason) <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
 | 10 | "Phase 4 of the pictures plan pins it by a drop instead." | stale forecast: drops pin views now (test_the_loop.py:446); the fixture still pins through the API | delete | -- |
 
 #### tests/e2e/test_picture_to_print.py -- light, 1 (writes walkthrough page 13)
@@ -739,7 +739,7 @@ Four findings, all `narrative` (run at `wt-timeless`, c67725a):
 | `tests/test_menu.py:187: narrative: used to be` | true positive: history in a test docstring | test_menu.py, 187 |
 | `tests/e2e/test_docs_photo_walkthrough.py:7: narrative: used to be` | true positive: the story of joining two demonstrations | test_docs_photo_walkthrough.py, 7-15 |
 | `tests/e2e/test_onboarding.py:313: narrative: used to say` | true positive: the bug, not the property | test_onboarding.py, 313-314 |
-| `tests/e2e/test_picture_in_the_world.py:190: narrative: was found in` | false positive: "what was found in it" is the finder's result, described in the present | test_picture_in_the_world.py, 190 |
+| `tests/e2e/test_picture_in_the_world.py:190: narrative: was found in` | false positive: "what was found in it" is the finder's result, described in the present | test_picture_in_the_world.py, 190 <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
 
 The gate sees four of the 236 test passages listed here. It misses the many "used to" with other
 verbs (`used to write / redirect / keep / force-close / stop / render / end / feed / leave / skip /
