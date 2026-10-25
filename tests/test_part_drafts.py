@@ -23,7 +23,6 @@ from apothecary.api import app
 from apothecary.projects import registry
 from apothecary.projects.parts import stl_renderer, variants
 from apothecary.projects.parts.base import BasePart
-from apothecary.projects.parts.customizer import lists_parameters
 from apothecary.projects.parts.drafts import (
     ReadOnly,
     check_draft,
@@ -466,26 +465,15 @@ def test_the_cache_lets_go_of_a_drafts_text_with_its_mesh(tmp_path):
 # --- with a real OpenSCAD that lists parameters, where this machine has one ---------------
 
 
-def _a_listing_openscad():
-    for path in stl_renderer._openscad_candidates():
-        if lists_parameters(path):
-            return path
-    return None
-
-
-LISTING = _a_listing_openscad()
-
-
-@pytest.mark.skipif(
-    LISTING is None, reason="no OpenSCAD here lists parameters (`apothecary openscad install`)"
-)
-def test_a_real_snapshot_checks_and_renders_a_draft_beside_its_part(tmp_path, monkeypatch):
+def test_a_real_snapshot_checks_and_renders_a_draft_beside_its_part(
+    tmp_path, monkeypatch, listing_openscad
+):
     """The draft's include resolves from beside the part, its error is on its own line
     of the part's SCAD, and its new parameter is listed with its range."""
     monkeypatch.setenv("APOTHECARY_CACHE_DIR", str(tmp_path / "cache"))
     monkeypatch.setattr(BasePart, "get_stl_output_path", lambda self: tmp_path / "block.stl")
     part = _part(tmp_path)
-    renderer = OpenSCADRenderer(str(LISTING))
+    renderer = OpenSCADRenderer(str(listing_openscad))
     broken = SCAD.replace(
         "hollow = true;", "hollow = true;\nlid = 2; // [1:5]\nassert(width < 10);"
     )

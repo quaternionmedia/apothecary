@@ -634,21 +634,8 @@ class TestAPartInASubmodule:
         assert not exclude.exists() or drafts.DRAFT_PATTERN not in exclude.read_text()
 
 
-def _a_rendering_openscad():
-    from apothecary.projects.parts.customizer import lists_parameters
-
-    for path in stl_renderer._openscad_candidates():
-        if lists_parameters(path):
-            return path
-    return None
-
-
-RENDERING = _a_rendering_openscad()
-
-
-@pytest.mark.skipif(RENDERING is None, reason="no snapshot here (`apothecary openscad install`)")
 def test_a_real_snapshot_renders_the_overlay_as_it_renders_the_values(
-    superproject, thing, tmp_path
+    superproject, thing, tmp_path, listing_openscad
 ):
     """The overlay is the variant: rendered, it measures what -D renders."""
     from apothecary.projects.parts.stl_renderer import OpenSCADRenderer
@@ -656,7 +643,7 @@ def test_a_real_snapshot_renders_the_overlay_as_it_renders_the_values(
     variant = save_variant(thing, "big", UPSTREAM, {"size": 23})
     overlay = superproject / variant.scad_path
     overlay.write_text(git(superproject, "show", f"{variant.ref}:{variant.scad_path}"))
-    renderer = OpenSCADRenderer(str(RENDERING))
+    renderer = OpenSCADRenderer(str(listing_openscad))
     as_overlay = renderer.render_stl(overlay, tmp_path / "o.stl")
     as_values = renderer.render_stl(thing.source_file, tmp_path / "d.stl", params={"size": 23})
     assert as_overlay.success and as_values.success, as_overlay.stderr

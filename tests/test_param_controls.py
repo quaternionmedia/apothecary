@@ -17,7 +17,6 @@ from apothecary.projects.parts import stl_renderer
 from apothecary.projects.parts.base import BasePart
 from apothecary.projects.parts.customizer import (
     check_scad,
-    lists_parameters,
     scad_fields,
     unit_of,
 )
@@ -211,23 +210,10 @@ class TestTheCustomizersUnits:
         assert fields["width"].unit == "mm" and fields["height"].unit is None
 
 
-def _a_listing_openscad():
-    for path in stl_renderer._openscad_candidates():
-        if lists_parameters(path):
-            return path
-    return None
-
-
-LISTING = _a_listing_openscad()
-
-
-@pytest.mark.skipif(
-    LISTING is None, reason="no OpenSCAD here lists parameters (`apothecary openscad install`)"
-)
-def test_a_real_snapshot_lists_what_the_units_are_read_beside(tmp_path):
+def test_a_real_snapshot_lists_what_the_units_are_read_beside(tmp_path, listing_openscad):
     scad = tmp_path / "units.scad"
     scad.write_text(SCAD.replace('label = "hi"; // 20\n', "") + "cube([width, depth, height]);\n")
-    check = check_scad(scad, stl_renderer.OpenSCADRenderer(str(LISTING)))
+    check = check_scad(scad, stl_renderer.OpenSCADRenderer(str(listing_openscad)))
     fields = {f.name: f for f in scad_fields(check.parameters, text=scad.read_text())}
     assert (fields["width"].unit, fields["width"].description) == ("mm", "Width")
     assert (fields["width"].min, fields["width"].max, fields["width"].integer) == (10, 100, True)
