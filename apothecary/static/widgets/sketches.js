@@ -1,23 +1,30 @@
 /* Sketches: one sketch built for one board and, asked, uploaded to a port -- and
  * raw images written to an Espressif chip with esptool.
  *
- * A sketch is parts/<name>/<name>.ino; a firmware.json beside it names the
- * board it is built for by default (its FQBN), the libraries it needs and a
- * note. mountBuild() is the form that picks one, names the board, and compiles
- * it (POST /firmware/sketches/{name}/compile) or compiles and uploads it to a
- * port, after asking (.../upload): the Bench's, with a drop-down of the
- * detected ports, and a board's Machine's Flashing card, for its own port. Each
- * is a task, followed in a task log (`tasks`, widgets/tasks.js). mountRawFlash()
- * is the Bench's esptool section: images, one "offset path" per line, written
- * to the chip on the Bench's port (POST /firmware/esptool/flash), after asking.
+ * A sketch is parts/<name>/<name>.ino, an Arduino sketch; a firmware.json beside
+ * it names the board it is built for by default (its FQBN), the libraries it
+ * needs and a note. Or it is another toolchain module's -- a Rust Cargo project
+ * whose firmware.json names its module -- listed beside them, and choosing it
+ * chooses its module: it builds for the chip its project names, so the form
+ * names no board. A sketch is always named with its toolchain -- its id,
+ * esp32_blink@arduino, esp32_blink@rust-esp32 -- in its row, the asking and the
+ * task's words, so two builds of one sketch are never mistaken for each other.
+ * mountBuild() is the form that picks one, names the
+ * board where it takes one, and compiles it (POST
+ * /firmware/sketches/{id}/compile) or compiles and uploads it to a port, after
+ * asking (.../upload): the Bench's, with a drop-down of the detected ports, and a
+ * board's Machine's Flashing card, for its own port. Each is a task, followed in
+ * a task log (`tasks`, widgets/tasks.js). mountRawFlash() is the Bench's esptool
+ * section: images, one "offset path" per line, written to the chip on the
+ * Bench's port (POST /firmware/esptool/flash), after asking.
  *
  * mountBuild(root, { base, tasks, say, port, suggest, onEnd, onPort }) returns
- * { load(status), compile(), upload(), choose(name), chosen(), fqbn(), port(),
+ * { load(status), compile(), upload(), choose(id), chosen(), fqbn(), port(),
  * enable(), destroy() }. `port` fixes the port (a Machine's); left out, the form
  * offers the detected ones. `suggest()` names the sketch to start from (what the
- * board should run); `onEnd(task, what)` is told how a compile or an upload
- * ended, `what` being { kind, sketch, fqbn, port }; `onPort(port)` of a port
- * chosen from the drop-down.
+ * board should run, by its id); `onEnd(task, what)` is told how a compile or an
+ * upload ended, `what` being { kind, sketch (its id), name, fqbn, target,
+ * toolchain, label, port }; `onPort(port)` of a port chosen from the drop-down.
  */
 
 import { esc } from "/static/board_text.js";
@@ -37,9 +44,9 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
     root.innerHTML = `
 <div class="bench-build">
     <div class="row"><span class="meta">sketch</span>
-        <select class="sketch-select grow" aria-label="Sketch" title="A sketch under parts/: parts/&lt;name&gt;/&lt;name&gt;.ino"><option value="">— no sketches under parts/ —</option></select></div>
+        <select class="sketch-select grow" aria-label="Sketch" title="A sketch under parts/: parts/&lt;name&gt;/&lt;name&gt;.ino, or a Rust Cargo project beside its part; choosing one chooses the toolchain that builds it"><option value="">— no sketches under parts/ —</option></select></div>
     <div class="sk-note note" hidden></div>
-    <div class="row"><span class="meta">board</span>
+    <div class="row sk-board-row"><span class="meta">board</span>
         <input class="fqbn-input grow" list="${listId}" placeholder="arduino:avr:uno" spellcheck="false" aria-label="Board (FQBN)" title="The board to build for (its FQBN); the sketch's firmware.json names one"></div>
     <datalist id="${listId}"></datalist>
     <div class="row sk-port-row"><span class="meta">port</span>
@@ -55,12 +62,30 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
     let sketches = [], status = null, alive = true;
     if (port) $(".sk-port-row").hidden = true;
 
-    function choose(name) {
-        const s = sketches.find((x) => x.name === name);
+    const idOf = (x) => x.id || `${x.name}@${x.toolchain || "arduino"}`;
+    const sketchOf = (id) => sketches.find((x) => idOf(x) === id) || null;
+    // The module that builds a sketch, from the status; Arduino's, as it was, when
+    // the status names none.
+    function moduleOf(s) {
+        const id = (s && s.toolchain) || "arduino";
+        const m = ((status && status.toolchains) || []).find((t) => t.id === id);
+        return m || { id, label: id === "arduino" ? "Arduino" : id, ok: id === "arduino" && !!(status && status.arduino_cli_ok), needs_board: id === "arduino" };
+    }
+    const needsBoard = (s) => moduleOf(s).needs_board;
+    // A sketch's row: the sketch with its toolchain, and its board or its chip.
+    const rowText = (x) => (needsBoard(x)
+        ? `${idOf(x)}${x.fqbn ? " · " + x.fqbn : " · no default board"}`
+        : `${idOf(x)} · ${x.target || "its project's chip"}`);
+
+    function choose(id) {
+        const s = sketchOf(id);
         if (!s) return false;
-        $(".sketch-select").value = name;
-        if (s.fqbn) $(".fqbn-input").value = s.fqbn;
+        $(".sketch-select").value = idOf(s);
+        const board = needsBoard(s);
+        $(".sk-board-row").hidden = !board;
+        if (board && s.fqbn) $(".fqbn-input").value = s.fqbn;
         const bits = [];
+        if (!board) bits.push(`built by ${moduleOf(s).label} for ${s.target || "the chip its project names"}`);
         if (s.libraries && s.libraries.length) bits.push("libraries: " + s.libraries.join(", "));
         if (s.note) bits.push(s.note);
         $(".sk-note").hidden = !bits.length;
@@ -71,11 +96,21 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
     const chosen = () => $(".sketch-select").value || null;
     const fqbn = () => $(".fqbn-input").value.trim();
     const portOf = () => port || $(".port-select").value || null;
+    // What a compile or an upload is of, said as the task says it.
+    function what(kind) {
+        const s = sketchOf(chosen()), board = needsBoard(s);
+        const target = board ? fqbn() : (s && s.target) || "its chip";
+        return {
+            kind, sketch: chosen(), name: s ? s.name : chosen(), toolchain: moduleOf(s).id,
+            fqbn: board ? fqbn() : null, target, label: `${chosen()} (${target})`, port: portOf(),
+        };
+    }
 
     function enable() {
-        const ok = !!(status && status.arduino_cli_ok);
+        const s = sketchOf(chosen());
+        const ok = !!s && !!moduleOf(s).ok;
         const busy = !!(tasks && tasks.running()) || !!(status && status.active_task && status.active_task.status === "running");
-        const ready = ok && !!chosen() && FQBN.test(fqbn());
+        const ready = ok && (!needsBoard(s) || FQBN.test(fqbn()));
         $(".compile-btn").disabled = !ready || busy;
         $(".upload-btn").disabled = !ready || !portOf() || busy;
     }
@@ -91,7 +126,7 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
         status = s; sketches = list;
         const had = chosen();
         $(".sketch-select").innerHTML = sketches.length
-            ? sketches.map((x) => `<option value="${esc(x.name)}">${esc(x.name)}${x.fqbn ? " · " + esc(x.fqbn) : " · no default board"}</option>`).join("")
+            ? sketches.map((x) => `<option value="${esc(idOf(x))}">${esc(rowText(x))}</option>`).join("")
             : '<option value="">— no sketches under parts/ —</option>';
         root.querySelector(`#${CSS.escape(listId)}`).innerHTML = all.map((b) => `<option value="${esc(b.fqbn)}">${esc(b.name)}</option>`).join("");
         if (found) {
@@ -102,29 +137,32 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
                 : '<option value="">(none detected)</option>';
             if (devices.some((d) => d.port === was)) sel.value = was;
         }
-        const want = (had && sketches.some((x) => x.name === had) && had) || (suggest && suggest()) || (sketches[0] && sketches[0].name);
+        const want = (had && sketchOf(had) && had) || (suggest && suggest()) || (sketches[0] && idOf(sketches[0]));
         if (!want || !choose(want)) enable();
     }
 
     async function run(kind, request) {
         if (!tasks) return null;
-        const what = { kind, sketch: chosen(), fqbn: fqbn(), port: portOf() };
+        const doing = what(kind);
         const ending = tasks.start(request);
         enable();
         const task = await ending;
         enable();
-        if (task && onEnd) onEnd(task, what);
+        if (task && onEnd) onEnd(task, doing);
         return task;
     }
+    // The request's board: an Arduino sketch's FQBN; none for another module's.
+    const body = (s, extra = {}) => (needsBoard(s) ? { fqbn: fqbn(), ...extra } : { ...extra });
     function compile() {
-        if (!chosen() || !FQBN.test(fqbn())) { if (say) say("Compile: choose a sketch and a board (FQBN) first", "error"); return null; }
-        return run("compile", () => post(`/firmware/sketches/${encodeURIComponent(chosen())}/compile`, { fqbn: fqbn() }));
+        const s = sketchOf(chosen());
+        if (!s || (needsBoard(s) && !FQBN.test(fqbn()))) { if (say) say("Compile: choose a sketch and a board (FQBN) first", "error"); return null; }
+        return run("compile", () => post(`/firmware/sketches/${encodeURIComponent(chosen())}/compile`, body(s)));
     }
     function upload() {
-        const to = portOf();
-        if (!chosen() || !FQBN.test(fqbn()) || !to) { if (say) say("Upload: choose a sketch, a board (FQBN) and a port first", "error"); return null; }
+        const to = portOf(), s = sketchOf(chosen());
+        if (!s || (needsBoard(s) && !FQBN.test(fqbn())) || !to) { if (say) say("Upload: choose a sketch, a board (FQBN) and a port first", "error"); return null; }
         if (!confirm(`Compile and upload "${chosen()}" to ${to}?`)) return null;
-        return run("upload", () => post(`/firmware/sketches/${encodeURIComponent(chosen())}/upload`, { fqbn: fqbn(), port: to }));
+        return run("upload", () => post(`/firmware/sketches/${encodeURIComponent(chosen())}/upload`, body(s, { port: to })));
     }
 
     $(".compile-btn").onclick = () => compile();

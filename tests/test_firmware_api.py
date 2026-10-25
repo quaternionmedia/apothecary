@@ -225,7 +225,7 @@ def test_cli_compile_and_upload(fake_arduino_cli):
     runner = CliRunner()
     r = runner.invoke(cli, ["firmware", "compile", "footpedal"])
     assert r.exit_code == 0, r.output
-    assert "Compiled footpedal for arduino:avr:uno" in r.output
+    assert "Compiled footpedal@arduino for arduino:avr:uno" in r.output
     r = runner.invoke(
         cli,
         [
@@ -239,7 +239,7 @@ def test_cli_compile_and_upload(fake_arduino_cli):
         ],
     )
     assert r.exit_code == 0, r.output
-    assert "Uploaded footpedal (arduino:avr:nano) to /dev/ttyFAKE0" in r.output
+    assert "Uploaded footpedal@arduino (arduino:avr:nano) to /dev/ttyFAKE0" in r.output
     calls = [c[0] for c in fake_cli_calls(fake_arduino_cli) if c[0] in ("compile", "upload")]
     assert calls == ["compile", "compile", "upload"]
 

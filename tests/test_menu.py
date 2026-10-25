@@ -1003,7 +1003,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     bench = next(c for c in panels.children if c.label == "Bench")
     assert [(c.label, c.action, c.cell) for c in bench.children] == [
         ("Bench", "panel:toggle:bench", 8),
-        ("Install", "bench:install", 6),
+        ("Install", None, 6),
         ("Compile", "bench:compile", 2),
         ("Upload", "bench:upload", 4),
         ("Raw flash", "bench:esptool", 9),
@@ -1013,6 +1013,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     ]
     assert address_of(root, "panel:bench") == "938"
     assert address_of(root, "bench:compile") == "932"
+    # Install is a ring of the toolchain modules, from their registry: each module's
+    # install has an address, and arduino-cli's moved one level deeper (it was 936).
+    install = bench.children[1]
+    assert [(c.label, c.action, c.cell) for c in install.children] == [
+        ("Arduino", "bench:install:arduino", 8),
+        ("Rust ESP32", "bench:install:rust-esp32", 6),
+    ]
+    assert address_of(root, "bench:install:arduino") == "9368"
+    assert address_of(root, "bench:install:rust-esp32") == "9366"
     # A core by its architecture, one leaf per suggested core.
     cores = bench.children[6]
     assert [c.label for c in cores.children] == ["AVR", "ESP32", "ESP8266", "RP2040", "SAMD"]
@@ -1021,7 +1030,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     for pid in ("site", "pictures", "machine", "bench"):
         assert carried_by(f"panel:toggle:{pid}").name == "VIEWER"
     for verb in (
-        "install",
+        "install:arduino",
+        "install:rust-esp32",
         "compile",
         "upload",
         "esptool",

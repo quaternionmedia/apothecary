@@ -174,7 +174,7 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     devkit = page.locator(".world-badge[data-path='footpedal']")
     expect(devkit).to_be_visible(timeout=10000)
     devkit.click()
-    expect(machine.locator("#c-sketch")).to_contain_text("should run footpedal", timeout=8000)
+    expect(machine.locator("#c-sketch")).to_contain_text("should run footpedal@arduino", timeout=8000)
     expect(machine.locator("#c-board")).to_contain_text("not listening")
     machine.locator("#listen").click()
     expect(machine.locator("#log")).to_contain_text("hello", timeout=10000)
@@ -295,7 +295,7 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?panel=bench$"))
     bench = page.locator(".panel[data-panel='bench']")
     expect(bench.locator(".tc-status")).to_contain_text("arduino-cli", timeout=15000)
-    expect(bench.locator(".sketch-select option[value='footpedal']")).to_have_count(1)
+    expect(bench.locator(".sketch-select option[value='footpedal@arduino']")).to_have_count(1)
     page.wait_for_timeout(600)
     docs.step(
         "The firmware page's address, /firmware, opens the viewer with the Bench, a tab of "
