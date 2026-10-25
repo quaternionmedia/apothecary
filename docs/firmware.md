@@ -630,12 +630,15 @@ a board's Machine, its flashing and its port opened only by Listen.
 through the page -- the Arduino `esp32_blink` from the Bench, then the Rust one
 from the board's Machine, each built, flashed and heard saying its hello --
 against the simulated devkit, and again with Rust alone and no arduino-cli;
-flashing the bench's own ESP32 is a step of the bench checklist. Its first test
+flashing the bench's own ESP32 is a step of
+[the bench checklist](bench-checklist.md). Its first test
 writes [walkthrough 15](../walkthrough/15-firmware.md), the loop as it is, with
 pictures it takes as it goes; the browser suite alone runs it.
-[`validation/2026-09-20-ender-bench.md`](validation/2026-09-20-ender-bench.md)
-is the seam against a real Ender mainboard, with a checklist for what needs
-control armed.
+[The bench checklist](bench-checklist.md) is the seam against the real Ender
+mainboard and ESP32, for what no test touches: heat, motion, levelling, a
+print, the emergency stop, a real flash. What the Ender's board and bed
+measured, which printer_1's slicer profile cites, is the dated
+[Ender bench record](validation/2026-09-20-ender-bench.md).
 
 The decision records are *Firmware toolchain seam*, whose toolchains are the
 modules above, and *G-code printer seam*, drafts proposed for

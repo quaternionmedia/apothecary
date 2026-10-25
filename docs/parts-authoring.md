@@ -163,7 +163,9 @@ Two places, kept in step: a top-level variable in the SCAD file (what `-p`
 reaches as `-D`) and a field on the wrapper's `Params` (what validates and
 documents it). `tests/test_parameter_coverage.py` fails on a field with no
 SCAD variable behind it; `apothecary parts verify` fails when the two
-disagree about size.
+disagree about size. A field's unit is declared on it,
+`json_schema_extra={"unit": "mm"}`, as a customizer parameter's is by its
+comment's unit word; the viewer shows a unit only where one is declared.
 
 ### A part without a model: its SCAD's own parameters
 
@@ -223,6 +225,11 @@ and its keys); walkthrough 16 goes round it.
 A part built by Python geometry (the snowplow) has no SCAD of its own to
 edit: `GET /parts/{name}/scad` answers the SCAD its geometry generates
 (`X-Part-Scad: generated`), and a draft or a save of it is a `403`.
+
+Every check and render is OpenSCAD run by the server on this machine; the
+page never runs it. OpenSCAD built to WebAssembly would duplicate the server,
+carry GPLv3 object code into the page, and need `wasm-unsafe-eval`, which the
+page's Content-Security-Policy (`apothecary/stays_local.py`) does not allow.
 
 ## Hooks for a part the SCAD file does not fully describe
 
