@@ -78,7 +78,7 @@ and a feature's test does not break when the layout around it changes:
 | Layer | What it holds | Runs in |
 |---|---|---|
 | Unit tests (`tests/`) | The registry of focused systems (`test_systems.py`), the ring, the census, the docs | `uv run pytest` |
-| The window manager (`test_window_manager.py`, marked `windows`) | `panels.js` and `systems.js` on a page of their own, served from the checkout by the browser's routing, with windows made up for each case: where a window opens, views, what a browser remembers, a window's life, systems from a registry, a stack's +. No server, no world | `apothecary test run`, and every browser run |
+| The window manager (`test_window_manager.py`, marked `windows`) | `panels.js` and `systems.js` on a page of their own, served from the checkout by the browser's routing, with windows made up for each case: where a window opens, views, what a browser remembers, a window's life, what a person moves (a tab dropped on another stack or beside the world, the splitter, a reset), systems from a registry, a stack's +. No server, no world | `apothecary test run`, and every browser run |
 | Focused systems (`test_focused_systems.py`) | Every system the registry names, in the viewer, parameterized over the registry: it opens its main window alone, each section shows its part, a ring verb opens the section it acts on, its view lays everything out, a reload keeps or forgets it | the browser suite |
 | Features and loops (the rest) | What a person does with a part, a board, a picture, end to end, and the walkthrough pages and pictures the loops write | the browser suite |
 
