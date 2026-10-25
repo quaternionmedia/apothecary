@@ -25,6 +25,7 @@ trying it, and names the optional installs: the slicer and each firmware toolcha
 ```bash
 uv run apothecary test run                      # the ordinary command: unit tests and the walkthrough, whose demonstration drives Chromium
 uv run apothecary test all                      # the same, then every browser test
+uv run apothecary test changed                  # while working: the unit tests and the walkthrough, then the browser files the change reaches
 uv run apothecary test all --workers 2 -k part  # the browser part on two workers; further arguments narrow both parts
 uv run apothecary test all --record-durations   # the same, the browser tests' times written into tests/e2e/durations.json
 uv run apothecary test all --steps              # the same, and the step-through tests, which every other run skips
@@ -45,6 +46,7 @@ lint alone, and the tests run in CI at a version tag, so the whole suite runs he
 every merge: `apothecary test all`, on the pull request's head merged onto its base's tip,
 before it is marked ready and again before it merges if that tree has changed. Its body
 says what ran and what it said, and the merge commit says it for the tree that landed.
+`apothecary test changed` is for while working and is never the gate.
 Every other browser test needs a server of its own (`--start-server`) or one named for it
 (`--base-url`); with neither it skips, and it never uses a server that happens to be
 listening. No limit is chosen by hand: in CI a browser test's cap is twice the time
