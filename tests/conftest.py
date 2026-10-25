@@ -36,6 +36,16 @@ def pytest_addoption(parser):
         "tests/e2e/durations.json. CI runs the three shards on three runners.",
     )
     parser.addoption(
+        "--step",
+        action="store",
+        type=int,
+        default=None,
+        metavar="N",
+        help="A step-through browser test (tests/e2e/test_steps_*.py): run only its step N, "
+        "on the running demo in the visible browser's tab named apothecary-walk, and leave "
+        "it there.",
+    )
+    parser.addoption(
         "--slow",
         action="store_true",
         default=False,

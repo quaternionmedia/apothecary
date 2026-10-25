@@ -29,10 +29,17 @@ in the site's own frame, from an anchor fixed when the view was made.
 
 - A view no camera took (a dropped file, the floor's Add) is flat: ``W`` mm
   across (``mm_across``, a person's width) and ``W`` times its height over its
-  width deep, its middle on its host's top-centre -- or at the floor with its
-  near edge on the anchor, just past the site's roots in +x. A shape at
+  width deep, its middle where it was laid when pinned (``offset`` from its
+  host's top-centre: the middle of the widest picture of its shape that fits
+  clear of what rests on the top, ``free_space.fit``) -- or at the floor with
+  its near edge on the anchor, just past the site's roots in +x. A shape at
   fractions ``(cx, cy)`` of the picture stands ``((cx - 0.5) * W, (0.5 - cy) *
-  H)`` from the mat's middle. Unsized, it has no mapping, and nothing is made.
+  H)`` from the mat's middle. Unsized, it has no mapping, and nothing is made;
+  it is drawn as wide as it fits there (``fit_width``).
+
+A shape of a sized view at a host is flagged with what resting on the host its
+footprint overlaps (``overlaps_of``), whatever moved since it was pinned. A flag
+only: Make still makes it, and the site's layout check then holds the piece.
 - A view a camera took keeps where the camera stood, how it was aimed and its
   field of view at that moment (``Taken``), so moving the camera after does not
   move it; its picture lands through a pinhole, and ``mm_across`` is its width
@@ -62,6 +69,7 @@ from pydantic import BaseModel, Field
 from ..hierarchy import Assembly
 from ..models.vectors import Vector3D
 from .compose import piece_from_shape, sides_as_found, thickness_guess
+from .free_space import Area, fit, footprint, overlapping, resting_on
 from .models import FoundShape
 from .projection import (
     Laid,
@@ -164,6 +172,10 @@ class View(BaseModel):
     words: Dict[int, str] = Field(default_factory=dict)  # a person's word per shape
     made: Dict[int, str] = Field(default_factory=dict)  # shape index -> piece
     anchor: Optional[Vector3D] = None  # the floor's, fixed when pinned
+    # A flat view's middle from its host's top-centre, fixed when pinned, and the widest
+    # it fits there clear of what rests on the top (free_space.fit).
+    offset: Optional[Tuple[float, float]] = None
+    fit_width: Optional[float] = None
 
     @property
     def tallness(self) -> float:
@@ -361,7 +373,7 @@ def mapping(view: View) -> Optional[Matrix]:
             (eye.x, eye.y, eye.z), view.taken.turn, view.taken.tilt, view.taken.fov, view.tallness
         )
     elif view.mm_across is not None:
-        middle = (view.mm_across / 2, 0.0) if view.at_floor else (0.0, 0.0)
+        middle = (view.mm_across / 2, 0.0) if view.at_floor else (view.offset or (0.0, 0.0))
         matrix = flat(view.mm_across, view.tallness, middle)
     else:
         return None
@@ -405,7 +417,7 @@ def in_site(view: View, site: Assembly) -> Optional[Matrix]:
 def mat_centre(view: View, site: Assembly) -> Optional[Vector3D]:
     """Where the middle of the view's picture lies now; None when its host is gone, or
     it landed nowhere. At the floor an unsized mat has no width, and its centre is
-    the anchor; at a host, its top-centre."""
+    the anchor; at a host, where it was laid from the host's top-centre."""
     origin = frame_origin(view, site)
     if origin is None:
         return None
@@ -413,9 +425,51 @@ def mat_centre(view: View, site: Assembly) -> Optional[Vector3D]:
     if matrix is None:
         if view.at_floor:
             return (view.anchor or Vector3D()).model_copy()
-        return origin
+        x, y = view.offset or (0.0, 0.0)
+        return Vector3D(x=origin.x + x, y=origin.y + y, z=origin.z)
     x, y = onto(matrix, 0.5, 0.5)
     return Vector3D(x=origin.x + x, y=origin.y + y, z=origin.z)
+
+
+def laid_at(
+    site_name: str, site: Assembly, host: str, tallness: float
+) -> Tuple[Tuple[float, float], float]:
+    """Where a flat picture ``tallness`` deep for its width is laid at ``host``, from its
+    top-centre, and the widest it is there: clear of what rests on the top
+    (``free_space.fit``), what a person added (``added_roots``) not counted, so a
+    second picture of a place lies where the first did. Fixed when it is pinned."""
+    node = next(c for c in site.children if c.name == host)
+    top, middle = footprint(node), top_centre(node)
+    assert top is not None
+    standing = resting_on(site, host, added_roots(site_name))
+    laid = fit(top, [area for _, area in standing], tallness)
+    return (laid.centre[0] - middle.x, laid.centre[1] - middle.y), laid.width
+
+
+def overlaps_of(view: View, site: Assembly) -> Dict[int, List[str]]:
+    """For each shape of a sized view at a host, what resting on the host now its
+    footprint overlaps (``free_space.resting_on``), what a person added not counted:
+    a made piece is the pictures', and a shape already made says so. Empty for a
+    view with no width, at the floor, or whose host is gone."""
+    matrix = in_site(view, site)
+    if matrix is None or view.at_floor:
+        return {}
+    standing = resting_on(site, view.host, added_roots(view.site))
+    flagged: Dict[int, List[str]] = {}
+    for index, shape in enumerate(view.shapes):
+        centre, size = onto(matrix, shape.centre.x, shape.centre.y), box_of(matrix, shape)
+        if centre is None or size is None:
+            continue
+        area = Area(
+            centre[0] - size[0] / 2,
+            centre[1] - size[1] / 2,
+            centre[0] + size[0] / 2,
+            centre[1] + size[1] / 2,
+        )
+        names = overlapping(area, standing)
+        if names:
+            flagged[index] = names
+    return flagged
 
 
 def mat_corners(view: View, site: Assembly) -> Optional[List[Optional[List[float]]]]:

@@ -80,9 +80,20 @@ On a host's ring, **Picture** holds:
 Pinning finds nothing: Find shapes is a step of its own. A view a camera took
 keeps where the camera stood and how it was aimed at that moment, so moving
 the camera after does not move it, and its picture lands through a pinhole. A
-view no camera took is flat on its place, a width across. An unsized view has
-no mapping, and nothing is made from it. A picture dropped on a structure, or
-pasted, is pinned there; on empty canvas, at the floor.
+view no camera took is flat on its place, a width across. Pinned at a
+structure, it is laid where the widest picture of its shape fits clear of what
+rests on the structure's top -- on the garage's bench, between printer_1 and the
+boards -- and stays there; made pieces and cameras are not counted, so a second
+picture of a place lies where the first did. An unsized view has no mapping,
+and nothing is made from it; it is drawn as wide as fits there. A picture
+dropped on a structure, or pasted, is pinned there; on empty canvas, at the
+floor.
+
+A picture is drawn seen through at half, and hatched: an overlay on what it was
+taken of, not a part. Once it has a width, a shape whose footprint lies over
+something resting on the structure is flagged: its area filled in warning red,
+and the place's badge, Find shapes and Size name what it lies over. Make still
+makes it, and the layout check then names the piece.
 
 ## Pieces
 
