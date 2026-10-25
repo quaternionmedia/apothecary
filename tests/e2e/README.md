@@ -36,12 +36,13 @@ not answer `/health` stops the run.
 | `--headed`, `--slowmo 500`, `--tracing on` | pytest-playwright's own flags, for debugging. Open a trace with `uv run playwright show-trace test-results/<test>/trace.zip`. |
 
 Every server comes from one factory, the `start_server` fixture in
-`conftest.py`, on a free port with state of its own. `test_printer_ui.py`,
-`test_ring.py`, `test_one_machine.py`, `test_bench.py`,
-`test_viewer_regressions.py` and `test_less_on_screen.py` ask it for servers of
-their own, so what they pin, arm, flash and print stays off the session's
-server; `test_docs_bench_walkthrough.py` for one whose picture folder holds only
-what its page puts there; and each loop's module for the bench its loop needs:
+`conftest.py`, on a free port with state of its own. A module whose tests change
+what a server holds -- a pin, an armed latch, a flash, a print, a saved
+variant -- or need a bench of their own asks it for servers of its own, so what
+they do stays off the session's server (`grep -l start_server
+tests/e2e/test_*.py` lists them); `test_docs_bench_walkthrough.py` asks for one
+whose picture folder holds only what its page puts there; and each loop's
+module for the bench its loop needs:
 `test_picture_to_print.py` the simulated printer idle and pinned to printer_1's
 mainboard with a scripted OrcaSlicer, `test_part_loop.py` an OpenSCAD that
 refuses one size, `test_scad_loop.py` this machine's OpenSCAD, and
@@ -85,5 +86,6 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   `apothecary docs generate` runs them that way, on a scripted server of its own.
 
 Before a screenshot of the viewer, `viewer_ready.settled(page)` waits until the
-level's geometry has loaded (`window.fractalViewer.waveDone`) and the canvas has
-drawn it.
+level's geometry has loaded (`window.fractalViewer.waveDone`), the camera is at
+rest, the badges' occlusion is tested where it came to rest, nothing is part
+way through an animation, and the canvas has drawn it.

@@ -200,9 +200,9 @@ sha256 of its text; the cache keeps the text, at
 never written.
 
 Saving is a variant in git: `POST /parts/{name}/saved` with `{name, scad,
-params}` commits the SCAD, and the parameters as `<stem>.variant.json`
-beside it, to `refs/apothecary/variants/<part>/<name>` in the repository
-that tracks the part, with git's plumbing alone
+params}` commits the SCAD, `params` written into it as its assignments, to
+`refs/apothecary/variants/<part>/<name>` in the repository that tracks the
+part, with git's plumbing alone
 (`apothecary/projects/parts/saved.py`), so the working tree, the index and
 the checked-out branch are never touched. The commit's author is the git
 identity of the checkout, and its parent is the variant's last save or

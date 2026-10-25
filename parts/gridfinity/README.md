@@ -15,6 +15,10 @@ uv run apothecary parts list | grep gridfinity
 uv run apothecary parts info gridfinity
 ```
 
+The bins need an OpenSCAD newer than 2021.01 (the part's
+`openscad_min_version`): `uv run apothecary openscad install` puts one in, and
+`uv run apothecary check` says which OpenSCAD the part renders with.
+
 ## Apothecary Integration
 
 Gridfinity is integrated into Apothecary as a parametric part wrapper. You can use it programmatically:
@@ -69,11 +73,9 @@ To initialize the submodule, run this in the root directory of the main reposito
 git submodule update --init
 ```
 
-Update the submodule to ensure you have the latest designs:
-
-```bash
-git submodule update --remote --merge
-```
+The submodule is pinned. Moving the pin is a commit that bumps it and passes
+`tests/test_parameter_coverage.py`, which holds the wrapper's names and
+defaults to the upstream file's own.
 
 ## Gridfinity Specifications
 

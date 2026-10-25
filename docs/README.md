@@ -16,7 +16,7 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 | [02 — Which numbers are whose](../walkthrough/02-fitting.md) | The seam, and driving it with overrides |
 | [03 — Navigating a sub-assembly](../walkthrough/03-an-assembly.md) | datum_core as an addressable tree |
 | [04 — Serving it](../walkthrough/04-serving-it.md) | The API and the viewer |
-| [05 — Contested numbers](../walkthrough/05-contested-numbers.md) | Numbers the sources disagree about, and the dashboard for turning them |
+| [05 — Contested numbers](../walkthrough/05-contested-numbers.md) | Numbers the sources disagree about, and turning them in the viewer |
 | [06 — Ready to build](../walkthrough/06-ready-to-build.md) | Whether a part can be printed and checked against a real one |
 | [07 — Status and progress](../walkthrough/07-status-and-progress.md) | One vocabulary for how the CLI reports state |
 | [08 — Problems and solutions](../walkthrough/08-problems-and-solutions.md) | What is unresolved, who can close it, and what exists to close it with |
@@ -27,7 +27,7 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 | [13 — A picture to a print](../walkthrough/13-a-picture-to-a-print.md) | A camera's picture, its shapes, a piece made and adjusted, sliced for printer_1, and a print job for it there, twice round through the page; written by the browser suite |
 | [14 — Designing a part](../walkthrough/14-designing-a-part.md) | A part's size moved, checked, applied and drawn in its tab, OpenSCAD's refusal by line, the saved part again for nothing, round twice and in two tabs; written by the browser suite |
 | [15 — Firmware](../walkthrough/15-firmware.md) | A sketch chosen, built, flashed to the ESP32 devkit and heard saying its hello in the board's Machine, the Arduino esp32_blink then the Rust one; written by its own run, in the browser suite |
-| [16 — Editing a part's SCAD](../walkthrough/16-editing-a-parts-scad.md) | A part's SCAD edited where its source stood, a failing line marked, a change rendered after a second of quiet and saved as a variant in git, the editor floated and fullscreen, round twice; written by the browser suite |
+| [16 — Editing a part's SCAD](../walkthrough/16-editing-a-parts-scad.md) | A part's SCAD edited in Selected's editor, a failing line marked, a change rendered once its check passes and saved as a variant in git, the editor floated and fullscreen, round twice; written by the browser suite |
 
 ## Guides
 
@@ -93,8 +93,8 @@ which the command passes; an ordinary browser run skips them.
 pages 11 and 12 come from the two other `test_docs_*.py` files, which are
 marked `walkthrough` and write `walkthrough/`, not `docs/generated/`.)
 
-On a fresh clone the folder is empty; once generated, each page is at its
-path under `/docs/`:
+Until they are generated the folder does not exist; once generated, each
+page is at its path under `/docs/`:
 
 | Page | Written to |
 |---|---|
