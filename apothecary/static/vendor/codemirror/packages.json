@@ -1,0 +1,86 @@
+{
+  "@codemirror/commands": {
+    "file": "commands/index.js",
+    "from": "dist/index.js",
+    "integrity": "sha512-O/4hG3SC1YwcmQ0d2UVNDs+AsaNWd1iHVxbTeEBuqH+6bExAiPK3iS/BvpY6rZGURALv4ZD3sIgcCmRvw3ehBg==",
+    "license": "MIT",
+    "version": "6.11.1"
+  },
+  "@codemirror/language": {
+    "file": "language/index.js",
+    "from": "dist/index.js",
+    "integrity": "sha512-zfvU2r3TyylQLMj/te+5CnQ0rSqZi8B1oTCBbQkagcLW4Xc6imab6qN+pEJhsuNOLaJqiRyBXp9UhWA1DhVvDw==",
+    "license": "MIT",
+    "version": "6.13.1"
+  },
+  "@codemirror/lint": {
+    "file": "lint/index.js",
+    "from": "dist/index.js",
+    "integrity": "sha512-28/+iWLYxKxsvGYhSYL7zaCZqLz5+FFFDq9tVsvGv9kv8RY4fFAchJ5WX9M3YrrRlTIsECjsXPqeNgnSmNP2dg==",
+    "license": "MIT",
+    "version": "6.9.7"
+  },
+  "@codemirror/state": {
+    "file": "state/index.js",
+    "from": "dist/index.js",
+    "integrity": "sha512-kAz+AncRtKuIknedxT1bq4XwXv4UowhbkHU1myPrtVb/jZtImWuV5BXzv5vK6i3kYACsdiZiQKFQQ5Mq7elW8w==",
+    "license": "MIT",
+    "version": "6.7.6"
+  },
+  "@codemirror/streamparser": {
+    "file": "streamparser/index.js",
+    "from": "dist/index.js",
+    "integrity": "sha512-JTFPF6xrfjt0mnfGPgzcLiMwYmvIyNaoizp8BYzv8FE8KrT6GBGDZ190rtt+O7Wke3gG/MFHyiY9YGNeimof4w==",
+    "license": "MIT",
+    "version": "6.0.0"
+  },
+  "@codemirror/view": {
+    "file": "view/index.js",
+    "from": "dist/index.js",
+    "integrity": "sha512-hC45YnmJNR1rz42OF57BLoQNFMV12/13drnvibDsR2quNDmldcb4WvYVV81hFQg56i9lcqQMEDqilhX2QDcGQQ==",
+    "license": "MIT",
+    "version": "6.43.14"
+  },
+  "@lezer/common": {
+    "file": "lezer-common/index.js",
+    "from": "dist/index.js",
+    "integrity": "sha512-H0iErY4e43LpXbYDyBci5W4v/RwTgGV3YzYOlJPiGZ8RY8w51kVE+xLn1tg3Z6UmSfyETvtsUK3r7YsgDQEI7Q==",
+    "license": "MIT",
+    "version": "1.5.3"
+  },
+  "@lezer/highlight": {
+    "file": "lezer-highlight/index.js",
+    "from": "dist/index.js",
+    "integrity": "sha512-O1GMVKgtf5YspFaRzpmqkVgMtIk2HG9uMAbH6wdAIdNh3TVzCsch/+cRi+6l2//UGDKe6NB9BW3cvuR5ezMQ0w==",
+    "license": "MIT",
+    "version": "1.2.5"
+  },
+  "@marijn/find-cluster-break": {
+    "file": "find-cluster-break/index.js",
+    "from": "src/index.js",
+    "integrity": "sha512-Wy0V7+SGUjnF9/TkiM1hKVDPj7jKXduPNboMVtHTA8dySMURWqfg/JZ9E2Sq8JgSJmkl7k7Qe9FLeMSrSraWmQ==",
+    "license": "MIT",
+    "version": "1.0.4"
+  },
+  "crelt": {
+    "file": "crelt/index.js",
+    "from": "index.js",
+    "integrity": "sha512-aK6BbWfhf4U/wCcLHKPJl/xa6VkVstRaPywWtMKGwuOLc/wZTyQYuoxgvZnNsBvv7Kg3YTBQYYBCggcviQczuA==",
+    "license": "MIT",
+    "version": "1.0.7"
+  },
+  "style-mod": {
+    "file": "style-mod/index.js",
+    "from": "src/style-mod.js",
+    "integrity": "sha512-XXWIQt633/EpAFx8aZDOTjBzrCaGmhvEQlQo6MVPfa2OzO2cWo+4hV9h+6UkHYlXGfy+ODXKUdP7Pthmcu5ATw==",
+    "license": "MIT",
+    "version": "4.1.4"
+  },
+  "w3c-keyname": {
+    "file": "w3c-keyname/index.js",
+    "from": "index.js",
+    "integrity": "sha512-dpojBhNsCNN7T82Tm7k26A6G9ML3NkhDsnw9n/eoxSRlVBB4CEtIQ/KTCLI2Fwf3ataSXRhYFkQi3SlnFwPvPQ==",
+    "license": "MIT",
+    "version": "2.2.8"
+  }
+}

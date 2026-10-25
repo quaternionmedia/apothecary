@@ -145,7 +145,7 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
 
     page.locator("#contents-list .contents-item").first.click()
     page.wait_for_timeout(800)
-    scad = page.locator("#part-scad-content")
+    scad = page.locator("#part-scad")
     expect(scad).to_be_visible()
     # Its heading in the middle of Selected, the source below it: scrolled to the
     # source's own top, the heading would stand under the sticky Apply bar.

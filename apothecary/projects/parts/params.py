@@ -32,21 +32,41 @@ class NoParameters(LookupError):
     """The part declares no ``params_model``, so there is nothing to build controls from."""
 
 
+class ParamOption(BaseModel):
+    """One choice of an ``enum``: the value it sets, and what it is called."""
+
+    value: Any
+    label: str
+
+
 class ParamField(BaseModel):
     """One parameter, as a control surface needs it."""
 
     name: str
-    # "number" gets a slider, "enum" a drop-down of the words in ``pattern``,
-    # "text" nothing yet.
+    # "number" gets a slider over min..max, "enum" a choice of ``options`` (or
+    # of the words in ``pattern``), "boolean" a tick, "text" a string,
+    # "vector" a list of numbers as long as its default.
     type: str
     default: Any = None
     min: Optional[float] = None
     max: Optional[float] = None
+    # The increment the source states (a customizer's ``[1:0.5:20]``); None
+    # where it states none.
+    step: Optional[float] = None
     pattern: Optional[str] = None
+    options: List[ParamOption] = Field(default_factory=list)
+    # The customizer tab a SCAD puts it under (``/* [Size] */``); None for a model's.
+    group: Optional[str] = None
     description: Optional[str] = None
     # The candidates the part's sources disagree about, each with where it
     # comes from: the number a person can turn instead of argue about.
     contested: List[ContestedValue] = Field(default_factory=list)
+
+
+# Where a spec's fields come from: the part's Python model, or its SCAD's own
+# parameters as OpenSCAD's customizer lists them (a part without a model).
+FROM_MODEL = "model"
+FROM_CUSTOMIZER = "customizer"
 
 
 class ParamsSpec(BaseModel):
@@ -56,6 +76,14 @@ class ParamsSpec(BaseModel):
     description: Optional[str] = None
     fields: List[ParamField] = Field(default_factory=list)
     bounds: Optional[BoundingBox3D] = None
+    source: str = Field(
+        FROM_MODEL,
+        description='"model": the part\'s Python model; "customizer": its SCAD\'s own '
+        "parameters, as OpenSCAD lists them",
+    )
+    openscad: Optional[str] = Field(
+        None, description="The OpenSCAD that listed them, for the customizer's"
+    )
 
 
 class FieldError(BaseModel):
@@ -100,7 +128,8 @@ def params_spec(part: BasePart) -> ParamsSpec:
         # contract exists to prevent.
         exclusive_low = spec.get("exclusiveMinimum")
         high = spec.get("maximum")
-        if not isinstance(default, (int, float)):
+        if isinstance(default, bool) or not isinstance(default, (int, float)):
+            # A tick is not a number, though Python counts True as one.
             low = high = None
         else:
             if low is None:
@@ -114,10 +143,16 @@ def params_spec(part: BasePart) -> ParamsSpec:
                 # One slider step above the bound it may not touch.
                 low = float(exclusive_low) + (high - float(exclusive_low)) / 200
 
+        if spec.get("pattern"):
+            kind = "enum"
+        elif isinstance(default, bool):
+            kind = "boolean"
+        else:
+            kind = "number" if high else "text"
         fields.append(
             ParamField(
                 name=field_name,
-                type="enum" if spec.get("pattern") else ("number" if high else "text"),
+                type=kind,
                 default=to_jsonable_python(default),
                 min=low,
                 max=high,
@@ -178,9 +213,12 @@ def validate_staged(part: BasePart, params: Optional[Mapping[str, Any]]) -> Vali
 
 
 __all__ = [
+    "FROM_CUSTOMIZER",
+    "FROM_MODEL",
     "FieldError",
     "NoParameters",
     "ParamField",
+    "ParamOption",
     "ParamsSpec",
     "Validation",
     "params_spec",

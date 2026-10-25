@@ -67,6 +67,9 @@ node_modules/
 !examples/*.jscad
 !examples/*.jscad.js
 !parts/**/*.scad
+# A draft checked or rendered beside its part, for one OpenSCAD run
+# (apothecary/projects/parts/drafts.py): scratch, should a killed run leave one.
+parts/**/.*.draft.scad
 
 # Playwright
 playwright-report/

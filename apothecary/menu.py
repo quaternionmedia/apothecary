@@ -150,6 +150,15 @@ class Place(BaseModel):
     chosen_view: Optional[str] = None
 
 
+class PartSeen(BaseModel):
+    """The part under a node ring, as the server knows it: whether its SCAD is its
+    own source, to edit (a part built by Python geometry shows what it generates),
+    and its variants saved in git, newest first (apothecary/projects/parts/saved.py)."""
+
+    editable: bool = True
+    variants: List[str] = Field(default_factory=list)
+
+
 class PictureContext(BaseModel):
     """What the resolver is told about pictures, as it is told a Device.
 
@@ -159,8 +168,10 @@ class PictureContext(BaseModel):
     intent route fills in ``made`` (the site's made pieces), ``camera_parts``
     (its cameras), ``printers`` (the site's printers with a board pinned, which a
     made piece's Print offers), ``words`` (the vocabulary), ``finders`` (those
-    that can read the drawn view's picture) and, on a camera part, ``here.camera``
-    (its device) from what the server knows, so a page cannot claim them."""
+    that can read the drawn view's picture), on a camera part ``here.camera``
+    (its device), and on a part from the parts folder ``part`` (whether its SCAD
+    is its own, and its saved variants) from what the server knows, so a page
+    cannot claim them."""
 
     cameras: List[CameraSeen] = Field(default_factory=list)
     asked: bool = False
@@ -172,6 +183,7 @@ class PictureContext(BaseModel):
     printers: List[str] = Field(default_factory=list)
     words: List[str] = Field(default_factory=list)
     here: Place = Field(default_factory=Place)
+    part: Optional[PartSeen] = None
 
 
 class Option(BaseModel):
@@ -1142,6 +1154,24 @@ def _node_ring(
         # answer, docs/plans/ui-flows-2026-10-08.md).
         verbs.append(Option(id="part:apply", label="Apply", action="part:apply"))
         verbs.append(Option(id="part:revert", label="Revert", action="part:revert"))
+        # Its SCAD, edited in the editor where the read-only source stood (loop 2,
+        # the owner's answer of 2026-10-10): Save, a variant in git under the name
+        # the editor shows; Float and Fullscreen, the editor out of Selected and
+        # back; Variants, the saved ones, choosing one draws it. Told by the server
+        # (``picture.part``); a part built by Python has no Save and no Variants,
+        # and a part with none saved has no Variants. After Revert, so the loop's
+        # cells keep their seats: eight at the most.
+        seen = picture.part if node.part_ref and not camera and not made else None
+        if seen is not None:
+            if seen.editable:
+                verbs.append(Option(id="part:save", label="Save", action="part:save"))
+            verbs.append(Option(id="part:float", label="Float", action="part:float"))
+            verbs.append(Option(id="part:fullscreen", label="Fullscreen", action="part:fullscreen"))
+            # Last, so the first save, which brings it, moves no cell.
+            chosen = _grouped("Variants", seen.variants, lambda n: f"part:variant:{n}")
+            if seen.editable and chosen is not None:
+                chosen.id = "part:variants"
+                verbs.append(chosen)
         options.append(Option(id="part", label="Part", children=verbs))
     # A made piece with a printer pinned in its site to print it on: Print,
     # appended after Part so no cell above moves. A piece with nowhere to be
@@ -1409,8 +1439,10 @@ CARRIED_BY: Dict[str, Carries] = {
     # The part editor is the page's: Part › Edit opens it in Selected and puts
     # the cursor in its first control, Part › Defaults opens it with the part's
     # own numbers staged, and Part › Apply and Revert do what its buttons do with
-    # what is staged. What Apply changes goes through the part, made and camera
-    # routes the editor already calls, never the intent route.
+    # what is staged; Part › Save, Variants, Float and Fullscreen do what the SCAD
+    # editor's own do. What Apply and Save change goes through the part, made,
+    # camera and saved-variant routes the editor already calls, never the intent
+    # route.
     "part": Carries.VIEWER,
 }
 
@@ -1456,6 +1488,7 @@ __all__ = [
     "MOST_OPTIONS",
     "NoSuchCell",
     "Option",
+    "PartSeen",
     "PLACEMENT",
     "Pointing",
     "Ring",

@@ -140,6 +140,68 @@ documents it). `tests/test_parameter_coverage.py` fails on a field with no
 SCAD variable behind it; `apothecary parts verify` fails when the two
 disagree about size.
 
+### A part without a model: its SCAD's own parameters
+
+A part with no `Params` model still has controls in the viewer where the
+OpenSCAD it renders with can list its SCAD's parameters: a development
+snapshot can (`--export-format=param`), 2021.01 cannot. `GET
+/parts/{name}/params` then answers what OpenSCAD's customizer lists
+(`apothecary/projects/parts/customizer.py`, `source: "customizer"`): the
+top-level assignments before the first module or function, annotated the
+customizer's way -- `width = 34; // [10:100]` a number with its range,
+`hollow = true;` a tick, `label = "hi";` a string, `shape = "round"; //
+[round, square]` a choice, `size = [10, 20];` a vector, `/* [Size] */` the
+group what follows is in, a comment on the line above its caption, and
+`/* [Hidden] */` what is not offered. Where there is nothing to list, the
+`404`'s `detail` says why, `lists: false` when the OpenSCAD in use cannot
+list at all. `POST /parts/{name}/validate` and `.../stl/generate` check a
+staged set against the same list: a number as a number, a choice one of its
+options, a range or length the SCAD states kept to; a value the SCAD itself
+assigns is no override.
+
+### Editing a part's SCAD: drafts, and saves as variants in git
+
+A draft is a part's SCAD as edited in the page. `POST
+/parts/{name}/draft/check` with `{scad, params}` writes it to a hidden file
+of its own beside the part (`.<stem>.<random>.draft.scad`, ignored by git,
+never a part), so its includes resolve, has OpenSCAD evaluate it without
+rendering, and removes it: the answer is what OpenSCAD said, by line of the
+draft and naming the part's SCAD, the fields to build controls from (the
+model's, or the draft's own as OpenSCAD lists them), and the staged
+parameters checked against them. `POST /parts/{name}/draft/render` renders it
+into the cache of variants, answered as generate answers, `draft` the
+sha256 of its text; the cache keeps the text, at
+`/parts/{name}/variants/{variant}/scad`. The part's own SCAD and STL are
+never written.
+
+Saving is a variant in git: `POST /parts/{name}/saved` with `{name, scad,
+params}` commits the SCAD, and the parameters as `<stem>.variant.json`
+beside it, to `refs/apothecary/variants/<part>/<name>` in the repository
+that tracks the part, with git's plumbing alone
+(`apothecary/projects/parts/saved.py`), so the working tree, the index and
+the checked-out branch are never touched. The commit's author is the git
+identity of the checkout, and its parent is the variant's last save or
+`HEAD`. `GET /parts/{name}/saved` lists a part's variants from those refs
+(`?diff=true`: with what each changes against the part's SCAD), and `GET
+/parts/{name}/saved/{variant}` reads one with its SCAD. Making one the
+part's source is a merge you do: `git merge
+refs/apothecary/variants/<part>/<name>`. Keeping a variant's parameters in
+the part's own description instead (`params_in: "part-description"`) is the
+aim, and a stub until then: a save that asks for it is refused, saying what it
+will do. `APOTHECARY_VARIANTS_REPO` names another repository to save into, a
+clone of the checkout; the browser suite's servers save into one of their own.
+
+In the viewer, the part's editor in Selected holds its SCAD, where the
+read-only source stood: checked once typing stops, rendered after a second
+of quiet, saved with Save (or Part › Save) under the name beside it, its
+saved variants listed under its parameters and, with what each changes, in
+the editor; floated over the world or made fullscreen (Part › Float, Part ›
+Fullscreen). Walkthrough 16 goes round it.
+
+A part built by Python geometry (the snowplow) has no SCAD of its own to
+edit: `GET /parts/{name}/scad` answers the SCAD its geometry generates
+(`X-Part-Scad: generated`), and a draft or a save of it is a `403`.
+
 ## Hooks for a part the SCAD file does not fully describe
 
 Most parts need none of these. Each is a `BasePart` field or method a

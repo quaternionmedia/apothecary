@@ -461,7 +461,7 @@ def test_part_edit_on_a_camera_opens_its_numbers_in_selected(
     expect(params.locator(".param")).to_have_count(6, timeout=10000)
     fields = params.locator(".param").evaluate_all("(ps) => ps.map((p) => p.dataset.field)")
     assert sorted(fields) == ["fov", "tilt", "turn", "x", "y", "z"]
-    expect(page.locator("#part-scad-content")).to_have_count(0)
+    expect(page.locator("#part-scad")).to_have_count(0)
     section = page.locator("#selected-body .camera-section")
     assert section.evaluate(
         "(el) => !!(el.compareDocumentPosition(document.getElementById('part-params')) & Node.DOCUMENT_POSITION_FOLLOWING)"

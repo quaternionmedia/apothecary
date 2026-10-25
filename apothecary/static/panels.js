@@ -349,10 +349,12 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
          * seen the panel starts from. `onClose` is called when an open panel is
          * closed or unregistered; `onOpen` when a panel whose body is already
          * filled comes back in front of a person -- opened again, or its tab
-         * shown again. */
-        register(id, { title, tab = null, body, zone = "tabs", where = "rail", open = true, collapsed = false, x = 40, y = 40, onClose = null, onOpen = null } = {}) {
+         * shown again. `onDock`, for a panel that is a part of another one
+         * floated out of it (the SCAD editor, out of Selected), is called
+         * instead of docking it in the rail: the page puts it back. */
+        register(id, { title, tab = null, body, zone = "tabs", where = "rail", open = true, collapsed = false, x = 40, y = 40, onClose = null, onOpen = null, onDock = null } = {}) {
             if (panels.has(id)) this.unregister(id);
-            const p = { id, title: title || id, tab, zone: zone === "stack" ? "stack" : "tabs", where: where === "free" ? "free" : "rail", order: order++, open, collapsed, x, y, height: null, el: null, slot: null, mount: null, onClose, onOpen };
+            const p = { id, title: title || id, tab, zone: zone === "stack" ? "stack" : "tabs", where: where === "free" ? "free" : "rail", order: order++, open, collapsed, x, y, height: null, el: null, slot: null, mount: null, onClose, onOpen, onDock };
             const had = remembered[id];
             if (had && typeof had === "object") {
                 if (typeof had.open === "boolean") p.open = had.open;
@@ -416,9 +418,10 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
             if (!p) return false;
             const rect = p.el.getBoundingClientRect(), base = overlay.getBoundingClientRect();
             change(p, () => {
+                // Beside where it was docked; one already free stays where it is.
+                if (p.where !== "free") { p.x = Math.max(0, rect.left - base.left - 24); p.y = Math.max(0, rect.top - base.top + 8); }
                 p.where = "free"; p.open = true;
                 if (rail.tab === id) rail.tab = null;
-                p.x = Math.max(0, rect.left - base.left - 24); p.y = Math.max(0, rect.top - base.top + 8);
             });
             placeClear(p); p.el.style.left = `${p.x}px`; p.el.style.top = `${p.y}px`; remember();
             return true;
@@ -428,6 +431,7 @@ export function mountPanels({ container, overlay, storageKey = "apothecary.panel
         dock(id) {
             const p = panels.get(id);
             if (!p) return false;
+            if (p.onDock) { p.onDock(); return true; }
             change(p, () => {
                 p.where = "rail"; p.open = true; rail.hidden = false;
                 if (p.zone === "tabs") showTab(p);

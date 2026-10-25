@@ -64,7 +64,8 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   `blank`), so a picture changes only when the page does. A loop's page --
   `walkthrough/13-a-picture-to-a-print.md` from `test_picture_to_print.py`,
   `walkthrough/14-designing-a-part.md` from `test_part_loop.py`,
-  `walkthrough/15-firmware.md` from `test_the_firmware_loop.py` -- is written
+  `walkthrough/15-firmware.md` from `test_the_firmware_loop.py`,
+  `walkthrough/16-editing-a-parts-scad.md` from `test_scad_loop.py` -- is written
   the same way by a test marked `e2e` and not `walkthrough`, which passes
   `browser_suite_only=True` to the fixture: the browser suite writes it,
   `apothecary test run` stays quick, and the page's header and footer say so.

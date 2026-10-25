@@ -92,8 +92,8 @@ A second tab of the same page: this one stages 23.91 mm and the other 36.20 mm, 
 
 ## What this page does not show
 
-- **Editing the SCAD.** The part's source is shown read-only, its refused line marked; an editor in the page is the next loop's.
-- **A variant kept for good.** An applied variant lives in its tab's address and the cache, which keeps the most recently drawn of each part; saving one is a variant in git, the next loop's too.
+- **Editing the SCAD.** The part's source is in the editor below its parameters, its refused line marked there; editing it is walkthrough 16's.
+- **A variant kept for good.** An applied variant lives in its tab's address and the cache, which keeps the most recently drawn of each part; saving one is a variant in git, walkthrough 16's too.
 - **Which OpenSCAD measured.** The editor says whether the measured bounds are OpenSCAD's own summary of the render or were read off the STL; which it is depends on the machine's OpenSCAD, so the words here leave it out.
 - **What changes from machine to machine.** A variant's key is a hash of what made it, its OpenSCAD among them; the address that carries it is not in the pictures, nor in the words.
 
