@@ -110,7 +110,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 - `apothecary check` reports each part's OpenSCAD, the slicer and each firmware toolchain, exits 1 when a required package is missing, and ends with the next step. ([readme](README.md))
 - `apothecary --help` lists a person's commands, then the repository's own, and ends with where to start. ([code](apothecary/cli/main.py))
 - Playwright is a dev dependency, and ruff is the one lint configuration. ([doc](CONTRIBUTING.md))
-- README.md is the entry doc, starting at walkthrough page 00; QUICKSTART.md points at it; CONTRIBUTING.md names the CI gates. ([readme](README.md))
+- README.md is the entry doc, starting at walkthrough page 00; CONTRIBUTING.md names the CI gates. ([readme](README.md))
 
 ### Removed
 
@@ -121,6 +121,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 - `elephant_walk` as a registered part; `apothecary parts elephant-walk` writes its preview to `.cache/`. ([code](apothecary/cli/parts.py))
 - `PartFiles`, the revision-graph prototype, and the uncalled parts of `apothecary.models`. ([doc](docs/models.md))
 - The tutorial; git keeps it. ([docs](docs/README.md))
+- QUICKSTART.md: README.md's *Start here* is where a person begins. ([readme](README.md))
 - The standalone parts browser and `/viewer/random`: `/viewer/parts/{name}` lands in the one viewer, on the parts library focused on that part. ([viewer](templates/fractal_viewer.html.j2))
 - Legacy JSCAD viewer endpoints and three orphaned modules. ([code](apothecary/api.py))
 

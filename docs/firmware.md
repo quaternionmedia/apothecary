@@ -28,12 +28,12 @@ it says what it builds -- its languages and board families -- finds its tools
 status and what it can do, installs them, builds and flashes a sketch as steps
 the task runner runs, and may find ports, listen to a board and ask its chip
 what it is itself. Arduino (arduino-cli, esptool) and Rust for the ESP32 (cargo,
-espflash) are modules today (`apothecary firmware validate` lists each); a later
+espflash) are the modules (`apothecary firmware validate` lists each); another
 family or language -- the ESP32-C3 on stable Rust, AVR, the RP2040 -- is a module
 of its own beside them, and the
 Bench, the Machine, the routes and the CLI draw it without a change of their
 own. `GET /firmware/toolchains` lists them; `GET /firmware/status` carries
-them as `toolchains`, its other fields Arduino's as they always were.
+them as `toolchains`, and its other fields are the Arduino module's.
 
 ## Setup
 
@@ -81,8 +81,8 @@ parts/esp32_blink/esp32_blink.ino
 ```
 
 A sketch in a category folder is found the same way: a
-`parts/rc/snowplow/controller/controller.ino`, which does not exist yet, would
-be the sketch `controller`.
+`parts/rc/snowplow/controller/controller.ino` would be the sketch
+`controller`.
 
 An optional `firmware.json` beside the `.ino` supplies defaults:
 
@@ -256,7 +256,8 @@ it; that commit re-runs a real install and a real offline build of every Rust
 sketch in a scratch tools dir and says what they did in its body -- the hosts
 they reached, the build's result. A sketch's `Cargo.lock` is resolved against
 the pinned toolchain, so a toolchain bump bumps the lockfiles too, when they
-need it. There is no licence gate over the crates yet.
+need it. No licence gate reads the crates: `license-check.yml` checks the
+Python dependencies.
 
 | Platform | The install |
 |---|---|
@@ -452,7 +453,7 @@ and the Machine's buttons wear that ring's addresses. `POST /menu/resolve`
 seats the options
 (`apothecary/menu.py`); `POST /menu/intent` receives the choice. A control
 verb from the ring goes through the same latch, allowlist and confirms as the
-button it replaces; the ring never opens a port.
+Machine's button for that verb; the ring never opens a port.
 
 ### Control, behind a latch
 
@@ -537,9 +538,9 @@ The card's history is the printer's jobs (`GET /jobs?machine=PORT&kind=print`),
 each with its JSON (`GET /jobs/{id}`, with the tail of what the firmware
 said), and the viewer's **Site** lists the jobs of the site's machines, a row
 opening its machine. `GET /jobs/choices?machine=PORT` says what a job there
-would record and which parts it can name. The print records kept before jobs
-(`~/.apothecary/prints/records/`) are carried over as print jobs the first
-time jobs are read, and left where they were.
+would record and which parts it can name. A print record under
+`~/.apothecary/prints/records/` that is not yet a job is written as one
+whenever jobs are read, and the record is left where it is.
 
 A kind of job belongs to a kind of machine: a printer offers `print`
 (`jobs.PRINT`), and a mill or a laser would register its own operation with

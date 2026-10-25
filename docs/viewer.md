@@ -82,7 +82,10 @@ before the view so it never turns it.
 **Stepping in** goes into the piece named -- the one double-clicked, or the
 ring's -- else the selection, else what the middle of the view shows, walls
 passed through as a click passes them; as deep as it is drawn. The status line
-says which, and why. Stepping out lands on the piece left, selected.
+says which, and why. Stepping out lands on the piece left, selected. Inside a
+piece the world draws what it holds, not the piece: stepped into a printer, its
+board and its posts are drawn, and its body is the picture at the level above.
+A piece that holds nothing is drawn itself.
 
 **Automatic zoom** is the wheel's step: once the camera is as near the level's
 pieces as it may come, or as far out, more scrolling the same way adds up, and
@@ -325,7 +328,8 @@ Moving a control **stages** a value: its line is rewritten and nothing is
 drawn. Once the controls rest the text is checked, its values against the
 part's own model, and the bar above them says what is staged -- what the text
 says otherwise than the text drawn -- whether it is valid and the envelope it
-would make. What is typed in the SCAD is drawn once it reads, as before.
+would make. What is typed in the SCAD is drawn once it reads
+([below](#the-scad-editor)).
 **Apply** renders the text, its values in it, nothing passed on the side:
 when the result is not the saved part, it is
 drawn in this tab only as an applied variant -- amber, not saved -- and the
@@ -419,8 +423,9 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   checkout, HEAD or the working tree. The status line says what making it the
   part's source takes, as the server words it: where the ref lives (a fetch
   first, when `APOTHECARY_VARIANTS_REPO` names another repository to keep them
-  in), and that a merge brings its values with it -- or, for a variant saved
-  before its values were in its text, that it does not until it is saved again.
+  in), and that a merge brings its values with it -- or, for a variant whose
+  values are in a `.variant.json` beside its SCAD and not in its text, that a
+  merge does not apply them until it is saved again.
   What would be a failed render is not saved. A part in a submodule
   (gridfinity) is saved as its **overlay**: the include of the upstream file
   and the values set after it, the submodule never touched; an edit of the
@@ -433,9 +438,9 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   to it, each a button of its row in the editor's list too (its **⋯** unfolds
   them): **Draw** loads it -- its SCAD into the editor, its values in it and
   the controls on them, checked and drawn; a part in a submodule's variant is
-  its overlay, the upstream file never put in the editor as the part's; one
-  saved before its values were written into its text has them written in when
-  it is read -- **Rename** and
+  its overlay, the upstream file never put in the editor as the part's; a
+  variant whose values are in a `.variant.json` and not its text has them
+  written in when it is read -- **Rename** and
   **Duplicate**, under the name typed in its row's box (the cell puts the
   cursor there; Enter does it), **History** (each save, newest first, an
   earlier one restored by its **Restore** as a new save, the history keeping

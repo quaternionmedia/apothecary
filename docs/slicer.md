@@ -2,10 +2,8 @@
 
 A part, or a piece made from a picture, sliced into G-code for the pinned
 printer, and kept where the Print card keeps a file, so Print follows Slice.
-The owner decided how on 2026-10-10 ([the plan](plans/slicer-2026-10-10.md));
-this page says what was built: the server, the command line, and Slice as a
-step of the page. Slicing writes files only: nothing here opens a serial port
-or sends anything to a printer.
+A slice runs from the server, the command line and the page. Slicing writes
+files only: nothing here opens a serial port or sends anything to a printer.
 
 ## Installing it
 
@@ -66,12 +64,11 @@ how a slice uses it:
 
 ## What a slice is composed from
 
-The owner decided (2026-10-10) that the start of a print is composed from
-modules as they are wanted. Each piece a slice can be composed from says what
-it does (`apothecary/slicer/compose.py`; `slicer status` and `GET
-/slicer/status` list them); a **stub** exists, says what it will do, and is not
-chosen -- a profile naming one is refused, saying what it will do, before
-anything is built. The printer's profile names its pieces under `start` and
+The start of a print is composed from modules, as they are wanted. Each piece
+a slice can be composed from says what it does (`apothecary/slicer/compose.py`;
+`slicer status` and `GET /slicer/status` list them); a **stub** exists, says
+what it will do, and is not chosen -- a profile naming one is refused, saying
+what it will do, before anything is built. The printer's profile names its pieces under `start` and
 `filament`, each with its source.
 
 | Kind | Piece | What it does | |
@@ -172,5 +169,5 @@ A slicer is a module (`apothecary/slicer/modules/`): a subclass of
 `SlicerModule` in a file of its own, registered in `_registry`. A printer's
 profile has a section per module, in that slicer's terms. The slicer a slice
 uses is the one named (`--slicer`, or the route's `slicer`), else
-`APOTHECARY_SLICER`, else the `slicer` line of the printer's profile -- the
-owner switches by changing that line.
+`APOTHECARY_SLICER`, else the `slicer` line of the printer's profile, so a
+printer changes slicer by changing that line.

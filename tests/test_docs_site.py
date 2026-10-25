@@ -79,7 +79,7 @@ def test_every_page_renders_and_its_links_resolve():
     assert not missing, "\n".join(missing)
 
 
-ROOT_DOCS = ["README.md", "QUICKSTART.md", "CONTRIBUTING.md", "AGENTS.md", "CHANGELOG.md"]
+ROOT_DOCS = ["README.md", "CONTRIBUTING.md", "AGENTS.md", "CHANGELOG.md"]
 FENCE = re.compile(r"^```.*?^```", re.M | re.S)
 REMOVED = re.compile(r"^### Removed$.*?(?=^#|\Z)", re.M | re.S)  # names what is gone
 HTML_LINK = re.compile(r'\b(?:src|href)="([^"]+)"')
@@ -98,8 +98,8 @@ def _names_a_repo_path(span: str) -> bool:
 
 
 def test_the_root_docs_name_only_files_that_exist():
-    """README, QUICKSTART, CONTRIBUTING, AGENTS and CHANGELOG link to, and name in
-    code, only files and folders this checkout has."""
+    """README, CONTRIBUTING, AGENTS and CHANGELOG link to, and name in code, only
+    files and folders this checkout has."""
     governance = (ROOT / "governance" / "qm" / "README.md").exists()
     missing = []
     for name in ROOT_DOCS:

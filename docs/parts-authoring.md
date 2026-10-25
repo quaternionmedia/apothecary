@@ -210,19 +210,15 @@ identity of the checkout, and its parent is the variant's last save or
 (`?diff=true`: with what each changes against the part's SCAD), and `GET
 /parts/{name}/saved/{variant}` reads one with its SCAD. Making one the
 part's source is a merge you do: `git merge
-refs/apothecary/variants/<part>/<name>`. Keeping a variant's parameters in
-the part's own description instead (`params_in: "part-description"`) is the
-aim, and a stub until then: a save that asks for it is refused, saying what it
-will do. `APOTHECARY_VARIANTS_REPO` names another repository to save into, a
+refs/apothecary/variants/<part>/<name>`. Keeping a variant's values in the
+part's own description instead (`params_in: "part-description"`) is a stub: a
+save that asks for it is refused, saying what it would do.
+`APOTHECARY_VARIANTS_REPO` names another repository to save into, a
 clone of the checkout; the browser suite's servers save into one of their own.
 
-In the viewer, the part's editor in Selected holds its SCAD, where the
-read-only source stood: checked once typing stops, rendered soon after a
-check that passes, saved with Save (Ctrl+S in the editor, or Part › Save)
-under the name beside it, its saved variants listed under its parameters
-and, with what each changes, in the editor; floated over the world or made
-fullscreen (Part › View › Float, Part › View › Fullscreen). Walkthrough 16
-goes round it, and [viewer.md](viewer.md#the-scad-editor) has its keys.
+In the viewer, the part's editor in Selected holds its SCAD
+([viewer.md](viewer.md#the-scad-editor) says how it checks, renders and saves,
+and its keys); walkthrough 16 goes round it.
 
 A part built by Python geometry (the snowplow) has no SCAD of its own to
 edit: `GET /parts/{name}/scad` answers the SCAD its geometry generates

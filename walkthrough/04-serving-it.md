@@ -52,7 +52,7 @@ Machine:
 
 | | |
 |---|---|
-| Start it | `apothecary serve --port 8765` |
+| Start it | `apothecary serve` |
 | Check the install | `apothecary check` |
 | The assembly | `/viewer/sites/datum_core` |
 | The catalog | `/viewer/sites/parts_library` |
