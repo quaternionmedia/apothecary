@@ -57,6 +57,12 @@ def press(page: Page, *labels: str) -> str:
     return address
 
 
+def past_the_chord(page: Page) -> None:
+    """Past the chord window: the next arrow walks from the cell lit, rather than
+    making a corner with the arrow before it."""
+    page.wait_for_function("() => !window.apothecaryRing.chordOpen()", timeout=RING_MS)
+
+
 def press_cells(page: Page, *digits: str) -> str:
     """The cells named by their digits pressed in turn; the address pressed."""
     for digit in digits:
