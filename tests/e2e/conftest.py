@@ -137,6 +137,72 @@ def pytest_collection_modifyitems(config, items):
                 item.add_marker(pytest.mark.timeout(caps[item.nodeid], func_only=True))
 
 
+# What a browser test file leaves on the session's shared server, as the next file
+# would find it: each site's pinned boards, views, cameras and made pieces, where its
+# roots stand and which of its lights are lit; the pictures, print files and slices.
+def _as_found(url: str) -> dict:
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        shown = {
+            "pictures": sorted((p["path"], p["kept"]) for p in http.get("/photos/pictures").json()),
+            "prints": sorted(f["id"] for f in http.get("/firmware/printers/prints").json()),
+            "slices": sorted(str(r.get("file_id")) for r in http.get("/slicer/slices").json()),
+        }
+        for site in http.get("/sites").json():
+            attached = http.get(f"/sites/{site}/attached").json()
+            roots = http.get(f"/sites/{site}").json()["structures"]
+            bound = http.get(f"/sites/{site}/devices").json()["bindings"]
+            lit = http.get(f"/sites/{site}/lighting/state")
+            shown[site] = {
+                "views": sorted((v["id"], v["host"]) for v in attached["views"]),
+                "cameras": sorted(c["name"] for c in attached["cameras"]),
+                "made": sorted(attached["made"]),
+                "roots": sorted(
+                    (r["name"], json.dumps(r["position"], sort_keys=True)) for r in roots
+                ),
+                "pins": sorted(
+                    (b["path"], str(b.get("identity")))
+                    for b in bound
+                    if b.get("binding_source") == "manual"
+                ),
+                "lit": sorted(
+                    ch for ch, params in lit.json()["channels"].items() if any(params.values())
+                )
+                if lit.status_code == 200
+                else None,
+            }
+    return shown
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _the_shared_server_as_found(request):
+    """A browser test file leaves the session's shared server as it found it, so which
+    files share a server -- the shards decide, and --record-durations moves them --
+    changes nothing a test sees. A file that leaves something changed fails here,
+    named, with what it changed. Not under --step, whose walk on the demo changes it
+    on purpose; not for a file that never asks for the shared server."""
+    if request.config.getoption("--step") is not None or not any(
+        "base_url" in item.fixturenames
+        for item in request.session.items
+        if getattr(item, "module", None) is request.module  # a page's doctest has none
+    ):
+        yield
+        return
+    try:
+        url = request.getfixturevalue("base_url")
+    except pytest.skip.Exception:
+        yield
+        return
+    before = _as_found(url)
+    yield
+    after = _as_found(url)
+    changed = {
+        key: {"found": before.get(key), "left": after.get(key)}
+        for key in sorted(set(before) | set(after))
+        if before.get(key) != after.get(key)
+    }
+    assert not changed, f"{request.module.__name__} left the shared server changed: {changed}"
+
+
 def _free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
