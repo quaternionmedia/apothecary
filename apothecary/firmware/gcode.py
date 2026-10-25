@@ -587,6 +587,9 @@ class GcodeLink:
     ``command()`` is serialised by a lock so a poll and a user command never
     interleave their replies. Lines that arrive outside any exchange (an
     autoreport, a boot banner) are kept in ``unsolicited`` for the caller.
+    The emergency stop takes no part in that order (``emergency_stop()``): a
+    second lock guards only the writing of a line, so M112 waits at most for
+    a line being written, never for an exchange in flight.
     """
 
     def __init__(self, port: str, baud: int, transport: Transport, log: Optional[CommsLog] = None):
@@ -594,6 +597,7 @@ class GcodeLink:
         self.baud = baud
         self._t = transport
         self._lock = threading.RLock()
+        self._write_lock = threading.Lock()  # one line on the wire at a time
         self._buf = b""
         self.unsolicited: List[str] = []
         self.opened_at = datetime.now(timezone.utc)
@@ -690,7 +694,8 @@ class GcodeLink:
         try:
             if not quiet:
                 self.log.add("tx", cmd, origin)
-            self._t.write((cmd + "\n").encode())
+            with self._write_lock:
+                self._t.write((cmd + "\n").encode())
             lines: List[str] = []
             end = time.monotonic() + timeout * self.time_scale
             while True:
@@ -718,6 +723,31 @@ class GcodeLink:
                     raise ToolchainError(f"{self.port}: {cmd} -> {line}")
         finally:
             self._lock.release()
+
+    def emergency_stop(self, settle: float = 1.0) -> List[str]:
+        """M112, written at once: ahead of any exchange in flight, waiting for no
+        `ok`, which a halted board never sends. With nothing in flight, what the
+        board says within ``settle`` seconds is returned (Marlin's "Printer
+        halted"); with an exchange in flight, that exchange reads it, and ends
+        with it. The board acts on M112 as it reads it only when its firmware
+        parses it early (Marlin's EMERGENCY_PARSER); otherwise after the moves
+        it has queued."""
+        self.log.add("tx", EMERGENCY_STOP, "control")
+        with self._write_lock:
+            self._t.write((EMERGENCY_STOP + "\n").encode())
+        lines: List[str] = []
+        if self._lock.acquire(blocking=False):
+            try:
+                end = time.monotonic() + settle * self.time_scale
+                while (left := end - time.monotonic()) > 0:
+                    line = self._read_line(left)
+                    if line is None:
+                        break
+                    lines.append(line)
+                    self.log.add("rx", line, "control")
+            finally:
+                self._lock.release()
+        return lines
 
     def close(self) -> None:
         with self._lock:
@@ -1209,8 +1239,12 @@ def poll_printer(
 
 
 def control_printer(link: GcodeLink, command: str, timeout: float = 30.0) -> List[str]:
-    """Send one allowlisted control line (homing can take a while; ``busy`` extends the wait)."""
-    return link.command(normalise_control(command), timeout=timeout, origin="control")
+    """Send one allowlisted control line (homing can take a while; ``busy`` extends the
+    wait). The emergency stop is written at once, ahead of the link's queue."""
+    cmd = normalise_control(command)
+    if cmd == EMERGENCY_STOP:
+        return link.emergency_stop()
+    return link.command(cmd, timeout=timeout, origin="control")
 
 
 def query_printer(link: GcodeLink, command: str, timeout: float = 15.0) -> List[str]:

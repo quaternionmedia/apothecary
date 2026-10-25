@@ -464,8 +464,11 @@ Disarmed, the default, nothing can heat or move the machine: the API refuses
 control lines with `409`. A printer's Machine's **⚙ Control** arms a per-port latch
 held on the server; it lapses after five minutes without a command (each
 accepted command renews it) and is dropped by a **Release** or a lost link.
-**E-STOP** (`M112`) is always accepted, latch or not; the board halts until
-it is reset.
+**E-STOP** (`M112`) is always accepted, latch or not, and is written at once,
+ahead of any exchange in flight (a homing, a bed probe), waiting for no `ok`:
+the board's "Printer halted" is its answer. The board halts until it is
+reset -- as soon as it reads the line when its firmware parses M112 early
+(Marlin's `EMERGENCY_PARSER`), else after the moves it has queued.
 
 Armed, the Machine's control pad -- heaters, motion, the SD print, leveling --
 pops out into a loud window of its own beside the world: its tab and frame red,
