@@ -1,8 +1,8 @@
 # Inventory: the walkthrough (`walkthrough/00`–`16`)
 
 Read at `wt-timeless` (`build/timeless-docs`, c67725a). `check_timeless.py --all` finds two
-lines in this area: `05-contested-numbers.md:30` ("until recently") and
-`tests/e2e/test_docs_photo_walkthrough.py:7` ("used to be"). Everything else below was found
+lines in this area: `05-contested-numbers.md:30` ("until recently") and <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory -->
+`tests/e2e/test_docs_photo_walkthrough.py:7` ("used to be"). Everything else below was found <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory -->
 by reading the files.
 
 ## 1. Verdict
@@ -94,7 +94,7 @@ hand-written pages, lines without a row are clean.
 
 | line(s) | quote | problem | home | rewrite or note |
 |---|---|---|---|---|
-| 28–37 | "This page listed three until recently. `walls` and `tolerence` were disputed…" | history (flagged by the gate) | retrospective → apothecary: the datum parts | Delete the story and its walls/tolerence doctest; page 02:19–21 already pins those values. |
+| 28–37 | "This page listed three until recently. `walls` and `tolerence` were disputed…" | history (flagged by the gate) | retrospective → apothecary: the datum parts | Delete the story and its walls/tolerence doctest; page 02:19–21 already pins those values. <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
 | 39–43 | "That is a real resolution, not a silencing…" | history around a principle | reference → `docs/fitting-a-part.md`; inline | Keep the rule: "A candidate's source must be readable; a candidate citing a deleted file is removed with it." |
 | 45–49 | "That is the whole reason… The wall thickness is settled now" | ornament + history | inline | Show the consequence with `board_y` (40 vs 30 mm of envelope) instead of the retired `walls=2.4`. |
 | 57–61 | "Selected carries every parameter as a control, contested ones first" | duplicate (`docs/viewer.md`, page 14) | reference → `docs/viewer.md` | One line and a link. Contested-first is still true (template :4077). |
@@ -188,7 +188,7 @@ hand-written pages, lines without a row are clean.
 | 137–139 | step 16 | ok | | | :364–368 |
 | 141–147 | "a tool that is pleasant to demonstrate… Unifying means it reaches nothing" | ornament + the language of a plan; the step is off-topic | delete here; reference → `docs/viewer.md` (the census) | The census of controls says nothing about photographs. The shown count is the run's own, which is fine wherever it goes. | :371–378 |
 | 149–154 | "What this page does not show" (4 bullets) | ok | | | :106–115 |
-| (docstring) | "It used to be two demonstrations…" | history (flagged by the gate) | retrospective → apothecary: the walkthrough | Keep lines 3–5 and 15–18 of the docstring. | :7–13 |
+| (docstring) | "It used to be two demonstrations…" | history (flagged by the gate) | retrospective → apothecary: the walkthrough | Keep lines 3–5 and 15–18 of the docstring. | :7–13 <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
 | (docstring) | "A walkthrough that cannot fail is a screenshot with a caption." | ornament | inline | "Holds the step's chips from the other side: no word, no chip." | :385 |
 
 ### 12-the-bench-as-it-is.md — source `tests/e2e/test_docs_bench_walkthrough.py`

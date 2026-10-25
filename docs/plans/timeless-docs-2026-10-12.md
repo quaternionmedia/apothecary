@@ -102,7 +102,7 @@ stands before changing it.
   Three draft records lag the code, and the bench checklist moves to a
   present-tense runbook.
 - **The gate** sees little of this, and two of its findings are false
-  positives: "was found in" describing a search's result in the present
+  positives: "was found in" describing a search's result in the present <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory -->
   tense.
 
 ## The order of the sweep

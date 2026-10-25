@@ -107,15 +107,15 @@ listed under the CLI.
 
 | finding | real? | row |
 |---|---|---|
-| `api.py:1517` "used to be" | real | api.py 1517-1520: inline + retrospective |
-| `census.py:114` "was found in" | **false positive**: "The page was read and nothing was found in it" describes the refusal, in the present | -- |
-| `datum_core_site.py:34` "used to be" | real | datum_core_site.py 34-36: inline + retrospective |
-| `gathering/models.py:6` "was found in" | **false positive**: "enough was found in it" describes a picture, in the present | -- |
-| `gathering/resolve.py:409` "used to be" | real | resolve.py 409-415: inline + retrospective |
-| `hierarchy.py:220` "used to be" | real | hierarchy.py 220-221: inline |
+| `api.py:1517` "used to be" | real | api.py 1517-1520: inline + retrospective <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
+| `census.py:114` "was found in" | **false positive**: "The page was read and nothing was found in it" describes the refusal, in the present | -- <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
+| `datum_core_site.py:34` "used to be" | real | datum_core_site.py 34-36: inline + retrospective <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
+| `gathering/models.py:6` "was found in" | **false positive**: "enough was found in it" describes a picture, in the present | -- <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
+| `gathering/resolve.py:409` "used to be" | real | resolve.py 409-415: inline + retrospective <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
+| `hierarchy.py:220` "used to be" | real | hierarchy.py 220-221: inline <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
 
 For the record's tool: `was (found|caught|discovered) in` matches present-tense descriptions
-of a search result. Both false positives use the shape "nothing/enough was found in it".
+of a search result. Both false positives use the shape "nothing/enough was found in it". <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory -->
 The pattern could require a narrating subject, or the two lines could carry
 `timeless: allow` with a reason.
 
@@ -292,7 +292,7 @@ Kept: 10 (rad's nine-cells record, a reference); 677-678, 731, 1270, 1276, 1283 
 | 1380-1384 | "the viewer falls back to a bounding-box wireframe ... real CSG rendering of composite nodes is future work" | stale, ornament ("not a bug") | inline | Composite nodes render through `GET /sites/{name}/nodes/{path}/stl` (api.py:1904; viewer template :7172-7201). "Returns None for anything richer; the viewer draws those from the node's STL." |
 | 1411-1412 | "drawn without them it was a round cone" | history | inline | "a wedge is a cylinder of three facets, and without them it would draw as a round cone." |
 | 1435-1436, 1446-1447 | "for the old, depth-capped viewers" / "the only depth the old, depth-capped viewers ever showed" | history, stale | inline | No viewer reads `structures` now (only tests and API clients). "Unlike ``_structure_summary`` (the root's direct children, in ``structures``) ..." |
-| 1517-1520 | "``scad`` used to be attached only by the layout route" | history (gate hit) | inline + retrospective → apothecary: the viewer and the one page | "Every read carries ``scad``: it is string generation over a tree in memory, not an OpenSCAD process." |
+| 1517-1520 | "``scad`` used to be attached only by the layout route" | history (gate hit) | inline + retrospective → apothecary: the viewer and the one page | "Every read carries ``scad``: it is string generation over a tree in memory, not an OpenSCAD process." <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
 | 2469-2471 | "There is no longer a standalone parts browser or bare Site browser" | history | inline | "The default entry point of the one viewer (``site_viewer``)." |
 | 2476-2480 | "The firmware page and the printer monitor were pages of their own; ... (the consolidation plan's Phase 5)" | history, plan citation | inline | "`/firmware` and `/firmware/monitor` redirect to the Bench and a board's Machine: links to them exist outside the app." |
 | 2494-2495 | "A port of the wrong shape is dropped, as the page dropped it" | history | inline | "A port of the wrong shape is dropped: the viewer opens with nothing in front of it." |
@@ -314,7 +314,7 @@ Kept: 1156 "(prototype, unratified)" and 2512 "(prototype)": still true, since t
 | 341-342, 348-349 (x2) | "Rust for the ESP32 today" / "OrcaSlicer today" | count, history | inline | "Every other toolchain module, drawn from the status beside arduino-cli, one Install each." The list is the registry's. |
 | 374 | "the gathering's section until gathering leaves core" | history (plan in code) | inline | "and the gathering's section". Same as menu.py:1081. |
 
-Gate hit 114 ("nothing was found in it"): **false positive**. It describes the refusal, in the present.
+Gate hit 114 ("nothing was found in it"): **false positive**. It describes the refusal, in the present. <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory -->
 Kept: 29-30 "**This is the meter.**" (a short clause in bold); 575-580 (cites records for a lasting exception, present tense).
 
 ### apothecary/spaces.py -- moderate -- 5 passages
@@ -353,7 +353,7 @@ Kept: 29-30 "**This is the meter.**" (a short clause in bold); 575-580 (cites re
 
 | line(s) | quote (<= 15 words) | problem | home | rewrite or note (<= 25 words) |
 |---|---|---|---|---|
-| 34-36 | "These used to be typed out again here, twelve of them, kept in step" | history, count (gate hit) | inline + retrospective → apothecary: reviews and gates | "The parts' own defaults, read from their parameter models rather than restated." The lesson ("a gate compensating for a duplication") goes to the retrospective. |
+| 34-36 | "These used to be typed out again here, twelve of them, kept in step" | history, count (gate hit) | inline + retrospective → apothecary: reviews and gates | "The parts' own defaults, read from their parameter models rather than restated." The lesson ("a gate compensating for a duplication") goes to the retrospective. <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
 
 Kept: 10-11 (the test still compares the SCAD defaults: `tests/test_datum_core_site.py:57-65`); 62 "no parameter model exposes yet" (a present limit).
 
@@ -379,7 +379,7 @@ record. vision/ is clean present-tense prose apart from its labels and a few own
 | 50-52 | "Measured: the plain finder's confidence is reliably lower when it is wrong" | history (measurement), ornament ("decorative") | inline | "The plain finder's confidence is lower when it is wrong (`photo check` measures it), so this threshold separates." |
 | 231-236 | "An earlier version picked the best partner for each shape here" | history | inline + retrospective → apothecary: gathering pictures | "Not one-to-one: a coincidence that looks slightly more alike would lock the real match out. Which pairing is real is the arrangement's question." |
 | 359-360, 374-377 (x2) | "This is the check that stopped two unrelated pictures being merged." / "was this module's most common mistake when it was first measured" | ornament (a check by what it caught), history | inline | "Matched one at a time, not in place: a coincidence." / Drop the last clause. |
-| 409-415 | "there used to be an exception for ... and a reviewer walked straight through it" | history (gate hit), ornament | inline + retrospective → apothecary: gathering pictures | "Always three shapes lined up: with one shape each, coverage is 100% and the arrangement check cannot run." |
+| 409-415 | "there used to be an exception for ... and a reviewer walked straight through it" | history (gate hit), ornament | inline + retrospective → apothecary: gathering pictures | "Always three shapes lined up: with one shape each, coverage is 100% and the arrangement check cannot run." <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
 | 577-582, 632-634 (x2) | "and it did: a reviewer handed the same folder in nine different orders" / "and it was destroying groups a person had built" | history | inline + retrospective → apothecary: gathering pictures | "Sorted by name: the answer does not depend on arrival order." / "This check destroys groups, so it never breaks one a person built." |
 | 833-835 | "Every one of these was silently dropped once" | history | inline | "An answer never applied is said out loud: a person may name a picture nothing could be read from." |
 
@@ -479,7 +479,7 @@ Kept: 7-48 ("two Tuesdays" and so on): a present argument for arithmetic, in the
 | 286-290 | "on made-up pictures with known answers it has never joined photographs that were plainly unrelated" | history (a measurement) | inline | "The sorting is conservative, not infallible: `photo gather-check` measures how often it joins two that merely look alike." |
 | 18 | "PROTOTYPE — not ratified." | ornament (label in capitals) | inline | See the group row below. |
 
-Gate hit 6 ("enough was found in it"): **false positive**. It describes a picture, in the present.
+Gate hit 6 ("enough was found in it"): **false positive**. It describes a picture, in the present. <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory -->
 
 ### apothecary/gathering/signature.py -- light -- 1 passage
 
@@ -761,7 +761,7 @@ it too ("its other fields Arduino's as they always were"). One sweep commit fixe
 | 3-11 | "It is additive: ``Scene`` and every existing primitive/boolean/transform are untouched. ... build on this module now" | history | inline | "A prototype under the draft hierarchy record. Scene and the primitives do not depend on it; the API and the parts library build on it." |
 | 23-25 | "remain as the vocabulary — ... *worked example* of configuring the fractal model, not gone" | history | inline | "``Site``, ``Structure``, ``Substructure`` and ``Feature`` are the vocabulary: thin factories over ``Assembly``, ..." |
 | 142-143 | "The single algorithm that replaces what the four fixed classes used to need three separate implementations for" | history | inline | "One algorithm for every level: gather positives ..." |
-| 220-221 | "Generalizes what used to be Site-only overlap-checking" | history (gate hit) | inline | "Checks every level of the tree, not only a site's direct children: ..." |
+| 220-221 | "Generalizes what used to be Site-only overlap-checking" | history (gate hit) | inline | "Checks every level of the tree, not only a site's direct children: ..." <!-- timeless: allow quoting a phrase the check flags, in the sweep's own inventory --> |
 | 76 | "used for the render comment and for future revision/diff messages" | history (plan in code) | inline | "used for the render comment". |
 
 ### apothecary/slicer/** -- light -- 7 passages (one stale)
