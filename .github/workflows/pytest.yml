@@ -44,6 +44,21 @@ jobs:
     - name: 🚧 Install dependencies
       run: uv sync --locked
 
+    - name: 🗃️ Cache the OpenSCAD snapshot
+      uses: actions/cache@v5
+      with:
+        path: ~/.apothecary/tools/openscad
+        key: openscad-${{ runner.os }}-2026.09.27
+
+    - name: 📐 An OpenSCAD snapshot for the unit tests
+      # Ubuntu's OpenSCAD (2021.01) lists no parameters, writes no render summary and
+      # has no Manifold, so the unit tests that need one of those skip with it alone;
+      # with the snapshot every render here then uses, they run. The browser tests'
+      # servers keep a tools folder of their own and render with the system's, as the
+      # walkthrough's pages say. The date is pinned, and moved by hand when
+      # files.openscad.org no longer serves it.
+      run: uv run apothecary openscad install --snapshot 2026.09.27 --extract
+
     - name: 🧹 Lint
       run: uv run ruff check apothecary tests
 
