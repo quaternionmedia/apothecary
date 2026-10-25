@@ -410,13 +410,29 @@ bare board):
 **With hardware** -- your own server, the board plugged in: the latch-side
 checklist in [`2026-09-20-ender-bench.md`](2026-09-20-ender-bench.md)
 (heaters, motion, the corner checks, a probe, a print from here, E-STOP,
-release), unchanged, plus these two that the bench did not have:
+release), unchanged, plus these three that the bench did not have:
 
 - [ ] `apothecary firmware boards` with the board plugged in → the port and
       its `0403:6001` as before; `~/.arduino15/inventory.yaml` does **not**
       gain a new `cache:` entry with today's time: the cloud lookup is off.
 - [ ] Pin it to `printer_1.frame_system.mainboard` → the bed reading's relief
       and the nozzle marker sit on the Ender 3 model's bed in the world.
+- [ ] The loop from a picture to a print, with the real camera over the bench
+      and the board pinned, as
+      [walkthrough 13](../../walkthrough/13-a-picture-to-a-print.md) goes round
+      it with the fakes: the bench's **Camera › Add here**, the camera's
+      **Device**, **Take picture**, **Picture › Find shapes**, **Picture › Make**
+      on a shape -- the status names *Part › Edit* and *a printer's Machine* --
+      **Part › Edit** and Apply, then printer_1's **Device › Open**: *Print from
+      here* lists the piece under *makes*. Keep a file sliced from the piece (its
+      editor's 💾 Download SCAD, rendered and sliced as any part would be),
+      choose the piece, arm, **▶ Print**:
+      the confirm names the piece, the status says where it is followed, and the
+      history and Site's Jobs keep the job with the piece's name. Turn the
+      camera, **P**, make a second piece with the Machine left open: *makes*
+      lists it without reopening, and **Print** on the piece's own ring chooses
+      it there. When each print ends the status line says so, or that it failed
+      and why.
 
 ## 7. The docs, and the walkthrough
 
@@ -436,9 +452,12 @@ release), unchanged, plus these two that the bench did not have:
       put in its own picture folder, the guard's refusal and the server's
       403 -- each with the
       output or the picture of the run that wrote it.
+- [ ] `/walkthrough/13-a-picture-to-a-print.md` → the loop from a picture to a
+      print twice round, each step's status line naming the next; the pictures'
+      times and picture names blanked, the words without them.
 - [ ] `uv run apothecary docs generate` → both doc workflows regenerate under
       a temporary server on 8766; the bar on every docs page then says when.
-      The two walkthrough pages (11 and 12) are rewritten by the browser
+      The walkthrough pages 11, 12 and 13 are rewritten by the browser
       run instead (`uv run pytest tests/e2e --start-server`); CI fails if the
       committed pages differ from what the run writes.
 

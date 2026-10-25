@@ -59,11 +59,16 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   their screenshots on every run that includes `test_docs_photo_walkthrough.py`
   or `test_docs_bench_walkthrough.py`. Each sentence is emitted after the
   assertion behind it. A screenshot is rewritten only when its pixels change;
-  commit the page and pictures when they do. A loop's page --
+  commit the page and pictures when they do. What changes on every run whatever
+  the page does -- a time, a picture's name made of one -- is blanked (`shows`'s
+  `blank`), so a picture changes only when the page does. A loop's page --
+  `walkthrough/13-a-picture-to-a-print.md` from `test_picture_to_print.py`,
   `walkthrough/14-designing-a-part.md` from `test_part_loop.py`,
   `walkthrough/15-firmware.md` from `test_the_firmware_loop.py` -- is written
-  the same way by a test marked `e2e` and not `walkthrough`: the browser suite
-  writes it, and `apothecary test run` stays quick.
+  the same way by a test marked `e2e` and not `walkthrough`, which passes
+  `browser_suite_only=True` to the fixture: the browser suite writes it,
+  `apothecary test run` stays quick, and the page's header and footer say so.
+  The fixture fails a run whose marker and flag disagree.
 - `doc_recorder` takes screenshots for `docs/generated/`. The tests that use it
   are marked `docs` and skip unless `--generate-docs` is given;
   `apothecary docs generate` runs them that way, on a scripted server of its own.

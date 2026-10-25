@@ -343,6 +343,18 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # revert-btn) are ring-backed by Part › Apply and Part › Revert, wherever Part is
 # (a part's ring, a camera's, a made piece's), acting on what the editor has
 # staged. No control added; two more ring-backed, and the share's floor follows.
+#
+# The loop from a picture to a print, and the owner's answers of 2026-10-10: a made
+# piece's ring ends with Print when a printer is pinned in its site, after Part (its
+# Edit, Apply and Revert), so no cell above it moved; it opens the printer's Machine with the piece chosen under
+# Print from here's makes. A cell with no control of its own: `apothecary census`
+# prints the same report before and after, but for line numbers. The makes drop-down
+# (print-part) stays unbacked: Print chooses a made piece there, and makes lists the
+# site's parts as well, which no cell chooses. The Machine tells a print started and
+# a print ended in the status line, and an open Machine lists its site's parts again
+# when a piece is made, rebuilt or dropped; none of it adds a control or a listener.
+# Merged onto the part loop: the ceiling and the share's floor are the part loop's,
+# since Print adds no control and backs none.
 VIEWER_CEILING = 118
 
 
