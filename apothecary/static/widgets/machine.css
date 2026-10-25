@@ -155,4 +155,9 @@
 .machine.host-world .cards { grid-template-columns: repeat(2, 1fr); }
 .machine.host-world .chart svg { height: 110px; }
 .machine.host-world .right { margin-top: 0.5rem; }
+/* A section in a window of its own: its cards, chart or log fill the window. */
+.machine.machine-section { display: flex; flex-direction: column; gap: 0.6rem; height: 100%; min-height: 0; }
+.machine.machine-section > .right { flex: 1 1 auto; min-height: 12rem; margin-top: 0; }
+.machine.machine-section .cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .machine.host-world #log { min-height: 140px; max-height: 40vh; }
+.machine.machine-section #log { flex: 1 1 auto; max-height: none; }

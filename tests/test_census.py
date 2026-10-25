@@ -14,7 +14,7 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # The viewer's controls of its own: a change that adds one raises this; one that removes
 # one may lower it. `uv run apothecary census` lists them, and docs/census.md says what
 # is counted, how each is classified and how the ceiling and the share's floor move.
-VIEWER_CEILING = 173
+VIEWER_CEILING = 172
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -252,7 +252,8 @@ def test_the_panel_module_keeps_its_chrome_to_itself():
     """panels.js leaves the windows' own chrome -- tabs, splitters, a stack's
     maximise and close -- to GoldenLayout, and listens on the window only for the
     tilde key and the page going (the layout saved at once), each taken off again;
-    the viewer loads it."""
+    the + it adds to a stack, and the list the + opens, listen to themselves alone.
+    The viewer loads it."""
     text = (STATIC / "panels.js").read_text(encoding="utf-8")
     assert _on_the_page(text) == [("window", "keydown"), ("window", "pagehide")]
     for event in ("keydown", "pagehide"):
@@ -377,7 +378,7 @@ def test_the_viewers_ring_backed_share_is_at_least_its_floor():
     `apothecary census` gives the share."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 95 / 173, f"{backed} of {own} ring-backed"
+    assert backed / own >= 94 / 172, f"{backed} of {own} ring-backed"
 
 
 def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address():

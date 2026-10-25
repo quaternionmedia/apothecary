@@ -21,7 +21,7 @@ from test_the_loop import _labels, _press, _ring_on, _said
 
 PRINTER = "/dev/ttyFAKE1"
 BOARD = "printer_1.frame_system.mainboard"
-MACHINE = ".panel[data-panel='machine']"
+MACHINE = windows.MACHINE
 
 
 @pytest.mark.e2e
@@ -82,8 +82,8 @@ def test_a_made_piece_s_print_cell_opens_its_printer_s_machine_with_it_chosen(pa
     _said(
         page, f"printer_1's Machine makes {piece}: choose its file in Print from here, then ▶ Print"
     )
-    machine = page.locator(MACHINE)
-    expect(machine).to_be_visible(timeout=5000)
+    machine = windows.machine(page)
+    expect(page.locator(MACHINE)).to_be_visible(timeout=5000)
     # Its tab names the printer; its whole title, the tab's tooltip, the port too.
     expect(windows.tab(page, "machine").locator(".lm_title")).to_have_text("printer_1")
     expect(windows.tab(page, "machine")).to_have_attribute("title", f"printer_1 · {PRINTER}")

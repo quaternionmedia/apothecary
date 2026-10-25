@@ -32,8 +32,15 @@
  * its window's ✕, puts it back as the last thing in the Machine's column; its
  * ⧉ Pop out pops it out again.
  *
- * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, name, say, padWindow, variantFor })
- * renders into `root` and returns the handle the ring drives (carry, pairs,
+ * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, name, say, padWindow, variantFor, sections })
+ * renders into `root` -- the head, what the board is and its state -- and each of
+ * its sections (the Machine's entry in apothecary/systems.py: Status, Temperature,
+ * Print, Bed level, Sketch, Flashing, Log) into the element `sections` gives for it,
+ * a window of its own; a section given none stays in `root`. A button that is a ring
+ * verb's tells `onVerb(action)` when pressed, as the ring's cell does; `onKind(kind)` is
+ * told the board's kind each time it is known anew, so the host shows that kind's
+ * sections. It returns the handle
+ * the ring drives (carry, pairs,
  * device), the world asks to list its site's parts again when a piece is made,
  * rebuilt or dropped (print.loadChoices), to choose the piece a made piece's
  * Print names (print.choose) and to slice what is chosen (print.slice), and the
@@ -108,18 +115,33 @@ const HEAD = `
 const CARDS = `
 <div class="cards" id="cards">
     <div class="card printer-only"><div class="k">State</div><div class="v" id="c-state">—</div><div class="s" id="c-state-s"></div></div>
+    <div class="card wide"><div class="k">Board · link</div><div class="kv" id="c-board">—</div></div>
+</div>
+<div data-section="status">
+<div class="cards">
     <div class="card printer-only"><div class="k">Hotend</div><div class="v" id="c-hot">—</div><div class="s" id="c-hot-s"></div><div class="bar hotend"><i id="b-hot" style="width:0"></i></div></div>
     <div class="card printer-only"><div class="k">Bed</div><div class="v" id="c-bed">—</div><div class="s" id="c-bed-s"></div><div class="bar bed"><i id="b-bed" style="width:0"></i></div></div>
     <div class="card printer-only"><div class="k">Position</div><div class="v" id="c-pos">—</div><div class="s" id="c-pos-s"></div></div>
     <div class="card printer-only"><div class="k">SD print</div><div class="v" id="c-sd">—</div><div class="s" id="c-sd-s"></div><div class="bar sd"><i id="b-sd" style="width:0"></i></div></div>
     <div class="card printer-only"><div class="k">Endstops · filament</div><div class="chips" id="c-stops"><span class="empty">—</span></div></div>
-    <div class="card wide"><div class="k">Board · link</div><div class="kv" id="c-board">—</div></div>
+</div>
+</div>
+<div data-section="sketch">
+<div class="cards">
     <div class="card wide devkit-only" id="sketch-card"><div class="k">Sketch · should run, and observed</div><div class="kv" id="c-sketch">—</div></div>
+</div>
+</div>
+<div data-section="flashing">
+<div class="cards">
     <div class="card wide devkit-only" id="flash-card">
         <div class="k">Flashing</div>
         <div class="bench-ui" id="flash-form"></div>
         <div class="bench-ui" id="flash-task"></div>
     </div>
+</div>
+</div>
+<div data-section="level">
+<div class="cards">
     <div class="card wide printer-only" id="level-card">
         <div class="k">Bed level <span class="s" id="level-note"></span></div>
         <div class="row">
@@ -136,6 +158,10 @@ const CARDS = `
         <div class="stats" id="level-stats"><span class="empty">no reading yet — Read mesh, or arm control and Probe bed</span></div>
         <div id="level-history"></div>
     </div>
+</div>
+</div>
+<div data-section="print">
+<div class="cards">
     <div class="card wide printer-only" id="print-card">
         <div class="k">Print from here <span class="s" id="print-note" style="text-transform: none; letter-spacing: 0;">· no SD card needed: the file streams over the link, one line per ok</span></div>
         <div class="row">
@@ -162,10 +188,13 @@ const CARDS = `
         <div id="print-history"></div>
     </div>
 </div>
+</div>
+<div data-section="temperature">
 <div class="chart printer-only">
     <div class="head"><span class="title">Temperature</span><span id="chart-span">no polls yet</span>
         <span class="legend"><span class="hotend">hotend</span><span class="bed">bed</span><span style="color:var(--ink-3)">dashed = target</span></span></div>
     <div class="wrap"><svg id="chart" viewBox="0 0 600 150" preserveAspectRatio="none"></svg><div class="tip" id="tip"></div></div>
+</div>
 </div>`;
 
 // The board's one log: a printer's comms log with the one box that asks it for
@@ -266,15 +295,30 @@ const BY_CMD = {
 };
 
 
-export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, say = null, padWindow = null, variantFor = null } = {}) {
+export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, say = null, padWindow = null, variantFor = null, sections = {}, onVerb = null, onKind = null } = {}) {
     const BASE = base;
     const model = boards || mountBoards({ base });
     root.classList.add("machine", `host-${host}`);
     root.classList.toggle("in-printer", !!inPrinter);
-    root.innerHTML = HEAD + `<div class="machine-main"><section class="left">${CARDS}</section><section class="right">${LOG}</section></div>` + CONTROL;
+    root.innerHTML = HEAD + `<div class="machine-main"><section class="left">${CARDS}</section><div data-section="log"><section class="right">${LOG}</section></div></div>` + CONTROL;
     // The control pad is the Machine's wherever it stands: popped out, it is the page's child.
     const pad = root.querySelector("#control");
-    const $ = (id) => (id === "control" ? pad : root.querySelector(`#${CSS.escape(id)}`) || pad.querySelector(`#${CSS.escape(id)}`));
+    // Each section's block moves to its window (the Machine's entry in
+    // apothecary/systems.py), which takes the Machine's classes so the kind's own
+    // controls show there as here; a section without a window stays in the Machine.
+    const windows = [];
+    for (const block of [...root.querySelectorAll("[data-section]")]) {
+        const win = sections[block.dataset.section];
+        if (!win) continue;
+        win.classList.add("machine", `host-${host}`, "machine-section");
+        win.classList.toggle("in-printer", !!inPrinter);
+        win.replaceChildren(...block.childNodes);
+        block.remove();
+        windows.push(win);
+    }
+    const everywhere = [root, pad, ...windows];
+    const $ = (id) => (id === "control" ? pad
+        : everywhere.map((el) => el.querySelector(`#${CSS.escape(id)}`)).find(Boolean) ?? null);
     const who = {};  // this Machine, as the model's watcher of its board
     const b = () => model.board(state.port);
     // What the Machine keeps of its own: the port, its kind, the chart's history.
@@ -320,8 +364,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     function applyKind() {
         const k = kindOf(), changed = k !== state.kind;
         state.kind = k;
-        root.classList.toggle("kind-printer", k === "printer");
-        root.classList.toggle("kind-devkit", k === "devkit");
+        for (const el of [root, ...windows]) {
+            el.classList.toggle("kind-printer", k === "printer");
+            el.classList.toggle("kind-devkit", k === "devkit");
+        }
+        if (changed && onKind) onKind(k);
         $("identify").textContent = k === "printer" ? "M115" : "Identify";
         $("identify").title = k === "printer" ? "Ask M115 again (no reset)" : "Listen a few seconds for the sketch's hello banner; none heard, ask M115 whether it is a G-code printer (no reset)";
         $("reconnect").title = k === "printer" ? "Release and reopen the serial link (no reset); the remedy for a wedged port" : "Close the serial stream and open it again, while listening";
@@ -1300,6 +1347,14 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         return out;
     }
 
+    // A button pressed is its ring verb pressed: the host told, so it opens the sections
+    // that verb acts on as the ring's cell does (Poll opens Status, Listen the Log).
+    if (onVerb) {
+        for (const [btn, action] of pairs()) {
+            if (btn && action && !/^control:(arm|disarm)$/.test(action)) btn.addEventListener("click", () => onVerb(action));
+        }
+    }
+
     const handle = {
         root, host, $, boards: model,
         state, ctl, arm, jog, estop, enqueue, sendControl, fillTemplate, pollOnce: pollNow, logLine, refuse, schedule, selectPort,
@@ -1318,7 +1373,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             if (!boards) model.destroy();
             if (padIsOut) { padIsOut = false; padWindow.close(pad, false); }
             pad.remove();
-            root.innerHTML = ""; root.classList.remove("machine", `host-${host}`, "kind-printer", "kind-devkit", "in-printer");
+            for (const el of [root, ...windows]) {
+                el.replaceChildren();
+                el.classList.remove("machine", `host-${host}`, "machine-section", "kind-printer", "kind-devkit", "in-printer");
+            }
         },
     };
 

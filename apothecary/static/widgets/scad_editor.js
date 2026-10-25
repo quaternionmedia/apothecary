@@ -13,7 +13,7 @@
  * The editor does not talk to the server. The page does: it is told when the
  * text changes (onChange), and what to do for each of the bar's buttons. The
  * bar holds the check's words (what OpenSCAD said, and what is next), the name a
- * Save keeps the variant under, Save, Pop out and Fullscreen; under the code, the
+ * Save keeps the variant under, Save and Fullscreen; under the code, the
  * part's variants saved in git, each with what it changes and whether HEAD
  * already holds it. A part whose SCAD is not its own source (its geometry is
  * Python, or a made piece's few lines) is read-only, and has no name and no Save.
@@ -36,7 +36,7 @@
  *
  * mountScadEditor(slot, options) renders into slot and resolves to the editor:
  *   options: { text, readOnly, editable, name, onChange(text, { staged }), onSave(),
- *              onPopout(), onFullscreen(), onChoose(name), onCheck(), onApply(),
+ *              onFullscreen(), onChoose(name), onCheck(), onApply(),
  *              onName(name), onManage(verb, name, { to, commit, button }), shownAs }
  *   editor:  { root, text(), setText(text), writeValues(values, { join }),
  *              replaceText(text), undo(), redo(), canUndo(), canRedo(),
@@ -45,8 +45,8 @@
  *              showHistory(name, commits), fullscreen(on), isFullscreen(), focus(),
  *              measure(), rebind(callbacks), destroy() }
  * variantChoices(list) is the markup of a list of saved variants to choose one
- * from, as the editor's own list and the page's short list under a part's
- * parameters both draw it; the page listens on the list.
+ * from, as the editor's own list and the page's list in a part's Variants window
+ * both draw it; the page listens on the list.
  */
 
 import { valueChanges } from "./assignments.js";
@@ -58,7 +58,6 @@ const MARKUP = `
         <span class="scad-spacer"></span>
         <label class="scad-name-label" title="The name Save keeps this variant under, in git: letters, digits, _ . and -. Empty, the name greyed in it; a name already saved is asked about first">as <input type="text" id="scad-name" spellcheck="false" maxlength="64"></label>
         <button type="button" id="scad-save" title="Save: this SCAD, its values in it, committed to this part's own ref in git under the name beside it. Nothing in the checkout changes; merging it is yours to do (Ctrl+S in the editor; Part › Save)">Save</button>
-        <button type="button" id="scad-popout" title="The editor in a window of its own beside the world, or back in Selected (Part › View › Pop out)">Pop out</button>
         <button type="button" id="scad-fullscreen" title="The editor over the whole page; Esc or this button puts it back (Part › View › Fullscreen)">Fullscreen</button>
     </div>
     <div class="scad-code"></div>
@@ -246,20 +245,18 @@ export async function mountScadEditor(slot, options = {}) {
     const { text = "", readOnly = false, editable = !readOnly, name = "", shownAs = null } = options;
     // What the page is told, through one object it can point elsewhere (rebind).
     const on = {};
-    for (const key of ["onChange", "onSave", "onPopout", "onFullscreen", "onChoose", "onCheck", "onApply", "onName", "onManage"]) on[key] = options[key];
+    for (const key of ["onChange", "onSave", "onFullscreen", "onChoose", "onCheck", "onApply", "onName", "onManage"]) on[key] = options[key];
     slot.innerHTML = MARKUP;
     const root = slot.querySelector(".scad-editor");
     const said = root.querySelector(".scad-said");
     const nameBox = root.querySelector("#scad-name");
     const saveBtn = root.querySelector("#scad-save");
-    const popBtn = root.querySelector("#scad-popout");
     const fullBtn = root.querySelector("#scad-fullscreen");
     const savedList = root.querySelector(".scad-saved");
     nameBox.value = name;
     for (const el of [nameBox.parentElement, saveBtn]) el.hidden = !editable;
     savedList.hidden = !editable;
     saveBtn.onclick = () => on.onSave && on.onSave();
-    popBtn.onclick = () => on.onPopout && on.onPopout();
     fullBtn.onclick = () => on.onFullscreen && on.onFullscreen();
     nameBox.oninput = () => on.onName && on.onName(nameBox.value);
     // The list: a variant chosen draws it; its ⋯ unfolds what can be done to it, each
@@ -455,7 +452,6 @@ export async function mountScadEditor(slot, options = {}) {
             editorView.requestMeasure();
         },
         isFullscreen: () => root.classList.contains("fullscreen"),
-        poppedOut(on) { popBtn.textContent = on ? "Dock" : "Pop out"; editorView.requestMeasure(); },
         focus() { editorView.focus(); },
         measure() { editorView.requestMeasure(); },
         rebind(callbacks) { Object.assign(on, callbacks); },

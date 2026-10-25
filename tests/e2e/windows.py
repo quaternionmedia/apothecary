@@ -8,11 +8,87 @@ all its tabs keeps the rest in its ▾ list, and a tab there is pressed from it.
 
 from __future__ import annotations
 
-from playwright.sync_api import Page
+import rings
+from playwright.sync_api import Page, expect
+
+from apothecary.systems import AIRGAP, PART, by_id
 
 WORLD = ".viewer-panel"
 # The world's stack's header: the world's window has no tab, so this is never shown.
 WORLD_HEADER = ".lm_stack:has(.world-window) > .lm_header"
+# The Airgap's sections, each a window ``airgap-<section>`` of its own beside the
+# Airgap, registered after it and closed until asked for: its entry in the registry
+# of focused systems (apothecary/systems.py).
+AIRGAP_SECTIONS = tuple(section.id for section in AIRGAP.sections)
+# The Part's sections, each a window ``part-<section>``, registered at start and
+# closed until asked for: Part › Edit opens Parameters, Part › View › SCAD the SCAD.
+PART_SECTIONS = tuple(section.id for section in PART.sections)
+
+
+def open_window(page: Page, pid: str) -> None:
+    """A window opened as ⊞ Windows opens it: at its place, in front."""
+    page.evaluate("(id) => window.apothecaryPanels.open(id)", pid)
+
+
+def from_the_windows_menu(page: Page, pid: str) -> None:
+    """A window chosen in the header's ⊞ Windows, as a person chooses it."""
+    page.locator("#windows-menu > summary").click()
+    page.locator(f".windows-menu-body .window-item[data-window='{pid}']").click()
+    expect(page.locator(".windows-menu-body")).to_be_hidden()
+
+
+# A board's Machine: its main window, and every window of it -- the Machine and each
+# of its sections (``machine-<section>``), which live while it is open.
+MACHINE = ".panel[data-panel='machine']"
+MACHINE_WINDOWS = ".panel[data-panel^='machine']"
+
+
+def machine(page: Page):
+    """Every window of the open board's Machine, to look in: an element of it is found
+    in whichever window holds it. (The Machine itself, open or not, is ``MACHINE``.)"""
+    return page.locator(MACHINE_WINDOWS)
+
+
+def in_machine(page: Page, selector: str):
+    """An element of a board's Machine, in whichever of its windows holds it."""
+    return page.locator(f"{MACHINE_WINDOWS} {selector}")
+
+
+def machine_view(page: Page) -> None:
+    """Panels › Windows › Machine view: the open board's Machine and every section of
+    it laid out together, as a person working on a board lays them out."""
+    page.evaluate("() => window.apothecaryPanels.applyView('machine')")
+
+
+def machine_ready(
+    page: Page,
+    kind: str | None = None,
+    *,
+    by_hand: bool = False,
+    timeout: int = 20000,
+) -> None:
+    """The open board's Machine once its kind is known (``kind``, when the test knows
+    which), laid out in the Machine view: every section of that kind open beside it,
+    Selected and Site with them -- the default for a test that works on a board. A board
+    taken for a printer until it says otherwise is waited for until it has said so.
+    (Waited for from here, not by the page's timers, so a test holding the page's clock
+    may call it.)
+
+    ``by_hand`` lays it out as a person does, the world's ring's Panels › Windows ›
+    Machine view: for a walk, whose pictures show what a person pressed."""
+    known = f".kind-{kind}" if kind else ":is(.kind-printer, .kind-devkit)"
+    expect(page.locator(f"{MACHINE} > .machine{known}")).to_be_attached(timeout=timeout)
+    if by_hand:
+        rings.on_world(page, "Panels", "Windows", by_id("machine").cell)
+        page.wait_for_function("() => window.apothecaryPanels.isOpen('machine-log')")
+    else:
+        machine_view(page)
+
+
+def part_view(page: Page) -> None:
+    """Panels › Windows › Part view: Selected, the Part's sections and the world laid
+    out together, as a person working on a part lays them out."""
+    page.evaluate("() => window.apothecaryPanels.applyView('part')")
 
 
 def tab(page: Page, pid: str):

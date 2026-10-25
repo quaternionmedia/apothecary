@@ -35,12 +35,20 @@ def unit_command(slow: bool = False) -> list[str]:
     return argv
 
 
-def browser_command(every: bool = False) -> list[str]:
-    """The browser part on a server of its own: the walkthrough's runs (those marked
-    `walkthrough`), or with ``every`` every browser test."""
+# The browser tests the ordinary command runs: the walkthrough's demonstration, and
+# the window manager on a page of its own, which starts no server.
+ORDINARY_BROWSER = "walkthrough or windows"
+
+
+def browser_command(every: bool = False, workers: int = 1) -> list[str]:
+    """The browser part on a server of its own: the walkthrough's runs and the window
+    manager's (ORDINARY_BROWSER), or with ``every`` every browser test; with
+    ``workers`` above one, that many in parallel, a file's tests together."""
     argv = _pytest_argv(BROWSER, "--start-server")
     if not every:
-        argv += ["-m", "walkthrough"]
+        argv += ["-m", ORDINARY_BROWSER]
+    if workers > 1:
+        argv += ["-n", str(workers), "--dist", "loadfile"]
     return argv
 
 
@@ -71,8 +79,11 @@ HELP = """Run the test suite, exiting as pytest does.
 
 \b
   apothecary test run   the ordinary command: the unit tests and the
-                        walkthrough, its browser part in a pytest of its own
-  apothecary test all   the same, then every browser test
+                        walkthrough, its browser part -- the walkthrough's
+                        demonstration and the window manager -- in a pytest of
+                        its own
+  apothecary test all   the same, then every browser test (--workers N in
+                        parallel; further arguments go to pytest)
   uv run pytest         the quick inner loop, browser tests skipped
 
 The walkthrough's demonstration and every browser test drive Chromium:
@@ -113,16 +124,27 @@ def test_run(slow: bool, pytest_args: tuple[str, ...]):
     raise SystemExit(_first_failure(codes))
 
 
-@test.command("all")
+@test.command("all", context_settings={"ignore_unknown_options": True})
 @click.option(
     "--slow", is_flag=True, help="Also run unit tests marked slow (full renders, accuracy benches)."
 )
-def test_all(slow: bool):
+@click.option(
+    "--workers",
+    type=click.IntRange(min=1),
+    default=1,
+    show_default=True,
+    help="Browser tests in parallel, a file's tests together (pytest-xdist).",
+)
+@click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
+def test_all(slow: bool, workers: int, pytest_args: tuple[str, ...]):
     """The unit tests and the walkthrough, then every browser test in a pytest of its
-    own, on a server of its own (--start-server)."""
-    unit_code = _pytest(unit_command(slow=slow))
-    browser_code = _pytest(browser_command(every=True))
-    raise SystemExit(unit_code or browser_code)
+    own, on a server of its own (--start-server); further arguments go to pytest, to
+    both, as `test run`'s do (`-k part` narrows each)."""
+    codes = [
+        _pytest(unit_command(slow=slow) + list(pytest_args)),
+        _pytest(browser_command(every=True, workers=workers) + list(pytest_args)),
+    ]
+    raise SystemExit(_first_failure(codes))
 
 
 for _name, _instead in (

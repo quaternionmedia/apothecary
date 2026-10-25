@@ -22,10 +22,11 @@ from typing import Callable, List, Optional, Tuple
 
 import httpx
 import pytest
+import windows
 from playwright.sync_api import Page, expect
 from slicer_helpers import write_fake_orcaslicer
 from stepping import ROOT, chosen, where
-from test_picture_to_print import BOARD, DWELL, LAYERS, MACHINE, PRINTER, _attached, _make
+from test_picture_to_print import BOARD, DWELL, LAYERS, PRINTER, _attached, _make
 from test_the_loop import _labels, _press, _ring_on, _said, _status
 from viewer_ready import by_hand, settled
 
@@ -144,7 +145,7 @@ def slice_(w: Walk) -> None:
     _ring_on(w.page, piece)
     _press(w.page, "Slice")
     _said(w.page, f"Slice: slicing {piece} for printer_1")
-    machine = w.page.locator(MACHINE)
+    machine = windows.machine(w.page)
     expect(machine.locator("#print-slice-said")).to_contain_text(
         f"{piece} sliced for printer_1 by OrcaSlicer", timeout=300000
     )
@@ -153,7 +154,7 @@ def slice_(w: Walk) -> None:
 
 def print_(w: Walk) -> None:
     """Send file, from printer_1's ring: the piece's G-code printed to its end."""
-    piece, machine = w.piece(), w.page.locator(MACHINE)
+    piece, machine = w.piece(), windows.machine(w.page)
     chosen = machine.locator("#print-pick option:checked")
     where(
         "Print",

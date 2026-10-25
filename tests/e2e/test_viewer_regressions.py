@@ -189,6 +189,7 @@ def test_apply_draws_what_it_rendered(page: Page, base_url: str, v_slot_as_it_wa
     _open(page, f"{base_url}/viewer/sites/parts_library")
     row = page.locator("#contents-list .contents-item[data-path='v_slot']")
     row.click()
+    windows.open_window(page, "part-parameters")
     length = page.locator("#part-params input[type=range]").first
     expect(length).to_be_visible(timeout=10000)
     page.wait_for_function(

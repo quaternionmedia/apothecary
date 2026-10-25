@@ -82,7 +82,8 @@ floor. A change to the page keeps them so:
 - A change that adds a control raises `VIEWER_CEILING` in the same change; one
   that removes a control may lower it.
 - Every new or moved listener is classified in `census.py` in the same change.
-- A control added ring-backed raises the share's floor with it.
+- A control added ring-backed raises the share's floor with it; one removed
+  because a window or a ring cell does what it did lowers the floor with it.
 - A new ring cell is seated after the cells a ring always has, so no address
   moves ([the viewer](viewer.md#the-ring): addresses hold still).
 - A control is written as markup -- one template per control in its widget

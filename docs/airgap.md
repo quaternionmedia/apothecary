@@ -41,9 +41,14 @@ Panels › Airgap › Airgap on the canvas ring opens it, a tab beside Pictures,
 closed until asked for. Shown, the
 panel computes from the part's text and draws the section -- the rotor at its
 angle, the stator's iron by covered run, the gap field or the gap itself as
-colour, each conductor with its phase and its sense -- and, in folds below it:
+colour, each conductor with its phase and its sense. What it computes is in
+windows of their own, grouped under Airgap in the header's ⊞ Windows and in
+every stack's + ([the windows](viewer.md#the-windows)); one opened while the
+panel is open is a tab beside it. Panels › Windows › Airgap view lays them all
+out together, the world among them. The Airgap is a focused system, these
+windows its entry in `apothecary/systems.py` ([the viewer](viewer.md#the-windows)):
 
-| Fold | |
+| Window | |
 |---|---|
 | Metrics | One document, `airgap/metrics/1`: geometry, windings, the static field and torque, the run |
 | Winding functions and gap field | Each phase's N(θ), and the signed gap flux density at the rotor angle |
@@ -80,7 +85,7 @@ button of the same name, which wears the cell's address.
 |---|---|
 | Airgap | The panel shown or hidden |
 | Play | The rotor spun, or the run played, and paused; what Play moves is the rig's `playback` |
-| Sweep | The metric the sweep line names mapped over its two ranges |
+| Sweep | The metric the sweep line names mapped over its two ranges, in the Sweep window, opened if it was closed |
 | To editor | The panel's values written into the airgap part's text; Part › Edit opened on it first where this site has it |
 | From editor | The part's text read again |
 | Copy SCAD | The part's text with the panel's values written in, copied |
@@ -89,7 +94,7 @@ button of the same name, which wears the cell's address.
 
 ### The rig
 
-The rig is what the geometry runs under, one JSON document in the Rig fold:
+The rig is what the geometry runs under, one JSON document in the Rig window:
 the excitation (`excite` auto · sin · dc · uniform, `current` in A, `advance`
 in electrical degrees) and the drive, load, bearing, axial, carrier, yoke and
 playback settings. A value outside its range is clamped and said; an unknown

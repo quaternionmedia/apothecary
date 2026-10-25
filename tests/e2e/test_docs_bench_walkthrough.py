@@ -286,10 +286,16 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     # Selected's part section once the server has answered for it: its readiness read,
     # and the line saying what its STL measures -- or, on a machine without OpenSCAD and
     # so without an STL to measure, the readiness saying OpenSCAD is not installed.
-    measured = page.locator("#part-envelope .measured", has_text="measured")
-    no_openscad = page.locator("#part-checklist .check", has_text="OpenSCAD not installed")
-    expect(measured.or_(no_openscad).first).to_be_visible(timeout=20000)
-    expect(page.locator("#part-checklist .verdict")).to_be_visible(timeout=20000)
+    # (The readiness is the Part's Readiness window's, closed here: read from the part's
+    # editor, whose window it is.)
+    page.wait_for_function(
+        """() => { const v = window.fractalViewer;
+            const said = v.partEl('#part-checklist')?.textContent || '';
+            return !!v.partEl('#part-checklist .verdict')
+                && (/measured/.test(document.querySelector('#part-envelope .measured')?.textContent || '')
+                    || /OpenSCAD not installed/.test(said)); }""",
+        timeout=20000,
+    )
     settled(page)
     story.shows(
         "The DevKitC standing on its pins",

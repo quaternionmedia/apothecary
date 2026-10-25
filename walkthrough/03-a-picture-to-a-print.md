@@ -65,11 +65,11 @@ The bench's ring, Picture › Make and the disc: disc_1 stands on its outline, s
 disc 1: made disc_1: Part › Edit adjusts it, and a printer's Machine prints it (⌗322)
 ```
 
-## 6. Part › Edit adjusts it in Selected
+## 6. Part › Edit adjusts it in Parameters
 
-The piece's ring, Part › Edit: its parameters in Selected, under where it came from. Its thickness, which a picture cannot see, set to 5 mm and applied: it is rebuilt where it stands, and the status line names the printer's Machine.
+The piece's ring, Part › Edit: its parameters in Parameters, a window under Selected and where it came from. Its thickness, which a picture cannot see, set to 5 mm and applied: it is rebuilt where it stands, and the status line names the printer's Machine.
 
-![Part › Edit adjusts it in Selected](screenshots/03-06-part-edit-adjusts-it-in-selected.png)
+![Part › Edit adjusts it in Parameters](screenshots/03-06-part-edit-adjusts-it-in-parameters.png)
 
 ```
 disc_1 rebuilt 173.2 × 172.2 × 5 mm; found 173.2 × 172.2, thickness a person's: a printer's Machine prints it
@@ -77,7 +77,7 @@ disc_1 rebuilt 173.2 × 172.2 × 5 mm; found 173.2 × 172.2, thickness a person'
 
 ## 7. Slice, in printer_1's Machine, slices the piece and chooses its G-code
 
-printer_1's ring, Device › Open: its Machine a tab beside Pictures, below Selected. Print from here lists the pieces of the garage under makes; disc_1 chosen, its Slice slices it for printer_1, the slicer's log in the card while it runs. The G-code it kept is chosen in the card's files, saying what it was sliced from and for which printer, and the card lists what the slice used -- each value from the printer's profile, a piece declaring none -- with the slicer's estimate. The Machine is maximised here from its stack, so the whole card is seen.
+printer_1's ring, Device › Open: its Machine a tab beside Pictures, below Selected, and ⊞ Windows › Print opens its Print from here, a tab beside it in a column already four stacks deep. It lists the pieces of the garage under makes; disc_1 chosen, its Slice slices it for printer_1, the slicer's log in the card while it runs. The G-code it kept is chosen in the card's files, saying what it was sliced from and for which printer, and the card lists what the slice used -- each value from the printer's profile, a piece declaring none -- with the slicer's estimate. Print is maximised here from its stack, so the whole card is seen.
 
 ![Slice, in printer_1's Machine, slices the piece and chooses its G-code](screenshots/03-07-slice-in-printer-1-s-machine-slices-the-piece-and-.png)
 
@@ -87,7 +87,7 @@ disc_1.gcode kept and chosen: sliced from disc_1 for printer_1, 1h 2m 3s, 0.79 g
 
 ## 8. Print starts a job that names the piece
 
-The Machine's ⚙ Control armed -- the latch a print needs, its pad a loud window of its own beside the world -- Print from here's ▶ Print asks first, naming the file, the port and disc_1; then the file streams, one line per ok, and the job is the newest of printer_1's history, running. The status line names where it is followed.
+printer_1's ring, Device › Control › Arm: the latch a print needs, its pad a loud window of its own beside the world, Print still in front. Print from here's ▶ Print asks first, naming the file, the port and disc_1; then the file streams, one line per ok, and the job is the newest of printer_1's history, running. The status line names where it is followed.
 
 ```
 Print disc_1.gcode on /dev/ttyFAKE1, making disc_1?

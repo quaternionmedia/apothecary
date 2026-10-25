@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 
 import pytest
+import windows
 from playwright.sync_api import expect
 from test_picture_in_the_world import (  # noqa: F401 - a fixture
     _open_garage,
@@ -95,8 +96,8 @@ def test_a_made_piece_is_edited_from_its_ring_and_the_found_candidate_returns_it
     _said(page, "made from shape 1")
     assert page.evaluate("() => window.apothecaryPictures.traced()")["piece"] == piece
 
-    # Part › Edit: the editor in Selected, under the piece's provenance, its first
-    # control focused. Height is contested (a guess), so it comes first; width has
+    # Part › Edit: its Parameters, a window under Selected and so under the piece's
+    # provenance, its first control focused. Height is contested (a guess), so it comes first; width has
     # a slider and, as found, no candidate yet.
     _ring_on(page, piece)
     assert _labels(page)[-2:] == ["Picture", "Part"]
@@ -121,7 +122,9 @@ def test_a_made_piece_is_edited_from_its_ring_and_the_found_candidate_returns_it
     # rebuild.
     expect(page.locator("#part-checklist")).to_have_count(0)
     expect(page.locator("#part-regenerate-btn")).to_have_count(0)
-    # Its few lines of SCAD, read-only, in the editor where a part's SCAD is edited.
+    # Its few lines of SCAD, read-only, in the editor where a part's SCAD is edited: the
+    # SCAD window, from ⊞ Windows.
+    windows.from_the_windows_menu(page, "part-scad")
     expect(page.locator("#part-scad .cm-content")).to_contain_text("cylinder", timeout=10000)
 
     # Two sliders staged: validated, the envelope said, nothing built yet.
@@ -195,8 +198,9 @@ def test_a_part_in_the_library_gets_the_same_editor_from_the_same_cell(page, bas
     _press(page, "Part", "Edit")
     _said(page, "Editing v_slot")
     expect(page.locator("#part-params input[type=range]").first).to_be_focused(timeout=10000)
-    # A part has what a made piece lacks: its checklist. Neither has a rebuild button
-    # beside Apply.
+    # A part has what a made piece lacks: its checklist, in Readiness. Neither has a
+    # rebuild button beside Apply.
+    windows.from_the_windows_menu(page, "part-readiness")
     expect(page.locator("#part-checklist")).to_be_visible()
     expect(page.locator("#part-regenerate-btn")).to_have_count(0)
     expect(page.locator("#stage-summary")).to_have_text("No staged changes")
