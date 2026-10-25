@@ -4,10 +4,8 @@ datum_cap - the cover for a datum_core tray.
 Four contact openings on a 2 x 2 grid and one indicator light pipe, over a lip
 that drops into the core's cavity.
 
-Split out of datum_core rather than selected by a parameter there. A `show`
-enum picking between the tray and the cover made one part's bounds depend on
-which mode you asked for, and the enclosure record asks for one core body with
-separate pieces around it.
+A part of its own, not a mode of datum_core: one part has one envelope, and the
+enclosure record asks for one core body with separate pieces around it.
 
 The board dimensions are assumptions carried as parameters, not measurements:
 no schematic exists. They match datum_core's, because the two pieces have to

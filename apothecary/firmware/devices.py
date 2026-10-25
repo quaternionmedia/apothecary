@@ -112,7 +112,7 @@ def state_file() -> Path:
 class _StateLock:
     """One writer at a time across threads *and* processes: the server and a CLI
     command (`firmware printer`, `upload`) both write the state file, and two
-    read-modify-writes interleaved used to drop each other's pins."""
+    read-modify-writes interleaved would drop each other's pins."""
 
     def __init__(self, path: Path):
         self.path = path
@@ -348,7 +348,7 @@ def _scan_modules():
 
     A module that finds none (not installed, or it does not) is passed over;
     when none finds any, the first one's refusal is the answer -- arduino-cli's
-    "not installed", as it always was, when Rust is not installed either.
+    "not installed", when Rust is not installed either.
     """
     from .modules import modules
 
@@ -636,8 +636,8 @@ def printer_status(
     except ToolchainError as exc:
         if link.job is not None:
             # One lost reply mid-print is not a dead board. Closing the link
-            # here killed the print under its thread and left the heaters on;
-            # a board that really went away fails the job's own next write.
+            # here would kill the print under its thread and leave the heaters
+            # on; a board that really went away fails the job's own next write.
             return _last_status_with(port, _live_job(port, link.job))
         links.close(port)  # a wedged idle link is worse than a reopen on the next poll
         status = gcode.offline_status(port, str(exc))
@@ -1235,8 +1235,8 @@ def print_job(port: str) -> Optional[PrintJob]:
 
 
 def _sha256_of(file: PrintFile) -> str:
-    """The kept file's hash: from its description, or from its bytes for a file kept
-    before descriptions carried one."""
+    """The kept file's hash: from its description when it carries one, else from its
+    bytes."""
     if file.sha256:
         return file.sha256
     digest = hashlib.sha256()
@@ -1501,8 +1501,8 @@ def stream_lines(
     Yields ``None`` after ``keepalive`` seconds of silence so an SSE writer can
     send a comment and notice a vanished client even when the board is quiet.
 
-    Replay guard: some USB-UART bridges (seen on a CP2102 under a realtime
-    kernel) occasionally hand back bytes they already delivered -- a few
+    Replay guard: some USB-UART bridges (a CP2102 under a realtime kernel, for
+    one) occasionally hand back bytes they already delivered -- a few
     lines, or the same buffer thousands of times a second, with bytes lost in
     between. Genuine output cannot outrun the wire, so a token bucket refilled
     at the baud rate arbitrates: a chunk that overdraws the bucket is a

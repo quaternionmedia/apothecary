@@ -48,8 +48,7 @@ result must run and report the pinned version before it is moved into place
 **The pin moves by hand.** ``ORCASLICER_VERSION`` and the digests in
 ``ASSETS`` move only together, in a commit that re-runs a real install and a
 real slice in a scratch tools dir and says in its body what they did (the hosts
-the install reached, the slice's G-code). The owner's decision of 2026-10-10
-(docs/plans/slicer-2026-10-10.md).
+the install reached, the slice's G-code).
 
 Every fetch goes through the OpenSCAD installer's tool fetch (``_fetch``,
 ``_fetch_to``: ``stays_local.tool_fetch``, no proxy), to api.github.com,

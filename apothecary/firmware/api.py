@@ -2,9 +2,9 @@
 
 Every endpoint that runs an engine returns a task id immediately; the
 viewer's Bench and a board's Machine poll ``GET /firmware/tasks/{id}?since=N``
-for new log lines. The pages this router served -- ``/firmware`` and
-``/firmware/monitor`` -- are the Bench and a board's Machine in front of the
-world now, and their addresses lead there (``apothecary/api.py``). The server
+for new log lines. ``/firmware`` and ``/firmware/monitor`` are not this
+router's: they redirect to the Bench and a board's Machine in front of the
+world (``apothecary/api.py``). The server
 binds to localhost by default and this router does nothing to change that:
 these endpoints run binaries and write to serial ports on the machine
 hosting the server, so they are a local workbench control, not a service to
@@ -192,8 +192,8 @@ async def firmware_library_install(body: LibraryInstallRequest):
 
 
 def _board(sketch, given):
-    """An Arduino sketch's FQBN, as the request names it (required, as it always
-    was); None for a module's sketch that builds for what its project names."""
+    """An Arduino sketch's FQBN, as the request names it (required); None for a
+    module's sketch that builds for what its project names."""
     if get_module(sketch.toolchain).needs_board and not given:
         raise ValueError(f"fqbn: {sketch.name} is an Arduino sketch; name the board to build for")
     return service.resolve_board(sketch, given)

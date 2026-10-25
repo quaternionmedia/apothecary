@@ -126,9 +126,9 @@ def build(
         """Place a block.
 
         Cube carries no position of its own, so a bare Cube renders at the
-        origin however carefully you fill in coordinates. An earlier version of
-        this function did exactly that: every object in the scene sat on top of
-        every other one, and the Python model looked correct throughout.
+        origin however carefully you fill in coordinates: every object in the
+        scene would sit on top of every other one while the Python model looks
+        correct. Each block is wrapped in a Translate.
         """
         return Translate(v=position, comment=comment, children=[Cube(size=size, center=False)])
 

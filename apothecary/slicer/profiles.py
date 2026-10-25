@@ -1,11 +1,10 @@
 """A printer's slicer profile, kept with the printer's part, and a part's declared print settings.
 
 **The printer's profile** is ``slicer.json`` in its part's folder --
-``parts/ender3/slicer.json`` for printer_1, an Ender 3 -- as the owner decided on
-2026-10-10 (docs/plans/slicer-2026-10-10.md). It holds:
+``parts/ender3/slicer.json`` for printer_1, an Ender 3. It holds:
 
 - ``slicer``: the module a slice of this printer uses (see
-  ``apothecary/slicer/modules/__init__.py`` for how the owner switches);
+  ``apothecary/slicer/modules/__init__.py`` for how to switch);
 - one section per slicer module, in that slicer's own terms: for OrcaSlicer, the
   names of the base profiles it starts from (OrcaSlicer's own, read from the
   installed release at each slice -- none of them is copied here) and, under

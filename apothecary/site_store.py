@@ -1,17 +1,16 @@
 """In-memory, single-process store for Site instances (prototype).
 
-Sites carry no real persistence layer yet -- this is a process-lifetime
-singleton, not a database. It exists so that edits (position moves, and a
-printer's status) survive across requests instead of being rebuilt fresh
-each time, unlike /render's stateless Scene handling, which fits because a
-Scene has no state to keep between calls.
+Sites have no persistence layer: this is a process-lifetime singleton, not a
+database. It exists so that edits (position moves, and a printer's status)
+survive across requests instead of being rebuilt fresh each time, unlike
+/render's stateless Scene handling, which fits because a Scene has no state to
+keep between calls.
 
-Known limitations, stated rather than hidden: state is lost on server
-restart -- all but the cameras a person added, whose records are kept in the
-state folder and stood in the site as it is built again -- and is not shared
-across multiple worker processes (each Uvicorn
-worker would get its own store). Fine for a single-process dev server, not
-for anything beyond this prototype -- a real deployment would swap this for
+Limits: state is lost on a server restart -- all but the cameras a person
+added, whose records are kept in the state folder and stood in the site as it
+is built again -- and is not shared across multiple worker processes (each
+Uvicorn worker would get its own store). Fine for a single-process dev server,
+not for anything beyond this prototype -- a real deployment would swap this for
 an actual persistence layer without changing the call sites below.
 """
 
@@ -83,11 +82,10 @@ class SiteStore:
     def add(self, name: str, factory: SiteFactory, validator: SiteValidator) -> str:
         """Register another arrangement, replacing any of the same name.
 
-        The register was built with everything it holds decided in advance,
-        which is fine while every arrangement is written into the program. An
-        arrangement built from a picture is not: it exists because somebody
-        pointed at a photograph a moment ago, and the viewer can only show it if
-        the register will take it now.
+        The register holds the arrangements written into the program. One built
+        from a picture is added while the server runs, since somebody pointed at
+        a photograph a moment ago, and the viewer shows only what the register
+        holds.
         """
         self._registry[name] = (factory, validator)
         self._sites.pop(name, None)

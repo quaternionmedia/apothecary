@@ -1,8 +1,8 @@
 """Worked example: the registered ``parts/`` library as a fractal tree.
 
-PROTOTYPE — every registered part as a leaf (``role="part"``) under one Site,
-in the same ``Assembly`` shape the garage example uses, so the fractal viewer
-reaches a part by navigating down to it. The layout is a catalog grid, not a
+A prototype, under hierarchy.py's draft record: every registered part as a leaf
+(``role="part"``) under one Site, in the same ``Assembly`` shape the garage
+example uses, so the fractal viewer reaches a part by navigating down to it. The layout is a catalog grid, not a
 build: nothing constrains where a leaf sits (see ``validate_parts_library``).
 """
 

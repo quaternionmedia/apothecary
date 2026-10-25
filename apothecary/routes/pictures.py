@@ -27,9 +27,8 @@ command line. These routes give the world's page the same, and no more:
   arrangement the world can open. A file that cannot be read is set aside
   with the reason, not a refusal of the rest.
 
-A camera is a part standing in a site now (``apothecary/vision/cameras.py``,
-its routes ``apothecary/routes/cameras.py``); the cameras pinned at places
-before it, and the file they were kept in, are no longer read or written.
+A camera is a part standing in a site (``apothecary/vision/cameras.py``, its
+routes ``apothecary/routes/cameras.py``).
 """
 
 from __future__ import annotations

@@ -1,11 +1,9 @@
 """A managed slicer: a part or a made piece, sliced for the pinned printer, from the page.
 
-Decided with the owner on 2026-10-10 (docs/plans/slicer-2026-10-10.md):
-
 - **A slicer is a module** behind one interface (``modules/__init__.py``), as a
   firmware toolchain is. OrcaSlicer's command line is the first
-  (``modules/orcaslicer.py``); another slicer is a module added, and the owner
-  switches which is used with one line of the printer's profile.
+  (``modules/orcaslicer.py``); another slicer is a module added, and one line
+  of the printer's profile switches which is used.
 - **Installed by apothecary**, as OpenSCAD is: a pinned release from its
   publisher, checked before it is opened, into the tools dir
   (``orcaslicer_installer.py``; ``apothecary slicer install``).

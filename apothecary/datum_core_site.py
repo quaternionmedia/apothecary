@@ -31,9 +31,9 @@ from .transforms import Rotate, Translate
 
 # --- the parts' own defaults, read rather than restated ---------------------
 #
-# These used to be typed out again here, twelve of them, kept in step with the
-# wrappers by a test. A gate compensating for a duplication is worse than not
-# duplicating: the assembly now reads the parts it models.
+# The assembly reads the parts it models: their defaults come from their
+# parameter models, not typed again here, so no test has to keep two copies in
+# step.
 
 _CORE = CoreParams()
 _CAP = CapParams()
