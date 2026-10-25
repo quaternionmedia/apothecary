@@ -139,7 +139,9 @@ def test_run(slow: bool, pytest_args: tuple[str, ...]):
 def test_all(slow: bool, workers: int, pytest_args: tuple[str, ...]):
     """The unit tests and the walkthrough, then every browser test in a pytest of its
     own, on a server of its own (--start-server); further arguments go to pytest, to
-    both, as `test run`'s do (`-k part` narrows each)."""
+    both, as `test run`'s do (`-k part` narrows each). --record-durations, passed
+    through, writes the browser tests' times into tests/e2e/durations.json, which
+    the shards are balanced by."""
     codes = [
         _pytest(unit_command(slow=slow) + list(pytest_args)),
         _pytest(browser_command(every=True, workers=workers) + list(pytest_args)),

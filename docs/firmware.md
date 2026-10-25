@@ -42,6 +42,7 @@ apothecary firmware install --esp32            # arduino-cli + the ESP32 core: p
 apothecary firmware install --avr              # the AVR core: parts/footpedal, on an Uno, Nano or Mega
 apothecary firmware install --rust-esp32       # Rust for the classic ESP32; see below
 apothecary firmware validate                   # each module and what it can do; exit 1 if arduino-cli is unusable
+apothecary firmware boards                     # the boards connected now (--all: every board the installed cores target)
 apothecary firmware cores --install rp2040:rp2040   # more cores; index URLs are added for you
 apothecary firmware libraries --install FastLED --install "Control Surface@2.1.2"
 ```
