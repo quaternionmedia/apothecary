@@ -19,7 +19,6 @@ from __future__ import annotations
 import io
 import json
 import threading
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -698,6 +697,7 @@ def test_names_stay_unique(world):
 # --- the store under load -----------------------------------------------------------
 
 
+@pytest.mark.timeout(60)
 def test_a_make_during_a_slow_find_loses_nothing_and_a_get_answers(world):
     from apothecary.vision import finder as finder_module
     from apothecary.vision.stated import StatedFinder
@@ -730,10 +730,10 @@ def test_a_make_during_a_slow_find_loses_nothing_and_a_get_answers(world):
         worker = threading.Thread(target=slow_find)
         worker.start()
         assert started.wait(10)
-        t0 = time.monotonic()
+        # Answered while the slow finder is held: a request it held would wait for
+        # the release, which comes only after, and the test's limit would end it.
         assert c.get("/sites/garage/attached").status_code == 200
         made = c.post(f"/sites/garage/views/{view['id']}/make", json={"all": True}).json()
-        assert time.monotonic() - t0 < 5
         release.set()
         worker.join(10)
         assert answers["slow"].status_code == 200

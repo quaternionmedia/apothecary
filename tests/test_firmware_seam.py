@@ -450,21 +450,21 @@ def test_task_runner_refuses_concurrent_tasks(tmp_path):
     assert first.status == TaskStatus.cancelled and runner.active is None
 
 
+@pytest.mark.timeout(60)
 def test_task_runner_cancel_kills_grandchildren_and_frees_the_slot(tmp_path):
     # arduino-cli forks avrdude/esptool; the shell here forks `sleep` the same
     # way, and it inherits the stdout pipe. A cancel that only reached the shell
-    # would leave the task "running" until sleep let go of the pipe.
+    # would leave the task "running" until sleep let go of the pipe, which is
+    # longer than the test's limit.
     slow = tmp_path / "slow.sh"
-    slow.write_text("#!/bin/sh\necho started\nsleep 30\necho never\n")
+    slow.write_text("#!/bin/sh\necho started\nsleep 300\necho never\n")
     slow.chmod(0o755)
     runner = TaskRunner()
     first = runner.run("x", "slow", [[str(slow)], ["true"]])
     _wait_for = time.time() + 5
     while "started" not in first.lines and time.time() < _wait_for:
         time.sleep(0.02)
-    t0 = time.time()
     assert runner.cancel(first.id)
-    assert time.time() - t0 < 5
     assert first.status == TaskStatus.cancelled and runner.active is None
     assert first.lines[-1] == "Cancelled." and "never" not in first.lines
     assert not any("true" in line for line in first.lines)  # remaining steps skipped

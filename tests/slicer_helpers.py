@@ -10,8 +10,8 @@ process that is not for the machine's system profile -- and writing
 process's layer height, OrcaSlicer's estimate comments and a config block) and
 ``result.json``. ``FAKE_ORCA`` in its environment scripts a failure: ``outside``
 prints the error OrcaSlicer gives for a model off the bed and exits non-zero;
-``silent`` exits zero and writes nothing; ``slow`` takes a minute first, for a
-cancel to stop. ``FAKE_ORCA_LAYERS`` says how many layers it writes (three) and
+``silent`` exits zero and writes nothing; ``slow`` takes five minutes first,
+longer than any test waits, for a cancel to stop. ``FAKE_ORCA_LAYERS`` says how many layers it writes (three) and
 ``FAKE_ORCA_DWELL`` a dwell in ms after each move, so a print of it is seen
 running on the simulated printer. Each argv is recorded beside it.
 """
@@ -47,7 +47,7 @@ FAKE_ORCASLICER = textwrap.dedent(r"""
     if mode == "slow":
         import time
         print("slicing slowly", flush=True)
-        time.sleep(60)
+        time.sleep(300)
     machine, process = [json.loads(Path(p).read_text()) for p in opt("--load-settings").split(";")]
     filament = json.loads(Path(opt("--load-filaments")).read_text())
     if machine.get("inherits") not in process.get("compatible_printers", []):
