@@ -132,6 +132,31 @@ part's own STL was rendered with, which is where a page drawing it starts;
 `GET /parts/{name}/variants/{variant}` says what made a cached variant, for a
 page that has only its key.
 
+### In the page, the text is the truth
+
+A part whose SCAD the page edits takes its values from that text: nothing is
+passed to OpenSCAD on the side. Over HTTP, values sent as `params` are
+written into the part's own text (its SCAD as saved, which is its default),
+and that text renders, as a draft does; a saved variant's SCAD carries its
+values, so merging it applies them. The part's `Params` model still checks
+each value the text gives -- a range, a type, a whole number -- and `apothecary
+problems` and the part's checklist say where a model's default and the SCAD's
+value disagree. A part whose SCAD is in a submodule is edited as an overlay
+beside it: the include of the upstream file and the values set after it.
+
+What counts as a value is a **top-level assignment**, read as OpenSCAD's
+customizer reads one: a name, `=`, a value and `;` at the outermost level,
+outside every module, function, comment and string. Before the first
+`module` or `function` and outside `/* [Hidden] */` it is a parameter, which
+gets a control. Its value is a literal (a number, a string, `true`, `false`,
+`undef`, a vector of literals) or an expression, which is computed: the check
+asks OpenSCAD for its value. A `//` comment after its `;` on its line may
+carry the customizer's range (`[10:100]`, `[1:0.5:20]`), options or a unit
+word; a comment line just above is its caption. A control writes only the
+value's span, so the name, the spacing and the comment stay. The full
+grammar, offsets and all, is the docstring of
+`apothecary/projects/parts/assignments.py`, which the page follows too.
+
 ### Adding a parameter
 
 Two places, kept in step: a top-level variable in the SCAD file (what `-p`
@@ -192,11 +217,12 @@ will do. `APOTHECARY_VARIANTS_REPO` names another repository to save into, a
 clone of the checkout; the browser suite's servers save into one of their own.
 
 In the viewer, the part's editor in Selected holds its SCAD, where the
-read-only source stood: checked once typing stops, rendered after a second
-of quiet, saved with Save (or Part › Save) under the name beside it, its
-saved variants listed under its parameters and, with what each changes, in
-the editor; floated over the world or made fullscreen (Part › Float, Part ›
-Fullscreen). Walkthrough 16 goes round it.
+read-only source stood: checked once typing stops, rendered soon after a
+check that passes, saved with Save (Ctrl+S in the editor, or Part › Save)
+under the name beside it, its saved variants listed under its parameters
+and, with what each changes, in the editor; floated over the world or made
+fullscreen (Part › View › Float, Part › View › Fullscreen). Walkthrough 16
+goes round it, and [viewer.md](viewer.md#the-scad-editor) has its keys.
 
 A part built by Python geometry (the snowplow) has no SCAD of its own to
 edit: `GET /parts/{name}/scad` answers the SCAD its geometry generates

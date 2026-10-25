@@ -64,12 +64,12 @@ disc 1: made disc_1: Part › Edit adjusts it, and a printer's Machine prints it
 
 ## 6. Part › Edit adjusts it in Selected
 
-The piece's ring, Part › Edit: its parameters in Selected, under where it came from. Its thickness, which a picture cannot see, set to 5.1 mm and applied: it is rebuilt where it stands, and the status line names the printer's Machine.
+The piece's ring, Part › Edit: its parameters in Selected, under where it came from. Its thickness, which a picture cannot see, set to 5 mm and applied: it is rebuilt where it stands, and the status line names the printer's Machine.
 
 ![Part › Edit adjusts it in Selected](screenshots/13-06-part-edit-adjusts-it-in-selected.png)
 
 ```
-disc_1 rebuilt 173.2 × 172.2 × 5.1 mm; found 173.2 × 172.2, thickness a person's: a printer's Machine prints it
+disc_1 rebuilt 173.2 × 172.2 × 5 mm; found 173.2 × 172.2, thickness a person's: a printer's Machine prints it
 ```
 
 ## 7. Slice, in printer_1's Machine, slices the piece and chooses its G-code
@@ -116,12 +116,12 @@ camera_1's picture lies on workbench: Picture › Find shapes finds what is in i
 
 ## 11. A second piece, made and adjusted
 
-Find shapes and Make on the second picture: plate_1 stands beside disc_1, the view brought to it by hand. Part › Edit narrows it to 38.5 mm and applies it.
+Find shapes and Make on the second picture: plate_1 stands beside disc_1, the view brought to it by hand. Part › Edit narrows it to 40 mm and applies it.
 
 ![A second piece, made and adjusted](screenshots/13-11-a-second-piece-made-and-adjusted.png)
 
 ```
-plate_1 rebuilt 38.5 × 129.9 × 19.5 mm; found 238.2 × 129.9, thickness a guess: a printer's Machine prints it
+plate_1 rebuilt 40 × 129.9 × 19.5 mm; found 238.2 × 129.9, thickness a guess: a printer's Machine prints it
 ```
 
 ## 12. Slice, on the piece's ring, slices it in printer_1's Machine

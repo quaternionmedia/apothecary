@@ -50,6 +50,13 @@ def openscad():
 )
 @click.option("--force", is_flag=True, help="Download it again even if it is installed")
 @click.option(
+    "--extract",
+    is_flag=True,
+    help="Extract the AppImage so each run starts at once, without mounting it (Linux "
+    "x86_64; also for a snapshot already installed). It takes more disk; `apothecary check` "
+    "says how much faster each run would start",
+)
+@click.option(
     "--jobs",
     type=click.IntRange(min=1),
     metavar="N",
@@ -61,13 +68,15 @@ def openscad_install(
     snapshot: Optional[str],
     minimum: Optional[str],
     force: bool,
+    extract: bool,
     jobs: Optional[int],
 ):
     """Install an OpenSCAD snapshot, fetched from files.openscad.org (on Linux
     arm64, its source from GitHub) and nowhere else.
 
     \b
-    Linux x86_64   the night's AppImage; extracted where there is no FUSE
+    Linux x86_64   the night's AppImage; extracted where there is no FUSE,
+                   or with --extract, for the fast start
     macOS          OpenSCAD.app copied out of the night's disk image (universal)
     Windows x64    the night's portable zip, unpacked
     Linux arm64    built here with cmake from OpenSCAD's source at the night's
@@ -94,7 +103,12 @@ def openscad_install(
         click.echo(f"Oldest OpenSCAD asked for: {minimum}{why}")
     try:
         oi.SnapshotInstaller(
-            snapshot=snapshot, minimum=minimum, force=force, log=click.echo, jobs=jobs
+            snapshot=snapshot,
+            minimum=minimum,
+            force=force,
+            log=click.echo,
+            jobs=jobs,
+            extract=extract,
         ).install()
     except (oi.InstallError, OSError) as exc:
         raise click.ClickException(f"{exc}{why}") from exc

@@ -22,11 +22,12 @@ import weakref
 from contextlib import asynccontextmanager, suppress
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional, Union
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
@@ -71,7 +72,7 @@ from .projects.parts.params import (
     validate_staged,
 )
 from .projects.parts.skeleton import ROOT
-from .projects.parts.stl_renderer import build_stl, geometry_scad, part_renderer
+from .projects.parts.stl_renderer import RUNS, build_stl, geometry_scad, part_renderer, runs_for
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.parts.variants import (
     KEY_PATTERN,
@@ -81,7 +82,9 @@ from .projects.parts.variants import (
     make_variant,
     measured_box,
     part_state,
+    read_partial,
     read_variant,
+    read_variant_draft,
     variant_paths,
     variant_record,
 )
@@ -200,6 +203,10 @@ STATIC_ROOT = Path(__file__).resolve().parent / "static"
 # Personal data stays on this machine by the shape of the program: the app
 # answers a client on loopback only and fences every page it sends
 # (apothecary/stays_local.py). Outermost, so static files are under it too.
+# Responses compressed for a client that takes gzip: JSON, SCAD, STLs and the
+# vendored scripts. Inside LocalOnly, which stays outermost; an event stream and
+# an image are left as they are (Starlette excludes them).
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 app.add_middleware(LocalOnly)
 app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 app.include_router(docs_router)
@@ -347,6 +354,9 @@ def _part_metadata(part) -> Dict[str, object]:
 
     stl_can_generate, stl_note = part.can_generate_stl()
     own = editable(part)
+    from .projects.parts.texts import is_overlaid
+
+    overlaid = own and is_overlaid(part)
     metadata["files"] = {
         "scad": {
             "exists": part.source_file.exists(),
@@ -355,6 +365,9 @@ def _part_metadata(part) -> Dict[str, object]:
             # generates, read-only; any other's SCAD is its source, to edit.
             "editable": own,
             "generated": not own,
+            # A part in a submodule is edited as its overlay; its upstream read only.
+            "overlay": overlaid,
+            "upstream_url": f"/parts/{part.name}/upstream" if overlaid else None,
         },
         "stl": {
             "exists": part.stl_file is not None,
@@ -424,12 +437,43 @@ def get_part(name: str, params: str | None = Query(None, alias="params")):
 
 
 @app.get("/parts/{name}/scad", response_class=PlainTextResponse)
-def get_part_scad(name: str, params: Optional[str] = Query(None, max_length=10_000)):
+def get_part_scad(
+    name: str,
+    params: Optional[str] = Query(None, max_length=10_000),
+    variant: Optional[str] = Query(
+        None, description="A cached variant's key: the SCAD it was rendered from"
+    ),
+):
     """The part's SCAD. A part built by Python geometry (the snowplow) answers the
     SCAD its geometry generates, for ``params`` (JSON) or its defaults, and says
     so (``X-Part-Scad: generated``): it is shown, never edited, and a draft of
-    it is refused. Any other answers its SCAD file (``X-Part-Scad: source``)."""
+    it is refused. Any other answers its SCAD file (``X-Part-Scad: source``).
+
+    ``variant`` answers the SCAD a cached variant was rendered from: for a part
+    built by Python geometry, what it generates for the variant's parameters
+    (the parameters an Apply drew); for any other, the draft it was rendered
+    from (``X-Part-Scad: draft``), else its own text with the values it was
+    applied with written in (``values``; none: ``source``). 404 once the cache has
+    let it go.
+
+    A part whose SCAD is in a submodule (gridfinity) answers the text it is
+    edited as: its overlay setting nothing, an include of the upstream file
+    (``X-Part-Scad: overlay``, ``X-Part-Upstream`` naming that file, which
+    ``GET /parts/{name}/upstream`` serves read only)."""
     part = _load_part_wrapper(name)
+    if variant is not None:
+        return _variant_scad(name, part, variant)
+    if editable(part) and not params:
+        from .projects.parts.texts import is_overlaid, own_text, upstream_path
+
+        if is_overlaid(part):
+            return PlainTextResponse(
+                own_text(part),
+                headers={
+                    "X-Part-Scad": "overlay",
+                    "X-Part-Upstream": upstream_path(part),
+                },
+            )
     if not editable(part):
         overrides: Dict[str, Any] = {}
         if params:
@@ -451,6 +495,57 @@ def get_part_scad(name: str, params: Optional[str] = Query(None, max_length=10_0
         )
     except OSError as exc:  # pragma: no cover - IO failure is rare
         raise HTTPException(status_code=500, detail=f"Failed to read SCAD: {exc}") from exc
+
+
+@app.get("/parts/{name}/upstream", response_class=PlainTextResponse)
+def get_part_upstream(name: str):
+    """A part in a submodule: its upstream SCAD, read only (``X-Part-Scad:
+    upstream``), which its overlay includes and sets values after. 404 for a
+    part in no submodule: its SCAD is ``GET /parts/{name}/scad``."""
+    from .projects.parts.texts import is_overlaid
+
+    part = _load_part_wrapper(name)
+    if not editable(part) or not is_overlaid(part):
+        raise HTTPException(
+            status_code=404,
+            detail=f"{name} is in no submodule: its SCAD is GET /parts/{name}/scad",
+        )
+    return PlainTextResponse(
+        part.source_file.read_text(encoding="utf-8"),
+        headers={"X-Part-Scad": "upstream", "Cache-Control": "no-cache"},
+    )
+
+
+def _variant_scad(name: str, part: BasePart, key: str) -> PlainTextResponse:
+    record = read_variant(part, key) if KEY_PATTERN.match(key) else None
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No variant '{key}' of '{name}' is cached; "
+            f"POST /parts/{name}/stl/generate makes it",
+        )
+    headers = {"X-Part-Variant": key}
+    if not editable(part):
+        try:
+            overrides = part.validate_overrides(record.get("params") or {})
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(status_code=422, detail=f"Invalid params: {exc}") from None
+        return PlainTextResponse(
+            geometry_scad(part, overrides), headers={**headers, "X-Part-Scad": "generated"}
+        )
+    text = read_variant_draft(part, key)
+    if text is not None:
+        return PlainTextResponse(text, headers={**headers, "X-Part-Scad": "draft"})
+    from .projects.parts.texts import is_overlaid, own_text, with_params
+
+    # The part's own text with the values it was applied with written in: what rendered.
+    values = dict(record.get("params") or {})
+    try:
+        text = with_params(part, own_text(part), part.validate_overrides(values))
+    except (ValueError, TypeError):
+        text, values = own_text(part), {}
+    kind = "overlay" if is_overlaid(part) else "source"
+    return PlainTextResponse(text, headers={**headers, "X-Part-Scad": "values" if values else kind})
 
 
 @app.get("/parts/{name}/stl")
@@ -484,6 +579,11 @@ def get_part_stl(name: str):
         raise HTTPException(status_code=500, detail=f"Failed to read STL: {exc}") from exc
 
 
+# What a page calls the state of its editor when it asks: a counter or a token,
+# handed back as it came, so the page can tell an answer for older text.
+EditorVersion = Optional[Union[int, Annotated[str, Field(max_length=64)]]]
+
+
 class StlGenerateRequest(BaseModel):
     """Body for a parameterised STL generation."""
 
@@ -491,10 +591,18 @@ class StlGenerateRequest(BaseModel):
         default_factory=dict,
         description="Parameter overrides, validated against the part's own model.",
     )
+    editor_version: EditorVersion = Field(
+        None,
+        description="The page's own name for the state of its editor when it asked: "
+        "handed back in the answer as it came",
+    )
 
 
 # The render each page has in flight per part, so a newer one can stop it.
 _page_renders = PageRenders()
+
+# What a variant's own URL is answered with: under its key its bytes never change.
+IMMUTABLE = "public, max-age=31536000, immutable"
 
 
 @app.post("/parts/{name}/stl/generate")
@@ -522,31 +630,77 @@ def generate_part_stl(
     sidecar says it holds another variant; any other variant is the cache's
     alone, so two pages applying different values never share a file.
 
+    For a part whose SCAD is its source, the values are written into its own
+    text (its SCAD, or a part in a submodule's overlay), and that text renders,
+    as a draft does (``POST /parts/{name}/draft/render``): nothing is passed to
+    OpenSCAD on the side. It is answered, and recorded, as the part with those
+    values: ``params`` them, ``draft`` null; its key is that text's. A part
+    built by Python geometry renders what its geometry generates for them.
+
     ``bounds`` is the envelope the part declares; ``measured`` is the box of
     what is served, in the same upright frame: OpenSCAD's own summary of the
     render where it writes one (``measured_from: "summary"``, a snapshot),
     else read off the STL (``"stl"``: 2021.01, or the part's own STL built
     elsewhere). ``saved`` says the answer is what the part's own STL holds.
     ``messages`` are its errors and warnings by file and line. A render
-    OpenSCAD refused is a 422 whose ``detail`` carries them; one superseded
-    by a newer request from the same ``page`` is a 409. No OpenSCAD, or a
+    OpenSCAD refused, or finished saying an error, is a 422 whose ``detail``
+    carries them, and ``partial``: the geometry a snapshot wrote before the
+    error (``stl_url`` under ``/parts/{name}/partials/``, the error's ``file``
+    and ``line``, its ``measured`` box), or null; it is never a variant. One
+    superseded by a newer request from the same ``page`` is a 409. No OpenSCAD, or a
     part that cannot be built on this machine, is a 503.
     """
     part = _load_part_wrapper(name)
-    overrides = checked_overrides(part, body.params if body else None, _listing(part))
+    with runs_for(part.name, page):
+        listing = _listing(part)
+    overrides = checked_overrides(part, body.params if body else None, listing)
     if not get_stl_renderer().is_available:
         raise HTTPException(
             status_code=503, detail="OpenSCAD not installed. Cannot generate STL files."
         )
+    if editable(part):
+        # The text is the truth: the values are written into the part's own
+        # text, which is what renders -- one path with a draft's render.
+        from .projects.parts.texts import own_text, with_params
+        from .routes.part_edits import render_text
+
+        text = with_params(part, own_text(part), overrides)
+        version = body.editor_version if body else None
+        return render_text(self_api(), name, part, text, force, page, version, values=overrides)
 
     cancel = _page_renders.begin(part.name, page, request_wants(overrides, force))
     try:
-        made = make_variant(part, overrides, force=force, cancel=cancel)
+        with runs_for(part.name, page):
+            made = make_variant(part, overrides, force=force, cancel=cancel)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     finally:
         _page_renders.end(part.name, page, cancel)
-    return made_answer(name, part, made, overrides)
+    return made_answer(name, part, made, overrides, body.editor_version if body else None)
+
+
+@app.get("/openscad/runs", tags=["parts"])
+def openscad_runs(
+    page: Optional[str] = Query(
+        None, max_length=128, description="Only this page's runs (the id it sends with each)"
+    ),
+):
+    """The queue of OpenSCAD runs: at most ``limit`` run at once (two; see
+    apothecary/projects/parts/stl_renderer.py's ``RUNS``) and the rest wait,
+    first come first served. ``running``: each run's ``kind`` (``render``, or
+    the export a check or compile makes: ``param``, ``echo``, ``csg``), its
+    ``part`` and ``page``, how long it has run; ``waiting``: the same, with its
+    ``position`` (1: next) and how long it has waited. What a page polls while
+    its render or check is in flight, to say it is queued. A cancelled request
+    leaves the line without running."""
+    return RUNS.snapshot(page)
+
+
+def self_api():
+    """This module, for a route elsewhere that answers as it does."""
+    import sys
+
+    return sys.modules[__name__]
 
 
 def _listing(part: BasePart) -> Optional[List[Dict[str, Any]]]:
@@ -586,10 +740,39 @@ def checked_overrides(
         raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
-def made_answer(name: str, part: BasePart, made, overrides: Dict[str, Any]) -> Dict[str, Any]:
+def partial_answer(name: str, partial) -> Optional[Dict[str, Any]]:
+    """A failed render's partial geometry as an answer names it: where it is
+    served, and the error it is flagged with. None where OpenSCAD wrote none."""
+    if partial is None:
+        return None
+    return {
+        "stl_url": f"/parts/{name}/partials/{partial.key}/stl",
+        "message": partial.message,
+        "file": partial.file,
+        "line": partial.line,
+        "measured": jsonable_encoder(measured_box(partial.measured)),
+        "measured_from": partial.measured_from,
+    }
+
+
+def made_answer(
+    name: str,
+    part: BasePart,
+    made,
+    overrides: Dict[str, Any],
+    editor_version: Optional[Union[int, str]] = None,
+    shown_params: Optional[Dict[str, Any]] = None,
+    text: Optional[str] = None,
+) -> Dict[str, Any]:
     """What a render answers, as generate answers it, or the HTTPException for
     one that made nothing: 503 refused, 409 superseded, 422 with OpenSCAD's
-    errors by line, 500 for a failure it said nothing about."""
+    errors by line, 500 for a failure it said nothing about. Any error
+    OpenSCAD said fails the render, even one it finished: a snapshot exits 0
+    after a failed ``assert`` with the geometry built before it, which the
+    422's ``partial`` names (``stl_url``, the error's ``file`` and ``line``),
+    to be drawn greyed; it is never a variant. ``editor_version`` is handed
+    back as the request gave it, in an answer and in a 409's or 422's
+    ``detail``: what the page's editor held when it asked."""
     messages = jsonable_encoder(made.messages)
     if made.failure == "refused":
         raise HTTPException(
@@ -597,30 +780,39 @@ def made_answer(name: str, part: BasePart, made, overrides: Dict[str, Any]) -> D
         )
     if made.failure == "cancelled":
         raise HTTPException(
-            status_code=409, detail={"message": made.error_message, "superseded": True}
+            status_code=409,
+            detail={
+                "message": made.error_message,
+                "superseded": True,
+                "editor_version": editor_version,
+            },
         )
     if made.failure is not None:
         said = any(m.level == "error" for m in made.messages)
-        raise HTTPException(
-            status_code=422 if said else 500,
-            detail={
-                "message": f"STL generation failed: {made.error_message}",
-                "messages": messages,
-            },
-        )
+        detail: Dict[str, Any] = {
+            "message": f"STL generation failed: {made.error_message}",
+            "messages": messages,
+            "partial": partial_answer(name, made.partial),
+            "editor_version": editor_version,
+        }
+        raise HTTPException(status_code=422 if said else 500, detail=detail)
 
     return {
         "success": True,
         "message": (
             f"STL generated in {made.render_time_seconds:.1f}s"
             if made.rendered
-            else "STL is up to date (force=true rebuilds it)"
+            else (
+                f"Compiled the same as variant {made.compiled_from}: nothing to render"
+                if made.compiled_from
+                else "STL is up to date (force=true rebuilds it)"
+            )
         ),
         "stl_url": (f"/parts/{name}/variants/{made.key}/stl" if made.key else f"/parts/{name}/stl"),
         "variant": made.key,
         "regenerated": made.rendered,
         "render_time_seconds": made.render_time_seconds,
-        "params": jsonable_encoder(made.params),
+        "params": jsonable_encoder(made.params if shown_params is None else shown_params),
         "bounds": jsonable_encoder(part.get_bounds(overrides or None)),
         "measured": jsonable_encoder(measured_box(made.measured)),
         "measured_from": made.measured_from,
@@ -630,6 +822,14 @@ def made_answer(name: str, part: BasePart, made, overrides: Dict[str, Any]) -> D
         "backend": made.backend,
         # The sha256 of the draft it was rendered from; None: the part's own SCAD.
         "draft": made.draft,
+        # What the page's editor held when it asked, as the page named it.
+        "editor_version": editor_version,
+        # The variant whose render this is too: it compiled the same.
+        "compiled_from": made.compiled_from,
+        # How long it waited for its turn among OpenSCAD's runs (GET /openscad/runs).
+        "queued_seconds": round(made.queued_seconds, 3),
+        # The text rendered, where values sent on the side were written into it.
+        "text": text,
     }
 
 
@@ -655,8 +855,9 @@ def get_part_variant_stl(name: str, variant: str):
     """One variant from the cache, by the ``variant`` key generate answered.
 
     Its bytes never change under its key, whichever page asks: what a page
-    applied is what it draws. 404 once the cache has let it go (it keeps the
-    most recently served of each part); generating it again puts it back.
+    applied is what it draws, and the browser keeps it as immutable. 404 once
+    the cache has let it go (it keeps the most recently served of each part);
+    generating it again puts it back.
     """
     part = _load_part_wrapper(name)
     if not KEY_PATTERN.match(variant) or read_variant(part, variant) is None:
@@ -675,8 +876,38 @@ def get_part_variant_stl(name: str, variant: str):
         media_type="application/sla",
         headers={
             "Content-Disposition": f'attachment; filename="{name}-{variant}.stl"',
+            # A key is everything that made it: its bytes never change under it.
+            "Cache-Control": IMMUTABLE,
             "X-Part-Name": name,
             "X-Part-Variant": variant,
+        },
+    )
+
+
+@app.get("/parts/{name}/partials/{variant}/stl")
+def get_part_partial_stl(name: str, variant: str):
+    """What a failed render wrote before its error, to be drawn greyed: the
+    ``partial.stl_url`` of a 422 from generate or a draft's render. Never a
+    variant and never cached by the browser (a render of the same request
+    that fails again writes it again); 404 once a newer failure has let it go."""
+    part = _load_part_wrapper(name)
+    path = read_partial(part, variant)
+    try:
+        data = path.read_bytes() if path is not None else None
+    except OSError:
+        data = None
+    if data is None:
+        raise HTTPException(
+            status_code=404, detail=f"No partial geometry '{variant}' of '{name}' is kept"
+        )
+    return Response(
+        content=data,
+        media_type="application/sla",
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}-{variant}-failed.stl"',
+            "Cache-Control": "no-store",
+            "X-Part-Name": name,
+            "X-Part-Partial": variant,
         },
     )
 
@@ -690,8 +921,14 @@ def get_part_state(name: str):
     ``/parts/{name}/stl`` starts its editor from, rather than the model's
     defaults. ``apothecary parts generate-stl -p`` is what writes a variant
     there; the page's own Apply only ever leaves the defaults there.
+    ``can_build`` says whether an OpenSCAD here can build the part at all, and
+    ``build_note`` why not.
     """
-    return part_state(_load_part_wrapper(name), url_name=name)
+    part = _load_part_wrapper(name)
+    can, why = part.can_generate_stl()
+    return part_state(part, url_name=name).model_copy(
+        update={"can_build": can, "build_note": why or None}
+    )
 
 
 @app.get("/parts/{name}/params", response_model=ParamsSpec)
@@ -713,14 +950,18 @@ def get_part_params(name: str):
     the 404's ``detail`` says why: ``lists`` false when the OpenSCAD in use
     (``openscad``, 2021.01) cannot list a SCAD's parameters at all, and
     ``messages`` when it could not read the SCAD.
+
+    ``can_build`` says up front whether an OpenSCAD here can build the part
+    (gridfinity cannot on 2021.01), and ``build_note`` why not: Apply is
+    refused (a 503) where it is false.
     """
     part = _load_part_wrapper(name)
     try:
-        return params_spec(part)
+        return buildable(part, params_spec(part))
     except NoParameters:
         pass
     try:
-        return customizer_spec(part)
+        return buildable(part, customizer_spec(part))
     except Unlisted as why:
         raise HTTPException(
             status_code=404,
@@ -731,6 +972,12 @@ def get_part_params(name: str):
                 "messages": jsonable_encoder(why.messages),
             },
         ) from None
+
+
+def buildable(part: BasePart, spec: ParamsSpec) -> ParamsSpec:
+    """``spec`` with whether an OpenSCAD here can build the part, and why not."""
+    can, why = part.can_generate_stl()
+    return spec.model_copy(update={"can_build": can, "build_note": why or None})
 
 
 def _parse_build_volume(raw: Optional[str]):
@@ -746,25 +993,119 @@ def _parse_build_volume(raw: Optional[str]):
     return parsed
 
 
+def drawn_variant(part: BasePart, key: str):
+    """The cached variant ``key`` of ``part`` as the checklist asks about it, or
+    a 404 once the cache has let it go (or never had it)."""
+    from .projects.parts.readiness import Drawn
+
+    record = read_variant(part, key) if KEY_PATTERN.match(key or "") else None
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No variant '{key}' of '{part.name}' is cached; "
+            f"POST /parts/{part.name}/stl/generate makes it",
+        )
+    stl, _ = variant_paths(part, key)
+    measured = record.get("measured")
+    if not measured:
+        from .projects.parts.variants import measure_stl
+
+        measured = measure_stl(stl, part.display_rotation.to_list())
+    return Drawn(
+        key=key,
+        stl=stl,
+        params=dict(record.get("params") or {}),
+        measured=measured,
+        draft=record.get("draft"),
+    )
+
+
+def pinned_build_volume(site_name: str, printer: Optional[str] = None):
+    """The build volume of the printer pinned in ``site_name``: ``printer``'s,
+    the path of one of them, or the one there is. ``(size, where)``, or
+    ``(None, (detail, fix))`` saying why there is none to take."""
+    pinned = printers_in(site_name)
+    if printer is not None:
+        if printer not in pinned:
+            named = ", ".join(pinned) or "none"
+            return None, (
+                f"{printer} is no printer pinned in {site_name} (pinned: {named})",
+                f"pin {printer}'s board in {site_name}, or name a pinned printer",
+            )
+        chosen = printer
+    elif len(pinned) == 1:
+        chosen = pinned[0]
+    elif not pinned:
+        return None, (
+            f"no printer is pinned in {site_name}",
+            f"pin a printer's board in {site_name} (its Pin), or give a build volume",
+        )
+    else:
+        return None, (
+            f"{len(pinned)} printers are pinned in {site_name}: {', '.join(pinned)}",
+            "name the one to print on (printer=<path>)",
+        )
+    node = _find_node_by_path(_site_store.get(site_name), chosen)
+    volume = getattr(node, "build_volume", None) if node is not None else None
+    if volume is None:
+        return None, (
+            f"{chosen} in {site_name} declares no build volume",
+            "give its node a build_volume",
+        )
+    return (volume.x, volume.y, volume.z), f"{chosen} in {site_name}"
+
+
 @app.get("/parts/{name}/checklist")
-def get_part_checklist(name: str, build_volume: Optional[str] = Query(None)):
+def get_part_checklist(
+    name: str,
+    build_volume: Optional[str] = Query(None, description="X,Y,Z in mm"),
+    variant: Optional[str] = Query(
+        None, description="A cached variant's key: the checklist of what a page draws"
+    ),
+    site: Optional[str] = Query(
+        None, max_length=64, description="Take the build volume of the printer pinned here"
+    ),
+    printer: Optional[str] = Query(
+        None, max_length=200, description="Which pinned printer, where the site has several"
+    ),
+):
     """Whether this part is ready to print and check against a real one.
 
     The same assessment `apothecary parts checklist` prints, so the viewer and
     the command line cannot disagree about whether something is buildable.
     A question that could not be asked is reported as `unknown`, never as a
     pass.
+
+    ``variant`` asks about a variant from the cache (``/parts/{name}/variants/
+    {key}``), as a page draws it: its render, its measured size against the
+    bounds declared for its parameters, and whether that size fits (404 once
+    the cache has let it go). Without ``build_volume``, ``site`` takes the
+    build volume of the printer pinned there (``printer`` names one where
+    several are): ``build_volume`` in the answer says the size and where it
+    came from, and "Fits the printer" says why when there is none.
     """
-    from .projects.parts.readiness import assess
+    from .projects.parts.readiness import NO_VOLUME, assess
 
     part = _load_part_wrapper(name)
+    drawn = drawn_variant(part, variant) if variant else None
+    volume, source, none = _parse_build_volume(build_volume), "given", NO_VOLUME
+    if volume is None and site:
+        if site not in _site_store.names():
+            raise HTTPException(status_code=404, detail=f"Site '{site}' not found")
+        found, said = pinned_build_volume(site, printer)
+        if found is None:
+            none = said
+        else:
+            volume, source = found, said
 
-    report = assess(part, build_volume=_parse_build_volume(build_volume))
+    report = assess(part, build_volume=volume, drawn=drawn, volume_from=source, no_volume=none)
     return {
         "part": report.part,
+        "variant": drawn.key if drawn else None,
         "ready": report.ready,
         "blocked": len(report.blocked),
         "unknown": len(report.unknown),
+        "build_volume": ({"size": list(volume), "from": source} if volume is not None else None),
         "checks": [
             {"name": c.name, "state": c.state, "detail": c.detail, "fix": c.fix}
             for c in report.checks

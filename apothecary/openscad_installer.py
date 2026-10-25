@@ -8,7 +8,12 @@ it is (``host()``):
 - **Linux x86_64**: the night's AppImage, run as it is. Where there is no FUSE
   the AppImage cannot mount itself; that failure is known by what it prints,
   and the image is extracted (``--appimage-extract``) and
-  ``squashfs-root/AppRun`` is run instead.
+  ``squashfs-root/AppRun`` is run instead. ``extract`` (``install --extract``)
+  extracts it anyway, for the fast start: an AppImage mounts itself on every
+  run, which an extracted one does not (``appimage_start`` measures what that
+  costs here, and ``apothecary check`` says it); an AppImage already installed
+  is extracted where it is, with nothing fetched. The default stays the
+  AppImage, which is the smaller on disk.
 - **macOS**, Intel and Apple Silicon: the night's ``.dmg``, attached read-only
   with ``hdiutil``, ``OpenSCAD.app`` copied out of it, and the image detached
   whatever happened. The app is universal (x86_64 and arm64; read from its
@@ -61,6 +66,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -455,6 +461,8 @@ def runs_here(
 HOW = {
     APPIMAGE: "AppImage, run through FUSE",
     EXTRACTED: "AppImage extracted (no FUSE here), run as squashfs-root/AppRun",
+    # The same, extracted because `install --extract` asked (install.json's "extracted").
+    "asked": "AppImage extracted (--extract, for the fast start), run as squashfs-root/AppRun",
     DMG: "OpenSCAD.app from the disk image",
     ZIP: "portable zip, unpacked",
     SOURCE: "built from source at {commit}",
@@ -491,6 +499,8 @@ def describe(date: str) -> Installed:
     if not isinstance(label, str):
         label = _platform_label(system, archs[0] if archs else machine)
     commit = record.get("commit")
+    if method == EXTRACTED and record.get("extracted") == "asked":
+        method = "asked"
     how = HOW[method].format(
         commit=commit if isinstance(commit, str) and SHA_RE.match(commit) else "an unknown commit"
     )
@@ -564,6 +574,86 @@ def reported_version(executable: Path) -> Optional[str]:
         if re.search(r"version\s+\d{4}\.", line, re.I):
             return line.strip()
     return None
+
+
+def is_appimage(path: Path) -> bool:
+    """Whether ``path`` is an AppImage (type 2): an ELF executable with the
+    AppImage magic, ``AI\\x02``, in its header's padding."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(12)
+    except OSError:
+        return False
+    return head[:4] == b"\x7fELF" and head[8:11] == b"AI\x02"
+
+
+@dataclass
+class StartTimes:
+    """How long an AppImage takes to start, measured here: through the image,
+    which mounts itself first, and from its files already mounted, which is
+    what an extracted copy pays. Each the median of ``runs`` runs of
+    ``--version``."""
+
+    appimage: float
+    extracted: Optional[float]
+    runs: int
+
+    @property
+    def saved(self) -> Optional[float]:
+        return None if self.extracted is None else max(0.0, self.appimage - self.extracted)
+
+
+def _median_start(argv: List[str], runs: int, timeout: float) -> Optional[float]:
+    times = []
+    for _ in range(runs):
+        began = time.monotonic()
+        try:
+            subprocess.run(argv, capture_output=True, timeout=timeout)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        times.append(time.monotonic() - began)
+    times.sort()
+    return times[len(times) // 2]
+
+
+def appimage_start(image: Path, runs: int = 3, timeout: float = 20.0) -> Optional[StartTimes]:
+    """What starting ``image`` costs on this machine, through the AppImage and
+    from its files: the AppImage's own ``--appimage-mount`` mounts it once and
+    its ``AppRun`` is timed from there, so nothing is extracted to measure it.
+    None when the image does not start at all; ``extracted`` None when it
+    would not mount."""
+    through = _median_start([str(image), "--version"], runs, timeout)
+    if through is None:
+        return None
+    try:
+        mount = subprocess.Popen(
+            [str(image), "--appimage-mount"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except OSError:
+        return StartTimes(through, None, runs)
+    try:
+        said: List[str] = []
+        reader = threading.Thread(target=lambda: said.append(mount.stdout.readline()), daemon=True)
+        reader.start()
+        reader.join(timeout)
+        where = Path(said[0].strip()) if said and said[0].strip() else None
+        apprun = where / "AppRun" if where is not None else None
+        unpacked = (
+            _median_start([str(apprun), "--version"], runs, timeout)
+            if apprun is not None and apprun.exists()
+            else None
+        )
+    finally:
+        mount.terminate()
+        try:
+            mount.wait(5)
+        except subprocess.TimeoutExpired:
+            mount.kill()
+            mount.wait(5)
+    return StartTimes(through, unpacked, runs)
 
 
 _FUSE = re.compile(r"fuse|--appimage-extract", re.I)
@@ -886,6 +976,7 @@ class SnapshotInstaller:
         log: Optional[Log] = None,
         fetch: Optional[Fetch] = None,
         jobs: Optional[int] = None,
+        extract: bool = False,
     ):
         self.snapshot = snapshot
         self.minimum = minimum
@@ -893,6 +984,7 @@ class SnapshotInstaller:
         self.log = log or (lambda _line: None)
         self._fetch = fetch
         self.jobs = jobs
+        self.extract = extract
 
     def fetch(self, url: str) -> bytes:
         # Looked up at call time, so a test's stand-in for _fetch is the one used.
@@ -917,6 +1009,12 @@ class SnapshotInstaller:
             check_date(self.snapshot)
         floor = self._floor()
         method = install_method()
+        if self.extract and method != APPIMAGE:
+            self.log(
+                f"--extract: an install here is {WHAT_INSTALL_DOES[method]}, not an AppImage, "
+                "so there is nothing to extract"
+            )
+            self.extract = False
         if self.snapshot is not None:
             self._refuse_below_floor(self.snapshot, floor)
             if not self.force and executable_for(self.snapshot).is_file():
@@ -956,9 +1054,46 @@ class SnapshotInstaller:
     def _already(self, date: str) -> Path:
         path = executable_for(date)
         self.log(f"OpenSCAD snapshot {date} already installed at {path}; --force to fetch it again")
+        if self.extract:
+            return self._extract_installed(date)
         _write_current(date)
         self.log(f"current -> {date}")
         return path
+
+    def _extract_installed(self, date: str) -> Path:
+        """The AppImage of ``date``, installed already, extracted where it is:
+        nothing fetched, the image itself not kept beside what it held."""
+        record = read_manifest(date)
+        method = record.get("method") or APPIMAGE
+        if method != APPIMAGE:
+            how = HOW.get(record.get("extracted") or method, HOW.get(method, method))
+            self.log(f"Nothing to extract: snapshot {date} is installed as {how}")
+            _write_current(date)
+            self.log(f"current -> {date}")
+            return executable_for(date)
+        image = executable_for(date)
+        self.log(f"Extracting the installed AppImage {image}, for the fast start")
+
+        def populate(staging: Path) -> dict:
+            kept = {k: v for k, v in record.items() if k in ("archs",)}
+            return {**kept, **self._unpacked(image, staging, image.name, "asked", keep=True)}
+
+        return self._put_in_place(date, populate)
+
+    def _unpacked(
+        self, image: Path, staging: Path, name: str, why: str, keep: bool = False
+    ) -> dict:
+        """``image`` extracted into ``staging``: what ``install.json`` says of it.
+        ``why``: "asked" (``--extract``) or "no FUSE". The image itself is
+        removed, unless ``keep`` (it is not in ``staging``, and goes with the
+        folder it is in)."""
+        code, said = _run(image, "--appimage-extract", timeout=900, cwd=staging)
+        if code != 0 or not (staging / "squashfs-root" / "AppRun").exists():
+            raise InstallError(f"{name} could not be extracted: {said.strip()[-500:]}")
+        (staging / "squashfs-root").chmod(0o755)  # the runtime makes it the owner's alone
+        if not keep:
+            image.unlink()
+        return {"method": EXTRACTED, "executable": "squashfs-root/AppRun", "extracted": why}
 
     def _put_in_place(self, date: str, populate: Callable[[Path], dict]) -> Path:
         """Stage the install beside where it goes, check it runs and reports its
@@ -1005,16 +1140,14 @@ class SnapshotInstaller:
             image.write_bytes(body)
             _executable(image)
             archs = binary_archs(image)
+            if self.extract:
+                self.log("Extracting the AppImage, as --extract asks: each run then starts at once")
+                return {**self._unpacked(image, staging, name, "asked"), "archs": archs}
             code, said = _run(image, "--version")
             if code == 0 or not needs_fuse(said):
                 return {"method": APPIMAGE, "executable": LEGACY_EXECUTABLE, "archs": archs}
             self.log("The AppImage cannot mount itself here (no FUSE); extracting it instead")
-            code, said = _run(image, "--appimage-extract", timeout=900, cwd=staging)
-            if code != 0 or not (staging / "squashfs-root" / "AppRun").exists():
-                raise InstallError(f"{name} could not be extracted: {said.strip()[-500:]}")
-            (staging / "squashfs-root").chmod(0o755)  # the runtime makes it the owner's alone
-            image.unlink()
-            return {"method": EXTRACTED, "executable": "squashfs-root/AppRun", "archs": archs}
+            return {**self._unpacked(image, staging, name, "no FUSE"), "archs": archs}
 
         return populate
 

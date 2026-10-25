@@ -193,9 +193,19 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
             for (const k of ["x", "y", "z"]) if (typeof p[k] === "number") target[k] = p[k];
             if (immediate) { Object.assign(current, target); place(); }
         },
+        // A step of the tween, and whether the nozzle moved: within a thousandth of a
+        // millimetre it is where it was asked to be, and stays (the page draws only
+        // while something moves).
         tick() {
-            for (const k of ["x", "y", "z"]) current[k] += (target[k] - current[k]) * 0.18;
-            place();
+            let moved = false;
+            for (const k of ["x", "y", "z"]) {
+                const gap = target[k] - current[k];
+                if (gap === 0) continue;
+                current[k] = Math.abs(gap) < 1e-3 ? target[k] : current[k] + gap * 0.18;
+                moved = true;
+            }
+            if (moved) place();
+            return moved;
         },
         position() { return { ...current }; },
         target() { return { ...target }; },

@@ -28,6 +28,7 @@ from apothecary.projects.parts.customizer import (
     scad_fields,
     without_initial,
 )
+from apothecary.projects.parts.drafts import draft_digest
 from apothecary.projects.parts.params import params_spec
 from apothecary.projects.parts.stl_renderer import OpenSCADRenderer
 
@@ -323,9 +324,11 @@ class TestTheCheckAndTheRender:
         r = client.post("/parts/block/stl/generate", json={"params": {"width": "50", "depth": 20}})
         assert r.status_code == 200, r.text
         body = r.json()
-        # A number as a number, and depth, which the SCAD assigns itself, no override.
-        assert body["params"] == {"width": 50.0}
-        assert '"width=50.0"' in stl_names(client.get(body["stl_url"]).content)
+        # A number as a number, and depth, which the SCAD assigns itself, no override;
+        # written into the part's text, which is what renders.
+        assert body["params"] == {"width": 50}
+        written = draft_digest(block.source_file.read_text().replace("width = 34;", "width = 50;"))
+        assert stl_names(client.get(body["stl_url"]).content).startswith(written)
         assert len(renders(exe)) == 1
         refused = client.post("/parts/block/stl/generate", json={"params": {"hollow": 3}})
         assert refused.status_code == 422 and "hollow" in refused.json()["detail"]

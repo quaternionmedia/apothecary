@@ -22,7 +22,7 @@ Panels › Bench › Bench on the canvas ring opens the Bench, floated here from
 
 ```
 rust-esp32: installed
-undefined: not installed
+orcaslicer: not installed
 esp32_blink@arduino · esp32:esp32:esp32
 esp32_blink@rust-esp32 · esp32
 ```

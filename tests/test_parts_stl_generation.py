@@ -348,7 +348,8 @@ class TestGridfinityOpenSCAD:
         assert client.get("/parts/gridfinity").json()["files"]["stl"]["can_generate"] is True
         r = client.post("/parts/gridfinity/stl/generate")
         assert r.status_code == 200, r.text
-        assert [call.split()[0] for call in _calls(snapshot)] == ["--version", "-o"]
+        # Its version, whether it writes a binary STL (its help), and the render.
+        assert [call.split()[0] for call in _calls(snapshot)] == ["--version", "--help", "-o"]
         assert stl.exists()
 
     def test_generate_stl_builds_it_with_the_openscad_it_is_given(

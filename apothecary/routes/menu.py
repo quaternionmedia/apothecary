@@ -150,7 +150,7 @@ def _part_seen(site: str, path: str) -> Optional[PartSeen]:
     from ..api import _load_part_wrapper
     from ..menu import _find
     from ..projects.parts.drafts import editable
-    from ..projects.parts.saved import saved_names
+    from ..projects.parts.saved import GitError, NotInGit, list_trash, saved_names
 
     node = _find(_site(site), path) if path else None
     if node is None or not node.part_ref:
@@ -160,8 +160,18 @@ def _part_seen(site: str, path: str) -> Optional[PartSeen]:
     except HTTPException:
         return None
     own = editable(part)
+    deleted: List[str] = []
+    if own:
+        # Its trash, which Part › Variants › Deleted holds.
+        try:
+            deleted = [v.name for v in list_trash(part)]
+        except (GitError, NotInGit):
+            deleted = []
     return PartSeen(
-        editable=own, variants=saved_names(part) if own else [], board="board" in part.tags
+        editable=own,
+        variants=saved_names(part) if own else [],
+        deleted=deleted,
+        board="board" in part.tags,
     )
 
 
