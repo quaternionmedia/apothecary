@@ -12,6 +12,12 @@ the draft record *Personal data stays on the device*.
 PROTOTYPE — not ratified.
 """
 
+# An install point of the guard (apothecary/stays_local.py), before any module
+# in this package runs: it reads photographs.
+from ..stays_local import install_guard as _install_guard
+
+_install_guard()
+
 from .album import Album, Built, Provenance
 from .compose import ScaleUnknown, build, picture_to_site
 from .finder import ShapeFinder, UnknownFinderError, get, names, register

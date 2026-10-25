@@ -538,7 +538,7 @@ class PrinterIdentifyRequest(ProbeRequest):
 # --- bindings: which board is which scene node -----------------------------------
 
 MAC_RE = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
-USB_SERIAL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]{2,63}$")  # an FTDI's A106ZTEU, a CP210x's
+USB_SERIAL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]{2,63}$")  # an FTDI's A1B2C3D4, a CP210x's
 
 
 def validate_identity(value: str) -> str:

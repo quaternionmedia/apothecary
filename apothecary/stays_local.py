@@ -9,10 +9,17 @@ editing this code and having that edit reviewed:
    the socket class for one that refuses to connect anywhere but loopback
    (127/8, ::1) or a Unix socket, and the name resolver for one that refuses
    to look up any name but a loopback one -- a hostname is the one place a
-   process could smuggle data out without a connection. It is installed when
-   the ``apothecary`` package is imported, so every apothecary process -- the
-   server, the CLI, the docs generator's server, the tests -- is under it
-   before any of its code runs. The one allowance is a *tool fetch*, and it
+   process could smuggle data out without a connection. It is installed by
+   the first statement of each module through which apothecary runs or reads
+   personal data: the application module (``apothecary/api.py``, which the
+   server and the docs generator's server load), the command line
+   (``apothecary/cli/__init__.py``), the ``__init__`` of the vision,
+   gathering, firmware and routes packages, and the tests' root
+   ``conftest.py``. So every apothecary process is under it before any of
+   that code runs, and the geometry library -- ``import apothecary``, the
+   shapes, the scene, the parts under ``apothecary.projects`` -- installs
+   nothing: a program that uses it for its shapes keeps its network. The one
+   allowance is a *tool fetch*, and it
    has two callers: the firmware installer downloads arduino-cli -- and, for
    Rust on the ESP32 (apothecary/firmware/rust_installer.py, through the
    firmware installer's own fetch), rustup-init from static.rust-lang.org,

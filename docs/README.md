@@ -73,9 +73,11 @@ geometry kernel is compared with ([the spike](plans/rust-geometry-kernels-2026-1
 | [Onboarding at the top of the stack](plans/onboarding-2026-10-11.md) | A newcomer's path, the docs, the suites and the pictures reviewed at the top of the stack; `serve --demo`, a Getting started page, one ordinary test command, pictures held to their captions |
 | [Iterating on a part, tightened](plans/part-iteration-2026-10-12.md) | The part and SCAD loops reviewed and timed: errors as failed renders, real controls, kept work, OpenSCAD's keys, variants drawn where they stand, history, compare, variant management; the next phase written out |
 | [The pointer, the keys and the ring](plans/input-2026-10-12.md) | Right-click is the camera's; Ctrl + right-click summons the ring; fractal zoom on Page Down and Page Up with automatic zoom's settings; one Settings panel; an overview of every input |
+| [Governance, brought up to the corpus](plans/governance-2026-10-13.md) | The audit of apothecary's governance and audit documents against the corpus, and what is decided: the guard's install points, licence exceptions, the serial removed, drafts, the bench checklist |
 | [Pictures in the world](plans/pictures-in-the-world-2026-09-26.md) | A picture pinned at a place as a view, its shapes made into pieces there; what is built, and what is open |
 | [Designing a part from the browser](plans/part-editing-in-the-browser-2026-09-27.md) | A spike: the loop for changing a part from the viewer today, what other tools do, and a recommended order |
 | [The shape finder, with a model behind it](plans/photo-finders-local-models-2026-09-21.md) | Optional local models behind the photo finder: the seam, the plugin shape, what reach is lawful, the phases |
+| [The bench checklist](bench-checklist.md) | The Ender 3 and an ESP32 for real: pinning, the link, heat, motion, levelling, printing from here, slicing, the emergency stop, and the Rust and Arduino blinks |
 | [Ender bench, 2026-09-20](validation/2026-09-20-ender-bench.md) | The printer seam against a real Marlin board, and the checklist for the rest |
 | [Local integration run-through, 2026-09-21](validation/2026-09-21-local-integration.md) | A checklist to walk at the bench, section by section |
 

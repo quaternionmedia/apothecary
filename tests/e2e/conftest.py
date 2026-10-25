@@ -17,8 +17,6 @@ import httpx
 import pytest
 from playwright.sync_api import Error as PlaywrightError
 
-import apothecary  # noqa: F401  -- the guard, before base_url connects anywhere
-
 # tests/ itself, for helpers shared with the unit tests (firmware_helpers).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
