@@ -1,8 +1,7 @@
 """Turning found shapes into an arrangement you could build.
 
-The important decision here is what happens when nobody has said how big the
-picture is in the real world. Answer: the pieces are still placed, but with no
-size attached and marked ``unsized``, so the overlap check stays quiet instead
+When nobody has said how big the picture is in the real world, the pieces are
+still placed, but with no size attached and marked ``unsized``, so the overlap check stays quiet instead
 of being confidently wrong about millimetres nobody supplied. Nothing is
 inferred and there is no default.
 
@@ -10,7 +9,7 @@ A picture is flat and a thing you build is not, so a thickness has to come from
 somewhere. It is a guess, it is written down as a guess in every node's note,
 and it is the first thing to replace once real measurements exist.
 
-PROTOTYPE — not ratified.
+A prototype: no ratified record governs it.
 """
 
 from __future__ import annotations
@@ -133,8 +132,8 @@ def build(
     """
     # Fetched here rather than at the top of the file. The vocabulary needs to
     # describe shapes, and shapes live in this package, so importing it up there
-    # made the two packages depend on each other and whichever was imported
-    # second failed.
+    # would make the two packages import each other, and whichever was imported
+    # second would fail.
     from ..vocabulary import starter_words, word_for
 
     # `or` would swallow an explicitly empty list, which a caller supplying a

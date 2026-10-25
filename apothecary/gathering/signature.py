@@ -60,8 +60,8 @@ def _cut_off(shape: FoundShape) -> bool:
 
     A rectangle half outside the frame is still reported as a rectangle, with the
     proportions of the half that stayed in. Comparing that with the whole
-    rectangle in another picture and calling them different shapes is how a
-    close-up came to be judged a separate object. A shape at the edge is
+    rectangle in another picture and calling them different shapes would judge
+    a close-up a separate object. A shape at the edge is
     therefore allowed to match, but never counted against a picture when it does
     not: it is not evidence either way.
     """
