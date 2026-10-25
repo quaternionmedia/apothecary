@@ -23,6 +23,7 @@ ON_A_PULL_REQUEST = {
     "lint.yml",
     "one-pr-check.yml",
     "reuse-lint.yml",
+    "signature-check.yml",
     "submodule-check.yml",
     "timeless-check.yml",
     "walkthrough.yml",
@@ -68,6 +69,17 @@ def test_the_pages_with_examples_are_the_pages_that_say_they_are_hermetic():
         p.name for p in pages if re.search(r"^\*\*Hermetic\.\*\*", p.read_text(encoding="utf-8"), re.M)
     }
     assert examples and examples == hermetic
+
+
+def test_dependabot_opens_grouped_security_updates_alone():
+    """Its pull requests start cloud CI nobody issued: no version updates, and each
+    ecosystem's security updates in one pull request."""
+    doc = yaml.safe_load((ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8"))
+    assert doc["updates"]
+    for update in doc["updates"]:
+        assert update["open-pull-requests-limit"] == 0, update["package-ecosystem"]
+        groups = update["groups"].values()
+        assert [g["applies-to"] for g in groups] == ["security-updates"], update["package-ecosystem"]
 
 
 def test_lint_runs_the_ruff_the_lock_pins():
