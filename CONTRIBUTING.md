@@ -67,8 +67,7 @@ is not a member: it is its own Cargo project, built by its own toolchain
 
 | Workflow | Fails on |
 |---|---|
-| `pytest.yml` | At a `v*` tag and on demand. On Python 3.11: a finding from `ruff check apothecary tests`; the walkthrough; the unit tests with `--slow`, rendering with a pinned OpenSCAD snapshot so the tests that need one run; the walkthrough and the unit tests again on the newest Python (3.14); the wheel failing to install and render a scene. In three more jobs, in parallel: the browser tests, a third each by recorded time (`--shard K/3`), and a walkthrough page they rewrote |
-| `lint.yml` | On every pull request and a push to `main`: a finding from `ruff check apothecary tests`, at the version `uv.lock` pins |
+| `pytest.yml` | At a `v*` tag and on demand. On Python 3.11: a finding from `ruff check apothecary tests`; the walkthrough; the unit tests with `--slow`, rendering with a pinned OpenSCAD snapshot so the tests that need one run, their coverage measured and kept as the run's artifact (no threshold); the walkthrough and the unit tests again on the newest Python (3.14); the wheel failing to install and render a scene. In three more jobs, in parallel: the browser tests, a third each by recorded time (`--shard K/3`), and a walkthrough page they rewrote |
 | `reuse-lint.yml` | A file with no copyright or licence information (`reuse lint`) |
 | `license-check.yml` | A third-party dependency whose licence is not on the OSI/FSF allowlist, or that has a known vulnerability (`pip-audit`) |
 | `adr-lint.yml` | A record in `governance/qm/adr/`: a draft that narrates its own revisions, a numbered one not ratified, a ratified body edited outside its Amendments, or an index that disagrees with the directory |

@@ -69,7 +69,16 @@ jobs:
       run: uv run pytest walkthrough -q
 
     - name: 🔬 Unit tests
-      run: uv run pytest tests -m "not e2e" -q --slow
+      # What they cover is measured and kept, with no threshold: a gap is found by
+      # reading the report, not by a number that fails the run.
+      run: uv run pytest tests -m "not e2e" -q --slow --cov --cov-report=term:skip-covered --cov-report=xml
+
+    - name: 🗂️ Keep the coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage
+        path: coverage.xml
+        retention-days: 30
 
     - name: 📦 The wheel installs and runs
       # A consumer pins a released version; what they get is the wheel, not this checkout.
