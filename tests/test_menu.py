@@ -1010,9 +1010,10 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     # Site (Contents, its problems, its SCAD, Pinned, the site's jobs), Selected,
     # Pictures (every picture, and the gathering) and a board's Machine (its log in
     # it) each a cell; then the rail; then the Bench, a group of its own: the panel
-    # and its verbs. A print is the job: Jobs is no panel. Last, Docs: the
-    # documentation and the walkthrough in a new tab, as the header's Docs opens them,
-    # seated after the others so none of them moves.
+    # and its verbs. A print is the job: Jobs is no panel. Then Docs: the
+    # documentation and the walkthrough in a new tab, as the header's Docs opens them;
+    # last, Control pad: an armed printer's pad out over the world or back in its
+    # Machine. Each seated after the others so none of them moves.
     assert [(c.label, c.action, c.cell) for c in panels.children] == [
         ("Site", "panel:toggle:site", 8),
         ("Selected", "panel:toggle:selected", 6),
@@ -1021,9 +1022,12 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Rail", "panel:rail:toggle", 9),
         ("Bench", None, 3),
         ("Docs", "panel:docs", 1),
+        ("Control pad", "panel:pad", 7),
     ]
     assert address_of(root, "panel:docs") == "41"
     assert carried_by("panel:docs").name == "VIEWER"
+    assert address_of(root, "panel:pad") == "47"
+    assert carried_by("panel:pad").name == "VIEWER"
     assert address_of(root, "panel:site") == "48"  # by the option's id
     assert address_of(root, "panel:pictures") == "42"
     assert address_of(root, "panel:machine") == "44"

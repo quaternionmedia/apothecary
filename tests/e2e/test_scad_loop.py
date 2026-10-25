@@ -74,6 +74,14 @@ WEDGES = (
     ".map((w) => [w.dataset.cell, w.getAttribute('aria-label')]))"
 )
 
+# How opaque an element is drawn: its opacity and every ancestor's, multiplied.
+OPACITY_THROUGH = """(selector) => {
+    let el = document.querySelector(selector), seen = 1;
+    for (; el; el = el.parentElement) seen *= Number(getComputedStyle(el).opacity);
+    return seen;
+}"""
+
+
 # The boxes a floated or fullscreen editor is checked against, in the page's pixels.
 LAYOUT = """() => {
     const box = (el) => {
@@ -499,6 +507,8 @@ def test_editing_a_parts_scad_twice_round(
     # Fullscreen, from its own button; Esc puts it back.
     page.locator("#scad-fullscreen").click()
     expect(page.locator(".scad-editor.fullscreen")).to_be_visible()
+    # It covers the page whole: floated, its panel lets the world through, fullscreen not.
+    assert page.evaluate(OPACITY_THROUGH, ".scad-editor.fullscreen") == 1
     for width, height in WIDTHS:
         page.set_viewport_size({"width": width, "height": height})
         settled(page)

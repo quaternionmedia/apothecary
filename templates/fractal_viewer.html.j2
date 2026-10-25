@@ -6,6 +6,9 @@
     <title>Apothecary Fractal Viewer</title>
     <style>
         * { box-sizing: border-box; }
+        /* What pops over the world -- a floated panel, the View menu, a badge's words,
+           an armed printer's control pad -- lets the world show faintly through it. */
+        :root { --popover-opacity: 0.9; }
         html, body {
             height: 100%; margin: 0;
             font-family: system-ui, -apple-system, sans-serif;
@@ -63,7 +66,7 @@
             position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
             display: flex; flex-direction: column; align-items: flex-start; gap: 0.55rem;
             padding: 0.65rem 0.8rem; background: #252525; border: 1px solid #3a3a3a; border-radius: 6px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.55); opacity: var(--popover-opacity);
         }
         .validity-indicator {
             font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 4px;
@@ -193,7 +196,10 @@
         .panel.free {
             position: absolute; width: min(380px, 80%); max-height: 75%; border: 1px solid #3a3a3a;
             border-radius: 6px; box-shadow: 0 8px 28px rgba(0,0,0,0.55); overflow: auto; resize: both; min-width: 220px; min-height: 40px; pointer-events: auto;
+            opacity: var(--popover-opacity);
         }
+        /* Fullscreen, an editor floated in a panel covers the page: not a popover. */
+        .panel.free:has(.scad-editor.fullscreen) { opacity: 1; }
         .panel-title {
             display: flex; align-items: center; gap: 0.35rem; padding: 0.45rem 0.6rem 0.45rem 0.75rem; background: #252525;
             font-weight: 600; font-size: 0.85rem; color: #ccc; user-select: none;
@@ -385,6 +391,7 @@
             font: 0.7rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: normal; overflow-wrap: anywhere;
             padding: 0.25rem 0.5rem; border-radius: 6px; background: rgba(20, 28, 20, 0.96); color: inherit; border: 1px solid #3a4a3a;
             box-shadow: 0 2px 10px rgba(0,0,0,0.6); cursor: default; pointer-events: none;
+            opacity: var(--popover-opacity);
         }
         .world-badge.cluster .badge-words { pointer-events: auto; }
         .world-badge .badge-words .sub { color: #8a9a8a; font-size: 0.64rem; }
@@ -5589,15 +5596,45 @@
                 return { ok: true, said: `Framed ${key}; Selected and its editor stay open (f)` };
             }
 
+            // A piece framed in what something standing over the world (`cover`, its box
+            // in the page's pixels) leaves of it: the larger part beside it or above it,
+            // the one the piece is drawn biggest in. An armed printer, its control pad
+            // popped out, is framed so; what it said, or why not.
+            frameClearOf(key, cover) {
+                const node = this.renderNodeByKey[key];
+                if (!node) return { ok: false, said: `${key} is not drawn at this level, so not framed` };
+                const view = this.renderer.domElement.getBoundingClientRect();
+                const gap = 12, aspect = this.camera.aspect;
+                const parts = [
+                    { x: view.left, y: view.top, w: cover.left - gap - view.left, h: view.height },
+                    { x: cover.right + gap, y: view.top, w: view.right - cover.right - gap, h: view.height },
+                    { x: view.left, y: view.top, w: view.width, h: cover.top - gap - view.top },
+                    { x: view.left, y: cover.bottom + gap, w: view.width, h: view.bottom - cover.bottom - gap },
+                ].filter((p) => p.w > 40 && p.h > 40);
+                const size = (p) => Math.min(p.h / view.height, aspect * p.w / view.width);
+                const clear = parts.sort((a, b) => size(b) - size(a))[0] || null;
+                const mesh = this.meshByName[key];
+                const box = mesh ? new THREE.Box3().setFromObject(mesh) : null;
+                this.frameBox(box && !box.isEmpty() ? siteBox(box) : this.boundsFor(node, 0), clear);
+                return { ok: true, said: `Framed ${key} beside its control pad` };
+            }
+
             // The view brought to a box of the site's (x, y, z up), from the side it looks
             // from, near enough that the whole box fits; the level's reach left as it was.
-            frameBox(bounds) {
+            // Given `clear`, a part of the world in the page's pixels ({ x, y, w, h }) that
+            // nothing stands over, the box fits that part and stands in its middle.
+            frameBox(bounds, clear = null) {
                 const sizes = bounds.max.map((v, i) => v - bounds.min[i]);
                 const span = Math.max(20, ...sizes);
                 const centre = sceneAt(...bounds.min.map((v, i) => (v + bounds.max[i]) / 2));
-                // Far enough that the piece's whole extent fits the narrower of the view's
-                // two angles, with a margin round it.
-                const half = Math.atan(Math.tan(this.camera.fov * Math.PI / 360) * Math.min(1, this.camera.aspect));
+                const view = this.renderer.domElement.getBoundingClientRect();
+                const part = clear && view.width && view.height
+                    ? { w: clear.w / view.width, h: clear.h / view.height, x: (clear.x + clear.w / 2 - view.left) / view.width, y: (clear.y + clear.h / 2 - view.top) / view.height }
+                    : { w: 1, h: 1, x: 0.5, y: 0.5 };
+                // Far enough that the piece's whole extent fits the narrower of the two
+                // angles of the view (or of its clear part), with a margin round it.
+                const tan = Math.tan(this.camera.fov * Math.PI / 360);
+                const half = Math.atan(tan * Math.min(part.h, this.camera.aspect * part.w));
                 const distance = Math.max(30, (Math.hypot(...sizes) / 2) / Math.sin(half) * 1.25);
                 // From the side the view is on, at the distance that frames it.
                 const from = this.camera.position.clone().sub(this.orbitControls.target);
@@ -5605,6 +5642,18 @@
                 from.normalize().multiplyScalar(distance);
                 this.orbitControls.target.copy(centre);
                 this.camera.position.copy(centre).add(from);
+                if (part.x !== 0.5 || part.y !== 0.5) {
+                    // The view slid across, the box's middle where the clear part's is.
+                    this.camera.lookAt(centre);
+                    this.camera.updateMatrixWorld();
+                    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+                    const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
+                    const across = (0.5 - part.x) * 2 * tan * distance * this.camera.aspect;
+                    const rise = (part.y - 0.5) * 2 * tan * distance;
+                    const slide = right.multiplyScalar(across).add(up.multiplyScalar(rise));
+                    this.orbitControls.target.add(slide);
+                    this.camera.position.add(slide);
+                }
                 if (this.reach) this.reach.fitSpan = Math.min(this.reach.fitSpan ?? Infinity, span);
                 this.orbitControls.minDistance = Math.min(this.orbitControls.minDistance, Math.max(1, span * this.settings.get('dollyIn')));
                 const near = Math.min(1, Math.max(0.05, span * 0.0004));
@@ -6753,7 +6802,9 @@
                     tab: anchor ? anchor.split('.').pop() : (port.split('/').pop() || port),
                     body: (slot) => {
                         machine.handle = mountMachine(slot, {
-                            base: BASE_URL, port, host: 'world', boards: this.boards, inPrinter,
+                            base: BASE_URL, port, host: 'world', boards: this.boards, inPrinter, name: anchor,
+                            // Its pad popped out over the world: the printer framed clear of it.
+                            onPadOut: (cover) => { if (anchor) this.frameClearOf(anchor, cover); },
                             pin: row ? { site: this.siteName, path: row.path, how: row.binding_source, sketch: row.sketch || null } : null,
                             say: (text, kind) => this.setStatus(text, kind),
                             // A part drawn from a variant this tab applied is sliced as drawn.
@@ -6770,6 +6821,8 @@
             // printer's level card sizes its corners from where it stands.
             machineOpened(port) {
                 if (window.apothecaryRing && window.apothecaryRing.annotateMachine) window.apothecaryRing.annotateMachine();
+                // Its pad's ⇥ and ⧉ are the canvas ring's Panels › Control pad.
+                if (window.apothecaryRing && window.apothecaryRing.refreshAddresses) window.apothecaryRing.refreshAddresses();
                 this.keepMachineInAddress(port);
                 const where = this.whereByPort[port] || fetch(`${BASE_URL}/firmware/printers/where?port=${encodeURIComponent(port)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
                 where.then((w) => { if (w && w.printer && this.machine && this.machine.port === port) window.dispatchEvent(new CustomEvent('apothecary:where', { detail: { ...w, port } })); });
@@ -7878,7 +7931,8 @@
             const at = { x: event.clientX, y: event.clientY };
             const target = event.target && event.target.closest ? event.target : null;
             if (!target) return null;
-            if (machineOpen && target.closest(".panel[data-panel='machine']")) return opening ? machineSpec(at) : 'page';
+            // The Machine, or its control pad popped out of it over the world.
+            if (machineOpen && target.closest(".panel[data-panel='machine'], #control")) return opening ? machineSpec(at) : 'page';
             const row = target.closest('#contents-list .contents-item');
             if (row) {
                 if (!opening) return 'page';
@@ -7960,7 +8014,9 @@
                     if (port && !(viewer.machine && viewer.machine.port === port) && !viewer.openMachine(path)) return;
                     const done = await viewer.machine.handle.carry(intent);
                     if (done) {
-                        if (done.refused) viewer.setStatus(`${intent.label}: ${done.refused}${tail}`, 'error');
+                        // A refusal naming the verb and its address, as the Machine's log
+                        // keeps it, is said as it is; one that does not, after the label.
+                        if (done.refused) viewer.setStatus(done.refused.includes(tail.trim()) ? done.refused : `${intent.label}: ${done.refused}${tail}`, 'error');
                         else viewer.setStatus(`${intent.label}${done.said ? `: ${done.said}` : ''}${tail}`, 'success');
                         return;
                     }
@@ -7992,6 +8048,15 @@
                     const docs = document.getElementById('docs-link');
                     window.open(docs ? docs.href : `${BASE_URL}/docs`, '_blank', 'noopener');
                     viewer.setStatus(`Opened the documentation in a new tab: the guides, and the walkthrough from its table${tail}`, 'success');
+                    return;
+                }
+                // Panels › Control pad: the open Machine's pad out over the world or back
+                // in it, as the pad's ⇥ and ⧉ do; while it is armed only.
+                if (action === 'panel:pad') {
+                    const r = viewer.machine && viewer.machine.handle
+                        ? viewer.machine.handle.pad()
+                        : { refused: 'No Machine is open: a printer\'s pad shows while ⚙ Control in its Machine is armed' };
+                    viewer.setStatus(`${r.refused || r.said}${tail}`, r.refused ? 'error' : 'success');
                     return;
                 }
                 if (action === 'panel:rail:toggle') {
@@ -8229,6 +8294,9 @@
             pairs.push([viewer.wallsToggle.closest('label'), 'view:walls']);
             // The header's Docs: Panels › Docs.
             pairs.push([document.getElementById('docs-link'), 'panel:docs']);
+            // An armed printer's pad, popped out or put back: Panels › Control pad.
+            const padToggle = document.getElementById('ctl-pop');
+            if (padToggle) pairs.push([padToggle, 'panel:pad']);
             const bench = document.querySelector(".panel[data-panel='bench']");
             if (bench) {
                 for (const [selector, action] of BENCH_VERBS) for (const el of bench.querySelectorAll(selector)) pairs.push([el, action]);

@@ -129,6 +129,7 @@ def preflight(passthrough: tuple[str, ...]) -> None:
         staged = staged_root / Path(name).stem
         staged.mkdir(parents=True)
         shutil.copy2(source / name, staged / name)
+        _steps_carry_their_jobs_env(staged / name)
         runnable.append((name, staged))
 
     if set_aside:
@@ -214,6 +215,35 @@ def _runner_can_run_steps(runner: Path) -> bool:
         return False
     finally:
         os.unlink(probe)
+
+
+def _steps_carry_their_jobs_env(workflow: Path) -> None:
+    """Give each step of a staged workflow its job's ``env:``, as a runner does.
+
+    GitHub exports a job's env to every step in it; the pinned runner applies a
+    workflow's env and a step's, not a job's. pytest.yml's browser jobs share one
+    list of steps (a YAML anchor) and differ only in the job's ``SHARD``, so here
+    each shard ran with none. The staged copy gives every step its job's variables,
+    beneath the step's own, in steps of its own so the shared list is not
+    changed for the other jobs. A workflow with no job env is left as written.
+    """
+    import yaml
+
+    text = workflow.read_text(encoding="utf-8")
+    loaded = yaml.safe_load(text) or {}
+    jobs = loaded.get("jobs") or {}
+    if not any((job or {}).get("env") for job in jobs.values()):
+        return
+    for job in jobs.values():
+        carried = (job or {}).get("env") or {}
+        if carried:
+            job["steps"] = [
+                {**step, "env": {**carried, **(step.get("env") or {})}}
+                for step in job.get("steps", [])
+            ]
+    workflow.write_text(
+        yaml.safe_dump(loaded, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
 
 
 def _report(name: str) -> None:

@@ -280,6 +280,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # they send rather than a name, and are named here by that line; a box
     # beside a button holds the number the line is filled in with.
     "ctl-disarm": (WIDGET, WHAT_YOU_SEE, "a button that disarms the control latch"),
+    "ctl-pop": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that pops the control pad out over the world or puts it back",
+    ),
     "h-hot": (WIDGET, WHAT_YOU_SEE, "a box for the hotend temperature to set"),
     "cmd:M104 S{h-hot}": (WIDGET, WHAT_IS_THERE, "a button that heats the hotend to that"),
     "cmd:M104 S0": (WIDGET, WHAT_IS_THERE, "a button that turns the hotend off"),
@@ -474,6 +479,7 @@ RING_BACKED: Dict[str, str] = {
     "identify": "device:query",
     "ctl": "control:arm",
     "ctl-disarm": "control:disarm",
+    "ctl-pop": "panel:pad",
     "estop": "control:estop",
     "cmd:M104 S{h-hot}": "control:hotend-on",
     "cmd:M104 S0": "control:hotend-off",

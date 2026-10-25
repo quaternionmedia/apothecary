@@ -37,8 +37,9 @@ jobs:
         python-version: "3.11"
 
     - name: 📐 Install OpenSCAD
-      # The tests that render an STL skip without it.
-      run: sudo apt-get update && sudo apt-get install -y openscad
+      # The tests that render an STL skip without it. A runner has none; a machine
+      # running this workflow here (`apothecary preflight`) may have it already.
+      run: command -v openscad || { sudo apt-get update && sudo apt-get install -y openscad; }
 
     - name: 🚧 Install dependencies
       run: uv sync --locked
@@ -87,7 +88,7 @@ jobs:
 
     - name: 📐 Install OpenSCAD
       # Without it the STL endpoints answer 503 and the page logs failed loads.
-      run: sudo apt-get update && sudo apt-get install -y openscad
+      run: command -v openscad || { sudo apt-get update && sudo apt-get install -y openscad; }
 
     - name: 🚧 Install dependencies
       run: uv sync --locked
@@ -103,12 +104,15 @@ jobs:
         key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
     - name: 🎭 Install Chromium
-      # --with-deps installs the system libraries, which the cache does not hold.
-      run: uv run playwright install --with-deps chromium
+      # On a runner --with-deps installs the system libraries, which the cache does not
+      # hold; a machine running this here (`apothecary preflight`) runs Chromium already.
+      run: |
+        if [ "$GITHUB_ACTIONS" = true ]; then uv run playwright install --with-deps chromium
+        else uv run playwright install chromium; fi
 
     - name: 🎭 Browser tests
       # --start-server runs the app on state and pictures of its own (tests/e2e/conftest.py).
-      run: uv run pytest tests/e2e --start-server -q --shard ${{ env.SHARD }}/3
+      run: uv run pytest tests/e2e --start-server -q --shard "$SHARD"/3
 
     - name: 🖼️ Pictures that differ from the committed ones
       # A warning naming each walkthrough picture this shard wrote that differs from

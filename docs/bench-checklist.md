@@ -56,8 +56,10 @@ Machine, Ctrl + right-click opens the board's own ring (the device ring); from
 
 ## B. Armed: heat
 
-- [ ] **⚙ Control**: the overlay opens and counts down from 5:00; the ring's
-      Control › (⌗77) reads *Disarm*.
+- [ ] **⚙ Control**: the control pad pops out over the world by the rail,
+      headed *printer_1 armed: it can heat and move*, counting down from 5:00;
+      its ⇥ puts it in the Machine and ⧉ out again; the ring's Control › (⌗77)
+      reads *Disarm*.
 - [ ] Bed **45** → Set: `M140 S45` in the log, the bed card's target `/45°` on
       the next poll, the bar filling. **Off** → target 0.
 - [ ] Hotend **150** → Set; watch it climb; **Off**. (Below printing
@@ -65,7 +67,7 @@ Machine, Ctrl + right-click opens the board's own ring (the device ring); from
 - [ ] Fan to about 128 → Set: the part fan spins; **Off**.
 - [ ] **900** in the hotend box → Set: refused before the port (`above 300` in
       the log, no `M104 S900` line).
-- [ ] Five minutes with no command: the latch lapses, the overlay closes.
+- [ ] Five minutes with no command: the latch lapses, the pad goes.
 
 ## C. Armed: motion
 

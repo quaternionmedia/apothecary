@@ -50,6 +50,11 @@ class Walk:
     def machine(self):
         return self.page.locator(MACHINE)
 
+    @property
+    def pad(self):
+        """The control pad: popped out into the page while armed, the Machine's otherwise."""
+        return self.page.locator("#control")
+
     def on(self, name: str) -> bool:
         """Whether the Machine is open, and is this board's."""
         return (
@@ -60,7 +65,7 @@ class Walk:
         """Control armed: pressed again when it has lapsed, as a person would."""
         if not self.machine.locator("#ctl").is_checked():
             self.machine.locator("#ctl").check()
-        expect(self.machine.locator("#control")).to_be_visible(timeout=5000)
+        expect(self.pad).to_be_visible(timeout=5000)
 
 
 def open_(w: Walk) -> None:
@@ -94,11 +99,36 @@ def report(w: Walk) -> None:
 
 
 def arm(w: Walk) -> None:
-    """⚙ Control: the latch armed, the overlay open and counting down from 5:00."""
+    """⚙ Control: the latch armed and counting down from 5:00, the control pad popped out
+    over the world, loud, naming the printer it heats and moves, and printer_1 framed in
+    what the pad leaves of the world. A latch still armed from before is let go first."""
     where("Arm", "printer_1's Machine open", w.on("printer_1"))
+    if w.machine.locator("#ctl").is_checked():
+        w.pad.locator("#ctl-disarm").click()
+        expect(w.pad).to_be_hidden(timeout=5000)
     w.machine.locator("#ctl").check()
-    expect(w.machine.locator("#control")).to_be_visible(timeout=5000)
+    expect(w.pad).to_be_visible(timeout=5000)
+    expect(w.pad).to_have_class(re.compile(r"\bout\b"))
+    expect(w.pad.locator(".head")).to_contain_text("printer_1 armed: it can heat and move")
     expect(w.machine.locator("#ctl-ttl")).to_have_text(re.compile(r"^[45]:\d\d$"), timeout=5000)
+    settled(w.page)
+    framed = w.page.evaluate(FRAMED, "printer_1")
+    assert framed["clear_of_the_pad"] and framed["in_the_world"], framed
+
+
+# Where a piece's middle is drawn in the page, against the world and the control pad.
+FRAMED = """(key) => {
+    const v = window.fractalViewer, b = v.renderNodeByKey[key].world_bounds;
+    const s = v.sceneAt(...b.min.map((m, i) => (m + b.max[i]) / 2)).project(v.camera);
+    const world = v.renderer.domElement.getBoundingClientRect();
+    const pad = document.querySelector('#control').getBoundingClientRect();
+    const x = world.left + (s.x + 1) / 2 * world.width, y = world.top + (1 - s.y) / 2 * world.height;
+    return {
+        at: [Math.round(x), Math.round(y)],
+        in_the_world: x > world.left && x < world.right && y > world.top && y < world.bottom,
+        clear_of_the_pad: x < pad.left || x > pad.right || y < pad.top || y > pad.bottom,
+    };
+}"""
 
 
 def heat(w: Walk) -> None:
@@ -108,7 +138,7 @@ def heat(w: Walk) -> None:
     w.armed()
     bed, control, log = (
         w.machine.locator("#c-bed"),
-        w.machine.locator("#control"),
+        w.pad,
         w.machine.locator("#log"),
     )
     control.locator("#h-bed").fill("45")
@@ -118,6 +148,7 @@ def heat(w: Walk) -> None:
     control.locator("button[data-cmd='M140 S0']").click()
     expect(log.locator(".tx", has_text="M140 S0").last).to_be_visible(timeout=5000)
     expect(bed).to_contain_text("/0°", timeout=WITHIN_A_POLL)
+    log.scroll_into_view_if_needed()  # the two lines sent, the chart above them
 
 
 def motion(w: Walk) -> None:
@@ -125,12 +156,13 @@ def motion(w: Walk) -> None:
     a poll."""
     where("Motion", "printer_1's Machine open", w.on("printer_1"))
     w.armed()
-    pos, control = w.machine.locator("#c-pos"), w.machine.locator("#control")
+    pos, control = w.machine.locator("#c-pos"), w.pad
     control.locator("button[data-cmd='G28 X Y']").click()
     expect(pos).to_contain_text("X0.0 Y0.0", timeout=WITHIN_A_POLL)
     control.locator("button[data-step='10']").click()
     control.locator("button[data-jog='Y+']").click()
     expect(pos).to_contain_text("X0.0 Y10.0", timeout=WITHIN_A_POLL)
+    pos.scroll_into_view_if_needed()
 
 
 def print_(w: Walk) -> None:
@@ -160,12 +192,12 @@ def disarm(w: Walk) -> None:
     said in the status bar as an error."""
     where("Disarm", "printer_1's Machine open", w.on("printer_1"))
     if w.machine.locator("#ctl").is_checked():
-        w.machine.locator("#ctl-disarm").click()
-    expect(w.machine.locator("#control")).to_be_hidden(timeout=5000)
+        w.pad.locator("#ctl-disarm").click()
+    expect(w.pad).to_be_hidden(timeout=5000)
     _ring_on(w.page, "printer_1")
     assert _press(w.page, "Device", "Control", "Jog", "Y+") == "7728"
     status = w.page.locator("#status")
-    expect(status).to_contain_text("not armed", timeout=5000)
+    expect(status).to_have_text("Y+ (⌗7728): control is not armed", timeout=5000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
 
 
@@ -180,7 +212,7 @@ def devkit(w: Walk) -> None:
     expect(w.machine.locator("#c-board")).to_contain_text(DEVKIT)
     expect(w.machine.locator("#c-sketch")).to_contain_text(f"should run {NODE}@", timeout=8000)
     expect(w.machine.locator("#listen")).to_be_visible()
-    expect(w.machine.locator("#control")).to_be_hidden()
+    expect(w.pad).to_be_hidden()
     assert not w.page.evaluate(f"() => !!window.fractalViewer.boards.board('{DEVKIT}').stream")
     settled(w.page)
 
