@@ -91,7 +91,7 @@ MACHINE = ".panel[data-panel='machine']"
 
 
 @pytest.mark.e2e
-def test_watch_and_monitor_are_one_cell_that_opens_the_machine(page: Page, url: str):
+def test_the_device_rings_open_is_the_one_cell_that_opens_the_machine(page: Page, url: str):
     """The Device ring holds one cell for a board's Machine, Open, and no Watch or
     Monitor. Chosen, the Machine opens in the rail's tab strip, the printer's."""
     _open_viewer(page, url)
@@ -309,7 +309,9 @@ def test_a_devkit_has_a_machine_with_what_it_should_run_and_what_it_says(page: P
 
 
 @pytest.mark.e2e
-def test_flash_takes_monitor_s_old_cell_and_every_cell_after_it_is_back(page: Page, url: str):
+def test_a_printers_device_ring_holds_flash_disabled_in_cell_2_and_control_in_7(
+    page: Page, url: str
+):
     """Device › Flash is in cell 2; Query, Unpin, Rescan, Link and Control keep the cells
     a devkit's device ring gives them -- Control at 7, so from a printer's node 2 7 2 8
     is Control › Jog › Y+. A printer keeps its own firmware: its Flash

@@ -1,16 +1,19 @@
 # 14 — Designing a part
 
-**This page is written by the run it describes.** Every sentence below
-was emitted by a test that had just asserted it, and the whole page is
+Written by `tests/e2e/test_part_loop.py`, and
 rewritten by every run of the browser suite (`uv run apothecary test
-all`), though not by the quicker `apothecary test run`. Editing it
-by hand is editing the output of a program: the next run puts it back.
+all`), though not by the quicker `apothecary test run`.
+Each numbered step is written as the run reaches it, after the assertions
+before it pass, and what a step shows is what the run had then. The
+opening, the notes under it and the list of what the page does not show
+are the test's fixed words. Editing the page by hand is editing the output
+of a program: the next run puts it back.
 
 A part chosen from its ring, a size moved and checked, its box beside the slider in step, Apply drawing it in this tab where it stands, with what it measures beside what it declares, a reload drawing it again, OpenSCAD's refusal shown by line, put back, undone and redone, the saved part again for nothing; then round again, the size typed, an earlier apply drawn again from the cache, a size staged kept over a reload, and two tabs applying at once. The parameters and the part's SCAD are one draft: a control rewrites its line, and Apply renders the text. Every step is the page's own: a cell of a ring, a slider, a box, a key or a button, and every step's words name the next one.
 
 **Runtime-bound.** It drives a real browser against a real server of its own, whose OpenSCAD is the one every test server runs, wrapped by the test so that it refuses a cube of 60 mm or more, as an assertion at the SCAD's size line would, so that the error met is OpenSCAD's own shape. Its cache of variants is a temporary folder. It needs no network, and refuses one.
 
-Its pictures were taken once every part's STL that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build was built by it; a part it cannot build is drawn from an STL already there, or as its box.
+Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build from an STL it built; a part it cannot build is drawn from an STL already there, or as its box.
 
 ---
 

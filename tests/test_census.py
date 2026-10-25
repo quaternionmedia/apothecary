@@ -373,7 +373,7 @@ def test_pictures_chooses_a_row_and_has_no_pin_here():
     )
 
 
-def test_the_viewers_ring_backed_share_did_not_fall():
+def test_the_viewers_ring_backed_share_is_at_least_its_floor():
     """The ring-backed share of the viewer's controls does not fall below its floor.
     A change that adds a ring-backed control raises the floor with it (docs/census.md);
     `apothecary census` gives the share."""
@@ -394,7 +394,7 @@ def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address
     assert "siteSelect:change:loadSite" not in census.LISTENING
 
 
-def test_the_serial_overlay_left_nothing_behind():
+def test_no_serial_overlay_or_watch_control_is_counted_and_open_opens_a_machine():
     """No control or listener of the serial overlay, the toolbar's look-for-boards
     tick-box or Selected's Watch, Poll now and Monitor is counted or classified; a
     board's Machine is opened by Open, which the ring backs, and the boards' model is
@@ -433,7 +433,7 @@ def test_the_serial_overlay_left_nothing_behind():
     assert "device:monitor" not in census.RING_BACKED.values()
 
 
-def test_the_jobs_panel_left_nothing_behind():
+def test_no_control_of_a_hand_typed_jobs_panel_is_counted():
     """No control or listener of the hand-typed Jobs panel is counted or classified."""
     taken = census.take()
     assert not [f.key for f in taken.found if f.key.startswith(("job-", "jobFormEl", "jobBtn"))]
@@ -447,7 +447,7 @@ def test_nothing_is_both_taken_back_and_ring_backed():
         assert key in census.CONTROLS or key in census.LISTENING, key
 
 
-def test_one_page_is_counted_and_the_retired_pages_left_nothing_behind():
+def test_the_census_counts_one_page_the_viewer_with_the_bench_in_it():
     """The census counts one page, the viewer: /firmware and /firmware/monitor open the
     Bench and a board's Machine in it, no template stands for either, and no toolbar
     link to them, monitor port picker or firmware device card or row is counted or
