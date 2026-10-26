@@ -1,0 +1,38 @@
+# Dependabot's pull requests start cloud CI that nobody issued (the corpus's spending
+# record), so they are kept to the security updates and grouped: one pull request per
+# ecosystem and directory, never one per package (the corpus's queue, decision 5).
+# Version updates are off (`open-pull-requests-limit: 0`); a person moves a version
+# with `uv lock --upgrade-package`, priced like any push. The license check's
+# pip-audit refuses a lock with a known advisory on every push either way.
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  # The workspace at the root (crates/) and the Rust sketch's own project.
+  - package-ecosystem: "cargo"
+    directories: ["/", "/parts/esp32_blink/rust"]
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
