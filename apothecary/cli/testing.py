@@ -38,6 +38,11 @@ def unit_command(slow: bool = False) -> list[str]:
     return argv
 
 
+# Browser tests in parallel: a file's tests on one worker, and a worker that crashes
+# ends the run, its test named. One started in its place leaves xdist's loadfile
+# scheduler waiting on the crashed file forever.
+FILES_WHOLE = ["--dist", "loadfile", "--max-worker-restart", "0"]
+
 # The browser tests the ordinary command runs: the walkthrough's demonstration, and
 # the window manager on a page of its own, which starts no server.
 ORDINARY_BROWSER = "walkthrough or windows"
@@ -51,7 +56,7 @@ def browser_command(every: bool = False, workers: int = 1) -> list[str]:
     if not every:
         argv += ["-m", ORDINARY_BROWSER]
     if workers > 1:
-        argv += ["-n", str(workers), "--dist", "loadfile"]
+        argv += ["-n", str(workers), *FILES_WHOLE]
     return argv
 
 
@@ -272,7 +277,7 @@ def changed_commands(changed: list[str], workers: int = 1) -> list[list[str]]:
     if browser:
         argv = _pytest_argv(*browser, "--start-server")
         if workers > 1:
-            argv += ["-n", str(workers), "--dist", "loadfile"]
+            argv += ["-n", str(workers), *FILES_WHOLE]
         commands.append(argv)
     return commands
 

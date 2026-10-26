@@ -73,8 +73,8 @@ def test_all_runs_both_phases_and_exits_with_the_first_failure(pytest_exits, uni
     [
         ([], [], []),
         (["-k", "part"], ["-k", "part"], ["-k", "part"]),
-        (["--workers", "2"], [], ["-n", "2", "--dist", "loadfile"]),
-        (["--workers", "3", "-x"], ["-x"], ["-n", "3", "--dist", "loadfile", "-x"]),
+        (["--workers", "2"], [], ["-n", "2", *testing.FILES_WHOLE]),
+        (["--workers", "3", "-x"], ["-x"], ["-n", "3", *testing.FILES_WHOLE, "-x"]),
     ],
     ids=["defaults", "pytest-args-to-both", "workers", "workers-and-pytest-args"],
 )
@@ -148,7 +148,7 @@ def test_changed_runs_the_unit_part_then_the_browser_files_the_change_reaches():
     assert "tests/e2e/test_one_machine.py" in files and "tests/e2e/test_ring.py" not in files
     assert _args(browser)[-1] == "--start-server"
     _, every = testing.changed_commands(["templates/fractal_viewer.html.j2"], workers=3)
-    assert _args(every) == ["-q", "tests/e2e", "--start-server", "-n", "3", "--dist", "loadfile"]
+    assert _args(every) == ["-q", "tests/e2e", "--start-server", "-n", "3", *testing.FILES_WHOLE]
     assert testing.changed_commands(["docs/viewer.md"]) == [testing.unit_command()]
 
 
@@ -168,3 +168,26 @@ def test_changed_exits_with_the_first_failing_code_and_lists_without_running(
 def test_changed_says_what_to_name_when_there_is_nothing_to_compare_with():
     done = CliRunner().invoke(cli, ["test", "changed", "--list", "--since", "no-such-ref-here"])
     assert done.exit_code != 0 and "name a ref with --since" in done.output
+
+
+def test_a_crashed_worker_ends_a_parallel_run_and_names_its_test(tmp_path):
+    """What FILES_WHOLE is for: a worker that crashes while other files wait, its own
+    file's next test among them, ends the run rather than leaving it waiting forever."""
+    (tmp_path / "test_crashes.py").write_text(
+        "import os\n\ndef test_crashes():\n    os._exit(1)\n\ndef test_after_it():\n    pass\n"
+    )
+    for name in "bcde":
+        (tmp_path / f"test_{name}.py").write_text(
+            "import time\n\n"
+            + "".join(f"def test_{n}():\n    time.sleep(0.2)\n\n" for n in range(3))
+        )
+    ran = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-n", "2"]
+        + testing.FILES_WHOLE,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert ran.returncode == 1
+    assert "crashed while running 'test_crashes.py::test_crashes'" in ran.stdout

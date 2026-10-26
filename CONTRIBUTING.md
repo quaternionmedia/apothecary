@@ -35,7 +35,7 @@ uv run apothecary test run --slow               # the ordinary command, with ful
 uv run pytest                                   # the quick inner loop: unit tests, the walkthrough and the window manager's page; other browser tests skip
 uv run pytest --slow                            # also full renders and accuracy benches
 uv run pytest tests/e2e --start-server          # the browser tests, on a server of their own
-uv run pytest tests/e2e --start-server -n auto --dist loadfile   # the same, a worker per core, files kept whole
+uv run pytest tests/e2e --start-server -n auto --dist loadfile --max-worker-restart 0   # the same, a worker per core, files kept whole, a crash ending the run
 uv run pytest tests/e2e --start-server --shard 2/3               # one CI shard: whole files, by tests/e2e/durations.json
 uv run ruff check apothecary tests              # kept clean; format only the files you change
 uv run --group preflight apothecary preflight   # the CI workflows, run here, before a push
@@ -50,7 +50,10 @@ request's head merged onto its base's tip, before it is marked ready and again b
 merges if that tree has changed. Its body says what ran and what it said, and the merge
 commit says it for the tree that landed. A merge skips no CI: its push to `main` runs those
 checks again, and that run is the default branch's evidence the corpus's walkthrough record
-counts.
+counts. Cloud CI's runner time is spend (the corpus's spending record), so a push is priced
+before it is made -- the jobs its workflows start and their recorded minutes -- and made
+once a person has authorised that number; the workflows run here first (`apothecary
+preflight`). A run here spends nothing the record counts, and is bounded in time.
 `apothecary test changed` is for while working and is never the gate. With `--coverage`,
 `test all` measures each part, the server the browser tests drive included, and says what
 of the package's statements ran and, of those the pull request adds or changes since
@@ -59,9 +62,12 @@ coverage --markdown` puts it as a line for the body. It informs the pull request
 nothing fails on a number.
 Every other browser test needs a server of its own (`--start-server`) or one named for it
 (`--base-url`); with neither it skips, and it never uses a server that happens to be
-listening. No limit is chosen by hand: in CI a browser test's cap is twice the time
-recorded for it, so a hung wait fails that test and names it, and a job's is twice its
-recorded median. Run here, nothing is capped.
+listening. No limit is chosen by hand, and every test has one, in CI and here: each phase
+of a test -- its setup, its call, its teardown -- ends at twice the longest test the suite
+records (`conftest.py`), and the process with it, every thread's stack written, so a hang
+no signal reaches still ends; and a worker that crashes ends a parallel run, naming its
+test. In CI a browser test's cap is also twice the time recorded for it, so a hung wait
+fails that test and names it, and a job's is twice its recorded median.
 
 `walkthrough/` is executable: its pages are doctests. Pages 01 and 02 are written by their
 browser tests, and a loop's page (03, 04, 05, 06) by the browser suite alone; commit what a
