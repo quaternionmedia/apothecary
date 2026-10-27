@@ -1,6 +1,8 @@
-# Dependabot's pull requests start cloud CI that nobody issued (the corpus's spending
-# record), so they are kept to the security updates and grouped: one pull request per
-# ecosystem and directory, never one per package (the corpus's queue, decision 5).
+# Dependabot's pull requests would start cloud CI that nobody issued (the corpus's
+# spending record): every job they would start is skipped until a person re-runs it
+# (tests/test_ci_workflows.py), and they are kept to the security updates and grouped:
+# one pull request per ecosystem and directory, never one per package (the corpus's
+# queue, decision 5).
 # Version updates are off (`open-pull-requests-limit: 0`); a person moves a version
 # with `uv lock --upgrade-package`, priced like any push. The license check's
 # pip-audit refuses a lock with a known advisory on every push either way.

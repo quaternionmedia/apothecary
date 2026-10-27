@@ -105,7 +105,10 @@ is not a member: it is its own Cargo project, built by its own toolchain
 
 Nothing else is a gate. Formatting is not checked in CI.
 `.github/dependabot.yml` keeps Dependabot to security updates, each ecosystem's in one pull
-request: its pull requests start cloud CI that nobody issued, so it opens no version updates.
+request, and opens no version updates. A job a bot's push or pull request would start is
+skipped until a person re-runs it (`github.triggering_actor`), so a Dependabot pull request
+spends nothing until someone asks: re-run its checks, and run the whole suite here, before
+merging one.
 `docs-generate.yml` runs at a `v*` tag and on demand, and gates nothing: `apothecary docs
 generate` runs the doc-capture tests, which nothing else runs, and keeps `docs/generated/`
 as the run's artifact. `steps.yml` runs at a `v*` tag and on demand too, and gates nothing:

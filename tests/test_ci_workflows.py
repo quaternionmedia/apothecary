@@ -87,3 +87,29 @@ def test_lint_runs_the_ruff_the_lock_pins():
     (locked,) = re.findall(r'\nname = "ruff"\nversion = "([^"]+)"', lock)
     lint = (WORKFLOWS / "lint.yml").read_text(encoding="utf-8")
     assert re.findall(r"uvx ruff@(\S+) check", lint) == [locked]
+
+
+# A bot's push or pull request starts no job until a person starts it (the corpus's
+# spending record): a person who re-runs a run is its triggering actor, and the jobs run.
+BY_A_PERSON = "${{ !endsWith(github.triggering_actor, '[bot]') }}"
+
+
+def _a_bot_can_start(on: dict) -> bool:
+    """A pull request, or a push to a branch other than main: Dependabot's are both. A
+    push to main or a version tag is a person's merge or tag."""
+    if "pull_request" in on:
+        return True
+    push = on.get("push")
+    return "push" in on and push not in ({"branches": ["main"]}, {"tags": ["v*"]})
+
+
+def test_a_bots_push_starts_no_job_until_a_person_reruns_it():
+    gated = set()
+    for path in WORKFLOWS.glob("*.yml"):
+        if not _a_bot_can_start(_triggers(path.name)):
+            continue
+        gated.add(path.name)
+        jobs = yaml.safe_load(path.read_text(encoding="utf-8"))["jobs"]
+        for job_id, job in jobs.items():
+            assert job.get("if") == BY_A_PERSON, (path.name, job_id)
+    assert gated == ON_A_PULL_REQUEST

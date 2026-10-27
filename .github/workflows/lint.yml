@@ -21,6 +21,8 @@ permissions:
 jobs:
   ruff:
     name: 🧹 ruff check
+    # A bot's push starts nothing until a person re-runs it (the spending record).
+    if: ${{ !endsWith(github.triggering_actor, '[bot]') }}
     runs-on: ubuntu-24.04
     # No cap of this file's: it has no record yet to take one from.
     steps:

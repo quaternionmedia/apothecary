@@ -32,6 +32,8 @@ permissions:
 
 jobs:
   timeless:
+    # A bot's push starts nothing until a person re-runs it (the spending record).
+    if: ${{ !endsWith(github.triggering_actor, '[bot]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
