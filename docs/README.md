@@ -78,10 +78,10 @@ Open plans: each says what is decided and what is not built.
 | [Pictures in the world: what is open](plans/pictures-the-rest-2026-10-13.md) | Gathering out of core as an extra, and the old photo routes closed: the two phases of the pictures plan not built |
 | [The shape finder, with a model behind it](plans/photo-finders-local-models-2026-09-21.md) | Optional local models behind the photo finder: the seam, the plugin shape, what reach is lawful, the phases |
 | [Iterating on a part, tightened](plans/part-iteration-2026-10-12.md) | The part and SCAD loops reviewed and timed, and this round built: errors as failed renders, real controls, kept work, OpenSCAD's keys, variants drawn where they stand, history, compare, variant management; its next phase written out |
-| [Governance, brought up to the corpus](plans/governance-2026-10-13.md) | The audit of apothecary's governance and audit documents against the corpus, and what is decided: the guard's install points, licence exceptions, the serial removed, drafts, the bench checklist |
+| [Governance, brought up to the corpus](plans/governance-2026-10-13.md) | The audit of apothecary's governance and audit documents against the corpus, and what is decided: the guard's install points, licence conflict rows, the serial removed, drafts, the bench checklist |
 | [Reviewed: the systems, the tests and the docs](plans/review-2026-10-24.md) | The whole read once for gaps at the top of the stack: safety, the code's shape, what the tests run and where, their duplication and time, the docs against the page, and what stands on origin; each gap with its evidence and a next step |
+| [A review cycle at ten times the requests](plans/review-cycle-2026-10-24.md) | How requests are reviewed and landed, measured, and a proposed cycle that holds at ten times as many: machines gate a request and its author merges it, a merge queue tests batches once, releases are reviewed by area at a tag, stacks stay shallow, shared files are split |
 | [Focused systems](plans/focused-systems-2026-10-22.md) | The Airgap as the standard for a focused layout, the Part and the Machine on it, one registry every system is configured through, and Board, Lighting, Fit and build and Bench after them |
-| [Landing the stack on main](plans/landing-the-stack-2026-10-20.md) | Every open pull request and the governance records it pins: what goes on origin first, the review of the whole once, the merge order and how each pull request merges, and the check that the order still merges |
 | [The documentation, swept](plans/timeless-docs-2026-10-12.md) | Every durable text brought under the governance record on durable text: present tense, no internal history, no ornament; the triage by area and the order; its notes on each area in [its folder](plans/timeless-docs-2026-10-12/) |
 
 ## History
@@ -91,6 +91,7 @@ of what was decided and why; what is still true of it is stated in the
 guides above, the governance records, or the code it describes. A plan
 whose work is done leaves the table above for this list.
 
+- 2026-10-20 — [Landing the stack on main](plans/landing-the-stack-2026-10-20.md): every open pull request and the governance records it pins, reviewed once as a whole and merged into `main` bottom first, the order checked by merging each branch in turn; what is still open of its *After* is in [todo.md](../todo.md).
 - 2026-10-12 — [The pointer, the keys and the ring](plans/input-2026-10-12.md): right-click the camera's and Ctrl+right-click the ring's, Page Down and Page Up stepping levels, automatic zoom's settings, one Settings panel, and every input of the page mapped and made to agree.
 - 2026-10-11 — [Onboarding at the top of the stack](plans/onboarding-2026-10-11.md): a newcomer's path, the docs, the suites and the pictures reviewed; `serve --demo`, a Getting started page, one ordinary test command, pictures held to their captions.
 - 2026-10-10 — [A managed slicer](plans/slicer-2026-10-10.md): OrcaSlicer behind a slicer interface, installed like OpenSCAD, the printer's profile kept with its part, print settings from what each part declares.
