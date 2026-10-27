@@ -462,7 +462,7 @@ release), unchanged, plus these three that the bench did not have:
       times and picture names blanked, the words without them.
 - [ ] `uv run apothecary docs generate` → both doc workflows regenerate under
       a temporary server on 8766; the bar on every docs page then says when.
-      The walkthrough pages 11, 12 and 13 are rewritten by the browser
+      The walkthrough pages 01, 02 and 03 are rewritten by the browser
       run instead (`uv run pytest tests/e2e --start-server`); CI fails if the
       committed pages differ from what the run writes.
 

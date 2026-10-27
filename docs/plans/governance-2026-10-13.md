@@ -37,11 +37,13 @@ the top of the stack. Decided with the owner one question at a time on
   installs nothing, so a program using the geometry library keeps its
   network. The test that holds the opposite is inverted, with a
   fresh-interpreter check per install point.
-- **Pillow and typing_extensions are recorded exceptions** in the adoption
-  scope, until an alternative is good enough to replace them; a research
-  effort into alternatives is stubbed (below).
-- **The Rust and JavaScript licence gap is a recorded exception** in the
-  adoption scope, with the trigger that ends it: a second Rust sketch, a
+- **Pillow and typing_extensions are conflict rows** in the adoption scope,
+  not exceptions: the open-licence record admits no local exception, and a
+  row records a conflict without waiving it. They stay until an alternative
+  is good enough to replace them; a research effort into alternatives is
+  stubbed (below).
+- **The Rust and JavaScript licence gap is a conflict row** in the adoption
+  scope, with the trigger that ends it: a second Rust sketch, a
   crate or a vendored library outside the allowlist, or the corpus's own
   gate for them.
 - **The board serial and home paths are removed going forward**, replaced
@@ -63,7 +65,7 @@ the top of the stack. Decided with the owner one question at a time on
   corpus's propagation, below.
 - **In the corpus (qm)**: #121's records rewritten in place to match the
   code and these decisions -- the conflict table and the full audit table
-  in the adoption scope, with both exceptions; the G-code seam without its
+  in the adoption scope, with both conflict rows; the G-code seam without its
   removed engine; the firmware seam's size re-examined; the one-screen and
   rad records naming `apothecary census` rather than quoting it; the
   slicer record's alternatives; the index passing the current lint. Then the
@@ -76,5 +78,5 @@ Pillow reads, writes and resizes every picture: the photo finder, the
 gathering, the made pieces' textures. A research effort is to find whether
 an approved-licence alternative covers what apothecary uses -- decoding
 JPEG and PNG, resizing, pixel access -- at the same quality and speed, and
-what moving would cost. Until it reports, Pillow stays, as a recorded
-exception.
+what moving would cost. Until it reports, Pillow stays, a conflict row in
+the adoption scope.
