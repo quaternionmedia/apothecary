@@ -235,7 +235,7 @@ def held_port():
 
 
 def test_a_held_port_is_refused_before_anything_is_built_or_printed(picture, held_port):
-    """`photo view` and `serve` both default to 8000: with a server there, the command
+    """`photo view` and `serve` both default to the viewer's port: with a server there, the command
     says so first, before it builds or prints anything."""
     with patch("uvicorn.run") as started:
         said = CliRunner().invoke(

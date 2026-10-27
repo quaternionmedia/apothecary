@@ -11,7 +11,7 @@ simulated devkit on ``/dev/ttyFAKE2`` that runs what was last flashed to it
 naming the demo, only step N runs, on the demo's walk tab, and the tab is left there
 (tests/e2e/stepping.py); its picture is ``.cache/walk/firmware-step-N.png``::
 
-    uv run pytest tests/e2e/test_steps_firmware.py --base-url http://127.0.0.1:8000 --step 1
+    uv run pytest tests/e2e/test_steps_firmware.py --base-url http://127.0.0.1:6283 --step 1
 """
 
 from __future__ import annotations

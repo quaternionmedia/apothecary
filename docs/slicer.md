@@ -112,7 +112,7 @@ A piece made from a picture lives in the running server's memory, so
 `apothecary slicer slice SITE/PATH` asks that server, as the page does: it
 posts to the slice route and echoes the task's log as it arrives. No command
 finds a running server for itself, so it asks the one at `apothecary serve`'s
-own address, 127.0.0.1:8000, unless `--host` and `--port` name another, on
+own address, 127.0.0.1:6283, unless `--host` and `--port` (or `APOTHECARY_PORT`) name another, on
 this machine only; with none there it says to start one. `--printer` names
 the printer's node in the site, and without it the site's one printer is
 used. The routes:

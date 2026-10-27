@@ -123,6 +123,13 @@ def _no_background_renders(monkeypatch):
     monkeypatch.setenv("APOTHECARY_SKIP_STL_GENERATION", "1")
 
 
+@pytest.fixture(autouse=True)
+def _the_default_port(monkeypatch):
+    """A shell that exports APOTHECARY_PORT, to run a second server beside the first,
+    moves no command a test runs: each test sees the default port, or names one."""
+    monkeypatch.delenv("APOTHECARY_PORT", raising=False)
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _cache_outside_the_checkout(tmp_path_factory):
     """Node renders go to a cache of the run's own, never the checkout's."""

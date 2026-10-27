@@ -13,6 +13,45 @@ from ..stays_local import require_loopback
 from .retired import retired
 from .utils import _safe_echo
 
+# The viewer answers on tau, 6283: a full turn, the circles and rotations every part
+# here is built from. Each server of the estate sits on a mathematical constant of
+# its own, so nobody has to remember which is which; governance/qm's ci/dashboard.py
+# holds the table. Not 8000, which half the Python world uses: a default that common
+# is a default that collides. `--port`, or $APOTHECARY_PORT, names another, the way
+# to run a second checkout's server beside the first.
+DEFAULT_PORT = 6283
+PORT_ENV = "APOTHECARY_PORT"
+
+
+def port_option(help: str = "Port to listen on"):
+    """``--port``: $APOTHECARY_PORT when set, else DEFAULT_PORT. Every command that
+    starts the viewer's server, or talks to a running one, takes the same one."""
+    return click.option(
+        "--port",
+        type=int,
+        default=DEFAULT_PORT,
+        envvar=PORT_ENV,
+        show_envvar=True,
+        show_default=True,
+        help=help,
+    )
+
+
+def viewer_port() -> int:
+    """The port a running server is looked for on: $APOTHECARY_PORT, else DEFAULT_PORT."""
+    raw = os.environ.get(PORT_ENV, "")
+    try:
+        return int(raw) if raw else DEFAULT_PORT
+    except ValueError:
+        raise click.UsageError(f"${PORT_ENV} is {raw!r}, not a port number") from None
+
+
+def free_port(host: str = "127.0.0.1") -> int:
+    """A port nothing holds now, for a server of a run's own: the system picks it."""
+    with socket.socket() as sock:
+        sock.bind((host, 0))
+        return sock.getsockname()[1]
+
 
 def _loopback_or_die(host: str) -> str:
     """Every server this CLI starts listens on this machine only; not a choice."""
@@ -41,7 +80,7 @@ def port_in_use(host: str, port: int) -> bool:
 
 def _port_free_or_die(host: str, port: int) -> None:
     """Refuse, before anything is printed or built, a port another server holds --
-    `apothecary serve` and `photo view` both default to 8000."""
+    `apothecary serve` and `photo view` both default to DEFAULT_PORT."""
     if port_in_use(host, port):
         raise click.ClickException(
             f"{host}:{port}: port in use (is apothecary serve running?) -- pass --port"
@@ -92,8 +131,14 @@ DEMO_HELP = (
     show_default=True,
     help="Address to listen on: this machine only (127.0.0.1, localhost, ::1)",
 )
-@click.option("--port", default=8000, type=int, show_default=True, help="Port to bind to")
-@click.option("--reload/--no-reload", default=False, help="Enable auto-reload on code changes")
+@port_option()
+@click.option(
+    "--reload/--no-reload",
+    default=False,
+    help="Restart the server when a .py file under the folder it started in is saved; "
+    "apothecary/static/ is served as it is, so a browser reload shows a change there "
+    "without it.",
+)
 # `--viewer-path` and `--no-viewer` are accepted and ignored, hidden, for one
 # release, so scripts that pass them keep working: no route serves a JSCAD
 # viewer.
@@ -119,12 +164,29 @@ DEMO_HELP = (
     "active channels) beside the lighting. Set the console's OSC TX to this machine's address, "
     "UDP, port 8001. Receive only.",
 )
-def serve(host: str, port: int, reload: bool, refresh_docs: bool, demo: bool, console_sacn: bool, console_osc: bool):
+def serve(
+    host: str,
+    port: int,
+    reload: bool,
+    refresh_docs: bool,
+    demo: bool,
+    console_sacn: bool,
+    console_osc: bool,
+):
     """Run the viewer's server: the viewer at /viewer, the docs at /docs, the API at
     /openapi.json. It listens on this machine only (see apothecary/stays_local.py).
 
     With --demo, every loop goes round with a simulated printer and devkit and
-    scripted firmware tools, on a state folder of its own."""
+    scripted firmware tools, on a state folder of its own.
+
+    \b
+    Examples:
+      apothecary serve --demo                the first time: nothing real is touched
+      apothecary serve --reload              while changing the package's Python
+      apothecary serve --port 6284           a second checkout's server beside the first
+      APOTHECARY_PORT=6284 apothecary serve  the same, for every command in that shell
+
+    docs/dev-loop.md is the loop: change, see, test, commit, integrate."""
     host = _loopback_or_die(host)
     _port_free_or_die(host, port)
     if console_sacn:
@@ -137,10 +199,24 @@ def serve(host: str, port: int, reload: bool, refresh_docs: bool, demo: bool, co
     if demo:
         target, factory = "apothecary.demo:create_app", True
         _start_the_demo()
-    click.echo(f"Starting server on http://{host}:{port}")
-    click.echo(f"  Viewer: http://{host}:{port}/viewer")
-    click.echo(f"  Docs:   http://{host}:{port}/docs")
+    _say_where(host, port, reload)
     run_server(target, host, port, reload=reload, factory=factory)
+
+
+def _say_where(host: str, port: int, reload: bool) -> None:
+    """Where the server answers, what is there, and where a newcomer starts."""
+    url = f"http://{host}:{port}"
+    click.echo(f"Starting server on {url} (this machine only)")
+    click.echo(f"  Viewer:   {url}/viewer")
+    click.echo(f"  Docs:     {url}/docs")
+    click.echo(f"  API:      {url}/openapi.json")
+    click.echo(f"  New here: {url}/walkthrough/00-getting-started.md")
+    click.echo(f"  Dev loop: {url}/docs/dev-loop.md")
+    if reload:
+        click.echo("  Reload:   on -- a saved .py file restarts the server")
+    else:
+        click.echo("  Reload:   off -- serve --reload restarts it on each saved .py file")
+    click.echo(f"Ctrl+C stops it. A second server beside it: --port, or ${PORT_ENV}.")
 
 
 def _start_the_demo() -> None:
@@ -170,7 +246,7 @@ def refresh_docs_in_background() -> subprocess.Popen | None:
     """Regenerate docs/generated/ while the server runs, so /docs is current after a restart.
 
     `apothecary docs generate` runs the doc-workflow browser tests against a
-    scripted server of its own (port 8766) and takes a minute or two; the
+    scripted server of its own, on a free port, and takes a minute or two; the
     pages it rewrites are served as they land, and the bar on every docs
     page says whether the run is still going or how it ended. Its output goes
     to docs/generated/refresh.log. A missing browser or a failing test is

@@ -12,7 +12,7 @@ Given ``--step N`` and ``--base-url`` naming the demo, only step N runs, on the 
 walk tab, and the tab is left there (tests/e2e/stepping.py); its picture is
 ``.cache/walk/picture-to-print-step-N.png``::
 
-    uv run pytest tests/e2e/test_steps_a_picture_to_a_print.py --base-url http://127.0.0.1:8000 --step 1
+    uv run pytest tests/e2e/test_steps_a_picture_to_a_print.py --base-url http://127.0.0.1:6283 --step 1
 """
 
 from __future__ import annotations

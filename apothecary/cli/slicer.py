@@ -11,6 +11,7 @@ from typing import Optional
 
 import click
 
+from .server import port_option
 from .utils import _safe_echo
 
 
@@ -116,7 +117,7 @@ def slicer_status():
     show_default=True,
     help="For SITE/PATH: the running server's address, this machine only (apothecary serve's)",
 )
-@click.option("--port", default=8000, show_default=True, type=int, help="For SITE/PATH: its port")
+@port_option("For SITE/PATH: its port")
 @click.option("--json-out/--text", default=False)
 def slicer_slice(
     part: str,

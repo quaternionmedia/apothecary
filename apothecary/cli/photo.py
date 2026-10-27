@@ -17,7 +17,7 @@ from ..vision import ScaleReference, get, names
 from ..vision import build as build_arrangement
 from ..vocabulary import starter_words, word_for
 from .retired import retired
-from .server import _loopback_or_die, _port_free_or_die, run_server
+from .server import _loopback_or_die, _port_free_or_die, port_option, run_server
 
 
 @click.group()
@@ -309,7 +309,7 @@ def check(finder: str, count: int):
     default=None,
     help="How wide the whole picture is in the real world, in millimetres.",
 )
-@click.option("--port", default=8000, show_default=True, help="Which port to listen on.")
+@port_option("Which port to listen on.")
 @click.option(
     "--host",
     default="127.0.0.1",
@@ -426,7 +426,7 @@ def _pictures_in(where: tuple[Path, ...], pattern: Optional[str]) -> list[Path]:
     is_flag=True,
     help="Build one arrangement out of the lot and open the viewer on it.",
 )
-@click.option("--port", default=8000, show_default=True, help="Which port to listen on.")
+@port_option("Which port to listen on.")
 @click.option(
     "--host",
     default="127.0.0.1",

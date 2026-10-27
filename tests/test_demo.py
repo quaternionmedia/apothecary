@@ -21,6 +21,7 @@ from slicer_helpers import write_fake_orcaslicer
 
 from apothecary import demo
 from apothecary.cli.main import cli
+from apothecary.cli.server import DEFAULT_PORT, PORT_ENV
 from apothecary.projects.parts.skeleton import ROOT
 
 PATHS = (
@@ -180,4 +181,5 @@ def test_serve_help_describes_the_demo_and_shows_the_defaults():
     said = CliRunner().invoke(cli, ["serve", "--help"], terminal_width=200).output
     assert "--demo" in said and "simulated Ender" in said and ".cache/demo" in said
     assert "Serve without --demo to leave it" in said
-    assert "[default: 127.0.0.1]" in said and "[default: 8000]" in said
+    assert "[default: 127.0.0.1]" in said
+    assert f"[env var: {PORT_ENV}; default: {DEFAULT_PORT}]" in said

@@ -15,7 +15,7 @@ from .photo import photo
 from .preflight import preflight
 from .release import release
 from .render import render_scene, render_scene_jscad, template_generate, testrun, validate
-from .server import dev, serve
+from .server import DEFAULT_PORT, dev, serve
 from .slicer import slicer
 from .spaces import problems, solutions
 from .system import check, install, submodules, system
@@ -27,13 +27,24 @@ REPOSITORY_COMMANDS = frozenset(
     {"census", "docs", "kernel-reference", "preflight", "release", "templategenerate", "test"}
 )
 
-START = """\b
+START = f"""\b
 Start here:
   1. apothecary check              what is installed here, and what is missing
   2. apothecary openscad install   an OpenSCAD with Manifold: fast renders, and the
                                    parts OpenSCAD 2021.01 is too old to build
-  3. apothecary serve --demo       the viewer, with a simulated printer and board
-walkthrough/00-getting-started.md says each step, then the four loops through the page."""
+  3. apothecary serve --demo       the viewer at http://127.0.0.1:{DEFAULT_PORT}/viewer,
+                                   with a simulated printer and board
+walkthrough/00-getting-started.md says each step, then the four loops through the page.
+
+\b
+The dev loop, once it runs:
+  apothecary serve --reload        a saved .py file restarts the server
+  apothecary test changed          while working: the tests the change reaches
+  apothecary test run              before each commit
+  apothecary test all              before a merge, on the branch merged onto main
+  git pull && uv sync && git submodule update --init
+                                   others' commits in, with their packages and pin
+docs/dev-loop.md says each step, and how a change is integrated."""
 
 
 class _Cli(click.Group):
