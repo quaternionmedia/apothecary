@@ -189,7 +189,7 @@ _original_getnameinfo: Optional[Callable] = None
 _original_ssl_connect: Optional[Callable] = None
 
 SACN_PORT = 5568
-OSC_PORT = 8001  # one of the two UDP ports ETC suggests for OSC (8000 is the viewer's)
+OSC_PORT = 8001  # one of the two UDP ports ETC suggests for OSC, 8000 and 8001
 CONSOLE_PORTS = frozenset({SACN_PORT, OSC_PORT})
 _listening = threading.local()
 

@@ -29,7 +29,7 @@ nothing printing from its own SD card.
       which is which; the port numbers can swap between plug-ins, the pins
       follow the boards.
 - [ ] `uv run apothecary serve` -- your own server and state, not `--demo` --
-      and open `http://127.0.0.1:8000/viewer`.
+      and open `http://127.0.0.1:6283/viewer`.
 - [ ] **Pin the printer.** Select `printer_1` in Site. Its Device section lists
       the free ports: choose the printer's, **Pin**. The pin goes to the
       printer's mainboard, and when nothing is printing the page asks the

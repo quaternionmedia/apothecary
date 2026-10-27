@@ -72,8 +72,11 @@ generate-stl --all --force` builds them again.
 uv run apothecary serve --demo
 ```
 
-Then open `http://127.0.0.1:8000/viewer`. `serve` keeps the terminal it was
-started in until Ctrl+C; run anything else in another one.
+Then open `http://127.0.0.1:6283/viewer`: `serve` prints the address, and where
+the docs, the API, this page and the dev loop are. It keeps the terminal it was
+started in until Ctrl+C; run anything else in another one. The port is 6283 unless
+`--port` or `APOTHECARY_PORT` names another, so a second checkout's server runs
+beside it.
 
 `--demo` serves the viewer on a state folder of its own, never yours, with a
 bench that needs no hardware: an idle simulated Ender pinned to printer_1's
@@ -149,7 +152,9 @@ Those fetches are the only connections the process makes
 
 The tests: `uv run apothecary test run` is the ordinary command, the unit
 tests and this walkthrough, whose demonstration drives Chromium.
-`CONTRIBUTING.md` has the rest of the loop.
+[The dev loop](../docs/dev-loop.md) is the rest: seeing a change, testing it,
+committing it, and integrating it, what others pushed into a checkout and a
+change into `main`.
 
 ## 7. Where next
 
@@ -172,8 +177,18 @@ above:
       1. apothecary check              what is installed here, and what is missing
       2. apothecary openscad install   an OpenSCAD with Manifold: fast renders, and the
                                        parts OpenSCAD 2021.01 is too old to build
-      3. apothecary serve --demo       the viewer, with a simulated printer and board
+      3. apothecary serve --demo       the viewer at http://127.0.0.1:6283/viewer,
+                                       with a simulated printer and board
     walkthrough/00-getting-started.md says each step, then the four loops through the page.
+    <BLANKLINE>
+    The dev loop, once it runs:
+      apothecary serve --reload        a saved .py file restarts the server
+      apothecary test changed          while working: the tests the change reaches
+      apothecary test run              before each commit
+      apothecary test all              before a merge, on the branch merged onto main
+      git pull && uv sync && git submodule update --init
+                                       others' commits in, with their packages and pin
+    docs/dev-loop.md says each step, and how a change is integrated.
 
 ## Recipes
 
@@ -185,4 +200,6 @@ above:
 | The viewer, this machine's boards | `apothecary serve` |
 | The real printer and board, checked at the bench | [the bench checklist](../docs/bench-checklist.md) |
 | The ordinary tests | `apothecary test run` |
+| A second server beside the first | `apothecary serve --port 6284`, or `APOTHECARY_PORT` |
+| The dev loop, from a change to `main` | [docs/dev-loop.md](../docs/dev-loop.md) |
 | Every command | `apothecary --help` |

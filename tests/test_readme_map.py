@@ -8,6 +8,7 @@ import re
 
 import pytest
 
+from apothecary.cli.server import DEFAULT_PORT
 from apothecary.projects.parts.skeleton import ROOT
 
 SECTION = "## What it does, and how to see it"
@@ -121,7 +122,7 @@ def test_the_maps_address_asked_as_another_host_serves_something_here():
         found
         for row in _rows(readme)
         for found in re.findall(
-            r"`curl -H 'Host: ([^']+)' http://127\.0\.0\.1:8000(/[^`\s]*)`", row[1]
+            rf"`curl -H 'Host: ([^']+)' http://127\.0\.0\.1:{DEFAULT_PORT}(/[^`\s]*)`", row[1]
         )
     ]
     assert asked, "the map names no address to ask as another host"

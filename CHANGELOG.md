@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- The dev loop, a page of its own: change, see, test, commit, and integrate, both what others pushed into a checkout and a change into `main`; `apothecary --help` ends with it, after where to start. ([doc](docs/dev-loop.md))
 - A site can carry a lighting rig, and the viewer lights it from a console: a theatre as a site, its shell sized by sliders and an example rig in it, fixtures drawn in their live colour, `serve --console-sacn` and `--console-osc`, a PUT for what has no DMX address, and `apothecary lighting simulate`. ([doc](docs/lighting.md))
 - `apothecary serve --demo` goes round every loop with nothing real: printer_1's mainboard pinned to an idle simulated Ender, a simulated ESP32 devkit, the scripted arduino-cli, cargo and espflash, and the OrcaSlicer installed (or Slice says how to install one), on a state folder of its own, `.cache/demo` in the checkout, kept between runs. A line above the header says it is the demo and how to leave it, and no real serial port is opened or listed. ([code](apothecary/demo.py))
 - Walkthrough page 00, *Getting started*: install, `apothecary check`, `apothecary openscad install` before the first serve, `apothecary serve --demo`, then the four loops and what each needs; `apothecary --help` ends with the same steps, and `check` with the next one. ([page](walkthrough/00-getting-started.md))
@@ -110,6 +111,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 - `apothecary parts generate-stl` keeps an STL that is newer than everything it was built from, at the same parameters, unless `--force`, and takes `--param`; `serve` builds the missing STLs in the background. ([code](apothecary/cli/parts.py))
 - `/` and `/viewer` open the fractal viewer on the garage site. ([page](walkthrough/10-serving-it.md))
 - `apothecary test` is `run` -- the ordinary command, the unit tests and the walkthrough -- and `all`, which adds every browser test, each exiting as pytest does. ([doc](CONTRIBUTING.md))
+- The viewer's server listens on 6283, tau, a constant of its own as each server of the estate has, not the 8000 anything else grabs: `serve`, `photo view` and `photo gather --view` listen there, `slicer slice` and `lighting simulate` find it there, and `--port` or `APOTHECARY_PORT` names another, so a second checkout's server runs beside the first; `docs generate` runs its server on a free port; `serve` prints the docs, the API, page 00 and the dev loop beside the viewer. ([doc](docs/dev-loop.md#two-loops-at-once))
 - `serve` and `photo view` refuse a port another server holds before they print an address -- "port in use (is apothecary serve running?) -- pass --port" -- and `serve --help` shows its defaults. ([code](apothecary/cli/server.py))
 - `apothecary check` reports each part's OpenSCAD, the slicer and each firmware toolchain, exits 1 when a required package is missing, and ends with the next step. ([readme](README.md))
 - `apothecary --help` lists a person's commands, then the repository's own, and ends with where to start. ([code](apothecary/cli/main.py))

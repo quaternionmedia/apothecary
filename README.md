@@ -42,7 +42,7 @@ steps.
 ## What it does, and how to see it
 
 Each row is one thing the code does, where to see it under `uv run apothecary serve --demo`
-(the page at `http://127.0.0.1:8000/viewer`, unless the row gives a command), the tests that
+(the page at `http://127.0.0.1:6283/viewer`, unless the row gives a command), the tests that
 hold it (paths under `tests/`), and the walkthrough page its run writes or its doctests
 check. A review walks these rows on the running demo, on the whole codebase at once:
 `uv run apothecary test all` runs every test named here, and
@@ -66,7 +66,7 @@ browser test is in no row, or when a page a run writes is in no row that names t
 | Scenes to OpenSCAD, and the parts library | `uv run apothecary render --scene-file examples/scenes/cube.json -o scene.scad`; `uv run apothecary parts list` | `test_models.py`, `test_scene_render.py`, `test_registry.py` | [07](walkthrough/07-a-part.md), [09](walkthrough/09-an-assembly.md) |
 | Whose numbers are whose, which disagree, what is ready to build, and what is open | `uv run apothecary problems` | `test_parameter_coverage.py`, `test_contested_values.py`, `test_readiness.py` | [08](walkthrough/08-fitting.md), [11](walkthrough/11-contested-numbers.md), [12](walkthrough/12-ready-to-build.md), [13](walkthrough/13-status-and-progress.md), [14](walkthrough/14-problems-and-solutions.md) |
 | A theatre's shell sized by sliders, its lighting rig drawn in it, its fixtures lit by a console's levels, received and never answered | `/viewer/sites/theatre`; the shell's ring, Part › Edit, its sliders; then `uv run apothecary lighting simulate` ([docs/lighting.md](docs/lighting.md)) | `e2e/test_lighting_overlay.py`, `test_theatre_site.py`, `test_lighting.py`, `test_lighting_routes.py`, `test_console_feedback.py` | |
-| It stays on this machine: the server answers this machine only, and the process connects nowhere else | `curl -H 'Host: evil.example' http://127.0.0.1:8000/sites/garage/attached` answers 403; without the header, the garage's cameras and views | `test_stays_local.py` | [02](walkthrough/02-the-bench-as-it-is.md) |
+| It stays on this machine: the server answers this machine only, and the process connects nowhere else | `curl -H 'Host: evil.example' http://127.0.0.1:6283/sites/garage/attached` answers 403; without the header, the garage's cameras and views | `test_stays_local.py` | [02](walkthrough/02-the-bench-as-it-is.md) |
 | The checks before a push, and what a project pinning this one may rely on | `uv run --group preflight apothecary preflight` | `test_cli_testing.py`, `test_e2e_shards.py`, `test_browser_suite_is_not_gated.py` | [15](walkthrough/15-preflight.md), [16](walkthrough/16-being-depended-on.md) |
 
 ## Install
@@ -89,10 +89,12 @@ names each.
 ## First commands
 
 ```bash
-uv run apothecary serve                             # the viewer: http://127.0.0.1:8000/viewer
+uv run apothecary serve                             # the viewer: http://127.0.0.1:6283/viewer
 ```
 
-`serve` keeps its terminal until Ctrl+C; run the rest in another one.
+`serve` keeps its terminal until Ctrl+C; run the rest in another one. It listens on
+6283 unless `--port` or `APOTHECARY_PORT` names another, so a second checkout's server
+runs beside it; [docs/dev-loop.md](docs/dev-loop.md) is the loop from a change to `main`.
 
 ```bash
 uv run apothecary render --scene-file examples/scenes/cube.json -o scene.scad   # a scene to OpenSCAD
@@ -132,6 +134,7 @@ in the background when OpenSCAD is present (`APOTHECARY_SKIP_STL_GENERATION=1` s
 - `uv run apothecary --help`, and `--help` on every command: the command reference.
 - `/openapi.json` on a running server: the HTTP API. `/docs` serves `docs/` and
   `/walkthrough` serves `walkthrough/`, rendered.
+- [docs/dev-loop.md](docs/dev-loop.md): the dev loop -- change, see, test, commit, integrate.
 - [CONTRIBUTING.md](CONTRIBUTING.md): the test loop -- `uv run apothecary test run` is the
   ordinary test command -- what CI gates, and how commits are written.
   [CHANGELOG.md](CHANGELOG.md): what changed.

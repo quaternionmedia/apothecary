@@ -14,7 +14,7 @@ N`` and ``--base-url`` naming the demo, only step N runs, on the demo's walk tab
 tab is left there (tests/e2e/stepping.py); its picture is
 ``.cache/walk/one-machine-step-N.png``::
 
-    uv run pytest tests/e2e/test_steps_one_machine.py --base-url http://127.0.0.1:8000 --step 1
+    uv run pytest tests/e2e/test_steps_one_machine.py --base-url http://127.0.0.1:6283 --step 1
 """
 
 from __future__ import annotations

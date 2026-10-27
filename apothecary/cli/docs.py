@@ -37,7 +37,7 @@ from pathlib import Path
 import click
 
 from ..projects.parts.skeleton import ROOT
-from .server import _loopback_or_die
+from .server import _loopback_or_die, free_port
 
 GENERATED_DOCS_ROOT = ROOT / "docs" / "generated"
 
@@ -76,7 +76,12 @@ def docs():
 
 @docs.command("generate")
 @click.option("--host", default="127.0.0.1", help="Host for the temporary doc-generation server")
-@click.option("--port", default=8766, type=int, help="Port for the temporary doc-generation server")
+@click.option(
+    "--port",
+    default=None,
+    type=int,
+    help="Port for the temporary doc-generation server  [default: a free one, picked as it starts]",
+)
 @click.option(
     "--keep-raw-video",
     is_flag=True,
@@ -90,7 +95,7 @@ def docs():
         "the simulated printer the doc server normally runs with"
     ),
 )
-def generate(host: str, port: int, keep_raw_video: bool, real_devices: bool):
+def generate(host: str, port: int | None, keep_raw_video: bool, real_devices: bool):
     """Run the doc-workflow E2E tests and render Markdown + GIFs from the results.
 
     Starts its own temporary server (STL generation skipped, for speed),
@@ -103,6 +108,9 @@ def generate(host: str, port: int, keep_raw_video: bool, real_devices: bool):
     and never depend on -- or touch -- a real board.
     """
     host = _loopback_or_die(host)
+    # A fixed port could be held by another server, whose /health would then
+    # answer for this one: the tests would drive the wrong server.
+    port = port or free_port(host)
     # A previous invocation's raw recordings (especially from a run that
     # failed before reaching cleanup, below) must not still be here --
     # _extract_workflow_videos picks "the" video for a given test out of

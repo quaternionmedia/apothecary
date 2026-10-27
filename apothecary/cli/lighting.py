@@ -12,6 +12,7 @@ import click
 
 from ..console_feedback import simulate_levels
 from ..lighting import LightingRig
+from .server import DEFAULT_PORT, PORT_ENV, viewer_port
 
 
 def _request(url: str, data: bytes | None = None, method: str = "GET") -> dict:
@@ -28,9 +29,19 @@ def lighting() -> None:
 
 @lighting.command("simulate")
 @click.option("--site", default="theatre", show_default=True, help="The site whose rig to drive.")
-@click.option("--url", default="http://127.0.0.1:8000", show_default=True, help="The running server.")
+@click.option(
+    "--url",
+    default=lambda: f"http://127.0.0.1:{viewer_port()}",
+    help="The running server.  [default: "
+    f"http://127.0.0.1:{DEFAULT_PORT}, or the port ${PORT_ENV} names]",
+)
 @click.option("--rate", default=10.0, show_default=True, help="Updates per second.")
-@click.option("--seconds", default=0.0, show_default=True, help="Stop after this long; 0 runs until interrupted.")
+@click.option(
+    "--seconds",
+    default=0.0,
+    show_default=True,
+    help="Stop after this long; 0 runs until interrupted.",
+)
 def simulate(site: str, url: str, rate: float, seconds: float) -> None:
     """Sweep the site's fixtures' levels, as a console would, until interrupted."""
     base = f"{url.rstrip('/')}/sites/{site}/lighting"
@@ -40,7 +51,9 @@ def simulate(site: str, url: str, rate: float, seconds: float) -> None:
         click.echo(f"{site}: {exc.code} from {base} (is there a rig for this site?)", err=True)
         sys.exit(1)
     except urllib.error.URLError as exc:
-        click.echo(f"no server at {url} ({exc.reason}); start one with `apothecary serve`", err=True)
+        click.echo(
+            f"no server at {url} ({exc.reason}); start one with `apothecary serve`", err=True
+        )
         sys.exit(1)
     start = time.monotonic()
     try:

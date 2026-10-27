@@ -5,6 +5,7 @@ first -- `serve` for real, the startup STL build, the example scene, one part's 
 from __future__ import annotations
 
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -81,7 +82,7 @@ def test_serve_runs_for_real_and_answers_the_viewer(tmp_path):
     finally:
         server.terminate()
         said, _ = server.communicate(timeout=10)
-    assert f"Viewer: http://127.0.0.1:{port}/viewer" in said
+    assert re.search(rf"Viewer:\s+http://127\.0\.0\.1:{port}/viewer", said), said
 
 
 @needs_openscad

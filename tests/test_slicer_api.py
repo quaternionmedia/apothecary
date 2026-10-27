@@ -389,9 +389,11 @@ def test_slicer_slice_reaches_a_made_piece_through_the_running_server(
     assert result.exit_code == 0, result.output
     assert "Slicing piece bin_1 for printer_1" in result.output
     assert "bin_1.gcode: kept as" in result.output
+    from apothecary.cli.server import DEFAULT_PORT
+
     assert asked[:2] == [
-        ("http://127.0.0.1:8000", "GET", "/health"),
-        ("http://127.0.0.1:8000", "POST", "/slicer/slice"),
+        (f"http://127.0.0.1:{DEFAULT_PORT}", "GET", "/health"),
+        (f"http://127.0.0.1:{DEFAULT_PORT}", "POST", "/slicer/slice"),
     ]
     assert {a[2] for a in asked[2:]} == {asked[2][2]} and asked[2][2].startswith("/slicer/tasks/")
     assert [f["name"] for f in client.get("/firmware/printers/prints").json()] == ["bin_1.gcode"]
