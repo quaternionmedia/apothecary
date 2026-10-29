@@ -53,7 +53,9 @@ here: run `apothecary problems`.
   once when run as the loop runs it, under a user systemd unit; never in a
   terminal, and not when run alone. The unit's environment lacks the desktop
   app's `EGL_PLATFORM`, which steers Chromium's graphics path; that it is the
-  cause is not shown.
+  cause is not shown. A run ends the same way, at the browser part's watchdog
+  with Playwright's event loop waiting and no test named, in a shell the Claude
+  desktop app starts; there the browser part run on its own passes.
 - Walkthrough pictures that move with no change to the page: a full browser
   run rewrites a few by a few pixels (the masked clocks' shade, the SCAD
   editor's sideways scroll in page 06's), so a run leaves the tree changed.
