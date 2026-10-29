@@ -1044,6 +1044,10 @@
         // for this long after a step.
         const WHEEL_QUIET_MS = 250;
         const STEP_QUIET_MS = 400;
+        // A turn of the wheel is measured in pixels: a line is this many, a page the
+        // canvas's height. A mouse's notch is about a hundred, a trackpad's turns a few
+        // each, so the trackpad's many add up to the mouse's one.
+        const WHEEL_PX_PER_LINE = 16;
         // The keys the page would scroll with: they step a level only while the world has
         // the keys.
         const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End', ' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
@@ -1346,6 +1350,10 @@
                 this.orbitControls.enableDamping = true;
                 this.orbitControls.dampingFactor = 0.05;
                 this.orbitControls.zoomSpeed = 0.6;
+                // The wheel's dolly is the page's (dollyByWheel): OrbitControls r160 divides
+                // a turn by the integer part of devicePixelRatio, which is 0 on a page zoomed
+                // below 100% on an ordinary screen, so one small turn threw the camera to a limit.
+                this.orbitControls.enableZoom = false;
                 // The arrows pan the view, and Shift+arrows turn it, while the world has the
                 // keyboard's focus, and only then.
                 this.orbitControls.listenToKeyEvents(this.renderer.domElement);
@@ -1670,7 +1678,9 @@
                 // With a camera selected, P takes a picture.
                 window.addEventListener('keydown', (e) => this.onPictureKey(e));
                 this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
-                this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: true });
+                // Not passive: a turn over the world is the world's, never the page's zoom
+                // (a pinch) or its history (a sideways swipe).
+                this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
                 // A file dropped on a structure is kept and pinned at its root (at the
                 // floor, on empty canvas); a pasted picture, at the selected place.
                 this.canvas.addEventListener('dragover', (e) => e.preventDefault());
@@ -7700,6 +7710,9 @@
             // forgotten after WHEEL_QUIET_MS without a turn, and nothing steps for
             // STEP_QUIET_MS after a step.
             onWheel(event) {
+                event.preventDefault();
+                const px = this.wheelPixels(event);
+                this.dollyByWheel(px);
                 const { autoZoom, autoZoomIn, autoZoomOut, wheelResistance } = this.settings.values();
                 const now = performance.now();
                 if (now - this.wheelAt > WHEEL_QUIET_MS) this.wheelPastLimit = 0;
@@ -7708,11 +7721,11 @@
                 const distance = this.orbitControls.getDistance();
                 const atMin = distance <= this.orbitControls.minDistance * 1.05;
                 const atMax = distance >= this.orbitControls.maxDistance * 0.95;
-                const zoomingIn = event.deltaY < 0 && autoZoomIn;
-                const zoomingOut = event.deltaY > 0 && autoZoomOut;
+                const zoomingIn = px < 0 && autoZoomIn;
+                const zoomingOut = px > 0 && autoZoomOut;
 
                 if (autoZoom && ((zoomingIn && atMin) || (zoomingOut && atMax))) {
-                    this.wheelPastLimit += Math.abs(event.deltaY);
+                    this.wheelPastLimit += Math.abs(px);
                     if (this.wheelPastLimit > wheelResistance) {
                         this.wheelPastLimit = 0;
                         this.stepQuietUntil = now + STEP_QUIET_MS;
@@ -7722,6 +7735,27 @@
                 } else {
                     this.wheelPastLimit = 0;
                 }
+            }
+
+            // A turn's vertical size in pixels, whichever unit the browser gave it in.
+            wheelPixels(event) {
+                const unit = event.deltaMode === 1 ? WHEEL_PX_PER_LINE : event.deltaMode === 2 ? this.canvas.clientHeight : 1;
+                return event.deltaY * unit;
+            }
+
+            // Toward the point the view turns about for a turn up, away for a turn down, by
+            // OrbitControls' own step per hundred pixels (its zoomSpeed), within its nearest
+            // and farthest.
+            dollyByWheel(px) {
+                const c = this.orbitControls;
+                if (!px || !c.enabled) return;
+                const scale = Math.pow(0.95, c.zoomSpeed * Math.abs(px) / 100);
+                const offset = this.camera.position.clone().sub(c.target);
+                const distance = offset.length();
+                offset.setLength(THREE.MathUtils.clamp(px < 0 ? distance * scale : distance / scale, c.minDistance, c.maxDistance));
+                this.camera.position.copy(c.target).add(offset);
+                c.update();
+                this.frameWanted = true;
             }
 
             // Page Down and Page Up, or the keys Settings gives them, step a level in and
