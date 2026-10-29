@@ -3737,7 +3737,8 @@
                         // Its own text with other values in it is its numbers applied, said so.
                         const numbers = this.partStages[target.key]?.tied && this.valuesOnly(target, body.sentScad);
                         if (body.draft && !numbers) return `${how} from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git`;
-                        return variant ? `${how}: an applied variant, not saved` : `${how}: drawn as saved`;
+                        const keep = this.partStages[target.key]?.tied ? '; Part › Save keeps it in git' : '';
+                        return variant ? `${how}: an applied variant, not saved${keep}` : `${how}: drawn as saved`;
                     },
                 };
             }
@@ -6134,12 +6135,14 @@
                 editor.setName(name);
                 this.keepWork(target, { now: true });
                 await this.loadSavedVariants(target, name);
-                editor.say(`Saved as ${name}: a commit on ${body.ref}. Nothing in the checkout changed.`, 'valid');
-                const what = body.kind === 'overlay' ? `an overlay of ${body.upstream ?? 'its upstream SCAD'} setting its values, ` : '';
+                // How the variant becomes the part's source is the editor's to say; the
+                // status line says what was saved and what comes next.
                 const merging = body.merge?.advice ?? `git merge ${body.ref} makes it the part's source`;
+                editor.say(`Saved as ${name}: a commit on ${body.ref}. Nothing in the checkout changed. ${merging}`, 'valid');
+                const what = body.kind === 'overlay' ? `an overlay of ${body.upstream ?? 'its upstream SCAD'} setting its values, ` : '';
                 const printer = this.pinnedPrinter();
-                const next = printer ? ` Next, its ring's Slice slices it for ${printer}.` : '';
-                const said = `${target.part} saved as the variant ${name}${taken ? ', replacing the one saved before' : ''}, ${what}a commit on ${body.ref}; nothing in the checkout changed. ${merging}${next}`;
+                const next = printer ? ` Next, its ring's Slice slices it for ${printer}.` : ' Its SCAD window says how to make it the part\'s source.';
+                const said = `${target.part} saved as the variant ${name}${taken ? ', replacing the one saved before' : ''}, ${what}a commit on ${body.ref}; nothing in the checkout changed.${next}`;
                 this.setStatus(said, 'success');
                 return { ok: true, said };
             }
@@ -6800,7 +6803,7 @@
                 if (!row) return null;
                 return row.device
                     ? `${part}'s board next: ${row.path}'s ring, Device › Flash`
-                    : `${part}'s board next: select ${row.path}, and its Device section's Flash its sketch opens the Bench on it`;
+                    : `${part}'s board next: ${row.path}'s ring, Flash sketch, opens the Bench on its sketch`;
             }
 
             // The Bench in front, its Build form on a sketch -- by id, or by its part's

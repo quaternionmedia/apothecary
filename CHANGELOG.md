@@ -9,6 +9,9 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- One made thing goes round the four loops: the footpedal on the garage's bench, sized, its SCAD edited and saved, sliced and printed, then its own sketch flashed to its board and heard, each loop's last message naming the next on it; a part whose sketch no board runs has Flash sketch on its ring and in its Device section, which open the Bench on that sketch and on the port of the board it is for. ([page](walkthrough/00-getting-started.md))
+- A devkit's LED flashes on its badges with each blink it is heard saying, and a heating or printing printer's badge pulses. ([code](templates/fractal_viewer.html.j2))
+- `serve --demo` runs a simulated lighting console, sweeping the theatre's rig, unless a real console is listened for. ([doc](docs/lighting.md))
 - The dev loop, a page of its own: change, see, test, commit, and integrate, both what others pushed into a checkout and a change into `main`; `apothecary --help` ends with it, after where to start. ([doc](docs/dev-loop.md))
 - A site can carry a lighting rig, and the viewer lights it from a console: a theatre as a site, its shell sized by sliders and an example rig in it, fixtures drawn in their live colour, `serve --console-sacn` and `--console-osc`, a PUT for what has no DMX address, and `apothecary lighting simulate`. ([doc](docs/lighting.md))
 - `apothecary serve --demo` goes round every loop with nothing real: printer_1's mainboard pinned to an idle simulated Ender, a simulated ESP32 devkit, the scripted arduino-cli, cargo and espflash, and the OrcaSlicer installed (or Slice says how to install one), on a state folder of its own, `.cache/demo` in the checkout, kept between runs. A line above the header says it is the demo and how to leave it, and no real serial port is opened or listed. ([code](apothecary/demo.py))
@@ -133,6 +136,8 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Fixed
 
+- A turn of the wheel or a trackpad over the world dollies by its size at any pixel ratio: on a page zoomed below 100% one turn threw the view to its nearest. ([code](templates/fractal_viewer.html.j2))
+- The Lighting panel says when the server is not answering, where its poll threw an error five times a second. ([code](apothecary/static/lighting.js))
 - A kept print file's id that starts with a dot or holds a separator names no file, to read, delete or print. ([code](apothecary/firmware/devices.py))
 - A printer's control latch runs on the monotonic clock: a step of the wall clock neither ends an armed window nor lengthens one. ([code](apothecary/firmware/gcode.py))
 - The emergency stop is written at once, ahead of an exchange in flight (a homing, a bed probe), and the board's halt line is its answer rather than an error. ([doc](docs/firmware.md))

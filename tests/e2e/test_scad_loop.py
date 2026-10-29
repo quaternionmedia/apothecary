@@ -56,7 +56,7 @@ RUN_CLONE = re.compile(r"/[^\s`'\"]*?/server\d*/variants\.git")
 # What differs on every run whatever the page does, blanked in the pictures: when each
 # variant was saved, a grey of one width whatever the time, and the run's own folder
 # where the status line names it.
-BLANK = (*all_words(".saved-when"), ("#status", RUN_CLONE.pattern))
+BLANK = (*all_words(".saved-when"), ("#status", RUN_CLONE.pattern), (".scad-said", RUN_CLONE.pattern))
 
 # How long after a check that passes the page renders a SCAD edit, read from the page.
 RENDER_AFTER_CHECK_MS = int(
