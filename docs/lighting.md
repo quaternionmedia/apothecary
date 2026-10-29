@@ -74,7 +74,9 @@ is the page's tab's); that is the next step.
   (`{"levels": {"1": {"Intens": 0.5}}}`) or a universe's slots as base64. This is
   how a bridge feeds what has no address: movers, virtual layers and servers,
   scenic elements.
-- `apothecary lighting simulate` sweeps every fixture, for a demo with no console.
+- `apothecary lighting simulate` sweeps every fixture, for a demo with no console;
+  `apothecary serve --demo` runs the same sweep itself, unless a real console is
+  listened for.
 - `GET /sites/{site}/lighting` is the rig and its checks; `GET .../lighting/state`
   is the latest levels, their age, and each channel's colour.
 
