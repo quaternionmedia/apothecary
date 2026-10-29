@@ -6819,6 +6819,13 @@
                 return id;
             }
 
+            // A piece's own sketch, never flashed: the Bench opened on it. What was said.
+            async flashSketchOf(path) {
+                const { row } = this.bindingFor(path);
+                if (!row || !row.sketch) { this.setStatus(`${path} has no sketch of its own to flash`, 'error'); return null; }
+                return this.openBench(row.sketch);
+            }
+
             afterUpload(task, what) {
                 if (!task || task.status !== 'succeeded' || what.kind !== 'upload') return;
                 const piece = this.pieceOf(what.name);
@@ -7512,7 +7519,7 @@
                     this.selectPath(e.currentTarget.dataset.path);
                 });
                 el.querySelector('.dev-rescan')?.addEventListener('click', () => this.rescanDevices());
-                el.querySelector('.dev-flash-sketch')?.addEventListener('click', () => { const { row } = this.bindingFor(path); if (row && row.sketch) this.openBench(row.sketch); });
+                el.querySelector('.dev-flash-sketch')?.addEventListener('click', () => this.flashSketchOf(path));
                 const manualIn = el.querySelector('.dev-manual');
                 const pinManual = () => {
                     const identity = (manualIn?.value || '').trim();
@@ -8153,6 +8160,7 @@
         const DEVICE_VERBS = [
             ['.dev-open', 'device:open'], ['.dev-query', 'device:query'], ['.dev-pin', 'device:pin'],
             ['.dev-pin-manual', 'device:pin'], ['.dev-unpin', 'device:unpin'], ['.dev-rescan', 'device:rescan'],
+            ['.dev-flash-sketch', 'device:flash-sketch'],
         ];
         // The part editor's buttons, by the cell of Part each one is.
         const PART_VERBS = [
@@ -8171,12 +8179,18 @@
             if (!row || !row.device) return undefined;
             return { port: row.device.port, printer: !!row.device.printer, armed: false, bound: true };
         }
+        // The sketch of a part of its own that no board connected runs: the ring's
+        // Flash its sketch.
+        function sketchFor(path) {
+            const { row } = viewer.bindingFor(path);
+            return row && !row.device && row.sketch ? row.sketch : undefined;
+        }
         // What the page knows about pictures at the place a ring stands on (a
         // node, or on the canvas ring the floor), told to the resolver as a
         // device is: the pictures list is asked for again as the ring opens.
         const nodeSpec = (path, at, fresh = true) => ({
             context: { pointing: 'node', targets: [path] },
-            site: viewer.siteName, device: deviceFor(path), at,
+            site: viewer.siteName, device: deviceFor(path), sketch: sketchFor(path), at,
             picture: viewer.pictures.context(path, { fresh }),
         });
         // The canvas ring stands on the level you are looking at: its Pieces
@@ -8308,6 +8322,7 @@
                 // opened for it first when it is not open. A refusal it meets is
                 // said here as an error, as well as in its log; what it told (a
                 // print started, and where it is followed) is said after the label.
+                if (action === 'device:flash-sketch') { await viewer.flashSketchOf(path); return; }
                 if (MACHINE_VERB.test(action) && (port || viewer.machine)) {
                     if (port && !(viewer.machine && viewer.machine.port === port) && !viewer.openMachine(path)) return;
                     const done = await viewer.machine.handle.carry(intent);
@@ -8553,14 +8568,14 @@
         // The key a ring is cached by: what it stands on, and what it was told of
         // the board and the pictures, so a choose, pin or make is never answered
         // from a ring resolved before it.
-        const ringKey = (spec, picture) => JSON.stringify({ p: spec.context.pointing, c: spec.context.targets, s: spec.site, d: spec.device || null, pic: picture || null });
+        const ringKey = (spec, picture) => JSON.stringify({ p: spec.context.pointing, c: spec.context.targets, s: spec.site, d: spec.device || null, k: spec.sketch || null, pic: picture || null });
         async function ringForSelected() {
             if (!viewer.siteName || !viewer.selectedName) return null;
             // The floor's cells are the canvas ring's Pictures › Floor.
             const spec = viewer.selectedName === '@floor' ? canvasSpec(null, false) : nodeSpec(viewer.selectedName, null, false);
             const picture = await spec.picture;
             const key = ringKey(spec, picture);
-            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site, device: spec.device, picture }).catch(() => null));
+            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site, device: spec.device, sketch: spec.sketch, picture }).catch(() => null));
             return rings.get(key);
         }
         function annotateControls(ring) {

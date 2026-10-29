@@ -49,6 +49,9 @@ class ResolveRequest(BaseModel):
     site: Optional[str] = None
     device: Optional[Device] = None
     picture: Optional[PictureContext] = None
+    # The sketch of a part of its own that no board connected runs, when the ring
+    # stands on such a piece: its Flash its sketch.
+    sketch: Optional[str] = None
 
 
 class Chosen(BaseModel):
@@ -191,6 +194,7 @@ def resolve_ring(request: ResolveRequest) -> Ring:
             groups=lists["groups"],
             device=request.device,
             picture=_pictures_known(request.site, request.picture, request.context),
+            sketch=request.sketch,
         )
     except RingTooFull as too_many:
         # A ring that cannot be built is a design problem, and the answer says so

@@ -16,6 +16,7 @@ from boards import ended as _ended
 from firmware_helpers import write_fake_arduino_cli
 from garage import open_garage
 from playwright.sync_api import Page, expect
+from rings import labels as _labels
 from rings import open_on_row as _ring_on
 from rings import press as _choose
 from windows import BENCH
@@ -35,15 +36,18 @@ def url(start_server, tmp_path_factory):
 
 @pytest.mark.e2e
 def test_the_footpedals_own_sketch_is_flashed_to_its_board_and_heard(page: Page, url: str):
-    """Selected's Flash its sketch, on the footpedal never flashed, opens the Bench on
-    its sketch and on the Uno its board is; the upload names Query, and the hello it
-    hears names Part › Edit, round again."""
+    """The footpedal never flashed: Selected offers Flash its sketch, and its ring's
+    Flash sketch, the same verb, opens the Bench on its sketch and on the Uno its board
+    is; the upload names Query, and the hello it hears names Part › Edit, round again."""
     page.on("dialog", lambda dialog: dialog.accept())
     open_garage(page, url, settle=False)
+    page.wait_for_function("() => window.fractalViewer.bindingsLoaded")
     page.locator(f"#contents-list .contents-item[data-path='{PIECE}']").click()
-    flash = page.locator("#selected-body .dev-flash-sketch")
-    expect(flash).to_be_visible(timeout=15000)
-    flash.click()
+    expect(page.locator("#selected-body .dev-flash-sketch")).to_be_visible(timeout=15000)
+    # Its ring's Flash sketch is the same verb, where a board running it would have Device.
+    _ring_on(page, PIECE)
+    assert "Flash sketch" in _labels(page), _labels(page)
+    _choose(page, "Flash sketch")
 
     bench = page.locator(BENCH)
     expect(bench).to_be_visible(timeout=5000)

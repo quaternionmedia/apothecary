@@ -497,6 +497,7 @@ def resolve(
     groups: Sequence[str] = (),
     device: Optional[Device] = None,
     picture: Optional[PictureContext] = None,
+    sketch: Optional[str] = None,
 ) -> Ring:
     """Work out which options belong on the ring, and hand them back.
 
@@ -504,13 +505,14 @@ def resolve(
     node ring, the board pinned to that node, if any; for a device ring, the
     board itself. ``picture`` is what it knows about pictures and cameras
     (``PictureContext``); without one, a host still offers Camera and Picture,
-    with nothing pinned, drawn or listed.
+    with nothing pinned, drawn or listed. ``sketch`` is the sketch of a part of its
+    own that no board connected runs, for a node ring: Flash its sketch.
     """
     picture = picture or PictureContext()
     if context.pointing is Pointing.CANVAS:
         return _canvas_ring(context, site, site_names, groups, picture)
     if context.pointing is Pointing.NODE:
-        return _node_ring(context, site, device, picture)
+        return _node_ring(context, site, device, picture, sketch)
     if context.pointing is Pointing.DEVICE:
         return _device_ring_on_top(context, device)
     raise ValueError(f"no ring is built for {context.pointing!r}")
@@ -1318,6 +1320,7 @@ def _node_ring(
     site: Optional[Assembly],
     device: Optional[Device],
     picture: PictureContext,
+    sketch: Optional[str] = None,
 ) -> Ring:
     path = context.targets[0] if context.targets else ""
     node = _find(site, path) if site and path else None
@@ -1430,6 +1433,13 @@ def _node_ring(
     # verbs above, and no board's.
     if device is not None and device.bound and not camera:
         options.append(Option(id="device", label="Device", children=_device_options(device)))
+    # A part with a sketch of its own that no board connected runs: the Bench opened
+    # on it, where a board running it would have its Device. Where Device would be,
+    # so the cells before it stay.
+    elif sketch and not camera:
+        options.append(
+            Option(id="device:flash-sketch", label="Flash sketch", action="device:flash-sketch")
+        )
     # The piece it is inside, selected: Parent, last.
     if "." in path:
         parent = path.rsplit(".", 1)[0]

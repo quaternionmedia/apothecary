@@ -593,6 +593,20 @@ def test_a_node_whose_device_is_not_bound_has_no_device_option():
     assert "device" not in [o.id for o in ring.options]
 
 
+def test_a_part_whose_sketch_no_board_runs_offers_to_flash_it_where_device_would_be():
+    """Told the sketch of a part of its own that no board connected runs, a piece's
+    ring offers Flash its sketch, last, where a board running it would have Device;
+    with a board pinned it has Device instead, and told nothing it has neither."""
+    at = Context(pointing=Pointing.NODE, targets=["printer_1"])
+    ring = resolve(at, _photo_site(), sketch="footpedal")
+    ids = [o.id for o in ring.options]
+    assert ids[-1] == "device:flash-sketch" and "device" not in ids
+    assert "device:flash-sketch" in every_action([ring])
+    pinned = resolve(at, _photo_site(), device=PRINTER, sketch="footpedal")
+    assert [o.id for o in pinned.options][-1] == "device"
+    assert "device:flash-sketch" not in [o.id for o in resolve(at, _photo_site()).options]
+
+
 def test_a_bound_device_is_seated_after_every_cell_a_piece_always_has():
     """Device comes and goes with a board pinned, so it is seated after Step in, Move
     and Why this and whatever the piece is -- last on a piece at the top of its site,
