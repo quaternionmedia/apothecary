@@ -96,7 +96,7 @@ export function boardSummary(board) {
             extra: parts, job: !!(st && st.job),
             short: st ? (st.state === "offline" ? "offline" : word) : "not polled yet",
             line: printerLine(st),
-            cls: word === "printing" ? "printing" : (word === "offline" ? "offline" : ""),
+            cls: word === "printing" ? "printing" : (word === "offline" ? "offline" : (word === "heating" ? "heating" : "")),
             title: `${label} on ${d.port} — ${printerLine(st)}`,
         };
     }
