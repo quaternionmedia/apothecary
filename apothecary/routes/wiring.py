@@ -1,28 +1,40 @@
 """A site's bench as carlos reads a rig: ``apothecary/wiring/``'s doors.
 
 Plain ``def``, since finding the ports shells out to the toolchains, which
-runs in the threadpool rather than on the event loop; neither touches a port
-the scan does not already, and neither changes anything:
+runs in the threadpool rather than on the event loop; none touches a port the
+scan does not already:
 
-- ``GET /sites/{s}/wiring``: ``{site, patch, evidence, unplaced}`` -- the
-  ``carlos.patch`` document, how each of its modules is known, and the nodes
-  with a board or a sketch that have no device to be.
+- ``GET /sites/{s}/wiring``: ``{site, patch, evidence, states, unplaced}`` --
+  the ``carlos.patch`` document, how each of its modules is known, the state of
+  each module and lead, and the nodes with a board or a sketch that have no
+  device to be.
 - ``GET /sites/{s}/wiring/patch``: the document alone, as carlos's Import
   reads a file.
+- ``POST /sites/{s}/wiring/send``: the wiring sent to carlos now, at
+  ``serve --carlos``'s address; ``{sent, answer}``, a 409 when no carlos is
+  named and a 502 when carlos refused it or did not answer.
+
+With ``serve --carlos``, a follower sends ``APOTHECARY_CARLOS_SITE``'s wiring
+(the garage's when unset) at the start and whenever it changes:
+``start_following`` and ``stop_following``, from the app's lifespan.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict
+import os
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from ..firmware import devices as firmware_devices
 from ..firmware.bindings import bindings_for_site
 from ..firmware.toolchains import ToolchainError
+from ..wiring import carlos
 from ..wiring.patch import Wiring, wiring_for_site
 
 router = APIRouter()
+
+_follower: Optional[carlos.Follower] = None
 
 
 def _wiring(name: str) -> Wiring:
@@ -33,12 +45,12 @@ def _wiring(name: str) -> Wiring:
         found = firmware_devices.detected_devices()
     except ToolchainError:
         found = []
-    return wiring_for_site(name, site, bindings_for_site(name, site, devices=found))
+    return wiring_for_site(name, site, bindings_for_site(name, site, devices=found), found)
 
 
 @router.get("/sites/{name}/wiring")
 def site_wiring(name: str) -> Dict[str, Any]:
-    """The site's bench as a ``carlos.patch``, with the evidence and the unplaced."""
+    """The site's bench as a ``carlos.patch``, with the evidence, the states and the unplaced."""
     return _wiring(name).model_dump(mode="json")
 
 
@@ -46,3 +58,35 @@ def site_wiring(name: str) -> Dict[str, Any]:
 def site_wiring_patch(name: str) -> Dict[str, Any]:
     """The ``carlos.patch`` document alone."""
     return _wiring(name).patch
+
+
+@router.post("/sites/{name}/wiring/send")
+def send_site_wiring(name: str) -> Dict[str, Any]:
+    """The site's wiring sent to carlos now."""
+    url = carlos.carlos_url()
+    if url is None:
+        raise HTTPException(409, detail="no carlos to send to: serve --carlos names one")
+    body = carlos.hold_body(_wiring(name))
+    try:
+        answer = carlos.send(body, url)
+    except carlos.CarlosError as exc:
+        raise HTTPException(502, detail=str(exc)) from None
+    return {"sent": url, "answer": answer}
+
+
+def start_following() -> None:
+    """Follow the bench to carlos, when ``serve --carlos`` named one."""
+    global _follower
+    url = carlos.carlos_url()
+    if url is None or _follower is not None:
+        return
+    site = os.environ.get(carlos.SITE_ENV) or carlos.DEFAULT_SITE
+    _follower = carlos.Follower(url, lambda: _wiring(site))
+    _follower.start()
+
+
+def stop_following() -> None:
+    global _follower
+    if _follower is not None:
+        _follower.stop()
+        _follower = None

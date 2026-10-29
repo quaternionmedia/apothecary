@@ -98,6 +98,7 @@ from .projects.parts.variants import (
 from .projects.parts.variants import wants as request_wants
 from .projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
 from .routes import lighting as lighting_routes
+from .routes import wiring as wiring_routes
 from .routes.airgap import router as airgap_router
 from .routes.cameras import router as cameras_router
 from .routes.jobs import router as jobs_router
@@ -183,7 +184,9 @@ async def lifespan(app: FastAPI):
     stl_task = asyncio.create_task(_generate_missing_stls_in_background())
     app.state.stl_generation_task = stl_task  # keep a strong reference (asyncio GC gotcha)
     lighting_routes.start_console_feeds()
+    wiring_routes.start_following()
     yield
+    wiring_routes.stop_following()
     lighting_routes.stop_console_feeds()
     # Shutdown: don't leave a render subprocess dangling if we're still generating
     if not stl_task.done():

@@ -4,12 +4,15 @@ import os
 import socket
 import subprocess
 import sys
+from typing import Optional
 
 import click
 import uvicorn
 
 from ..projects.parts.skeleton import ROOT
 from ..stays_local import require_loopback
+from ..wiring.carlos import CARLOS_ENV, loopback_url
+from ..wiring.carlos import SITE_ENV as CARLOS_SITE_ENV
 from .retired import retired
 from .utils import _safe_echo
 
@@ -165,6 +168,13 @@ DEMO_HELP = (
     "active channels) beside the lighting. Set the console's OSC TX to this machine's address, "
     "UDP, port 8001. Receive only.",
 )
+@click.option(
+    "--carlos",
+    metavar="URL",
+    help="Send the garage's wiring to carlos at URL (on this machine, e.g. "
+    "http://127.0.0.1:4186), at the start and whenever it changes; carlos holds it and "
+    f"draws it. ${CARLOS_SITE_ENV} names another site.",
+)
 def serve(
     host: str,
     port: int,
@@ -173,6 +183,7 @@ def serve(
     demo: bool,
     console_sacn: bool,
     console_osc: bool,
+    carlos: Optional[str],
 ):
     """Run the viewer's server: the viewer at /viewer, the docs at /docs, the API at
     /openapi.json. It listens on this machine only (see apothecary/stays_local.py).
@@ -194,6 +205,11 @@ def serve(
         os.environ["APOTHECARY_CONSOLE_SACN"] = "1"
     if console_osc:
         os.environ["APOTHECARY_CONSOLE_OSC"] = "1"
+    if carlos:
+        try:
+            os.environ[CARLOS_ENV] = loopback_url(carlos)
+        except ValueError as exc:
+            raise click.BadParameter(str(exc), param_hint="--carlos") from None
     if refresh_docs:  # before the demo's environment is this process's
         refresh_docs_in_background()
     target, factory = "apothecary.api:app", False

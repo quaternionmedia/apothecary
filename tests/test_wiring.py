@@ -137,7 +137,8 @@ def test_each_entry_is_named_for_its_id_and_has_one_usb_socket():
         names = [j["name"] for j in entry["jacks"]]
         assert len(names) == len(set(names))
         assert catalogue.usb_jack(entry["id"]) == "usb"
-    assert set(catalogue.PARTS.values()) | {catalogue.HOST} == set(catalogue.entries())
+    named = set(catalogue.PARTS.values()) | set(catalogue.BY_FQBN.values())
+    assert named | {catalogue.HOST, catalogue.UNNAMED} == set(catalogue.entries())
 
 
 @pytest.mark.parametrize(
@@ -169,7 +170,7 @@ def test_the_routes_answer_the_pinned_mainboard_as_a_lead_and_the_document_alone
     )
     assert pinned.status_code == 200
     body = client.get("/sites/garage/wiring").json()
-    assert set(body) == {"site", "patch", "evidence", "unplaced"}
+    assert set(body) == {"site", "patch", "evidence", "states", "unplaced"}
     assert {"module": MAINBOARD, "jack": "usb"} in [
         c["source"] for c in body["patch"]["connections"]
     ]
@@ -179,3 +180,180 @@ def test_the_routes_answer_the_pinned_mainboard_as_a_lead_and_the_document_alone
     assert alone == body["patch"]
     _carlos_rules_hold(alone)
     assert client.get("/sites/nowhere/wiring").status_code == 404
+
+
+# --- the states, the declared leads and the boards no node names ----------------
+
+
+def test_an_expected_board_not_answering_is_absent_with_a_declared_lead():
+    row = NodeBinding(
+        path="esp32_blink",
+        name="esp32_blink",
+        part_ref="esp32_devkitc",
+        sketch_ref="esp32_blink",
+        sketch="esp32_blink",
+        note="never flashed from apothecary",
+    )
+    wiring = wiring_for_site("garage", create_example_site(), [row])
+    state = wiring.states.modules["esp32_blink"]
+    assert state.level == "fault"
+    assert state.says == [
+        "absent: expected, and not answering",
+        "firmware: esp32_blink never flashed from here",
+        "known by: the site's drawing",
+    ]
+    (lead,) = wiring.states.connections
+    assert lead.source == {"module": "esp32_blink", "jack": "usb"}
+    assert lead.level == "fault" and lead.says == ["declared: the board is not answering"]
+    # A board placed and naming nothing is on the bench, and has no lead.
+    assert wiring.states.modules["arduino_uno"].says[0] == "on the bench: not expected plugged in"
+    assert wiring.states.modules["arduino_uno"].level == "none"
+    _carlos_rules_hold(wiring.patch)
+
+
+def test_a_pinned_board_says_it_is_present_and_known_by_its_serial_number():
+    board = DeviceInfo(port="/dev/ttyUSB0", serial_number="A106ZTEU")
+    wiring = wiring_for_site("garage", create_example_site(), [_pinned(board)])
+    state = wiring.states.modules[MAINBOARD]
+    assert state.level == "ok"
+    assert state.says == [
+        "present: answering on /dev/ttyUSB0",
+        "known by: pinned, by its USB serial number",
+    ]
+    assert [c.says for c in wiring.states.connections] == [["seen: answering on /dev/ttyUSB0"]]
+    assert wiring.states.modules[HOST_MODULE].level == "ok"
+
+
+def test_a_board_flashed_from_an_older_source_is_a_warning():
+    from datetime import datetime, timezone
+
+    board = DeviceInfo(port="/dev/ttyUSB1", mac="24:6f:28:aa:bb:cc")
+    record = FlashRecord(
+        identity=board.identity,
+        port=board.port,
+        sketch="esp32_blink",
+        flashed_at=datetime(2026, 10, 29, tzinfo=timezone.utc),
+    )
+    row = NodeBinding(
+        path="esp32_blink",
+        name="esp32_blink",
+        part_ref="esp32_devkitc",
+        sketch="esp32_blink",
+        binding_source="sketch",
+        identity=board.identity,
+        device=board,
+        expected=ExpectedFirmware(record=record, source_changed=True),
+    )
+    state = wiring_for_site("garage", create_example_site(), [row]).states.modules["esp32_blink"]
+    assert state.level == "warn"
+    assert "firmware: esp32_blink, flashed from an older source" in state.says
+    assert "known by: the board esp32_blink was last flashed to" in state.says
+
+
+def test_a_board_on_a_port_no_node_names_is_unexpected_and_typed_by_its_match():
+    uno = DeviceInfo(port="/dev/ttyACM0", board_name="Arduino Uno", fqbn="arduino:avr:uno")
+    other = DeviceInfo(port="/dev/ttyUSB3", serial_number="0001")
+    pinned = DeviceInfo(port="/dev/ttyUSB0", serial_number="A106ZTEU")
+    wiring = wiring_for_site(
+        "garage", create_example_site(), [_pinned(pinned)], [uno, other, pinned]
+    )
+    types = {m["id"]: m["type"] for m in wiring.patch["modules"]}
+    assert types["usb:/dev/ttyACM0"] == "arduino.uno-r3"
+    assert types["usb:0001"] == "apothecary.usb-device"
+    assert not any(t.startswith("usb:") and t.endswith("A106ZTEU") for t in types)
+    state = wiring.states.modules["usb:/dev/ttyACM0"]
+    assert state.level == "warn"
+    assert state.says == [
+        "unexpected: answering on /dev/ttyACM0, and no node names it",
+        "known by: its port, which arduino-cli matches to Arduino Uno",
+    ]
+    assert len(wiring.patch["connections"]) == 3
+    _carlos_rules_hold(wiring.patch)
+
+
+# --- sending it to carlos --------------------------------------------------------
+
+
+def test_the_hold_carries_the_rig_every_entry_it_names_and_the_states():
+    from apothecary.wiring.carlos import hold_body
+
+    board = DeviceInfo(port="/dev/ttyUSB0", serial_number="A106ZTEU")
+    wiring = wiring_for_site("garage", create_example_site(), [_pinned(board)])
+    body = hold_body(wiring)
+    assert body["cue"]["number"] == "garage" and body["cue"]["name"] == "apothecary: garage"
+    hold = body["action"]["hold"]
+    assert hold["patch"] == wiring.patch
+    assert {d["id"] for d in hold["devices"]} == {m["type"] for m in wiring.patch["modules"]}
+    assert hold["states"]["modules"][MAINBOARD]["level"] == "ok"
+
+
+@pytest.fixture
+def a_carlos():
+    """A stand-in for carlos on loopback: what it was sent, and what it answers."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    heard = []
+    answer = {"status": 200, "body": {"ok": True}}
+
+    class Cue(BaseHTTPRequestHandler):
+        def do_POST(self):
+            length = int(self.headers["Content-Length"])
+            heard.append((self.path, json.loads(self.rfile.read(length))))
+            self.send_response(answer["status"])
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(answer["body"]).encode())
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Cue)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_port}", heard, answer
+    server.shutdown()
+    server.server_close()
+
+
+def test_the_follower_sends_once_for_an_unchanged_bench_and_again_when_it_changes(a_carlos):
+    from apothecary.wiring.carlos import Follower
+
+    url, heard, answer = a_carlos
+    rows = []
+    follower = Follower(url, lambda: wiring_for_site("garage", create_example_site(), rows))
+    assert follower.look() and not follower.look()
+    rows.append(_pinned(DeviceInfo(port="/dev/ttyUSB0", serial_number="A106ZTEU")))
+    assert follower.look()
+    assert [path for path, _ in heard] == ["/family/cue", "/family/cue"]
+    assert heard[-1][1]["action"]["hold"]["states"]["modules"][MAINBOARD]["level"] == "ok"
+    # A refusal is not taken as sent: the next look sends again.
+    answer.update(status=422, body={"ok": False, "error": "not a rig"})
+    rows.clear()
+    assert not follower.look() and follower.last_error.endswith("(422): not a rig")
+    answer.update(status=200, body={"ok": True})
+    assert follower.look()
+
+
+def test_carlos_is_reached_on_this_machine_only():
+    from apothecary.wiring.carlos import loopback_url
+
+    assert loopback_url("http://127.0.0.1:4186/") == "http://127.0.0.1:4186"
+    for elsewhere in ("http://192.168.1.4:4186", "https://127.0.0.1:4186", "ftp://localhost"):
+        with pytest.raises(ValueError):
+            loopback_url(elsewhere)
+
+
+def test_sending_asks_for_a_carlos_and_says_what_it_answered(
+    fake_arduino_cli, garage, a_carlos, monkeypatch
+):
+    client = TestClient(app)
+    monkeypatch.delenv("APOTHECARY_CARLOS", raising=False)
+    assert client.post("/sites/garage/wiring/send").status_code == 409
+    url, heard, _ = a_carlos
+    monkeypatch.setenv("APOTHECARY_CARLOS", url)
+    sent = client.post("/sites/garage/wiring/send")
+    assert sent.status_code == 200 and sent.json() == {"sent": url, "answer": {"ok": True}}
+    hold = heard[-1][1]["action"]["hold"]
+    # The scripted bench's two ports no node names are in the rig, unexpected.
+    assert {"usb:/dev/ttyFAKE0", "usb:FAKESERIAL1"} <= set(hold["states"]["modules"])

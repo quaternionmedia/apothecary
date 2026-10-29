@@ -1,7 +1,8 @@
 # The bench as a rig carlos can draw: a plan
 
-*Slice 1 is built on `explore/qm-family` (`apothecary/wiring/`). Slices 2 to 4
-are not.*
+*Slices 1 and 4 are built, on `explore/qm-family` (`apothecary/wiring/`) and,
+for carlos's hold, on carlos's `feat/hold-the-rig`; neither is pushed. Slices 2
+and 3 are not built.*
 
 ## What this plans
 
@@ -47,9 +48,9 @@ Carlos (`instruments`; default branch `they`, read at a5540e7, and
   /api/patch/validate` checks a document; the browser additionally refuses a
   type or a jack its build does not have.
 - `POST /family/cue` and `GET /family/state`, on `feat/family-control` only:
-  a hub loads one of carlos's shipped examples or turns the rack. Nothing
-  loads a posted document, and persistence waits on carlos's datastore
-  decision.
+  a hub loads one of carlos's shipped examples or turns the rack, and every
+  open tab draws what the server holds. Persistence waits on carlos's
+  datastore decision.
 - Outbound calls are planned, never sent.
 
 ## The seam
@@ -71,8 +72,8 @@ inside it.
    pictures.
 3. **Reconciled**: the rig as it is, as a `carlos.patch`, with the evidence for
    each module and every disagreement with the declared one.
-4. **Shown**: on apothecary's Bench, and in carlos's rack once carlos loads a
-   posted document.
+4. **Shown**: in carlos's rack, which holds what it is sent; on apothecary's
+   Bench later.
 5. **Acted on**: a board plugged in, a sketch flashed, a lead moved, or the
    declared rig edited. Then observed again.
 
@@ -89,12 +90,14 @@ The disagreements are of five kinds:
 ## Slices
 
 1. **The bench as a patch** (built). `apothecary/wiring/` writes a site's
-   bindings as a `carlos.patch`: a module per node whose part has a catalogue
-   entry, the computer apothecary runs on as `apothecary.host`, and a USB lead
-   from each connected board to it. The evidence and the unplaced nodes come
-   beside it. `GET /sites/{s}/wiring` answers all three; `GET
-   /sites/{s}/wiring/patch` answers the document alone, for carlos's Import.
-   The entries are in `apothecary/wiring/catalogue/`, in carlos's file format.
+   tree, bindings and ports as a `carlos.patch`: a module per node whose part
+   has a catalogue entry, one per board on a port no node names, the computer
+   apothecary runs on as `apothecary.host`, and a USB lead to it from every
+   expected board and every board answering. The evidence, each module's and
+   lead's state, and the unplaced nodes come beside it. `GET /sites/{s}/wiring`
+   answers them all; `GET /sites/{s}/wiring/patch` answers the document alone,
+   for carlos's Import. The entries are in `apothecary/wiring/catalogue/`, in
+   carlos's file format.
 2. **A picture names a device.** An identification is a ranked list that may
    decline. First by footprint: the plain finder's rectangle and a stated
    scale give millimetres, compared with each board's bounds. The ratio alone
@@ -109,44 +112,77 @@ The disagreements are of five kinds:
    its top face) and connections at pin level: the footpedal's switches, the
    blink sketch's LED. A sketch can say its own in its hello, so the declared
    pins and the running ones compare.
-4. **The loop closed.** A diff of a declared document against a site, then a
-   Bench window showing it, then the reconciled document sent to carlos once
-   carlos loads one.
+4. **The loop closed** (built, against the site as drawn). `serve --carlos
+   URL` sends the garage's wiring to carlos as a hold at the start and again
+   whenever it changes (`wiring/carlos.py`'s `Follower`, every two seconds);
+   `POST /sites/{s}/wiring/send` sends it now. Carlos draws it, so a board
+   plugged in or flashed on the apothecary side is redrawn in carlos's rack.
+   Not built: a Bench window on apothecary's own page, and a lead that
+   apothecary cannot observe (an audio lead) declared anywhere but in the site
+   as drawn.
 
 ## What carlos needs
 
-Each is carlos's own change, in its repository:
-
-- Categories for a circuit board and a computer.
-- The connector `micro-USB`, and a lead from `USB-A` to `micro-USB` carrying
-  data.
-- A cue action that loads a posted document, beside `patch` and `turn`.
-- `feat/family-control` merged into `they`, or this work aimed at it.
-
-Until then, a document from slice 1 is what carlos's own docs call a valid
-patch this build cannot render: its server's validator accepts it, and its
-browser refuses the types it has no entry for.
+One action, in its repository: `/family/cue` takes `{"hold": {patch,
+devices, states}}` beside `patch` and `turn`, holds it, and answers it in
+`/family/state`, and an open tab draws it -- the held devices for that rig
+only, its cables as sent, and each module's and each lead's state as a level
+and its lines. Its catalogue, its lead list and its routes stay as they are.
 
 Checked on 2026-10-29 with carlos's own `patch_format.load` and
 `catalogue.load_device`, from a clone, on the garage with its mainboard
 pinned: both branches accept the document. On `feat/family-control` the
-footpedal's entry loads as it is, and the others are refused only for the
-categories and `micro-USB` above. On `they` every entry is refused, since its
-sockets have no `carrier` and no `data` signal: the entries follow
-`feat/family-control`'s socket model. A USB socket's carrier is written out,
-because carlos's loader refuses the default `direct` for a USB connector
-rather than inferring it.
+footpedal's entry loads as it is, and the others are refused for the board and
+computer categories and the `micro-USB` connector, which is why a held rig's
+devices are checked for their shape rather than against carlos's vocabulary.
+On `they` every entry is refused, since its sockets have no `carrier` and no
+`data` signal. A USB socket's carrier is written out, because carlos's loader
+refuses the default `direct` for a USB connector rather than inferring it.
 
-## To decide
+## Decided
 
-- Where the catalogue entries live: in apothecary, beside the boards they
-  draw, and offered to carlos; or only in carlos, read from its API. Slice 1
-  keeps them in apothecary, where the drawing and the sockets come from the
-  same maker's drawing and a test holds each entry's box to its part's bounds.
-- Which carlos branch is the target: `they`, or `feat/family-control`, whose
-  socket model the entries already need.
-- Where a declared rig is kept: per site in apothecary, or in carlos once it
-  persists patches.
+The owner's, on 2026-10-29:
+
+- **Carlos only holds and draws the rig, from outside; everything else is
+  apothecary's.** Apothecary observes, identifies, configures, reconciles and
+  sends; carlos holds what it is sent and draws it, its connections and their
+  states, judging none of it. A held rig's cables are drawn as they are sent,
+  whether or not carlos's own lead list has the cable.
+- **The device entries travel with the rig.** Apothecary sends the entries a
+  rig names beside it, and carlos holds them for drawing that rig; carlos's
+  catalogue does not change.
+- **The declared rig is the site as drawn.** A node that names firmware or has
+  a device pinned to it is expected plugged in, with a USB lead to the
+  computer; a board placed and naming neither is on the bench and not
+  expected.
+- **Carlos draws four states**: present or absent (and a port no node names,
+  unexpected), firmware, leads seen or only declared, and how each board is
+  known.
+- **Work in flight is taken as it is**: this branch stacks on
+  `build/iterate-ui`, and carlos's side builds on `feat/family-control`'s
+  `/family/cue`, as a third action beside `patch` and `turn`.
+- **The first demo is the simulated bench**: `serve --demo`'s simulated Ender
+  and devkit, sending to a carlos on this machine.
+
+## The demo
+
+The simulated bench, sending to a carlos on this machine. In carlos's clone, on
+`feat/hold-the-rig`:
+
+    uv run carlos serve --port 4186 --state <a folder for its database>
+
+and in this checkout:
+
+    uv run apothecary serve --demo --port 6284 --carlos http://127.0.0.1:4186
+
+Then `http://127.0.0.1:4186/rack` is the garage's rig as apothecary sees it:
+printer_1's mainboard present and pinned, the ESP32 devkit and the footpedal
+expected and absent with their leads drawn broken, the scripted Uno and devkit
+answering on ports no node names, and the Uno lying on the bench, not
+expected. Flashing `esp32_blink` onto the devkit from apothecary's page
+(`http://127.0.0.1:6284/viewer`, the devkit's Flash sketch) turns it present in
+carlos's rack within two seconds, its port no longer unexpected; the footpedal
+on the scripted Uno does the same.
 
 ## After carlos
 

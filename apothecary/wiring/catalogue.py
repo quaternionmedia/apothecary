@@ -34,6 +34,16 @@ PARTS: Dict[str, str] = {
     "footpedal": "quaternionmedia.footpedal",
 }
 
+# What a board answering on a port no node names is, when the port says no more.
+UNNAMED = "apothecary.usb-device"
+
+# What a port says a board is, by the FQBN arduino-cli matched to it: only a
+# match that names one board. A USB bridge's VID and PID name the bridge, and a
+# CP2102 is on many more boards than the ESP32 devkit.
+BY_FQBN: Dict[str, str] = {
+    "arduino:avr:uno": "arduino.uno-r3",
+}
+
 # The connectors a USB lead plugs into, as carlos's vocabulary spells them.
 USB_CONNECTORS = ("USB-A", "USB-B", "USB-C", "micro-USB")
 
@@ -51,6 +61,11 @@ def entries() -> Dict[str, dict]:
 def device_of(part_ref: Optional[str]) -> Optional[str]:
     """The catalogue id of the device a part draws, or None."""
     return PARTS.get(part_ref) if part_ref else None
+
+
+def device_by_port(fqbn: Optional[str]) -> str:
+    """The catalogue id a port's own match gives a board no node names."""
+    return BY_FQBN.get(fqbn or "", UNNAMED)
 
 
 def usb_jack(device: str) -> Optional[str]:
