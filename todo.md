@@ -46,6 +46,13 @@ here: run `apothecary problems`.
   merge-tree` loop, run by hand; and `apothecary test all` runs the unit part,
   then the browser files in file order, where the longest browser files first,
   beside the unit part, is the order that shortens a landing run.
+- `tests/e2e/test_docs_bench_walkthrough.py::test_the_bench_as_it_is`, the camera test,
+  sometimes stalls in its first call to the browser until its phase's watchdog
+  ends the run: twice in the local demo loop's runs of `apothecary test run`, and
+  once when run as the loop runs it, under a user systemd unit; never in a
+  terminal, and not when run alone. The unit's environment lacks the desktop
+  app's `EGL_PLATFORM`, which steers Chromium's graphics path; that it is the
+  cause is not shown.
 - Walkthrough pictures that move with no change to the page: a full browser
   run rewrites a few by a few pixels (the masked clocks' shade, the SCAD
   editor's sideways scroll in page 06's), so a run leaves the tree changed.

@@ -37,9 +37,17 @@ ROOT = Path(__file__).resolve().parents[2]
 # suite's do (tests/conftest.py): a real board's silences -- 1.5 s after every link
 # opens, 0.6 s after a reset -- would otherwise cost each browser test that opens one.
 # Its builds go to a folder of its own (argv[2]): a scripted build is not the
-# checkout's, and a real flash record must never be compared with one.
+# checkout's, and a real flash record must never be compared with one. It ends with
+# the run that started it, however the run ends: a phase's watchdog (ended_after)
+# exits with no teardown, and a server would outlive it, listening. On Linux the
+# kernel ends it, asked as the server's first act (prctl's PR_SET_PDEATHSIG, inside
+# the child, where no thread of the run can deadlock it).
 SERVE = """
-import sys, uvicorn
+import sys
+if sys.platform == "linux":
+    import ctypes, signal
+    ctypes.CDLL(None).prctl(1, signal.SIGTERM)
+import uvicorn
 from pathlib import Path
 from apothecary.firmware import bindings, service
 from apothecary.firmware.gcode import GcodeLink
