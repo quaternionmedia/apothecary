@@ -43,7 +43,7 @@ Left to right, one row:
   brings Problems, beside Site, in front.
 
 Under `apothecary serve --demo`, one quiet line above the header says it is
-the demo -- a simulated printer and ESP32, scripted firmware tools, its own
+the demo -- a simulated printer, ESP32 and lighting console, scripted firmware tools, its own
 state folder -- and how to leave it: `apothecary serve` without `--demo`.
 
 The status line is the bar along the bottom: every verb says there what it

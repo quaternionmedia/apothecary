@@ -76,3 +76,18 @@ def test_a_site_without_a_rig_gets_no_overlay_and_switching_away_clears_it(page,
     expect(page.locator(".lighting-panel")).to_be_hidden()
     page.evaluate("() => window.fractalViewer.loadSite('theatre')")
     page.wait_for_function(f"() => {STATS}.placed === {len(LOCATED)}", timeout=20000)
+
+
+def test_a_poll_the_server_does_not_answer_is_said_not_thrown(page, base_url: str):
+    """While the server restarts or is stopped, the panel says it is not answering and
+    the page throws nothing; once it answers again, so does the panel."""
+    thrown = []
+    page.on("pageerror", lambda error: thrown.append(str(error)))
+    page.goto(f"{base_url}/viewer/sites/theatre")
+    page.wait_for_function(f"() => {STATS}.placed > 0", timeout=20000)
+    page.route("**/sites/theatre/lighting/state", lambda route: route.abort())
+    panel = page.locator(".lighting-panel")
+    expect(panel).to_contain_text("the server is not answering", timeout=5000)
+    page.unroute("**/sites/theatre/lighting/state")
+    expect(panel).not_to_contain_text("not answering", timeout=5000)
+    assert thrown == [], thrown
