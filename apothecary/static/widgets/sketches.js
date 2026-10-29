@@ -19,9 +19,10 @@
  * Bench's port (POST /firmware/esptool/flash), after asking.
  *
  * mountBuild(root, { base, tasks, say, port, suggest, onEnd, onPort }) returns
- * { load(status), compile(), upload(), choose(id), chosen(), fqbn(), port(),
- * enable(), destroy() }. `port` fixes the port (a Machine's); left out, the form
- * offers the detected ones. `suggest()` names the sketch to start from (what the
+ * { load(status), compile(), upload(), choose(id), chooseNamed(name), chosen(), fqbn(),
+ * port(), enable(), destroy() }. `port` fixes the port (a Machine's); left out, the form
+ * offers the detected ones, and a sketch chosen puts the port whose board is its board
+ * in front. chooseNamed takes an id or a part's name (its Arduino sketch first). `suggest()` names the sketch to start from (what the
  * board should run, by its id); `onEnd(task, what)` is told how a compile or an
  * upload ended, `what` being { kind, sketch (its id), name, fqbn, target,
  * toolchain, label, port }; `onPort(port)` of a port chosen from the drop-down.
@@ -59,7 +60,7 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
     const $ = (sel) => root.querySelector(sel);
     const api = (path, opts) => call(base, path, opts);
     const post = (path, data) => api(path, { method: "POST", body: JSON.stringify(data ?? {}) });
-    let sketches = [], status = null, alive = true;
+    let sketches = [], status = null, alive = true, devices = [];
     if (port) $(".sk-port-row").hidden = true;
 
     const idOf = (x) => x.id || `${x.name}@${x.toolchain || "arduino"}`;
@@ -84,6 +85,9 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
         const board = needsBoard(s);
         $(".sk-board-row").hidden = !board;
         if (board && s.fqbn) $(".fqbn-input").value = s.fqbn;
+        // The port whose board is the sketch's board, when one was found: the board it is for.
+        const on = !port && board && s.fqbn && devices.find((d) => d.fqbn === s.fqbn);
+        if (on) $(".port-select").value = on.port;
         const bits = [];
         if (!board) bits.push(`built by ${moduleOf(s).label} for ${s.target || "the chip its project names"}`);
         if (s.libraries && s.libraries.length) bits.push("libraries: " + s.libraries.join(", "));
@@ -153,7 +157,7 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
         root.querySelector(`#${CSS.escape(listId)}`).innerHTML = all.map((b) => `<option value="${esc(b.fqbn)}">${esc(b.name)}</option>`).join("");
         if (found) {
             const sel = $(".port-select"), was = sel.value;
-            const devices = (found.devices || []).map((v) => v.device);
+            devices = (found.devices || []).map((v) => v.device);
             sel.innerHTML = devices.length
                 ? devices.map((d) => `<option value="${esc(d.port)}">${esc(d.port)} — ${esc(d.printer ? (d.printer.firmware_name || "printer") : (d.board_name || d.chip || "unknown"))}</option>`).join("")
                 : '<option value="">(none detected)</option>';
@@ -196,8 +200,15 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
     const portEl = $(".port-select");
     portEl.addEventListener("change", () => { enable(); if (onPort) onPort(portOf()); });
 
+    // A sketch by its id, or by its part's name (an Arduino one first): the id chosen, or null.
+    function chooseNamed(name) {
+        const named = sketches.filter((x) => x.name === name);
+        const s = sketchOf(name) || named.find((x) => moduleOf(x).id === "arduino") || named[0];
+        return s && choose(idOf(s)) ? idOf(s) : null;
+    }
+
     return {
-        load, compile, upload, choose, chosen, fqbn, enable,
+        load, compile, upload, choose, chooseNamed, chosen, fqbn, enable,
         port: portOf,
         setStatus(s) { status = s; enable(); },
         destroy() { alive = false; root.innerHTML = ""; },

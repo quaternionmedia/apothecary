@@ -21,6 +21,10 @@ here: run `apothecary problems`.
   tarballs (codeload publishes no checksum). A source build takes no nested
   submodules and no `.1` second build of a night. Windows on ARM is refused:
   no ARM64 snapshot is published.
+- `parts/footpedal/footpedal.ino` would not build on a real board: `pushbutton` is
+  never declared, and `ledpin` is pin 6, which `b5` reads too. It prints no
+  `apothecary footpedal: hello`, since its serial line carries Hairless MIDI, so
+  the made thing's Query hears its hello only from the demo's scripted monitor.
 - A host-side bound on where the print head ends. Each jog's move is capped
   (`JOG_MAX_MM`), jogs one after another add up, and the firmware's soft
   endstops, after a homing, are what keeps the head on the machine

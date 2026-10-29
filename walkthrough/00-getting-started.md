@@ -128,6 +128,15 @@ Where each starts:
   Panels › Bench › Bench: the sketches under `parts/`, each named with its
   toolchain.
 
+One made thing goes round all four. The footpedal on the garage's bench is a
+part with a sketch of its own: its ring's Part › Edit for its sizes and its
+SCAD, Part › Save, then its ring's Slice for printer_1 and the Print card in
+printer_1's Machine. Each loop's last message names the next on it: a save
+names Slice; a print of it done names its board; Selected's Flash its sketch
+opens the Bench on `footpedal@arduino` and the Uno it is for; the upload names
+its ring's Device › Query; and the hello heard names Part › Edit, round again.
+Under `serve --demo` the scripted arduino-cli builds and flashes it.
+
 ## 6. The installs only some loops want
 
 ```bash

@@ -6137,7 +6137,9 @@
                 editor.say(`Saved as ${name}: a commit on ${body.ref}. Nothing in the checkout changed.`, 'valid');
                 const what = body.kind === 'overlay' ? `an overlay of ${body.upstream ?? 'its upstream SCAD'} setting its values, ` : '';
                 const merging = body.merge?.advice ?? `git merge ${body.ref} makes it the part's source`;
-                const said = `${target.part} saved as the variant ${name}${taken ? ', replacing the one saved before' : ''}, ${what}a commit on ${body.ref}; nothing in the checkout changed. ${merging}`;
+                const printer = this.pinnedPrinter();
+                const next = printer ? ` Next, its ring's Slice slices it for ${printer}.` : '';
+                const said = `${target.part} saved as the variant ${name}${taken ? ', replacing the one saved before' : ''}, ${what}a commit on ${body.ref}; nothing in the checkout changed. ${merging}${next}`;
                 this.setStatus(said, 'success');
                 return { ok: true, said };
             }
@@ -6762,6 +6764,72 @@
                 }
             }
 
+            // One made thing goes round the four loops -- its sizes, its SCAD, a print of
+            // it, its board flashed -- and each loop's last message names the next, on
+            // the same part: Save names Slice (above), a print done names its sketch
+            // (afterPrint), an upload names Query (afterUpload), and the hello heard
+            // names Part › Edit again (afterHello). Selected's Flash its sketch, on a
+            // part whose sketch was never flashed, opens the Bench on it (openBench).
+
+            // The site's printer whose board is pinned and connected, by its path, or null.
+            pinnedPrinter() {
+                const row = Object.values(this.bindings || {}).find((r) => r.device && r.device.printer);
+                return row ? this.bearerPathFor(row.path) : null;
+            }
+
+            // The site's first piece made from a part, by its path, or null.
+            pieceOf(part) {
+                const walk = (n, prefix) => {
+                    for (const c of n.children || []) {
+                        const at = prefix ? `${prefix}.${c.name}` : c.name;
+                        if (c.part_ref === part) return at;
+                        const found = walk(c, at);
+                        if (found) return found;
+                    }
+                    return null;
+                };
+                return this.tree && part ? walk(this.tree, '') : null;
+            }
+
+            // A print done of a part with a sketch of its own: its board, next. The job
+            // names the piece by its path or the part by its name.
+            afterPrint(job) {
+                if (!job.part) return null;
+                const part = this.nodeByPath(job.part)?.part_ref || String(job.part).split('.').pop();
+                const row = Object.values(this.bindings || {}).find((r) => r.sketch === part);
+                if (!row) return null;
+                return row.device
+                    ? `${part}'s board next: ${row.path}'s ring, Device › Flash`
+                    : `${part}'s board next: select ${row.path}, and its Device section's Flash its sketch opens the Bench on it`;
+            }
+
+            // The Bench in front, its Build form on a sketch -- by id, or by its part's
+            // name -- and on the port whose board that sketch is for, when one is found.
+            async openBench(sketch) {
+                this.panels.open('bench');
+                const bench = this.bench;
+                if (!bench) { this.setStatus('The Bench did not open', 'error'); return null; }
+                await bench.ready();
+                const id = bench.build.chooseNamed(sketch);
+                if (!id) { this.setStatus(`No sketch named ${sketch} under parts/: the Bench lists those it found`, 'error'); return null; }
+                const port = bench.build.port();
+                this.setStatus(port
+                    ? `The Bench, ${id} chosen for ${port}: Compile & upload flashes it`
+                    : `The Bench, ${id} chosen: no board for it is connected; plug one in, then ⟳ in its port's list`);
+                return id;
+            }
+
+            afterUpload(task, what) {
+                if (!task || task.status !== 'succeeded' || what.kind !== 'upload') return;
+                const piece = this.pieceOf(what.name);
+                this.setStatus(`${what.sketch} flashed to ${what.port}: ${piece ? `${piece}'s ring, Device › Query hears its hello` : 'its Machine, Listen, hears its hello'}`, 'success');
+            }
+
+            afterHello(sketch) {
+                const piece = this.pieceOf(sketch);
+                return piece ? `round again: ${piece}'s ring, Part › Edit` : null;
+            }
+
             // A devkit's LED, as the page knows it: lit for LED_FLASH_MS each time the
             // board is heard saying it blinked (a line its sketch prints), on its badge
             // in Site's tree and in the world. Only while the board is listened to: the
@@ -6952,6 +7020,8 @@
                             say: (text, kind) => this.setStatus(text, kind),
                             // A part drawn from a variant this tab applied is sliced as drawn.
                             variantFor: (path) => { const ref = this.nodeByPath(path)?.part_ref; return ref ? this.variantByPart[ref] ?? null : null; },
+                            afterPrint: (job) => this.afterPrint(job),
+                            afterHello: (sketch) => this.afterHello(sketch),
                         });
                         if (this.machine === machine) { window.apothecaryMachine = machine.handle; this.machineOpened(port); }
                     },
@@ -7007,7 +7077,10 @@
                     onEnd: () => { if (bench) bench.load(); if (this.siteName) this.boards.scan(); },
                 });
                 const toolchain = mountToolchain(slot.querySelector('.bench-toolchain-slot'), { base: BASE_URL, tasks, say });
-                const build = mountBuild(slot.querySelector('.bench-build-slot'), { base: BASE_URL, tasks, say, onPort: () => bench && bench.raw.enable() });
+                const build = mountBuild(slot.querySelector('.bench-build-slot'), {
+                    base: BASE_URL, tasks, say, onPort: () => bench && bench.raw.enable(),
+                    onEnd: (task, what) => this.afterUpload(task, what),
+                });
                 const raw = mountRawFlash(slot.querySelector('.bench-raw-slot'), { base: BASE_URL, tasks, say, port: () => build.port() });
                 const load = async () => {
                     const status = await toolchain.load();
@@ -7380,7 +7453,8 @@
                     body = `<div class="device-line" title="${esc(`${boardLabel(d)} on ${d.port}, ${how} — ${sum.line}`)}"><b>${esc(d.port)}</b> · ${state}${viaLink}
                             <button type="button" class="dev-open" title="Open this board's Machine: its state, its log, its controls">Open</button>${unpin}</div>`;
                 } else if (row) {
-                    body = `<div class="device-line"><span class="warn">${esc(row.note || 'not connected')}</span>${viaLink} ${rescan}${unpin}</div>`;
+                    const flash = row.sketch ? ` <button type="button" class="dev-flash-sketch" title="The Bench, ${esc(row.sketch)}'s sketch chosen for the board it is for">Flash its sketch</button>` : '';
+                    body = `<div class="device-line"><span class="warn">${esc(row.note || 'not connected')}</span>${viaLink}${flash} ${rescan}${unpin}</div>`;
                 } else {
                     const free = this.siteDevices.filter((d) => !Object.values(this.bindings).some((r) => r.device && r.device.port === d.port));
                     const manual = `<div class="device-actions">
@@ -7438,6 +7512,7 @@
                     this.selectPath(e.currentTarget.dataset.path);
                 });
                 el.querySelector('.dev-rescan')?.addEventListener('click', () => this.rescanDevices());
+                el.querySelector('.dev-flash-sketch')?.addEventListener('click', () => { const { row } = this.bindingFor(path); if (row && row.sketch) this.openBench(row.sketch); });
                 const manualIn = el.querySelector('.dev-manual');
                 const pinManual = () => {
                     const identity = (manualIn?.value || '').trim();
