@@ -1,0 +1,24 @@
+{
+  "id": "arduino.uno-r3",
+  "maker": "Arduino",
+  "model": "Uno R3",
+  "category": "board",
+  "summary": "The 68.6 x 53.3 mm ATmega328P board every shield is drawn for. Its USB-B powers it and carries its serial port through an ATmega16U2. This entry has the USB socket and not yet its headers.",
+  "fidelity": "sketch",
+  "jacks": [
+    {
+      "name": "usb",
+      "label": "USB",
+      "type": "output",
+      "signal": "data",
+      "carrier": "usb",
+      "connector": "USB-B",
+      "side": "left",
+      "note": "Power in, and the serial port: flashing, and whatever the sketch prints."
+    }
+  ],
+  "parameters": [],
+  "layout": {
+    "box": { "width": 75.08, "height": 53.34, "depth": 14.5 }
+  }
+}

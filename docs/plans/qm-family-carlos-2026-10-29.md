@@ -127,13 +127,24 @@ Until then, a document from slice 1 is what carlos's own docs call a valid
 patch this build cannot render: its server's validator accepts it, and its
 browser refuses the types it has no entry for.
 
+Checked on 2026-10-29 with carlos's own `patch_format.load` and
+`catalogue.load_device`, from a clone, on the garage with its mainboard
+pinned: both branches accept the document. On `feat/family-control` the
+footpedal's entry loads as it is, and the others are refused only for the
+categories and `micro-USB` above. On `they` every entry is refused, since its
+sockets have no `carrier` and no `data` signal: the entries follow
+`feat/family-control`'s socket model. A USB socket's carrier is written out,
+because carlos's loader refuses the default `direct` for a USB connector
+rather than inferring it.
+
 ## To decide
 
 - Where the catalogue entries live: in apothecary, beside the boards they
   draw, and offered to carlos; or only in carlos, read from its API. Slice 1
   keeps them in apothecary, where the drawing and the sockets come from the
   same maker's drawing and a test holds each entry's box to its part's bounds.
-- Which carlos branch is the target: `they`, or `feat/family-control`.
+- Which carlos branch is the target: `they`, or `feat/family-control`, whose
+  socket model the entries already need.
 - Where a declared rig is kept: per site in apothecary, or in carlos once it
   persists patches.
 

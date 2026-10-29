@@ -105,6 +105,7 @@ from .routes.lighting import router as lighting_router
 from .routes.part_edits import router as part_edits_router
 from .routes.pictures import router as pictures_router
 from .routes.views import router as views_router
+from .routes.wiring import router as wiring_router
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
 from .slicer import service as slicing
@@ -259,6 +260,8 @@ app.include_router(part_edits_router)
 app.include_router(lighting_router)
 # The Airgap panel's metrics document: its schema, and a copied document read back.
 app.include_router(airgap_router)
+# The bench as carlos reads a rig: a site's boards and their USB leads as a carlos.patch.
+app.include_router(wiring_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 

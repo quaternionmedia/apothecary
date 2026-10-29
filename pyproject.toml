@@ -63,8 +63,9 @@ package = true
 include = ["apothecary*"]
 
 [tool.setuptools.package-data]
-# The viewer's scripts, styles and vendored three.js are served from the package.
-apothecary = ["static/**/*"]
+# The viewer's scripts, styles and vendored three.js are served from the package;
+# the wiring's catalogue entries are read from it.
+apothecary = ["static/**/*", "wiring/catalogue/*.json"]
 
 [tool.pytest.ini_options]
 # The walkthrough pages are executable. A bare `pytest` reaches them through

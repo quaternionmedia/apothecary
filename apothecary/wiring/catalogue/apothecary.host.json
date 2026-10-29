@@ -1,0 +1,21 @@
+{
+  "id": "apothecary.host",
+  "maker": "Apothecary",
+  "model": "Host",
+  "category": "computer",
+  "summary": "The computer apothecary runs on, which every board on the bench is plugged into. Not a product: it stands for whichever machine that is, the way a generic module stands for a kind. Its USB sockets are drawn as one, because a port name says which board answered and not which socket it is in.",
+  "fidelity": "sketch",
+  "jacks": [
+    {
+      "name": "usb",
+      "label": "USB",
+      "type": "input",
+      "signal": "data",
+      "carrier": "usb",
+      "connector": "USB-A",
+      "side": "back",
+      "note": "Every USB socket of the computer, as one."
+    }
+  ],
+  "parameters": []
+}

@@ -1,0 +1,24 @@
+{
+  "id": "creality.v422",
+  "maker": "Creality",
+  "model": "V4.2.2 mainboard",
+  "category": "board",
+  "summary": "The 32-bit board in an Ender 3's electronics box: an STM32 and four stepper drivers. Over its micro-USB it speaks G-code to whatever streams a print to it. This entry has the USB socket and not yet its motor, heater and endstop headers.",
+  "fidelity": "sketch",
+  "jacks": [
+    {
+      "name": "usb",
+      "label": "USB",
+      "type": "output",
+      "signal": "data",
+      "carrier": "usb",
+      "connector": "micro-USB",
+      "side": "bottom",
+      "note": "G-code in, and temperatures and progress out, through the board's USB serial bridge."
+    }
+  ],
+  "parameters": [],
+  "layout": {
+    "box": { "width": 102.0, "height": 74.0, "depth": 13.6 }
+  }
+}
