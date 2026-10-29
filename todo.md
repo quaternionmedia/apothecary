@@ -13,6 +13,7 @@ here: run `apothecary problems`.
   after gathering leaves core (*Next round*):
   [docs/plans/pictures-the-rest-2026-10-13.md](docs/plans/pictures-the-rest-2026-10-13.md).
 - Optional local models behind the shape finder: [docs/plans/photo-finders-local-models-2026-09-21.md](docs/plans/photo-finders-local-models-2026-09-21.md).
+- The bench as a rig carlos draws, slices 2 to 4 (a picture names a device, IO configuration, the loop closed) and what carlos needs: [docs/plans/qm-family-carlos-2026-10-29.md](docs/plans/qm-family-carlos-2026-10-29.md).
 - Pictures without Pillow, a research effort: whether a library under an approved licence decodes JPEG and PNG, resizes and reads pixels as well and as fast as Pillow does here, and what moving would cost. Until it reports, Pillow stays, a conflict row in the adoption scope: [the governance plan's stub](docs/plans/governance-2026-10-13.md#stubbed-pictures-without-pillow).
 - The installers' hardening. A download is checked against its listed size
   and published SHA-256; not checked are the GPG `.asc` signatures beside
