@@ -179,8 +179,14 @@ AREAS = {
         "tests": ("test_the_demo.py",),
     },
     "carlos": {
-        "sources": ("apothecary/rig/*", "apothecary/wiring/*", "apothecary/cli/rig.py"),
-        "tests": ("test_carlos_concert.py",),
+        "sources": (
+            "apothecary/rig/*",
+            "apothecary/wiring/*",
+            "apothecary/routes/wiring.py",
+            "apothecary/cli/rig.py",
+            "tests/e2e/carlos_app.py",
+        ),
+        "tests": ("test_carlos_concert.py", "test_carlos_bench.py"),
     },
 }
 

@@ -56,14 +56,18 @@ fails on any. Every other module uses the session's server, which lives
 for the whole run: take back what a test pins, places or adds, or the tests
 after it see it.
 
-`test_carlos_concert.py` needs no apothecary server: it runs carlos itself,
-from the checkout `CARLOS_CHECKOUT` names (its `.venv` synced, on a branch that
-holds a rig and turns it in place), follows a drawn concert of the rig into it
-and holds each frame's rack to the frame's truth. Without that variable it
-skips, saying so, since carlos is another repository:
+The two `test_carlos_*.py` files hold apothecary and carlos together. Each runs
+carlos itself (`carlos_app.py`), from the checkout `CARLOS_CHECKOUT` names (its
+`.venv` synced, on a branch that holds a rig and turns it in place), and skips,
+saying so, without that variable, since carlos is another repository.
+`test_carlos_concert.py` needs no apothecary server: it follows a drawn concert
+of a synth rig into carlos and holds each frame's rack to the frame's truth.
+`test_carlos_bench.py` starts a server of its own sending its garage to carlos,
+as `serve --carlos` does, flashes a board through it, and holds carlos's open
+tab to the bench as it changes:
 
 ```bash
-CARLOS_CHECKOUT=../carlos uv run pytest tests/e2e/test_carlos_concert.py
+CARLOS_CHECKOUT=../carlos uv run pytest tests/e2e/test_carlos_concert.py tests/e2e/test_carlos_bench.py
 ```
 
 ## Running in parallel

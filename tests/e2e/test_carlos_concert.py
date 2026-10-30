@@ -1,11 +1,9 @@
 """A concert followed into carlos, frame by frame, and what carlos's rack draws of it.
 
-Carlos runs from a checkout of its own (``CARLOS_CHECKOUT``, its ``.venv``
-synced) on a free port with a state folder of the test's, as carlos's demo
-contract starts it (``carlos serve --host --port --state``). The rig is
-carlos's Subharmonicon example, asked of that carlos; ``rig.simulated`` draws
-its concert, and each frame is read and held in carlos as ``apothecary rig
-follow`` holds it. An open rack tab is then held to the frame's truth:
+Carlos runs from a checkout of its own (``CARLOS_CHECKOUT``), as
+``carlos_app.py`` starts it. The rig is carlos's Subharmonicon example, asked
+of that carlos; ``rig.simulated`` draws its concert, and each frame is read and
+held in carlos as ``apothecary rig follow`` holds it. An open rack tab is then held to the frame's truth:
 
 - every knob and fader carlos draws stands where the frame was drawn, within
   what the reader is measured to;
@@ -20,15 +18,16 @@ Without ``CARLOS_CHECKOUT`` it skips, saying so: carlos is another repository.
 from __future__ import annotations
 
 import json
-import os
-import socket
-import subprocess
-import time
-import urllib.request
-from pathlib import Path
 
 import pytest
-from browsers import CHROMIUM_MISSING
+
+# The fixtures these tests stand on: carlos itself, and a page of its.
+from carlos_app import (  # noqa: F401
+    _chromium_here,
+    _verify_url,
+    browser_context_args,
+    carlos_server,  # the fixture `carlos`
+)
 from playwright.sync_api import Page
 
 from apothecary.rig import concert, reading, simulated
@@ -40,80 +39,6 @@ EXAMPLE = "moog.subharmonicon.complex"
 # The reader on drawn pictures is measured at under 2% of a range at worst
 # (`apothecary rig check`); carlos is held to a little more.
 WITHIN = 0.03
-
-
-def _checkout() -> Path:
-    named = os.environ.get("CARLOS_CHECKOUT")
-    if not named:
-        pytest.skip("CARLOS_CHECKOUT names no carlos checkout to run carlos from")
-    path = Path(named)
-    if not (path / ".venv" / "bin" / "carlos").exists():
-        pytest.skip(f"{path} has no synced .venv with carlos in it: run `uv sync` there")
-    return path
-
-
-def _free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
-
-
-@pytest.fixture(scope="module")
-def carlos(tmp_path_factory):
-    """Carlos on a port of its own, until the module's tests are done."""
-    checkout = _checkout()
-    port = _free_port()
-    state = tmp_path_factory.mktemp("carlos-state")
-    log = (tmp_path_factory.mktemp("carlos-log") / "carlos.log").open("w")
-    server = subprocess.Popen(
-        [
-            str(checkout / ".venv" / "bin" / "carlos"),
-            "serve",
-            "--port",
-            str(port),
-            "--state",
-            str(state),
-        ],
-        cwd=checkout,
-        stdout=log,
-        stderr=subprocess.STDOUT,
-    )
-    url = f"http://127.0.0.1:{port}"
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    deadline = time.monotonic() + 30
-    while True:
-        try:
-            with opener.open(f"{url}/healthz", timeout=2):
-                break
-        except OSError:
-            if server.poll() is not None or time.monotonic() > deadline:
-                server.kill()
-                pytest.fail(f"carlos did not start; its log is {log.name}")
-            time.sleep(0.25)
-    yield url
-    server.terminate()
-    try:
-        server.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        server.kill()
-    log.close()
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _chromium_here(browser_type):
-    if not Path(browser_type.executable_path).exists():
-        pytest.skip(CHROMIUM_MISSING)
-
-
-@pytest.fixture
-def browser_context_args():
-    """No apothecary server: the page is carlos's."""
-    return {}
-
-
-@pytest.fixture(scope="session")
-def _verify_url():
-    """pytest-base-url checks a server's address before each test; this one has carlos's."""
 
 
 def _drawn_values(page: Page, modules) -> dict:
