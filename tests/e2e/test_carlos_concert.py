@@ -33,6 +33,9 @@ from playwright.sync_api import Page
 
 from apothecary.rig import concert, reading, simulated
 
+# A browser test, deselected where nothing can serve it.
+pytestmark = pytest.mark.e2e
+
 EXAMPLE = "moog.subharmonicon.complex"
 # The reader on drawn pictures is measured at under 2% of a range at worst
 # (`apothecary rig check`); carlos is held to a little more.

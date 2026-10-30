@@ -178,6 +178,10 @@ AREAS = {
         "sources": ("apothecary/demo.py", "apothecary/cli/server.py"),
         "tests": ("test_the_demo.py",),
     },
+    "carlos": {
+        "sources": ("apothecary/rig/*", "apothecary/wiring/*", "apothecary/cli/rig.py"),
+        "tests": ("test_carlos_concert.py",),
+    },
 }
 
 
