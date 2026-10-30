@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
@@ -15,6 +16,8 @@ from pydantic import ValidationError
 from apothecary.cli.main import cli
 from apothecary.rig import concert, look, panels, reading, simulated
 from apothecary.vision.projection import CORNERS
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
 
 # A made-up desktop synth, measured as a carlos catalogue entry is: two knobs, a
 # fader, a switch and an encoder on its front, three sockets there and one on its back.
@@ -365,3 +368,105 @@ def test_the_rig_commands_simulate_read_follow_and_check_from_a_catalogue_folder
 
     refused = runner.invoke(cli, ["rig", "check", "--carlos", "http://192.168.1.4:4186"])
     assert refused.exit_code != 0 and "this machine only" in refused.output
+
+
+UNO_RIG = ROOT_DIR / "examples" / "rigs" / "uno-power-and-usb.json"
+
+
+def test_a_rig_file_takes_apothecary_s_own_devices_and_asks_for_the_rest(tmp_path):
+    rig_doc, devices = reading.rig_from_file(UNO_RIG)
+    assert [d["id"] for d in devices] == [
+        "apothecary.host",
+        "apothecary.power-supply",
+        "arduino.uno-r3",
+    ]
+    # The Uno's two sockets are laid out on the edge they share.
+    edge = panels.panel(next(d for d in devices if d["id"] == "arduino.uno-r3"), "left")
+    assert [s.name for s in edge.sockets] == ["usb", "power"] and edge.controls == []
+
+    mixed = tmp_path / "mixed.json"
+    mixed.write_text(
+        json.dumps({**RIG, "modules": [*RIG["modules"], {"id": "uno", "type": "arduino.uno-r3"}]})
+    )
+    with pytest.raises(ValueError, match="made-up.desk is not one of apothecary's devices"):
+        reading.rig_from_file(mixed)
+    asked = []
+    _, devices = reading.rig_from_file(
+        mixed,
+        lambda name: asked.append(name) or {"made-up.desk": DESK, "made-up.synth": SYNTH}[name],
+    )
+    assert asked == ["made-up.desk", "made-up.synth"] and len(devices) == 3
+
+
+def test_a_rig_of_sockets_alone_is_laid_by_its_sockets_and_read(tmp_path):
+    rig_doc, devices = reading.rig_from_file(UNO_RIG)
+    setup = simulated.scene(rig_doc, devices)
+    assert list(setup.faces) == ["uno"] and setup.faces["uno"].side == "left"
+    assert all(0 < u < 1 and 0 < v < 1 for u, v in setup.faces["uno"].corners)
+    measured = {row.kind: row for row in simulated.measure(setup, count=3)}
+    assert set(measured) == {"socket"} and measured["socket"].mean == 0
+
+    picture = tmp_path / "uno.png"
+    simulated.draw(setup, {}, {"uno": {"usb": False, "power": True}}).save(picture)
+    patch, states = reading.held(setup, reading.read(setup, picture))
+    usb, power = states.connections
+    assert usb.level == "fault" and usb.says[0] == "declared: nothing plugged into USB on uno"
+    assert power.level == "none"  # a plug seen in the Uno; the supply is not in the picture
+    assert power.says == [
+        "seen: a plug in POWER on uno",
+        "not seen: DC OUT on supply is not in the picture",
+    ]
+
+
+def test_rig_setup_pins_a_photograph_s_faces_by_their_corners_in_pixels(tmp_path):
+    rig_doc, devices = reading.rig_from_file(UNO_RIG)
+    drawn = simulated.scene(rig_doc, devices)
+    picture = tmp_path / "uno.png"
+    simulated.draw(drawn, {}, {"uno": {"usb": True, "power": False}}).save(picture)
+    width, height = simulated.PICTURE
+    pixels = ",".join(f"{u * width:.2f},{v * height:.2f}" for u, v in drawn.faces["uno"].corners)
+    out = tmp_path / "pinned.json"
+    runner = CliRunner()
+
+    done = runner.invoke(
+        cli,
+        [
+            "rig",
+            "setup",
+            "--rig",
+            str(UNO_RIG),
+            "--picture",
+            str(picture),
+            "--face",
+            f"uno=left:{pixels}",
+            "--out",
+            str(out),
+        ],
+    )
+    assert done.exit_code == 0, done.output
+    assert "uno, its left: USB, POWER" in done.output
+    pinned = reading.Setup.load(out)
+    for got, want in zip(pinned.faces["uno"].corners, drawn.faces["uno"].corners, strict=True):
+        assert got == pytest.approx(want, abs=1e-4)
+    done = runner.invoke(cli, ["rig", "read", str(picture), "--setup", str(out)])
+    assert done.exit_code == 0 and "plugs in: usb" in done.output
+
+    for face, said in (
+        ("uno=top:0,0,1,0,1,1,0,1", "uno's top has nothing on it to read"),
+        ("uno=left:1,2,3", "a face is MODULE=SIDE:x1,y1,x2,y2,x3,y3,x4,y4"),
+        ("piano=front:0,0,1,0,1,1,0,1", "which the rig does not have"),
+    ):
+        refused = runner.invoke(
+            cli,
+            [
+                "rig",
+                "setup",
+                "--rig",
+                str(UNO_RIG),
+                "--face",
+                face,
+                "--out",
+                str(tmp_path / "no.json"),
+            ],
+        )
+        assert refused.exit_code != 0 and said in refused.output, refused.output

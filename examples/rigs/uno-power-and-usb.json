@@ -1,0 +1,17 @@
+{
+  "format": "carlos.patch",
+  "version": 3,
+  "name": "An Uno, its power and its USB",
+  "modules": [
+    {"id": "uno", "type": "arduino.uno-r3", "view": "left", "parameters": {}},
+    {"id": "supply", "type": "apothecary.power-supply", "view": "back", "parameters": {}},
+    {"id": "host", "type": "apothecary.host", "view": "back", "parameters": {}}
+  ],
+  "connections": [
+    {"source": {"module": "uno", "jack": "usb"}, "target": {"module": "host", "jack": "usb"}},
+    {"source": {"module": "supply", "jack": "dc_out"}, "target": {"module": "uno", "jack": "power"}}
+  ],
+  "groups": [],
+  "display": {"mode": "irl"},
+  "midi": []
+}

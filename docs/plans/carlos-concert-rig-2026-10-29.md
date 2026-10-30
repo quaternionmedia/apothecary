@@ -1,7 +1,10 @@
 # A synth rig photographed through a concert, held in carlos: a plan
 
-*Slice 1 is built, on `explore/qm-family` (`apothecary/rig/`, `apothecary
-rig`); it is not pushed. Slices 2 to 6 are not built.*
+*Slices 1 and 2 are built, with a test that runs both apps end to end; slice 3
+is built for the command line, and slice 4 is ready for its first photographs.
+The apothecary side is on `explore/qm-family` (`apothecary/rig/`, `apothecary
+rig`) and carlos's on its `feat/hold-the-rig`; neither is pushed. Slices 5 and
+6 are not built.*
 
 ## What this plans
 
@@ -127,23 +130,47 @@ Every result carries a confidence: the contrast it was read on.
 
    Drawn pictures prove the plumbing, not the eyes: the same drawing rules
    both draw them and read them.
-2. **Carlos turns in place.** When a hold keeps the same rig with new values,
-   carlos turns the knobs and slides the faders where they stand, rather than
-   drawing the rack again. A control apothecary could not read is drawn as
-   unread. This is carlos's side, and it only draws.
-3. **Faces pinned on a real photograph.** A window in apothecary's viewer shows
-   the camera's picture, and a person drags each device's four corners onto
-   it. The first guess comes from the site's camera pose, where the rig stands
-   in a site. The setup is kept in the state folder, like a camera's record.
-4. **Real photographs measured.** The owner's rig is photographed at positions
-   set by hand and written down, and `rig check` is run on those photographs.
-   The thresholds are recorded in `docs/validation/`. The setup picture then
-   teaches each control its own look: which way the pointer is lighter, the
-   knob's real sweep, and what an empty socket looks like.
+2. **Carlos turns in place.** *Built*, on carlos's side, where it only draws.
+   When a hold has the same devices on the same sides with the same leads,
+   carlos turns each control that moved where it stands and puts the new
+   states on the elements already drawn, rather than drawing the rack again;
+   a different rig is drawn afresh. A module's state may carry `controls`, a
+   state by parameter name, and apothecary gives one to every control it did
+   not read -- warn for one it could have read, none for an encoder -- which
+   carlos draws faded, its title saying why.
+
+   **The full test**, `tests/e2e/test_carlos_concert.py`, runs carlos from the
+   checkout `CARLOS_CHECKOUT` names, follows a drawn concert of the
+   Subharmonicon example into it, and holds an open rack tab to each frame's
+   truth: every knob and fader within 3% of its range, the same elements from
+   the first frame on, the stray plug's device a warning and the pulled lead a
+   fault.
+3. **Faces pinned on a real photograph.** *Built for the command line:*
+   `apothecary rig setup --picture PHOTO --face MODULE=SIDE:x1,y1,...,x4,y4`
+   pins each face by its four corners, in the photograph's pixels as an image
+   viewer shows them, and writes the setup; `--rig` names a rig file. What
+   remains is a window in apothecary's viewer where a person drags the corners
+   onto the camera's picture, the first guess from the site's camera pose, the
+   setup kept in the state folder like a camera's record.
+4. **Real photographs, starting simple.** The first photographs are not of a
+   synth. They are of one board with the leads every board has: power and USB.
+   The rig is `examples/rigs/uno-power-and-usb.json`, an Uno with a supply's
+   lead in its barrel jack and a USB lead to the computer; apothecary's Uno
+   entry lays the two sockets out on the edge they share, and `rig check --rig`
+   measures the reader on drawn pictures of it. Then:
+   - photograph that edge with each lead in and out, the camera fixed;
+   - pin the edge once with `rig setup --picture`;
+   - read each photograph with `rig read`, and write down which leads were in;
+   - record what was read against what was there in `docs/validation/`.
+
+   Only once the sockets read true does the synth rig's turn come: knobs set by
+   hand and written down, and the setup picture teaching each control its own
+   look (which way the pointer is lighter, the knob's real sweep, what an empty
+   socket looks like).
 5. **A concert, live.** During a show, the camera keeps a frame every few
-   seconds in `captures/`. `rig follow` reads the newest frame as it arrives,
-   and each reading is tied to the hub's cue, the one carlos already holds. The
-   record is the show's.
+   seconds in `captures/`. `rig follow --watch` reads each new frame as it
+   arrives; what remains is tying each reading to the hub's cue, the one
+   carlos already holds, so the record is the show's.
 6. **Printed for the rig.** From the parts library: a camera mount for a mic
    stand or a desk edge, and a corner tab for each synth, so the setup comes
    back the same at the next gig.
@@ -162,11 +189,22 @@ decision the owner has made yet.
   whether the viewer's camera, a phone's time-lapse or ffmpeg. The follower
   reads a folder; it does not drive a camera.
 
+## Decided
+
+- **2026-10-29:** carlos's rigs are bolstered from apothecary, not the other way
+  round; the airgap's test rig and a server room follow, each in turn.
+- **2026-10-30:** go as far as is reasonable without real pictures, with
+  carlos's JavaScript tested here and a full test of carlos with the demo synth
+  rig; real pictures are validated first on something much simpler, power and
+  USB into a device (slice 4).
+
 ## Open
 
-- Which synths the owner's real rig has, and whether it can be photographed at
-  known positions. This is slice 4, and nothing about the eyes is known until
-  it is done.
+- Which board the first photographs are of. The Uno is prepared because its
+  power and USB sockets share an edge one camera sees; another board's entry
+  would need its sockets laid out the same way.
+- Which synths the owner's real rig has, for the second half of slice 4.
+  Nothing about the eyes is known until real photographs are read.
 
 ## After the concert
 
@@ -193,4 +231,21 @@ The first command draws the concert's frames, with its setup and the truth of
 each frame. The second sends them to carlos one a second, as a replay of the
 concert. Carlos's rack draws the Subharmonicon and the DFAM in `irl` with every
 knob and fader where the frame shows it. A lead whose plug was pulled is drawn
-as a fault until it goes back in.
+as a fault until it goes back in, and carlos turns the rack in place from frame
+to frame.
+
+The first photographs go through the same commands with the Uno's rig. A drawn
+session of it comes first:
+
+```bash
+uv run apothecary rig simulate --rig examples/rigs/uno-power-and-usb.json --out .cache/uno --frames 1
+uv run apothecary rig read .cache/uno/frame-0003.png --setup .cache/uno/setup.json
+```
+
+Then, for a photograph, the edge's four corners in its pixels, read off any
+image viewer:
+
+```bash
+uv run apothecary rig setup --rig examples/rigs/uno-power-and-usb.json --picture uno.jpg --face uno=left:x1,y1,x2,y2,x3,y3,x4,y4 --out uno-setup.json
+uv run apothecary rig read uno.jpg --setup uno-setup.json
+```

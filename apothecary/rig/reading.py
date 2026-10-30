@@ -29,7 +29,7 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -232,6 +232,13 @@ def _example_name(example: str) -> Tuple[str, str]:
     return device, kind
 
 
+def device_from_carlos(url: str, name: str) -> Dict[str, Any]:
+    """One device's entry, asked of carlos."""
+    from ..wiring import carlos
+
+    return carlos.fetch(url, f"/api/catalogue/devices/{name}")
+
+
 def rig_from_carlos(url: str, example: str) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """One of carlos's examples, and the entry of every device in it, asked of carlos."""
     from ..wiring import carlos
@@ -239,7 +246,34 @@ def rig_from_carlos(url: str, example: str) -> Tuple[Dict[str, Any], List[Dict[s
     device, kind = _example_name(example)
     rig = carlos.fetch(url, f"/api/catalogue/devices/{device}/examples")["examples"][kind]
     types = sorted({module["type"] for module in rig.get("modules", [])})
-    return rig, [carlos.fetch(url, f"/api/catalogue/devices/{name}") for name in types]
+    return rig, [device_from_carlos(url, name) for name in types]
+
+
+def rig_from_file(
+    path: Path, more: Optional[Callable[[str], Dict[str, Any]]] = None
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    """A rig written as a ``carlos.patch`` file, and the entry of every device in
+    it: apothecary's own (``wiring/catalogue``) first, then what ``more`` gives
+    for the rest -- carlos's, asked of carlos or read from its catalogue."""
+    from ..wiring import catalogue as own
+
+    rig = json.loads(Path(path).read_text(encoding="utf-8"))
+    devices = []
+    for name in sorted({module["type"] for module in rig.get("modules", [])}):
+        if name in own.entries():
+            devices.append(own.entries()[name])
+        elif more is not None:
+            devices.append(more(name))
+        else:
+            raise ValueError(
+                f"{name} is not one of apothecary's devices: name carlos, or its catalogue, for it"
+            )
+    return rig, devices
+
+
+def device_in(catalogue: Path, name: str) -> Dict[str, Any]:
+    """One device's entry, read from a carlos checkout's ``catalogue`` folder."""
+    return json.loads((Path(catalogue) / "devices" / f"{name}.json").read_text(encoding="utf-8"))
 
 
 def rig_in(catalogue: Path, example: str) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
@@ -247,7 +281,4 @@ def rig_in(catalogue: Path, example: str) -> Tuple[Dict[str, Any], List[Dict[str
     _example_name(example)
     rig = json.loads((Path(catalogue) / "examples" / f"{example}.json").read_text(encoding="utf-8"))
     types = sorted({module["type"] for module in rig.get("modules", [])})
-    return rig, [
-        json.loads((Path(catalogue) / "devices" / f"{name}.json").read_text(encoding="utf-8"))
-        for name in types
-    ]
+    return rig, [device_in(catalogue, name) for name in types]

@@ -34,6 +34,7 @@ PICTURE = (1600, 1000)
 EYE = (0.0, -330.0, 640.0)
 TURN, TILT, FOV = 0.0, 24.0, 62.0
 GAP_MM = 30.0  # between two devices on the table
+ROW_MM = 650.0  # a row of devices this wide is seen from EYE; a narrower one from nearer
 PX_PER_MM = 4  # each face is drawn at this before it is laid into the picture
 START = datetime(2026, 10, 29, 20, 0, tzinfo=timezone.utc)
 
@@ -56,18 +57,23 @@ def _panel_of(setup: Setup, module: Dict[str, Any]) -> Optional[Panel]:
 
 
 def scene(rig: Dict[str, Any], devices: List[Dict[str, Any]]) -> Setup:
-    """The rig laid on the table, and where each face lies in the camera's picture."""
+    """The rig laid on the table, and where each face lies in the camera's picture.
+
+    The devices laid are those whose side the rig shows has controls on it; in a
+    rig with none, those whose side has sockets -- a board and the leads into
+    it. The camera is as far above as the row needs, wide or tall, so it fills
+    the picture as a synth rig's does."""
     setup = Setup(rig=rig, devices=devices)
-    laid = [
-        (module, panel)
-        for module in rig.get("modules", [])
-        if (panel := _panel_of(setup, module)) is not None and panel.controls
-    ]
+    shown = [(m, p) for m in rig.get("modules", []) if (p := _panel_of(setup, m)) is not None]
+    laid = [(m, p) for m, p in shown if p.controls] or [(m, p) for m, p in shown if p.sockets]
     width = sum(panel.width_mm for _, panel in laid) + GAP_MM * max(0, len(laid) - 1)
-    onto_picture = panels.invert(projection.pinhole(EYE, TURN, TILT, FOV, PICTURE[1] / PICTURE[0]))
+    tallest = max((panel.height_mm for _, panel in laid), default=0.0)
+    away = max(width, 1.5 * tallest * PICTURE[0] / PICTURE[1], 60.0) / ROW_MM
+    eye = (EYE[0] * away, EYE[1] * away, EYE[2] * away)
+    onto_picture = panels.invert(projection.pinhole(eye, TURN, TILT, FOV, PICTURE[1] / PICTURE[0]))
     left = -width / 2
     for module, panel in laid:
-        cx, cy = left + panel.width_mm / 2, 40.0
+        cx, cy = left + panel.width_mm / 2, 40.0 * away
         corners = []
         for fx, fy in projection.CORNERS:
             x = cx + (fx - 0.5) * panel.width_mm

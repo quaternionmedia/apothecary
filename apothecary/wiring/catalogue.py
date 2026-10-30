@@ -26,6 +26,8 @@ ROOT = Path(__file__).resolve().parent / "catalogue"
 
 # The computer apothecary runs on: the far end of every USB lead it observes.
 HOST = "apothecary.host"
+# A mains supply, the far end of a board's power lead in a rig a camera sees.
+SUPPLY = "apothecary.power-supply"
 
 PARTS: Dict[str, str] = {
     "esp32_devkitc": "espressif.esp32-devkitc",

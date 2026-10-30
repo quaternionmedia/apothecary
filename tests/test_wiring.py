@@ -136,9 +136,11 @@ def test_each_entry_is_named_for_its_id_and_has_one_usb_socket():
         assert re.fullmatch(r"[a-z0-9-]+\.[a-z0-9-]+", entry["id"])
         names = [j["name"] for j in entry["jacks"]]
         assert len(names) == len(set(names))
-        assert catalogue.usb_jack(entry["id"]) == "usb"
+        # Every device on the bench has its one USB socket; a supply has none.
+        expected = None if entry["id"] == catalogue.SUPPLY else "usb"
+        assert catalogue.usb_jack(entry["id"]) == expected
     named = set(catalogue.PARTS.values()) | set(catalogue.BY_FQBN.values())
-    assert named | {catalogue.HOST, catalogue.UNNAMED} == set(catalogue.entries())
+    assert named | {catalogue.HOST, catalogue.UNNAMED, catalogue.SUPPLY} == set(catalogue.entries())
 
 
 @pytest.mark.parametrize(

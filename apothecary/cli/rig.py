@@ -1,13 +1,16 @@
 """``apothecary rig``: a rig of synths photographed, its controls read, held in carlos.
 
-The rig and its devices are carlos's: an example asked of carlos on this
-machine (``--carlos``, or ``APOTHECARY_CARLOS``), or read from a carlos
-checkout's ``catalogue`` folder (``--catalogue``). Nothing here reaches past
-this machine, and it writes only where it is pointed.
+The rig is one of carlos's examples, asked of carlos on this machine
+(``--carlos``, or ``APOTHECARY_CARLOS``) or read from a carlos checkout's
+``catalogue`` folder (``--catalogue``); or a ``carlos.patch`` file (``--rig``),
+whose devices are apothecary's own where it has them and carlos's otherwise.
+Nothing here reaches past this machine, and it writes only where it is
+pointed.
 """
 
 from __future__ import annotations
 
+from functools import partial
 from pathlib import Path
 from typing import Optional
 
@@ -15,7 +18,7 @@ import click
 from pydantic import ValidationError
 
 from ..rig import concert as concert_
-from ..rig import reading, simulated
+from ..rig import panels, reading, simulated
 from ..wiring import carlos
 
 DEFAULT_EXAMPLE = "moog.subharmonicon.complex"
@@ -36,18 +39,25 @@ def _carlos_or_env(url: Optional[str]) -> Optional[str]:
         raise click.BadParameter(str(exc), param_hint="--carlos") from None
 
 
-def _rig(url: Optional[str], catalogue: Optional[Path], example: str):
+def _rig(url: Optional[str], catalogue: Optional[Path], example: str, rig_file: Optional[Path]):
     try:
+        if rig_file is not None:
+            more = None
+            if catalogue is not None:
+                more = partial(reading.device_in, catalogue)
+            elif (found := _carlos_or_env(url)) is not None:
+                more = partial(reading.device_from_carlos, found)
+            return reading.rig_from_file(rig_file, more)
         if catalogue is not None:
             return reading.rig_in(catalogue, example)
         url = _carlos_or_env(url)
         if url is None:
             raise click.UsageError(
-                "name carlos (--carlos URL) or a carlos catalogue folder (--catalogue)"
+                "name carlos (--carlos URL), a carlos catalogue folder (--catalogue) or a rig (--rig)"
             )
         return reading.rig_from_carlos(url, example)
     except (carlos.CarlosError, ValueError, OSError, KeyError) as exc:
-        raise click.ClickException(f"no rig {example!r}: {exc}") from None
+        raise click.ClickException(f"no rig {rig_file or example!r}: {exc}") from None
 
 
 def _setup(path: Path) -> reading.Setup:
@@ -71,6 +81,12 @@ _rig_options = [
         default=DEFAULT_EXAMPLE,
         show_default=True,
         help="The rig: one of carlos's examples, <device>.simple or <device>.complex.",
+    ),
+    click.option(
+        "--rig",
+        "rig_file",
+        type=click.Path(exists=True, dir_okay=False, path_type=Path),
+        help="The rig as a carlos.patch file instead, e.g. examples/rigs/uno-power-and-usb.json.",
     ),
 ]
 
@@ -101,12 +117,12 @@ def rig_options(command):
     help="Seconds between frames.",
 )
 @click.option("--seed", default=1, show_default=True, type=int)
-def simulate_cmd(url, catalogue, example, out, songs, frames, every, seed):
+def simulate_cmd(url, catalogue, example, rig_file, out, songs, frames, every, seed):
     """Draw a concert: frames of the rig through a camera above it, with its setup and their truth.
 
     Each song moves a few controls; between songs a plug is pushed where no
     lead names one, and a lead's plug is pulled and pushed back."""
-    rig_doc, devices = _rig(url, catalogue, example)
+    rig_doc, devices = _rig(url, catalogue, example, rig_file)
     setup = simulated.scene(rig_doc, devices)
     if not setup.faces:
         raise click.ClickException(
@@ -117,6 +133,76 @@ def simulate_cmd(url, catalogue, example, out, songs, frames, every, seed):
         f"{count} frames of {rig_doc.get('name', example)!r} in {out}, with setup.json and truth.jsonl"
     )
     click.echo(f"faces in the picture: {', '.join(setup.faces)}")
+
+
+def _face(given: str, size: Optional[tuple]) -> tuple:
+    """``MODULE=SIDE:x1,y1,x2,y2,x3,y3,x4,y4``: a module, its side, its four corners."""
+    try:
+        module, rest = given.split("=", 1)
+        side, numbers = rest.split(":", 1)
+        values = [float(n) for n in numbers.split(",")]
+    except ValueError:
+        values = []
+    if len(values) != 8:
+        raise click.BadParameter(
+            f"{given!r}: a face is MODULE=SIDE:x1,y1,x2,y2,x3,y3,x4,y4", param_hint="--face"
+        )
+    corners = list(zip(values[0::2], values[1::2], strict=True))
+    if size is not None:
+        corners = [(x / size[0], y / size[1]) for x, y in corners]
+    return module, side, corners
+
+
+@rig.command("setup")
+@rig_options
+@click.option(
+    "--face",
+    "faces",
+    multiple=True,
+    required=True,
+    help="MODULE=SIDE:x1,y1,...,x4,y4, a face's corners top left, top right, bottom right, "
+    "bottom left; once for each face in the picture.",
+)
+@click.option(
+    "--picture",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="The photograph the corners were read off; the corners are then its pixels, "
+    "else fractions across and down.",
+)
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="The setup written.",
+)
+def setup_cmd(url, catalogue, example, rig_file, faces, picture, out):
+    """Pin each face a photograph shows by its four corners, and write the setup it is read through."""
+    rig_doc, devices = _rig(url, catalogue, example, rig_file)
+    size = None
+    if picture is not None:
+        from PIL import Image, ImageOps
+
+        with Image.open(picture) as opened:
+            size = ImageOps.exif_transpose(opened).size
+    pinned = {}
+    for given in faces:
+        module, side, corners = _face(given, size)
+        pinned[module] = {"side": side, "corners": corners}
+    try:
+        setup = reading.Setup(rig=rig_doc, devices=devices, faces=pinned)
+    except ValidationError as exc:
+        raise click.ClickException(f"not a setup: {exc.errors()[0]['msg']}") from None
+    types = {m["id"]: m["type"] for m in rig_doc.get("modules", [])}
+    for module, face in setup.faces.items():
+        panel = panels.panel(setup.entry(types[module]), face.side)
+        things = (
+            [c.label for c in panel.controls] + [s.label for s in panel.sockets] if panel else []
+        )
+        if not things:
+            raise click.ClickException(f"{module}'s {face.side} has nothing on it to read")
+        click.echo(f"{module}, its {face.side}: {', '.join(things)}")
+    out.write_text(setup.model_dump_json(indent=2), encoding="utf-8")
+    click.echo(f"the setup is {out}")
 
 
 @rig.command("read")
@@ -202,9 +288,9 @@ def follow_cmd(folder, setup_path, url, pace, watch, every):
     "--count", default=8, show_default=True, type=click.IntRange(1), help="Pictures drawn and read."
 )
 @click.option("--seed", default=1, show_default=True, type=int)
-def check_cmd(url, catalogue, example, count, seed):
+def check_cmd(url, catalogue, example, rig_file, count, seed):
     """How well the reader does on drawn pictures of the rig, whose every answer is known."""
-    rig_doc, devices = _rig(url, catalogue, example)
+    rig_doc, devices = _rig(url, catalogue, example, rig_file)
     setup = simulated.scene(rig_doc, devices)
     if not setup.faces:
         raise click.ClickException(
