@@ -13,7 +13,8 @@ here: run `apothecary problems`.
   after gathering leaves core (*Next round*):
   [docs/plans/pictures-the-rest-2026-10-13.md](docs/plans/pictures-the-rest-2026-10-13.md).
 - Optional local models behind the shape finder: [docs/plans/photo-finders-local-models-2026-09-21.md](docs/plans/photo-finders-local-models-2026-09-21.md).
-- The bench as a rig carlos draws, slices 2 to 4 (a picture names a device, IO configuration, the loop closed) and what carlos needs: [docs/plans/qm-family-carlos-2026-10-29.md](docs/plans/qm-family-carlos-2026-10-29.md).
+- A synth rig photographed through a concert, held in carlos, slices 2 to 6 (carlos turns in place, faces pinned on a real photograph, real photographs measured, a concert live, a mount and corner tabs printed), then the airgap's test rig and a server room: [docs/plans/carlos-concert-rig-2026-10-29.md](docs/plans/carlos-concert-rig-2026-10-29.md).
+- Waiting behind it, the bench as a rig carlos draws, slices 2 and 3 (a picture names a device, IO configuration): [docs/plans/qm-family-carlos-2026-10-29.md](docs/plans/qm-family-carlos-2026-10-29.md).
 - Pictures without Pillow, a research effort: whether a library under an approved licence decodes JPEG and PNG, resizes and reads pixels as well and as fast as Pillow does here, and what moving would cost. Until it reports, Pillow stays, a conflict row in the adoption scope: [the governance plan's stub](docs/plans/governance-2026-10-13.md#stubbed-pictures-without-pillow).
 - The installers' hardening. A download is checked against its listed size
   and published SHA-256; not checked are the GPG `.asc` signatures beside

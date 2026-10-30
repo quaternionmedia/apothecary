@@ -2,7 +2,8 @@
 
 *Slices 1 and 4 are built, on `explore/qm-family` (`apothecary/wiring/`) and,
 for carlos's hold, on carlos's `feat/hold-the-rig`; neither is pushed. Slices 2
-and 3 are not built.*
+and 3 are not built, and wait: the lane turned toward carlos's own rigs, in
+[A synth rig photographed through a concert](carlos-concert-rig-2026-10-29.md).*
 
 ## What this plans
 

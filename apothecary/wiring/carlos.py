@@ -30,7 +30,7 @@ import threading
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 from urllib.parse import urlsplit
 
 from . import catalogue
@@ -64,24 +64,49 @@ def carlos_url() -> Optional[str]:
     return loopback_url(url) if url else None
 
 
+def hold_cue(
+    number: str,
+    name: str,
+    patch: Dict[str, Any],
+    devices: List[Dict[str, Any]],
+    states: Dict[str, Any],
+    fired_at: Optional[datetime] = None,
+) -> Dict[str, object]:
+    """The cue that has carlos hold a rig: its patch, its devices and their states."""
+    return {
+        "cue": {
+            "number": number,
+            "name": name,
+            "fired_at": (fired_at or datetime.now(timezone.utc)).isoformat(),
+        },
+        "action": {"hold": {"patch": patch, "devices": devices, "states": states}},
+    }
+
+
 def hold_body(wiring: "Wiring", fired_at: Optional[datetime] = None) -> Dict[str, object]:
     """The cue that has carlos hold this wiring."""
     entries = catalogue.entries()
     named = sorted({module["type"] for module in wiring.patch["modules"]})
-    return {
-        "cue": {
-            "number": wiring.site,
-            "name": f"apothecary: {wiring.site}",
-            "fired_at": (fired_at or datetime.now(timezone.utc)).isoformat(),
-        },
-        "action": {
-            "hold": {
-                "patch": wiring.patch,
-                "devices": [entries[device] for device in named],
-                "states": wiring.states.model_dump(mode="json"),
-            }
-        },
-    }
+    return hold_cue(
+        wiring.site,
+        f"apothecary: {wiring.site}",
+        wiring.patch,
+        [entries[device] for device in named],
+        wiring.states.model_dump(mode="json"),
+        fired_at,
+    )
+
+
+def fetch(url: str, path: str) -> Any:
+    """GET one of carlos's routes on this machine; its JSON, or CarlosError saying why not."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(f"{loopback_url(url)}{path}", timeout=TIMEOUT_SECONDS) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise CarlosError(f"carlos has no {path} ({exc.code})") from None
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        raise CarlosError(f"carlos did not answer at {url}: {exc}") from None
 
 
 def send(body: Dict[str, object], url: str) -> Dict[str, object]:

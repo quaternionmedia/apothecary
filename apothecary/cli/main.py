@@ -14,6 +14,7 @@ from .parts import parts
 from .photo import photo
 from .preflight import preflight
 from .release import release
+from .rig import rig
 from .render import render_scene, render_scene_jscad, template_generate, testrun, validate
 from .server import DEFAULT_PORT, dev, serve
 from .slicer import slicer
@@ -101,6 +102,7 @@ cli.add_command(openscad)
 cli.add_command(slicer)
 cli.add_command(lighting)
 cli.add_command(airgap)
+cli.add_command(rig)
 
 
 def main():  # pragma: no cover - entry point
