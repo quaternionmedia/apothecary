@@ -10,7 +10,14 @@ from fastapi.testclient import TestClient
 
 from apothecary.api import app
 from apothecary.example_hierarchy import create_example_site
-from apothecary.firmware.models import DeviceInfo, ExpectedFirmware, FlashRecord, NodeBinding
+from apothecary.firmware.models import (
+    DeviceInfo,
+    ExpectedFirmware,
+    FlashRecord,
+    Heater,
+    NodeBinding,
+    PrinterStatus,
+)
 from apothecary.hierarchy import Assembly
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.wiring import catalogue
@@ -46,6 +53,45 @@ def _pinned(device: DeviceInfo, **row) -> NodeBinding:
         device=device,
         **row,
     )
+
+
+def test_a_printer_s_state_says_what_its_last_poll_found():
+    """Printer monitoring in carlos: while the Machine polls the printer, each poll's
+    state, progress and heaters are lines of the mainboard's state."""
+    from datetime import datetime, timezone
+
+    board = DeviceInfo(port="/dev/ttyUSB0", serial_number="A106ZTEU")
+    polled = datetime(2026, 10, 30, 20, 41, 3, tzinfo=timezone.utc)
+    printing = PrinterStatus(
+        port="/dev/ttyUSB0",
+        polled_at=polled,
+        state="printing",
+        hotends=[Heater(actual=204.6, target=205)],
+        bed=Heater(actual=59.9, target=60),
+        sd_printing=True,
+        sd_progress=0.43,
+        print_time_s=734,
+    )
+    wiring = wiring_for_site(
+        "garage", create_example_site(), [_pinned(board, printer_status=printing)]
+    )
+    state = wiring.states.modules[MAINBOARD]
+    assert state.level == "ok"
+    assert "printer: printing, 43% of its job, 12 min in, as polled at 20:41:03" in state.says
+    assert "heaters: hotend 205/205 °C, bed 60/60 °C" in state.says
+
+    resting = printing.model_copy(update={"state": "offline", "sd_printing": False, "bed": None})
+    wiring = wiring_for_site(
+        "garage", create_example_site(), [_pinned(board, printer_status=resting)]
+    )
+    state = wiring.states.modules[MAINBOARD]
+    assert state.level == "warn"
+    assert "printer: offline, as polled at 20:41:03" in state.says
+    assert "heaters: hotend 205/205 °C" in state.says
+
+    # No poll, no lines: the Machine is closed, or the board is no printer.
+    wiring = wiring_for_site("garage", create_example_site(), [_pinned(board)])
+    assert not any(line.startswith("printer:") for line in wiring.states.modules[MAINBOARD].says)
 
 
 def test_every_board_the_garage_draws_is_a_module_plugged_in_or_not():

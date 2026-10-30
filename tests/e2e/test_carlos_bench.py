@@ -8,7 +8,9 @@ sends the garage's wiring to carlos at the start, and an open rack tab draws it
 with each board's and lead's state. Then a sketch is flashed through apothecary's
 own route, as the Machine's Upload does, and the tab draws the bench as it now is,
 without a reload: the board that was absent is present, and the port that no node
-named is the board's.
+named is the board's. And the printer, pinned to printer_1's mainboard and polled
+as its Machine polls it, is said in carlos as each poll found it: printing, how
+far through its job, and its heaters.
 
 Without ``CARLOS_CHECKOUT`` it skips, saying so: carlos is another repository.
 """
@@ -19,6 +21,7 @@ import time
 
 import httpx
 import pytest
+from boards import BOARD, PRINTER
 
 # The fixtures these tests stand on: carlos itself, and a page of its.
 from carlos_app import (  # noqa: F401
@@ -107,3 +110,29 @@ def test_the_bench_is_held_in_carlos_and_followed_through_a_flash(carlos, apothe
     assert lead.count() > 0 and "is-held-ok" in (lead.first.get_attribute("class") or "")
     held = family_state(carlos)["state"]["held"]
     assert held["states"]["modules"][pedal]["level"] == "ok"
+
+
+def test_printer_monitoring_reaches_carlos_as_the_mainboard_s_lines(carlos, apothecary, page: Page):
+    """The printer pinned and polled, as its Machine polls it: each poll's state,
+    progress and heaters are said under the mainboard in carlos."""
+    with httpx.Client(base_url=apothecary, timeout=15.0) as http:
+        http.post("/firmware/devices/identify", json={"port": PRINTER}).raise_for_status()
+        http.put(
+            f"/sites/garage/nodes/{BOARD}/device", json={"identity": PRINTER}
+        ).raise_for_status()
+        polled = http.get("/firmware/printers/status", params={"port": PRINTER})
+        polled.raise_for_status()
+    assert polled.json()["state"] == "printing"
+
+    page.goto(f"{carlos}/rack")
+    board = page.locator(f'.module[data-module-id="{BOARD}"]')
+    page.wait_for_function(
+        '(id) => (document.querySelector(`.module[data-module-id="${id}"] .held-says`)'
+        "?.textContent || '').includes('printer: printing')",
+        arg=BOARD,
+        timeout=20_000,
+    )
+    says = board.locator(".held-says").first.inner_text()
+    assert f"present: answering on {PRINTER}" in says
+    assert "heaters: hotend" in says and "known by: pinned" in says
+    assert board.get_attribute("data-held") == "ok"

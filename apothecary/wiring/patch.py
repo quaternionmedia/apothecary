@@ -195,6 +195,9 @@ def _state(known: Evidence, row: Optional[NodeBinding]) -> ModuleState:
         if known.connected:
             state.at_least("warn")
         state.says.append(f"firmware: {known.sketch} never flashed from here")
+    # A printer as its last poll found it, while the Machine polls it.
+    if row is not None and row.printer_status is not None:
+        _printing(state, row.printer_status)
     # How it is known.
     if known.binding_source == "manual":
         state.says.append(f"known by: pinned, by {_identity_kind(known.identity or '', device)}")
@@ -205,6 +208,29 @@ def _state(known: Evidence, row: Optional[NodeBinding]) -> ModuleState:
     else:
         state.says.append("known by: the site's drawing")
     return state
+
+
+def _heat(name: str, heater) -> str:
+    return f"{name} {heater.actual:.0f}/{heater.target:.0f} °C"
+
+
+def _printing(state: ModuleState, status) -> None:
+    """A printer's state, its job's progress and its heaters, as one poll found them:
+    the lines printer monitoring adds, each poll being one look."""
+    doing = status.state
+    if status.sd_printing and status.sd_progress is not None:
+        doing += f", {status.sd_progress:.0%} of its job"
+        if status.print_time_s is not None:
+            doing += f", {status.print_time_s // 60} min in"
+    if status.state in ("offline", "maintenance"):
+        state.at_least("warn")
+    when = status.polled_at.strftime("%H:%M:%S")
+    state.says.append(f"printer: {doing}, as polled at {when}")
+    heaters = [_heat("hotend", h) for h in status.hotends]
+    if status.bed is not None:
+        heaters.append(_heat("bed", status.bed))
+    if heaters:
+        state.says.append("heaters: " + ", ".join(heaters))
 
 
 def _unnamed(device: DeviceInfo) -> ModuleState:

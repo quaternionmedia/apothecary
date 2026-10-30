@@ -1,9 +1,11 @@
 # The bench as a rig carlos can draw: a plan
 
 *Slices 1 and 4 are built, on `explore/qm-family` (`apothecary/wiring/`) and,
-for carlos's hold, on carlos's `feat/hold-the-rig`; neither is pushed. Slices 2
-and 3 are not built, and wait: the lane turned toward carlos's own rigs, in
-[A synth rig photographed through a concert](carlos-concert-rig-2026-10-29.md).*
+for carlos's hold, on carlos's `feat/hold-the-rig`, with a test that runs both
+apps end to end; neither is pushed. Slices 2 and 3 are not built, and wait: the
+lane turned toward carlos's own rigs, in
+[A synth rig photographed through a concert](carlos-concert-rig-2026-10-29.md).
+Next is a camera on the Ender (below).*
 
 ## What this plans
 
@@ -118,9 +120,15 @@ The disagreements are of five kinds:
    whenever it changes (`wiring/carlos.py`'s `Follower`, every two seconds);
    `POST /sites/{s}/wiring/send` sends it now. Carlos draws it, so a board
    plugged in or flashed on the apothecary side is redrawn in carlos's rack.
-   Not built: a Bench window on apothecary's own page, and a lead that
-   apothecary cannot observe (an audio lead) declared anywhere but in the site
-   as drawn.
+   A printer's polls are part of it: while its Machine polls it, the
+   mainboard's state says what the last poll found -- printing, how far through
+   its job and how long in, its heaters -- and warns when it is offline or in
+   maintenance. `tests/e2e/test_carlos_bench.py` holds the loop with a real
+   carlos: the bench held at the start, a flash through apothecary's upload
+   route drawn in an open tab without a reload, and the printer's poll said
+   under its mainboard. Not built: a Bench window on apothecary's own page,
+   and a lead that apothecary cannot observe (an audio lead) declared anywhere
+   but in the site as drawn.
 
 ## What carlos needs
 
@@ -184,6 +192,40 @@ expected. Flashing `esp32_blink` onto the devkit from apothecary's page
 (`http://127.0.0.1:6284/viewer`, the devkit's Flash sketch) turns it present in
 carlos's rack within two seconds, its port no longer unexpected; the footpedal
 on the scripted Uno does the same.
+
+## Next: a camera on the Ender
+
+The owner aims a camera at the Ender 3 next, to tie printer monitoring to it.
+What is ready for it:
+
+- **The camera.** A camera is a part of the garage (`camera_1`), added on
+  printer_1's ring with Camera › Add here, its device one of the browser's
+  cameras; Live shows its video and Take picture keeps a frame in `captures/`
+  ([pictures.md](../pictures.md#cameras)).
+- **The monitoring.** The printer's Machine polls it -- state, progress,
+  heaters -- and each poll now reaches carlos as lines under printer_1's
+  mainboard, beside what the port says: present, Marlin as it answered `M115`,
+  pinned by its serial number.
+- **The reading.** `apothecary rig` reads sockets off a photograph through a
+  face pinned by its corners (`rig setup`), and follows a folder of frames as
+  they come (`rig follow --watch`); a board's power and USB leads are its first
+  validation ([the concert plan](carlos-concert-rig-2026-10-29.md), slice 4).
+
+What the tie still needs, once the camera's pictures show what it sees:
+
+1. **The Ender's faces laid out.** The sides of the printer the camera sees,
+   with the sockets on them (its power inlet, the mainboard's USB) placed as
+   fractions of each face, as the Uno's edge is; measured off the camera's
+   own pictures.
+2. **Frames kept with the polls.** While a print runs and the camera is live,
+   a frame kept at each poll, or each step of progress, beside the poll it was
+   kept at: a print's record of pictures and polls, and a folder `rig follow`
+   reads.
+3. **Two kinds of evidence for one lead.** The USB lead to printer_1 is seen
+   by its port answering, and could be seen in the picture as well; the lead's
+   state in carlos says both, and which disagree.
+
+Which of these comes first is the owner's to say once the camera is up.
 
 ## After carlos
 
