@@ -154,21 +154,32 @@ def _number(value: float) -> float:
     return float(int(rounded)) if rounded == int(rounded) else rounded
 
 
-def held(setup: Setup, reading: Reading) -> Tuple[Dict[str, Any], States]:
-    """The rig at the values read, drawn irl, and each module's and lead's state."""
+def held(
+    setup: Setup, reading: Reading, leads: Optional[List[Dict[str, Any]]] = None
+) -> Tuple[Dict[str, Any], States]:
+    """The rig at the values read, drawn irl, and each module's, socket's and lead's state.
+
+    ``leads`` are the rig's leads as they were last held, the setup's when none
+    are given: a plug moved in one frame is where it was moved to in the next,
+    so a rig re-patched a plug at a time is followed a plug at a time.
+
+    Every socket read has a state of its own when it has something to say: a plug
+    in it, a lead's plug that is not, one too small in the picture to read. A lead
+    with one plug out, where the picture has a plug in a socket no lead names that
+    takes the same plug the same way round, is held moved there, as a warning: a
+    hand moved that plug. Only where the pairing is the one there is, one such
+    lead and one such socket, since two of each could be paired either way."""
     patch = copy.deepcopy(setup.rig)
     patch["display"] = {**patch.get("display", {}), "mode": "irl"}
+    if leads is not None:
+        patch["connections"] = copy.deepcopy(leads)
     by_id = {m.module: m for m in reading.modules}
+    types = {m["id"]: m["type"] for m in patch.get("modules", [])}
     states = States()
-    plugged: Dict[Tuple[str, str], Optional[bool]] = {}
-    named = set()
-    for connection in patch.get("connections", []):
-        for end in (connection["source"], connection["target"]):
-            named.add((end["module"], end["jack"]))
+    plugged: Dict[Tuple[str, str], Plug] = {}
 
     for module in patch.get("modules", []):
         found = by_id[module["id"]]
-        entry = setup.entry(module["type"])
         state = ModuleState()
         if found.side is None or found.why:
             state.says.append(found.why or "not in the picture")
@@ -191,34 +202,141 @@ def held(setup: Setup, reading: Reading) -> Tuple[Dict[str, Any], States]:
             state.at_least(level)
             state.says.append(f"not read: {seen.name}, {seen.why}")
             state.controls[seen.name] = State(level=level, says=[f"not read: {seen.why}"])
-        labels = _labels(entry)
         for plug in found.plugs:
-            plugged[(module["id"], plug.name)] = plug.plugged
-            if plug.plugged and (module["id"], plug.name) not in named:
-                state.at_least("warn")
-                state.says.append(
-                    f"a plug in {labels.get(plug.name, plug.name)} that no lead names"
-                )
+            plugged[(module["id"], plug.name)] = plug
         states.modules[module["id"]] = state
 
-    for connection in patch.get("connections", []):
+    def where(module: str, jack: str) -> str:
+        return f"{_labels(setup.entry(types[module])).get(jack, jack)} on {module}"
+
+    connections = patch.get("connections", [])
+    moves = _moves(setup, connections, types, plugged)
+    moved_from, moved_into = {}, {}
+    for (index, role), socket in moves.items():
+        old = connections[index][role]
+        moved_from[(old["module"], old["jack"])] = where(*socket)
+        moved_into[socket] = where(old["module"], old["jack"])
+        connections[index][role] = {"module": socket[0], "jack": socket[1]}
+    named = {
+        (end["module"], end["jack"]) for c in connections for end in (c["source"], c["target"])
+    }
+
+    for module in patch.get("modules", []):
+        found, state = by_id[module["id"]], states.modules[module["id"]]
+        if found.side is None or found.why:
+            continue
+        labels = _labels(setup.entry(module["type"]))
+        unread = [plug for plug in found.plugs if plug.plugged is None]
+        if unread:
+            state.says.append(
+                f"not read: {len(unread)} of {len(found.plugs)} sockets on its {found.side}"
+            )
+        for plug in found.plugs:
+            key, label = (module["id"], plug.name), labels.get(plug.name, plug.name)
+            if plug.plugged is None:
+                # A lead drawn to a socket not read is drawn on the rig's word alone.
+                level = "warn" if key in named else "none"
+                state.at_least(level)
+                state.jacks[plug.name] = State(level=level, says=[f"not read: {plug.why}"])
+            elif plug.plugged and key in moved_into:
+                state.jacks[plug.name] = State(
+                    level="warn",
+                    says=[
+                        f"a plug in it: the lead's from {moved_into[key]}, as the picture has it"
+                    ],
+                )
+            elif plug.plugged and key not in named:
+                state.at_least("warn")
+                state.says.append(f"a plug in {label} that no lead names")
+                state.jacks[plug.name] = State(
+                    level="warn", says=["a plug in it that no lead names"]
+                )
+            elif plug.plugged:
+                state.jacks[plug.name] = State(level="ok", says=["seen: a plug in it"])
+            elif key in named:
+                state.jacks[plug.name] = State(
+                    level="fault", says=["declared: a lead's plug, and nothing in it"]
+                )
+            elif key in moved_from:
+                state.jacks[plug.name] = State(
+                    level="none", says=[f"empty: its lead's plug is in {moved_from[key]}"]
+                )
+
+    for index, connection in enumerate(connections):
         lead = LeadState(source=connection["source"], target=connection["target"])
-        seen_in, empty, unseen = [], [], []
-        for end in (connection["source"], connection["target"]):
-            module = next(m for m in patch["modules"] if m["id"] == end["module"])
-            label = _labels(setup.entry(module["type"])).get(end["jack"], end["jack"])
-            where = f"{label} on {end['module']}"
-            state_of_end = plugged.get((end["module"], end["jack"]))
-            (seen_in if state_of_end else empty if state_of_end is False else unseen).append(where)
+        seen_in, empty, unseen, unread = [], [], [], []
+        for role in ("source", "target"):
+            end = connection[role]
+            at = where(end["module"], end["jack"])
+            plug = plugged.get((end["module"], end["jack"]))
+            if plug is None:
+                unseen.append(at)
+            elif plug.plugged is None:
+                unread.append(f"{at}, {plug.why}")
+            else:
+                (seen_in if plug.plugged else empty).append(at)
+            if (index, role) in moves:
+                lead.says.append(
+                    f"moved: its plug in {moved_into[(end['module'], end['jack'])]} "
+                    f"is in {at} now, as the picture has it"
+                )
         if empty:
             lead.at_least("fault")
-            lead.says.extend(f"declared: nothing plugged into {where}" for where in empty)
-        elif seen_in and not unseen:
+            lead.says.extend(f"declared: nothing plugged into {at}" for at in empty)
+        elif seen_in and not unseen and not unread:
             lead.at_least("ok")
-        lead.says.extend(f"seen: a plug in {where}" for where in seen_in)
-        lead.says.extend(f"not seen: {where} is not in the picture" for where in unseen)
+        if any((index, role) in moves for role in ("source", "target")):
+            lead.at_least("warn")
+        lead.says.extend(f"seen: a plug in {at}" for at in seen_in)
+        lead.says.extend(f"not read: {at}" for at in unread)
+        lead.says.extend(f"not seen: {at} is not in the picture" for at in unseen)
         states.connections.append(lead)
     return patch, states
+
+
+def _moves(
+    setup: Setup,
+    connections: List[Dict[str, Any]],
+    types: Dict[str, str],
+    plugged: Dict[Tuple[str, str], Plug],
+) -> Dict[Tuple[int, str], Tuple[str, str]]:
+    """Which lead's plug a hand moved, and into which socket, by the lead's
+    index and the end: a lead with that end's socket empty and the other end's
+    plugged, paired with a socket no lead names that has a plug in it and takes
+    the same plug the same way round -- the one lead and the one socket of
+    their kind, or none. And none where a plug no lead names is in a socket of
+    the other way round: the two could be a new lead's ends."""
+
+    def kind(module: str, jack: str) -> Tuple[Any, Any]:
+        entry = next(
+            (j for j in setup.entry(types[module]).get("jacks", []) if j["name"] == jack), {}
+        )
+        return entry.get("type"), entry.get("connector")
+
+    named = {
+        (end["module"], end["jack"]) for c in connections for end in (c["source"], c["target"])
+    }
+    out: Dict[Tuple[Any, Any], List[Tuple[int, str]]] = {}
+    for index, connection in enumerate(connections):
+        for role, other in (("source", "target"), ("target", "source")):
+            here = plugged.get((connection[role]["module"], connection[role]["jack"]))
+            there = plugged.get((connection[other]["module"], connection[other]["jack"]))
+            if here is not None and here.plugged is False and there is not None and there.plugged:
+                out.setdefault(
+                    kind(connection[role]["module"], connection[role]["jack"]), []
+                ).append((index, role))
+    into: Dict[Tuple[Any, Any], List[Tuple[str, str]]] = {}
+    for socket, plug in plugged.items():
+        if plug.plugged and socket not in named:
+            into.setdefault(kind(*socket), []).append(socket)
+    other_way = {"input": "output", "output": "input"}
+    return {
+        ends[0]: into[found][0]
+        for found, ends in out.items()
+        if len(ends) == 1
+        and len(into.get(found, [])) == 1
+        and (other_way.get(found[0]), found[1]) not in into
+    }
 
 
 # --- the rig, as carlos has it ------------------------------------------------------------

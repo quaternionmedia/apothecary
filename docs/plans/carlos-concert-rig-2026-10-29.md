@@ -72,6 +72,15 @@ module and lead:
 - **A lead's state:** whether a plug was seen at both ends, at one end, or at
   neither, or whether an end is on a face the camera does not see. A plug seen
   in a socket that no lead names is a line on its module.
+- **A socket's state:** each socket read that has something to say has a state
+  of its own, by jack name: a plug seen in it, a lead's plug that is not, a plug
+  no lead names, one too small in the picture to read. Carlos rings that socket
+  in its level.
+- **A plug moved:** a lead with one plug out, where the picture has a plug in a
+  socket no lead names that takes the same plug the same way round, is held
+  moved there, as a warning. That happens only where the pairing is the one
+  there is. The follower carries the leads from frame to frame, so a rig
+  re-patched between songs, a plug at a time, is followed a plug at a time.
 
 Slice 1 needs nothing new from carlos.
 
@@ -126,13 +135,15 @@ Every result carries a confidence: the contrast it was read on.
    - `apothecary rig follow`, which reads a folder of frames in order, holds
      each reading in carlos, and keeps the record beside the frames;
    - `apothecary rig simulate`, which draws a concert: songs that move a few
-     controls each and pull or push a plug between them.
+     controls each and pull or push a plug between them, and from the fifth
+     song on move one of a lead's plugs to another socket.
 
    Drawn pictures prove the plumbing, not the eyes: the same drawing rules
    both draw them and read them.
 2. **Carlos turns in place.** *Built*, on carlos's side, where it only draws.
-   When a hold has the same devices on the same sides with the same leads,
-   carlos turns each control that moved where it stands and puts the new
+   When a hold has the same devices on the same sides, carlos turns each
+   control that moved where it stands, re-patches the leads that changed (each
+   one gone taken out, each new one put in, the rest left), and puts the new
    states on the elements already drawn, rather than drawing the rack again;
    a different rig is drawn afresh. A module's state may carry `controls`, a
    state by parameter name, and apothecary gives one to every control it did
@@ -197,6 +208,14 @@ decision the owner has made yet.
   carlos's JavaScript tested here and a full test of carlos with the demo synth
   rig; real pictures are validated first on something much simpler, power and
   USB into a device (slice 4).
+- **2026-10-30:** carlos is tested for many small leads that change often. In
+  carlos: a held rig's leads are re-patched in place; a lead it could not draw
+  (to a jack its device lacks, two outputs or two inputs, sent twice) is refused
+  rather than left off the rack; a socket carries a state of its own; a lead the
+  patch names input first keeps its state. In apothecary: a socket too small in
+  the picture to read is said so (`look.MIN_SOCKET_PX`), since below it drawn
+  sockets were read wrong as surely as large ones were read right; each socket
+  is sent its state; a plug moved is followed (*The seam*).
 
 ## Open
 

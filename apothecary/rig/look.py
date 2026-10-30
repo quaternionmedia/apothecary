@@ -11,7 +11,7 @@ the plain finder reads it, and nothing else is needed.
 | fader, drawbar | the point along the travel, averaged across the slot, that differs most from the travel's middle value: the cap; up, or right, is more |
 | switch | whichever half of its body is lighter: the lever; up is the top of the range |
 | encoder | never: it turns without end, so a picture shows no position |
-| socket | a plug, unless its centre is darker than the ring round it by ``HOLE_CONTRAST``: an empty hole |
+| socket | a plug, unless its centre is darker than the ring round it by ``HOLE_CONTRAST``: an empty hole; never when its hole is under ``MIN_SOCKET_PX`` from centre to edge in the picture, where centre and ring are the same few pixels |
 
 Each answer carries a confidence, the contrast it was read on, well under 1.0
 when that was faint, so nothing downstream takes a guess for a measurement.
@@ -37,6 +37,11 @@ from .panels import Control, Panel, Socket
 MIN_CONTRAST = 40
 # An empty socket's centre is this much darker than the ring round it.
 HOLE_CONTRAST = 50
+# A socket smaller than this, in pixels from its centre to its edge, is not read:
+# its centre and the ring round it are the same few pixels. On drawn pictures the
+# reads go wrong a little under it, and as surely as a large socket's are right;
+# the rest is a margin for a real camera's blur and compression.
+MIN_SOCKET_PX = 2.5
 # A pointer this far past the sweep is in the gap at the bottom, and is not read.
 PAST_SWEEP = 12.0
 RING_SAMPLES = 120
@@ -59,6 +64,7 @@ class Plug(BaseModel):
     name: str
     plugged: Optional[bool] = None  # None when it was not read
     confidence: float = 0.0
+    why: Optional[str] = None  # why it was not read
 
 
 class Grey:
@@ -116,6 +122,17 @@ class Face:
     def mm(self, across: float, down: float) -> Tuple[float, float]:
         """A size in millimetres, as fractions of this face."""
         return across / self.panel.width_mm, down / self.panel.height_mm
+
+    def pixels(self, x: float, y: float, rx: float, ry: float) -> float:
+        """How far ``rx`` across or ``ry`` down from a point on the face is in the
+        picture, in its pixels: the shorter of the two."""
+        cx, cy = panels.apply(self.onto, x, y)
+        ax, ay = panels.apply(self.onto, x + rx, y)
+        bx, by = panels.apply(self.onto, x, y + ry)
+        w, h = self.grey.width, self.grey.height
+        return min(
+            math.hypot((ax - cx) * w, (ay - cy) * h), math.hypot((bx - cx) * w, (by - cy) * h)
+        )
 
 
 def _peak(values: Sequence[float], circular: bool) -> Tuple[float, float]:
@@ -243,6 +260,12 @@ def control(face: Face, control: Control) -> Seen:
 
 def socket(face: Face, socket: Socket) -> Plug:
     rx, ry = face.mm(panels.SOCKET_MM * socket.size / 2, panels.SOCKET_MM * socket.size / 2)
+    radius = face.pixels(socket.x, socket.y, rx, ry)
+    if radius < MIN_SOCKET_PX:
+        return Plug(
+            name=socket.name,
+            why=f"too small in the picture to read, {2 * radius:.1f} px across",
+        )
     centre = [
         face.at(socket.x + dx * 0.3 * rx, socket.y + dy * 0.3 * ry)
         for dx in (-1, -0.5, 0, 0.5, 1)

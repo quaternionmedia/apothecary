@@ -219,14 +219,18 @@ def _moving(setup: Setup) -> List[Tuple[str, panels.Control]]:
 
 
 def concert(setup: Setup, songs: int = 4, frames: int = 6, seed: int = 1):
-    """Each frame of a concert, as (values, plugged, what changed at its song's start).
+    """Each frame of a concert, as (values, plugged, leads, what changed at its
+    song's start).
 
     Each song moves a few controls to new places over its first half and holds
     them; the second song starts with a plug pushed into a socket no lead names,
     the third with it out again and a lead's plug pulled, and the fourth with it
-    pushed back."""
+    pushed back. Each song after that starts with one of a lead's plugs moved to
+    a free socket that takes it, as a rig is re-patched between songs: ``leads``
+    is the rig's leads as the frame has them."""
     rng = random.Random(seed)
     values, plugged = at_rest(setup)
+    leads = json.loads(json.dumps(setup.rig.get("connections", [])))
     moving = _moving(setup)
     named_ends = [
         (end["module"], end["jack"])
@@ -257,6 +261,8 @@ def concert(setup: Setup, songs: int = 4, frames: int = 6, seed: int = 1):
         if song == 3 and pulled:
             plugged[pulled[0]][pulled[1]] = True
             happened.append(f"the lead's plug in {pulled[1]} on {pulled[0]} pushed back")
+        if song >= 4:
+            happened.extend(_repatch(rng, setup, leads, plugged))
         start = {module: dict(controls) for module, controls in values.items()}
         targets = {}
         for module, control in rng.sample(moving, min(4, len(moving))):
@@ -278,8 +284,45 @@ def concert(setup: Setup, songs: int = 4, frames: int = 6, seed: int = 1):
             yield (
                 {m: dict(c) for m, c in values.items()},
                 {m: dict(s) for m, s in plugged.items()},
+                json.loads(json.dumps(leads)),
                 happened if frame == 0 else [],
             )
+
+
+def _repatch(rng: random.Random, setup: Setup, leads: List[Dict[str, Any]], plugged: Plugged):
+    """One of a lead's plugs, on a face the camera sees, moved to a free socket
+    there that takes the same plug the same way round; what was done, if anything."""
+    types = {m["id"]: m["type"] for m in setup.rig.get("modules", [])}
+
+    def kind(module: str, jack: str):
+        entry = next(j for j in setup.entry(types[module])["jacks"] if j["name"] == jack)
+        return entry["type"], entry["connector"]
+
+    named = {
+        (end["module"], end["jack"]) for lead in leads for end in (lead["source"], lead["target"])
+    }
+    free = [
+        (module, name)
+        for module, sockets in sorted(plugged.items())
+        for name, on in sorted(sockets.items())
+        if not on and (module, name) not in named
+    ]
+    choices = [
+        (lead, role, socket)
+        for lead in leads
+        for role in ("source", "target")
+        if lead[role]["jack"] in plugged.get(lead[role]["module"], {})
+        for socket in free
+        if kind(*socket) == kind(lead[role]["module"], lead[role]["jack"])
+    ]
+    if not choices:
+        return []
+    lead, role, (module, name) = rng.choice(choices)
+    old = lead[role]
+    plugged[old["module"]][old["jack"]] = False
+    plugged[module][name] = True
+    lead[role] = {"module": module, "jack": name}
+    return [f"the lead's plug in {old['jack']} on {old['module']} moved to {name} on {module}"]
 
 
 def write_concert(
@@ -293,7 +336,7 @@ def write_concert(
     (folder / "setup.json").write_text(setup.model_dump_json(indent=2), encoding="utf-8")
     lines = []
     count = 0
-    for count, (values, plugged, happened) in enumerate(
+    for count, (values, plugged, leads, happened) in enumerate(
         concert(setup, songs, frames, seed), start=1
     ):
         name = f"frame-{count:04d}.png"
@@ -308,6 +351,7 @@ def write_concert(
                     "at": taken,
                     "values": values,
                     "plugged": plugged,
+                    "leads": leads,
                     "happened": happened,
                 }
             )

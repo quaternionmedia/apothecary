@@ -10,7 +10,11 @@ held in carlos as ``apothecary rig follow`` holds it. An open rack tab is then h
 - the rack is turned in place from frame to frame, its devices the same elements
   (carlos's ``feat/hold-the-rig``), not drawn again;
 - the stray plug's song draws the DFAM's state as a warning, and the pulled
-  lead's song draws that lead as a fault.
+  lead's song draws that lead as a fault;
+- each re-patched song's lead, one of its plugs moved to another socket, is
+  drawn where the frame has it, and stays there: the cable taken out and put
+  in, the devices where they stand, and on the frame it moved in the socket it
+  is in now ringed as a guess.
 
 Without ``CARLOS_CHECKOUT`` it skips, saying so: carlos is another repository.
 """
@@ -55,7 +59,7 @@ def test_a_concert_followed_into_carlos_is_drawn_frame_by_frame(carlos, page: Pa
     rig_doc, devices = reading.rig_from_carlos(carlos, EXAMPLE)
     setup = simulated.scene(rig_doc, devices)
     folder = tmp_path / "concert"
-    simulated.write_concert(setup, folder, songs=4, frames=3, every=5.0, seed=7)
+    simulated.write_concert(setup, folder, songs=6, frames=3, every=5.0, seed=7)
     truth = [json.loads(line) for line in (folder / "truth.jsonl").read_text().splitlines()]
     ranges = {
         (module["id"], c.name): (c.minimum, c.maximum)
@@ -68,7 +72,8 @@ def test_a_concert_followed_into_carlos_is_drawn_frame_by_frame(carlos, page: Pa
     following = concert.Concert(folder, url=carlos, say=lambda line: None)
     (folder / concert.RECORD).write_text("", encoding="utf-8")
     elements = None
-    seen = {"held": 0, "stray": 0, "pulled": 0}
+    seen = {"held": 0, "stray": 0, "pulled": 0, "moved": 0}
+    leads_before = rig_doc["connections"]
 
     for frame, shown in zip(concert.frames(folder), truth, strict=True):
         following.take(frame)
@@ -97,13 +102,30 @@ def test_a_concert_followed_into_carlos_is_drawn_frame_by_frame(carlos, page: Pa
         ), f"{frame.name}: the rack was drawn again"
         assert page.locator(".module").count() == elements
 
+        # The rack's cables are the frame's leads: a moved plug's lead is drawn
+        # where the frame has it.
+        assert _drawn_leads(page) == {_lead(lead) for lead in shown["leads"]}, frame.name
+        moved = [
+            lead[role]
+            for lead, before in zip(shown["leads"], leads_before, strict=True)
+            for role in ("source", "target")
+            if lead[role] != before[role]
+        ]
+        leads_before = shown["leads"]
+        # The frame a plug is moved in rings the socket it is in now as a guess.
+        for end in moved:
+            socket = page.locator(
+                f'.module[data-module-id="{end["module"]}"] .jack[data-jack="{end["jack"]}"]'
+            )
+            assert socket.get_attribute("data-held") == "warn", frame.name
+
         # What the song did to the plugs is drawn as each device's and lead's state.
         dfam = page.locator('.module[data-module-id="dfam"]')
         stray = [
             module
             for module, sockets in shown["plugged"].items()
             for name, on in sockets.items()
-            if on and not _named(rig_doc, module, name)
+            if on and not _named(shown["leads"], module, name)
         ]
         for module in stray:
             assert (
@@ -114,7 +136,7 @@ def test_a_concert_followed_into_carlos_is_drawn_frame_by_frame(carlos, page: Pa
             assert dfam.get_attribute("data-held") == "ok", frame.name
         pulled = any(
             not shown["plugged"][end["module"]][end["jack"]]
-            for lead in rig_doc["connections"]
+            for lead in shown["leads"]
             for end in (lead["source"], lead["target"])
             if end["jack"] in shown["plugged"].get(end["module"], {})
         )
@@ -125,15 +147,31 @@ def test_a_concert_followed_into_carlos_is_drawn_frame_by_frame(carlos, page: Pa
         seen["held"] += bool(held)
         seen["stray"] += bool(stray)
         seen["pulled"] += pulled
+        seen["moved"] += bool(moved)
 
     # The concert went through what it is drawn to: frames held, a song with a
-    # stray plug in, and one with a lead's plug pulled.
-    assert seen["held"] > 1 and seen["stray"] and seen["pulled"], seen
+    # stray plug in, one with a lead's plug pulled, and re-patched ones.
+    assert seen["held"] > 1 and seen["stray"] and seen["pulled"] and seen["moved"], seen
 
 
-def _named(rig_doc, module: str, jack: str) -> bool:
+def _named(leads, module: str, jack: str) -> bool:
     return any(
         end["module"] == module and end["jack"] == jack
-        for lead in rig_doc["connections"]
+        for lead in leads
         for end in (lead["source"], lead["target"])
+    )
+
+
+def _lead(lead) -> str:
+    """A lead as carlos keys its cable: output first, as the rig names it."""
+    source, target = lead["source"], lead["target"]
+    return f"{source['module']}:{source['jack']}->{target['module']}:{target['jack']}"
+
+
+def _drawn_leads(page: Page) -> set:
+    return set(
+        page.evaluate(
+            "() => system.patchBay.connections.map(({ source, target }) =>"
+            " `${source.module.id}:${source.name}->${target.module.id}:${target.name}`)"
+        )
     )

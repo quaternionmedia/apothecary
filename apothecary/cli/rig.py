@@ -105,7 +105,7 @@ def rig_options(command):
     type=click.Path(file_okay=False, path_type=Path),
     help="The folder the concert is drawn into.",
 )
-@click.option("--songs", default=4, show_default=True, type=click.IntRange(1, 50))
+@click.option("--songs", default=6, show_default=True, type=click.IntRange(1, 50))
 @click.option(
     "--frames", default=6, show_default=True, type=click.IntRange(1, 200), help="Frames per song."
 )
@@ -121,7 +121,9 @@ def simulate_cmd(url, catalogue, example, rig_file, out, songs, frames, every, s
     """Draw a concert: frames of the rig through a camera above it, with its setup and their truth.
 
     Each song moves a few controls; between songs a plug is pushed where no
-    lead names one, and a lead's plug is pulled and pushed back."""
+    lead names one, and a lead's plug is pulled and pushed back; from the fifth
+    song on, one of a lead's plugs is moved to another socket, as a rig is
+    re-patched."""
     rig_doc, devices = _rig(url, catalogue, example, rig_file)
     setup = simulated.scene(rig_doc, devices)
     if not setup.faces:

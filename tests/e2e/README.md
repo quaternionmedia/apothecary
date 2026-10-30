@@ -61,7 +61,8 @@ carlos itself (`carlos_app.py`), from the checkout `CARLOS_CHECKOUT` names (its
 `.venv` synced, on a branch that holds a rig and turns it in place), and skips,
 saying so, without that variable, since carlos is another repository.
 `test_carlos_concert.py` needs no apothecary server: it follows a drawn concert
-of a synth rig into carlos and holds each frame's rack to the frame's truth.
+of a synth rig into carlos, re-patched a plug at a time between the later songs,
+and holds each frame's rack to the frame's truth.
 `test_carlos_bench.py` starts a server of its own sending its garage to carlos,
 as `serve --carlos` does, flashes a board through it, and holds carlos's open
 tab to the bench as it changes:

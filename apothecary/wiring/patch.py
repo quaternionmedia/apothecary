@@ -90,10 +90,12 @@ class LeadState(State):
 
 
 class ModuleState(State):
-    """A module's state, and a state of its own for any of its controls: one a
-    picture could not read, say, by its parameter's name."""
+    """A module's state, and a state of its own for any of its controls, by its
+    parameter's name, and any of its jacks, by the jack's: a control a picture
+    could not read, a socket with a plug in it that no lead names."""
 
     controls: Dict[str, State] = Field(default_factory=dict)
+    jacks: Dict[str, State] = Field(default_factory=dict)
 
 
 class States(BaseModel):

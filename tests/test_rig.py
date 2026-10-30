@@ -197,7 +197,7 @@ def test_held_is_the_rig_at_the_values_read_with_each_module_s_and_lead_s_state(
     values, plugged = simulated.at_rest(setup)
     values["one"]["cutoff"] = 90
     plugged["one"]["spare_in"] = True  # a plug no lead names
-    plugged["two"]["gate_in"] = False  # the lead's far end pulled
+    plugged["one"]["cv_out"] = False  # the lead's near end pulled
     picture = tmp_path / "rig.png"
     simulated.draw(setup, values, plugged).save(picture)
     patch, states = reading.held(setup, reading.read(setup, picture))
@@ -222,17 +222,120 @@ def test_held_is_the_rig_at_the_values_read_with_each_module_s_and_lead_s_state(
     assert states.modules["two"].level == "ok"
     assert states.modules["desk"].level == "none"
 
+    # Each socket read has a state of its own when it has something to say.
+    assert {name: j.level for name, j in states.modules["one"].jacks.items()} == {
+        "cv_out": "fault",
+        "spare_in": "warn",
+    }
+    assert states.modules["two"].jacks["gate_in"].says == ["seen: a plug in it"]
+
     pulled, unseen = states.connections
     assert pulled.level == "fault"
     assert pulled.says == [
-        "declared: nothing plugged into GATE on two",
-        "seen: a plug in CV on one",
+        "declared: nothing plugged into CV on one",
+        "seen: a plug in GATE on two",
     ]
     assert unseen.level == "none"
     assert unseen.says == [
         "not seen: OUT on two is not in the picture",
         "not seen: IN 1 on desk is not in the picture",
     ]
+
+
+def _held_off(setup, tmp_path, values, plugged, scale: float = 1.0):
+    picture = simulated.draw(setup, values, plugged)
+    if scale != 1.0:
+        picture = picture.resize((round(picture.width * scale), round(picture.height * scale)))
+    picture.save(tmp_path / "rig.png")
+    return reading.held(setup, reading.read(setup, tmp_path / "rig.png"))
+
+
+def test_a_plug_moved_to_a_socket_no_lead_names_is_held_moved_there(setup, tmp_path):
+    values, plugged = simulated.at_rest(setup)
+    plugged["two"]["gate_in"] = False  # the lead's plug, out of GATE on two
+    plugged["one"]["spare_in"] = True  # and in SPARE on one: an input, a 3.5mm plug
+    patch, states = _held_off(setup, tmp_path, values, plugged)
+
+    # Held where the picture has it, as a warning, and said where it was.
+    assert patch["connections"][0]["target"] == {"module": "one", "jack": "spare_in"}
+    assert RIG["connections"][0]["target"] == {"module": "two", "jack": "gate_in"}
+    moved = states.connections[0]
+    assert (moved.target, moved.level) == ({"module": "one", "jack": "spare_in"}, "warn")
+    assert moved.says == [
+        "moved: its plug in GATE on two is in SPARE on one now, as the picture has it",
+        "seen: a plug in CV on one",
+        "seen: a plug in SPARE on one",
+    ]
+    assert states.modules["one"].jacks["spare_in"].says == [
+        "a plug in it: the lead's from GATE on two, as the picture has it"
+    ]
+    assert states.modules["two"].jacks["gate_in"].says == [
+        "empty: its lead's plug is in SPARE on one"
+    ]
+    # Not a stray, then: no module warns of a plug no lead names.
+    assert not any("no lead names" in line for m in states.modules.values() for line in m.says)
+
+
+def test_a_rig_re_patched_a_plug_at_a_time_is_followed_a_plug_at_a_time(tmp_path):
+    # Two leads into the two synths' gates, each moved in turn to a SPARE.
+    rig = json.loads(json.dumps(RIG))
+    rig["connections"].append(
+        {
+            "source": {"module": "two", "jack": "cv_out"},
+            "target": {"module": "one", "jack": "gate_in"},
+        }
+    )
+    setup = simulated.scene(rig, [SYNTH, DESK])
+    values, plugged = simulated.at_rest(setup)
+    plugged["two"]["gate_in"], plugged["one"]["spare_in"] = False, True
+    first, _ = _held_off(setup, tmp_path, values, plugged)
+    assert first["connections"][0]["target"] == {"module": "one", "jack": "spare_in"}
+
+    plugged["one"]["gate_in"], plugged["two"]["spare_in"] = False, True
+    # Against the setup alone, two plugs are out and two are in, and either
+    # could be either lead's: nothing is guessed.
+    alone, _ = _held_off(setup, tmp_path, values, plugged)
+    assert alone["connections"] == rig["connections"]
+    # Against the leads as the last frame held them, one plug moved since.
+    picture = tmp_path / "rig.png"
+    second, states = reading.held(setup, reading.read(setup, picture), leads=first["connections"])
+    assert [c["target"] for c in second["connections"][::2]] == [
+        {"module": "one", "jack": "spare_in"},
+        {"module": "two", "jack": "spare_in"},
+    ]
+    assert [lead.level for lead in states.connections] == ["ok", "none", "warn"]
+    assert first["connections"][2]["target"] == {"module": "one", "jack": "gate_in"}
+
+
+def test_no_move_is_guessed_where_the_picture_could_say_two_things(setup, tmp_path):
+    values, plugged = simulated.at_rest(setup)
+    plugged["two"]["gate_in"] = False
+    plugged["one"]["spare_in"] = True
+    # A plug no lead names in an output too: SPARE and CV on two could be a new
+    # lead's two ends, and GATE on two a lead's plug pulled.
+    plugged["two"]["cv_out"] = True
+    patch, states = _held_off(setup, tmp_path, values, plugged)
+    assert patch["connections"] == RIG["connections"]
+    assert states.connections[0].level == "fault"
+    assert states.modules["one"].jacks["spare_in"].level == "warn"
+    assert states.modules["two"].jacks["cv_out"].says == ["a plug in it that no lead names"]
+
+
+def test_a_socket_too_small_in_the_picture_is_not_read(setup, tmp_path):
+    values, plugged = simulated.at_rest(setup)
+    patch, states = _held_off(setup, tmp_path, values, plugged, scale=0.12)
+    plugs = [p for m in reading.read(setup, tmp_path / "rig.png").modules for p in m.plugs]
+    assert plugs and all(p.plugged is None for p in plugs)
+    assert all(p.why.startswith("too small in the picture to read") for p in plugs)
+    # The lead to it is drawn on the rig's word alone, and says so.
+    gate = states.modules["two"].jacks["gate_in"]
+    assert gate.level == "warn" and gate.says[0].startswith("not read: too small")
+    assert states.modules["one"].jacks["spare_in"].level == "none"
+    assert "not read: 3 of 3 sockets on its front" in states.modules["one"].says
+    lead = states.connections[0]
+    assert lead.level == "none"
+    assert lead.says[0].startswith("not read: CV on one, too small in the picture to read")
+    assert patch["connections"] == RIG["connections"]
 
 
 def test_a_setup_refuses_what_it_cannot_show(setup):
