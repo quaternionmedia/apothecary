@@ -14,7 +14,9 @@ module and each lead, in the levels ``wiring.patch`` has (``none``, ``ok``,
 ``warn``, ``fault``):
 
 - a module: how many of its controls were read, and each that was not, with
-  why; a plug seen in a socket no lead names; a face not in the picture;
+  why, which is also that control's own state (``ModuleState.controls``) so
+  that carlos draws it unread; a plug seen in a socket no lead names; a face
+  not in the picture;
 - a lead: a plug seen at both ends, nothing in one end, or an end on a face
   the camera does not see.
 
@@ -31,7 +33,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from ..wiring.patch import LeadState, State, States
+from ..wiring.patch import LeadState, ModuleState, State, States
 from . import look, panels
 from .look import Plug, Seen
 
@@ -167,7 +169,7 @@ def held(setup: Setup, reading: Reading) -> Tuple[Dict[str, Any], States]:
     for module in patch.get("modules", []):
         found = by_id[module["id"]]
         entry = setup.entry(module["type"])
-        state = State()
+        state = ModuleState()
         if found.side is None or found.why:
             state.says.append(found.why or "not in the picture")
             states.modules[module["id"]] = state
@@ -184,9 +186,11 @@ def held(setup: Setup, reading: Reading) -> Tuple[Dict[str, Any], States]:
             f"read: {len(found.seen) - len(unread)} of {len(found.seen)} controls on its {found.side}"
         )
         for seen in unread:
-            if seen.kind != "encoder":
-                state.at_least("warn")
+            # An encoder has no position to read; any other control could have.
+            level = "none" if seen.kind == "encoder" else "warn"
+            state.at_least(level)
             state.says.append(f"not read: {seen.name}, {seen.why}")
+            state.controls[seen.name] = State(level=level, says=[f"not read: {seen.why}"])
         labels = _labels(entry)
         for plug in found.plugs:
             plugged[(module["id"], plug.name)] = plug.plugged

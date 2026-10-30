@@ -89,8 +89,15 @@ class LeadState(State):
     target: Dict[str, str]
 
 
+class ModuleState(State):
+    """A module's state, and a state of its own for any of its controls: one a
+    picture could not read, say, by its parameter's name."""
+
+    controls: Dict[str, State] = Field(default_factory=dict)
+
+
 class States(BaseModel):
-    modules: Dict[str, State] = Field(default_factory=dict)
+    modules: Dict[str, ModuleState] = Field(default_factory=dict)
     connections: List[LeadState] = Field(default_factory=list)
 
 
@@ -151,10 +158,10 @@ def _identity_kind(identity: str, device: Optional[DeviceInfo]) -> str:
     return "its port"
 
 
-def _state(known: Evidence, row: Optional[NodeBinding]) -> State:
+def _state(known: Evidence, row: Optional[NodeBinding]) -> ModuleState:
     """A board's four states: present or absent, firmware, and how it is known (its
     lead's is the lead's own)."""
-    state = State()
+    state = ModuleState()
     device = row.device if row is not None else None
     # Present or absent.
     if not known.expected:
@@ -200,8 +207,8 @@ def _state(known: Evidence, row: Optional[NodeBinding]) -> State:
     return state
 
 
-def _unnamed(device: DeviceInfo) -> State:
-    state = State(level="warn")
+def _unnamed(device: DeviceInfo) -> ModuleState:
+    state = ModuleState(level="warn")
     state.says.append(f"unexpected: answering on {device.port}, and no node names it")
     if device.printer is not None:
         state.says.append(f"firmware: {device.printer.firmware_name}, as it answered M115")
@@ -295,7 +302,7 @@ def wiring_for_site(
 
     if connections:
         modules.append(_module(HOST_MODULE, catalogue.HOST))
-        wiring.states.modules[HOST_MODULE] = State(
+        wiring.states.modules[HOST_MODULE] = ModuleState(
             level="ok", says=["the computer apothecary runs on"]
         )
     wiring.patch = {

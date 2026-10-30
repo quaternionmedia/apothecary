@@ -56,6 +56,16 @@ fails on any. Every other module uses the session's server, which lives
 for the whole run: take back what a test pins, places or adds, or the tests
 after it see it.
 
+`test_carlos_concert.py` needs no apothecary server: it runs carlos itself,
+from the checkout `CARLOS_CHECKOUT` names (its `.venv` synced, on a branch that
+holds a rig and turns it in place), follows a drawn concert of the rig into it
+and holds each frame's rack to the frame's truth. Without that variable it
+skips, saying so, since carlos is another repository:
+
+```bash
+CARLOS_CHECKOUT=../carlos uv run pytest tests/e2e/test_carlos_concert.py
+```
+
 ## Running in parallel
 
 A file's tests run in order and on one server: the walkthroughs and the ring build

@@ -211,6 +211,11 @@ def test_held_is_the_rig_at_the_values_read_with_each_module_s_and_lead_s_state(
     assert any(
         line.startswith("not read: select, an encoder") for line in states.modules["one"].says
     )
+    # The control not read has a state of its own, for carlos to draw it so; an
+    # encoder never has a position to read, so it asks nothing of a person.
+    unread = states.modules["one"].controls
+    assert list(unread) == ["select"] and unread["select"].level == "none"
+    assert unread["select"].says[0].startswith("not read: an encoder turns without end")
     assert states.modules["two"].level == "ok"
     assert states.modules["desk"].level == "none"
 
