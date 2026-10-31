@@ -171,7 +171,7 @@ side and says one of four things:
 - **Unknown**: nothing has said, or everything that said is older than its
   budget.
 
-Two precedences are decided, and one is proposed:
+Three precedences are decided:
 
 - **A person's word wins over a guess.** Where a model's answer and a person's
   differ on a subject and property, the person's is the state, without
@@ -180,10 +180,10 @@ Two precedences are decided, and one is proposed:
 - **A guess never raises a level on its own.** `warn` or `fault` on a subject
   rests on at least one observation that is not a guess. A guess alone is shown
   as one, at `none`.
-- *Proposed:* a person's word against an instrument or a reading is a
-  disagreement like any other, not a win. A person says the lead is in and the
-  port does not answer: each is true of something, and which one it is, is the
-  person's to say when they close it (*Open*, 4).
+- **A person's word against an instrument or a reading is a disagreement** like
+  any other, not a win. A person says the lead is in and the port does not
+  answer: each is true of something, and which one it is, is the person's to
+  say when they close it.
 
 Levels are the wiring's (`none`, `ok`, `warn`, `fault`). A level is computed
 from the observations by rules a test holds, and never set by hand.
@@ -225,7 +225,9 @@ by any of four links:
   through its own corners into the face's coordinates and compared there: that
   says which module a face just pinned in the second camera is. Finding a region
   in the second camera with nothing pinned there needs a feature matcher, which
-  this repository does not have, or an image model through qmcp (*Open*, 11).
+  this repository does not have. A local feature matcher makes the suggestion,
+  a new dependency that enters behind the licence gate, and an image model
+  through qmcp, where one is installed, gives a second opinion beside it.
 
 A region two cameras see and nothing links is two sightings until a link joins
 them.
@@ -391,7 +393,7 @@ the reader's knobs and faders is not measured.
 5. **A person at the subject, from a wider camera.** Motion in a room camera's
    view over the region a face occupies marks that face's readings in the span
    as possibly covered. It is coarse, holding the readings while anyone stands
-   at the rig, and it records that someone was there, never who (*Open*, 8).
+   at the rig, and it records that someone was there, never who.
 6. **A model's guess** that something covers a face, through qmcp. A guess may
    withhold a reading, making it unread, and never makes one: it only ever
    lowers what the layer claims.
@@ -405,7 +407,8 @@ found when the cover lifts is reported as having happened while covered,
 between the last clean frame and the first clean one after it, never at the
 moment the cover lifted.
 
-**The order proposed** (*Open*, 12): the picture's limits and the reference
+**The order proposed** (*Open*, 2), settled after the demo on the Ender's real
+frames: the picture's limits and the reference
 surround in the reader first, as new whys of `look`'s; time in the follower,
 which already carries leads from frame to frame; parallax once two cameras see
 one face; a person at the subject and a model's guess after them. Each is tested
@@ -460,7 +463,9 @@ same way:
   where it can, a *done when* written over observations: the job ended `done`,
   and the bed is not empty in the frame after. When that holds, the view
   reports the goal *met*, and the person closes it, or drops it. Done is a
-  claim about work, and the layer does not make it.
+  claim about work, and the layer does not make it. A goal nobody has touched
+  for a set time is shown as stale and offered for closing; it stays open until
+  the person closes it.
 - **A directive** is an instruction about the space. Some say what to keep: *a
   frame at each poll while printing*, *watch the USB lead*. Some state an
   expectation, which becomes a `stated` observation to compare against: *the
@@ -499,12 +504,19 @@ guard, as `rig` and `gathering` are. Nothing of what it keeps is committed, and
 its writer refuses a path inside a repository. A person's goals and directives
 are personal data like the rest. Backups are the person's.
 
-How much is kept is a cost to decide. A frame at every poll of a long print is a
-frame every couple of seconds for hours, from each of the Ender's three
-cameras, so slice 1 keeps a frame set when the poll's state changes and at each
-step of progress, the bed camera's frame at each layer, and otherwise no oftener
-than a directive says, and the folder's size is shown where its frames are
-listed (*Open*, 3).
+A frame at every poll of a long print is a frame every couple of seconds for
+hours, from each of the Ender's three cameras, so slice 1 keeps a frame set when
+the poll's state changes and at every 5 % of the print's progress, never closer
+together than ten seconds, and the bed camera's frame at each layer; a directive may set other numbers. Frames kept with polls live
+under a **size budget per printer**, 5 GB unless the person sets another. Past
+it the oldest are deleted first, a timelapse's frames only when no other kept
+frame is left; a picture a person took by hand is never counted or deleted. The
+folder's size against its budget is shown where its frames are listed.
+
+What is recorded about people: subjects are things, and a person appears as a
+claimant or an actor, by the name they give. That someone was at a subject, from
+motion in a room camera's view, is recorded as presence, never who. A model's
+sighting of a person is not recorded.
 
 ## What reads it
 
@@ -522,10 +534,12 @@ parts:
   nothing that opens a port, a file or a socket.
 - **Renderers** read that document and nothing else:
   - **The viewer.** A window, as every section of the page is (`panels.js`),
-    called *Working space*. It lists the subjects with their states, and each
-    line opens its evidence: a frame with its region drawn, a poll's lines, a
-    person's record. A strip under it scrubs through time, and *what changed* is
-    the span between two marks. The 3D view can colour a node by its level.
+    called *Working space*, opened two ways: from a printer's ring, beside
+    Machine and its cameras, on that printer's timeline; and from the site's
+    menu, on every subject of the site. It lists the subjects with their
+    states, and each line opens its evidence: a frame with its region drawn, a
+    poll's lines, a person's record. A strip under it scrubs through time, and
+    *what changed* is the span between two marks. The 3D view can colour a node by its level.
     `GET /sites/{s}/evidence?at=&since=` answers the document.
   - **Carlos.** The seam does not change: the hold action on `POST
     /family/cue`, a `carlos.patch`, and each module's, lead's and jack's state
@@ -533,7 +547,8 @@ parts:
     what it rests on: *seen: answering on its port; seen plugged in camera_1 at
     14:02*, or *disagree: answering on its port; no plug seen in camera_1 at
     14:02*. Carlos judges none of it, and refuses fields it does not define, so
-    the evidence stays in apothecary.
+    the evidence stays in apothecary. What reaches carlos and qmcp names a frame
+    by its path and region and a poll by its id, and never carries a picture.
   - **qmcp's human queue** (`POST /v1/human/requests`). Only a decision goes
     there: a delta at `warn` or `fault` that has not converged within its
     budget, a sighting that needs a person to say what it is, a goal reported
@@ -587,7 +602,7 @@ The bed and room cameras both see the bed, and the head and room cameras both
 see the head, so the Ender gives many of one from its first frames. The Ender
 3's bed moves front to back and its gantry up and down: a camera fixed to the
 bed keeps the print still in its frame, as a timelapse wants, and one fixed to
-the frame watches the bed slide (*Open*, 13).
+the frame watches the bed slide (*Open*, 3).
 
 What is ready: `camera_1`, added on `printer_1`'s ring, its device one of the
 browser's cameras, with Live and Take picture; the printer's Machine polling
@@ -608,18 +623,19 @@ lays the layer under them, one pull request a step, stacked.
 2. **Frames kept with polls.** The page holds the cameras and drives the polls,
    so the page keeps the frames: while the Ender's cameras are Live and
    `printer_1` is polled, a frame set (one frame from each Live camera) when the
-   poll's state changes, at each step of progress, and no oftener than a
-   directive's cadence, each frame posted to the picture route (`POST
+   poll's state changes and at every 5 % of progress, never closer together
+   than ten seconds, each frame posted to the picture route (`POST
    /photos/pictures?site=&camera=`) with the poll's id. The route keeps the
    frames under `captures/` as now, and writes each as evidence beside that
    poll. That is a print's record of polls and pictures, readable as a timeline
-   before any picture is read, and a folder `rig follow` reads. The *Working
-   space* window's first form is `printer_1`'s timeline: state and heaters as a
-   strip, each camera's frames in a row at their polls. It starts with
+   before any picture is read, and a folder `rig follow` reads, kept under the
+   printer's size budget. The *Working space* window's first form is
+   `printer_1`'s timeline, opened from its ring or from the site's menu: state
+   and heaters as a strip, each camera's frames in a row at their polls. It starts with
    `camera_1` alone and takes the others as they are mounted. Whether one page
    holds three cameras streaming at once depends on the USB bus and each
    camera's format, and is found at the bench; a camera the page cannot open is
-   unread, with why, and never absent (*Open*, 14).
+   unread, with why, and never absent (*Open*, 4).
 3. **The lead, seen two ways.** The Ender's mainboard face laid out: the USB
    socket and the power inlet placed as fractions of their face, as the Uno's
    edge is, measured off the room camera's own frames, and pinned once with
@@ -681,7 +697,7 @@ Each follows once the one before it reads real evidence.
 - **The airgap's test rig.** Three origins for one property: the Airgap panel's
   prediction (`airgap/metrics/1`), the dials and gauges read off a picture, and a
   board on the rig reporting over serial. A board's readings need a line format
-  for sensors, which is a seam of its own (*Open*, 9).
+  for sensors, which is a seam of its own (*Open*, 1).
 - **A server room.** Racks are faces, patch panels are sockets, a camera looks
   along each row, and the room as drawn is the expectation. A row seen from both
   ends is many of one at its plainest: a port far down the row is too small in
@@ -715,7 +731,7 @@ Drafted when its slice is built, in `governance/qm/adr/` on
   point. It also says whether carlos and qmcp, reached over loopback on this
   machine and each keeping its own database, are *here*: carlos already holds
   the bench's states, and qmcp would hold a person's questions and answers. A
-  capture on the server, if chosen (*Open*, 2), is a subprocess outside the
+  capture on the server, once it is built (*Later*), is a subprocess outside the
   socket guard that the record names, as it names OpenSCAD.
 - **For governance/qm**: whether *A disagreement is a delta* covers a working
   space's runtime state. Its rule (one delta per address and field, closed by a
@@ -728,57 +744,36 @@ Drafted when its slice is built, in `governance/qm/adr/` on
 
 ## Open, for the owner
 
-1. **Which comes first on the Ender**: frames kept with polls (recommended:
-   it needs no faces, and everything after it reads its folder), the lead seen
-   two ways, or the faces laid out.
-2. **Who takes the frames during a print.** The page, as built, which needs the
-   tab open and Live for the length of the print; or a capture on the server, a
-   subprocess reading the camera device, which runs with no page open.
-3. **How long frames are kept**, and who forgets them. The page forgets only
-   what the browser put there, and frames kept for a print are that.
-4. **A person's word against an instrument**: a disagreement to close
-   (proposed), or the person's word as the state until it is closed.
-5. **Where a person's goals, directives and answers are kept, and when one
-   expires**, `todo.md`'s question widened. Proposed: in the state folder; a
-   link holds until it is replaced; a stated state ages as any observation; a
-   goal holds until the person closes it.
-6. **Which deltas reach qmcp's queue**, and at what budget. Proposed: `warn` and
-   `fault` that have not converged, sightings, and goals reported met.
-7. **What may be sent to carlos and qmcp**: references only (proposed), or
-   frames too.
-8. **People in the frames.** A camera on a working space sees whoever walks
-   past it. Proposed: subjects are things; a person appears as a claimant or an
-   actor, by the name they give, and a model's sighting of a person is not
-   recorded.
-9. **A line format for a board's sensor readings**, beside its hello: a standard
-   one with more than one implementation (*Seams on standard protocols*), or
-   the hello's own form extended.
-10. **Names**: `apothecary/evidence/` for the package and `apothecary.evidence`
-    for the document, *Working space* for the window.
-11. **The matcher behind a suggested link** for a region no face covers: a
-    feature matcher, a new dependency under the licence gate and the question
-    of pictures without Pillow, or an image model through qmcp, a guess like
-    any other. And how close a match is before a suggestion is offered.
-    Proposed: clearly above every other candidate, the threshold measured on
-    real frames.
-12. **Telling a covered subject**: which tests come first (proposed: the
-    picture's limits and the reference surround, then time, then parallax);
-    which frame is a face's reference (the one it was pinned on, or the latest
-    it read clean); how much of a surround may differ before its subject is
-    covered, with a real plug's cable not marking every socket under it; and how
-    many frames a change holds before it is taken.
-13. **The Ender's camera mounts**: the bed camera on the bed, still to the
-    print, or on the frame, watching the bed slide; the head camera on the
-    carriage, moving with the nozzle, or on the frame; the room camera where the
-    mainboard's edge is large enough in its picture to read.
-14. **Three cameras on one page**: whether the page holds them streaming at
-    once; if not, which camera a second page or a capture on the server takes
-    (*Open*, 2).
+Each is settled where it names, not before.
+
+1. **A line format for a board's sensor readings**, beside its hello: a
+   standard one with more than one implementation (*Seams on standard
+   protocols*), or the hello's own form extended. Settled when the airgap's
+   test rig is built.
+2. **Telling a covered subject**: which tests come first (proposed: the
+   picture's limits and the reference surround, then time, then parallax);
+   which frame is a face's reference (the one it was pinned on, or the latest it
+   read clean); how much of a surround may differ before its subject is
+   covered, with a real plug's cable not marking every socket under it; and how
+   many frames a change holds before it is taken. Settled after the demo, on the
+   Ender's real frames.
+3. **The Ender's camera mounts**: the bed camera on the bed, still to the print,
+   or on the frame, watching the bed slide; the head camera on the carriage,
+   moving with the nozzle, or on the frame; the room camera where the
+   mainboard's edge is large enough in its picture to read. Settled at the
+   bench.
+4. **Three cameras on one page**: whether the page holds them streaming at
+   once; if not, which camera a second page takes until the capture on the
+   server (*Later*). Settled at the bench.
 
 ## Later
 
 In no slice yet; each waits on what it names.
 
+- **A capture on the server**, a subprocess reading the camera devices, so a
+  long print keeps its frames with no page open. It is outside the socket guard,
+  so the personal-data record names it, as it names OpenSCAD. It waits on the
+  page's frame sets running on the Ender.
 - **Size by triangulation**, from two cameras with calibrated poses: a third
   source of scale, beside a reference a person states and a marker of known
   size. It waits on poses calibrated and their error measured.
@@ -819,3 +814,17 @@ In no slice yet; each waits on what it names.
   parts, and one further away on the whole printer. Triangulation as a source of
   scale is later. A covered subject is unread and never a value, and the ways to
   tell one are planned with what each misses.
+- **2026-10-31:** the first demo is slice 1's first two steps on `serve --demo`:
+  the simulated Ender's polls in the log, frame sets from its cameras kept with
+  them, and the *Working space* window showing `printer_1`'s timeline, opened
+  from the printer's ring and from the site's menu. The page takes the frames;
+  a capture on the server is later. A frame set is kept when the poll's state
+  changes and at every 5 % of progress, never closer than ten seconds. Kept
+  frames live under a 5 GB budget per printer, the oldest deleted first and a
+  timelapse's last, pictures taken by hand never. A person's word against an
+  instrument is a disagreement to close. People are recorded as presence,
+  never who. Only references reach carlos and qmcp, and qmcp's queue takes
+  unsettled `warn` and `fault` deltas, sightings to name and goals met. A goal
+  untouched for a set time is shown as stale. The matcher behind a suggested
+  link is local first, with a model as a second opinion. The names are
+  `apothecary/evidence/`, `apothecary.evidence` and *Working space*.
