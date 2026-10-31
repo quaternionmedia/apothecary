@@ -13,7 +13,7 @@ here: run `apothecary problems`.
   after gathering leaves core (*Next round*):
   [docs/plans/pictures-the-rest-2026-10-13.md](docs/plans/pictures-the-rest-2026-10-13.md).
 - Optional local models behind the shape finder: [docs/plans/photo-finders-local-models-2026-09-21.md](docs/plans/photo-finders-local-models-2026-09-21.md).
-- A synth rig photographed through a concert, held in carlos: the first real photographs, power and USB into an Uno (slice 4: `examples/rigs/uno-power-and-usb.json`, `apothecary rig setup`), then the viewer's window for pinning faces, cues in the record, a mount and corner tabs printed; then the airgap's test rig and a server room: [docs/plans/carlos-concert-rig-2026-10-29.md](docs/plans/carlos-concert-rig-2026-10-29.md).
+- A synth rig photographed through a concert, held in carlos: the first real photographs, the Ender's mainboard's power and USB through the camera aimed at the Ender, waiting for that camera (slice 4, rehearsed on an Uno's drawn pictures: `examples/rigs/uno-power-and-usb.json`, `apothecary rig setup`), then the DFAM and Subharmonicon, then the viewer's window for pinning faces, cues in the record, a mount and corner tabs printed; then the airgap's test rig and a server room: [docs/plans/carlos-concert-rig-2026-10-29.md](docs/plans/carlos-concert-rig-2026-10-29.md).
 - Waiting behind it, the bench as a rig carlos draws, slices 2 and 3 (a picture names a device, IO configuration): [docs/plans/qm-family-carlos-2026-10-29.md](docs/plans/qm-family-carlos-2026-10-29.md).
 - Pictures without Pillow, a research effort: whether a library under an approved licence decodes JPEG and PNG, resizes and reads pixels as well and as fast as Pillow does here, and what moving would cost. Until it reports, Pillow stays, a conflict row in the adoption scope: [the governance plan's stub](docs/plans/governance-2026-10-13.md#stubbed-pictures-without-pillow).
 - The installers' hardening. A download is checked against its listed size
@@ -97,6 +97,22 @@ Decided, not started. Each waits on what its line names.
   ([the governance plan](docs/plans/governance-2026-10-13.md)). It ends, and the
   gate is built, at the first of: a second Rust sketch, a crate or a vendored
   library outside the allowlist, or the corpus's own gate for them.
+- Photo gathering proposes and waits: `photo gather` lists what it would do
+  and does nothing until a person says yes, as an image model is asked only
+  when a person asks. A person's word already wins over a guess.
+- A made piece saved as a variant: Save turns it into a part in the state
+  folder, editable from then on, as the draft record *Personal data stays on
+  the device* (§6) says. The page offers a made piece no Save now, and shows
+  its SCAD read only.
+- The root README served in the app, rendered as `/docs` is, its map's links
+  going to the pages the app serves. The map lists what the browser suite
+  walks; a feature gets a row when a test walks it.
+- The review cycle in
+  [docs/plans/review-cycle-2026-10-24.md](docs/plans/review-cycle-2026-10-24.md),
+  taken as proposed: a merge queue tested once a batch, releases reviewed by
+  area at a tag, shallow stacks, and the shared files split. The merge queue
+  needs required checks, so it waits on `main`'s protection (*For a person to
+  decide*).
 - The hidden command stubs `apothecary/cli/retired.py` makes (`system`,
   `install`, `testrun`, `dev`, `inventory`, `submodules`, `photo look`,
   `test setup-e2e`, `test validate-e2e`, `test run-e2e`) are removed one
@@ -126,46 +142,17 @@ Decided, not started. Each waits on what its line names.
   decision 7).
 - Review rad#7 (a ring entered at an item); apothecary's ring follows what
   rad decides.
+- Delete origin's branches whose commits are all on `main` or whose pull
+  request is closed, from a list checked first; their pull requests keep
+  their history.
 
 ## For a person to decide
 
-- Protect `main`? It has no protection: the checks a merge waits on, the
-  whole suite before a merge and the bot gate ([CONTRIBUTING.md](CONTRIBUTING.md))
-  hold by convention. A merge queue needs required checks.
-- The review cycle proposed in
-  [docs/plans/review-cycle-2026-10-24.md](docs/plans/review-cycle-2026-10-24.md):
-  a merge queue tested once a batch, releases reviewed by area at a tag,
-  shallow stacks, and the shared files split.
-- The branches on origin: most of its heads are landed or closed, among them
-  the eleven the [landing plan](docs/plans/landing-the-stack-2026-10-20.md)
-  names under *After*. Delete them, or keep them.
-- Serve the root README in the app? `/docs` and `/walkthrough` are served;
-  the README, whose map a review walks, is not.
-- README map rows for the features no browser test walks (the 2026-10-24
-  review): add them, or leave the map to what the browser suite holds.
-- Is the pictures plan's Phase 6, Selected tethered to the selection,
-  dropped? Selected is in the one rail, and the page has no tether.
-- May a made piece be saved as a variant? The draft record *Personal data
-  stays on the device* (§6) says a made piece is saved, varied and committed
-  as a part is; the page offers a made piece no Save, and shows its SCAD read
-  only.
-
-- What counts as "this machine": a home cluster, or the one machine? The draft
-  record *Personal data stays on the device* says the one machine; storage,
-  asking the video editor (alfred) for a frame, and any cluster deployment
-  wait on its ratification.
-- Is a person's one-time download of an openly licensed model the same class
-  as the install-time fetches that record allows?
-- When local-only makes something impossible: build it badly and say so, or
-  do not build it?
-- Should photo gathering guess before it is asked, or propose and wait? It
-  guesses; a person's word wins over a guess.
-- Where a person's answers about their photographs are kept, and when one
-  expires: they live in the file handed to `--answers`.
+- Protect `main`? Not yet: the checks a merge waits on, the whole suite
+  before a merge and the bot gate ([CONTRIBUTING.md](CONTRIBUTING.md)) hold by
+  convention. The review cycle's merge queue waits on it (*Next round*).
 - Are the questions `photo gather --ask` ranks first the ones worth a minute?
   Only a person with a real folder of photographs can check.
-- Backups are the person's, not the program's; say so where the stays-local
-  rule is stated.
 
 ## For governance/qm (file there)
 
@@ -180,6 +167,26 @@ Decided, not started. Each waits on what its line names.
   change until the check changes or an exception is written.
 - No rule says what information may leave for a project that sends data.
 - Proposing a decision to a project has no category in the rulebook's list.
+- *Personal data stays on the device* counts the one machine as the device,
+  and a home cluster would be an amendment of its own. Storage, asking the
+  video editor (alfred) for a frame, and any cluster deployment wait on the
+  record's ratification.
+- When keeping data on the device makes something impossible, neither
+  building it badly nor leaving it out is the rule: each case is explored and
+  its questions brought to the owner to reconcile. The same record could say
+  so.
+- A model's weights are a fetch of their own, not an install-time fetch: qmcp
+  fetches them on a person's word, from a pinned list, and the host learns
+  only what was fetched (the image-models plan's *Decided*). The same record
+  names the download.
+- The *Data retention* record, when drafted, settles where a person's answers
+  about their photographs are kept and when one expires, with the other kinds
+  of kept data. Until then they live in the file handed to `--answers`.
+- A check that reads git trailers for credit (carlos's corpus pin, from
+  qm#81's `seed/read-the-trailer`, not on qm's main) refuses `Tools: Claude
+  Code` written as a commit's last paragraph, though the corpus names a
+  `Tools:` note as how a tool is disclosed. It should tell a `Tools:` note from
+  a byline before apothecary's pin takes it.
 - qm#121's *Personal data stays on the device* does not name the console's
   receive-only UDP listeners (sACN on 5568, OSC on 8001), which
   `apothecary/stays_local.py` allows and [docs/lighting.md](docs/lighting.md)
