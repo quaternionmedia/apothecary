@@ -6800,6 +6800,13 @@
                 return this.tree && part ? walk(this.tree, '') : null;
             }
 
+            // The site's piece whose own sketch is `name`, by its path: the node bound by
+            // it, else the first piece made from a part of that name; or null.
+            sketchPiece(name) {
+                const row = Object.values(this.bindings || {}).find((r) => r.sketch === name);
+                return row ? row.path : this.pieceOf(name);
+            }
+
             // A print done of a part with a sketch of its own: its board, next. The job
             // names the piece by its path or the part by its name.
             afterPrint(job) {
@@ -6813,7 +6820,8 @@
             }
 
             // The Bench in front, its Build form on a sketch -- by id, or by its part's
-            // name -- and on the port whose board that sketch is for, when one is found.
+            // name -- and on the port whose board that sketch is for, when one is found;
+            // a port in front that is not found to be is not named as its board.
             async openBench(sketch) {
                 this.panels.open('bench');
                 const bench = this.bench;
@@ -6822,9 +6830,11 @@
                 const id = bench.build.chooseNamed(sketch);
                 if (!id) { this.setStatus(`No sketch named ${sketch} under parts/: the Bench lists those it found`, 'error'); return null; }
                 const port = bench.build.port();
-                this.setStatus(port
+                this.setStatus(port && bench.build.portFound()
                     ? `The Bench, ${id} chosen for ${port}: Compile & upload flashes it`
-                    : `The Bench, ${id} chosen: no board for it is connected; plug one in, then ⟳ in its port's list`);
+                    : port
+                        ? `The Bench, ${id} chosen: no port is known to be its board's; choose it, then Compile & upload`
+                        : `The Bench, ${id} chosen: no board for it is connected; plug one in, then ⟳ in its port's list`);
                 return id;
             }
 
@@ -6837,7 +6847,7 @@
 
             afterUpload(task, what) {
                 if (!task || task.status !== 'succeeded' || what.kind !== 'upload') return;
-                const piece = this.pieceOf(what.name);
+                const piece = this.sketchPiece(what.name);
                 this.setStatus(`${what.sketch} flashed to ${what.port}: ${piece ? `${piece}'s ring, Device › Query hears its hello` : 'its Machine, Listen, hears its hello'}`, 'success');
             }
 

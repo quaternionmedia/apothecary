@@ -104,11 +104,16 @@ export function mountBoards({ base = "", site = () => null } = {}) {
         return b.logChain;
     }
     function clearLog(port) { const b = board(port); b.log = []; emit(port, "log", { entries: [], dropped: [], cleared: true }); }
-    // A devkit's line, heard on its stream or in a listen.
-    function heard(b, text) {
-        appendLog(b, [{ i: -1, t: new Date().toISOString(), kind: "rx", text }]);
-        const m = HELLO.exec(text);
-        if (m && b.observed !== m[1]) { b.observed = m[1]; emit(b.port, "observed", { observed: m[1] }); }
+    // A devkit's lines, heard on its stream (one at a time) or in a listen (its
+    // seconds together, so one log event: the viewer plays a blink heard among
+    // others back at the sketch's pace).
+    function heard(b, lines) {
+        const t = new Date().toISOString();
+        appendLog(b, lines.map((text) => ({ i: -1, t, kind: "rx", text })));
+        for (const text of lines) {
+            const m = HELLO.exec(text);
+            if (m && b.observed !== m[1]) { b.observed = m[1]; emit(b.port, "observed", { observed: m[1] }); }
+        }
     }
 
     // --- one poll, and the poller ----------------------------------------------------------
@@ -174,7 +179,7 @@ export function mountBoards({ base = "", site = () => null } = {}) {
         const es = new EventSource(`${BASE}/firmware/devices/stream?port=${encodeURIComponent(b.port)}&baud=115200`);
         b.stream = es;
         es.addEventListener("open", () => opened(b, es));
-        es.onmessage = (ev) => heard(b, ev.data);
+        es.onmessage = (ev) => heard(b, [ev.data]);
         es.addEventListener("close", () => streamStopped(b, es, "the stream stopped -- a task took the port?"));
         es.onerror = () => { if (es.readyState === EventSource.CLOSED) streamStopped(b, es, "disconnected"); };
     }
@@ -262,7 +267,7 @@ export function mountBoards({ base = "", site = () => null } = {}) {
         note(port, `listening ${seconds} s for the sketch's hello`);
         try {
             const r = await post("/firmware/devices/listen", { port, seconds });
-            for (const line of r.lines) heard(b, line);
+            if (r.lines.length) heard(b, r.lines);
             if (r.running_sketch && b.observed !== r.running_sketch) { b.observed = r.running_sketch; emit(port, "observed", { observed: b.observed }); }
             note(port, r.running_sketch ? `heard ${r.running_sketch} say hello` : `no hello in ${r.seconds} s (${r.lines.length} lines)`);
             return r;
