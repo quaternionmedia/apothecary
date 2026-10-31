@@ -140,7 +140,10 @@ millimetres. The first managed engine.
 **2. A namer over loopback.** `LoopbackModel` and a `vlm:<model>` finder:
 labels for what the plain or marker finder found. A seam-started
 `llama-server`, or the person's Ollama with the cloud refusal. A selection
-record for the model; measured on this machine before it is offered.
+record for the model; measured on this machine before it is offered. Planned
+through qmcp, as the one door for every model's answers, in
+[image models through qmcp](image-models-through-qmcp-2026-10-30.md); whether
+`LoopbackModel` is built beside it is open there.
 
 **3. Masks and depth.** An Open Inference Protocol server over ONNX
 exports, evaluated for licence, a CPU build and telemetry; failing that,
