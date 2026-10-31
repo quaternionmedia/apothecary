@@ -99,11 +99,28 @@ characters (`apothecary/menu.py`, `MOST_OPTIONS`, `LONGEST_LABEL`):
 
 **One module for observations, the working-space stack's.** That stack is
 lower: its evidence log already writes observations, and its window reads them.
-The image-models branch is rebased onto it and adds its properties to the
-closed list (a colour's word, a material, a quantity, covered), reading and
-writing through the one module. Whichever of the two lands first, the other
-takes the module as it landed. Neither goes up as a pull request until this is
-settled.
+It is also the stricter, and apothecary tightens the shared format, never
+relaxes it: a closed list of properties, a subject's address checked against
+its pattern, typed evidence references, a value of any shape (a print head's
+position is x, y and z), times that carry a zone. The image-models branch is
+rebased onto it and brings the four things the module lacks, then reads and
+writes through it:
+- **A subject that is a region of a picture:** the picture's digest, the
+  region and its box. The Working space plan's "a frame and a region" needs it
+  too.
+- **`origin.by` as a record:** a reader's name, or a model's name, version and
+  weights, with its `key()`, which switching a model off and trusting it look
+  up. The printer poll's string becomes `{"name": …}`.
+- **Evidence references to a picture** (its digest, path and box) **and to a
+  model's invocation,** beside a poll, a pin, a frame, an observation and a
+  record.
+- **The models' properties in the closed list:** label, quantity, size, shape,
+  material, colour, covered, match, rgb. With them come `overruled` in the
+  apothecary block, `generic()` for the family's other apps, and the format's
+  name and version on every record.
+
+Whichever of the two lands first, the other takes the module as it landed. The
+models branch goes up as a pull request after its rebase.
 
 **Each window answers one question.**
 - **Working space: what is known, and since when.** Every observation about a
@@ -149,7 +166,8 @@ settled.
 ## The order
 
 1. **The observation module,** settled before either stack is pushed: the
-   working-space stack keeps it, and the models branch rebases onto it.
+   working-space stack keeps it, and the models branch rebases onto it with
+   its four additions. The demo then merges all three.
 2. **The words,** renamed in the open stacks before they land, while it costs
    a rename and not a migration.
 3. **The small seats:** Save variant, the Models seat, Lighting's door, the
@@ -161,9 +179,13 @@ settled.
 6. **One stack beside the world,** when a fourth window would take a stack
    there.
 
+## Decided
+
+- **2026-10-31, the owner:** the working-space stack's observation module
+  stays, and the models branch adds its four things to it when it rebases.
+
 ## Open, for the owner
 
-- Which observation module stays. The proposal: the working-space stack's.
 - The words above.
 - Faces as one window for three plans, behind Camera › Faces.
 - The bench's disagreements as Working space rows, not a Bench window.
