@@ -60,6 +60,10 @@ here: run `apothecary problems`.
   cause is not shown. A run ends the same way, at the browser part's watchdog
   with Playwright's event loop waiting and no test named, in a shell the Claude
   desktop app starts; there the browser part run on its own passes.
+- A phase's bound does not allow for a loaded machine: at a load of 12 on four
+  cores the camera test (`test_docs_bench_walkthrough.py::test_the_bench_as_it_is`)
+  ran 153 s against the 75 s it records, near the bound of twice the longest
+  recorded test, so a little more load ends a run that is only slow.
 - Walkthrough pictures that move with no change to the page: a full browser
   run rewrites a few by a few pixels (the masked clocks' shade, the SCAD
   editor's sideways scroll in page 06's), so a run leaves the tree changed.
