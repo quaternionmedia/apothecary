@@ -105,7 +105,10 @@ and raises `LeftTheMachine` otherwise, sends pictures only as base64 data,
 validates a JSON-schema'd reply, and refuses Ollama's cloud models
 (loopback that forwards). A proxy on loopback that forwards is the person's
 program and cannot be detected. Preferred: the seam starts `llama-server`
-over a weights file, bound to 127.0.0.1 with a random key.
+over a weights file, bound to 127.0.0.1 with a random key. Every model's
+answers come through qmcp instead, over MCP, so `LoopbackModel` is not built
+and these rules are qmcp's engine adapters'
+([image models through qmcp](image-models-through-qmcp-2026-10-30.md)).
 
 **Weights are files the person brings**: a models folder under the state
 folder, or a server they filled. Whether a one-time model download is the
@@ -140,14 +143,13 @@ millimetres. The first managed engine.
 **2. A namer over loopback.** `LoopbackModel` and a `vlm:<model>` finder:
 labels for what the plain or marker finder found. A seam-started
 `llama-server`, or the person's Ollama with the cloud refusal. A selection
-record for the model; measured on this machine before it is offered. Planned
-through qmcp, as the one door for every model's answers, in
-[image models through qmcp](image-models-through-qmcp-2026-10-30.md); whether
-`LoopbackModel` is built beside it is open there.
+record for the model; measured on this machine before it is offered. Replaced
+by [image models through qmcp](image-models-through-qmcp-2026-10-30.md): qmcp
+is the one door for every model's answers, and `LoopbackModel` is not built.
 
 **3. Masks and depth.** An Open Inference Protocol server over ONNX
-exports, evaluated for licence, a CPU build and telemetry; failing that,
-one runner as its own project. `points` consumed by `vision/geometry.py`,
+exports, evaluated for licence, a CPU build and telemetry, reached through
+qmcp's adapter; failing that, one runner as its own project. `points` consumed by `vision/geometry.py`,
 relative depth on shapes, a stated focal length for metric depth, and
 `Provenance.thickness_guessed = False` when a depth said so.
 

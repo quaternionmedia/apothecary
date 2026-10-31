@@ -13,7 +13,7 @@ here: run `apothecary problems`.
   after gathering leaves core (*Next round*):
   [docs/plans/pictures-the-rest-2026-10-13.md](docs/plans/pictures-the-rest-2026-10-13.md).
 - Optional local models behind the shape finder: [docs/plans/photo-finders-local-models-2026-09-21.md](docs/plans/photo-finders-local-models-2026-09-21.md).
-- Image models as an optional source of measurements, through qmcp: quantity, size, shape, material, colour and a label, as observations beside the plain readers' and never over a person's word, with qmcp's own slice in its repository and the owner's questions open: [docs/plans/image-models-through-qmcp-2026-10-30.md](docs/plans/image-models-through-qmcp-2026-10-30.md).
+- Image models as an optional source of measurements, through qmcp over MCP and only when a person asks: quantity, size, shape, material, colour and a label, as observations in the family's format beside the plain readers' and never over a person's word, with qmcp's own slice (MCP on its server, the vision tools) in its repository, and the vocabularies and the model download open: [docs/plans/image-models-through-qmcp-2026-10-30.md](docs/plans/image-models-through-qmcp-2026-10-30.md).
 - A synth rig photographed through a concert, held in carlos: the first real photographs, power and USB into an Uno (slice 4: `examples/rigs/uno-power-and-usb.json`, `apothecary rig setup`), then the viewer's window for pinning faces, cues in the record, a mount and corner tabs printed; then the airgap's test rig and a server room: [docs/plans/carlos-concert-rig-2026-10-29.md](docs/plans/carlos-concert-rig-2026-10-29.md).
 - Waiting behind it, the bench as a rig carlos draws, slices 2 and 3 (a picture names a device, IO configuration): [docs/plans/qm-family-carlos-2026-10-29.md](docs/plans/qm-family-carlos-2026-10-29.md).
 - A working space seen from every kind of evidence at once: its cameras, one thing from several angles among them, a printer's polls and a board's port, its sensors, a person's goals, directives and actions, and the image models' guesses, each line of the view opening its evidence. First the Ender's three cameras, on the bed for its timelapse, on the head and across the room, tied to its polls (frames kept with polls, then its lead, its motion and its bed seen two ways), then the rig through a concert, the airgap's test rig and a server room. Its first two steps are built and walked from each door in [walkthrough 18](walkthrough/18-the-working-space.md); the next is the Ender's cameras at the bench: [docs/plans/working-space-view-2026-10-30.md](docs/plans/working-space-view-2026-10-30.md).
@@ -158,7 +158,8 @@ Decided, not started. Each waits on what its line names.
   asking the video editor (alfred) for a frame, and any cluster deployment
   wait on its ratification.
 - Is a person's one-time download of an openly licensed model the same class
-  as the install-time fetches that record allows?
+  as the install-time fetches that record allows? The questions it breaks into
+  are in [the image-models plan](docs/plans/image-models-through-qmcp-2026-10-30.md#open-for-the-owner).
 - When local-only makes something impossible: build it badly and say so, or
   do not build it?
 - Should photo gathering guess before it is asked, or propose and wait? It
@@ -190,6 +191,10 @@ Decided, not started. Each waits on what its line names.
 - The apothecary handoff's records chain (`handbook/handoffs/apothecary-merge-queue.md`,
   §3) leaves out qm#121 and qm#145, which land between #171 and #172
   (*For a person to do*, above).
+- No rule says how long a program keeps what it is given and what it makes,
+  who forgets it, or how a person deletes it: qmcp's invocation rows,
+  apothecary's observations and frames, carlos's states (*Data retention* in
+  [the image-models plan](docs/plans/image-models-through-qmcp-2026-10-30.md#records-it-needs)).
 - The site and structure record's *Pends on* says no production
   implementation of `Assembly` exists; the API, the firmware bindings and
   the gathering are built on it (`apothecary/hierarchy.py`, which calls
