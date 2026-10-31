@@ -438,6 +438,7 @@ class PrinterStatus(BaseModel):
     raw: List[str] = Field(default_factory=list)  # every line the poll received, for the log
     synced: List[dict] = Field(default_factory=list)  # scene nodes this poll updated (api.py)
     job: Optional[dict] = None  # a long exchange holding the port (a bed probe): kind, stage, since
+    poll: Optional[str] = None  # its id in the evidence log (apothecary/evidence), when kept there
 
     @property
     def heating(self) -> bool:

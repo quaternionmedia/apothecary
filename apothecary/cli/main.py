@@ -5,6 +5,7 @@ import click
 from .airgap import airgap
 from .census import census
 from .docs import docs
+from .evidence import evidence
 from .firmware import firmware
 from .inventory import inventory
 from .kernels import kernel_reference
@@ -103,6 +104,7 @@ cli.add_command(slicer)
 cli.add_command(lighting)
 cli.add_command(airgap)
 cli.add_command(rig)
+cli.add_command(evidence)
 
 
 def main():  # pragma: no cover - entry point

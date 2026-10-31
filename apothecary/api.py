@@ -20,6 +20,7 @@ _install_guard()
 import asyncio
 import hashlib
 import json
+import logging
 import mimetypes
 import os
 import re
@@ -43,6 +44,7 @@ from . import jobs
 from .core import OpenSCADObject
 from .datum_core_site import create_datum_core_site, validate_datum_core
 from .docs_site import router as docs_router
+from .evidence import printers as evidence_printers
 from .example_hierarchy import (
     PRINTER_STATUSES,
     create_example_site,
@@ -101,6 +103,7 @@ from .routes import lighting as lighting_routes
 from .routes import wiring as wiring_routes
 from .routes.airgap import router as airgap_router
 from .routes.cameras import router as cameras_router
+from .routes.evidence import router as evidence_router
 from .routes.jobs import router as jobs_router
 from .routes.lighting import router as lighting_router
 from .routes.part_edits import router as part_edits_router
@@ -203,6 +206,7 @@ app = FastAPI(
         "parts, rendered by OpenSCAD and kept as variants; photos, the views pinned "
         "from them, the cameras that take them and the shapes found in them; firmware "
         "for the boards and printers, with their control and prints; the slicer; jobs; "
+        "the evidence a site's printers and cameras leave, as one view of it; "
         "the airgap part's metrics document, its schema and its check; the ring's menu; "
         "and the documentation and walkthrough it serves."
     ),
@@ -265,6 +269,8 @@ app.include_router(lighting_router)
 app.include_router(airgap_router)
 # The bench as carlos reads a rig: a site's boards and their USB leads as a carlos.patch.
 app.include_router(wiring_router)
+# A working space seen from every kind of evidence: the log's document for a site.
+app.include_router(evidence_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 
@@ -2387,6 +2393,37 @@ def _sync_printer_status(status) -> List[Dict[str, object]]:
 
 
 firmware_devices.STATUS_LISTENERS.append(_sync_printer_status)
+
+
+def _record_printer_poll(status) -> List[Dict[str, object]]:
+    """A printer poll kept in the evidence log, said of each node its port is pinned
+    to and of the node it drives (apothecary/evidence/printers.py); a port no pin
+    names is kept as a sighting. The poll's id rides on ``status.poll``, so a frame
+    the page keeps with it can name it. Registered after the site sync; touches no
+    node."""
+    state = firmware_devices.get_state()
+    known = firmware_devices.known_device(status.port, state)
+    identity = known.identity if known is not None else status.port
+    pins: List[evidence_printers.Pin] = []
+    for site_name in _site_store.loaded():
+        site = _site_store.get(site_name)
+        for binding in state.bindings(site_name):
+            if same_device(binding.identity, status.port, known):
+                bearer = status_bearer_for(site, binding.path)
+                pins.append(
+                    evidence_printers.Pin(site_name, binding.path, bearer, binding.identity)
+                )
+    try:
+        status.poll = evidence_printers.record_poll(status, pins, identity)
+    except OSError as exc:
+        # The poll answers whether or not it could be kept; the log's folder said why not.
+        logging.getLogger("apothecary.evidence").warning(
+            "a poll of %s not kept: %s", status.port, exc
+        )
+    return []
+
+
+firmware_devices.STATUS_LISTENERS.append(_record_printer_poll)
 
 
 def _sync_job_status(job: jobs.Job) -> None:

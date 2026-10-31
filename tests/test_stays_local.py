@@ -108,6 +108,7 @@ INSTALL_POINTS = {
     "apothecary.firmware": PACKAGE / "firmware" / "__init__.py",
     "apothecary.routes": PACKAGE / "routes" / "__init__.py",
     "apothecary.rig": PACKAGE / "rig" / "__init__.py",
+    "apothecary.evidence": PACKAGE / "evidence" / "__init__.py",
 }
 ROOT_CONFTEST = ROOT / "conftest.py"
 

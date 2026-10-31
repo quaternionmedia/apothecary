@@ -547,6 +547,71 @@ def test_poll_syncs_bound_printer_node(fake_arduino_cli, fresh_task_runner, scri
     assert body["synced"] == [] and printer_1.status == "offline"
 
 
+def test_a_pinned_poll_is_kept_as_evidence(
+    fake_arduino_cli, fresh_task_runner, scripted_links, garage
+):
+    """A poll of a pinned port is said of its board and of the printer it drives, each
+    observation measured and resting on the poll by its id; the poll keeps every line."""
+    c = TestClient(app)
+    assert (
+        c.put(
+            "/sites/garage/nodes/printer_1/device", json={"identity": "/dev/ttyFAKE1"}
+        ).status_code
+        == 200
+    )
+    scripted_links.factory = lambda port, baud: ScriptedTransport(port, baud, PRINTING)
+    body = c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE1"}).json()
+    poll = body["poll"]
+    assert poll and poll.endswith("-ttyFAKE1")
+
+    seen = c.get("/sites/garage/evidence").json()
+    assert seen["format"] == "apothecary.evidence" and seen["unreadable"] == 0
+    said = {(s["subject"], p["property"]): p for s in seen["subjects"] for p in s["properties"]}
+    state = said[("garage:printer_1", "state")]
+    assert state["value"] == "printing" and state["origin"]["kind"] == "measured"
+    assert {"kind": "poll", "id": poll} in state["evidence"]
+    assert {"kind": "pin", "id": "garage:printer_1"} in state["evidence"]
+    assert state["current"] and state["standing"] == "one kind"
+    assert said[("garage:printer_1#heater:bed", "temperature")]["value"] == 60.02
+    assert said[("garage:printer_1", "progress")]["unit"] == "fraction"
+    assert said[("garage:printer_1#endstop:y_min", "endstop")]["value"] == "triggered"
+
+    kept = c.get(f"/evidence/polls/{poll}", params={"space": "garage"}).json()
+    assert "ok T:209.8 /210.00 B:60.02 /60.00 @:78 B@:12" in kept["raw"]
+    assert (
+        c.get("/evidence/polls/20261031T000000.000-nope", params={"space": "garage"}).status_code
+        == 404
+    )
+
+    # A poll that changes nothing writes nothing, and its id is still one a frame can name.
+    def written():
+        folder = devices.state_dir() / "evidence" / "garage" / "observations"
+        return sum(len(f.read_text().splitlines()) for f in folder.glob("*.jsonl"))
+
+    before = written()
+    again = c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE1"}).json()["poll"]
+    assert written() == before
+    assert c.get(f"/evidence/polls/{again}", params={"space": "garage"}).status_code == 404
+    from apothecary.evidence.printers import COLLECTOR
+
+    assert COLLECTOR.keep(again) == ["garage"]
+    assert c.get(f"/evidence/polls/{again}", params={"space": "garage"}).status_code == 200
+
+    # A failed poll: the board is no longer present, and the change is what changed.
+    ScriptedTransport.instances[0].replies = {"M105": []}
+    c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE1"})
+    seen = c.get("/sites/garage/evidence").json()
+    moved = {(t["subject"], t["property"]): t for t in seen["transitions"]}
+    assert moved[("garage:printer_1", "state")]["to"] == "offline"
+    assert moved[("garage:printer_1", "present")]["to"] is False
+
+    result = CliRunner().invoke(cli, ["evidence", "show", "--site", "garage"])
+    assert result.exit_code == 0, result.output
+    assert "garage:printer_1" in result.output and "offline" in result.output
+    result = CliRunner().invoke(cli, ["evidence", "changed", "--site", "garage", "--since", "1h"])
+    assert "printing -> offline" in result.output
+
+
 def test_sync_skips_nodes_without_status(fake_arduino_cli, scripted_links, garage):
     c = TestClient(app)
     c.put("/sites/garage/nodes/footpedal/device", json={"identity": "/dev/ttyFAKE1"})
