@@ -110,6 +110,23 @@ def test_add_here_stands_a_camera_above_the_place_looking_straight_down():
     assert "rotate([0.0, 0.0, 0.0])" in c.get("/sites/garage").json()["scad"]
 
 
+def test_add_here_again_stands_the_next_camera_beside_the_last_and_the_layout_stays_valid():
+    """Three cameras added above one place stand a step apart along x -- the middle,
+    then one side, then the other -- each clear of the others, each landing on the
+    place, and the site stays valid; without the step they would overlap."""
+    c = TestClient(app)
+    added = [_add(c) for _ in range(3)]
+    assert [cam["position"][0] for cam in added] == [
+        900.0,
+        900.0 + cameras.BESIDE,
+        900.0 - cameras.BESIDE,
+    ]
+    assert {tuple(cam["position"][1:]) for cam in added} == {(300.0, 1380.0)}
+    assert all(cam["lands"]["host"] == "workbench" for cam in added)
+    site = c.get("/sites/garage").json()
+    assert site["is_valid"], site["violations"]
+
+
 def test_a_camera_is_named_afresh_while_a_view_remembers_a_removed_one():
     c = TestClient(app)
     _add(c)

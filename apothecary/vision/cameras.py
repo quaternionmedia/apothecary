@@ -45,7 +45,7 @@ import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
@@ -391,13 +391,47 @@ def starting_pose(site_name: str, site: Assembly, host: str) -> Pose:
     return Pose(position=Vector3D(x=middle.x, y=middle.y, z=top + START_HEIGHT))
 
 
+# How far a camera added where another stands steps aside: its body's width and a
+# hand's breadth, so the two stand clear of each other.
+BESIDE = BODY[0] + 30.0
+
+
+def _placed(pose: Pose) -> Tuple[Tuple[float, ...], Tuple[float, ...]]:
+    """The webcam's box where it stands: its footprint, which is about its lens, moved
+    to the lens's place."""
+    box, at = footprint(pose), pose.position
+    low = (box.min_point.x + at.x, box.min_point.y + at.y, box.min_point.z + at.z)
+    high = (box.max_point.x + at.x, box.max_point.y + at.y, box.max_point.z + at.z)
+    return low, high
+
+
+def _clear(a, b) -> bool:
+    return any(a[1][k] <= b[0][k] or b[1][k] <= a[0][k] for k in range(3))
+
+
+def beside(pose: Pose, others: Sequence[Pose]) -> Pose:
+    """``pose``, or the nearest place along x clear of every camera in ``others`` --
+    a step to one side, then the other, then two -- so a second Add here at one place
+    stands beside the first rather than in it, and still looks at what it is above."""
+    taken = [_placed(o) for o in others]
+    for k in range(0, 2 * len(others) + 1):
+        dx = BESIDE * ((k + 1) // 2) * (1 if k % 2 else -1)
+        moved = pose.model_copy(
+            update={"position": pose.position.model_copy(update={"x": pose.position.x + dx})}
+        )
+        if all(_clear(_placed(moved), box) for box in taken):
+            return moved
+    return pose
+
+
 def add_here(site_name: str, site: Assembly, host: str) -> Camera:
     """Add a camera above ``host``'s middle (``""``, the floor's), looking straight
-    down: its record kept, its node appended to the site. ``host`` is one
-    ``check_host`` has let through."""
-    pose = starting_pose(site_name, site, host)
+    down -- beside a camera already standing there -- its record kept, its node
+    appended to the site. ``host`` is one ``check_host`` has let through."""
+    start = starting_pose(site_name, site, host)
     with _LOCK:
         cameras = _load()
+        pose = beside(start, [c.pose for c in cameras if c.site == site_name])
         camera = Camera(
             site=site_name,
             name=_free_name(site_name, site),

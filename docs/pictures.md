@@ -33,7 +33,8 @@ drawn as the library's webcam (`parts/cameras/webcam`) standing where it is put
 (`apothecary/vision/cameras.py`).
 
 - **Camera › Add here**, on a host's ring, stands one above the host, looking
-  straight down, and selects it. A camera can also be dropped from the library.
+  straight down, and selects it; added where one already stands, it stands a
+  step beside it, clear of it. A camera can also be dropped from the library.
 - **Device** on the camera's ring chooses which of this browser's cameras it
   is; **Allow** asks the browser once. One device is one camera: choosing it
   for one takes it off any other. A device is one browser's, as a board is one
