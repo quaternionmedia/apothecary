@@ -1630,6 +1630,7 @@
                 // closed until asked for. Panels › Site › Workspace opens it on the whole
                 // site and a printer's Workspace on that printer, where it watches the
                 // printer's board and keeps a frame set from its cameras with its polls.
+                // Its first line names the next step, whichever door opened it.
                 this.workingSpace = null;
                 this.workingOn = null;
                 this.panels.register('working', {
@@ -1639,6 +1640,7 @@
                         this.workingSpace = mountWorkingSpace(slot, {
                             base: BASE_URL, boards: this.boards, pictures: this.pictures,
                             siteName: () => this.siteName,
+                            applySite: (site) => this.applySite(site),
                             log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
                         });
                         window.apothecaryWorkingSpace = this.workingSpace;
@@ -7184,15 +7186,14 @@
             }
 
             // The Working space opened on a printer (its path), or on the whole site
-            // (null): the window in front, and what it now shows, said.
+            // (null): the window in front, and its next step said.
             async openWorkingSpace(path) {
                 this.workingOn = path;
                 const fresh = !this.workingSpace;
                 this.panels.open('working');
-                const watched = fresh ? await this.workingOpened : await this.workingSpace.open(path);
-                if (!path) return `the Working space of ${this.siteName}: every subject its evidence speaks of`;
-                const cams = watched ? watched.cameras.map((c) => c.name) : [];
-                return `${path}'s hour in the Working space${cams.length ? `, a frame set kept from ${cams.join(', ')} with its polls` : ': no camera looks at it yet (Camera › Add here on its ring)'}`;
+                await (fresh ? this.workingOpened : this.workingSpace.open(path));
+                const next = this.workingSpace.next();
+                return path ? `${path}'s hour in the Working space: ${next}` : `the Working space of ${this.siteName}: ${next}`;
             }
             // Stops the Machine watching its board and takes its panel away. Called
             // again from inside (the panel's onClose), it does nothing.

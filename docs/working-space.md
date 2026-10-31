@@ -39,28 +39,46 @@ site, private to the account, and is never sent anywhere:
 
 ## The window
 
-*Working space* is a window of the viewer, closed until asked for:
+*Working space* is a window of the viewer, closed until asked for.
+[Walkthrough 18](../walkthrough/18-the-working-space.md) goes through it from
+each of its doors, written by the browser test that does it.
 
-- **Panels › Site › Workspace** opens it on the whole site: every subject the
-  log has said of, each property's value, how it is known, and whether its
-  source is still heard or the value is last known.
-- **Camera › Workspace** on a printer's ring opens it on that printer: its
-  state as a strip and its heaters as lines over the last hour, and a row for
-  each camera that looks at it, with the frames kept at its polls. While open,
-  it watches the printer's board and keeps a frame set with its polls: a frame
-  from each of those cameras whose device is this browser's, when the
-  printer's state changes and at every 5 % of its progress, never closer
-  together than ten seconds.
+Its first line, under the title, names the next step and carries the button
+that takes it, whichever door opened it: choose a printer; add a camera above
+it; choose a camera's device; or, with every camera this browser's, when
+frames are kept and Keep a set now. The status line says the same.
 
-Each mark and each row opens its evidence underneath: a frame, and the poll
-it was kept with, every line the printer sent.
+- **⊞ Windows › Working space**, or **Panels › Site › Workspace** on the
+  canvas ring, opens it on the whole site: a row for each printer a board
+  pinned here drives -- what it is doing, whether it is answering, how many
+  cameras look at it, and its hour's button -- then every subject the log has
+  said of, named as a person names it (printer_1 › bed heater), each value
+  with how it is known and when.
+- **Camera › Workspace** on a printer's ring, or its row's button, opens it on
+  that printer: its state as a strip and its heaters as lines over the last
+  hour, a key under them, and a row for each camera that looks at it, with the
+  frames kept at its polls. ‹ and the site's name go back.
+  - A camera row whose device is not this browser's has a box to choose one,
+    or Allow when the browser has not been asked; a printer no camera looks at
+    has *Add a camera above* it, as Camera › Add here does.
+  - While open, it watches the printer's board and keeps a frame set with its
+    polls: a frame from each of those cameras whose device is this browser's,
+    when the printer's state changes, at every 5 % of its progress and when a
+    camera is newly this browser's, never closer together than ten seconds.
+  - Under the rows, how much its kept frames take of their budget, and a box
+    to set it.
+
+Each dot, frame and row opens its evidence under the timeline -- a frame, and
+the poll it was kept with, every line the printer sent -- and × closes it.
 
 ## Doors
 
 | Door | What it answers |
 |---|---|
 | `GET /sites/{s}/evidence?at=&since=` | the `apothecary.evidence` document: every subject, each value at `at` with its sources and evidence, and the transitions, series and frames since `since` |
-| `GET /sites/{s}/evidence/printers/{path}` | the port a printer's board answers on, and the cameras that look at it |
+| `GET /sites/{s}/evidence/printers` | each printer a board pinned in the site drives, as the next door answers it |
+| `GET /sites/{s}/evidence/printers/{path}` | the port a printer's board answers on, the cameras that look at it, and what its kept frames take of their budget |
+| `PUT /sites/{s}/evidence/printers/{path}/budget` `{gb}` | that budget set |
 | `GET /evidence/polls/{id}?space=` | one poll, every line the printer sent |
 | `POST /photos/pictures?site=&camera=&poll=` | a frame kept with a poll |
 | `apothecary evidence show` | every subject and its values, from the log |

@@ -144,7 +144,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "defaults-btn": (WIDGET, WHAT_YOU_SEE, "a button that stages a part's own numbers"),
     # The staged numbers' undo and redo, and the ghost of what was drawn before:
     # Part › History and Part › View.
-    "undo-btn": (WIDGET, WHAT_YOU_SEE, "a button that undoes the last change to the staged numbers"),
+    "undo-btn": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that undoes the last change to the staged numbers",
+    ),
     "redo-btn": (WIDGET, WHAT_YOU_SEE, "a button that redoes the change undone"),
     "ghost-toggle": (
         WIDGET,
@@ -185,10 +189,18 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a button that saves a variant again as it was at an earlier save",
     ),
-    "variant-compare": (WIDGET, WHAT_YOU_SEE, "a button that compares a variant with what is drawn"),
+    "variant-compare": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that compares a variant with what is drawn",
+    ),
     "variant-delete": (WIDGET, WHAT_IS_THERE, "a button that moves a variant to the trash"),
     "trash-restore": (WIDGET, WHAT_IS_THERE, "a button that brings a deleted variant back"),
-    "trash-forget": (WIDGET, WHAT_IS_THERE, "a button that deletes one variant for good, asked twice"),
+    "trash-forget": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that deletes one variant for good, asked twice",
+    ),
     "trash-empty": (WIDGET, WHAT_IS_THERE, "a button that empties the trash, asked twice"),
     # Two variants compared, in the part's editor: what with, how drawn, and closed.
     "compare-with": (WIDGET, WHAT_YOU_SEE, "a drop-down of what a variant is compared with"),
@@ -396,7 +408,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # ---- Site's Pinned, apothecary/static/widgets/pinned.js ---------------
     # What a page added or pinned, every site's, each taken back from its row
     # (TAKEN_BACK): a camera removed, a view unpinned, a board's pin taken back.
-    "pinned-camera-remove": (WIDGET, WHAT_IS_THERE, "a button that removes one camera, in any site"),
+    "pinned-camera-remove": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that removes one camera, in any site",
+    ),
     "pinned-view-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one view, in any site"),
     "pinned-board-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one board's pin back"),
     # Selected: the one width a view is sized by (a chosen shape's long side
@@ -494,6 +510,26 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a line naming two ranges and the metric to map over them",
     ),
     "airgap-run": (WIDGET, WHAT_YOU_SEE, "a button that maps the metric the sweep line names"),
+    # ---- the Working space, apothecary/static/widgets/working_space.js ---------
+    # Its first line's buttons take the step it names; a printer's hour has a row
+    # per camera, a camera's device chosen there, and its frames' budget set.
+    "ws-back": (WIDGET, WHAT_YOU_SEE, "a button that goes back from a printer's hour to the site"),
+    "ws-hour": (WIDGET, WHAT_YOU_SEE, "a button that opens a printer's hour"),
+    "ws-add-camera": (WIDGET, WHAT_IS_THERE, "a button that adds a camera above the printer"),
+    "ws-keep": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that keeps a frame from each of the printer's cameras with its last poll",
+    ),
+    "ws-choose": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a drop-down saying which of this browser's cameras it is",
+    ),
+    "ws-permit": (WIDGET, WHAT_YOU_SEE, "a button that asks the browser for its cameras"),
+    "ws-gb": (WIDGET, WHAT_YOU_SEE, "a number box for a printer's frame budget, in gigabytes"),
+    "ws-budget-set": (WIDGET, WHAT_IS_THERE, "a button that sets a printer's frame budget"),
+    "ws-close": (WIDGET, WHAT_YOU_SEE, "a button that closes the evidence opened"),
 }
 
 # A control of its own that does the same thing as a cell of the ring, and the
@@ -668,6 +704,14 @@ RING_BACKED: Dict[str, str] = {
     "cam-take": "camera:take-picture",
     "takeBtn:click:takePictureWith": "camera:take-picture",
     "window:keydown:onPictureKey": "camera:take-picture",
+    # the Working space: ‹ back is Panels › Site › Workspace, a printer's hour its
+    # Camera › Workspace, Add a camera its Camera › Add here, and a camera row's
+    # device and Allow the camera's own Device (whose leaves are camera:device:<id>)
+    "ws-back": "panel:toggle:working",
+    "ws-hour": "working:open",
+    "ws-add-camera": "camera:add-here",
+    "ws-choose": "camera:device",
+    "ws-permit": "camera:allow",
 }
 
 # A control kept on purpose beside the ring: the button on a row of Site's
@@ -1120,13 +1164,21 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "leaving the page stops the polling and lets go of the serial streams",
     ),
     # ---- the Airgap (widgets/airgap.js): its controls, and its pictures hovered and clicked
-    "toEditorEl:click:act": (WIDGET, WHAT_YOU_SEE, "the panel's values written into the part's text"),
+    "toEditorEl:click:act": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the panel's values written into the part's text",
+    ),
     "fromEditorEl:click:act": (WIDGET, WHAT_YOU_SEE, "the part's text read again"),
     "copyScadEl:click:act": (WIDGET, WHAT_YOU_SEE, "the text with the panel's values copied"),
     "copyMetricsEl:click:act": (WIDGET, WHAT_YOU_SEE, "the metrics document copied"),
     "resetEl:click:act": (WIDGET, WHAT_YOU_SEE, "the panel put back on the part's text"),
     "phiEl:input:scrubTo": (WIDGET, WHAT_YOU_SEE, "the rotor angle, or the run's time, scrubbed"),
-    "playEl:click:setPlaying": (WIDGET, WHAT_YOU_SEE, "the rotor spun or the run played, and paused"),
+    "playEl:click:setPlaying": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the rotor spun or the run played, and paused",
+    ),
     "presetEl:change:choosePreset": (WIDGET, WHAT_YOU_SEE, "a preset's arrangement taken"),
     "rigEl:change:rigChanged": (WIDGET, WHAT_YOU_SEE, "the rig document read, checked and run"),
     "sweepEl:change:sweepChanged": (WIDGET, WHAT_YOU_SEE, "the sweep line read and checked"),
@@ -1160,6 +1212,13 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "that cell's two values taken, into the text where it is edited",
     ),
+    # ---- the Working space ------------------------------------------------------
+    "root:click:closest": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a Working space button doing what it names, or a frame, dot or row opening its evidence",
+    ),
+    "root:change:closest": (WIDGET, WHAT_IS_THERE, "a camera's device chosen in its row"),
 }
 
 LISTENS = re.compile(r"addEventListener\s*\(\s*['\"]([\w-]+)['\"]\s*,")

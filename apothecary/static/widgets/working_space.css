@@ -8,10 +8,25 @@
     display: flex; flex-direction: column; gap: 0.5rem; font-size: 13px;
 }
 .working-space .muted { color: var(--ink-3); }
+.working-space button { cursor: pointer; }
+.ws-back { margin-right: 0.25rem; }
+/* The next step, said and offered: the first thing read under the title. */
+.ws-next { padding: 0.4rem 0.5rem; border-left: 3px solid var(--ok); background: #1a201a; color: var(--ink); line-height: 1.5; }
+.ws-next button { margin-left: 0.35rem; }
+.ws-printer { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; padding: 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 4px; }
+.ws-printer button { margin-left: auto; }
+.ws-legend { display: flex; flex-wrap: wrap; gap: 0.75rem; font-size: 11px; }
+.ws-key { display: inline-block; width: 12px; height: 8px; margin-right: 0.25rem; vertical-align: middle; background: #3a403a; }
+.ws-key.ws-printing { background: var(--ok); }
+.ws-key.ws-idle { background: #6a786a; }
+.ws-key.ws-offline { background: var(--bad); }
+.ws-key.ws-line { height: 2px; }
+.ws-key.ws-hotend { background: var(--hotend); }
+.ws-key.ws-bed { background: var(--bed); }
 .ws-chart { width: 100%; height: 92px; display: block; background: #161816; border: 1px solid var(--line); border-radius: 4px; }
 .ws-state { cursor: pointer; fill: #3a403a; }
 .ws-state.ws-printing { fill: var(--ok); }
-.ws-state.ws-idle { fill: #4a544a; }
+.ws-state.ws-idle { fill: #6a786a; }
 .ws-state.ws-offline { fill: var(--bad); }
 .ws-state.ws-maintenance { fill: var(--warn); }
 path.ws-hotend { stroke: var(--hotend); stroke-width: 1.5; }
@@ -20,15 +35,24 @@ circle.ws-hotend { fill: var(--hotend); cursor: pointer; }
 circle.ws-bed { fill: var(--bed); cursor: pointer; }
 .ws-axis { display: flex; justify-content: space-between; font-size: 11px; }
 .ws-camera-row { display: flex; align-items: center; gap: 0.5rem; min-height: 44px; }
-.ws-camera-name { flex: 0 0 5.5rem; color: var(--ink-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+.ws-camera-name { flex: 0 0 12rem; display: flex; flex-direction: column; gap: 0.15rem; color: var(--ink-2); font-size: 12px; overflow: hidden; }
+.ws-device { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-ok { color: var(--ok); }
+.ws-bad { color: var(--bad); }
+.ws-choose, .ws-camera-name button { font-size: 11px; max-width: 100%; }
 .ws-frames { position: relative; flex: 1; height: 40px; border-bottom: 1px dashed var(--line); overflow: hidden; }
 .ws-frame { position: absolute; top: 0; height: 38px; width: auto; transform: translateX(-50%); border: 1px solid var(--line); border-radius: 2px; cursor: pointer; }
 .ws-frame:hover { z-index: 1; outline: 1px solid var(--ink-2); }
 .ws-subjects { width: 100%; border-collapse: collapse; }
+.ws-budget { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.ws-gb { width: 4.5rem; }
+.ws-subjects thead th { color: var(--ink-3); font-weight: 400; font-size: 11px; border-bottom: none; }
 .ws-subjects th { text-align: left; padding: 0.35rem 0.25rem 0.15rem; color: var(--ink-2); font-weight: 600; border-bottom: 1px solid var(--line); }
 .ws-subjects td { padding: 0.15rem 0.25rem; vertical-align: top; }
 .ws-property[data-poll] { cursor: pointer; }
 .ws-property[data-poll]:hover td { background: #1f241f; }
 .ws-stale td { color: var(--ink-3); }
+.ws-opened { position: relative; padding: 0.4rem 1.6rem 0.4rem 0.4rem; border: 1px solid var(--line); border-radius: 4px; }
+.ws-close { position: absolute; top: 0.2rem; right: 0.2rem; line-height: 1; }
 .ws-opened pre { max-height: 14rem; overflow: auto; background: #161816; border: 1px solid var(--line); padding: 0.4rem; font-size: 11px; }
 .ws-frame-large { display: block; max-width: 100%; margin-top: 0.4rem; border: 1px solid var(--line); }

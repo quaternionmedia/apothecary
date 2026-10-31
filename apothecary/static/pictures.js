@@ -108,11 +108,10 @@ export function mountPictures({ base = "", marks, world, log }) {
         return cam.device;
     }
 
-    // Allow: the browser is asked once. It answers with its prompt, or with what
-    // the address bar holds for this site. Its yes flows on: one camera is chosen
-    // as this camera's device at once; several reopen the ring at Device, where
-    // the ring stood, so the choice is made without another trip.
-    async function allow(name, at = null) {
+    // The browser asked for its cameras, and its answer named: this browser's
+    // cameras, or a refusal saying where the camera is allowed. `again` is what to
+    // press once it is.
+    async function permit(again = "Allow") {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("this browser has no cameras to offer");
         let probe;
         try {
@@ -120,14 +119,22 @@ export function mountPictures({ base = "", marks, world, log }) {
         } catch (e) {
             const said = e && e.message ? ` (${e.message})` : "";
             if (e && e.name === "NotAllowedError") {
-                throw new Error(`the browser refused the camera${said}: answer its prompt, or allow the camera for this site in the address bar, then ${name}'s Device again`);
+                throw new Error(`the browser refused the camera${said}: answer its prompt, or allow the camera for this site in the address bar, then ${again} again`);
             }
             throw new Error(`this browser offered no camera it could use${said || (e && e.name ? ` (${e.name})` : "")}`);
         }
         for (const t of probe.getTracks()) t.stop();
         await listCameras();
-        const n = state.cameras.length;
-        if (!n) throw new Error("the browser allowed a camera and then named none: this browser offered no camera it could use");
+        if (!state.cameras.length) throw new Error("the browser allowed a camera and then named none: this browser offered no camera it could use");
+        return state.cameras;
+    }
+
+    // Allow: the browser is asked once. It answers with its prompt, or with what
+    // the address bar holds for this site. Its yes flows on: one camera is chosen
+    // as this camera's device at once; several reopen the ring at Device, where
+    // the ring stood, so the choice is made without another trip.
+    async function allow(name, at = null) {
+        const n = (await permit(`${name}'s Device`)).length;
         if (n === 1) { await chooseDevice(name, state.cameras[0].id, { allowed: true }); return; }
         say(`${n} cameras allowed: choose which is ${name}`);
         if (world.reopenRing) world.reopenRing(name, "camera:device", at);
@@ -485,7 +492,7 @@ export function mountPictures({ base = "", marks, world, log }) {
     function cameraGone(name) { if (state.live && state.live.camera === name) still(); }
 
     return {
-        ready, state, listCameras, allow, chooseDevice, goLive, still, takePicture, frameOf,
+        ready, state, listCameras, permit, allow, chooseDevice, goLive, still, takePicture, frameOf,
         findShapes, addFiles, pickFiles, paste, pinPicture, drawView, unpinView, forget, purge, setWidth,
         context, carry, cameraGone, picturesNow, choose,
         chosen: () => state.chosen,

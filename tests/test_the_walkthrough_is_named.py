@@ -63,6 +63,10 @@ LOOP_PAGES = {
         "test_editing_a_parts_scad_twice_round",
         ROOT / "walkthrough" / "06-editing-a-parts-scad.md",
     ),
+    Path(__file__).resolve().parent / "e2e" / "test_working_space.py": (
+        "test_the_working_space_from_each_of_its_doors",
+        ROOT / "walkthrough" / "18-the-working-space.md",
+    ),
 }
 
 

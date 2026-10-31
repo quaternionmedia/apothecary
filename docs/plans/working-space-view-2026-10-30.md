@@ -2,7 +2,8 @@
 
 *Slice 1's first two steps are built: a printer's polls kept as evidence, frame
 sets kept with them, and the Working space window (`apothecary/evidence/`,
-`docs/working-space.md`). The rest is not built, and its next step is the
+`docs/working-space.md`), walked from each of its doors in
+`walkthrough/18-the-working-space.md`. The rest is not built, and its next step is the
 Ender's cameras at the bench. The image models served through qmcp, an
 always-optional source of readings off a picture, are planned beside it in
 `docs/plans/image-models-through-qmcp-2026-10-30.md`, not yet on this branch.*
