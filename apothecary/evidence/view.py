@@ -15,7 +15,10 @@ or socket. For a space, a moment ``at`` and a span from ``since``:
   board present or not), with the evidence on either side;
 - ``series``: in the span, each number as it moved, for a timeline's strips,
   each point ``[at, value, poll]``;
-- ``polls``: the polls in the span, by id, so a line opens its evidence.
+- ``polls``: the polls in the span, by id, so a line opens its evidence;
+- ``frames``: the frames kept with polls in the span, each with its camera,
+  its poll and the subjects that poll speaks of, and ``frame_sizes``: per
+  subject, what its kept frames take and the budget they live under.
 
 Every value names the observations it rests on; the document shows nothing
 that cannot.
@@ -66,6 +69,8 @@ def document(
     at: datetime,
     since: datetime,
     unreadable: int = 0,
+    frames: Optional[List[dict]] = None,
+    frame_sizes: Optional[Dict[str, dict]] = None,
 ) -> dict:
     """The space as the log has it at ``at``, and what moved since ``since``."""
     upto = sorted((o for o in observations if o.at <= at), key=lambda o: o.at)
@@ -163,6 +168,12 @@ def document(
         "transitions": transitions,
         "series": series,
         "polls": in_span,
+        "frames": [
+            {k: f.get(k) for k in ("id", "camera", "poll", "at", "size", "subjects")}
+            for f in frames or []
+            if since <= datetime.fromisoformat(f["at"]) <= at
+        ],
+        "frame_sizes": frame_sizes or {},
         "observations": len(span),
         "unreadable": unreadable,
     }

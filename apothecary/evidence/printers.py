@@ -167,6 +167,8 @@ class Collector:
             "raw": list(status.raw),
         }
         said = [(pin.site, pin) for pin in pins] or [(log.SIGHTINGS, None)]
+        # The nodes the poll speaks of, as the frames kept with it are filed under.
+        record["subjects"] = sorted({_subjects(pin, identity)[1] for _, pin in said})
         with self._lock:
             written: set = set()
             for space, pin in said:
@@ -180,6 +182,19 @@ class Collector:
             while len(self._held) > HELD_POLLS:
                 self._held.popitem(last=False)
         return pid
+
+    def held(self, pid: str) -> Optional[dict]:
+        """A poll this collector still holds: its record and the spaces it is said in."""
+        with self._lock:
+            found = self._held.get(pid)
+            if found is None:
+                return None
+            record, spaces, _ = found
+            return {
+                "record": dict(record),
+                "spaces": list(spaces),
+                "subjects": list(record["subjects"]),
+            }
 
     def keep(self, pid: str) -> List[str]:
         """The poll ``pid`` written to the log where it was not yet, so what rests

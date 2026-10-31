@@ -671,6 +671,11 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("pinned", "Pinned"),
     ("jobs", "Jobs"),
     ("scad", "SCAD"),
+    # Working space: the site as every kind of evidence has it (apothecary/evidence/),
+    # a tab of Site's ring registered by the page's script, closed until asked for;
+    # a printer's ring opens it on that printer. A ring's label holds twelve
+    # characters, so its cells say Workspace.
+    ("working", "Workspace"),
     # Registered by the page's script rather than marked in its markup: Pictures
     # (every picture under the picture root, each pinned here or forgotten) and
     # Gather (the gathering, a window beside it, closed until asked for), a ring of
@@ -705,7 +710,7 @@ VIEWS = tuple((system.id, system.cell) for system in SYSTEMS)
 # Machine and its control pad.
 _BEFORE_WINDOWS = ("site", "selected", "pictures", "machine")
 _RINGS = {
-    "site": ("site", "problems", "pinned", "jobs", "scad"),
+    "site": ("site", "problems", "pinned", "jobs", "scad", "working"),
     "pictures": ("pictures", "gather"),
 }
 
@@ -977,17 +982,18 @@ def _is_host(site: Optional[Assembly], path: str, not_hosts: Sequence[str]) -> b
     return node is not None and node.world_bounds() is not None
 
 
-def _camera_group(floor: bool) -> Option:
+def _camera_group(floor: bool, printer: bool = False) -> Option:
     """Camera at a host or the floor: Add here, a camera part standing above the
-    middle of this place, looking straight down. The server adds it."""
+    middle of this place, looking straight down. The server adds it. On a printer a
+    board drives, Workspace too: the Working space opened on it, where the frames its
+    cameras keep with its polls are (widgets/working_space.js)."""
     tail = f":{FLOOR_MARK}" if floor else ""
-    return Option(
-        id=f"camera{tail}",
-        label="Camera",
-        children=[
-            Option(id=f"camera:add-here{tail}", label="Add here", action=f"camera:add-here{tail}")
-        ],
-    )
+    children = [
+        Option(id=f"camera:add-here{tail}", label="Add here", action=f"camera:add-here{tail}")
+    ]
+    if printer:
+        children.append(Option(id="working", label="Workspace", action="working:open"))
+    return Option(id=f"camera{tail}", label="Camera", children=children)
 
 
 def _camera_options(picture: PictureContext) -> List[Option]:
@@ -1346,7 +1352,7 @@ def _node_ring(
     # has a camera added above it and holds views; a made piece has its word and
     # can be dropped; a camera has its own verbs, its device first.
     if _is_host(site, path, [*picture.made, *picture.camera_parts]):
-        options.append(_camera_group(floor=False))
+        options.append(_camera_group(floor=False, printer=path in picture.printers))
         host_pictures = _picture_group(picture, floor=False)
         assert host_pictures is not None  # a host's always holds Add
         options.append(host_pictures)
@@ -1667,6 +1673,9 @@ CARRIED_BY: Dict[str, Carries] = {
     "slice": Carries.VIEWER,
     # Opening and closing the windows beside the world (panels.js).
     "panel": Carries.VIEWER,
+    # A printer's Working space: the page opens the window on the printer, watches
+    # its board and keeps frames with its polls (widgets/working_space.js).
+    "working": Carries.VIEWER,
     # How the world is drawn: the header's View menu (snapping, detail, outlines,
     # whether a click picks a wall).
     "view": Carries.VIEWER,

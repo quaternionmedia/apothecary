@@ -5,6 +5,10 @@
   ``at`` (now, unless given) with its sources, origins and evidence, and what
   moved since ``since`` (an hour before ``at``, unless given). A moment with no
   time zone is UTC.
+- ``GET /sites/{s}/evidence/printers/{path}``: what the Working space watches
+  for a printer: the port its board answers on (null when none does) and the
+  cameras that look at it, each with the browser device it was told, so the
+  page keeps a frame set from those of its own with each poll.
 - ``GET /evidence/polls/{id}``: one poll an observation rests on, every line
   the printer sent, from the space that holds it.
 """
@@ -39,6 +43,45 @@ def site_evidence(
     if at is not None and since is not None and since > at:
         raise HTTPException(status_code=422, detail="since is after at")
     return log.document(name, at=at, since=since)
+
+
+@router.get("/sites/{name}/evidence/printers/{path}")
+def printer_watched(name: str, path: str) -> Dict[str, Any]:
+    """A printer's port and the cameras that look at it, for the page to keep frames with."""
+    from ..api import PRINTER_STATUSES, _find_node_by_path, _get_site_or_404, status_bearer_for
+    from ..firmware import devices as firmware_devices
+    from ..firmware.bindings import device_for_identity
+    from ..firmware.toolchains import ToolchainError
+    from ..vision import cameras
+
+    site = _get_site_or_404(name)
+    node = _find_node_by_path(site, path)
+    if node is None or node.status not in PRINTER_STATUSES:
+        raise HTTPException(status_code=404, detail=f"{path} is no printer of {name}")
+    try:
+        found = firmware_devices.detected_devices()
+    except ToolchainError:
+        found = []
+    port = None
+    for binding in firmware_devices.get_state().bindings(name):
+        if status_bearer_for(site, binding.path) == path:
+            device = device_for_identity(binding.identity, found)
+            port = device.port if device is not None else None
+            if port:
+                break
+    root = path.split(".", 1)[0]
+    looking = [
+        {"name": cam.name, "device_id": cam.device.id if cam.device else None}
+        for cam in cameras.records(name)
+        if cameras.looks_at(name, site, cam.pose) == root
+    ]
+    return {
+        "site": name,
+        "path": path,
+        "subject": f"{name}:{path}",
+        "port": port,
+        "cameras": looking,
+    }
 
 
 @router.get("/evidence/polls/{poll_id}")

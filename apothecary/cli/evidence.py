@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import click
 
@@ -61,6 +62,26 @@ def show(space: str, as_json: bool):
             click.echo(f"  {prop['property']:<12} {_value(prop):<28} {how}{heard}")
     if document["unreadable"]:
         click.echo(f"{document['unreadable']} line(s) of the log could not be read")
+
+
+@evidence.command("budget")
+@click.argument("printer")
+@click.option(
+    "--site", "space", default="garage", show_default=True, help="The space: a site's name."
+)
+@click.option("--gb", type=click.FloatRange(min=0.01), help="Set the budget, in GB.")
+def budget(printer: str, space: str, gb: Optional[float]):
+    """How much a printer's kept frames take, and the budget they live under; --gb sets it."""
+    from ..evidence import frames
+
+    subject = f"{space}:{printer}"
+    if gb is not None:
+        frames.set_budget(space, subject, int(gb * 1e9))
+    size = frames.sizes(space).get(subject, {"bytes": 0, "frames": 0})
+    click.echo(
+        f"{subject}: {size['frames']} frame(s) kept, {size['bytes'] / 1e6:.1f} MB "
+        f"of {frames.budget(space, subject) / 1e9:.2f} GB"
+    )
 
 
 @evidence.command("changed")

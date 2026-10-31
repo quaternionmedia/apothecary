@@ -342,6 +342,14 @@ def lands(site_name: str, site: Assembly, pose: Pose) -> Optional[Hit]:
     return hit
 
 
+def looks_at(site_name: str, site: Assembly, pose: Pose) -> Optional[str]:
+    """The root structure a camera at ``pose`` looks at, its top or a side of it: what
+    its centre ray reaches first; None for the floor, a wall or the sky."""
+    eye = (pose.position.x, pose.position.y, pose.position.z)
+    hit = first_surface(eye, looking(pose.turn, pose.tilt), surfaces(site_name, site))
+    return hit.name if hit is not None and hit.name else None
+
+
 # --- what a person does to one ------------------------------------------------------------
 
 

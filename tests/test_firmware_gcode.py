@@ -612,6 +612,78 @@ def test_a_pinned_poll_is_kept_as_evidence(
     assert "printing -> offline" in result.output
 
 
+def test_frames_kept_with_a_poll_are_its_evidence_under_the_printers_budget(
+    fake_arduino_cli, fresh_task_runner, scripted_links, world
+):
+    """The Working space keeps a frame set with a printer's poll: each frame is kept as
+    its camera's, recorded beside the poll and never the camera's view; the printer's
+    kept frames past its budget are forgotten oldest first, and a picture taken by
+    hand is never counted."""
+    from views_helpers import png
+
+    from apothecary.evidence import frames
+
+    c = TestClient(app)
+    assert (
+        c.put(
+            "/sites/garage/nodes/printer_1/device", json={"identity": "/dev/ttyFAKE1"}
+        ).status_code
+        == 200
+    )
+    camera = c.post("/sites/garage/cameras", json={"host": "printer_1"}).json()["camera"]["name"]
+    watched = c.get("/sites/garage/evidence/printers/printer_1").json()
+    assert watched["port"] == "/dev/ttyFAKE1"
+    assert watched["cameras"] == [{"name": camera, "device_id": None}]
+    assert c.get("/sites/garage/evidence/printers/workbench").status_code == 404
+
+    scripted_links.factory = lambda port, baud: ScriptedTransport(port, baud, PRINTING)
+
+    def keep_one():
+        poll = c.get("/firmware/printers/status", params={"port": "/dev/ttyFAKE1"}).json()["poll"]
+        r = c.post(
+            "/photos/pictures",
+            params={"name": camera, "site": "garage", "camera": camera, "poll": poll},
+            content=png(),
+        )
+        assert r.status_code == 201, r.text
+        return poll, r.json()
+
+    poll, first = keep_one()
+    assert first["path"].startswith("captures/") and f"garage--{camera}" in first["path"]
+    assert "view" not in first  # a kept frame is not the camera's view
+    assert first["evidence"]["poll"] == poll and first["evidence"]["subjects"] == [
+        "garage:printer_1"
+    ]
+    assert c.get(f"/evidence/polls/{poll}", params={"space": "garage"}).status_code == 200
+    seen = c.get("/sites/garage/evidence").json()
+    assert [f["id"] for f in seen["frames"]] == [first["path"]]
+    assert seen["frame_sizes"]["garage:printer_1"]["frames"] == 1
+
+    # A frame names a poll it was kept with, its site and its camera, or nothing is kept.
+    before = sorted(p.name for p in (world / "captures").iterdir())
+    for params, code in (
+        ({"site": "garage", "camera": camera, "poll": "20261031T000000.000-ttyFAKE1"}, 409),
+        ({"site": "garage", "host": "printer_1", "poll": poll}, 422),
+    ):
+        assert c.post("/photos/pictures", params=params, content=png()).status_code == code
+    assert sorted(p.name for p in (world / "captures").iterdir()) == before
+
+    # A picture taken by hand is no kept frame; past the budget, the oldest kept one goes.
+    by_hand = c.post(
+        "/photos/pictures",
+        params={"name": camera, "site": "garage", "camera": camera},
+        content=png(),
+    ).json()
+    frames.set_budget("garage", "garage:printer_1", first["size"] + 1)
+    _, second = keep_one()
+    assert second["forgotten"] == [first["path"]]
+    assert not (world / first["path"]).exists() and (world / by_hand["path"]).exists()
+    seen = c.get("/sites/garage/evidence").json()
+    assert [f["id"] for f in seen["frames"]] == [second["path"]]
+    result = CliRunner().invoke(cli, ["evidence", "budget", "printer_1", "--site", "garage"])
+    assert "1 frame(s) kept" in result.output
+
+
 def test_sync_skips_nodes_without_status(fake_arduino_cli, scripted_links, garage):
     c = TestClient(app)
     c.put("/sites/garage/nodes/footpedal/device", json={"identity": "/dev/ttyFAKE1"})

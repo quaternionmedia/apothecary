@@ -15,7 +15,10 @@ command line. These routes give the world's page the same, and no more:
   from a camera under ``captures/`` (named by the moment, and a camera part's
   by its camera too, which the listing reads back as ``camera``), or, with
   ``kept=upload``, a file a person chose under ``uploads/`` (named as the
-  person named it). It stays on this machine; nothing is sent anywhere.
+  person named it). It stays on this machine; nothing is sent anywhere. With
+  ``poll`` too, it is a frame the Working space keeps with a printer's poll:
+  recorded beside that poll (``apothecary/evidence/frames.py``), and never the
+  camera's view.
 - ``DELETE /photos/pictures/{path}`` forgets one kept picture and
   ``DELETE /photos/pictures`` forgets every kept picture: what the browser
   put under ``captures/`` and ``uploads/``, and only that. The folder's own
@@ -197,6 +200,7 @@ def keep_picture(
     site: Optional[str] = Query(None, max_length=64),
     host: Optional[str] = Query(None, max_length=400),
     camera: Optional[str] = Query(None, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"),
+    poll: Optional[str] = Query(None, pattern=r"^\d{8}T\d{6}\.\d{3}-[A-Za-z0-9_.-]{1,64}$"),
 ):
     """Keep a picture the browser sends: a camera's frame under captures/, named by the
     moment (and a camera part's by its site and name, ``TAKEN_BY``), or
@@ -210,6 +214,13 @@ def keep_picture(
     becomes that camera's view, lying where the camera looks (or nowhere, at a
     wall or the sky) and keeping how the camera stood. A host that cannot hold a
     view, or a camera that is not there, is refused before anything is kept.
+
+    With ``site``, ``camera`` and ``poll`` -- the Working space keeping a frame
+    set with a printer's poll -- it is kept and named as Take picture names it,
+    recorded as evidence beside that poll, and is not the camera's view. The
+    printer's kept frames past its budget are forgotten, the oldest first, and
+    named in the answer's ``forgotten``. A poll this server no longer holds is
+    refused before anything is kept.
 
     The body is read on the event loop; the write of up to 16 MB runs in the threadpool."""
     suffix = _suffix_by_bytes(data)
@@ -225,6 +236,10 @@ def keep_picture(
             "host, not both",
         )
     pinning = site is not None
+    if poll is not None and (camera is None or not pinning or kept != "capture"):
+        raise HTTPException(
+            status_code=422, detail="a frame kept with a poll names its site and its camera"
+        )
     if pinning != (host is not None or camera is not None):
         raise HTTPException(
             status_code=422,
@@ -235,6 +250,15 @@ def keep_picture(
         from .views import camera_or_404
 
         camera_or_404(site, camera)
+        if poll is not None:
+            from ..evidence import frames as evidence_frames
+
+            if not evidence_frames.holds(site, poll):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"poll {poll} is not one of {site}'s this server still holds: "
+                    "a frame is kept with a poll it has just answered",
+                )
     elif pinning:
         from .views import check_host
 
@@ -255,6 +279,10 @@ def keep_picture(
     from ..vision.views import store
 
     store().kept_again(entry["path"])
+    if poll is not None:
+        entry["evidence"] = evidence_frames.keep(site, camera, entry["path"], entry["size"], poll)
+        entry["forgotten"] = _over_budget(root, site, entry["evidence"]["subjects"])
+        return entry
     if pinning:
         from .views import _answer, pin_picture, take_picture
 
@@ -269,6 +297,25 @@ def keep_picture(
             # Kept, and not pinned: the picture is the person's either way.
             entry["view"], entry["not_pinned"] = None, refused.detail
     return entry
+
+
+def _over_budget(root: Path, site: str, subjects: List[str]) -> List[str]:
+    """The frames kept with polls that ``subjects``' budgets no longer hold, forgotten
+    as Pictures forgets one: the file, then its views; each recorded as forgotten."""
+    from ..evidence import frames as evidence_frames
+    from ..vision.views import store
+
+    gone: List[str] = []
+    for subject in subjects:
+        for record in evidence_frames.over_budget(site, subject):
+            try:
+                _kept_picture(root, record["id"]).unlink()
+            except (HTTPException, FileNotFoundError):
+                pass  # forgotten already, by a person or another purge
+            store().forget_picture(record["id"])
+            evidence_frames.forgotten(site, record["id"], f"over {subject}'s budget")
+            gone.append(record["id"])
+    return gone
 
 
 # The sizes a picture is served at, along its longer edge: a row of Pictures, a mat, a large mat.

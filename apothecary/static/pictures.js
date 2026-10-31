@@ -189,21 +189,21 @@ export function mountPictures({ base = "", marks, world, log }) {
         return true;
     }
 
-    function grab(video) {
+    function grab(video, type = "image/png") {
         const canvas = document.createElement("canvas");
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
         if (!canvas.width || !canvas.height) return Promise.reject(new Error("the camera gave no frame"));
         canvas.getContext("2d").drawImage(video, 0, 0);
-        return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("no frame"))), "image/png"));
+        return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("no frame"))), type, 0.85));
     }
-    async function frame(device) {
-        if (state.live && state.live.id === device.id) return grab(state.live.video);
+    async function frame(device, type = "image/png") {
+        if (state.live && state.live.id === device.id) return grab(state.live.video, type);
         const stream = await open(device.id);
         const { video, loaded } = videoFor(stream);
         try {
             await loaded;
             await new Promise((resolve) => setTimeout(resolve, FRAME_SETTLE_MS));
-            return await grab(video);
+            return await grab(video, type);
         } finally { close(stream, video); }
     }
 
@@ -264,6 +264,12 @@ export function mountPictures({ base = "", marks, world, log }) {
         if (world.rendered) world.rendered();
         say(pinned(kept.view));
         return kept.view;
+    }
+    // A frame from a camera's device as a JPEG, kept by no one yet: the Working
+    // space keeps it with a printer's poll (widgets/working_space.js). Live stays as
+    // it was; a camera not live is opened for the frame and closed again.
+    async function frameOf(name) {
+        return frame(deviceOf(name), "image/jpeg");
     }
     // Find shapes: a finder reads the view drawn here. On a view another finder
     // searched already, its shapes are a new view, drawn in its place.
@@ -479,7 +485,7 @@ export function mountPictures({ base = "", marks, world, log }) {
     function cameraGone(name) { if (state.live && state.live.camera === name) still(); }
 
     return {
-        ready, state, listCameras, allow, chooseDevice, goLive, still, takePicture,
+        ready, state, listCameras, allow, chooseDevice, goLive, still, takePicture, frameOf,
         findShapes, addFiles, pickFiles, paste, pinPicture, drawView, unpinView, forget, purge, setWidth,
         context, carry, cameraGone, picturesNow, choose,
         chosen: () => state.chosen,

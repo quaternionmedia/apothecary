@@ -1,7 +1,9 @@
 # A working space, seen from every kind of evidence at once: a plan
 
-*Not built. Queued behind the cameras on the Ender 3, whose tie to the printer's
-polls is its first slice. The image models served through qmcp, an
+*Slice 1's first two steps are built: a printer's polls kept as evidence, frame
+sets kept with them, and the Working space window (`apothecary/evidence/`,
+`docs/working-space.md`). The rest is not built, and its next step is the
+Ender's cameras at the bench. The image models served through qmcp, an
 always-optional source of readings off a picture, are planned beside it in
 `docs/plans/image-models-through-qmcp-2026-10-30.md`, not yet on this branch.*
 
@@ -500,8 +502,9 @@ The layer adds no fourth place for personal data:
   space.
 
 The package reads personal data, so it is an install point of the stays-local
-guard, as `rig` and `gathering` are. Nothing of what it keeps is committed, and
-its writer refuses a path inside a repository. A person's goals and directives
+guard, as `rig` and `gathering` are. Nothing of what it keeps is committed: it
+writes only under the state folder, which the demo keeps in the checkout's
+git-ignored `.cache/demo/`. A person's goals and directives
 are personal data like the rest. Backups are the person's.
 
 A frame at every poll of a long print is a frame every couple of seconds for
@@ -534,9 +537,10 @@ parts:
   nothing that opens a port, a file or a socket.
 - **Renderers** read that document and nothing else:
   - **The viewer.** A window, as every section of the page is (`panels.js`),
-    called *Working space*, opened two ways: from a printer's ring, beside
-    Machine and its cameras, on that printer's timeline; and from the site's
-    menu, on every subject of the site. It lists the subjects with their
+    called *Working space*, opened two ways: from a printer's ring, under its
+    Camera (Camera › Workspace, since a ring's label holds twelve characters),
+    on that printer's timeline; and from Panels › Site › Workspace, on every
+    subject of the site. It lists the subjects with their
     states, and each line opens its evidence: a frame with its region drawn, a
     poll's lines, a person's record. A strip under it scrubs through time, and
     *what changed* is the span between two marks. The 3D view can colour a node by its level.

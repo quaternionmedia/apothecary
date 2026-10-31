@@ -5,7 +5,9 @@ named for the day its records held (UTC), appended to and never rewritten:
 
 - ``observations/2026-10-31.jsonl``, one ``apothecary.observation`` a line;
 - ``polls/2026-10-31.jsonl``, the polls observations rest on, each with its id
-  and every line the printer sent.
+  and every line the printer sent;
+- ``frames/2026-10-31.jsonl``, the frames kept with polls, and those forgotten
+  since (``frames``).
 
 A space is a site, by its name; what no pin attributes to a site goes to
 ``_sightings``, a name no site can have. The folder is private, as the firmware
@@ -27,7 +29,8 @@ from .observation import Observation
 SIGHTINGS = "_sightings"
 OBSERVATIONS = "observations"
 POLLS = "polls"
-KINDS = (OBSERVATIONS, POLLS)
+FRAMES = "frames"
+KINDS = (OBSERVATIONS, POLLS, FRAMES)
 
 # One writer at a time in this process; the server is the one process that writes.
 _WRITING = threading.Lock()
@@ -148,7 +151,7 @@ def spaces() -> List[str]:
 
 def document(space: str, at: Optional[datetime] = None, since: Optional[datetime] = None) -> dict:
     """The view's document for a space, from what the log holds up to ``at``."""
-    from . import view
+    from . import frames, view
 
     at = at or datetime.now(timezone.utc)
     since = since or view.default_since(at)
@@ -163,4 +166,13 @@ def document(space: str, at: Optional[datetime] = None, since: Optional[datetime
             parsed.append(Observation.model_validate(record))
         except ValueError:
             unreadable += 1
-    return view.document(space, parsed, polls.records, at, since, unreadable)
+    return view.document(
+        space,
+        parsed,
+        polls.records,
+        at,
+        since,
+        unreadable,
+        frames=[f for f in frames.kept(space) if datetime.fromisoformat(f["at"]) <= at],
+        frame_sizes=frames.sizes(space),
+    )

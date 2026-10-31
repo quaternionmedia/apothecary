@@ -188,6 +188,15 @@ AREAS = {
         ),
         "tests": ("test_carlos_concert.py", "test_carlos_bench.py"),
     },
+    "working space": {
+        "sources": (
+            "apothecary/evidence/*",
+            "apothecary/routes/evidence.py",
+            "apothecary/cli/evidence.py",
+            "apothecary/static/widgets/working_space.*",
+        ),
+        "tests": ("test_working_space.py",),
+    },
 }
 
 

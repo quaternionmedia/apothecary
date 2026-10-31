@@ -1074,6 +1074,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Pinned", "panel:toggle:pinned", 2),
         ("Jobs", "panel:toggle:jobs", 4),
         ("SCAD", "panel:toggle:scad", 9),
+        ("Workspace", "panel:toggle:working", 3),
     ]
     assert address_of(root, "panel:site") == "488"  # by the option's id
     assert address_of(root, "panel:problems") == "486"
@@ -1634,6 +1635,37 @@ def test_a_made_piece_and_a_part_slice_for_a_printer_pinned_in_their_site():
     ring = resolve(Context(pointing=Pointing.NODE, targets=["esp32_blink"]), site, picture=plain)
     assert "Slice" not in [o.label for o in ring.options]  # its sketch says it is a board
     assert carried_by("slice:piece:printer_1").name == "VIEWER"
+
+
+def test_a_printer_a_board_drives_opens_its_working_space_under_its_camera():
+    """Workspace is under a printer's Camera, beside Add here: the page opens the
+    Working space on it (widgets/working_space.js), where the frames its cameras keep
+    with its polls are. Only a printer a board drives has it, so no cell of the
+    ring moves, whether the printer's own Device is there or its board's pin is
+    below it; another host's Camera holds Add here alone."""
+    from apothecary.menu import PictureContext, carried_by
+
+    site = _garage()
+
+    def on(path, printers, device=None):
+        told = PictureContext(printers=printers)
+        context = Context(pointing=Pointing.NODE, targets=[path])
+        return resolve(context, site, picture=told, device=device)
+
+    for device in (None, PRINTER):
+        ring = on("printer_1", ["printer_1"], device)
+        camera = _group(ring, "Camera")
+        assert [(c.label, c.action) for c in camera.children] == [
+            ("Add here", "camera:add-here"),
+            ("Workspace", "working:open"),
+        ]
+        assert [o.label for o in ring.options] == [
+            o.label for o in on("printer_1", [], device).options
+        ]
+    assert carried_by("working:open").name == "VIEWER"
+    for path in ("workbench", "printer_1"):
+        bare = _group(on(path, []), "Camera")
+        assert [c.label for c in bare.children] == ["Add here"], path
 
 
 def test_a_made_piece_has_picture_with_word_and_drop_and_no_camera():
