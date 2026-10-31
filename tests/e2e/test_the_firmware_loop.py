@@ -261,9 +261,17 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
     _choose(page, "Device", "Query")
     expect(log).to_contain_text("heard esp32_blink say hello", timeout=20000)
     expect(sketch).to_contain_text("observed esp32_blink ✓ matches", timeout=8000)
-    # Its LED flashed with the blinks it was heard saying, on its badges.
+    # Its LED blinks with the blinks it was heard saying, on its badges: a Query's come
+    # back at once, and are played back a second apart.
     page.wait_for_function(
-        f"() => (window.fractalViewer.ledFlashes[{DEVKIT!r}] || 0) > 0", timeout=8000
+        f"() => (window.fractalViewer.ledFlashes[{DEVKIT!r}] || 0) >= 2", timeout=8000
+    )
+    # The picture once the five played back are over and the LED is out: one taken
+    # mid-blink would depend on its moment.
+    page.wait_for_function(
+        f"() => window.fractalViewer.ledFlashes[{DEVKIT!r}] >= 5"
+        " && !document.querySelector('.lit[data-port]')",
+        timeout=10000,
     )
     sketch.scroll_into_view_if_needed()
     settled(page)
