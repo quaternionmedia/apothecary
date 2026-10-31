@@ -305,6 +305,8 @@ def parse(result: Any, req: Dict[str, Any]) -> List[Observation]:
         or result.get("version") != VERSION
     ):
         raise Refused("the answer is not qm.vision version 1")
+    if "picture" not in result:
+        raise Refused("the answer names no picture")
     if result.get("picture") != req["picture"]["sha256"]:
         raise Refused("the answer is about another picture")
     listed = result.get("observations")
@@ -359,7 +361,7 @@ def ask(req: Dict[str, Any], address: Optional[str] = None) -> Tuple[List[Observ
             req, "the deadline passed"
         ), f"{qmcp.named()} did not answer within {seconds:g} s: the call was given up"
     except Exception as down:
-        return [], f"{qmcp.named()} is not answering ({_why(down)}): nothing was kept"
+        return [], f"{qmcp.named()} is not answering ({_why(down)}): no model answered"
     try:
         seen = parse(result, req)
     except Refused as refused:

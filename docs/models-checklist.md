@@ -60,9 +60,11 @@ status bar said, word for word.
   - [ ] **label:** *unread: the model answered 'block'* (or *'bar'*)
         *, which is outside the words asked among*. A word outside the list
         is shown, and used for nothing.
-- [ ] **Ask** on a shape of two colours, one inside the other: where the
-      reading and the guess name different colours, the guess says
-      *disagrees* in red, and the reading stays as read.
+- [ ] **Ask** on a shape whose reading and guess name different colours:
+      the guess says *disagrees* in red, and the reading stays as read. The
+      simulated model names a region's mean colour and the plain reader its
+      median, so a dark shape, or one with a large patch of another colour
+      inside it, often disagrees; on a shape where they agree, try another.
 - [ ] Choose another shape: Models follows it, with that shape's own rows.
       Choose the first again: what was asked about it is still there.
 - [ ] The ring's **Panels › Pictures › Models › Ask** does the same as the
@@ -75,10 +77,13 @@ status bar said, word for word.
       through, *overruled by a person*. The status bar says *a person says its
       material is …*.
 - [ ] The ring's **Panels › Pictures › Models › Colour ›** a word does the
-      same for colour, without the keyboard.
-- [ ] In label's box, type a word and press Enter: the same, with no list.
+      same for colour, without the keyboard: black, white, grey, red, yellow,
+      green and blue a cell each, orange, purple, pink and brown under
+      **More**.
+- [ ] In label's box, type a word and press Enter: the same, with no list;
+      the model's unread label is struck through too, *overruled by a person*.
 - [ ] A colour outside the basic colour words (*teal*) is refused, and says
-      which words a colour is.
+      *a colour is one of black, white, grey, …*.
 - [ ] With no model asked at all, a person's word on material is still taken.
 
 ## Switching an origin off
@@ -108,6 +113,8 @@ pixels, and nothing else in the viewer changes.
       tooltip saying there is no model to ask.
 - [ ] `APOTHECARY_QMCP=simulated:down`: an amber dot, *the simulated qmcp
       (down) is not answering (connection refused)*, and the same button.
+      **Read its colour** says *… is not answering (connection refused): no
+      model answered*, and the colour is read.
 - [ ] `APOTHECARY_QMCP=simulated:empty`: *the simulated qmcp (empty) is
       answering, with no model*. **Read its colour** reads the colour; the
       guesses are *unread: no model that answers … is loaded*.
@@ -118,7 +125,7 @@ pixels, and nothing else in the viewer changes.
       answers while it waits.
 - [ ] `APOTHECARY_QMCP=simulated:broken`: **Ask** says *the simulated qmcp
       (broken) answered, and the answer was refused, so nothing from it is
-      kept: …*; no guess is shown.
+      kept: the answer's observations are not a list*; no guess is shown.
 - [ ] `APOTHECARY_QMCP=http://localhost/mcp`: *the qmcp extra is not
       installed*: nothing is asked.
 - [ ] `APOTHECARY_QMCP=http://192.0.2.7/mcp`: *it is not on this machine:
@@ -146,3 +153,7 @@ pixels, and nothing else in the viewer changes.
 - A site's own words mapped onto the colour and material lists.
 - Keeping what was asked: it lasts as long as the server, and a restart forgets
   it. The switches are kept.
+- Models beside the world in a layout the browser remembers: opened again after
+  a reload, it takes room from the world each time; until windows beside the
+  world share one stack (docs/plans/ui-coordination-2026-10-31.md), the
+  layout's own Reset gives the room back.

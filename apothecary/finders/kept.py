@@ -122,9 +122,9 @@ def say(key: Key, prop: str, value: str, picture_digest: str, shape: Any) -> Dic
     if not word:
         raise ValueError("a person's word is a word")
     if prop == "colour" and word not in COLOURS:
-        raise ValueError(f"a colour is one of {list(COLOURS)}")
+        raise ValueError(f"a colour is one of {', '.join(COLOURS)}")
     if prop == "material" and word not in MATERIALS:
-        raise ValueError(f"a material is one of {list(MATERIALS)}")
+        raise ValueError(f"a material is one of {', '.join(MATERIALS)}")
     unit = {"colour": COLOUR_UNIT, "material": MATERIAL_UNIT}.get(prop)
     stated = Observation(
         subject=Sighting(
@@ -164,7 +164,7 @@ def about(key: Key) -> Dict[str, Any]:
                 "reading": _seen(reading, rgb=rgb),
                 "guesses": [_seen(g, against=reading) for g in guesses],
                 "person": _seen(person),
-                "hidden": len(hidden),
+                "hidden": sum(1 for o in hidden if o.origin.kind == "guessed"),
                 "words": list(COLOURS)
                 if prop == "colour"
                 else list(MATERIALS)

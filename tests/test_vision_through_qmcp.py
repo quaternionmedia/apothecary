@@ -122,7 +122,13 @@ def test_a_persons_word_overrules_a_guess_which_is_kept(client, monkeypatch):
         f"/sites/garage/views/{client.view}/shapes/{index}/observations/colour",
         json={"value": "teal"},
     )
-    assert r.status_code == 400 and "a colour is one of" in r.json()["detail"]
+    assert r.status_code == 400 and "a colour is one of black, white, grey" in r.json()["detail"]
+    # A person's label overrules the model's, unread as it is.
+    r = client.put(
+        f"/sites/garage/views/{client.view}/shapes/{index}/observations/label",
+        json={"value": "spacer"},
+    )
+    assert _row(r.json(), "label")["guesses"][0]["overruled"] is True
 
 
 def test_a_model_switched_off_is_not_asked_and_its_guesses_leave_the_view(client, monkeypatch):
@@ -133,7 +139,7 @@ def test_a_model_switched_off_is_not_asked_and_its_guesses_leave_the_view(client
     assert r.status_code == 200
     seen = client.get(f"/sites/garage/views/{client.view}/shapes/{index}/observations").json()
     colour = next(row for row in seen["rows"] if row["property"] == "colour")
-    assert colour["guesses"] == [] and colour["hidden"] >= 1
+    assert colour["guesses"] == [] and colour["hidden"] == 1  # the one guess, not the reading
     assert "every model is switched off" in _ask(client, index)["said"]
     assert client.put("/vision/origins/person", json={"on": False}).status_code == 400
 
@@ -182,7 +188,7 @@ def test_an_answer_past_the_deadline_is_given_up_and_unread(client, monkeypatch)
 def test_a_malformed_answer_is_refused_whole_and_nothing_kept(client, monkeypatch):
     monkeypatch.setenv(qmcp.ENV, "simulated:broken")
     answer = _ask(client, _red(client), ["colour"])
-    assert "refused" in answer["said"]
+    assert "refused" in answer["said"] and "observations are not a list" in answer["said"]
     assert _row(answer, "colour")["guesses"] == []
 
 
@@ -257,6 +263,14 @@ def test_parse_refuses_a_malformed_answer_whole(tmp_path, change, refusal):
     req = _request(tmp_path)
     with pytest.raises(qmcp.Refused, match=refusal):
         qmcp.parse(_answer(req, **change), req)
+
+
+def test_an_answer_naming_no_picture_says_so(tmp_path):
+    req = _request(tmp_path)
+    answer = _answer(req)
+    del answer["picture"]
+    with pytest.raises(qmcp.Refused, match="names no picture"):
+        qmcp.parse(answer, req)
 
 
 def test_an_observation_unread_says_why_and_its_generic_form_drops_apothecarys_block():

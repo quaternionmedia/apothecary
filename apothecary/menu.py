@@ -821,6 +821,27 @@ def _view() -> Option:
     )
 
 
+# The colours a lead, a plug or a part most often is, each a cell of Models › Colour;
+# the rest of the basic colour words under More.
+COMMON_COLOURS = ("black", "white", "grey", "red", "yellow", "green", "blue")
+
+
+def _colours(words: Sequence[str]) -> List[Option]:
+    """Models › Colour: the common colours a cell each, the rest under More, so no
+    word sits under another's name."""
+
+    def say(word: str) -> Option:
+        return Option(
+            id=f"models:say:colour:{word}", label=word, action=f"models:say:colour:{word}"
+        )
+
+    rest = [w for w in words if w not in COMMON_COLOURS]
+    cells = [say(w) for w in COMMON_COLOURS if w in words]
+    if rest:
+        cells.append(Option(id="models:colour:more", label="More", children=[say(w) for w in rest]))
+    return cells
+
+
 def _models(toggle: Option) -> Option:
     """Panels › Pictures › Models: the window, then its verbs, which the page hands to it
     (widgets/models.js): Ask about the shape chosen on a mat, and a person's word on its
@@ -837,7 +858,7 @@ def _models(toggle: Option) -> Option:
             Option(
                 id="models:colour",
                 label="Colour",
-                children=_listed("models:colour", [(f"models:say:colour:{w}", w) for w in COLOURS]),
+                children=_colours(COLOURS),
             ),
             Option(
                 id="models:material",

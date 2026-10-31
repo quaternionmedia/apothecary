@@ -52,7 +52,6 @@ def vision_status():
         {
             "origin": READER,
             "what": "the plain reader: a region's colour, read off its pixels",
-            "trusted": True,
             "on": switched.get(READER, True),
         }
     ]

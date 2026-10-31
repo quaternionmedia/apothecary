@@ -104,7 +104,7 @@ export function mountModels(root, { base = "", world = null, log = null } = {}) 
 
     function cell(seen, { guess = false } = {}) {
         if (!seen) return '<span class="empty">–</span>';
-        if (seen.value === null) return `<span class="unread" title="${esc(seen.origin)}">unread: ${esc(seen.why)}</span>`;
+        if (seen.value === null) return `<span class="unread${seen.overruled ? " overruled" : ""}" title="${esc(seen.origin)}">unread: ${esc(seen.why)}</span>${seen.overruled ? ' <span class="meta">overruled by a person</span>' : ""}`;
         const sure = seen.confidence === null ? "" : ` · ${Number(seen.confidence).toFixed(2)}`;
         const agrees = guess && seen.agrees !== undefined ? (seen.agrees ? ' · <span class="ok">agrees</span>' : ' · <span class="bad">disagrees</span>') : "";
         const trust = guess ? ' · <span class="warn">not checked</span>' : "";

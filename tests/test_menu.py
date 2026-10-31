@@ -1098,6 +1098,12 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     ]
     assert carried_by("models:ask").name == "VIEWER"
     assert carried_by("models:say:colour:red").name == "VIEWER"
+    colour = next(c for c in models.children if c.label == "Colour")
+    # The common colours a cell each, the rest under More: no word under another's name.
+    assert [c.label for c in colour.children] == [
+        "black", "white", "grey", "red", "yellow", "green", "blue", "More"
+    ]
+    assert [c.label for c in colour.children[-1].children] == ["orange", "purple", "pink", "brown"]
     material = next(c for c in models.children if c.label == "Material")
     assert [c.action for c in material.children][:2] == [
         "models:say:material:plastic",

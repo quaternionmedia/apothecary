@@ -74,7 +74,13 @@ class SimulatedQmcp:
         if self.mode == "slow":
             time.sleep(SLOW_SECONDS)
         if self.mode == "broken":
-            return {"contract": "qm.vision", "version": 1, "observations": "not a list"}
+            picture = arguments.get("picture", {}).get("sha256")
+            return {
+                "contract": "qm.vision",
+                "version": 1,
+                "picture": picture,
+                "observations": "not a list",
+            }
         return self._observe(arguments)
 
     def _observe(self, request: Dict[str, Any]) -> Dict[str, Any]:
