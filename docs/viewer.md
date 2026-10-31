@@ -209,7 +209,8 @@ site built again from its factory, as it was first built: chosen twice); then
 Step out 1 (when stepped in) and Group (each category of the site's pieces:
 expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
 
-- **Panels** › Site › Site, Problems, Pinned, Jobs and SCAD; Selected;
+- **Panels** › Site › Site, Problems, Pinned, Jobs, SCAD and Workspace (the
+  Working space, [working-space.md](working-space.md)); Selected;
   Pictures › Pictures and Gather; Machine › Machine (the selected board's) and
   Control pad (an armed printer's pad in a loud window of its own or back in its
   Machine, as the pad's ⧉ Pop out and ⇥ Put back); Windows › World alone (as
