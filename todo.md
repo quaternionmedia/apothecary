@@ -46,13 +46,10 @@ here: run `apothecary problems`.
   merge-tree` loop, run by hand; and `apothecary test all` runs the unit part,
   then the browser files in file order, where the longest browser files first,
   beside the unit part, is the order that shortens a landing run.
-- `tests/e2e/test_docs_bench_walkthrough.py::test_the_bench_as_it_is`, the camera test,
-  sometimes stalls in its first call to the browser until its phase's watchdog
-  ends the run: twice in the local demo loop's runs of `apothecary test run`, and
-  once when run as the loop runs it, under a user systemd unit; never in a
-  terminal, and not when run alone. The unit's environment lacks the desktop
-  app's `EGL_PLATFORM`, which steers Chromium's graphics path; that it is the
-  cause is not shown.
+- A phase's bound does not allow for a loaded machine: at a load of 12 on four
+  cores the camera test (`test_docs_bench_walkthrough.py::test_the_bench_as_it_is`)
+  ran 153 s against the 75 s it records, near the bound of twice the longest
+  recorded test, so a little more load ends a run that is only slow.
 - Walkthrough pictures that move with no change to the page: a full browser
   run rewrites a few by a few pixels (the masked clocks' shade, the SCAD
   editor's sideways scroll in page 06's), so a run leaves the tree changed.
