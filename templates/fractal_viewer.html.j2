@@ -1480,12 +1480,15 @@
                 // after anything that moves a host or a camera, or takes a picture.
                 // The lighting rig and the console's levels, when the site has a rig
                 // (lighting.js): its legend a window, Lighting, a tab beside Pictures,
-                // there while the site has a rig.
+                // there while the site has a rig and in front of its stack as the site
+                // opens, the rig being what the site is for.
                 this.lighting = mountLighting({
                     scene: this.scene, base: BASE_URL,
-                    onPanel: (el) => (el
-                        ? (this.panels.state('lighting') || this.panels.register('lighting', { title: 'Lighting', group: 'Lighting', body: el }))
-                        : this.panels.unregister('lighting')),
+                    onPanel: (el) => {
+                        if (!el) { this.panels.unregister('lighting'); return; }
+                        if (!this.panels.state('lighting')) this.panels.register('lighting', { title: 'Lighting', group: 'Lighting', body: el });
+                        this.panels.open('lighting');
+                    },
                 });
                 this.pictureMarks = mountPictureMarks({
                     scene: this.scene, anchors: this.anchors, base: BASE_URL,
