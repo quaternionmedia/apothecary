@@ -12,7 +12,8 @@ something is made of.
 
 This plan adds a layer through which image models answer those questions: how
 many of a kind a picture shows, how big, what shape, what material, what colour,
-and what it is. The models are engines that qmcp, the QM family's tool server,
+what it is, whether something covers it, and where it is in another camera's
+picture. The models are engines that qmcp, the QM family's tool server,
 serves as tools on this machine. Apothecary asks qmcp only when a person asks it
 to look closer, and only when qmcp is configured and answering; otherwise
 apothecary does exactly what it does without the layer. What comes back is a
@@ -25,7 +26,9 @@ a person's word. The working-space layer, planned beside this one
 **This extends [the finders plan](photo-finders-local-models-2026-09-21.md)**
 and keeps every rule of it: a model is an engine, a subprocess or a server on
 loopback, never imported into `apothecary/`; OpenCV is not imported either;
-weights are files the person brings; the paid-service hook stays shut. This is
+the paid-service hook stays shut. Its weights rule is narrowed: qmcp fetches a
+model's weights on a person's word, from a list it pins, and apothecary never
+touches them. This is
 that plan's loopback reach, made once, through qmcp, and qmcp is the one door:
 every model's answers reach apothecary through it, so that plan's direct client,
 `LoopbackModel`, is not built. This replaces that plan's phase 2, a namer over
@@ -122,9 +125,11 @@ The request:
   convention of `FoundShape`. No box is the whole picture. Its `id` is the
   asker's, and comes back on every observation about it.
 - **What is asked** is drawn from a closed set: `label`, `quantity` (with `of`,
-  the kind counted), `size`, `shape`, `material`, `colour`. A property answered
-  in words may name `among`, the only words it may answer with; without it, the
-  model's vocabulary from `vision.models` applies.
+  the kind counted), `size`, `shape`, `material`, `colour`, and `covered`,
+  whether something stands between the camera and the region. A property
+  answered in words may name `among`, the words it is asked among; without it,
+  the model's vocabulary from `vision.models` applies. Apothecary always names
+  it (*The words*, below).
 - **No scale crosses the seam.** A size comes back in fractions of the picture.
   Turning it into millimetres is apothecary's, with a reference a person stated
   (*Which measurements come first*).
@@ -168,10 +173,10 @@ qmcp knows a region and not what it is:
   `why`, as the rig reader's `Seen` and `Plug` do. Unread is not a value, and an
   answer missing one is malformed.
 - **`value` and `unit` go together.** A count is in `count`. A size is in
-  `fraction`, of the picture's width, as `FoundShape`'s sides are. A colour is a
-  word whose `unit` names its vocabulary, with a second observation in `sRGB`, a
-  hex value, when the engine gives one. A shape, a material and a label are
-  words whose `unit` names their vocabulary.
+  `fraction`, of the picture's width, as `FoundShape`'s sides are. A colour, a
+  shape, a material and a label are words whose `unit` names the list they were
+  asked among. `covered` is true or false, with no unit. A model gives no
+  `rgb`: a measured sRGB is a reader of pixels' alone.
 - **`confidence`** is what the model reports of itself, from 0 to 1, as it gave
   it and never rounded up, or null when it reports nothing. It is a report, not
   a measurement; what apothecary makes of it is in the next section.
@@ -179,14 +184,32 @@ qmcp knows a region and not what it is:
   reached.
 - **`why`** says why a value is null, as one of a fixed set: no model answers the
   property; the region is too small for the model, with its size in pixels; the
-  model declined; the deadline passed; the picture could not be read, or is
-  outside the declared roots, or changed; a size was asked of a model that gives
-  no outline.
+  model declined; the model answered a word outside the words asked among, with
+  the word; the deadline passed; the picture could not be read, or is outside
+  the declared roots, or changed; a size was asked of a model that gives no
+  outline.
 
 Apothecary refuses an answer whole when its `picture` is not the digest asked
 about, its version is not one it reads, it names a region not asked about, or it
 does not validate against the contract's schema. Nothing from a refused answer
 is kept.
+
+### `vision.match`: a region found again in another picture
+
+Two pictures, each a path and its digest under a declared root, and a region in
+the first; back come the regions of the second that show the same thing, best
+first. The working-space plan asks it for a subject one camera sees with nothing
+pinned in another camera's picture, that plan's suggested link, and a person
+takes a suggestion before it becomes a link.
+
+The answer is observations in the same format, about the first picture's
+region: property `match`, the value the second picture's box in `fraction`s,
+the confidence how well the two match, origin `guessed`. No match good enough is
+one observation, unread, with its `why`. Which engine matches is qmcp's to
+select, a classical feature matcher or a model: OpenCV, when it comes, runs in
+otto, the family's video-generation engine, and qmcp reaches it there, so
+OpenCV is imported into neither apothecary nor qmcp. How qmcp reaches otto is
+otto's and qmcp's to plan.
 
 ## How apothecary consumes it
 
@@ -274,10 +297,12 @@ What apothecary's instance adds and tightens:
   its corners, a camera's projection. A model's label is a property of the
   sighting and never a link.
 - **Properties** are a closed list per facet; the image models add `label`,
-  `quantity` (with `of`), `size`, `shape`, `material` and `colour`.
+  `quantity` (with `of`), `size`, `shape`, `material`, `colour`, `covered` and
+  `match`, and apothecary's readers of pixels add `rgb`.
 - **Units**: `count`; `fraction`, of the picture's width; `mm` only when
   apothecary turned a fraction into millimetres with a reference a person
-  stated; `sRGB`, a hex value; and, for a word, the vocabulary it is from.
+  stated; `sRGB`, a hex value, for `rgb`; and, for a word, the list it was asked
+  among (*The words*).
 - **`trusted`**, on a guess: whether `apothecary vision check` has passed for
   that model, at that weights digest, for that property, with the confidence
   above the threshold the check found (*How each is measured*). An untrusted
@@ -291,6 +316,36 @@ What apothecary's instance adds and tightens:
 Apothecary's own readers give observations in this format (`read`, by
 `plain/colour` and by the rig reader), so a model's and the plain reader's stand
 side by side.
+
+### The words
+
+Every property answered in a word is asked among a list, and the lists come from
+three places.
+
+- **Colour and material are qm's**, beside `qm.observation`, so carlos and every
+  family app read the same words. A colour is one of the basic colour words:
+  black, white, grey, red, orange, yellow, green, blue, purple, pink, brown. A
+  material is one a camera can tell apart: plastic, metal, wood, rubber, fabric,
+  glass, paper, ceramic. The finer word, PLA or PETG, is a person's or the
+  site's `material` on a node (`apothecary/hierarchy.py`), and either wins over
+  a guess.
+- **A site adds its own words**, each mapped onto one of qm's: a rig's cream
+  leads, a lab's safety yellow, a node's `PETG` onto plastic. A model is asked
+  among the site's words, and a reader of the generic format reads the qm word
+  each maps to, so a guess of plastic agrees with a site that stated PETG. A
+  site may narrow a list, to the colours its leads come in, and adds no word
+  that maps to none.
+- **Kinds counted and labels are built for each question** from what apothecary
+  already knows about the subject: for a rig's face, carlos's entry, its
+  controls' kinds (`KINDS` in `apothecary/rig/panels.py`), its sockets and
+  plugs; for a device, the parts library's names and the site's nodes. A person
+  may add words when asking. Apothecary's instance keeps the rule that builds
+  them, not a list.
+- **A colour's value is the word.** Its measured sRGB is a property of its own,
+  `rgb`, which only a reader of pixels gives: the plain reader gives both, a
+  model the word alone.
+- **A word outside the list is unread**, its `why` naming the word, so nothing
+  uses it, and a person sees it and can add it to a site's list.
 
 ### As a finder
 
@@ -321,6 +376,12 @@ guess beside what the reader read.
 - **A guess moves no level.** A rig's states in carlos are computed from the
   observations that are not guesses, as the working-space plan holds for every
   subject: a guess alone stays at `none`, and no guess lowers a level either.
+- **A trusted guess that something covers the face** may withhold a reading and
+  never makes one, as the working-space plan has a cover: the reading is unread,
+  *covered*, with the guess as its evidence, and the socket's state carries as
+  last known. It moves no level, since a state carried is not a state changed;
+  it only lowers what is claimed. An untrusted cover guess is shown beside the
+  reading, which stands.
 - **They agree:** the state is the reader's, and its lines say the model agrees.
 - **They disagree:** both are shown, each with its origin and evidence (`the
   reader saw a plug; <model> saw none`), and the state and its level stay the
@@ -383,6 +444,8 @@ refused connection raise, and watch the test go red.
 | 4 | shape | nothing | Measured by `photo check` itself, against the plain finder's kinds |
 | 5 | material | nothing | No plain baseline and no drawn truth: measured on real photographs alone |
 | 6 | size | **a scale** | A model gives a better outline, in fractions of the picture. Millimetres need a reference a person stated (`ScaleReference`) or a marker of known size (the finders plan's phase 1); without one, a size is a fraction of the picture and says so |
+| 7 | covered | nothing | The working-space plan's last test of a cover, after the picture's limits, the reference surround, time and parallax, so it is measured against theirs. On the rig: a hand over a row of sockets, a lead draped across a face |
+| 8 | match | **a second camera** | Measured once two cameras see one subject, on frames whose pairs are written down |
 
 **Size needs a scale, and colour a reference.** A region's colour is the
 camera's: under a stage's warm light a white plug reads amber. A named colour is
@@ -419,6 +482,8 @@ The scores:
 | shape | `photo check`'s own columns: found, named, made up, honest |
 | material | named right; named wrong; declined |
 | size | how far off, as a share of the true size, with the scale stated |
+| covered | said covered when clear, which withholds a reading for nothing; said clear when covered, which lets a wrong reading through; declined |
+| match | the right region first; the right region among those offered; a wrong one first |
 
 and, for every property, **made up**, an answer about a region holding nothing
 of the kind, and **honest**, how much lower the reported confidence is when the
@@ -437,10 +502,11 @@ again.
 
 | | qmcp | apothecary |
 |---|---|---|
-| the model | the engines it reaches, the weights the person put there, their digests and licences, `vision.models` | nothing: no engine, no weights, no image library but Pillow, no OpenCV, no numpy |
+| the model | the engines it reaches, the weights a person fetched with its command from its pinned list, their digests and licences, `vision.models` | nothing: no engine, no weights, no image library but Pillow, no OpenCV, no numpy |
 | the call | `vision.observe` over MCP: a region's crop to an engine over a standard protocol, the engine's reply into the contract, the deadline and the cancellation passed on, the invocation row | the client: the address, loopback, the MCP call, its own deadline, the schema, `ask` and `parse` |
 | the picture | reads the file under a declared root, checks its digest, crops in memory, keeps the path and the digest | the picture root declared, the regions, what to ask |
 | the format | observations in `qm.observation`, about sightings | its instance: subjects, links, `trusted`, `view` |
+| the words | answers among the words it is asked; none of its own | each question's `among`: qm's colours and materials, a site's words mapped onto them, the catalogues' kinds and labels |
 | meaning | none: a count is a count and a word a word | scale, colour reference, subjects, the order of evidence, a person's word |
 | trust | reports the model's confidence | measures it (`vision check`), switches origins off, keeps the record |
 
@@ -479,9 +545,13 @@ its own repository, started when the owner says so.
    Inference Protocol, for detectors and segmenters. An engine qmcp starts runs
    with every telemetry and offline switch its libraries have, as the finders
    plan has a managed engine run.
-5. **Vision models in `qmcp localmodel`**: `check`, then `plan` with a pinned
-   weights digest, the commands printed for a person to run, as it does for its
-   judgement worker.
+5. **Vision models in `qmcp localmodel`**: `check`; `fetch <model>`, which
+   downloads a model's weights when a person runs it, only from qmcp's pinned
+   list, each entry a source, size, SHA-256 and SPDX licence, with no account,
+   token or cookie sent, and keeps them only once the digest matches; and
+   `plan`, as it has for its judgement worker. Nothing checks a host for newer
+   weights: a new version is a new entry in a commit to the list, measured again
+   before it is trusted.
 6. **A picture's bytes recorded as their digest**, before the bytes form. An
    invocation row keeps a tool's input verbatim (`input_params`,
    `qmcp/server.py:217`, a JSON column in `qmcp/db/models.py`). A tool declares
@@ -492,6 +562,8 @@ its own repository, started when the owner says so.
    revision triggers name, so an origin names the instance as well as the model.
    Until then apothecary's record names a qmcp by its configured address, which
    two clones on one port would share (that record's *Context*).
+8. **`vision.match`**, with the recorded engine first, then an engine qmcp
+   selects; OpenCV's, when it comes, run in otto and reached there.
 
 ## Governance
 
@@ -534,7 +606,10 @@ its own repository, started when the owner says so.
   given (a picture's path and digest, and its regions), that it reads a picture
   only under the roots it is given, each engine it starts and what that is given
   (a crop), and qmcp's invocation rows as a place observations are kept on this
-  machine.
+  machine. It names a model's download as a fetch of a class of its own: by
+  qmcp's command, on a person's word, from qmcp's pinned list, telling the host
+  which model was fetched, from which address and when, and nothing a program
+  sends unattended.
 
 ### Records it needs
 
@@ -542,16 +617,18 @@ Each drafted with the slice that needs it; a person ratifies.
 
 - **The observation format** (an org record, in qm): `qm.observation` version
   1, its generic fields, the origin kinds, unread as no value, evidence by
-  reference, and how an instance adds to and tightens it. It belongs to the
-  family, since every family app that says something about the world reads and
-  writes it.
+  reference, and how an instance adds to and tightens it, with the colour and
+  material words beside it and how a site maps its own words onto them. It
+  belongs to the family, since every family app that says something about the
+  world reads and writes it.
 - **Apothecary's instance** (on `project/apothecary`): the working-space plan's
   project record for the evidence model, with this layer's decisions in it.
   Models answer through qmcp alone, over MCP, and only when a person asks; the
   layer is optional in each way the table above lists; a person's word comes
-  first; a guess moves no level; a model never sets a scale; and a guess is
-  trusted only after a check. One record for both plans, one decision each with
-  the finders plan's finder-seam record.
+  first; a guess moves no level, and a trusted cover guess only withholds a
+  reading; a model never sets a scale; a word outside the list is unread; and a
+  guess is trusted only after a check. One record for both plans, one decision
+  each with the finders plan's finder-seam record.
 - **Data retention** (for governance/qm): how long each program keeps what it is
   given and what it makes, who forgets it, and how a person deletes it: qmcp's
   invocation rows (a picture's path and digest, every observation), apothecary's
@@ -562,52 +639,20 @@ Each drafted with the slice that needs it; a person ratifies.
 - **The MCP SDK as a component**: the record the house stack asks for before a
   component is imported into seam code, for apothecary's extra and for qmcp,
   which already imports it.
+- **Model weights, a class of their own** (in qmcp's records, and named in
+  apothecary's personal-data record): weights are not a tool fetched at install.
+  qmcp fetches them by a command a person runs, only from its pinned list, each
+  entry a source, size, SHA-256 and SPDX licence read from what the publisher
+  ships at that digest, with no account, token or cookie sent; nothing checks a
+  host for newer weights, and new weights are a new entry, measured again.
+  Apothecary's personal-data record names the download and what it tells the
+  host, and that apothecary never touches the weights.
 - **A selection record for each model**: its name, version, weights digest,
   licence and engine, the check's table, and its seconds on this machine.
-- **qmcp's vision tools** (in qmcp's records): served on loopback only, over MCP
-  and `/v1/tools`, reading a picture only under declared roots, the contract
-  `qm.vision` version 1.
-
-### Open for the owner
-
-1. **The vocabularies**, fixed once for this layer and the working-space layer:
-   - **Colour:** is the value the region's measured sRGB, with a name only as a
-     word for people, or is the name the value? If names, which set: the basic
-     colour words (black, white, grey, red, orange, yellow, green, blue, purple,
-     pink, brown), or a long list such as CSS's named colours?
-   - **Material:** whose words? The site's free-text `material` on a node
-     (`apothecary/hierarchy.py`, which holds values such as `PETG` and `Steel
-     frame, pine top`), the slicer's filament types, or a coarse set a model can
-     see (plastic, metal, wood, rubber, fabric, glass, paper)? No model tells
-     PLA from PETG by eye: is the coarse set the model's, with a person's word
-     for the rest?
-   - **Kinds counted, and labels:** from carlos's catalogue (knob, fader, jack,
-     plug, a module's name), from the parts library's names, from the site's
-     nodes, or words a person types with each question?
-   - **Who keeps each list:** apothecary's instance, qm beside
-     `qm.observation`, or each site, as a site states its own?
-   - **A word outside the list:** refused, so a model answers only from
-     `among`, or kept as unread with the word in its `why`?
-2. **The model download**, `todo.md`'s one-time-download question for this
-   layer:
-   - **Who fetches:** is a person running the commands `qmcp localmodel plan`
-     prints the same act as `uv sync`, so that no program downloads a model? Or
-     does a command fetch on a person's word, as `apothecary openscad install`
-     fetches a tool?
-   - **Whose record:** qmcp fetches and serves the weights, and apothecary never
-     touches them. Is the question then qmcp's records', with apothecary's
-     personal-data record silent on it?
-   - **A tool, or data:** the install-time fetches the personal-data draft
-     allows are tools, each checked against a listed size and SHA-256. Is a
-     weights file pinned the same way (its source, size, SHA-256 and SPDX
-     licence in a committed list) of the same class, or a class of its own?
-   - **Where from:** only weights on a committed list, or any file a person
-     names, its licence and digest checked once it is here?
-   - **What the request tells:** a download tells its host which model was
-     fetched, from which address, at what time. Is that personal data leaving,
-     when a program sends it, and when a person does?
-   - **New weights:** a new digest, measured again before it is trusted. Are
-     they offered when published, or fetched only when a person asks?
+- **qmcp's vision tools** (in qmcp's records): `vision.models`,
+  `vision.observe` and `vision.match`, served on loopback only, over MCP and
+  `/v1/tools`, reading a picture only under declared roots, the contract
+  `qm.vision` version 1, and OpenCV run in otto rather than imported.
 
 ## Decided
 
@@ -625,18 +670,35 @@ Each drafted with the slice that needs it; a person ratifies.
 - **2026-10-31:** the observation format is a generic family contract in qm,
   `qm.observation`, which apothecary's instance adds to and tightens for this
   project, one format with the working-space layer's.
+- **2026-10-31:** a colour's value is one of the basic colour words, and its
+  measured sRGB is a property of its own that only a reader of pixels gives. A
+  material is a coarse word a camera can tell apart. Both lists are qm's, beside
+  `qm.observation`, and a site adds words of its own, each mapped onto one of
+  qm's.
+- **2026-10-31:** the kinds counted and the labels are built for each question
+  from apothecary's catalogues. A word a model answers outside the list is
+  unread, with the word.
+- **2026-10-31:** a model's weights are a class of fetch of their own: qmcp's
+  command fetches them on a person's word, from a pinned list, and the host
+  learns only what was fetched; nothing checks for newer weights. qmcp's records
+  govern them, and apothecary's personal-data record names the download.
+- **2026-10-31:** a trusted guess that something covers a face may withhold a
+  reading, and never makes one.
+- **2026-10-31:** a region found again in another camera's picture is qmcp's
+  `vision.match`. OpenCV, when it comes, runs in otto, reached by qmcp.
 
 ## Slices
 
 Smallest first; each lands alone.
 
-0. **The format and the switch, with no model.** `qm.observation` drafted in qm;
-   apothecary's instance, one module with the working-space layer's; `--qmcp` and
-   `APOTHECARY_QMCP`, loopback when the client is made; the `qmcp` extra with the
-   MCP client, its transport injected, and `parse` tested on recorded results;
-   the degrade test against a stub MCP server, a case for every row of the
-   table; and a walkthrough page that reads an observation from a recorded
-   result and shows each row's degrading.
+0. **The format and the switch, with no model.** `qm.observation` drafted in qm,
+   with the colour and material words; apothecary's instance, one module with
+   the working-space layer's, with a site's own words mapped onto qm's;
+   `--qmcp` and `APOTHECARY_QMCP`, loopback when the client is made; the `qmcp`
+   extra with the MCP client, its transport injected, and `parse` tested on
+   recorded results; the degrade test against a stub MCP server, a case for
+   every row of the table; and a walkthrough page that reads an observation
+   from a recorded result and shows each row's degrading.
 1. **The plain reader's answers as observations** (apothecary). A region's
    colour from its pixels (`plain/colour`), and the rig reader's plugs, so the
    baseline is in the format before any model is.
@@ -647,7 +709,8 @@ Smallest first; each lands alone.
    `tests/e2e/test_carlos_concert.py` runs carlos. The personal-data rewrite
    lands with it, the first time a picture's path leaves apothecary's process.
 3. **Colour from a model, measured.** qmcp's slices 4 and 5 for one
-   vision-language model over the OpenAI-compatible API; `apothecary vision
+   vision-language model over the OpenAI-compatible API, its weights fetched by
+   `qmcp localmodel fetch` from the pinned list; `apothecary vision
    check --property colour`, with the plain reader's row beside it; the first
    selection record.
 4. **Quantity**: drawn pictures, drawn rig faces, then the Uno's photographs
@@ -660,4 +723,9 @@ Smallest first; each lands alone.
 9. **Bytes**: qmcp's slice 6, then a contract version that carries a region's
    pixels, first a rig's face rectified through its pinned corners, measured by
    `vision check` against the path form's crop.
-10. **The working-space layer takes them**, in its own plan.
+10. **Covered**: `covered` from a model, measured on drawn faces with the covers
+    the working-space plan's spike drew, then on real frames at the bench, before
+    a cover guess is trusted to withhold anything.
+11. **A match**: qmcp's slice 8, measured on frames from two cameras with their
+    pairs written down, for the working-space layer's suggested links.
+12. **The working-space layer takes them**, in its own plan.

@@ -22,8 +22,8 @@ its own project.
 
 So a model is an engine: a subprocess the seam starts, or a server on
 loopback, never imported into `apothecary/` (nor is OpenCV). Its weights are
-files the person brings. A paid hook is the same seam with an address the
-guard refuses.
+qmcp's, fetched on a person's word (*Reach*). A paid hook is the same seam
+with an address the guard refuses.
 
 ## The seam as it stands
 
@@ -110,11 +110,12 @@ answers come through qmcp instead, over MCP, so `LoopbackModel` is not built
 and these rules are qmcp's engine adapters'
 ([image models through qmcp](image-models-through-qmcp-2026-10-30.md)).
 
-**Weights are files the person brings**: a models folder under the state
-folder, or a server they filled. Whether a one-time model download is the
-same class as the install-time fetches the record allows is open (see
-`todo.md`). A program-side download is a second tool-fetch door, reviewed as
-one; no phase below needs it.
+**Weights are fetched by qmcp, on a person's word**: a download of a
+model's weights is a class of fetch of its own, not an install-time tool
+fetch. `qmcp localmodel fetch` fetches only from qmcp's pinned list, and
+apothecary never touches the weights ([image models through
+qmcp](image-models-through-qmcp-2026-10-30.md)). It is a second fetch door,
+reviewed as one, and qmcp's.
 
 **Paid services** are the same OpenAI-compatible seam with an address the
 guard refuses. Adding one is a proposal of the secured-user-accounts record
@@ -167,6 +168,6 @@ first, then the edits it names to `stays_local.py` and its tests.
 |---|---|
 | The licence gate reading SPDX expressions and every shape | this project, phase 0 |
 | `CC0-1.0` (numpy) on the licence allowlist | the org: an allowlist addition is an amendment |
-| Whether a one-time model download is an install-time fetch | the sponsor (`todo.md`) |
+| Whether a one-time model download is an install-time fetch | answered in [image models through qmcp](image-models-through-qmcp-2026-10-30.md): a class of its own, by qmcp's command from a pinned list |
 | The runner's protocol, or a seams-record exception | phase 3 |
 | Whether the browser offers a finder choice | answered in [the pictures plan](pictures-in-the-world-2026-09-26.md): Picture › Find, where more than one finder can read the picture |
