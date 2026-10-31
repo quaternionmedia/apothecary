@@ -370,7 +370,7 @@
         /* A board's lights, on Site's tree and in the world: a printer heating pulses
            amber and one printing pulses its own colour (the glow, never the opacity,
            which says a badge is behind something); a devkit's LED flashes blue on each
-           blink it is heard saying (.lit, flashLed). */
+           blink it is heard saying (.lit, heardBlinks). */
         .contents-item .dev-badge.heating { background: #2a1d10; color: #ffb066; border-color: #4a331a; }
         .contents-item .dev-badge.heating, .world-badge.heating { --pulse: rgba(255, 176, 102, 0.85); animation: board-pulse 1.6s ease-in-out infinite; }
         .contents-item .dev-badge.printing, .world-badge.printing { --pulse: rgba(255, 204, 102, 0.75); animation: board-pulse 2.4s ease-in-out infinite; }
@@ -1063,9 +1063,13 @@
         // canvas's height. A mouse's notch is about a hundred, a trackpad's turns a few
         // each, so the trackpad's many add up to the mouse's one.
         const WHEEL_PX_PER_LINE = 16;
-        // A devkit's LED is lit this long for each blink it is heard saying, a line its
-        // sketch prints as it blinks ("blink 12").
-        const LED_FLASH_MS = 120;
+        // A devkit's LED, as its sketch drives it: esp32_blink prints "blink 12" as its LED
+        // comes on, and keeps it on for half its period. Heard one at a time (Listen), each
+        // blink lights it for half the time since the one before; heard all at once (a
+        // Query's few seconds come back together), up to LED_REPLAY of them are played back
+        // at LED_PERIOD_MS, the sketch's own second, so a person sees it blink.
+        const LED_PERIOD_MS = 1000;
+        const LED_REPLAY = 5;
         const BLINK = /^blink\b/i;
         // The keys the page would scroll with: they step a level only while the world has
         // the keys.
@@ -1272,6 +1276,7 @@
                 this.wheelAt = 0;              // the last turn of the wheel
                 this.ledFlashes = {};          // port -> how many times its LED flashed (flashLed)
                 this.ledOff = {};              // port -> the timer that puts it out
+                this.ledHeard = {};            // port -> when its last blink was heard, one at a time
                 this.stepQuietUntil = 0;       // no step by the wheel before this
                 this.press = null;             // a button held on the world, until it is let go
                 this.lastPressInWorld = true;  // nothing pressed yet: the keys are the world's
@@ -6746,7 +6751,8 @@
                 if (!this.siteName) return;
                 if (d.what === 'scan') { this.afterBindings(); return; }
                 if (d.what === 'log') {
-                    if ((d.entries || []).some((e) => e.kind === 'rx' && BLINK.test(e.text))) this.flashLed(d.port);
+                    const blinks = (d.entries || []).filter((e) => e.kind === 'rx' && BLINK.test(e.text)).length;
+                    if (blinks) this.heardBlinks(d.port, blinks);
                     return;
                 }
                 if (d.what === 'status') {
@@ -6840,19 +6846,33 @@
                 return piece ? `round again: ${piece}'s ring, Part › Edit` : null;
             }
 
-            // A devkit's LED, as the page knows it: lit for LED_FLASH_MS each time the
-            // board is heard saying it blinked (a line its sketch prints), on its badge
-            // in Site's tree and in the world. Only while the board is listened to: the
-            // page hears nothing of a board it is not listening to. Counted
-            // (ledFlashes) for a test, since a flash is over before one can look.
-            flashLed(port) {
+            // A devkit's LED, as the page knows it, on its badge in Site's tree and in the
+            // world (LED_PERIOD_MS above). Only while the board is listened to or queried:
+            // the page hears nothing else of it.
+            heardBlinks(port, count) {
+                if (count > 1) {
+                    for (let i = 0; i < Math.min(count, LED_REPLAY); i++) {
+                        setTimeout(() => this.flashLed(port, LED_PERIOD_MS / 2), i * LED_PERIOD_MS);
+                    }
+                    this.ledHeard[port] = null;
+                    return;
+                }
+                const now = performance.now(), last = this.ledHeard[port];
+                this.ledHeard[port] = now;
+                const since = last ? now - last : LED_PERIOD_MS;
+                this.flashLed(port, Math.min(since, 2 * LED_PERIOD_MS) / 2);
+            }
+
+            // The LED lit for `ms`. Counted (ledFlashes) for a test, since a flash is over
+            // before one can look.
+            flashLed(port, ms) {
                 this.ledFlashes[port] = (this.ledFlashes[port] || 0) + 1;
                 const lit = [...document.querySelectorAll('.dev-badge[data-port], .world-badge[data-port]')].filter((el) => el.dataset.port === port);
                 for (const el of lit) el.classList.add('lit');
                 clearTimeout(this.ledOff[port]);
                 this.ledOff[port] = setTimeout(() => {
                     for (const el of document.querySelectorAll('.lit[data-port]')) if (el.dataset.port === port) el.classList.remove('lit');
-                }, LED_FLASH_MS);
+                }, ms);
             }
 
             // After a scan: the server polls held printer links while answering
