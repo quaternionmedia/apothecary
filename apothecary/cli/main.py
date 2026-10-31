@@ -14,8 +14,8 @@ from .parts import parts
 from .photo import photo
 from .preflight import preflight
 from .release import release
-from .rig import rig
 from .render import render_scene, render_scene_jscad, template_generate, testrun, validate
+from .rig import rig
 from .server import DEFAULT_PORT, dev, serve
 from .slicer import slicer
 from .spaces import problems, solutions
