@@ -33,7 +33,7 @@ from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 from ..firmware.models import PrinterStatus
 from ..stamped import stamp
 from . import log
-from .observation import Observation, Origin, Ref
+from .observation import By, Observation, Origin, Ref
 
 BY = "printer poll: M105, M114, M27, M119, M31"
 # How far a number moves before it is said again.
@@ -79,7 +79,7 @@ def observations_of(
     evidence = [Ref(kind="poll", id=poll_id(status))]
     if pin is not None:
         evidence.append(Ref(kind="pin", id=f"{pin.site}:{pin.path}"))
-    origin = Origin(kind="measured", by=BY)
+    origin = Origin(kind="measured", by=By(name=BY))
 
     def said(subject: str, prop: str, value: Any, unit: Optional[str] = None) -> Observation:
         return Observation(

@@ -273,7 +273,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
         return shown.map((e) => `<tr class="ws-subject" title="${esc(e.subject)}"><th colspan="4">${esc(named(e.subject))}</th></tr>` + e.properties.map((p) => {
             const poll = (p.evidence || []).find((r) => r.kind === "poll");
             const heard = p.current ? "now" : `last known ${hhmm(p.at)}`;
-            return `<tr class="ws-property${p.current ? "" : " ws-stale"}"${poll ? ` data-poll="${esc(poll.id)}"` : ""} title="${esc(p.origin.kind)} by ${esc(p.origin.by)}${poll ? ": click for the poll's lines" : ""}"><td>${esc(p.property)}</td><td>${value(p)}</td><td>${known(p)}</td><td>${heard}</td></tr>`;
+            return `<tr class="ws-property${p.current ? "" : " ws-stale"}"${poll ? ` data-poll="${esc(poll.id)}"` : ""} title="${esc(p.origin.kind)} by ${esc(p.origin.by.name)}${poll ? ": click for the poll's lines" : ""}"><td>${esc(p.property)}</td><td>${value(p)}</td><td>${known(p)}</td><td>${heard}</td></tr>`;
         }).join("")).join("") || `<tr><td class="muted">nothing is said of ${esc(s ? state.path : site())} yet: a printer pinned here says it once it is polled</td></tr>`;
     }
     function render() {

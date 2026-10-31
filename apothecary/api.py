@@ -109,6 +109,7 @@ from .routes.lighting import router as lighting_router
 from .routes.part_edits import router as part_edits_router
 from .routes.pictures import router as pictures_router
 from .routes.views import router as views_router
+from .routes.vision import router as vision_router
 from .routes.wiring import router as wiring_router
 from .scene import Scene
 from .site_store import SiteStore, UnknownSiteError
@@ -271,6 +272,8 @@ app.include_router(airgap_router)
 app.include_router(wiring_router)
 # A working space seen from every kind of evidence: the log's document for a site.
 app.include_router(evidence_router)
+# Image models through qmcp, and the plain reader beside them: asked only when a person asks.
+app.include_router(vision_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 

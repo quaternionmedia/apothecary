@@ -184,6 +184,9 @@ def prepare(root: Optional[Path] = None) -> Demo:
         "CARGO": str(write_fake_cargo(bench / "cargo")),
         "ESPFLASH": str(write_fake_espflash(bench / "espflash")),
         "ESPTOOL": "none",
+        # The image models' qmcp is the simulated one, answering in process, unless
+        # the person named another (simulated:slow, simulated:down, ...).
+        "APOTHECARY_QMCP": os.environ.get("APOTHECARY_QMCP", "").strip() or "simulated",
         "FAKE_DEVKIT": "1",
     }
     variants = _variants_repo(root / "variants.git")

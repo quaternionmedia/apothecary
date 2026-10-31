@@ -85,7 +85,7 @@ def document(
     # The newest of each source, per subject and property.
     latest: Dict[Tuple[str, str], Dict[Tuple[str, str], Observation]] = {}
     for each in upto:
-        source = (each.origin.kind, each.origin.by)
+        source = (each.origin.kind, each.origin.key())
         latest.setdefault((each.subject, each.property), {})[source] = each
 
     subjects: Dict[str, List[dict]] = {}

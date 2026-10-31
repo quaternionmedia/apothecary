@@ -787,6 +787,7 @@
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/bench.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/working_space.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/airgap.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/models.css">
     <script type="importmap">
     {
         "imports": {
@@ -823,6 +824,7 @@
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
         import { mountPictureList } from '/static/widgets/picture_list.js';
+        import { mountModels } from '/static/widgets/models.js';
         import { mountToolchain } from '/static/widgets/toolchain.js';
         import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
         import { mountTasks } from '/static/widgets/tasks.js';
@@ -1570,6 +1572,35 @@
                     hint: 'Which of the ticked pictures are of one thing, and what the machine would ask a person',
                     body: gatherEl, home: 'pictures', open: false,
                     onOpen: () => this.pictureList(),
+                });
+                // Models: image models through qmcp, and the plain reader beside them
+                // (widgets/models.js) -- a stack of its own beside the world, closed
+                // until asked for, so the mat a shape is chosen on and the table about
+                // it are both in view. It follows the shape chosen on a mat; nothing
+                // is asked until a person presses Ask there.
+                this.modelsWidget = null;
+                this.panels.register('models', {
+                    title: 'Models', group: 'Pictures',
+                    hint: 'Ask a model about the shape chosen on a mat, beside the colour read off its pixels; switch a model off',
+                    home: 'beside', open: false,
+                    body: (slot) => {
+                        this.modelsWidget = mountModels(slot, {
+                            base: BASE_URL,
+                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                            world: {
+                                siteName: () => this.siteName,
+                                chosen: () => {
+                                    const pick = this.pictureMarks.chosen();
+                                    if (!pick) return null;
+                                    const view = (this.pictureMarks.attached()?.views || []).find((v) => v.id === pick.view);
+                                    const shape = view && view.shapes.find((sh) => sh.index === pick.index);
+                                    return shape ? { ...pick, word: shape.word, picture: view.picture, host: view.host } : null;
+                                },
+                            },
+                        });
+                        window.apothecaryModels = this.modelsWidget;
+                    },
+                    onOpen: () => { if (this.modelsWidget) { this.modelsWidget.load(); this.modelsWidget.follow(); } },
                 });
                 // The Bench: the toolchain, the sketches built and uploaded, raw flash
                 // and the task log (widgets/toolchain.js, sketches.js, tasks.js) -- a
@@ -3263,6 +3294,8 @@
                 this.placeStageBar();
                 this.showPartSections();
                 this.refocus(focused);
+                // Models follows the shape chosen on a mat, while it is shown.
+                if (this.modelsWidget && this.panels.isShown('models')) this.modelsWidget.follow();
             }
 
             // What has the focus in Selected -- its body, or its pinned bar -- as a selector
@@ -3500,6 +3533,7 @@
                     const long = longSide ? `${longSide.toFixed(0)} mm` : 'no size yet';
                     const status = shape.status === 'made' ? `made: ${esc(shape.piece)}` : shape.status === 'already_made' ? `already made (${esc(shape.piece)})` : 'found';
                     rows.push(`<div class="chosen-shape" data-facts="shape">Shape ${shape.index}: a ${esc(shape.word)} (${esc(shape.kind)}) because ${esc(shape.reason)}${shape.word_stated ? ' (a person said so)' : ''}; confidence ${Number(shape.confidence).toFixed(2)}; long side ${long}; ${status}</div>`);
+                    rows.push(`<div class="chosen-shape-models note" data-facts="models">⊞ Windows › Models asks a model about it, beside the colour read off its pixels</div>`);
                 }
                 // The one width: the drawn view's, or with a shape chosen, that shape's long side.
                 const bySide = shape && drawn && view === drawn;
@@ -8402,6 +8436,14 @@
                     viewer.panels.open('bench');
                     viewer.setStatus(`${intent.label}${tail}`, 'success');
                     if (viewer.bench) viewer.bench.act(action.slice('bench:'.length));
+                    return;
+                }
+                // A Models verb: the window shown, and the verb done on the shape chosen
+                // on a mat; what it asked or said, or refused, is the window's own last word.
+                if (action.startsWith('models:')) {
+                    viewer.panels.open('models');
+                    viewer.setStatus(`${intent.label}${tail}`, 'success');
+                    if (viewer.modelsWidget) { viewer.modelsWidget.follow(); viewer.modelsWidget.act(action.slice('models:'.length)); }
                     return;
                 }
                 // An Airgap verb: the panel shown, and the verb done; what it did, or

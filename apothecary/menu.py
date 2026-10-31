@@ -677,11 +677,14 @@ PANELS: Sequence[Tuple[str, str]] = (
     # characters, so its cells say Workspace.
     ("working", "Workspace"),
     # Registered by the page's script rather than marked in its markup: Pictures
-    # (every picture under the picture root, each pinned here or forgotten) and
-    # Gather (the gathering, a window beside it, closed until asked for), a ring of
-    # their own under Pictures' cell, at start; a board's Machine, its log in it,
-    # when a board is opened.
+    # (every picture under the picture root, each pinned here or forgotten), Models
+    # (image models through qmcp asked about the shape chosen on a mat, closed until
+    # asked for, its verbs a ring of their own under its cell: _models) and Gather
+    # (the gathering, a window beside it, closed until asked for), a ring of their
+    # own under Pictures' cell, at start; a board's Machine, its log in it, when a
+    # board is opened.
     ("pictures", "Pictures"),
+    ("models", "Models"),
     ("gather", "Gather"),
     ("machine", "Machine"),
     # The Bench: the toolchain, the sketches, compile and upload, raw flash and
@@ -711,7 +714,9 @@ VIEWS = tuple((system.id, system.cell) for system in SYSTEMS)
 _BEFORE_WINDOWS = ("site", "selected", "pictures", "machine")
 _RINGS = {
     "site": ("site", "problems", "pinned", "jobs", "scad", "working"),
-    "pictures": ("pictures", "gather"),
+    # Models before Gather, so Models keeps its address when Gather goes
+    # (docs/plans/ui-coordination-2026-10-31.md).
+    "pictures": ("pictures", "models", "gather"),
 }
 
 
@@ -739,7 +744,12 @@ def _panels() -> Option:
         return Option(
             id=f"panels:{pid}",
             label=label,
-            children=[toggle(each, labels[each]) for each in _RINGS[pid]],
+            children=[
+                _models(toggle(each, labels[each]))
+                if each == "models"
+                else toggle(each, labels[each])
+                for each in _RINGS[pid]
+            ],
         )
 
     return Option(
@@ -807,6 +817,35 @@ def _view() -> Option:
             Option(id="view:outlines", label="Outlines", action="view:outlines"),
             Option(id="view:walls", label="Select walls", action="view:walls"),
             Option(id="view:settings", label="Settings", action="view:settings"),
+        ],
+    )
+
+
+def _models(toggle: Option) -> Option:
+    """Panels › Pictures › Models: the window, then its verbs, which the page hands to it
+    (widgets/models.js): Ask about the shape chosen on a mat, and a person's word on its
+    colour or its material, each a word of the family's lists. Seated after the
+    window's own cell, so no address moves."""
+    from .evidence.words import COLOURS, MATERIALS
+
+    return Option(
+        id="panels:models",
+        label="Models",
+        children=[
+            toggle,
+            Option(id="models:ask", label="Ask", action="models:ask"),
+            Option(
+                id="models:colour",
+                label="Colour",
+                children=_listed("models:colour", [(f"models:say:colour:{w}", w) for w in COLOURS]),
+            ),
+            Option(
+                id="models:material",
+                label="Material",
+                children=_listed(
+                    "models:material", [(f"models:say:material:{w}", w) for w in MATERIALS]
+                ),
+            ),
         ],
     )
 
@@ -1687,6 +1726,9 @@ CARRIED_BY: Dict[str, Carries] = {
     "bench": Carries.VIEWER,
     # The Airgap panel's verbs: the page carries each to the panel (widgets/airgap.js).
     "airgap": Carries.VIEWER,
+    # Models' verbs: the page carries each to the window (widgets/models.js), which
+    # asks the server about the shape chosen on a mat.
+    "models": Carries.VIEWER,
     # A camera's verbs: which of this browser's cameras it is (and Allow, to name
     # them), live, a picture taken and made its view, and the gathering's report
     # -- the page's: only the browser can open a camera, and the device and

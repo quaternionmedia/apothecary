@@ -1,6 +1,13 @@
 # Image models through qmcp: a plan
 
-*Nothing in this page is built.*
+*A prototype of slice 0 and the journeys is built, against a simulated qmcp: the
+observation format (`apothecary/evidence/`), the plain colour reader
+(`apothecary/vision/colour.py`), the client with every way qmcp can be missing
+(`apothecary/finders/`), the Models window and its ring, and `apothecary
+vision`; [the models checklist](../models-checklist.md) walks them. The rest of
+this page is not built: MCP to a real qmcp, `vision check` and trust, the `qmcp`
+finder, asking about a rig's face, a site's own words, and keeping what was
+asked.*
 
 ## What this plans
 

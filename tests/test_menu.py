@@ -1081,9 +1081,28 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     pictures = next(c for c in panels.children if c.label == "Pictures")
     assert [(c.label, c.action, c.cell) for c in pictures.children] == [
         ("Pictures", "panel:toggle:pictures", 8),
-        ("Gather", "panel:toggle:gather", 6),
+        # Models before Gather, so Models keeps its address when Gather goes
+        # (docs/plans/ui-coordination-2026-10-31.md): the window, then its verbs,
+        # which the page carries to it -- Ask, and a person's word on a colour or a
+        # material, each a word of the family's lists.
+        ("Models", None, 6),
+        ("Gather", "panel:toggle:gather", 2),
     ]
     assert address_of(root, "panel:pictures") == "428"
+    models = next(c for c in pictures.children if c.label == "Models")
+    assert [(c.label, c.action) for c in models.children] == [
+        ("Models", "panel:toggle:models"),
+        ("Ask", "models:ask"),
+        ("Colour", None),
+        ("Material", None),
+    ]
+    assert carried_by("models:ask").name == "VIEWER"
+    assert carried_by("models:say:colour:red").name == "VIEWER"
+    material = next(c for c in models.children if c.label == "Material")
+    assert [c.action for c in material.children][:2] == [
+        "models:say:material:plastic",
+        "models:say:material:metal",
+    ]
     assert address_of(root, "panel:machine") == "448"
     assert address_of(root, "panel:windows") == "49"
     windows = next(c for c in panels.children if c.label == "Windows")

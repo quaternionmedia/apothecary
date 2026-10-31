@@ -415,6 +415,26 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "pinned-view-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one view, in any site"),
     "pinned-board-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one board's pin back"),
+    # ---- Models, apothecary/static/widgets/models.js ----------------------
+    # Image models through qmcp: an origin switched, the shape chosen on a mat asked
+    # about, and a person's word on one of its properties. Ask and a person's word
+    # are Panels › Pictures › Models too (RING_BACKED).
+    "models-switch": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a tick-box per origin, the plain reader or a model, switching it on or off",
+    ),
+    "models-ask": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that asks about the shape chosen on a mat: its colour read off its "
+        "pixels, and each model's guesses",
+    ),
+    "models-word": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a box per property for a person's word, said with Enter, over every guess",
+    ),
     # Selected: the one width a view is sized by (a chosen shape's long side
     # when one is chosen). A number the ring cannot type; Size puts the cursor in it.
     "view-width": (WIDGET, WHAT_IS_THERE, "a box for how wide a picture is, or one shape's side"),
@@ -541,6 +561,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
 RING_BACKED: Dict[str, str] = {
     # the header's Docs is the canvas ring's Panels › Docs
     "docs-link": "panel:docs",
+    # Models' Ask and a person's word are the cells of Panels › Pictures › Models
+    "models-ask": "models:ask",
+    "models:click:closest": "models:ask",
+    "models-word": "models:say:colour:red",
+    "models:keydown:closest": "models:say:colour:red",
     # the Airgap's verbs are the cells of Panels › Airgap
     "airgap-play": "airgap:play",
     "playEl:click:setPlaying": "airgap:play",
@@ -1017,6 +1042,9 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "gather-out:click:closest": (WIDGET, WHAT_YOU_SEE, "answering a question with a button"),
     "pic-file:change:addFiles": (WIDGET, WHAT_YOU_SEE, "adding the chosen pictures"),
     # ---- Site --------------------------------------------------------------
+    "models:click:closest": (WIDGET, WHAT_IS_THERE, "Ask, about the shape chosen on a mat"),
+    "models:change:closest": (WIDGET, WHAT_IS_THERE, "an origin's tick-box, switching it"),
+    "models:keydown:closest": (WIDGET, WHAT_IS_THERE, "Enter in a person's word, saying it"),
     "pinned-list:click:closest": (
         WIDGET,
         WHAT_IS_THERE,
