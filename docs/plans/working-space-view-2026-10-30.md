@@ -1,6 +1,6 @@
 # A working space, seen from every kind of evidence at once: a plan
 
-*Not built. Queued behind the camera on the Ender 3, whose tie to the printer's
+*Not built. Queued behind the cameras on the Ender 3, whose tie to the printer's
 polls is its first slice. The image models served through qmcp, an
 always-optional source of readings off a picture, are planned beside it in
 `docs/plans/image-models-through-qmcp-2026-10-30.md`, not yet on this branch.*
@@ -127,7 +127,7 @@ One thing said about one subject at one moment:
 | Field | Holds |
 |---|---|
 | `subject` | a subject's address, or a sighting: a source's own name, a port, or a frame and a region |
-| `property` | from a closed list per facet: `present`, `state`, `firmware`, `plugged`, `value`, `temperature`, `target`, `progress`, `position`, `endstop`, `filament`, `moving`; the image models add `quantity`, `size`, `shape`, `material`, `colour` |
+| `property` | from a closed list per facet: `present`, `state`, `firmware`, `plugged`, `value`, `temperature`, `target`, `progress`, `position`, `layer`, `endstop`, `filament`, `moving`, `clear`; the image models add `quantity`, `size`, `shape`, `material`, `colour` |
 | `value`, `unit` | the value, and its unit: `°C`, `mm`, `fraction`, or none for a word |
 | `confidence` | from 0 to 1 as its source gave it, never rounded up; empty where a source gives none |
 | `origin` | its kind and what produced it (below) |
@@ -192,29 +192,43 @@ from the observations by rules a test holds, and never set by hand.
 
 One subject's property is often measured more than once at the same moment,
 and most often by several cameras on one place: a rig seen from the front of
-the stage and from the side, a printer from its bed and from its mainboard's
-edge, a row of racks from both ends. This is a different case from two kinds of
+the stage and from the side, a printer's bed from a camera beside it and from
+one across the room, a row of racks from both ends. This is a different case from two kinds of
 evidence agreeing, and the layer keeps it apart.
 
 **One subject across angles.** Each camera has its own setup: `rig setup` is
 run once per camera, and pins that camera's view of each face it sees. A setup
 names the camera it belongs to, which the setup format does not hold yet (a
 version 2 of `apothecary.rig-setup`). Two cameras' readings are of one subject
-in one of two ways:
+by any of four links:
 
-- **A person linked them** (decided). Both setups pin a face of the same module,
-  so both cameras' readings of `dfam#control:cutoff` are of one subject by a
-  person's word, given once per camera when the face was pinned.
-- **Both cameras' poses are known** (proposed). Where both cameras stand in the
-  space is calibrated, by placing each in the site or by a marker both of them
-  see. Then a region one camera sees is projected into the space and compared
-  with what the other sees there. That link is `derived`, and is made only when
-  the pairing is unique, as the concert follower pairs a moved plug: one region
-  in the second camera's frame lands where the first's does, and no other. Two
-  candidates is a conflict, and nothing is paired (*Open*, 11).
+- **Both setups pin a face of the same module**, so both cameras' readings of
+  `dfam#control:cutoff` are of one subject by a person's word, given once per
+  camera when the face was pinned.
+- **A person links a pair**: this region of one camera's frame is that region
+  of the other's. It is how a subject with no face in the catalogue is linked,
+  the Ender's bed or its head, and it is a person's word.
+- **Both cameras' poses are known.** Each camera is placed in the site by hand,
+  or calibrated by a marker both of them see. A region one camera sees is then
+  projected into the space and compared with what the other sees there. That
+  link is `derived`, and is made only when the pairing is unique, as the
+  concert follower pairs a moved plug: one region in the second camera's frame
+  lands where the first's does, and no other. Two candidates is a conflict, and
+  nothing is paired.
+- **The content matches, and a person takes the suggestion.** Where a region of
+  one camera's frame closely matches a region of another's, the layer suggests
+  linking them. A suggestion is a guess and never a link: it is shown with how
+  well the two match and both regions as its evidence, and becomes a link, a
+  person's word, when a person takes it. One is offered only when one candidate
+  matches well and clearly better than any other, the pairing rule again. With
+  Pillow alone, faces already pinned in both cameras are matched, each laid flat
+  through its own corners into the face's coordinates and compared there: that
+  says which module a face just pinned in the second camera is. Finding a region
+  in the second camera with nothing pinned there needs a feature matcher, which
+  this repository does not have, or an image model through qmcp (*Open*, 11).
 
-A region two cameras see and nothing links is two sightings until a person or a
-unique pairing links them.
+A region two cameras see and nothing links is two sightings until a link joins
+them.
 
 **Each angle is its own observation.** The angles are never merged when they are
 written. Each reading carries its camera and frame as evidence, and in `view`
@@ -230,22 +244,28 @@ how well that camera sees the subject:
   angle says.
 
 **Combining many of one.** A combination is `derived`: a rule over the angles'
-observations, naming each one it took. Angles that did not read take no part.
+observations, naming each one it took and the rule it applied. Angles that did
+not read take no part.
 
-- **A number** (a knob's position, a fader's, a size). The angles are weighed by
-  how well each sees the subject, and the estimate is shown with its spread
-  across them. Angles that differ by more than the reader is measured to get
-  wrong for that kind of control (`apothecary rig check`'s error per kind) are a
-  disagreement between angles: each is shown with its view, none is averaged
-  in, and the disagreement is a delta like any other. *Decided:* past the
-  reader's measured error, angles are a disagreement and never an average.
-  *Proposed:* the weight is pixels per millimetre times the reader's
-  confidence, and the tolerance is the worst error `rig check` measures for the
-  kind (*Open*, 12).
-- **A word** (`plugged`, a switch's side, a colour's name). The angles agree, or
-  they disagree. *Decided:* there is no vote. Two angles that see a plug and one
-  that sees an empty hole are a disagreement, not a majority, since a majority
-  is an average of words.
+Some properties are averaged and some are not, so the rule is declared per
+property, in one table a test holds, and a site or a setup may name another for
+one subject:
+
+| Rule | Gives | Declared for |
+|---|---|---|
+| `mean` | the angles' values, weighed by how well each sees the subject, with their spread | a knob, a fader, a size, a position |
+| `best` | the value from the angle that sees the subject best, the others shown beside it | a property one camera is placed for: the first layer, from the bed camera |
+| `each` | no combined value: every angle's, side by side | a property whose angles are not comparable |
+| `agree` | for a word, the value every angle that read it gives | `plugged`, a switch's side, a colour's name |
+
+The weight is pixels per millimetre on the face times the reader's confidence.
+Whatever the rule, angles further apart than the tolerance are a disagreement
+between angles: each is shown with its view, none is averaged in or chosen, and
+the disagreement is a delta like any other. The tolerance is the worst error
+`apothecary rig check` measures for the kind of control, unless the property's
+declaration names another, and the combined value records which it used. A word
+has no vote: two angles that see a plug and one that sees an empty hole are a
+disagreement, not a majority, since a majority is an average of words.
 
 **How independent the angles are.** Several angles through one reader are one
 kind of evidence. They share the reader's blind spots, the room's light and the
@@ -260,12 +280,11 @@ tightly.
 is unread from that angle and read from another. Its state comes from the angles
 that read it, and an angle that did not read it never makes it absent. With
 every angle unread, the subject is unread, and its last value is *last known
-at*. A blocking hand the reader cannot tell from a value (a hand over a socket
-reads as a plug) is the case two angles catch, as a disagreement between them;
-telling a hidden face before reading it is later (*Open*, 15).
+at*. Telling a covered subject from its state is the next section's.
 
 **One moment across cameras.** Cameras are not synchronised: each device keeps
-frames on its own clock and cadence. There are two ways to one moment:
+frames on its own clock and cadence. There are two ways to one moment, and both
+are used:
 
 - **A frame set**: the cameras are triggered together. The page holds every Live
   camera, so when it keeps a frame for a poll it keeps one from each, under the
@@ -276,9 +295,9 @@ frames on its own clock and cadence. There are two ways to one moment:
   which the property is seen to change (a knob between two of the follower's
   frames, a lead between two polls) and than the slowest camera's interval;
   frames further apart are each their own moment, and the state is carried
-  between them (*Open*, 13).
+  between them.
 
-**Size without a stated scale** (later). Two cameras with calibrated poses can
+**Size without a stated scale** (*Later*). Two cameras with calibrated poses can
 triangulate a point both see, which gives millimetres without a stated
 reference: a third source of scale, beside a reference a person states and a
 marker of known size. The image-models plan holds that a size without a scale is
@@ -286,7 +305,7 @@ a fraction of the picture and says so
 (`docs/plans/image-models-through-qmcp-2026-10-30.md`, on
 `claude/image-models-qmcp-e257c5`); a triangulated size is `derived`, carries
 both poses and their calibration as its evidence, and is no better than the
-calibration, which is measured before it is trusted (*Open*, 16).
+calibration, which is measured before it is trusted.
 
 **Tested before it is trusted.** `rig/simulated.py` draws a rig through one
 pinhole from `EYE`. The test draws the same rig at the same values from two eye
@@ -307,6 +326,93 @@ second, and one that reads a covered socket as empty fails the third. Drawn
 pictures prove the plumbing and not the eyes, so each angle's own error on real
 frames is measured on the first photographs from two cameras, as the Uno's
 sockets are measured from one.
+
+### Telling a covered subject from its state
+
+A camera's view of a subject is lost in three ways, and each is unread with its
+own `why`, never a value:
+
+- **Covered**: something stands between the camera and the subject: a hand, an
+  arm, a player's body, a cable draped across the face, a tool.
+- **Unreadable**: nothing is in front, and the picture still cannot be read
+  there: glare, a shadow too deep, blur, a socket too small in the picture
+  (`look.MIN_SOCKET_PX`, already a `why`).
+- **Out of view**: the face is not where its corners say: the camera knocked,
+  the device moved.
+
+**What the reader does now.** `rig/look.py` reads a socket as a plug unless its
+centre is darker than the ring round it, so anything in front of an empty
+socket that is not darker in the middle than at its edge is read as a plug. A
+throwaway spike drew four things over an empty socket in `simulated.draw`'s
+picture of `tests/test_rig.py`'s made-up synth: a patch in a hand's colour, a
+dark sleeve, a cable crossing it, and a spot of glare. The reader called each
+one a plug at its highest confidence; a soft shadow over the same socket it
+read as empty. A covered socket is a confident wrong answer, so the confidence
+does not catch it. A hand on a knob is mostly a hand turning it: the knob is
+unread while it is held and read again when it is let go. What a hand does to
+the reader's knobs and faders is not measured.
+
+**Ways to tell, each with what it misses:**
+
+1. **The picture's own limits.** A socket whose samples reach the picture's
+   white limit is *washed out*, and one at its black limit *too dark to read*.
+   It catches glare and nothing else, and costs nothing.
+2. **The face against its own reference.** Each face keeps a reference look:
+   the frame it was pinned on, or the latest frame in which it read clean. A
+   control or socket is read only where the face just round it (the panel
+   outside its ring, a label, a neighbour's nut) still looks as it does in the
+   reference. In the spike, comparing each socket's surround with the reference
+   frame marked the hand, the cable and the glare over the socket they covered,
+   the hand also over part of a neighbour's surround it reached, and did not
+   mark a plug pushed in with nothing in front. It missed the dark sleeve, whose
+   grey is close to the panel's: it misses whatever looks like what it covers.
+   Light changes the reference as surely as a hand does, under a stage's light
+   above all, so levels are compared after the face's own shift in brightness is
+   taken out, or edges in place of levels, whichever measures better on real
+   frames. A drawn plug has no cable; a real plug's cable hangs across the face
+   below it and must not mark every socket under it covered, so how much of a
+   surround may differ before its socket is covered is measured on real frames
+   too.
+3. **Time.** A cover arrives and leaves: a surround changes and changes back
+   within seconds, where a re-patch changes one socket's centre and leaves its
+   surround as it was. So a change of state is taken once it has held across
+   frames with the surround clean in each, and a cover is seen as the
+   surround's own change, arriving and leaving. It catches the dark sleeve
+   wherever the sleeve crosses something on its way in (a neighbour's nut, a
+   pointer, a label), and not on a face with nothing to cross. It reports a
+   change a frame or two late.
+4. **Another angle, by parallax.** A cover stands in front of the face, so two
+   cameras see it over different parts of the face: a hand over a socket from
+   the front covers another socket, or none, from the side. A face's own marks
+   fall on the same place in the face's coordinates from both. Two angles that
+   disagree about a socket, each covered somewhere else, are a covered subject,
+   not a changed one. It is the one test that does not depend on how the cover
+   looks, and it needs a second camera on the face.
+5. **A person at the subject, from a wider camera.** Motion in a room camera's
+   view over the region a face occupies marks that face's readings in the span
+   as possibly covered. It is coarse, holding the readings while anyone stands
+   at the rig, and it records that someone was there, never who (*Open*, 8).
+6. **A model's guess** that something covers a face, through qmcp. A guess may
+   withhold a reading, making it unread, and never makes one: it only ever
+   lowers what the layer claims.
+
+Telling a hand by the colour of skin is not proposed: it reads people's bodies,
+misses a glove, a cable and a tool, and differs from one person to the next.
+
+**What the view does with a covered reading.** It is unread, *covered*, and
+never a value, and the subject's state carries as *last known at*. A change
+found when the cover lifts is reported as having happened while covered,
+between the last clean frame and the first clean one after it, never at the
+moment the cover lifted.
+
+**The order proposed** (*Open*, 12): the picture's limits and the reference
+surround in the reader first, as new whys of `look`'s; time in the follower,
+which already carries leads from frame to frame; parallax once two cameras see
+one face; a person at the subject and a model's guess after them. Each is tested
+on drawn pictures with the covers the spike drew, each seen to fail first: the
+dark sleeve is the case the reference surround misses and time or parallax must
+catch. Then on real frames, at the bench: a hand over the Uno's sockets, a lead
+draped across its edge.
 
 ### Time
 
@@ -394,10 +500,11 @@ its writer refuses a path inside a repository. A person's goals and directives
 are personal data like the rest. Backups are the person's.
 
 How much is kept is a cost to decide. A frame at every poll of a long print is a
-frame every couple of seconds for hours, so slice 1 keeps one when the poll's
-state changes, at each step of progress, and otherwise no oftener than a
-directive says, and the folder's size is shown where its frames are listed
-(*Open*, 3).
+frame every couple of seconds for hours, from each of the Ender's three
+cameras, so slice 1 keeps a frame set when the poll's state changes and at each
+step of progress, the bed camera's frame at each layer, and otherwise no oftener
+than a directive says, and the folder's size is shown where its frames are
+listed (*Open*, 3).
 
 ## What reads it
 
@@ -451,8 +558,9 @@ parts:
 | `devices.last_statuses()`, `STATUS_LISTENERS` | The newest poll per port, in memory, and the hook every poll passes | A collector on the hook, and a history in place of the newest alone |
 | `firmware/bindings.py`: `NodeBinding.binding_source` | A board tied to a node by a pin or by its sketch | Links, each with its origin |
 | `jobs.py`: a job's record, `LISTENERS` | When a print began and ended, and how far it got | Events, and what a goal's *done when* reads |
+| `slicer/models.py`: `Estimate.layers` | The count of layers the slicer wrote into the G-code | Which layer of how many each timelapse frame is |
 | `vision/cameras.py`: pose, lens, `lands` | Where a camera stands and where its centre ray lands | Which subjects each camera can see; several cameras on one place |
-| `rig/look.py`: `Seen`; `rig/reading.py`: faces, `held` | Each control and socket read off a picture, with why one was not | `read` observations, unread kept as unread, a face as a link |
+| `rig/look.py`: `Seen`; `rig/reading.py`: faces, `held` | Each control and socket read off a picture, with why one was not | `read` observations, unread kept as unread, a face as a link; covered, washed out and out of view as new whys |
 | `rig/concert.py`: frames in order, leads carried, `readings.jsonl` | A rig followed through time, a plug moved only when the pairing is unique | The state-carrying rule and the pairing rule, made general |
 | `rig/simulated.py`: a rig drawn through one pinhole; `rig check`'s error per kind | The reader measured on pictures whose every answer is known, from one eye | The two-angle test, and the tolerance past which angles disagree |
 | `gathering/judgement.py` | A person's word wins, carries and scores; two people who disagree are refused | The precedence of a person's word, for every subject |
@@ -464,62 +572,92 @@ What it replaces, once each renderer reads the document: the wiring's
 line-building in `_state`, and `_LAST_STATUS` as the only memory of a printer's
 polls. Slice 1 replaces nothing.
 
-## The first slice: the Ender seen by its camera and by its port
+## The first slice: the Ender seen by its cameras and by its port
 
-A camera goes on the Ender 3 next, to tie printer monitoring to it. What is
-ready: `camera_1`, added on `printer_1`'s ring, its device one of the browser's
-cameras, with Live and Take picture; the printer's Machine polling it; the
-mainboard's polls reaching carlos as lines; `rig setup` and `rig follow`. The
-bench plan's *Next: a camera on the Ender* names three pieces the tie needs.
-This slice puts them in order and lays the layer under them, one pull request a
-step, stacked.
+Three cameras go on the Ender 3 to tie printer monitoring to them, each placed
+for its own work:
+
+| Camera | Placed | Sees | Reads first |
+|---|---|---|---|
+| bed | close on the bed | the bed, the first layer, the print growing | a frame at each layer, the print's timelapse; the bed clear or not before a start |
+| head | close on the hotend and the extruder | the nozzle, the extruder's feed, the carriage and the gantry moving | `moving`, beside the poll's `printing` |
+| room | further away | the whole printer and the space round it: bed, gantry, spool, the mainboard's edge and its lead | the lead into the mainboard; the bed and the head again, from a second angle |
+
+The bed and room cameras both see the bed, and the head and room cameras both
+see the head, so the Ender gives many of one from its first frames. The Ender
+3's bed moves front to back and its gantry up and down: a camera fixed to the
+bed keeps the print still in its frame, as a timelapse wants, and one fixed to
+the frame watches the bed slide (*Open*, 13).
+
+What is ready: `camera_1`, added on `printer_1`'s ring, its device one of the
+browser's cameras, with Live and Take picture; the printer's Machine polling
+it; the mainboard's polls reaching carlos as lines; `rig setup` and `rig
+follow`. `camera_1` takes whichever of the three places its mount suits, and
+the other two are added on the same ring. The bench plan's *Next: a camera on
+the Ender* names three pieces the tie needs. This slice puts them in order and
+lays the layer under them, one pull request a step, stacked.
 
 1. **The log, and polls into it.** The observation, its origin, the evidence
    reference and the append-only log in the state folder; a collector on
    `STATUS_LISTENERS` that writes each poll of a pinned port as observations of
    the node it is pinned to (`present`, `state`, each heater's `temperature` and
-   `target`, `progress`, `endstop`, `filament`), and a poll of an unpinned port
-   as a sighting. Each poll gets an id, and its raw lines are its evidence. A
-   test on `serve --demo`'s simulated Ender holds it: polls in, observations
-   out, the pin as their link.
-2. **Frames kept with polls.** The page holds the camera and drives the polls,
-   so the page keeps the frames: while `camera_1` is Live and `printer_1` is
-   polled, a frame when the poll's state changes, at each step of progress, and
-   no oftener than a directive's cadence, posted to the picture route (`POST
-   /photos/pictures?site=&camera=`) with the poll's id. The route keeps the frame
-   under `captures/` as now, and writes it as evidence beside that poll. That
-   is a print's record of polls and pictures, readable as a timeline before any
-   picture is read, and a folder `rig follow` reads. The *Working space*
-   window's first form is `printer_1`'s timeline: state and heaters as a strip,
-   the frames at their polls.
-3. **The lead, seen two ways.** The Ender's side faces laid out: the mainboard's
-   USB socket and the power inlet placed as fractions of their face, as the
-   Uno's edge is, measured off `camera_1`'s own frames, and pinned once with
+   `target`, `progress`, `position`, `endstop`, `filament`), and a poll of an
+   unpinned port as a sighting. Each poll gets an id, and its raw lines are its
+   evidence. A test on `serve --demo`'s simulated Ender holds it: polls in,
+   observations out, the pin as their link.
+2. **Frames kept with polls.** The page holds the cameras and drives the polls,
+   so the page keeps the frames: while the Ender's cameras are Live and
+   `printer_1` is polled, a frame set (one frame from each Live camera) when the
+   poll's state changes, at each step of progress, and no oftener than a
+   directive's cadence, each frame posted to the picture route (`POST
+   /photos/pictures?site=&camera=`) with the poll's id. The route keeps the
+   frames under `captures/` as now, and writes each as evidence beside that
+   poll. That is a print's record of polls and pictures, readable as a timeline
+   before any picture is read, and a folder `rig follow` reads. The *Working
+   space* window's first form is `printer_1`'s timeline: state and heaters as a
+   strip, each camera's frames in a row at their polls. It starts with
+   `camera_1` alone and takes the others as they are mounted. Whether one page
+   holds three cameras streaming at once depends on the USB bus and each
+   camera's format, and is found at the bench; a camera the page cannot open is
+   unread, with why, and never absent (*Open*, 14).
+3. **The lead, seen two ways.** The Ender's mainboard face laid out: the USB
+   socket and the power inlet placed as fractions of their face, as the Uno's
+   edge is, measured off the room camera's own frames, and pinned once with
    `rig setup`. Each kept frame is read through the face, and the USB lead's
    `plugged` from the picture stands beside its port's `present`. The lead's
-   state in carlos says both, and where they disagree. It is validated as the
-   Uno is: the lead in and out by hand with the camera fixed, and what was read
-   against what was there, in `docs/validation/`.
+   state in carlos says both, and where they disagree. A socket the room camera
+   sees under `look.MIN_SOCKET_PX` is unread, *too small in the picture to
+   read*, and the lead is then seen one way, which the view says. It is
+   validated as the Uno is: the lead in and out by hand with the camera fixed,
+   and what was read against what was there, in `docs/validation/`.
 4. **Moving, seen two ways.** A frame compared with the frame before it inside
-   the gantry's face: `moving`, read, with the difference as its confidence,
-   beside the poll's `printing` or `idle`. A print the poll calls printing while
-   nothing moves across several frames is a delta at `warn`: a pause, a stall,
-   or a camera knocked aside. The view names those and decides none. This is
-   arithmetic, not a model; changing light is its known weakness, and it is
-   measured on the Ender's own frames before any threshold is trusted.
-5. **A second camera.** Where it stands decides what it adds. On another face,
-   one on the bed and nozzle beside one on the mainboard's edge, it adds
-   subjects and covers the gantry from a second side. On the same face, two
-   cameras on the mainboard's edge, it adds a second angle on the same socket,
-   and that is where combining many of one is first tried on real frames: the
-   lead read from both, a hand in front of one, each angle's error measured.
-   The page keeps a frame set at each poll, one frame from each Live camera
-   (*Open*, 14).
+   the head camera's view of the carriage and gantry: `moving`, read, with the
+   difference as its confidence, beside the poll's `printing` or `idle`. A print
+   the poll calls printing while nothing moves across several frames is a delta
+   at `warn`: a pause, a stall, or a camera knocked aside. The view names those
+   and decides none. This is arithmetic, not a model; changing light is its
+   known weakness, and it is measured on the Ender's own frames before any
+   threshold is trusted.
+5. **The bed, and its timelapse.** A `layer` is a new highest height in the
+   poll's `M114` position that holds into the next poll, since a lift between
+   moves rises and falls again; the slicer's estimate gives how many layers it
+   wrote. At each layer the bed camera's frame is kept, numbered as which layer
+   of how many, and the frames in order are the print's timelapse, a strip in
+   the window. The frame is kept at the poll after the layer changes, with the
+   head wherever it is then. Before a start, the bed camera's frame against its
+   reference of the empty bed reads the bed `clear` or not: the reference of
+   *Telling a covered subject from its state*, applied to a whole bed. The view
+   shows it beside a print being started, and refuses nothing.
+6. **Many of one, on real frames.** The bed from the bed and room cameras, and
+   the head's motion from the head and room cameras, each combined by its
+   property's rule or kept as a disagreement between angles; a hand in front of
+   one camera, unread there and read from the other; each angle's error
+   measured on the Ender's own frames.
 
 After step 4 the four questions have answers for one printer: `printer_1`, its
 mainboard and its lead are here; it is printing, at these temperatures, and seen
-moving; that is known by its port and by `camera_1`, each line opening its poll
-or its frame; and the window shows what changed in the last hour. The image
+moving; that is known by its port and by its cameras, each line opening its
+poll or its frame; and the window shows what changed in the last hour. The image
 models' readings (whether a part is on the bed, its colour, a print gone to
 spaghetti) arrive as guesses once the sibling plan's first slice is built, and
 change none of the above.
@@ -563,11 +701,14 @@ Drafted when its slice is built, in `governance/qm/adr/` on
   origin kinds, unread as no value, identity before attribution, a pairing only
   when unique, a person's word over a guess, a guess never raising a level on
   its own, every rendered line naming its observations, and many of one: each
-  angle its own observation, angles past the reader's error a disagreement, no
-  vote, angles one kind of evidence. It tightens the org records above. Its
-  teeth are tests, each seen to fail: a renderer handed an observation with no
-  evidence refuses it; a guess alone yields `none`; two links for one name
-  attribute nothing; the two-angle test's three holds.
+  angle its own observation, a suggested link no link until a person takes it,
+  the combining rule declared per property, angles past the tolerance a
+  disagreement whatever the rule, no vote, angles one kind of evidence, a
+  covered reading unread and never a value. It tightens the org records above.
+  Its teeth are tests, each seen to fail: a renderer handed an observation with
+  no evidence refuses it; a guess alone yields `none`; two links for one name
+  attribute nothing; the two-angle test's three holds; a socket drawn covered
+  reads unread.
 - **An amendment to *Personal data stays on the device*** (qm#121, open). §6
   names the log, the links, and a person's goals and directives in the state
   folder, and the frames' retention; §1 names the new package as an install
@@ -614,24 +755,39 @@ Drafted when its slice is built, in `governance/qm/adr/` on
    the hello's own form extended.
 10. **Names**: `apothecary/evidence/` for the package and `apothecary.evidence`
     for the document, *Working space* for the window.
-11. **How two cameras' poses are calibrated**, so that a region no face covers
-    can be paired across them: each camera placed in the site by hand, a marker
-    both see, or a person linking each pair.
-12. **How angles are weighed for a number, and how far apart they may be.**
-    Proposed: pixels per millimetre on the face times the reader's confidence;
-    past the worst error `rig check` measures for the kind, a disagreement.
-    Whether the tolerance is that worst error or a multiple of the mean.
-13. **The pairing window for cameras not triggered together.** Proposed: a
-    frame set wherever one page holds the cameras; otherwise no wider than the
-    property's time to change and the slowest camera's interval.
-14. **Where the Ender's second camera goes**: on another face, adding subjects,
-    or on the mainboard's edge beside the first, adding an angle.
-15. **Telling a hidden face before reading it**, from the face's own look, so a
-    hand over a socket is unread rather than a plug; until then, a second angle
-    catches it as a disagreement.
-16. **Triangulation as a source of scale**, from two calibrated cameras, beside
-    a stated reference and a marker of known size; later, once poses are
-    calibrated and measured.
+11. **The matcher behind a suggested link** for a region no face covers: a
+    feature matcher, a new dependency under the licence gate and the question
+    of pictures without Pillow, or an image model through qmcp, a guess like
+    any other. And how close a match is before a suggestion is offered.
+    Proposed: clearly above every other candidate, the threshold measured on
+    real frames.
+12. **Telling a covered subject**: which tests come first (proposed: the
+    picture's limits and the reference surround, then time, then parallax);
+    which frame is a face's reference (the one it was pinned on, or the latest
+    it read clean); how much of a surround may differ before its subject is
+    covered, with a real plug's cable not marking every socket under it; and how
+    many frames a change holds before it is taken.
+13. **The Ender's camera mounts**: the bed camera on the bed, still to the
+    print, or on the frame, watching the bed slide; the head camera on the
+    carriage, moving with the nozzle, or on the frame; the room camera where the
+    mainboard's edge is large enough in its picture to read.
+14. **Three cameras on one page**: whether the page holds them streaming at
+    once; if not, which camera a second page or a capture on the server takes
+    (*Open*, 2).
+
+## Later
+
+In no slice yet; each waits on what it names.
+
+- **Size by triangulation**, from two cameras with calibrated poses: a third
+  source of scale, beside a reference a person states and a marker of known
+  size. It waits on poses calibrated and their error measured.
+- **The head parked for each timelapse frame**, by a hook at each layer change
+  in the G-code the slicer writes. It is the printer's seam, and waits on the
+  timelapse.
+- **A start that waits on the bed seen clear.** This layer shows `clear` beside
+  a print being started and refuses nothing; holding a start is the printer's
+  seam, and waits on `clear` read true on the Ender's own frames.
 
 ## Decided
 
@@ -647,3 +803,19 @@ Drafted when its slice is built, in `governance/qm/adr/` on
   differ beyond the reader's measured error are a disagreement, never an
   average. Several angles through one reader are one kind of evidence. An angle
   that does not see a subject never makes it absent.
+- **2026-10-31:** two cameras' readings are linked by a face pinned in both, a
+  person linking a pair, known poses (placed by hand or calibrated by a marker
+  both see), or a suggestion from matching content that a person takes.
+  Combining is declared per property (a weighted mean, the best-placed angle,
+  each angle alone, or agreement for a word), and a site or setup may name
+  another for one subject; whatever the rule, angles past the tolerance are a
+  disagreement. The weight is pixels per millimetre times the reader's
+  confidence, and the tolerance `rig check`'s worst error for the kind unless a
+  property names another. Frames are one moment as a frame set where one page
+  holds the cameras, and otherwise within a window no wider than the property's
+  time to change and the slowest camera's interval.
+- **2026-10-31:** the Ender has three cameras: one on the bed for the first
+  layer and the print's timelapse, one on the hotend, the extruder and the moving
+  parts, and one further away on the whole printer. Triangulation as a source of
+  scale is later. A covered subject is unread and never a value, and the ways to
+  tell one are planned with what each misses.
