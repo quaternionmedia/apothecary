@@ -14,6 +14,7 @@ here: run `apothecary problems`.
   [docs/plans/pictures-the-rest-2026-10-13.md](docs/plans/pictures-the-rest-2026-10-13.md).
 - Optional local models behind the shape finder: [docs/plans/photo-finders-local-models-2026-09-21.md](docs/plans/photo-finders-local-models-2026-09-21.md).
 - A synth rig photographed through a concert, held in carlos: the first real photographs, the Ender's mainboard's power and USB through the camera aimed at the Ender, waiting for that camera (slice 4, rehearsed on an Uno's drawn pictures: `examples/rigs/uno-power-and-usb.json`, `apothecary rig setup`), then the DFAM and Subharmonicon, then the viewer's window for pinning faces, cues in the record, a mount and corner tabs printed; then the airgap's test rig and a server room: [docs/plans/carlos-concert-rig-2026-10-29.md](docs/plans/carlos-concert-rig-2026-10-29.md).
+- The viewer across the efforts in flight, one observation module first, then the words and seats: [docs/plans/ui-coordination-2026-10-31.md](docs/plans/ui-coordination-2026-10-31.md).
 - Waiting behind it, the bench as a rig carlos draws, slices 2 and 3 (a picture names a device, IO configuration): [docs/plans/qm-family-carlos-2026-10-29.md](docs/plans/qm-family-carlos-2026-10-29.md).
 - Pictures without Pillow, a research effort: whether a library under an approved licence decodes JPEG and PNG, resizes and reads pixels as well and as fast as Pillow does here, and what moving would cost. Until it reports, Pillow stays, a conflict row in the adoption scope: [the governance plan's stub](docs/plans/governance-2026-10-13.md#stubbed-pictures-without-pillow).
 - The installers' hardening. A download is checked against its listed size
@@ -142,9 +143,6 @@ Decided, not started. Each waits on what its line names.
   decision 7).
 - Review rad#7 (a ring entered at an item); apothecary's ring follows what
   rad decides.
-- Delete origin's branches whose commits are all on `main` or whose pull
-  request is closed, from a list checked first; their pull requests keep
-  their history.
 
 ## For a person to decide
 

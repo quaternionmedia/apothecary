@@ -86,6 +86,7 @@ Open plans: each says what is decided and what is not built.
 | [The documentation, swept](plans/timeless-docs-2026-10-12.md) | Every durable text brought under the governance record on durable text: present tense, no internal history, no ornament; the triage by area and the order; its notes on each area in [its folder](plans/timeless-docs-2026-10-12/) |
 | [The bench as a rig carlos can draw](plans/qm-family-carlos-2026-10-29.md) | Carlos, in the instruments family, holding and drawing the bench as apothecary sees it: the bench written as a `carlos.patch` with each board's and lead's state and sent whenever it changes (built, with a demo), a picture naming a device, IO configuration, and carlos's one action |
 | [A synth rig photographed through a concert, held in carlos](plans/carlos-concert-rig-2026-10-29.md) | Carlos's rigs, bolstered from apothecary: each knob, fader, switch and socket read off a camera's picture against carlos's own panels and held in carlos frame by frame through a concert, turned in place, with a test of both apps end to end (built, on drawn pictures); the first real photographs, power and USB into an Uno; then the airgap's test rig and a server room |
+| [One page for every effort](plans/ui-coordination-2026-10-31.md) | The viewer's windows, doors and words across the efforts in flight (the Working space, the image models, the rig's faces, the bench in carlos, lighting, pictures): where they collide, one observation module, and the order the collisions are settled in. |
 
 ## History
 
