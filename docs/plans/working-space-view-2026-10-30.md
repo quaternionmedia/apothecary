@@ -133,6 +133,7 @@ One thing said about one subject at one moment:
 | `origin` | its kind and what produced it (below) |
 | `at` | when it was true: a frame's taken time, a poll's `polled_at` |
 | `recorded_at` | when it was written, which may be later: a frame read afterwards |
+| `view` | for a reading off a picture: the camera, and how well it sees the subject (*One thing measured many times at once*) |
 | `evidence` | references to what it rests on: a frame and a region, a poll and its lines, a person's record, a qmcp invocation, other observations |
 
 | Origin | Is | Carries |
@@ -154,13 +155,14 @@ measures (a port that stopped answering) or what a person states.
 For a subject and a property, the view puts every source's latest value side by
 side and says one of four things:
 
-- **Agreed**: two or more sources give the same value within the window that
-  pairs them. The USB lead to `printer_1` answering on its port, and a plug seen
-  in the mainboard's USB socket in the frame kept with the same poll, is *seen
-  both ways*. Two kinds of origin is the stronger agreement; two cameras
-  through one reader share that reader's blind spots, and the line says which
-  agreement it is.
-- **One source**: one source says, and nothing else is placed to.
+- **Agreed**: sources of two or more kinds give the same value within the
+  window that pairs them. The USB lead to `printer_1` answering on its port, and
+  a plug seen in the mainboard's USB socket in the frame kept with the same
+  poll, is *seen both ways*. Several cameras through one reader are one kind:
+  they agree as *seen from several angles*, which is weaker (*One thing measured
+  many times at once*, below).
+- **One kind of source**: one origin says, from one angle or several, and
+  nothing of another kind is placed to.
 - **Disagreed**: the values differ. Both are shown, each with its origin and
   evidence, and neither is the state. The disagreement is a delta: named by the
   subject and property, opened when first seen, and found again, not opened
@@ -185,6 +187,126 @@ Two precedences are decided, and one is proposed:
 
 Levels are the wiring's (`none`, `ok`, `warn`, `fault`). A level is computed
 from the observations by rules a test holds, and never set by hand.
+
+### One thing measured many times at once
+
+One subject's property is often measured more than once at the same moment,
+and most often by several cameras on one place: a rig seen from the front of
+the stage and from the side, a printer from its bed and from its mainboard's
+edge, a row of racks from both ends. This is a different case from two kinds of
+evidence agreeing, and the layer keeps it apart.
+
+**One subject across angles.** Each camera has its own setup: `rig setup` is
+run once per camera, and pins that camera's view of each face it sees. A setup
+names the camera it belongs to, which the setup format does not hold yet (a
+version 2 of `apothecary.rig-setup`). Two cameras' readings are of one subject
+in one of two ways:
+
+- **A person linked them** (decided). Both setups pin a face of the same module,
+  so both cameras' readings of `dfam#control:cutoff` are of one subject by a
+  person's word, given once per camera when the face was pinned.
+- **Both cameras' poses are known** (proposed). Where both cameras stand in the
+  space is calibrated, by placing each in the site or by a marker both of them
+  see. Then a region one camera sees is projected into the space and compared
+  with what the other sees there. That link is `derived`, and is made only when
+  the pairing is unique, as the concert follower pairs a moved plug: one region
+  in the second camera's frame lands where the first's does, and no other. Two
+  candidates is a conflict, and nothing is paired (*Open*, 11).
+
+A region two cameras see and nothing links is two sightings until a person or a
+unique pairing links them.
+
+**Each angle is its own observation.** The angles are never merged when they are
+written. Each reading carries its camera and frame as evidence, and in `view`
+how well that camera sees the subject:
+
+- pixels per millimetre on the face, from the face's corners in the frame and
+  its size in the catalogue;
+- how oblique the face is to the camera, from the same corners, or from the poses
+  where they are known;
+- the reader's confidence, the contrast it read on, as `rig/look.py` reads it;
+- where it did not read, its `why`: a socket under `look.MIN_SOCKET_PX`, *too
+  small in the picture to read*, is unread from that angle, whatever another
+  angle says.
+
+**Combining many of one.** A combination is `derived`: a rule over the angles'
+observations, naming each one it took. Angles that did not read take no part.
+
+- **A number** (a knob's position, a fader's, a size). The angles are weighed by
+  how well each sees the subject, and the estimate is shown with its spread
+  across them. Angles that differ by more than the reader is measured to get
+  wrong for that kind of control (`apothecary rig check`'s error per kind) are a
+  disagreement between angles: each is shown with its view, none is averaged
+  in, and the disagreement is a delta like any other. *Decided:* past the
+  reader's measured error, angles are a disagreement and never an average.
+  *Proposed:* the weight is pixels per millimetre times the reader's
+  confidence, and the tolerance is the worst error `rig check` measures for the
+  kind (*Open*, 12).
+- **A word** (`plugged`, a switch's side, a colour's name). The angles agree, or
+  they disagree. *Decided:* there is no vote. Two angles that see a plug and one
+  that sees an empty hole are a disagreement, not a majority, since a majority
+  is an average of words.
+
+**How independent the angles are.** Several angles through one reader are one
+kind of evidence. They share the reader's blind spots, the room's light and the
+moment: a plug the reader takes for a hole under a stage's light, it takes for a
+hole from every angle. So the view says *seen from two angles*, which is weaker
+than *seen two ways* (a port and a picture). *Decided:* angles never count as
+two kinds toward the agreement that clears a delta or sets a level. What a
+second angle changes is whether the one kind read the subject at all, and how
+tightly.
+
+**Hidden, not absent.** A subject a player's hand or body blocks from one camera
+is unread from that angle and read from another. Its state comes from the angles
+that read it, and an angle that did not read it never makes it absent. With
+every angle unread, the subject is unread, and its last value is *last known
+at*. A blocking hand the reader cannot tell from a value (a hand over a socket
+reads as a plug) is the case two angles catch, as a disagreement between them;
+telling a hidden face before reading it is later (*Open*, 15).
+
+**One moment across cameras.** Cameras are not synchronised: each device keeps
+frames on its own clock and cadence. There are two ways to one moment:
+
+- **A frame set**: the cameras are triggered together. The page holds every Live
+  camera, so when it keeps a frame for a poll it keeps one from each, under the
+  poll's id, and the set is one moment by construction. This is the default
+  wherever one page holds the cameras.
+- **A pairing window**, for frames not kept together. Frames within the window
+  are one moment, and the gap is shown. The window is no wider than the time in
+  which the property is seen to change (a knob between two of the follower's
+  frames, a lead between two polls) and than the slowest camera's interval;
+  frames further apart are each their own moment, and the state is carried
+  between them (*Open*, 13).
+
+**Size without a stated scale** (later). Two cameras with calibrated poses can
+triangulate a point both see, which gives millimetres without a stated
+reference: a third source of scale, beside a reference a person states and a
+marker of known size. The image-models plan holds that a size without a scale is
+a fraction of the picture and says so
+(`docs/plans/image-models-through-qmcp-2026-10-30.md`, on
+`claude/image-models-qmcp-e257c5`); a triangulated size is `derived`, carries
+both poses and their calibration as its evidence, and is no better than the
+calibration, which is measured before it is trusted (*Open*, 16).
+
+**Tested before it is trusted.** `rig/simulated.py` draws a rig through one
+pinhole from `EYE`. The test draws the same rig at the same values from two eye
+positions (`scene` given a second eye, the faces pinned for each), reads both,
+and holds three things:
+
+- the combined value is no worse than the best single angle, kind by kind,
+  across the drawn pictures, by `measure`'s mean and worst error;
+- a disagreement between angles is surfaced: one angle's picture is altered (a
+  plug drawn in one view only, a pointer turned in one) and the result is a
+  disagreement, not a value between the two;
+- a hidden angle never makes a subject absent: a patch drawn over a socket, or
+  over a whole face, in one view leaves the state to the other view; drawn over
+  both, the subject is unread.
+
+Each is seen to fail first: a combination that averages across angles fails the
+second, and one that reads a covered socket as empty fails the third. Drawn
+pictures prove the plumbing and not the eyes, so each angle's own error on real
+frames is measured on the first photographs from two cameras, as the Uno's
+sockets are measured from one.
 
 ### Time
 
@@ -332,6 +454,7 @@ parts:
 | `vision/cameras.py`: pose, lens, `lands` | Where a camera stands and where its centre ray lands | Which subjects each camera can see; several cameras on one place |
 | `rig/look.py`: `Seen`; `rig/reading.py`: faces, `held` | Each control and socket read off a picture, with why one was not | `read` observations, unread kept as unread, a face as a link |
 | `rig/concert.py`: frames in order, leads carried, `readings.jsonl` | A rig followed through time, a plug moved only when the pairing is unique | The state-carrying rule and the pairing rule, made general |
+| `rig/simulated.py`: a rig drawn through one pinhole; `rig check`'s error per kind | The reader measured on pictures whose every answer is known, from one eye | The two-angle test, and the tolerance past which angles disagree |
 | `gathering/judgement.py` | A person's word wins, carries and scores; two people who disagree are refused | The precedence of a person's word, for every subject |
 | `console_feedback.py`: `ConsoleState` | A console's levels, received on the local network | A sensor stream of the same shape, for a theatre |
 | `airgap_metrics.py`: `airgap/metrics/1` | The Airgap panel's prediction, as a document a view reads | An expectation beside the test rig's readings |
@@ -384,6 +507,14 @@ step, stacked.
    or a camera knocked aside. The view names those and decides none. This is
    arithmetic, not a model; changing light is its known weakness, and it is
    measured on the Ender's own frames before any threshold is trusted.
+5. **A second camera.** Where it stands decides what it adds. On another face,
+   one on the bed and nozzle beside one on the mainboard's edge, it adds
+   subjects and covers the gantry from a second side. On the same face, two
+   cameras on the mainboard's edge, it adds a second angle on the same socket,
+   and that is where combining many of one is first tried on real frames: the
+   lead read from both, a hand in front of one, each angle's error measured.
+   The page keeps a frame set at each poll, one frame from each Live camera
+   (*Open*, 14).
 
 After step 4 the four questions have answers for one printer: `printer_1`, its
 mainboard and its lead are here; it is printing, at these temperatures, and seen
@@ -401,15 +532,24 @@ Each follows once the one before it reads real evidence.
   observations of the rig's modules, the follower's carried leads the derived
   state, and the hub's cues events (the concert plan's slice 5). A setlist is a
   directive: each song's expected values beside the readings. Two cameras on
-  one rig, each with its own setup: a control both see is seen both ways, and
-  one a player stands in front of is unread in one camera and read in the
-  other, never absent.
+  one rig, each with its own setup pinning the faces it sees, kept as a frame
+  set where one page holds both, or paired within a window where each writes
+  its own folder. A knob both see is combined with its spread and *seen from two
+  angles*; one a player stands in front of is unread in one camera and read in
+  the other, never absent; a fader the two read further apart than `rig check`'s
+  error for faders is a disagreement between angles, both shown. The simulated
+  concert is drawn from both eyes first, as *Tested before it is trusted* has
+  it.
 - **The airgap's test rig.** Three origins for one property: the Airgap panel's
   prediction (`airgap/metrics/1`), the dials and gauges read off a picture, and a
   board on the rig reporting over serial. A board's readings need a line format
   for sensors, which is a seam of its own (*Open*, 9).
 - **A server room.** Racks are faces, patch panels are sockets, a camera looks
-  along each row, and the room as drawn is the expectation. What a switch says
+  along each row, and the room as drawn is the expectation. A row seen from both
+  ends is many of one at its plainest: a port far down the row is too small in
+  the picture to read from the near end and read from the far one, so each port's
+  state comes from the angle that sees it, and a port both read is combined or
+  is a disagreement between them. What a switch says
   of its own ports arrives over the network, which the stays-local guard
   refuses; until a record allows it, the room is known by camera and by what a
   person states.
@@ -422,10 +562,12 @@ Drafted when its slice is built, in `governance/qm/adr/` on
 - **A project record for the evidence model**: the observation's fields, the
   origin kinds, unread as no value, identity before attribution, a pairing only
   when unique, a person's word over a guess, a guess never raising a level on
-  its own, every rendered line naming its observations. It tightens the org
-  records above. Its teeth are tests, each seen to fail: a renderer handed an
-  observation with no evidence refuses it; a guess alone yields `none`; two
-  links for one name attribute nothing.
+  its own, every rendered line naming its observations, and many of one: each
+  angle its own observation, angles past the reader's error a disagreement, no
+  vote, angles one kind of evidence. It tightens the org records above. Its
+  teeth are tests, each seen to fail: a renderer handed an observation with no
+  evidence refuses it; a guess alone yields `none`; two links for one name
+  attribute nothing; the two-angle test's three holds.
 - **An amendment to *Personal data stays on the device*** (qm#121, open). §6
   names the log, the links, and a person's goals and directives in the state
   folder, and the frames' retention; §1 names the new package as an install
@@ -472,6 +614,24 @@ Drafted when its slice is built, in `governance/qm/adr/` on
    the hello's own form extended.
 10. **Names**: `apothecary/evidence/` for the package and `apothecary.evidence`
     for the document, *Working space* for the window.
+11. **How two cameras' poses are calibrated**, so that a region no face covers
+    can be paired across them: each camera placed in the site by hand, a marker
+    both see, or a person linking each pair.
+12. **How angles are weighed for a number, and how far apart they may be.**
+    Proposed: pixels per millimetre on the face times the reader's confidence;
+    past the worst error `rig check` measures for the kind, a disagreement.
+    Whether the tolerance is that worst error or a multiple of the mean.
+13. **The pairing window for cameras not triggered together.** Proposed: a
+    frame set wherever one page holds the cameras; otherwise no wider than the
+    property's time to change and the slowest camera's interval.
+14. **Where the Ender's second camera goes**: on another face, adding subjects,
+    or on the mainboard's edge beside the first, adding an angle.
+15. **Telling a hidden face before reading it**, from the face's own look, so a
+    hand over a socket is unread rather than a plug; until then, a second angle
+    catches it as a disagreement.
+16. **Triangulation as a source of scale**, from two calibrated cameras, beside
+    a stated reference and a marker of known size; later, once poses are
+    calibrated and measured.
 
 ## Decided
 
@@ -480,3 +640,10 @@ Drafted when its slice is built, in `governance/qm/adr/` on
   readings into one view is queued, planned and not built. Its first slice ties
   the Ender's camera to its polls. The image models through qmcp are an
   always-optional source, planned on their own.
+- **2026-10-30:** the layer plans for one thing measured many times at once,
+  above all one subject seen from several camera angles. Each angle is its own
+  observation, carrying how well its camera sees the subject. A number is
+  combined with its spread and a word is agreed or not, never voted. Angles that
+  differ beyond the reader's measured error are a disagreement, never an
+  average. Several angles through one reader are one kind of evidence. An angle
+  that does not see a subject never makes it absent.
