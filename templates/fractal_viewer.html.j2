@@ -966,6 +966,8 @@
         // the editor's target key, so a reload offers it back; and its recent applies.
         const KEPT_PREFIX = 'apothecary.work:';
         const HISTORY_PREFIX = 'apothecary.applies:';
+        // Which drawn variant this tab saved under which name, by part (noteSaved).
+        const SAVED_AS_KEY = 'apothecary.savedAs';
         // Measured and declared differ when they are this far apart (mm), and a part
         // stands below the floor when it reaches this far under it.
         const DIFFERS_MM = 0.01;
@@ -1290,6 +1292,8 @@
                 this.variantByPart = {};
                 this.variantRecords = {};
                 this.variantsRead = this.readVariantsFromAddress();
+                // part name -> { name, variant }: the variant drawn when it was saved as `name`.
+                this.savedAs = (() => { try { return JSON.parse(sessionStorage.getItem(SAVED_AS_KEY)) || {}; } catch (e) { return {}; } })();
                 this.partSection = null;   // the Selected panel's section for the part being edited
                 this.checklistRead = 0;    // the newest read of a part's checklist: an older answer is let go
                 // The SCAD editor (widgets/scad_editor.js), for the part being edited: what
@@ -2511,23 +2515,51 @@
             // the badge layer, so it is the same size at any framing and seen at a
             // glance without selecting the part, where an edge's colour is a pixel
             // wide. It stands on the top of the part's mesh, and goes when the mesh
-            // does or is the saved part again.
+            // does or is the saved part again. Its words name the variant saved in git
+            // that it is drawn from, when it is one (savedName).
             markVariant(key, node, variant) {
                 const mark = `variant:${key}`;
                 if (!variant) { this.anchors.remove(mark); return; }
-                if (this.anchors.has(mark)) return;
-                const top = () => {
-                    const mesh = this.meshByName[key];
-                    if (!mesh || !mesh.userData.drawnFromVariant) return null;
-                    const g = mesh.geometry;
-                    if (!g.boundingBox) g.computeBoundingBox();
-                    const b = g.boundingBox;
-                    return mesh.localToWorld(new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2));
-                };
-                const el = this.anchors.badge(mark, top, { className: 'variant-mark', ignore: (m) => m === this.meshByName[key] });
-                el.dataset.part = node.part_ref;
-                el.dataset.path = key;
-                this.anchors.say(mark, { icon: '', words: `${esc(node.part_ref)}: an applied variant, not saved` });
+                if (!this.anchors.has(mark)) {
+                    const top = () => {
+                        const mesh = this.meshByName[key];
+                        if (!mesh || !mesh.userData.drawnFromVariant) return null;
+                        const g = mesh.geometry;
+                        if (!g.boundingBox) g.computeBoundingBox();
+                        const b = g.boundingBox;
+                        return mesh.localToWorld(new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2));
+                    };
+                    const el = this.anchors.badge(mark, top, { className: 'variant-mark', ignore: (m) => m === this.meshByName[key] });
+                    el.dataset.part = node.part_ref;
+                    el.dataset.path = key;
+                }
+                this.anchors.say(mark, { icon: '', words: `${esc(node.part_ref)}: ${esc(this.drawnAs(node.part_ref))}` });
+            }
+
+            // What a part drawn from a variant is drawn from, in a few words.
+            drawnAs(ref) {
+                const saved = this.savedName(ref);
+                return saved ? `${saved}, saved in git` : 'an applied variant, not saved';
+            }
+
+            // The name a part's drawn variant was saved under in this tab, or null.
+            savedName(ref) {
+                const s = this.savedAs[ref];
+                return s && s.variant === this.variantByPart[ref] ? s.name : null;
+            }
+
+            // Saved as `name`, or a saved variant drawn: when what is drawn is what was
+            // saved (its text, and its numbers staged), its mark and Selected name it while
+            // it is drawn from it; a name saved over something else is let go.
+            noteSaved(target, name, text) {
+                const ref = target.part, drawn = this.variantByPart[ref];
+                const scad = this.scadStages[target.key], stage = this.partStages[target.key];
+                const numbers = !stage || stage.tied || (stage.history?.[0]?.variant === drawn
+                    && JSON.stringify(stage.history[0].params) === JSON.stringify(stage.staged ?? {}));
+                if (drawn && scad?.drawnText === text && numbers) this.savedAs[ref] = { name, variant: drawn };
+                else if (this.savedAs[ref]?.name === name) delete this.savedAs[ref];
+                try { sessionStorage.setItem(SAVED_AS_KEY, JSON.stringify(this.savedAs)); } catch (e) { /* named until the tab is left */ }
+                this.showDrawn(ref);
             }
 
             isWall(node) { return !!node && node.category === WALL_CATEGORY; }
@@ -4946,7 +4978,7 @@
                 const variant = Boolean(this.variantByPart[ref]);
                 section.classList.toggle('drawn-from-variant', variant);
                 const el = section.querySelector('#part-drawn');
-                if (el) el.textContent = variant ? 'an applied variant, not saved' : '';
+                if (el) el.textContent = variant ? this.drawnAs(ref) : '';
                 this.markEnvelope();
             }
 
@@ -6143,6 +6175,7 @@
                 editor.setName(name);
                 this.keepWork(target, { now: true });
                 await this.loadSavedVariants(target, name);
+                this.noteSaved(target, name, asked.text);
                 // How the variant becomes the part's source is the editor's to say; the
                 // status line says what was saved and what comes next.
                 const merging = body.merge?.advice ?? `git merge ${body.ref} makes it the part's source`;
@@ -6195,6 +6228,7 @@
                 scad.checking = this.checkScad(target, seq).catch(() => null);
                 await this.loadSavedVariants(target, name);
                 await this.renderScad(target, seq);
+                this.noteSaved(target, name, scad.text);
                 const said = stage?.tied
                     ? `${target.part}: the variant ${name} is drawn, its ${overlay ? 'overlay' : 'SCAD'} in the editor with its values in it, the controls on them; Save keeps a change to it`
                     : overlay
