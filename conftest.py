@@ -71,7 +71,28 @@ CEILING = pytest.StashKey[int | None]()
 STDERR = pytest.StashKey[int]()
 
 
+def open_files_to_the_hard_limit() -> None:
+    """A browser run holds more than 1024 files open -- Chromium's processes, a fake
+    camera's buffers, the test server -- and a service manager's soft limit is often
+    1024 (a user systemd unit's is): past it Chromium's IPC fails and a page call never
+    returns, until a phase's bound ends the run. The soft limit is raised to the hard
+    one, for this run and what it starts; where it cannot be, it is left."""
+    try:
+        import resource
+    except ImportError:  # no rlimits on Windows
+        return
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    want = hard if hard != resource.RLIM_INFINITY else 1 << 20
+    if soft == resource.RLIM_INFINITY or soft >= want:
+        return
+    try:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (want, hard))
+    except (ValueError, OSError):
+        pass
+
+
 def pytest_configure(config):
+    open_files_to_the_hard_limit()
     known = json.loads(DURATIONS.read_text()) if DURATIONS.exists() else {}
     config.stash[CEILING] = ceiling(known)
     # stderr as it is before any test captures it, for a phase's stack.

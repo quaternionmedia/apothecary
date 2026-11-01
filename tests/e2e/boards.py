@@ -22,6 +22,22 @@ RUST = "esp32_blink@rust-esp32"
 LAYERS, DWELL = "15", "60"
 
 
+# A node's board badge standing in the world: drawn on its own, or merged into a count with
+# the badges close to it, as the overview shows it once a picture mark stands beside it.
+WORN = """(node) => { const el = document.querySelector(`.world-badge[data-path='${node}']`);
+    return Boolean(el) && !el.hidden && (el.classList.contains("merged") || el.checkVisibility()); }"""
+
+
+def worn(page, node: str = NODE) -> bool:
+    """Whether the node wears its board's badge, on its own or in a count."""
+    return page.evaluate(WORN, node)
+
+
+def wears(page, node: str = NODE, timeout: int = 15000) -> None:
+    """Wait until the node wears its board's badge, on its own or in a count."""
+    page.wait_for_function(WORN, arg=node, timeout=timeout)
+
+
 def ended(where, title: str, timeout: int = 15000) -> None:
     """The task log says the task of this title succeeded."""
     expect(where.locator(".task-title")).to_contain_text(title, timeout=timeout)

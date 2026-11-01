@@ -164,12 +164,16 @@ Every result carries a confidence: the contrast it was read on.
    onto the camera's picture, the first guess from the site's camera pose, the
    setup kept in the state folder like a camera's record.
 4. **Real photographs, starting simple.** The first photographs are not of a
-   synth. They are of one board with the leads every board has: power and USB.
-   The rig is `examples/rigs/uno-power-and-usb.json`, an Uno with a supply's
-   lead in its barrel jack and a USB lead to the computer; apothecary's Uno
-   entry lays the two sockets out on the edge they share, and `rig check --rig`
-   measures the reader on drawn pictures of it. Then:
-   - photograph that edge with each lead in and out, the camera fixed;
+   synth. They are of one board with the leads every board has, power and USB:
+   the Ender's mainboard, through the camera aimed at the Ender ([the bench
+   plan](qm-family-carlos-2026-10-29.md#next-a-camera-on-the-ender)), its power
+   inlet and USB socket laid out on the faces that camera sees once its pictures
+   show them. The Uno is the rehearsal: `examples/rigs/uno-power-and-usb.json`
+   is an Uno with a supply's lead in its barrel jack and a USB lead to the
+   computer, apothecary's Uno entry lays the two sockets out on the edge they
+   share, and `rig check --rig` measures the reader on drawn pictures of it.
+   Then, for the mainboard:
+   - photograph its sockets with each lead in and out, the camera fixed;
    - pin the edge once with `rig setup --picture`;
    - read each photograph with `rig read`, and write down which leads were in;
    - record what was read against what was there in `docs/validation/`.
@@ -191,9 +195,6 @@ Every result carries a confidence: the contrast it was read on.
 These defaults were chosen when slice 1 was built. Each one is a default, not a
 decision the owner has made yet.
 
-- **The rig:** carlos's `moog.subharmonicon.complex` example. The Subharmonicon
-  clocks the DFAM, and the DFAM returns through its VCA to a Qu-24 seen from
-  the back. Two synths face the camera, and the desk is behind them.
 - **What a concert is:** a folder of frames, in time order by name. The record
   is `readings.jsonl` beside them.
 - **Where the frames come from:** anything that writes pictures into a folder,
@@ -216,14 +217,14 @@ decision the owner has made yet.
   the picture to read is said so (`look.MIN_SOCKET_PX`), since below it drawn
   sockets were read wrong as surely as large ones were read right; each socket
   is sent its state; a plug moved is followed (*The seam*).
-
-## Open
-
-- Which board the first photographs are of. The Uno is prepared because its
-  power and USB sockets share an edge one camera sees; another board's entry
-  would need its sockets laid out the same way.
-- Which synths the owner's real rig has, for the second half of slice 4.
-  Nothing about the eyes is known until real photographs are read.
+- **2026-10-31:** the first real photographs are of the Ender's mainboard, its
+  power and USB leads, through the camera aimed at the Ender, and wait for that
+  camera; the Uno's drawn pictures stay the rehearsal.
+- **2026-10-31:** the owner's rig is the DFAM and the Subharmonicon, carlos's
+  `moog.subharmonicon.complex` example: the Subharmonicon clocks the DFAM, and
+  the DFAM returns through its VCA to a Qu-24 seen from the back. Two synths
+  face the camera, and the desk is behind them. Its photographs follow the
+  mainboard's; nothing about the eyes is known until real photographs are read.
 
 ## After the concert
 

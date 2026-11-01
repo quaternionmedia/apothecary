@@ -254,6 +254,10 @@ def _settled_render(page: Page) -> None:
 
 def _saved(page: Page, name: str) -> None:
     expect(_status(page)).to_contain_text(f"{PART} saved as the variant {name}", timeout=20000)
+    # Drawn from what it saved: the amber mark over it and Selected name the variant.
+    mark = page.locator(f".world-badge.variant-mark[data-part='{PART}'] .badge-words")
+    expect(mark).to_have_text(f"{PART}: {name}, saved in git")
+    expect(page.locator("#part-drawn")).to_have_text(f"{name}, saved in git")
     # Listed in Variants (a tab of the Part view, in front or not), and in the editor.
     expect(page.locator(f"#part-saved .saved-variant[data-variant='{name}']")).to_be_attached()
     expect(

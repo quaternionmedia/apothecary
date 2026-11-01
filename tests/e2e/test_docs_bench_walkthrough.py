@@ -575,7 +575,8 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
         "before any name is looked up. The "
         "server answers this machine alone; a page from anywhere else asking it "
         "for a site's cameras and pictures gets a refusal, not the list. Neither is "
-        "a setting.",
+        "a setting. Backups are the person's, not the program's: apothecary keeps no "
+        "copy of anything anywhere else.",
         shown=(
             f"{refused.value}\n\n"
             f"Origin: http://elsewhere.test -> {elsewhere.status} {elsewhere.text()}"
