@@ -14,7 +14,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from ..evidence.observation import Observation, Origin, Region, Sighting, now
+from ..evidence.observation import Observation, Origin, Region, Sighting, model_key, now
 from ..evidence.words import COLOUR_UNIT, COLOURS, MATERIAL_UNIT, MATERIALS
 from . import qmcp, switches
 
@@ -98,7 +98,7 @@ def ask_about(
         else:
             said.append(f"{READER} is switched off")
     status = qmcp.status()
-    origins = [f"qmcp/{m.get('name')}@{m.get('version')}" for m in status["models"]]
+    origins = [model_key(m.get("name"), m.get("version")) for m in status["models"]]
     off = [m for m in origins if not switches.is_on(m)]
     if origins and len(off) == len(origins):
         said.append("every model is switched off: qmcp was not asked")

@@ -22,6 +22,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..evidence.observation import model_key
 from ..finders import kept, qmcp, switches
 
 router = APIRouter()
@@ -56,7 +57,7 @@ def vision_status():
         }
     ]
     for model in status["models"]:
-        origin = f"qmcp/{model.get('name')}@{model.get('version')}"
+        origin = model_key(model.get("name"), model.get("version"))
         origins.append(
             {
                 "origin": origin,
