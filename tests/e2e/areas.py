@@ -197,6 +197,15 @@ AREAS = {
         ),
         "tests": ("test_working_space.py",),
     },
+    "models": {
+        "sources": (
+            "apothecary/finders/*",
+            "apothecary/routes/vision.py",
+            "apothecary/cli/vision.py",
+            "apothecary/static/widgets/models.*",
+        ),
+        "tests": ("test_models_window.py",),
+    },
 }
 
 
