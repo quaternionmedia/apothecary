@@ -13,6 +13,7 @@ board that says no board (the devkit, on /dev/ttyFAKE2).
 from __future__ import annotations
 
 import pytest
+from boards import ARDUINO, DEVKIT, NODE
 from boards import ended as _ended
 from firmware_helpers import write_fake_arduino_cli
 from garage import open_garage
@@ -25,9 +26,6 @@ from windows import BENCH
 PIECE = "footpedal"
 UNO = "/dev/ttyFAKE0"
 SKETCH = "footpedal@arduino"
-BLINKER = "esp32_blink"
-DEVKIT = "/dev/ttyFAKE2"
-BLINK = "esp32_blink@arduino"
 
 
 @pytest.fixture(scope="module")
@@ -85,20 +83,20 @@ def test_a_port_that_says_no_board_is_not_named_as_the_sketchs(page: Page, url: 
     page.on("dialog", lambda dialog: dialog.accept())
     open_garage(page, url, settle=False)
     page.wait_for_function("() => window.fractalViewer.bindingsLoaded")
-    _ring_on(page, BLINKER)
+    _ring_on(page, NODE)
     _choose(page, "Flash sketch")
 
     bench = page.locator(BENCH)
-    expect(bench.locator(".sketch-select")).to_have_value(BLINK, timeout=10000)
+    expect(bench.locator(".sketch-select")).to_have_value(ARDUINO, timeout=10000)
     status = page.locator("#status")
     expect(status).to_contain_text(
-        f"The Bench, {BLINK} chosen: no port is known to be its board's; choose it"
+        f"The Bench, {ARDUINO} chosen: no port is known to be its board's; choose it"
     )
 
     bench.locator(".port-select").select_option(DEVKIT)
     bench.locator(".upload-btn").click()
-    _ended(bench, f"Upload {BLINK}")
+    _ended(bench, f"Upload {ARDUINO}")
     expect(status).to_contain_text(
-        f"{BLINK} flashed to {DEVKIT}: {BLINKER}'s ring, Device › Query hears its hello",
+        f"{ARDUINO} flashed to {DEVKIT}: {NODE}'s ring, Device › Query hears its hello",
         timeout=15000,
     )
