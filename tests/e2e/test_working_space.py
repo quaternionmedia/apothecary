@@ -253,7 +253,9 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
     window.locator(f".ws-camera-row[data-camera='{names[0]}'] .ws-frame").last.click()
     opened = window.locator(".ws-evidence")
     expect(opened.locator("img.ws-frame-large")).to_be_visible()
-    opened.get_by_role("link", name="the poll it rests on").click()
+    link = opened.get_by_role("link", name="the poll it rests on")
+    expect(link).to_have_css("color", "rgb(74, 158, 255)")  # the page's link blue
+    link.click()
     expect(opened.locator("pre")).to_contain_text("ok T:")
     expect(opened.locator("pre")).to_contain_text("SD printing byte")
     story.shows(

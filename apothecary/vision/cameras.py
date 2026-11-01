@@ -392,8 +392,10 @@ def starting_pose(site_name: str, site: Assembly, host: str) -> Pose:
 
 
 # How far a camera added where another stands steps aside: its body's width and a
-# hand's breadth, so the two stand clear of each other.
+# hand's breadth along x, its depth and a hand's breadth along y to the next row, so
+# the two stand clear of each other.
 BESIDE = BODY[0] + 30.0
+BESIDE_ROW = BODY[1] + 30.0
 
 
 def _placed(pose: Pose) -> Tuple[Tuple[float, ...], Tuple[float, ...]]:
@@ -409,19 +411,45 @@ def _clear(a, b) -> bool:
     return any(a[1][k] <= b[0][k] or b[1][k] <= a[0][k] for k in range(3))
 
 
-def beside(pose: Pose, others: Sequence[Pose]) -> Pose:
-    """``pose``, or the nearest place along x clear of every camera in ``others`` --
-    a step to one side, then the other, then two -- so a second Add here at one place
-    stands beside the first rather than in it, and still looks at what it is above."""
+def _steps(n: int) -> List[int]:
+    """None, then one side and the other, a step further each time: 0, 1, -1, 2, -2..."""
+    return [((k + 1) // 2) * (1 if k % 2 else -1) for k in range(n)]
+
+
+def beside(pose: Pose, others: Sequence[Pose], stays: Callable[[Pose], bool]) -> Pose:
+    """``pose``, or the nearest place clear of every camera in ``others`` that still
+    ``stays`` over its place: a step along x to one side, then the other, then two,
+    and once x runs out the same a row along y. So a second Add here at one place
+    stands beside the first rather than in it, and the next few fill the place's top
+    in rows; with no room left over it, the nearest clear place along x, outside it."""
     taken = [_placed(o) for o in others]
-    for k in range(0, 2 * len(others) + 1):
-        dx = BESIDE * ((k + 1) // 2) * (1 if k % 2 else -1)
-        moved = pose.model_copy(
-            update={"position": pose.position.model_copy(update={"x": pose.position.x + dx})}
+    steps = _steps(2 * len(others) + 1)
+
+    def at(dx: float, dy: float) -> Pose:
+        p = pose.position
+        return pose.model_copy(
+            update={"position": p.model_copy(update={"x": p.x + dx, "y": p.y + dy})}
         )
-        if all(_clear(_placed(moved), box) for box in taken):
+
+    def clear(moved: Pose) -> bool:
+        return all(_clear(_placed(moved), box) for box in taken)
+
+    for row in steps:
+        for k in steps:
+            moved = at(BESIDE * k, BESIDE_ROW * row)
+            if clear(moved) and stays(moved):
+                return moved
+    for k in steps:
+        if clear(moved := at(BESIDE * k, 0.0)):
             return moved
     return pose
+
+
+def over(site_name: str, site: Assembly, host: str, pose: Pose) -> bool:
+    """Whether a camera at ``pose`` lands its picture on ``host``'s top (``""``, the
+    floor): one of the cameras of that place."""
+    hit = lands(site_name, site, pose)
+    return hit is not None and hit.name == host
 
 
 def add_here(site_name: str, site: Assembly, host: str) -> Camera:
@@ -431,7 +459,11 @@ def add_here(site_name: str, site: Assembly, host: str) -> Camera:
     start = starting_pose(site_name, site, host)
     with _LOCK:
         cameras = _load()
-        pose = beside(start, [c.pose for c in cameras if c.site == site_name])
+        pose = beside(
+            start,
+            [c.pose for c in cameras if c.site == site_name],
+            lambda moved: over(site_name, site, host, moved),
+        )
         camera = Camera(
             site=site_name,
             name=_free_name(site_name, site),
@@ -582,6 +614,7 @@ __all__ = [
     "lands",
     "names",
     "node",
+    "over",
     "record",
     "records",
     "remove",

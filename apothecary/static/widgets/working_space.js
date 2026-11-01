@@ -323,7 +323,10 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
             const answer = await api(`${siteUrl()}/cameras`, { method: "POST", body: JSON.stringify({ host: state.path }) });
             if (applySite && answer.site) await applySite(answer.site);
             await rewatch();
-            say(`added ${answer.camera.name} above ${state.path}, looking straight down: choose its device in its row`);
+            const cam = answer.camera;
+            say(cam.lands && cam.lands.host === state.path
+                ? `added ${cam.name} above ${state.path}, looking straight down: choose its device in its row`
+                : `added ${cam.name} outside ${state.path}: no room is left above it, so it is not one of ${state.path}'s cameras`);
             return;
         }
         if (what === "permit") {
