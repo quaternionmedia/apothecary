@@ -225,7 +225,10 @@ What the tie still needs, once the camera's pictures show what it sees:
    by its port answering, and could be seen in the picture as well; the lead's
    state in carlos says both, and which disagree.
 
-Which of these comes first is the owner's to say once the camera is up.
+Which of these comes first is the owner's to say once the camera is up. The
+concert plan's first real photographs are of this mainboard's power and USB
+leads ([its slice 4](carlos-concert-rig-2026-10-29.md#the-path)), so the faces
+laid out serve both.
 
 ## After carlos
 

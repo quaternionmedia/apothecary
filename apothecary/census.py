@@ -1058,6 +1058,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "going to the piece inside that holds the board",
     ),
     "devRescan:click:rescanDevices": (WIDGET, WHAT_YOU_SEE, "looking for boards again"),
+    "devFlashSketch:click:flashSketchOf": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "opening the Bench on the piece's own sketch",
+    ),
     "devPinManual:click:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board"),
     "manualIn:keydown:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board, by Enter"),
     # the page reacting to itself

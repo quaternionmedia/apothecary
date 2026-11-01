@@ -123,8 +123,9 @@ a view rebuilds every piece made from it whose sides no person stated.
 - **Rebuild** builds the site again from its factory, and its made pieces go.
 
 Views and made pieces are kept in the server's memory and are gone after a
-restart; whether they may be kept in the state folder waits on what the draft
-record *Personal data stays on the device* counts as this machine. Nothing
+restart; whether they may be kept in the state folder waits on the draft
+record *Personal data stays on the device*, which counts the one machine as
+the device, being ratified. Nothing
 picture-shaped is stored in the browser, its HTTP cache included.
 
 ## From the command line

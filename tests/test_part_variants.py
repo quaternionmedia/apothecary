@@ -135,6 +135,17 @@ class TestTheKey:
         after_scad = variant_key(part, {}, renderer)
         assert len({before, after_include, after_scad}) == 3
 
+    def test_a_file_rewritten_at_its_size_within_one_tick_is_read_again(self, tmp_path):
+        """A rewrite at the same size within the filesystem clock's tick keeps the
+        file's size and mtime: its digest is read again, not the one from before."""
+        dims = tmp_path / "dims.scad"
+        dims.write_text("depth = 20;\n")
+        first = variants._file_digest(dims)
+        stamp = dims.stat().st_mtime_ns
+        dims.write_text("depth = 25;\n")
+        os.utime(dims, ns=(stamp, stamp))
+        assert variants._file_digest(dims) != first
+
     def test_the_openscad_and_its_backend_are_in_it(self, tmp_path, openscad, monkeypatch):
         old = OpenSCADRenderer(str(openscad(version="2021.01")))
         new = OpenSCADRenderer(str(openscad(version="2026.09.27")))
