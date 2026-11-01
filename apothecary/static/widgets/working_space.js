@@ -29,7 +29,9 @@
  *     chooseDevice and the cameras this browser has (state.cameras);
  *   siteName(): the site shown; applySite(site): the world drawn again, a camera
  *     added; log(text, kind): the status bar, "bad" a refusal.
- * Answers { open(path), close(), refresh(), subject(), next() }.
+ * Answers { open(path), close(), shown(), refresh(), subject(), next() }. Closed,
+ * it holds no printer and keeps nothing, and shown() opens it on the site again;
+ * an open() overtaken by a later one, or by close(), stops where it is.
  */
 
 const KEEP_EVERY = 0.05;        // a frame set at every 5 % of progress
@@ -67,6 +69,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
     const state = {
         path: null, watch: null, refused: null, printers: [], doc: null, last: null, next: "",
         kept: { at: 0, state: null, step: null, cameras: "" }, timer: null, unwatch: null, keeping: false,
+        turn: 0, closed: false,
     };
 
     async function api(path, opts = {}) {
@@ -100,9 +103,10 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
         if (state.keeping || !state.watch || !st || !st.poll || (!asked && !due(st, now))) return null;
         state.keeping = true;
         state.kept = { at: now, state: st.state, step: st.sd_progress == null ? null : Math.floor(st.sd_progress / KEEP_EVERY), cameras: cameras() };
-        const kept = [], refused = [];
+        const kept = [], refused = [], turn = state.turn;
         try {
             for (const cam of ready()) {
+                if (turn !== state.turn) break;  // closed, or opened on another, mid-set
                 try {
                     const blob = await pictures.frameOf(cam.name);
                     const params = new URLSearchParams({ name: cam.name, site: site(), camera: cam.name, poll: st.poll });
@@ -111,6 +115,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
                 } catch (e) { refused.push(`${cam.name}: ${e.message}`); }
             }
         } finally { state.keeping = false; }
+        if (turn !== state.turn) return { kept, refused };  // the window has moved on: not its line
         if (kept.length || refused.length) {
             const did = kept.length ? `a frame from ${kept.join(", ")} kept with the poll at ${hhmm(st.polled_at)}: click one to see it beside the poll's lines` : "no frame kept";
             say(`${state.path} ${st.state}: ${did}${refused.length ? ` -- ${refused.join("; ")}` : ""}`, refused.length && !kept.length ? "bad" : "");
@@ -377,34 +382,46 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
     }
     // What the printer is watched with, asked again: a camera added, a device chosen.
     async function rewatch() {
-        state.watch = await api(printerUrl(state.path));
+        const turn = state.turn;
+        const watch = await api(printerUrl(state.path));
+        if (turn !== state.turn) return;
+        state.watch = watch;
         await refresh();
     }
+    // Stopped, it holds no printer: a poll another window asks for keeps nothing here.
     function stop() {
+        state.turn += 1;
         clearInterval(state.timer); state.timer = null;
         if (state.unwatch) { state.unwatch(); state.unwatch = null; }
+        state.watch = null;
     }
     async function open(path = null) {
         stop();
-        state.path = path; state.watch = null; state.last = null; state.refused = null;
+        const turn = state.turn;
+        state.closed = false;
+        state.path = path; state.last = null; state.refused = null;
         state.kept = { at: 0, state: null, step: null, cameras: "" };
         q(".ws-evidence").innerHTML = "";
         q(".ws-timeline").innerHTML = "";
         render();
         if (path) {
             try {
-                state.watch = await api(printerUrl(path));
-                if (state.watch.port) state.unwatch = boards.watch(state.watch.port, WHO, { kind: "printer", interval: POLL_MS });
-            } catch (e) { state.refused = e.message; }
+                const watch = await api(printerUrl(path));
+                if (turn !== state.turn) return null;
+                state.watch = watch;
+                if (watch.port) state.unwatch = boards.watch(watch.port, WHO, { kind: "printer", interval: POLL_MS });
+            } catch (e) { if (turn === state.turn) state.refused = e.message; }
         }
         await refresh();
+        if (turn !== state.turn) return null;
         state.timer = setInterval(refresh, REFRESH_MS);
         return state.watch;
     }
+    function close() { stop(); state.closed = true; }
 
     return {
-        open, refresh,
-        close: stop,
+        open, close, refresh,
+        shown: () => (state.closed ? open(null) : refresh()),
         subject: () => state.path,
         next: () => state.next,
         destroy() { stop(); window.removeEventListener("apothecary:board", onBoard); },

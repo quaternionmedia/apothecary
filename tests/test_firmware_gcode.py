@@ -684,6 +684,35 @@ def test_frames_kept_with_a_poll_are_its_evidence_under_the_printers_budget(
     assert "1 frame(s) kept" in result.output
 
 
+def test_a_poll_let_go_while_its_frame_is_written_keeps_nothing(
+    fake_arduino_cli, fresh_task_runner, scripted_links, world, monkeypatch
+):
+    """A frame's poll is asked for before the frame is written and again as it is
+    recorded: one the server let go of in between is refused as the first ask refuses
+    it, and the frame written for it is taken away."""
+    from views_helpers import png
+
+    from apothecary.evidence import frames
+
+    c = TestClient(app)
+    camera = c.post("/sites/garage/cameras", json={"host": "printer_1"}).json()["camera"]["name"]
+    monkeypatch.setattr(frames, "holds", lambda site, poll: True)  # held when first asked
+    before = sorted((world / "captures").glob("*"))
+    r = c.post(
+        "/photos/pictures",
+        params={
+            "name": camera,
+            "site": "garage",
+            "camera": camera,
+            "poll": "20261031T000000.000-ttyFAKE1",
+        },
+        content=png(),
+    )
+    assert r.status_code == 409, r.text
+    assert "still holds" in r.json()["detail"]
+    assert sorted((world / "captures").glob("*")) == before
+
+
 def test_sync_skips_nodes_without_status(fake_arduino_cli, scripted_links, garage):
     c = TestClient(app)
     c.put("/sites/garage/nodes/footpedal/device", json={"identity": "/dev/ttyFAKE1"})

@@ -144,16 +144,13 @@ class Collector:
             self._held.clear()
 
     def _due(self, space: str, each: Observation) -> bool:
-        key = (space, each.subject, each.property)
-        last = self._last.get(key)
-        if last is not None:
-            value, held = last
-            again = HEARTBEAT_S if each.property == "present" else REFRESH_S
-            quiet = (each.at - held).total_seconds() < again
-            if quiet and not _moved(each.property, value, each.value):
-                return False
-        self._last[key] = (each.value, each.at)
-        return True
+        last = self._last.get((space, each.subject, each.property))
+        if last is None:
+            return True
+        value, held = last
+        again = HEARTBEAT_S if each.property == "present" else REFRESH_S
+        quiet = (each.at - held).total_seconds() < again
+        return not quiet or _moved(each.property, value, each.value)
 
     def take(self, status: PrinterStatus, pins: List[Pin], identity: str) -> str:
         """The poll's observations written in each space its pins name; its id."""
@@ -177,6 +174,9 @@ class Collector:
                     continue
                 log.append(space, log.POLLS, record, status.polled_at)
                 log.write(space, due)
+                # Taken as said once written: a write that failed is due again.
+                for o in due:
+                    self._last[(space, o.subject, o.property)] = (o.value, o.at)
                 written.add(space)
             self._held[pid] = (record, [space for space, _ in said], written)
             while len(self._held) > HELD_POLLS:

@@ -41,14 +41,22 @@ def frames(folder: Path) -> List[Path]:
 
 
 def taken(path: Path, image) -> str:
-    """When a frame was taken: a PNG's ``taken`` text, a JPEG's EXIF time, else its file's."""
+    """When a frame was taken: a PNG's ``taken`` text, a JPEG's EXIF time, else its
+    file's. One that does not read as a time (a camera with no clock writes
+    ``0000:00:00 00:00:00``) gives way to the next."""
     said = image.info.get("taken")
-    if said:
-        return str(said)
     exif = image.getexif().get_ifd(0x8769).get(EXIF_TAKEN)
-    if exif:
-        return datetime.strptime(str(exif), "%Y:%m:%d %H:%M:%S").isoformat()
+    for text, read_as in ((said, datetime.fromisoformat), (exif, _exif_time)):
+        if text:
+            try:
+                return read_as(str(text)).isoformat()
+            except ValueError:
+                pass
     return datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat()
+
+
+def _exif_time(text: str) -> datetime:
+    return datetime.strptime(text, "%Y:%m:%d %H:%M:%S")
 
 
 def read_frame(setup: Setup, path: Path) -> Reading:

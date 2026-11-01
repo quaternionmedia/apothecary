@@ -220,7 +220,8 @@ def keep_picture(
     recorded as evidence beside that poll, and is not the camera's view. The
     printer's kept frames past its budget are forgotten, the oldest first, and
     named in the answer's ``forgotten``. A poll this server no longer holds is
-    refused before anything is kept.
+    refused before anything is kept, and one let go of while the frame was written
+    is refused as it is recorded, the frame taken away again.
 
     The body is read on the event loop; the write of up to 16 MB runs in the threadpool."""
     suffix = _suffix_by_bytes(data)
@@ -254,11 +255,7 @@ def keep_picture(
             from ..evidence import frames as evidence_frames
 
             if not evidence_frames.holds(site, poll):
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"poll {poll} is not one of {site}'s this server still holds: "
-                    "a frame is kept with a poll it has just answered",
-                )
+                raise _not_held(site, poll)
     elif pinning:
         from .views import check_host
 
@@ -280,7 +277,13 @@ def keep_picture(
 
     store().kept_again(entry["path"])
     if poll is not None:
-        entry["evidence"] = evidence_frames.keep(site, camera, entry["path"], entry["size"], poll)
+        try:
+            entry["evidence"] = evidence_frames.keep(
+                site, camera, entry["path"], entry["size"], poll
+            )
+        except evidence_frames.NotHeld:
+            path.unlink(missing_ok=True)  # let go of while the frame was written
+            raise _not_held(site, poll) from None
         entry["forgotten"] = _over_budget(root, site, entry["evidence"]["subjects"])
         return entry
     if pinning:
@@ -297,6 +300,14 @@ def keep_picture(
             # Kept, and not pinned: the picture is the person's either way.
             entry["view"], entry["not_pinned"] = None, refused.detail
     return entry
+
+
+def _not_held(site: str, poll: str) -> HTTPException:
+    return HTTPException(
+        status_code=409,
+        detail=f"poll {poll} is not one of {site}'s this server still holds: "
+        "a frame is kept with a poll it has just answered",
+    )
 
 
 def _over_budget(root: Path, site: str, subjects: List[str]) -> List[str]:

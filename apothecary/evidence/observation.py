@@ -145,8 +145,13 @@ class Origin(BaseModel):
         if self.by.tool is not None:
             if self.by.name == "qmcp":
                 return "qmcp"
-            return f"qmcp/{self.by.name}@{self.by.version or '?'}"
+            return model_key(self.by.name, self.by.version)
         return self.by.name
+
+
+def model_key(name: str, version: Optional[str]) -> str:
+    """A model's origin through qmcp, as its guesses carry it and qmcp lists it."""
+    return f"qmcp/{name}@{version or '?'}"
 
 
 class Ref(BaseModel):

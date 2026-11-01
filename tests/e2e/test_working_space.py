@@ -36,6 +36,8 @@ CAMERAS = 3
 HELD = "0.42"  # the simulated print held at 42 %, so what it shows is the same each run
 WINDOW = ".working-space"
 FRAMES_MS = 30000  # a newly chosen camera's first frame waits for a poll, ten seconds apart
+KEEP_APART_MS = 10000  # widgets/working_space.js: no two frame sets closer together than this
+REFRESH_MS = 5000  # widgets/working_space.js: the document asked for again
 
 # What changes on every run whatever the page does: the moments, how many observations
 # the hour holds, the frames (the fake camera's moving picture), the heaters' lines
@@ -315,3 +317,102 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
         shown=f"{hour}\n{_words(status(page).inner_text())}",
     )
     assert errors == []
+
+
+def _on_printer_1(page, url) -> None:
+    """The garage, and printer_1's hour opened from its ring."""
+    open_garage(page, url)
+    on_row(page, "printer_1", "Camera", "Workspace")
+    expect(page.locator(f"{WINDOW} .ws-title")).to_have_text("garage › printer_1")
+
+
+def _settled(page) -> None:
+    """Whatever a timer has started is asked for before /health is."""
+    with page.expect_request("**/health"):
+        page.evaluate("() => fetch('/health')")
+
+
+def _refreshes(page, path: str) -> list:
+    """The requests for ``path`` over one REFRESH_MS, the clock paused and then moved
+    on by hand: one for each timer the window holds, each firing once."""
+    page.clock.pause_at(page.evaluate("Date.now()") + 1000)
+    _settled(page)
+    asked = []
+    page.on("request", lambda r: asked.append(r.url) if r.url.endswith(path) else None)
+    page.clock.fast_forward(REFRESH_MS)
+    _settled(page)
+    return asked
+
+
+@pytest.mark.e2e
+def test_closed_it_keeps_no_frame_whoever_polls_the_printer(page, url):
+    """Closed by its tab's ✕, the window turns on no camera: a poll of printer_1 that
+    another window asked for -- its Machine's, say -- keeps no frame set."""
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        if not http.get("/sites/garage/evidence/printers/printer_1").json()["cameras"]:
+            http.post("/sites/garage/cameras", json={"host": "printer_1"}).raise_for_status()
+    page.clock.install()
+    _on_printer_1(page, url)
+    window = page.locator(WINDOW)
+    window.locator(".ws-choose").first.select_option(index=1)
+    said(page, "kept with the poll at", timeout=FRAMES_MS)
+    page.evaluate(
+        """() => {
+            const verbs = window.apothecaryPictureVerbs, frameOf = verbs.frameOf;
+            window.framesAsked = [];
+            verbs.frameOf = (name) => { window.framesAsked.push(name); return frameOf(name); };
+        }"""
+    )
+    windows.close(page, "working")
+    expect(window).to_have_count(0)
+    page.clock.pause_at(page.evaluate("Date.now()") + 1000)
+    page.clock.fast_forward(KEEP_APART_MS)  # past what would hold a set back
+    # A poll of printer_1's port, its state changed, as boards.js sends every poll.
+    page.evaluate(
+        """(port) => window.dispatchEvent(new CustomEvent("apothecary:board", { detail: {
+            port, what: "status", status: { state: "paused", poll: "another-windows-poll",
+            polled_at: new Date().toISOString(), sd_progress: 0.5 } } }))""",
+        PRINTER,
+    )
+    assert page.evaluate("() => window.framesAsked") == []
+
+
+@pytest.mark.e2e
+def test_opened_again_from_the_windows_menu_it_is_the_site_and_read_again(page, url):
+    """⊞ Windows › Working space, after the window was closed on printer_1, opens it on
+    the site, as it does the first time, and the site is read again on its timer."""
+    page.clock.install()
+    _on_printer_1(page, url)
+    windows.close(page, "working")
+    windows.from_the_windows_menu(page, "working")
+    window = page.locator(WINDOW)
+    expect(window.locator(".ws-title")).to_have_text("garage")
+    expect(window.locator(".ws-next")).to_contain_text("Choose a printer to see its hour")
+    assert len(_refreshes(page, "/sites/garage/evidence/printers")) == 1
+
+
+@pytest.mark.e2e
+def test_two_opens_at_once_leave_one_timer(page, url):
+    """Two doors pressed at once -- a printer's hour, then the site -- leave the later:
+    the site, read again once a REFRESH_MS, not once for each."""
+    page.clock.install()
+    open_garage(page, url)
+    windows.from_the_windows_menu(page, "working")
+    window = page.locator(WINDOW)
+    expect(window.locator(".ws-title")).to_have_text("garage")
+    page.evaluate(
+        """() => { const ws = window.apothecaryWorkingSpace;
+                   return Promise.all([ws.open("printer_1"), ws.open(null)]).then(() => null); }"""
+    )
+    expect(window.locator(".ws-title")).to_have_text("garage")
+    assert len(_refreshes(page, "/sites/garage/evidence/printers")) == 1
+
+
+@pytest.mark.e2e
+def test_another_site_loaded_is_the_one_it_shows(page, url):
+    """Open on printer_1 when another site is loaded, the window shows that site,
+    whether it is in front then or brought in front after."""
+    _on_printer_1(page, url)
+    page.evaluate("() => window.fractalViewer.loadSite('theatre')")
+    windows.show(page, "working")
+    expect(page.locator(f"{WINDOW} .ws-title")).to_have_text("theatre")

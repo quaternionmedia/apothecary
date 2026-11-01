@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 import pytest
 from fastapi.testclient import TestClient
@@ -164,6 +165,25 @@ def test_a_model_switched_off_is_not_asked_and_its_guesses_leave_the_view(client
     assert colour["guesses"] == [] and colour["hidden"] == 1  # the one guess, not the reading
     assert "every model is switched off" in _ask(client, index)["said"]
     assert client.put("/vision/origins/person", json={"on": False}).status_code == 400
+
+
+def test_a_model_with_no_version_is_switched_off_by_the_origin_it_is_listed_as(client, monkeypatch):
+    """A model qmcp lists with no version has one origin: the one GET /vision lists it
+    as is the one its guesses carry, so switched off by it, its guesses leave the view."""
+    from apothecary.finders import simulated
+
+    monkeypatch.setenv(qmcp.ENV, "simulated")
+    monkeypatch.setattr(simulated, "MODEL", {**simulated.MODEL, "version": None})
+    index = _red(client)
+    guess = _row(_ask(client, index), "colour")["guesses"][0]
+    [listed] = [o["origin"] for o in client.get("/vision").json()["origins"][1:]]
+    assert guess["origin"] == listed
+    # Sent as the Models window sends it, each part of the path encoded.
+    switched = client.put(f"/vision/origins/{quote(listed, safe='/')}", json={"on": False})
+    assert switched.status_code == 200
+    seen = client.get(f"/sites/garage/views/{client.view}/shapes/{index}/observations").json()
+    colour = next(row for row in seen["rows"] if row["property"] == "colour")
+    assert colour["guesses"] == [] and colour["hidden"] == 1
 
 
 def test_the_plain_reader_switched_off_reads_nothing(client):
