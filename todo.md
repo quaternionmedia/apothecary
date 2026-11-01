@@ -110,9 +110,6 @@ Decided, not started. Each waits on what its line names.
   folder, editable from then on, as the draft record *Personal data stays on
   the device* (§6) says. The page offers a made piece no Save now, and shows
   its SCAD read only.
-- The root README served in the app, rendered as `/docs` is, its map's links
-  going to the pages the app serves. The map lists what the browser suite
-  walks; a feature gets a row when a test walks it.
 - The review cycle in
   [docs/plans/review-cycle-2026-10-24.md](docs/plans/review-cycle-2026-10-24.md),
   taken as proposed: a merge queue tested once a batch, releases reviewed by

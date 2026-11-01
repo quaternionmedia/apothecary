@@ -108,6 +108,7 @@ from .routes.jobs import router as jobs_router
 from .routes.lighting import router as lighting_router
 from .routes.part_edits import router as part_edits_router
 from .routes.pictures import router as pictures_router
+from .routes.readme import router as readme_router
 from .routes.views import router as views_router
 from .routes.vision import router as vision_router
 from .routes.wiring import router as wiring_router
@@ -252,6 +253,8 @@ class _AskedAgain(StaticFiles):
 
 app.mount("/static", _AskedAgain(directory=STATIC_ROOT), name="static")
 app.include_router(docs_router)
+# The root README, as a page of the same kind.
+app.include_router(readme_router)
 # Mounted before the photo routes below, so /photos/pictures and /photos/gather
 # are matched before /photos/{name} can take "pictures" for a name. The router
 # reaches back into this module only inside its handlers.
