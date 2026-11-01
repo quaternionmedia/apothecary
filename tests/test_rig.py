@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import threading
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -429,6 +430,27 @@ def test_a_concert_is_followed_into_carlos_and_recorded(a_carlos, tmp_path):
     held = cue["action"]["hold"]
     assert held["patch"]["display"]["mode"] == "irl"
     assert [d["id"] for d in held["devices"]] == ["made-up.desk", "made-up.synth"]
+
+
+def test_a_frame_whose_time_does_not_read_is_taken_at_its_files_time(tmp_path):
+    """A camera with no clock writes 0000:00:00 00:00:00, and a PNG's ``taken`` text
+    may say anything: neither is a time, so the frame is taken at its file's time
+    rather than ending the follow."""
+    from PIL import Image, PngImagePlugin
+
+    jpeg, png = tmp_path / "no-clock.jpg", tmp_path / "said.png"
+    exif = Image.Exif()
+    exif.get_ifd(0x8769)[concert.EXIF_TAKEN] = "0000:00:00 00:00:00"
+    Image.new("RGB", (8, 8)).save(jpeg, exif=exif)
+    said = PngImagePlugin.PngInfo()
+    said.add_text("taken", "the second song")
+    Image.new("RGB", (8, 8)).save(png, pnginfo=said)
+    for path in (jpeg, png):
+        with Image.open(path) as image:
+            at = concert.taken(path, image)
+        assert datetime.fromisoformat(at) == datetime.fromtimestamp(
+            path.stat().st_mtime, timezone.utc
+        )
 
 
 def test_the_rig_commands_simulate_read_follow_and_check_from_a_catalogue_folder(tmp_path):
