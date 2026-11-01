@@ -383,6 +383,35 @@ def test_the_follower_sends_once_for_an_unchanged_bench_and_again_when_it_change
     assert follower.look()
 
 
+def test_a_look_that_fails_the_same_way_is_logged_once(caplog):
+    """APOTHECARY_CARLOS_SITE naming no site fails every look with the route's 404:
+    one traceback for it, and one more when a look fails another way."""
+    import threading
+
+    from fastapi import HTTPException
+
+    from apothecary.wiring.carlos import Follower
+
+    looks = []
+    six = threading.Event()
+
+    def wiring():
+        looks.append(1)
+        if len(looks) >= 6:
+            six.set()
+        if len(looks) <= 3:
+            raise HTTPException(status_code=404, detail="Site 'nowhere' not found")
+        raise OSError("the state folder is not there")
+
+    follower = Follower("http://127.0.0.1:1", wiring, every=0.01)
+    with caplog.at_level("ERROR", logger="apothecary.wiring.carlos"):
+        follower.start()
+        assert six.wait(5)
+        follower.stop()
+    failed = [r for r in caplog.records if r.getMessage() == "wiring: a look at the bench failed"]
+    assert [type(r.exc_info[1]).__name__ for r in failed] == ["HTTPException", "OSError"]
+
+
 def test_carlos_is_reached_on_this_machine_only():
     from apothecary.wiring.carlos import loopback_url
 

@@ -166,11 +166,17 @@ class Follower:
         return True
 
     def _run(self) -> None:
+        # A look that fails is logged once, until one fails another way or one
+        # runs; the next one runs either way.
+        failed: Optional[str] = None
         while not self._stop.is_set():
             try:
                 self.look()
-            except Exception:  # pragma: no cover - a look that fails is logged; the next one runs
-                log.exception("wiring: a look at the bench failed")
+                failed = None
+            except Exception as exc:
+                if repr(exc) != failed:
+                    log.exception("wiring: a look at the bench failed")
+                failed = repr(exc)
             self._stop.wait(self.every)
 
     def start(self) -> None:
