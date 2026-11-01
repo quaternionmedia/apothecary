@@ -110,6 +110,62 @@ def test_add_here_stands_a_camera_above_the_place_looking_straight_down():
     assert "rotate([0.0, 0.0, 0.0])" in c.get("/sites/garage").json()["scad"]
 
 
+def test_add_here_again_stands_the_next_camera_beside_the_last_and_the_layout_stays_valid():
+    """Three cameras added above one place stand a step apart along x -- the middle,
+    then one side, then the other -- each clear of the others, each landing on the
+    place, and the site stays valid; without the step they would overlap."""
+    c = TestClient(app)
+    added = [_add(c) for _ in range(3)]
+    assert [cam["position"][0] for cam in added] == [
+        900.0,
+        900.0 + cameras.BESIDE,
+        900.0 - cameras.BESIDE,
+    ]
+    assert {tuple(cam["position"][1:]) for cam in added} == {(300.0, 1380.0)}
+    assert all(cam["lands"]["host"] == "workbench" for cam in added)
+    site = c.get("/sites/garage").json()
+    assert site["is_valid"], site["violations"]
+
+
+def test_add_here_fills_a_printers_top_in_rows_so_each_camera_stays_the_printers():
+    """Cameras added above printer_1 fill its top a row at a time -- along x while
+    there is room over it, then a row along y -- so each lands on printer_1 and is
+    one of its cameras, and the site stays valid; stepping along x alone, the fourth
+    stood past printer_1's side."""
+    c = TestClient(app)
+    added = [_add(c, host="printer_1") for _ in range(6)]
+    assert [cam["lands"] and cam["lands"]["host"] for cam in added] == ["printer_1"] * 6
+    first = added[0]["position"]
+    rows = sorted({cam["position"][1] for cam in added})
+    assert rows[0] < first[1] or rows[-1] > first[1], rows  # x ran out: a row along y
+    assert {round(abs(y - first[1]), 6) for y in rows} <= {0.0, cameras.BESIDE_ROW}
+    site = c.get("/sites/garage").json()
+    assert site["is_valid"], site["violations"]
+
+
+def test_with_no_room_left_above_a_place_a_camera_stands_outside_and_is_said_not_its(
+    monkeypatch,
+):
+    """When no clear place is left over a place's top, Add here stands the camera
+    outside it, and the ring's line says it is not one of the place's cameras."""
+    monkeypatch.setattr(cameras, "BESIDE", 5000.0)
+    monkeypatch.setattr(cameras, "BESIDE_ROW", 5000.0)
+    c = TestClient(app)
+
+    def add() -> str:
+        context = {"pointing": "node", "targets": ["printer_1"]}
+        intent = {"action": "camera:add-here", "option_id": "camera:add-here", "context": context}
+        r = c.post("/menu/intent", json={"intent": intent, "site": "garage"})
+        assert r.status_code == 200, r.text
+        return r.json()["did"]
+
+    assert add().startswith("added camera_1 above printer_1, looking straight down")
+    assert add() == (
+        "added camera_2 outside printer_1: no room is left above it, "
+        "so it is not one of printer_1's cameras"
+    )
+
+
 def test_a_camera_is_named_afresh_while_a_view_remembers_a_removed_one():
     c = TestClient(app)
     _add(c)

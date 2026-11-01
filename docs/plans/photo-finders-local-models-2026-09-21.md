@@ -22,8 +22,8 @@ its own project.
 
 So a model is an engine: a subprocess the seam starts, or a server on
 loopback, never imported into `apothecary/` (nor is OpenCV). Its weights are
-files the person brings. A paid hook is the same seam with an address the
-guard refuses.
+qmcp's, fetched on a person's word (*Reach*). A paid hook is the same seam
+with an address the guard refuses.
 
 ## The seam as it stands
 
@@ -105,13 +105,17 @@ and raises `LeftTheMachine` otherwise, sends pictures only as base64 data,
 validates a JSON-schema'd reply, and refuses Ollama's cloud models
 (loopback that forwards). A proxy on loopback that forwards is the person's
 program and cannot be detected. Preferred: the seam starts `llama-server`
-over a weights file, bound to 127.0.0.1 with a random key.
+over a weights file, bound to 127.0.0.1 with a random key. Every model's
+answers come through qmcp instead, over MCP, so `LoopbackModel` is not built
+and these rules are qmcp's engine adapters'
+([image models through qmcp](image-models-through-qmcp-2026-10-30.md)).
 
-**Weights are files the person brings**: a models folder under the state
-folder, or a server they filled. Whether a one-time model download is the
-same class as the install-time fetches the record allows is open (see
-`todo.md`). A program-side download is a second tool-fetch door, reviewed as
-one; no phase below needs it.
+**Weights are fetched by qmcp, on a person's word**: a download of a
+model's weights is a class of fetch of its own, not an install-time tool
+fetch. `qmcp localmodel fetch` fetches only from qmcp's pinned list, and
+apothecary never touches the weights ([image models through
+qmcp](image-models-through-qmcp-2026-10-30.md)). It is a second fetch door,
+reviewed as one, and qmcp's.
 
 **Paid services** are the same OpenAI-compatible seam with an address the
 guard refuses. Adding one is a proposal of the secured-user-accounts record
@@ -140,11 +144,13 @@ millimetres. The first managed engine.
 **2. A namer over loopback.** `LoopbackModel` and a `vlm:<model>` finder:
 labels for what the plain or marker finder found. A seam-started
 `llama-server`, or the person's Ollama with the cloud refusal. A selection
-record for the model; measured on this machine before it is offered.
+record for the model; measured on this machine before it is offered. Replaced
+by [image models through qmcp](image-models-through-qmcp-2026-10-30.md): qmcp
+is the one door for every model's answers, and `LoopbackModel` is not built.
 
 **3. Masks and depth.** An Open Inference Protocol server over ONNX
-exports, evaluated for licence, a CPU build and telemetry; failing that,
-one runner as its own project. `points` consumed by `vision/geometry.py`,
+exports, evaluated for licence, a CPU build and telemetry, reached through
+qmcp's adapter; failing that, one runner as its own project. `points` consumed by `vision/geometry.py`,
 relative depth on shapes, a stated focal length for metric depth, and
 `Provenance.thickness_guessed = False` when a depth said so.
 
@@ -162,6 +168,6 @@ first, then the edits it names to `stays_local.py` and its tests.
 |---|---|
 | The licence gate reading SPDX expressions and every shape | this project, phase 0 |
 | `CC0-1.0` (numpy) on the licence allowlist | the org: an allowlist addition is an amendment |
-| Whether a one-time model download is an install-time fetch | the sponsor (`todo.md`) |
+| Whether a one-time model download is an install-time fetch | answered in [image models through qmcp](image-models-through-qmcp-2026-10-30.md): a class of its own, by qmcp's command from a pinned list |
 | The runner's protocol, or a seams-record exception | phase 3 |
 | Whether the browser offers a finder choice | answered in [the pictures plan](pictures-in-the-world-2026-09-26.md): Picture › Find, where more than one finder can read the picture |

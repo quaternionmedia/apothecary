@@ -1,0 +1,21 @@
+{
+  "id": "quaternionmedia.footpedal",
+  "maker": "Quaternion Media",
+  "model": "Footpedal",
+  "category": "controller",
+  "summary": "Six footswitches and eight LEDs in a printed case, on an Arduino Uno. Each switch sends a MIDI note, and the LEDs light for the notes they are sent. The notes travel as serial over USB, and a bridge on the computer turns them into MIDI, so its socket carries data rather than class-compliant MIDI.",
+  "fidelity": "sketch",
+  "jacks": [
+    {
+      "name": "usb",
+      "label": "USB",
+      "type": "output",
+      "signal": "data",
+      "carrier": "usb",
+      "connector": "USB-B",
+      "side": "back",
+      "note": "The Uno's USB-B: power in, and serial MIDI both ways, through a Hairless bridge on the computer."
+    }
+  ],
+  "parameters": []
+}

@@ -1,0 +1,20 @@
+{
+  "id": "apothecary.power-supply",
+  "maker": "Apothecary",
+  "model": "Power supply",
+  "category": "power",
+  "summary": "A wall adapter whose lead ends in a 2.1 mm DC barrel plug. Not a product: it stands for whichever supply powers a board from the mains, as the host stands for whichever computer.",
+  "fidelity": "sketch",
+  "jacks": [
+    {
+      "name": "dc_out",
+      "label": "DC OUT",
+      "type": "output",
+      "signal": "power",
+      "connector": "DC barrel 2.1mm",
+      "side": "back",
+      "note": "The end of its lead: the plug that goes into a board's barrel jack."
+    }
+  ],
+  "parameters": []
+}

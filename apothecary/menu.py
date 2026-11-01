@@ -671,12 +671,20 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("pinned", "Pinned"),
     ("jobs", "Jobs"),
     ("scad", "SCAD"),
+    # Working space: the site as every kind of evidence has it (apothecary/evidence/),
+    # a tab of Site's ring registered by the page's script, closed until asked for;
+    # a printer's ring opens it on that printer. A ring's label holds twelve
+    # characters, so its cells say Workspace.
+    ("working", "Workspace"),
     # Registered by the page's script rather than marked in its markup: Pictures
-    # (every picture under the picture root, each pinned here or forgotten) and
-    # Gather (the gathering, a window beside it, closed until asked for), a ring of
-    # their own under Pictures' cell, at start; a board's Machine, its log in it,
-    # when a board is opened.
+    # (every picture under the picture root, each pinned here or forgotten), Models
+    # (image models through qmcp asked about the shape chosen on a mat, closed until
+    # asked for, its verbs a ring of their own under its cell: _models) and Gather
+    # (the gathering, a window beside it, closed until asked for), a ring of their
+    # own under Pictures' cell, at start; a board's Machine, its log in it, when a
+    # board is opened.
     ("pictures", "Pictures"),
+    ("models", "Models"),
     ("gather", "Gather"),
     ("machine", "Machine"),
     # The Bench: the toolchain, the sketches, compile and upload, raw flash and
@@ -705,8 +713,10 @@ VIEWS = tuple((system.id, system.cell) for system in SYSTEMS)
 # Machine and its control pad.
 _BEFORE_WINDOWS = ("site", "selected", "pictures", "machine")
 _RINGS = {
-    "site": ("site", "problems", "pinned", "jobs", "scad"),
-    "pictures": ("pictures", "gather"),
+    "site": ("site", "problems", "pinned", "jobs", "scad", "working"),
+    # Models before Gather, so Models keeps its address when Gather goes
+    # (docs/plans/ui-coordination-2026-10-31.md).
+    "pictures": ("pictures", "models", "gather"),
 }
 
 
@@ -734,7 +744,12 @@ def _panels() -> Option:
         return Option(
             id=f"panels:{pid}",
             label=label,
-            children=[toggle(each, labels[each]) for each in _RINGS[pid]],
+            children=[
+                _models(toggle(each, labels[each]))
+                if each == "models"
+                else toggle(each, labels[each])
+                for each in _RINGS[pid]
+            ],
         )
 
     return Option(
@@ -802,6 +817,56 @@ def _view() -> Option:
             Option(id="view:outlines", label="Outlines", action="view:outlines"),
             Option(id="view:walls", label="Select walls", action="view:walls"),
             Option(id="view:settings", label="Settings", action="view:settings"),
+        ],
+    )
+
+
+# The colours a lead, a plug or a part most often is, each a cell of Models › Colour;
+# the rest of the basic colour words under More.
+COMMON_COLOURS = ("black", "white", "grey", "red", "yellow", "green", "blue")
+
+
+def _colours(words: Sequence[str]) -> List[Option]:
+    """Models › Colour: the common colours a cell each, the rest under More, so no
+    word sits under another's name."""
+
+    def say(word: str) -> Option:
+        return Option(
+            id=f"models:say:colour:{word}", label=word, action=f"models:say:colour:{word}"
+        )
+
+    rest = [w for w in words if w not in COMMON_COLOURS]
+    cells = [say(w) for w in COMMON_COLOURS if w in words]
+    if rest:
+        cells.append(Option(id="models:colour:more", label="More", children=[say(w) for w in rest]))
+    return cells
+
+
+def _models(toggle: Option) -> Option:
+    """Panels › Pictures › Models: the window, then its verbs, which the page hands to it
+    (widgets/models.js): Ask about the shape chosen on a mat, and a person's word on its
+    colour or its material, each a word of the family's lists. Seated after the
+    window's own cell, so no address moves."""
+    from .evidence.words import COLOURS, MATERIALS
+
+    return Option(
+        id="panels:models",
+        label="Models",
+        children=[
+            toggle,
+            Option(id="models:ask", label="Ask", action="models:ask"),
+            Option(
+                id="models:colour",
+                label="Colour",
+                children=_colours(COLOURS),
+            ),
+            Option(
+                id="models:material",
+                label="Material",
+                children=_listed(
+                    "models:material", [(f"models:say:material:{w}", w) for w in MATERIALS]
+                ),
+            ),
         ],
     )
 
@@ -977,17 +1042,18 @@ def _is_host(site: Optional[Assembly], path: str, not_hosts: Sequence[str]) -> b
     return node is not None and node.world_bounds() is not None
 
 
-def _camera_group(floor: bool) -> Option:
+def _camera_group(floor: bool, printer: bool = False) -> Option:
     """Camera at a host or the floor: Add here, a camera part standing above the
-    middle of this place, looking straight down. The server adds it."""
+    middle of this place, looking straight down. The server adds it. On a printer a
+    board drives, Workspace too: the Working space opened on it, where the frames its
+    cameras keep with its polls are (widgets/working_space.js)."""
     tail = f":{FLOOR_MARK}" if floor else ""
-    return Option(
-        id=f"camera{tail}",
-        label="Camera",
-        children=[
-            Option(id=f"camera:add-here{tail}", label="Add here", action=f"camera:add-here{tail}")
-        ],
-    )
+    children = [
+        Option(id=f"camera:add-here{tail}", label="Add here", action=f"camera:add-here{tail}")
+    ]
+    if printer:
+        children.append(Option(id="working", label="Workspace", action="working:open"))
+    return Option(id=f"camera{tail}", label="Camera", children=children)
 
 
 def _camera_options(picture: PictureContext) -> List[Option]:
@@ -1346,7 +1412,7 @@ def _node_ring(
     # has a camera added above it and holds views; a made piece has its word and
     # can be dropped; a camera has its own verbs, its device first.
     if _is_host(site, path, [*picture.made, *picture.camera_parts]):
-        options.append(_camera_group(floor=False))
+        options.append(_camera_group(floor=False, printer=path in picture.printers))
         host_pictures = _picture_group(picture, floor=False)
         assert host_pictures is not None  # a host's always holds Add
         options.append(host_pictures)
@@ -1667,6 +1733,9 @@ CARRIED_BY: Dict[str, Carries] = {
     "slice": Carries.VIEWER,
     # Opening and closing the windows beside the world (panels.js).
     "panel": Carries.VIEWER,
+    # A printer's Working space: the page opens the window on the printer, watches
+    # its board and keeps frames with its polls (widgets/working_space.js).
+    "working": Carries.VIEWER,
     # How the world is drawn: the header's View menu (snapping, detail, outlines,
     # whether a click picks a wall).
     "view": Carries.VIEWER,
@@ -1678,6 +1747,9 @@ CARRIED_BY: Dict[str, Carries] = {
     "bench": Carries.VIEWER,
     # The Airgap panel's verbs: the page carries each to the panel (widgets/airgap.js).
     "airgap": Carries.VIEWER,
+    # Models' verbs: the page carries each to the window (widgets/models.js), which
+    # asks the server about the shape chosen on a mat.
+    "models": Carries.VIEWER,
     # A camera's verbs: which of this browser's cameras it is (and Allow, to name
     # them), live, a picture taken and made its view, and the gathering's report
     # -- the page's: only the browser can open a camera, and the device and

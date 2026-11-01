@@ -1,0 +1,21 @@
+{
+  "id": "apothecary.usb-device",
+  "maker": "Apothecary",
+  "model": "USB device",
+  "category": "board",
+  "summary": "Something answering on one of the computer's USB serial ports that no node on the site names, and that its port does not say enough about to be anything more particular. Not a product: it stands for whatever that is until it is pinned to a node.",
+  "fidelity": "sketch",
+  "jacks": [
+    {
+      "name": "usb",
+      "label": "USB",
+      "type": "output",
+      "signal": "data",
+      "carrier": "usb",
+      "connector": "USB-A",
+      "side": "back",
+      "note": "Whatever plug it has: its port says which board answered, not the plug."
+    }
+  ],
+  "parameters": []
+}

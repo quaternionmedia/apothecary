@@ -1,0 +1,24 @@
+{
+  "id": "espressif.esp32-devkitc",
+  "maker": "Espressif",
+  "model": "ESP32-DevKitC V4",
+  "category": "board",
+  "summary": "A 55 x 28 mm ESP32 development board, standing on two rows of nineteen pins. Its micro-USB powers it and carries its serial console through a CP2102 bridge, which is how it is flashed and how it says hello. This entry has the USB socket and not yet its header pins.",
+  "fidelity": "sketch",
+  "jacks": [
+    {
+      "name": "usb",
+      "label": "USB",
+      "type": "output",
+      "signal": "data",
+      "carrier": "usb",
+      "connector": "micro-USB",
+      "side": "right",
+      "note": "Power in, and the serial console out: flashing, and the sketch's hello."
+    }
+  ],
+  "parameters": [],
+  "layout": {
+    "box": { "width": 56.0, "height": 28.0, "depth": 17.1 }
+  }
+}

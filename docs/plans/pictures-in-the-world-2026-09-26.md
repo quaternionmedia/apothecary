@@ -22,8 +22,8 @@ followed:*
   on a kept one, Purge, and the gathering as a section. A row chosen in
   Pictures is pinned from the ring's Picture › Folder. The row buttons no
   ring backs are Pinned's Unpin and Pictures' Forget (`census.TAKEN_BACK`).*
-- *Phase 1 waits on the next round (`todo.md`). Phase 6 is not built:
-  Selected stays in the one rail. Phase 7 is open: `POST /photos` and the
+- *Phase 1 waits on the next round (`todo.md`). Phase 6 was dropped on
+  2026-10-31: every section of the viewer is a window, Selected among them. Phase 7 is open: `POST /photos` and the
   album routes answer, and walkthrough 11 runs on them.*
 
 *This page keeps the words it was decided in.*

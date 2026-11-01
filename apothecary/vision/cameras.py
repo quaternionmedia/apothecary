@@ -45,7 +45,7 @@ import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
@@ -342,6 +342,14 @@ def lands(site_name: str, site: Assembly, pose: Pose) -> Optional[Hit]:
     return hit
 
 
+def looks_at(site_name: str, site: Assembly, pose: Pose) -> Optional[str]:
+    """The root structure a camera at ``pose`` looks at, its top or a side of it: what
+    its centre ray reaches first; None for the floor, a wall or the sky."""
+    eye = (pose.position.x, pose.position.y, pose.position.z)
+    hit = first_surface(eye, looking(pose.turn, pose.tilt), surfaces(site_name, site))
+    return hit.name if hit is not None and hit.name else None
+
+
 # --- what a person does to one ------------------------------------------------------------
 
 
@@ -383,13 +391,79 @@ def starting_pose(site_name: str, site: Assembly, host: str) -> Pose:
     return Pose(position=Vector3D(x=middle.x, y=middle.y, z=top + START_HEIGHT))
 
 
+# How far a camera added where another stands steps aside: its body's width and a
+# hand's breadth along x, its depth and a hand's breadth along y to the next row, so
+# the two stand clear of each other.
+BESIDE = BODY[0] + 30.0
+BESIDE_ROW = BODY[1] + 30.0
+
+
+def _placed(pose: Pose) -> Tuple[Tuple[float, ...], Tuple[float, ...]]:
+    """The webcam's box where it stands: its footprint, which is about its lens, moved
+    to the lens's place."""
+    box, at = footprint(pose), pose.position
+    low = (box.min_point.x + at.x, box.min_point.y + at.y, box.min_point.z + at.z)
+    high = (box.max_point.x + at.x, box.max_point.y + at.y, box.max_point.z + at.z)
+    return low, high
+
+
+def _clear(a, b) -> bool:
+    return any(a[1][k] <= b[0][k] or b[1][k] <= a[0][k] for k in range(3))
+
+
+def _steps(n: int) -> List[int]:
+    """None, then one side and the other, a step further each time: 0, 1, -1, 2, -2..."""
+    return [((k + 1) // 2) * (1 if k % 2 else -1) for k in range(n)]
+
+
+def beside(pose: Pose, others: Sequence[Pose], stays: Callable[[Pose], bool]) -> Pose:
+    """``pose``, or the nearest place clear of every camera in ``others`` that still
+    ``stays`` over its place: a step along x to one side, then the other, then two,
+    and once x runs out the same a row along y. So a second Add here at one place
+    stands beside the first rather than in it, and the next few fill the place's top
+    in rows; with no room left over it, the nearest clear place along x, outside it."""
+    taken = [_placed(o) for o in others]
+    steps = _steps(2 * len(others) + 1)
+
+    def at(dx: float, dy: float) -> Pose:
+        p = pose.position
+        return pose.model_copy(
+            update={"position": p.model_copy(update={"x": p.x + dx, "y": p.y + dy})}
+        )
+
+    def clear(moved: Pose) -> bool:
+        return all(_clear(_placed(moved), box) for box in taken)
+
+    for row in steps:
+        for k in steps:
+            moved = at(BESIDE * k, BESIDE_ROW * row)
+            if clear(moved) and stays(moved):
+                return moved
+    for k in steps:
+        if clear(moved := at(BESIDE * k, 0.0)):
+            return moved
+    return pose
+
+
+def over(site_name: str, site: Assembly, host: str, pose: Pose) -> bool:
+    """Whether a camera at ``pose`` lands its picture on ``host``'s top (``""``, the
+    floor): one of the cameras of that place."""
+    hit = lands(site_name, site, pose)
+    return hit is not None and hit.name == host
+
+
 def add_here(site_name: str, site: Assembly, host: str) -> Camera:
     """Add a camera above ``host``'s middle (``""``, the floor's), looking straight
-    down: its record kept, its node appended to the site. ``host`` is one
-    ``check_host`` has let through."""
-    pose = starting_pose(site_name, site, host)
+    down -- beside a camera already standing there -- its record kept, its node
+    appended to the site. ``host`` is one ``check_host`` has let through."""
+    start = starting_pose(site_name, site, host)
     with _LOCK:
         cameras = _load()
+        pose = beside(
+            start,
+            [c.pose for c in cameras if c.site == site_name],
+            lambda moved: over(site_name, site, host, moved),
+        )
         camera = Camera(
             site=site_name,
             name=_free_name(site_name, site),
@@ -540,6 +614,7 @@ __all__ = [
     "lands",
     "names",
     "node",
+    "over",
     "record",
     "records",
     "remove",

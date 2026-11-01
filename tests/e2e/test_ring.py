@@ -565,12 +565,16 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
         "bench",
         "settings",
         "gather",
+        # The Models window, beside the world, closed until asked for.
+        "models",
         # The Part's sections, then the Airgap and its sections, each a window of its
         # own closed until asked for (apothecary/systems.py).
         *(f"part-{sid}" for sid in windows.PART_SECTIONS),
         "airgap",
         # The Airgap's sections, each a window of its own, closed until asked for.
         *(f"airgap-{sid}" for sid in windows.AIRGAP_SECTIONS),
+        # The Working space, a tab of Site's ring, closed until asked for.
+        "working",
     ]
     assert not any(windows.state(page, f"airgap-{s}")["open"] for s in windows.AIRGAP_SECTIONS)
     expect(page.locator(".lm_goldenlayout")).to_have_count(1)
@@ -623,7 +627,7 @@ def test_a_closed_window_stays_closed_and_the_ring_reopens_it(page: Page, ring_u
     page.keyboard.press(next(cell for cell, label in inner.items() if label == "Site"))
     # Panels › Site is a ring of Site and its own windows: Site first.
     site_ring = _wedges(page)
-    assert sorted(site_ring.values()) == ["Jobs", "Pinned", "Problems", "SCAD", "Site"]
+    assert sorted(site_ring.values()) == ["Jobs", "Pinned", "Problems", "SCAD", "Site", "Workspace"]
     page.keyboard.press(next(cell for cell, label in site_ring.items() if label == "Site"))
     expect(page.locator("#ring-overlay")).to_have_count(0)
     expect(windows.panel(page, "site")).to_be_visible()

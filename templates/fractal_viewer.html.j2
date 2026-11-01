@@ -785,7 +785,9 @@
     {% endif %}
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/machine.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/bench.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/working_space.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/airgap.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/models.css">
     <script type="importmap">
     {
         "imports": {
@@ -820,7 +822,9 @@
         import { mountBoards } from '/static/boards.js';
         import { boardLabel, boardSummary } from '/static/board_text.js';
         import { mountPinned } from '/static/widgets/pinned.js';
+        import { mountWorkingSpace } from '/static/widgets/working_space.js';
         import { mountPictureList } from '/static/widgets/picture_list.js';
+        import { mountModels } from '/static/widgets/models.js';
         import { mountToolchain } from '/static/widgets/toolchain.js';
         import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
         import { mountTasks } from '/static/widgets/tasks.js';
@@ -1581,6 +1585,35 @@
                     body: gatherEl, home: 'pictures', open: false,
                     onOpen: () => this.pictureList(),
                 });
+                // Models: image models through qmcp, and the plain reader beside them
+                // (widgets/models.js) -- a stack of its own beside the world, closed
+                // until asked for, so the mat a shape is chosen on and the table about
+                // it are both in view. It follows the shape chosen on a mat; nothing
+                // is asked until a person presses Ask there.
+                this.modelsWidget = null;
+                this.panels.register('models', {
+                    title: 'Models', group: 'Pictures',
+                    hint: 'Ask a model about the shape chosen on a mat, beside the colour read off its pixels; switch a model off',
+                    home: 'beside', open: false,
+                    body: (slot) => {
+                        this.modelsWidget = mountModels(slot, {
+                            base: BASE_URL,
+                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                            world: {
+                                siteName: () => this.siteName,
+                                chosen: () => {
+                                    const pick = this.pictureMarks.chosen();
+                                    if (!pick) return null;
+                                    const view = (this.pictureMarks.attached()?.views || []).find((v) => v.id === pick.view);
+                                    const shape = view && view.shapes.find((sh) => sh.index === pick.index);
+                                    return shape ? { ...pick, word: shape.word, picture: view.picture, host: view.host } : null;
+                                },
+                            },
+                        });
+                        window.apothecaryModels = this.modelsWidget;
+                    },
+                    onOpen: () => { if (this.modelsWidget) { this.modelsWidget.load(); this.modelsWidget.follow(); } },
+                });
                 // The Bench: the toolchain, the sketches built and uploaded, raw flash
                 // and the task log (widgets/toolchain.js, sketches.js, tasks.js) -- a
                 // tab beside Pictures, filled the first time it is shown and asked for the
@@ -1634,6 +1667,31 @@
                             log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
                         });
                     },
+                });
+                // Working space: the site as every kind of evidence has it, and a
+                // printer's hour in it (widgets/working_space.js) -- a tab of Site's ring,
+                // closed until asked for. Panels › Site › Workspace opens it on the whole
+                // site and a printer's Workspace on that printer, where it watches the
+                // printer's board and keeps a frame set from its cameras with its polls.
+                // Its first line names the next step, whichever door opened it.
+                this.workingSpace = null;
+                this.workingOn = null;
+                this.panels.register('working', {
+                    title: 'Working space', group: 'Site', open: false,
+                    hint: 'The site as every kind of evidence has it, and a printer\'s hour in it',
+                    body: (slot) => {
+                        this.workingSpace = mountWorkingSpace(slot, {
+                            base: BASE_URL, boards: this.boards, pictures: this.pictures,
+                            siteName: () => this.siteName,
+                            applySite: (site) => this.applySite(site),
+                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                        });
+                        window.apothecaryWorkingSpace = this.workingSpace;
+                        this.workingOpened = this.workingSpace.open(this.workingOn);
+                    },
+                    onOpen: () => this.workingSpace?.refresh(),
+                    // Closed, it stops watching the printer and keeping its frames.
+                    onClose: () => this.workingSpace?.close(),
                 });
                 // ⊞ Windows: drawn afresh each time it opens, so it says which are open.
                 const windowsBody = this.windowsMenuEl.querySelector('.windows-menu-body');
@@ -2054,6 +2112,9 @@
             async loadSite(name, focusPathStr = '') {
                 if (!name) return;
                 this.closeMachine();
+                // A printer of the site before is no printer of this one.
+                this.workingOn = null;
+                this.workingSpace?.close();
                 this.whereByPort = {};
                 this.setStatus(`Loading ${name}...`, 'loading');
                 try {
@@ -3273,6 +3334,8 @@
                 this.placeStageBar();
                 this.showPartSections();
                 this.refocus(focused);
+                // Models follows the shape chosen on a mat, while it is shown.
+                if (this.modelsWidget && this.panels.isShown('models')) this.modelsWidget.follow();
             }
 
             // What has the focus in Selected -- its body, or its pinned bar -- as a selector
@@ -3510,6 +3573,7 @@
                     const long = longSide ? `${longSide.toFixed(0)} mm` : 'no size yet';
                     const status = shape.status === 'made' ? `made: ${esc(shape.piece)}` : shape.status === 'already_made' ? `already made (${esc(shape.piece)})` : 'found';
                     rows.push(`<div class="chosen-shape" data-facts="shape">Shape ${shape.index}: a ${esc(shape.word)} (${esc(shape.kind)}) because ${esc(shape.reason)}${shape.word_stated ? ' (a person said so)' : ''}; confidence ${Number(shape.confidence).toFixed(2)}; long side ${long}; ${status}</div>`);
+                    rows.push(`<div class="chosen-shape-models note" data-facts="models">⊞ Windows › Models asks a model about it, beside the colour read off its pixels</div>`);
                 }
                 // The one width: the drawn view's, or with a shape chosen, that shape's long side.
                 const bySide = shape && drawn && view === drawn;
@@ -7222,6 +7286,16 @@
                 return mountAirgap(slot, { base: BASE_URL, say: (text, kind) => this.setStatus(text, kind), world, sections });
             }
 
+            // The Working space opened on a printer (its path), or on the whole site
+            // (null): the window in front, and its next step said.
+            async openWorkingSpace(path) {
+                this.workingOn = path;
+                const fresh = !this.workingSpace;
+                this.panels.open('working');
+                await (fresh ? this.workingOpened : this.workingSpace.open(path));
+                const next = this.workingSpace.next();
+                return path ? `${path}'s hour in the Working space: ${next}` : `the Working space of ${this.siteName}: ${next}`;
+            }
             // Stops the Machine watching its board and takes its panel away. Called
             // again from inside (the panel's onClose), it does nothing.
             closeMachine() {
@@ -8373,6 +8447,12 @@
                     }
                     if (action === 'device:pin') { viewer.setStatus(`${intent.label}: choose the piece to pin ${port} to, and pin it from Selected${tail}`, 'error'); return; }
                 }
+                // A printer's Workspace: the Working space opened on it.
+                if (action === 'working:open') {
+                    const said = await viewer.openWorkingSpace(path);
+                    viewer.setStatus(`${said}${tail}`, 'success');
+                    return;
+                }
                 // A made piece's Print names the printer it prints on; the piece is the
                 // ring's target. Before the board verbs: it is the world's, not a Machine's.
                 if (action.startsWith('print:piece:')) {
@@ -8423,6 +8503,14 @@
                     viewer.panels.open('bench');
                     viewer.setStatus(`${intent.label}${tail}`, 'success');
                     if (viewer.bench) viewer.bench.act(action.slice('bench:'.length));
+                    return;
+                }
+                // A Models verb: the window shown, and the verb done on the shape chosen
+                // on a mat; what it asked or said, or refused, is the window's own last word.
+                if (action.startsWith('models:')) {
+                    viewer.panels.open('models');
+                    viewer.setStatus(`${intent.label}${tail}`, 'success');
+                    if (viewer.modelsWidget) { viewer.modelsWidget.follow(); viewer.modelsWidget.act(action.slice('models:'.length)); }
                     return;
                 }
                 // An Airgap verb: the panel shown, and the verb done; what it did, or
@@ -8568,6 +8656,10 @@
                     // The View menu's items, as a person changes them there.
                     const said = viewer.viewVerb(action.slice('view:'.length));
                     viewer.setStatus(said ? `${said}${tail}` : `${intent.label}: the View menu has no such item${tail}`, said ? 'success' : 'error');
+                } else if (action === 'panel:toggle:working') {
+                    // Panels › Site › Workspace: the Working space on the whole site.
+                    const said = await viewer.openWorkingSpace(null);
+                    viewer.setStatus(`${said}${tail}`, 'success');
                 } else if (action.startsWith('panel:toggle:')) {
                     const id = action.slice('panel:toggle:'.length);
                     const open = viewer.panels.toggle(id) && viewer.panels.isOpen(id);

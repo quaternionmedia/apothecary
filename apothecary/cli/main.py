@@ -5,6 +5,7 @@ import click
 from .airgap import airgap
 from .census import census
 from .docs import docs
+from .evidence import evidence
 from .firmware import firmware
 from .inventory import inventory
 from .kernels import kernel_reference
@@ -15,11 +16,13 @@ from .photo import photo
 from .preflight import preflight
 from .release import release
 from .render import render_scene, render_scene_jscad, template_generate, testrun, validate
+from .rig import rig
 from .server import DEFAULT_PORT, dev, serve
 from .slicer import slicer
 from .spaces import problems, solutions
 from .system import check, install, submodules, system
 from .testing import test
+from .vision import vision
 
 # Commands for working on this repository rather than with it: its tests, its CI
 # run here, its generated docs and its own measures. Listed after the rest.
@@ -92,6 +95,7 @@ cli.add_command(parts)
 cli.add_command(preflight)
 cli.add_command(release)
 cli.add_command(photo)
+cli.add_command(vision)
 cli.add_command(test)
 cli.add_command(docs)
 cli.add_command(census)
@@ -101,6 +105,8 @@ cli.add_command(openscad)
 cli.add_command(slicer)
 cli.add_command(lighting)
 cli.add_command(airgap)
+cli.add_command(rig)
+cli.add_command(evidence)
 
 
 def main():  # pragma: no cover - entry point

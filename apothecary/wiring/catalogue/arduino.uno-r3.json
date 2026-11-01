@@ -1,0 +1,51 @@
+{
+  "id": "arduino.uno-r3",
+  "maker": "Arduino",
+  "model": "Uno R3",
+  "category": "board",
+  "summary": "The 68.6 x 53.3 mm ATmega328P board every shield is drawn for. Its USB-B powers it and carries its serial port through an ATmega16U2; its 2.1 mm DC barrel jack, beside it on the same edge, powers it from a supply instead. This entry has the two sockets on that edge, laid out as a camera facing the edge sees them, and not yet its headers.",
+  "fidelity": "sketch",
+  "jacks": [
+    {
+      "name": "usb",
+      "label": "USB",
+      "type": "output",
+      "signal": "data",
+      "carrier": "usb",
+      "connector": "USB-B",
+      "side": "left",
+      "note": "Power in, and the serial port: flashing, and whatever the sketch prints."
+    },
+    {
+      "name": "power",
+      "label": "POWER",
+      "type": "input",
+      "signal": "power",
+      "connector": "DC barrel 2.1mm",
+      "side": "left",
+      "note": "7 to 12 V from a supply, centre positive."
+    }
+  ],
+  "parameters": [],
+  "layout": {
+    "box": {
+      "width": 75.08,
+      "height": 53.34,
+      "depth": 14.5
+    },
+    "jacks": {
+      "usb": {
+        "x": 0.5,
+        "y": 0.28,
+        "side": "left",
+        "size": 1.1
+      },
+      "power": {
+        "x": 0.5,
+        "y": 0.855,
+        "side": "left",
+        "size": 0.85
+      }
+    }
+  }
+}

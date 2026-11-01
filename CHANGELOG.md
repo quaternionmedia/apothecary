@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- A working space seen from its evidence: a printer's polls kept as observations, each value saying how it is known and what it rests on, with a frame from each camera that looks at the printer; its window's first line names the next step from each of its doors, and a camera added where one stands steps beside it. ([page](walkthrough/18-the-working-space.md))
 - One made thing goes round the four loops: the footpedal on the garage's bench, sized, its SCAD edited and saved, sliced and printed, then its own sketch flashed to its board and heard, each loop's last message naming the next on it; a part whose sketch no board runs has Flash sketch on its ring and in its Device section, which open the Bench on that sketch and on the port of the board it is for. ([page](walkthrough/00-getting-started.md))
 - A devkit's LED flashes on its badges with each blink it is heard saying, and a heating or printing printer's badge pulses. ([code](templates/fractal_viewer.html.j2))
 - `serve --demo` runs a simulated lighting console, sweeping the theatre's rig, unless a real console is listened for. ([doc](docs/lighting.md))

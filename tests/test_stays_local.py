@@ -107,6 +107,8 @@ INSTALL_POINTS = {
     "apothecary.gathering": PACKAGE / "gathering" / "__init__.py",
     "apothecary.firmware": PACKAGE / "firmware" / "__init__.py",
     "apothecary.routes": PACKAGE / "routes" / "__init__.py",
+    "apothecary.rig": PACKAGE / "rig" / "__init__.py",
+    "apothecary.evidence": PACKAGE / "evidence" / "__init__.py",
 }
 ROOT_CONFTEST = ROOT / "conftest.py"
 
@@ -243,7 +245,7 @@ def test_each_install_point_puts_the_guard_on_before_any_of_its_own_code(source)
 # points' packages none of it is done, but through one of them: the state folder
 # is apothecary.firmware's to resolve and the picture root apothecary.api's, so a
 # module that calls either has imported an install point first.
-GUARDED_SOURCES = ("api.py", "cli/", "vision/", "gathering/", "firmware/", "routes/")
+GUARDED_SOURCES = ("api.py", "cli/", "vision/", "gathering/", "firmware/", "routes/", "rig/")
 READER_MODULES = {"serial": "the serial link", "PIL": "an image library"}
 READER_VARIABLES = {"APOTHECARY_STATE_DIR", "APOTHECARY_PICTURE_ROOT"}
 RESOLVED_BY = {"state_dir": "apothecary.firmware", "_picture_root": "apothecary.api"}

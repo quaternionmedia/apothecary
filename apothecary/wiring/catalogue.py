@@ -1,0 +1,76 @@
+"""The devices on the bench, as carlos's catalogue names them.
+
+Carlos addresses a device as ``<maker>.<model>`` and describes it in one JSON
+file: what it is, its sockets, and which face each socket is on. The entries in
+``catalogue/`` are in that format, one file each, named for its id, so a file
+can be offered to carlos's catalogue as it is. Apothecary reads from them only
+what it writes connections with: the id and the sockets.
+
+A board's faces follow its drawing: the front is its component side seen from
+above with +y up, so its edges are left (x min), right (x max), bottom (y min)
+and top (y max), and its box is its bounds -- width, height and depth along x,
+y and z.
+
+``PARTS`` says which part draws which device. A node made of a part that is
+not in it has no type in a patch.
+"""
+
+from __future__ import annotations
+
+import json
+from functools import lru_cache
+from pathlib import Path
+from typing import Dict, Optional
+
+ROOT = Path(__file__).resolve().parent / "catalogue"
+
+# The computer apothecary runs on: the far end of every USB lead it observes.
+HOST = "apothecary.host"
+# A mains supply, the far end of a board's power lead in a rig a camera sees.
+SUPPLY = "apothecary.power-supply"
+
+PARTS: Dict[str, str] = {
+    "esp32_devkitc": "espressif.esp32-devkitc",
+    "creality_v422": "creality.v422",
+    "arduino_uno": "arduino.uno-r3",
+    "footpedal": "quaternionmedia.footpedal",
+}
+
+# What a board answering on a port no node names is, when the port says no more.
+UNNAMED = "apothecary.usb-device"
+
+# What a port says a board is, by the FQBN arduino-cli matched to it: only a
+# match that names one board. A USB bridge's VID and PID name the bridge, and a
+# CP2102 is on many more boards than the ESP32 devkit.
+BY_FQBN: Dict[str, str] = {
+    "arduino:avr:uno": "arduino.uno-r3",
+}
+
+# The connectors a USB lead plugs into, as carlos's vocabulary spells them.
+USB_CONNECTORS = ("USB-A", "USB-B", "USB-C", "micro-USB")
+
+
+@lru_cache(maxsize=None)
+def entries() -> Dict[str, dict]:
+    """Every entry, by id."""
+    found: Dict[str, dict] = {}
+    for path in sorted(ROOT.glob("*.json")):
+        entry = json.loads(path.read_text(encoding="utf-8"))
+        found[entry["id"]] = entry
+    return found
+
+
+def device_of(part_ref: Optional[str]) -> Optional[str]:
+    """The catalogue id of the device a part draws, or None."""
+    return PARTS.get(part_ref) if part_ref else None
+
+
+def device_by_port(fqbn: Optional[str]) -> str:
+    """The catalogue id a port's own match gives a board no node names."""
+    return BY_FQBN.get(fqbn or "", UNNAMED)
+
+
+def usb_jack(device: str) -> Optional[str]:
+    """The name of a device's USB socket, when it has exactly one."""
+    sockets = [j["name"] for j in entries()[device]["jacks"] if j["connector"] in USB_CONNECTORS]
+    return sockets[0] if len(sockets) == 1 else None

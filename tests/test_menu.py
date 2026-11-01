@@ -1074,15 +1074,41 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Pinned", "panel:toggle:pinned", 2),
         ("Jobs", "panel:toggle:jobs", 4),
         ("SCAD", "panel:toggle:scad", 9),
+        ("Workspace", "panel:toggle:working", 3),
     ]
     assert address_of(root, "panel:site") == "488"  # by the option's id
     assert address_of(root, "panel:problems") == "486"
     pictures = next(c for c in panels.children if c.label == "Pictures")
     assert [(c.label, c.action, c.cell) for c in pictures.children] == [
         ("Pictures", "panel:toggle:pictures", 8),
-        ("Gather", "panel:toggle:gather", 6),
+        # Models before Gather, so Models keeps its address when Gather goes
+        # (docs/plans/ui-coordination-2026-10-31.md): the window, then its verbs,
+        # which the page carries to it -- Ask, and a person's word on a colour or a
+        # material, each a word of the family's lists.
+        ("Models", None, 6),
+        ("Gather", "panel:toggle:gather", 2),
     ]
     assert address_of(root, "panel:pictures") == "428"
+    models = next(c for c in pictures.children if c.label == "Models")
+    assert [(c.label, c.action) for c in models.children] == [
+        ("Models", "panel:toggle:models"),
+        ("Ask", "models:ask"),
+        ("Colour", None),
+        ("Material", None),
+    ]
+    assert carried_by("models:ask").name == "VIEWER"
+    assert carried_by("models:say:colour:red").name == "VIEWER"
+    colour = next(c for c in models.children if c.label == "Colour")
+    # The common colours a cell each, the rest under More: no word under another's name.
+    assert [c.label for c in colour.children] == [
+        "black", "white", "grey", "red", "yellow", "green", "blue", "More"
+    ]
+    assert [c.label for c in colour.children[-1].children] == ["orange", "purple", "pink", "brown"]
+    material = next(c for c in models.children if c.label == "Material")
+    assert [c.action for c in material.children][:2] == [
+        "models:say:material:plastic",
+        "models:say:material:metal",
+    ]
     assert address_of(root, "panel:machine") == "448"
     assert address_of(root, "panel:windows") == "49"
     windows = next(c for c in panels.children if c.label == "Windows")
@@ -1634,6 +1660,37 @@ def test_a_made_piece_and_a_part_slice_for_a_printer_pinned_in_their_site():
     ring = resolve(Context(pointing=Pointing.NODE, targets=["esp32_blink"]), site, picture=plain)
     assert "Slice" not in [o.label for o in ring.options]  # its sketch says it is a board
     assert carried_by("slice:piece:printer_1").name == "VIEWER"
+
+
+def test_a_printer_a_board_drives_opens_its_working_space_under_its_camera():
+    """Workspace is under a printer's Camera, beside Add here: the page opens the
+    Working space on it (widgets/working_space.js), where the frames its cameras keep
+    with its polls are. Only a printer a board drives has it, so no cell of the
+    ring moves, whether the printer's own Device is there or its board's pin is
+    below it; another host's Camera holds Add here alone."""
+    from apothecary.menu import PictureContext, carried_by
+
+    site = _garage()
+
+    def on(path, printers, device=None):
+        told = PictureContext(printers=printers)
+        context = Context(pointing=Pointing.NODE, targets=[path])
+        return resolve(context, site, picture=told, device=device)
+
+    for device in (None, PRINTER):
+        ring = on("printer_1", ["printer_1"], device)
+        camera = _group(ring, "Camera")
+        assert [(c.label, c.action) for c in camera.children] == [
+            ("Add here", "camera:add-here"),
+            ("Workspace", "working:open"),
+        ]
+        assert [o.label for o in ring.options] == [
+            o.label for o in on("printer_1", [], device).options
+        ]
+    assert carried_by("working:open").name == "VIEWER"
+    for path in ("workbench", "printer_1"):
+        bare = _group(on(path, []), "Camera")
+        assert [c.label for c in bare.children] == ["Add here"], path
 
 
 def test_a_made_piece_has_picture_with_word_and_drop_and_no_camera():

@@ -1,0 +1,32 @@
+/* Models (widgets/models.js): qmcp's state, the origins and their switches, and a
+ * shape asked about. Scoped to .models-ui, so the page's own rules are left alone. */
+.models-ui { font-size: 0.8rem; color: #c8d0c8; display: flex; flex-direction: column; gap: 0.35rem; }
+.models-ui .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #7a867a; margin-top: 0.45rem; }
+.models-ui .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+.models-ui .grow { flex: 1; min-width: 0; }
+.models-ui .meta { color: #7a867a; font-size: 0.72rem; }
+.models-ui .note { color: #8a9a8a; font-size: 0.72rem; font-style: italic; }
+.models-ui .note:empty { display: none; }
+.models-ui .empty { color: #666; font-style: italic; }
+.models-ui .ok { color: #6fdb75; } .models-ui .warn { color: #ffcc66; } .models-ui .bad { color: #ff8080; }
+.models-ui .dot { display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 50%; margin-right: 0.4rem; vertical-align: middle; background: #555; }
+.models-ui .dot.ok { background: #6fdb75; } .models-ui .dot.warn { background: #ffcc66; } .models-ui .dot.off { background: #555; }
+.models-ui button, .models-ui input:not([type=checkbox]), .models-ui select {
+    font: inherit; font-size: 0.78rem; background: #232823; color: #ddd; border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.45rem;
+}
+.models-ui button { cursor: pointer; }
+.models-ui button:hover { background: #2f382f; }
+.models-ui button:disabled { opacity: 0.45; cursor: not-allowed; }
+.models-ui ul { list-style: none; margin: 0; padding: 0; }
+.models-ui li { display: flex; flex-direction: column; gap: 0.05rem; padding: 0.2rem 0.2rem; border-radius: 3px; }
+.models-ui li label { display: flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+.models-ui .origin { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.74rem; }
+.models-ui li .meta { padding-left: 1.4rem; }
+.models-ui .models-table { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
+.models-ui .models-table th, .models-ui .models-table td { text-align: left; vertical-align: top; padding: 0.25rem 0.3rem; border-top: 1px solid #2a302a; }
+.models-ui .models-table thead th { color: #7a867a; font-weight: normal; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; border-top: none; }
+.models-ui .models-table tbody th { color: #aab4aa; font-weight: normal; white-space: nowrap; }
+.models-ui .models-table input { width: 100%; min-width: 5rem; box-sizing: border-box; }
+.models-ui .unread { color: #a89a7a; font-style: italic; }
+.models-ui .overruled { text-decoration: line-through; color: #7a867a; }
+.models-ui .swatch { display: inline-block; width: 0.7rem; height: 0.7rem; border: 1px solid #555; border-radius: 2px; margin-right: 0.3rem; vertical-align: -0.1rem; }

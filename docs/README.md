@@ -6,7 +6,7 @@ HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 
 ## The walkthrough
 
-`walkthrough/` is the path through this repository. Pages 01 to 06 are
+`walkthrough/` is the path through this repository. Pages 01 to 06 and 18 are
 written by the browser tests that walk them; page 00 and pages 07 to 17 are
 doctests, run by `pytest walkthrough`. Start there, at page 00.
 
@@ -30,6 +30,7 @@ doctests, run by `pytest walkthrough`. Start there, at page 00.
 | [15 — Running the checks before pushing](../walkthrough/15-preflight.md) | `apothecary preflight`: each CI workflow, run here before a push |
 | [16 — Being depended on](../walkthrough/16-being-depended-on.md) | What a consumer pinning this repository is entitled to |
 | [17 — A part that computes itself](../walkthrough/17-a-part-that-computes-itself.md) | The airgap: a part whose SCAD computes its surfaces from its assignments, the Python mirror that declares its envelope, and the metrics document its panel says |
+| [18 — The working space](../walkthrough/18-the-working-space.md) | A site as its evidence has it and a printer's hour in it, from each of its doors: three cameras added above printer_1, each told its device in its row, a frame set kept with a poll and opened beside it, the budget set; written by the browser suite |
 
 ## Guides
 
@@ -45,6 +46,7 @@ doctests, run by `pytest walkthrough`. Start there, at page 00.
 | [Fitting a part](fitting-a-part.md) | The seam between a consumer and this repository as built: black boxes, a part's parameters and the validator, a gate per pair of descriptions, the pin, and who owns each open problem |
 | [Geometry models](models.md) | Vectors, bounds, colors, shapes and units |
 | [Geometry made elsewhere](geometry-from-elsewhere.md) | An STL or OBJ as a part (`apothecary parts import`), and a part described by a sidecar |
+| [The Working space](working-space.md) | A site as its evidence has it: a printer's polls kept as observations, the frames its cameras keep with them under a budget, the window that shows both, and the doors that read them |
 | [Pictures, cameras and pieces](pictures.md) | Where pictures live, a camera as a part of the site, a picture pinned as a view, its shapes made into pieces, what is taken back and how, the `photo` commands |
 | [The census](census.md) | What `apothecary census` counts of the viewer, how each control and listener is classified, ring-backed and taken back, and the ceiling and floor a change to the page keeps |
 | [Configuration](configuration.md) | Every `APOTHECARY_*` variable, and the tool variables, each with its default and the page that explains it |
@@ -52,6 +54,7 @@ doctests, run by `pytest walkthrough`. Start there, at page 00.
 | [The slicer](slicer.md) | OrcaSlicer installed and pinned, the printer's profile kept with its part, a part or a made piece sliced for the pinned printer and kept for the Print card |
 | [The Airgap](airgap.md) | The `airgap` part -- a rotor/stator pair computed in its SCAD -- and the Airgap panel: the part as a field, torque and dynamics model that follows its text in the editor, its verbs on the ring, its rig and sweep as documents, and the metrics document Python reads back |
 | [The bench checklist](bench-checklist.md) | The Ender 3 and an ESP32 for real: pinning, the link, heat, motion, levelling, printing from here, slicing, the emergency stop, and the Rust and Arduino blinks |
+| [The models checklist](models-checklist.md) | Image models through qmcp by hand, against the simulated qmcp: the Models window, asking about a shape, a person's word, switching an origin off, and each way qmcp can be missing |
 
 ## The Rust workspace
 
@@ -78,12 +81,17 @@ Open plans: each says what is decided and what is not built.
 |---|---|
 | [Pictures in the world: what is open](plans/pictures-the-rest-2026-10-13.md) | Gathering out of core as an extra, and the old photo routes closed: the two phases of the pictures plan not built |
 | [The shape finder, with a model behind it](plans/photo-finders-local-models-2026-09-21.md) | Optional local models behind the photo finder: the seam, the plugin shape, what reach is lawful, the phases |
+| [Image models through qmcp](plans/image-models-through-qmcp-2026-10-30.md) | Image models as an always-optional source of measurements, served by qmcp on this machine: the vision tools' contract, observations beside the plain readers' and never over a person's word, how each degrades, which come first and how each is measured, qmcp's own slice, the records and the owner's questions |
 | [Iterating on a part, tightened](plans/part-iteration-2026-10-12.md) | The part and SCAD loops reviewed and timed, and this round built: errors as failed renders, real controls, kept work, OpenSCAD's keys, variants drawn where they stand, history, compare, variant management; its next phase written out |
 | [Governance, brought up to the corpus](plans/governance-2026-10-13.md) | The audit of apothecary's governance and audit documents against the corpus, and what is decided: the guard's install points, licence conflict rows, the serial removed, drafts, the bench checklist |
 | [Reviewed: the systems, the tests and the docs](plans/review-2026-10-24.md) | The whole read once for gaps at the top of the stack: safety, the code's shape, what the tests run and where, their duplication and time, the docs against the page, and what stands on origin; each gap with its evidence and a next step |
 | [A review cycle at ten times the requests](plans/review-cycle-2026-10-24.md) | How requests are reviewed and landed, measured, and a proposed cycle that holds at ten times as many: machines gate a request and its author merges it, a merge queue tests batches once, releases are reviewed by area at a tag, stacks stay shallow, shared files are split |
 | [Focused systems](plans/focused-systems-2026-10-22.md) | The Airgap as the standard for a focused layout, the Part and the Machine on it, one registry every system is configured through, and Board, Lighting, Fit and build and Bench after them |
 | [The documentation, swept](plans/timeless-docs-2026-10-12.md) | Every durable text brought under the governance record on durable text: present tense, no internal history, no ornament; the triage by area and the order; its notes on each area in [its folder](plans/timeless-docs-2026-10-12/) |
+| [The bench as a rig carlos can draw](plans/qm-family-carlos-2026-10-29.md) | Carlos, in the instruments family, holding and drawing the bench as apothecary sees it: the bench written as a `carlos.patch` with each board's and lead's state and sent whenever it changes (built, with a demo), a picture naming a device, IO configuration, and carlos's one action |
+| [A synth rig photographed through a concert, held in carlos](plans/carlos-concert-rig-2026-10-29.md) | Carlos's rigs, bolstered from apothecary: each knob, fader, switch and socket read off a camera's picture against carlos's own panels and held in carlos frame by frame through a concert, turned in place, with a test of both apps end to end (built, on drawn pictures); the first real photographs, power and USB into an Uno; then the airgap's test rig and a server room |
+| [A working space, seen from every kind of evidence at once](plans/working-space-view-2026-10-30.md) | One view of a place (what is here, what state it is in, how it is known, what changed) from its cameras (one thing from several angles among them), ports and polls, sensors, a person's goals, directives and actions, and optional image models, every line opening its evidence and every disagreement kept; first the Ender's three cameras (on the bed for its timelapse, on the head, across the room) tied to its polls; not built |
+| [One page for every effort](plans/ui-coordination-2026-10-31.md) | The viewer's windows, doors and words across the efforts in flight (the Working space, the image models, the rig's faces, the bench in carlos, lighting, pictures): where they collide, one observation module, and the order the collisions are settled in. |
 
 ## History
 
