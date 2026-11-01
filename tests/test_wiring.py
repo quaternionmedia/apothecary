@@ -272,6 +272,27 @@ def test_a_pinned_board_says_it_is_present_and_known_by_its_serial_number():
     assert wiring.states.modules[HOST_MODULE].level == "ok"
 
 
+@pytest.mark.parametrize(
+    "identity, kind",
+    [
+        ("A106ZTEU", "its USB serial number"),
+        ("24:6f:28:aa:bb:cc", "its MAC"),
+        ("/dev/ttyUSB0", "its port"),
+    ],
+)
+def test_a_pinned_board_not_answering_is_known_by_what_its_pin_names(identity, kind):
+    row = NodeBinding(
+        path=MAINBOARD,
+        name="mainboard",
+        part_ref="creality_v422",
+        binding_source="manual",
+        identity=identity,
+    )
+    state = wiring_for_site("garage", create_example_site(), [row]).states.modules[MAINBOARD]
+    assert state.level == "fault"
+    assert state.says == ["absent: expected, and not answering", f"known by: pinned, by {kind}"]
+
+
 def test_a_board_flashed_from_an_older_source_is_a_warning():
     from datetime import datetime, timezone
 
