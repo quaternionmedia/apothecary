@@ -367,6 +367,21 @@
         .contents-item .dev-badge.printing { background: #2a2410; color: #ffcc66; border-color: #4a3f1a; }
         .contents-item .dev-badge.mismatch { color: #ff9b9b; border-color: #4a2f2f; }
         .contents-item .dev-badge.via { opacity: 0.75; }
+        /* A board's lights, on Site's tree and in the world: a printer heating pulses
+           amber and one printing pulses its own colour (the glow, never the opacity,
+           which says a badge is behind something); a devkit's LED flashes blue on each
+           blink it is heard saying (.lit, heardBlinks). */
+        .contents-item .dev-badge.heating { background: #2a1d10; color: #ffb066; border-color: #4a331a; }
+        .contents-item .dev-badge.heating, .world-badge.heating { --pulse: rgba(255, 176, 102, 0.85); animation: board-pulse 1.6s ease-in-out infinite; }
+        .contents-item .dev-badge.printing, .world-badge.printing { --pulse: rgba(255, 204, 102, 0.75); animation: board-pulse 2.4s ease-in-out infinite; }
+        .world-badge.heating { color: #ffb066; border-color: #7a4f1a; }
+        .contents-item .dev-badge.lit, .world-badge.lit { color: #cfeaff; border-color: #4fb3ff; box-shadow: 0 0 10px rgba(79, 179, 255, 0.85); }
+        .contents-item .dev-badge.lit, .world-badge.lit .badge-icon { text-shadow: 0 0 6px #4fb3ff, 0 0 12px #4fb3ff; }
+        @keyframes board-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 transparent; }
+            50% { box-shadow: 0 0 9px 1px var(--pulse); }
+        }
+        @media (prefers-reduced-motion: reduce) { .contents-item .dev-badge.heating, .contents-item .dev-badge.printing, .world-badge.heating, .world-badge.printing { animation: none; } }
         /* Anchors: badges fixed to a point in the world (anchors.js). A badge is
            a small icon at its thing's own spot; its words are a card the layer
            opens on hover or while its thing is selected, and places clear of
@@ -669,7 +684,7 @@
 <body>
     <div class="app-container">
         {% if demo %}
-        <div id="demo-banner" class="demo-banner" role="note" title="apothecary serve --demo: printer_1's mainboard is pinned to a simulated Ender, an ESP32 devkit is simulated, arduino-cli, cargo and espflash are scripted, and no real serial port is opened. Its state is {{ demo }}, kept between runs; your own ~/.apothecary and pins are not touched.">The demo: a simulated printer and ESP32, scripted firmware tools, its own state in {{ demo }}. To leave it, stop the server and run <code>apothecary serve</code> without --demo.</div>
+        <div id="demo-banner" class="demo-banner" role="note" title="apothecary serve --demo: printer_1's mainboard is pinned to a simulated Ender, an ESP32 devkit is simulated, a simulated lighting console sweeps the theatre's rig, arduino-cli, cargo and espflash are scripted, and no real serial port is opened. Its state is {{ demo }}, kept between runs; your own ~/.apothecary and pins are not touched.">The demo: a simulated printer, ESP32 and lighting console, scripted firmware tools, its own state in {{ demo }}. To leave it, stop the server and run <code>apothecary serve</code> without --demo.</div>
         {% endif %}
         <div class="toolbar">
             <h1>🧪 Apothecary</h1>
@@ -951,6 +966,8 @@
         // the editor's target key, so a reload offers it back; and its recent applies.
         const KEPT_PREFIX = 'apothecary.work:';
         const HISTORY_PREFIX = 'apothecary.applies:';
+        // Which drawn variant this tab saved under which name, by part (noteSaved).
+        const SAVED_AS_KEY = 'apothecary.savedAs';
         // Measured and declared differ when they are this far apart (mm), and a part
         // stands below the floor when it reaches this far under it.
         const DIFFERS_MM = 0.01;
@@ -1044,6 +1061,18 @@
         // for this long after a step.
         const WHEEL_QUIET_MS = 250;
         const STEP_QUIET_MS = 400;
+        // A turn of the wheel is measured in pixels: a line is this many, a page the
+        // canvas's height. A mouse's notch is about a hundred, a trackpad's turns a few
+        // each, so the trackpad's many add up to the mouse's one.
+        const WHEEL_PX_PER_LINE = 16;
+        // A devkit's LED, as its sketch drives it: esp32_blink prints "blink 12" as its LED
+        // comes on, and keeps it on for half its period. Heard one at a time (Listen), each
+        // blink lights it for half the time since the one before; heard all at once (a
+        // Query's few seconds come back together), up to LED_REPLAY of them are played back
+        // at LED_PERIOD_MS, the sketch's own second, so a person sees it blink.
+        const LED_PERIOD_MS = 1000;
+        const LED_REPLAY = 5;
+        const BLINK = /^blink\b/i;
         // The keys the page would scroll with: they step a level only while the world has
         // the keys.
         const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End', ' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
@@ -1247,6 +1276,9 @@
                 this.invalidInside = new Map();
                 this.wheelPastLimit = 0;
                 this.wheelAt = 0;              // the last turn of the wheel
+                this.ledFlashes = {};          // port -> how many times its LED flashed (flashLed)
+                this.ledOff = {};              // port -> the timer that puts it out
+                this.ledHeard = {};            // port -> when its last blink was heard, one at a time
                 this.stepQuietUntil = 0;       // no step by the wheel before this
                 this.press = null;             // a button held on the world, until it is let go
                 this.lastPressInWorld = true;  // nothing pressed yet: the keys are the world's
@@ -1260,6 +1292,8 @@
                 this.variantByPart = {};
                 this.variantRecords = {};
                 this.variantsRead = this.readVariantsFromAddress();
+                // part name -> { name, variant }: the variant drawn when it was saved as `name`.
+                this.savedAs = (() => { try { return JSON.parse(sessionStorage.getItem(SAVED_AS_KEY)) || {}; } catch (e) { return {}; } })();
                 this.partSection = null;   // the Selected panel's section for the part being edited
                 this.checklistRead = 0;    // the newest read of a part's checklist: an older answer is let go
                 // The SCAD editor (widgets/scad_editor.js), for the part being edited: what
@@ -1346,6 +1380,10 @@
                 this.orbitControls.enableDamping = true;
                 this.orbitControls.dampingFactor = 0.05;
                 this.orbitControls.zoomSpeed = 0.6;
+                // The wheel's dolly is the page's (dollyByWheel): OrbitControls r160 divides
+                // a turn by the integer part of devicePixelRatio, which is 0 on a page zoomed
+                // below 100% on an ordinary screen, so one small turn threw the camera to a limit.
+                this.orbitControls.enableZoom = false;
                 // The arrows pan the view, and Shift+arrows turn it, while the world has the
                 // keyboard's focus, and only then.
                 this.orbitControls.listenToKeyEvents(this.renderer.domElement);
@@ -1446,12 +1484,15 @@
                 // after anything that moves a host or a camera, or takes a picture.
                 // The lighting rig and the console's levels, when the site has a rig
                 // (lighting.js): its legend a window, Lighting, a tab beside Pictures,
-                // there while the site has a rig.
+                // there while the site has a rig and in front of its stack as the site
+                // opens, the rig being what the site is for.
                 this.lighting = mountLighting({
                     scene: this.scene, base: BASE_URL,
-                    onPanel: (el) => (el
-                        ? (this.panels.state('lighting') || this.panels.register('lighting', { title: 'Lighting', group: 'Lighting', body: el }))
-                        : this.panels.unregister('lighting')),
+                    onPanel: (el) => {
+                        if (!el) { this.panels.unregister('lighting'); return; }
+                        if (!this.panels.state('lighting')) this.panels.register('lighting', { title: 'Lighting', group: 'Lighting', body: el });
+                        this.panels.open('lighting');
+                    },
                 });
                 this.pictureMarks = mountPictureMarks({
                     scene: this.scene, anchors: this.anchors, base: BASE_URL,
@@ -1670,7 +1711,9 @@
                 // With a camera selected, P takes a picture.
                 window.addEventListener('keydown', (e) => this.onPictureKey(e));
                 this.canvas.addEventListener('dblclick', (e) => this.onDoubleClick(e));
-                this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: true });
+                // Not passive: a turn over the world is the world's, never the page's zoom
+                // (a pinch) or its history (a sideways swipe).
+                this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
                 // A file dropped on a structure is kept and pinned at its root (at the
                 // floor, on empty canvas); a pasted picture, at the selected place.
                 this.canvas.addEventListener('dragover', (e) => e.preventDefault());
@@ -2472,23 +2515,51 @@
             // the badge layer, so it is the same size at any framing and seen at a
             // glance without selecting the part, where an edge's colour is a pixel
             // wide. It stands on the top of the part's mesh, and goes when the mesh
-            // does or is the saved part again.
+            // does or is the saved part again. Its words name the variant saved in git
+            // that it is drawn from, when it is one (savedName).
             markVariant(key, node, variant) {
                 const mark = `variant:${key}`;
                 if (!variant) { this.anchors.remove(mark); return; }
-                if (this.anchors.has(mark)) return;
-                const top = () => {
-                    const mesh = this.meshByName[key];
-                    if (!mesh || !mesh.userData.drawnFromVariant) return null;
-                    const g = mesh.geometry;
-                    if (!g.boundingBox) g.computeBoundingBox();
-                    const b = g.boundingBox;
-                    return mesh.localToWorld(new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2));
-                };
-                const el = this.anchors.badge(mark, top, { className: 'variant-mark', ignore: (m) => m === this.meshByName[key] });
-                el.dataset.part = node.part_ref;
-                el.dataset.path = key;
-                this.anchors.say(mark, { icon: '', words: `${esc(node.part_ref)}: an applied variant, not saved` });
+                if (!this.anchors.has(mark)) {
+                    const top = () => {
+                        const mesh = this.meshByName[key];
+                        if (!mesh || !mesh.userData.drawnFromVariant) return null;
+                        const g = mesh.geometry;
+                        if (!g.boundingBox) g.computeBoundingBox();
+                        const b = g.boundingBox;
+                        return mesh.localToWorld(new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y, (b.min.z + b.max.z) / 2));
+                    };
+                    const el = this.anchors.badge(mark, top, { className: 'variant-mark', ignore: (m) => m === this.meshByName[key] });
+                    el.dataset.part = node.part_ref;
+                    el.dataset.path = key;
+                }
+                this.anchors.say(mark, { icon: '', words: `${esc(node.part_ref)}: ${esc(this.drawnAs(node.part_ref))}` });
+            }
+
+            // What a part drawn from a variant is drawn from, in a few words.
+            drawnAs(ref) {
+                const saved = this.savedName(ref);
+                return saved ? `${saved}, saved in git` : 'an applied variant, not saved';
+            }
+
+            // The name a part's drawn variant was saved under in this tab, or null.
+            savedName(ref) {
+                const s = this.savedAs[ref];
+                return s && s.variant === this.variantByPart[ref] ? s.name : null;
+            }
+
+            // Saved as `name`, or a saved variant drawn: when what is drawn is what was
+            // saved (its text, and its numbers staged), its mark and Selected name it while
+            // it is drawn from it; a name saved over something else is let go.
+            noteSaved(target, name, text) {
+                const ref = target.part, drawn = this.variantByPart[ref];
+                const scad = this.scadStages[target.key], stage = this.partStages[target.key];
+                const numbers = !stage || stage.tied || (stage.history?.[0]?.variant === drawn
+                    && JSON.stringify(stage.history[0].params) === JSON.stringify(stage.staged ?? {}));
+                if (drawn && scad?.drawnText === text && numbers) this.savedAs[ref] = { name, variant: drawn };
+                else if (this.savedAs[ref]?.name === name) delete this.savedAs[ref];
+                try { sessionStorage.setItem(SAVED_AS_KEY, JSON.stringify(this.savedAs)); } catch (e) { /* named until the tab is left */ }
+                this.showDrawn(ref);
             }
 
             isWall(node) { return !!node && node.category === WALL_CATEGORY; }
@@ -3706,7 +3777,8 @@
                         // Its own text with other values in it is its numbers applied, said so.
                         const numbers = this.partStages[target.key]?.tied && this.valuesOnly(target, body.sentScad);
                         if (body.draft && !numbers) return `${how} from its edited SCAD: an applied variant, not saved; Part › Save keeps it in git`;
-                        return variant ? `${how}: an applied variant, not saved` : `${how}: drawn as saved`;
+                        const keep = this.partStages[target.key]?.tied ? '; Part › Save keeps it in git' : '';
+                        return variant ? `${how}: an applied variant, not saved${keep}` : `${how}: drawn as saved`;
                     },
                 };
             }
@@ -4906,7 +4978,7 @@
                 const variant = Boolean(this.variantByPart[ref]);
                 section.classList.toggle('drawn-from-variant', variant);
                 const el = section.querySelector('#part-drawn');
-                if (el) el.textContent = variant ? 'an applied variant, not saved' : '';
+                if (el) el.textContent = variant ? this.drawnAs(ref) : '';
                 this.markEnvelope();
             }
 
@@ -6103,10 +6175,15 @@
                 editor.setName(name);
                 this.keepWork(target, { now: true });
                 await this.loadSavedVariants(target, name);
-                editor.say(`Saved as ${name}: a commit on ${body.ref}. Nothing in the checkout changed.`, 'valid');
-                const what = body.kind === 'overlay' ? `an overlay of ${body.upstream ?? 'its upstream SCAD'} setting its values, ` : '';
+                this.noteSaved(target, name, asked.text);
+                // How the variant becomes the part's source is the editor's to say; the
+                // status line says what was saved and what comes next.
                 const merging = body.merge?.advice ?? `git merge ${body.ref} makes it the part's source`;
-                const said = `${target.part} saved as the variant ${name}${taken ? ', replacing the one saved before' : ''}, ${what}a commit on ${body.ref}; nothing in the checkout changed. ${merging}`;
+                editor.say(`Saved as ${name}: a commit on ${body.ref}. Nothing in the checkout changed. ${merging}`, 'valid');
+                const what = body.kind === 'overlay' ? `an overlay of ${body.upstream ?? 'its upstream SCAD'} setting its values, ` : '';
+                const printer = this.pinnedPrinter();
+                const next = printer ? ` Next, its ring's Slice slices it for ${printer}.` : ' Its SCAD window says how to make it the part\'s source.';
+                const said = `${target.part} saved as the variant ${name}${taken ? ', replacing the one saved before' : ''}, ${what}a commit on ${body.ref}; nothing in the checkout changed.${next}`;
                 this.setStatus(said, 'success');
                 return { ok: true, said };
             }
@@ -6151,6 +6228,7 @@
                 scad.checking = this.checkScad(target, seq).catch(() => null);
                 await this.loadSavedVariants(target, name);
                 await this.renderScad(target, seq);
+                this.noteSaved(target, name, scad.text);
                 const said = stage?.tied
                     ? `${target.part}: the variant ${name} is drawn, its ${overlay ? 'overlay' : 'SCAD'} in the editor with its values in it, the controls on them; Save keeps a change to it`
                     : overlay
@@ -6709,6 +6787,11 @@
             boardChanged(d) {
                 if (!this.siteName) return;
                 if (d.what === 'scan') { this.afterBindings(); return; }
+                if (d.what === 'log') {
+                    const blinks = (d.entries || []).filter((e) => e.kind === 'rx' && BLINK.test(e.text)).length;
+                    if (blinks) this.heardBlinks(d.port, blinks);
+                    return;
+                }
                 if (d.what === 'status') {
                     const st = d.status;
                     // Each synced node's status is patched onto the tree and the mesh
@@ -6725,6 +6808,118 @@
                     this.updateDeviceViews();
                     this.syncWorldMarks();
                 }
+            }
+
+            // One made thing goes round the four loops -- its sizes, its SCAD, a print of
+            // it, its board flashed -- and each loop's last message names the next, on
+            // the same part: Save names Slice (above), a print done names its sketch
+            // (afterPrint), an upload names Query (afterUpload), and the hello heard
+            // names Part › Edit again (afterHello). Selected's Flash its sketch, on a
+            // part whose sketch was never flashed, opens the Bench on it (openBench).
+
+            // The site's printer whose board is pinned and connected, by its path, or null.
+            pinnedPrinter() {
+                const row = Object.values(this.bindings || {}).find((r) => r.device && r.device.printer);
+                return row ? this.bearerPathFor(row.path) : null;
+            }
+
+            // The site's first piece made from a part, by its path, or null.
+            pieceOf(part) {
+                const walk = (n, prefix) => {
+                    for (const c of n.children || []) {
+                        const at = prefix ? `${prefix}.${c.name}` : c.name;
+                        if (c.part_ref === part) return at;
+                        const found = walk(c, at);
+                        if (found) return found;
+                    }
+                    return null;
+                };
+                return this.tree && part ? walk(this.tree, '') : null;
+            }
+
+            // The site's piece whose own sketch is `name`, by its path: the node bound by
+            // it, else the first piece made from a part of that name; or null.
+            sketchPiece(name) {
+                const row = Object.values(this.bindings || {}).find((r) => r.sketch === name);
+                return row ? row.path : this.pieceOf(name);
+            }
+
+            // A print done of a part with a sketch of its own: its board, next. The job
+            // names the piece by its path or the part by its name.
+            afterPrint(job) {
+                if (!job.part) return null;
+                const part = this.nodeByPath(job.part)?.part_ref || String(job.part).split('.').pop();
+                const row = Object.values(this.bindings || {}).find((r) => r.sketch === part);
+                if (!row) return null;
+                return row.device
+                    ? `${part}'s board next: ${row.path}'s ring, Device › Flash`
+                    : `${part}'s board next: ${row.path}'s ring, Flash sketch, opens the Bench on its sketch`;
+            }
+
+            // The Bench in front, its Build form on a sketch -- by id, or by its part's
+            // name -- and on the port whose board that sketch is for, when one is found;
+            // a port in front that is not found to be is not named as its board.
+            async openBench(sketch) {
+                this.panels.open('bench');
+                const bench = this.bench;
+                if (!bench) { this.setStatus('The Bench did not open', 'error'); return null; }
+                await bench.ready();
+                const id = bench.build.chooseNamed(sketch);
+                if (!id) { this.setStatus(`No sketch named ${sketch} under parts/: the Bench lists those it found`, 'error'); return null; }
+                const port = bench.build.port();
+                this.setStatus(port && bench.build.portFound()
+                    ? `The Bench, ${id} chosen for ${port}: Compile & upload flashes it`
+                    : port
+                        ? `The Bench, ${id} chosen: no port is known to be its board's; choose it, then Compile & upload`
+                        : `The Bench, ${id} chosen: no board for it is connected; plug one in, then ⟳ in its port's list`);
+                return id;
+            }
+
+            // A piece's own sketch, never flashed: the Bench opened on it. What was said.
+            async flashSketchOf(path) {
+                const { row } = this.bindingFor(path);
+                if (!row || !row.sketch) { this.setStatus(`${path} has no sketch of its own to flash`, 'error'); return null; }
+                return this.openBench(row.sketch);
+            }
+
+            afterUpload(task, what) {
+                if (!task || task.status !== 'succeeded' || what.kind !== 'upload') return;
+                const piece = this.sketchPiece(what.name);
+                this.setStatus(`${what.sketch} flashed to ${what.port}: ${piece ? `${piece}'s ring, Device › Query hears its hello` : 'its Machine, Listen, hears its hello'}`, 'success');
+            }
+
+            afterHello(sketch) {
+                const piece = this.pieceOf(sketch);
+                return piece ? `round again: ${piece}'s ring, Part › Edit` : null;
+            }
+
+            // A devkit's LED, as the page knows it, on its badge in Site's tree and in the
+            // world (LED_PERIOD_MS above). Only while the board is listened to or queried:
+            // the page hears nothing else of it.
+            heardBlinks(port, count) {
+                if (count > 1) {
+                    for (let i = 0; i < Math.min(count, LED_REPLAY); i++) {
+                        setTimeout(() => this.flashLed(port, LED_PERIOD_MS / 2), i * LED_PERIOD_MS);
+                    }
+                    this.ledHeard[port] = null;
+                    return;
+                }
+                const now = performance.now(), last = this.ledHeard[port];
+                this.ledHeard[port] = now;
+                const since = last ? now - last : LED_PERIOD_MS;
+                this.flashLed(port, Math.min(since, 2 * LED_PERIOD_MS) / 2);
+            }
+
+            // The LED lit for `ms`. Counted (ledFlashes) for a test, since a flash is over
+            // before one can look.
+            flashLed(port, ms) {
+                this.ledFlashes[port] = (this.ledFlashes[port] || 0) + 1;
+                const lit = [...document.querySelectorAll('.dev-badge[data-port], .world-badge[data-port]')].filter((el) => el.dataset.port === port);
+                for (const el of lit) el.classList.add('lit');
+                clearTimeout(this.ledOff[port]);
+                this.ledOff[port] = setTimeout(() => {
+                    for (const el of document.querySelectorAll('.lit[data-port]')) if (el.dataset.port === port) el.classList.remove('lit');
+                }, ms);
             }
 
             // After a scan: the server polls held printer links while answering
@@ -6789,6 +6984,7 @@
                         badge.addEventListener('click', () => { this.selectPath(anchorPath); this.openMachine(anchorPath); });
                     }
                     sayBoard(this.anchors, anchorPath, boardSummary(this.boards.board(row.device.port)), { label: boardLabel(row.device), port: row.device.port });
+                    badge.dataset.port = row.device.port;
                     if (isPrinter && row.device.port) this.ensureMarks(anchorPath, row);
                 }
                 // The machines' badges are this method's; a place's badge and a
@@ -6901,6 +7097,8 @@
                             say: (text, kind) => this.setStatus(text, kind),
                             // A part drawn from a variant this tab applied is sliced as drawn.
                             variantFor: (path) => { const ref = this.nodeByPath(path)?.part_ref; return ref ? this.variantByPart[ref] ?? null : null; },
+                            afterPrint: (job) => this.afterPrint(job),
+                            afterHello: (sketch) => this.afterHello(sketch),
                         });
                         if (this.machine === machine) { window.apothecaryMachine = machine.handle; this.machineOpened(port); }
                     },
@@ -6956,7 +7154,10 @@
                     onEnd: () => { if (bench) bench.load(); if (this.siteName) this.boards.scan(); },
                 });
                 const toolchain = mountToolchain(slot.querySelector('.bench-toolchain-slot'), { base: BASE_URL, tasks, say });
-                const build = mountBuild(slot.querySelector('.bench-build-slot'), { base: BASE_URL, tasks, say, onPort: () => bench && bench.raw.enable() });
+                const build = mountBuild(slot.querySelector('.bench-build-slot'), {
+                    base: BASE_URL, tasks, say, onPort: () => bench && bench.raw.enable(),
+                    onEnd: (task, what) => this.afterUpload(task, what),
+                });
                 const raw = mountRawFlash(slot.querySelector('.bench-raw-slot'), { base: BASE_URL, tasks, say, port: () => build.port() });
                 const load = async () => {
                     const status = await toolchain.load();
@@ -7292,6 +7493,7 @@
                     return span;
                 }
                 const sum = boardSummary(this.boards.board(row.device.port));
+                span.dataset.port = row.device.port;
                 if (sum.kind === 'printer') {
                     span.textContent = sum.readings ? `🖨 ${sum.readings}${sum.extra.length ? ' ' + sum.extra[0] : ''}` : '🖨';
                 } else {
@@ -7328,7 +7530,8 @@
                     body = `<div class="device-line" title="${esc(`${boardLabel(d)} on ${d.port}, ${how} — ${sum.line}`)}"><b>${esc(d.port)}</b> · ${state}${viaLink}
                             <button type="button" class="dev-open" title="Open this board's Machine: its state, its log, its controls">Open</button>${unpin}</div>`;
                 } else if (row) {
-                    body = `<div class="device-line"><span class="warn">${esc(row.note || 'not connected')}</span>${viaLink} ${rescan}${unpin}</div>`;
+                    const flash = row.sketch ? ` <button type="button" class="dev-flash-sketch" title="The Bench, ${esc(row.sketch)}'s sketch chosen for the board it is for">Flash its sketch</button>` : '';
+                    body = `<div class="device-line"><span class="warn">${esc(row.note || 'not connected')}</span>${viaLink}${flash} ${rescan}${unpin}</div>`;
                 } else {
                     const free = this.siteDevices.filter((d) => !Object.values(this.bindings).some((r) => r.device && r.device.port === d.port));
                     const manual = `<div class="device-actions">
@@ -7386,6 +7589,7 @@
                     this.selectPath(e.currentTarget.dataset.path);
                 });
                 el.querySelector('.dev-rescan')?.addEventListener('click', () => this.rescanDevices());
+                el.querySelector('.dev-flash-sketch')?.addEventListener('click', () => this.flashSketchOf(path));
                 const manualIn = el.querySelector('.dev-manual');
                 const pinManual = () => {
                     const identity = (manualIn?.value || '').trim();
@@ -7700,6 +7904,9 @@
             // forgotten after WHEEL_QUIET_MS without a turn, and nothing steps for
             // STEP_QUIET_MS after a step.
             onWheel(event) {
+                event.preventDefault();
+                const px = this.wheelPixels(event);
+                this.dollyByWheel(px);
                 const { autoZoom, autoZoomIn, autoZoomOut, wheelResistance } = this.settings.values();
                 const now = performance.now();
                 if (now - this.wheelAt > WHEEL_QUIET_MS) this.wheelPastLimit = 0;
@@ -7708,11 +7915,11 @@
                 const distance = this.orbitControls.getDistance();
                 const atMin = distance <= this.orbitControls.minDistance * 1.05;
                 const atMax = distance >= this.orbitControls.maxDistance * 0.95;
-                const zoomingIn = event.deltaY < 0 && autoZoomIn;
-                const zoomingOut = event.deltaY > 0 && autoZoomOut;
+                const zoomingIn = px < 0 && autoZoomIn;
+                const zoomingOut = px > 0 && autoZoomOut;
 
                 if (autoZoom && ((zoomingIn && atMin) || (zoomingOut && atMax))) {
-                    this.wheelPastLimit += Math.abs(event.deltaY);
+                    this.wheelPastLimit += Math.abs(px);
                     if (this.wheelPastLimit > wheelResistance) {
                         this.wheelPastLimit = 0;
                         this.stepQuietUntil = now + STEP_QUIET_MS;
@@ -7722,6 +7929,27 @@
                 } else {
                     this.wheelPastLimit = 0;
                 }
+            }
+
+            // A turn's vertical size in pixels, whichever unit the browser gave it in.
+            wheelPixels(event) {
+                const unit = event.deltaMode === 1 ? WHEEL_PX_PER_LINE : event.deltaMode === 2 ? this.canvas.clientHeight : 1;
+                return event.deltaY * unit;
+            }
+
+            // Toward the point the view turns about for a turn up, away for a turn down, by
+            // OrbitControls' own step per hundred pixels (its zoomSpeed), within its nearest
+            // and farthest.
+            dollyByWheel(px) {
+                const c = this.orbitControls;
+                if (!px || !c.enabled) return;
+                const scale = Math.pow(0.95, c.zoomSpeed * Math.abs(px) / 100);
+                const offset = this.camera.position.clone().sub(c.target);
+                const distance = offset.length();
+                offset.setLength(THREE.MathUtils.clamp(px < 0 ? distance * scale : distance / scale, c.minDistance, c.maxDistance));
+                this.camera.position.copy(c.target).add(offset);
+                c.update();
+                this.frameWanted = true;
             }
 
             // Page Down and Page Up, or the keys Settings gives them, step a level in and
@@ -8002,6 +8230,7 @@
         const DEVICE_VERBS = [
             ['.dev-open', 'device:open'], ['.dev-query', 'device:query'], ['.dev-pin', 'device:pin'],
             ['.dev-pin-manual', 'device:pin'], ['.dev-unpin', 'device:unpin'], ['.dev-rescan', 'device:rescan'],
+            ['.dev-flash-sketch', 'device:flash-sketch'],
         ];
         // The part editor's buttons, by the cell of Part each one is.
         const PART_VERBS = [
@@ -8020,12 +8249,18 @@
             if (!row || !row.device) return undefined;
             return { port: row.device.port, printer: !!row.device.printer, armed: false, bound: true };
         }
+        // The sketch of a part of its own that no board connected runs: the ring's
+        // Flash its sketch.
+        function sketchFor(path) {
+            const { row } = viewer.bindingFor(path);
+            return row && !row.device && row.sketch ? row.sketch : undefined;
+        }
         // What the page knows about pictures at the place a ring stands on (a
         // node, or on the canvas ring the floor), told to the resolver as a
         // device is: the pictures list is asked for again as the ring opens.
         const nodeSpec = (path, at, fresh = true) => ({
             context: { pointing: 'node', targets: [path] },
-            site: viewer.siteName, device: deviceFor(path), at,
+            site: viewer.siteName, device: deviceFor(path), sketch: sketchFor(path), at,
             picture: viewer.pictures.context(path, { fresh }),
         });
         // The canvas ring stands on the level you are looking at: its Pieces
@@ -8157,6 +8392,7 @@
                 // opened for it first when it is not open. A refusal it meets is
                 // said here as an error, as well as in its log; what it told (a
                 // print started, and where it is followed) is said after the label.
+                if (action === 'device:flash-sketch') { await viewer.flashSketchOf(path); return; }
                 if (MACHINE_VERB.test(action) && (port || viewer.machine)) {
                     if (port && !(viewer.machine && viewer.machine.port === port) && !viewer.openMachine(path)) return;
                     const done = await viewer.machine.handle.carry(intent);
@@ -8402,14 +8638,14 @@
         // The key a ring is cached by: what it stands on, and what it was told of
         // the board and the pictures, so a choose, pin or make is never answered
         // from a ring resolved before it.
-        const ringKey = (spec, picture) => JSON.stringify({ p: spec.context.pointing, c: spec.context.targets, s: spec.site, d: spec.device || null, pic: picture || null });
+        const ringKey = (spec, picture) => JSON.stringify({ p: spec.context.pointing, c: spec.context.targets, s: spec.site, d: spec.device || null, k: spec.sketch || null, pic: picture || null });
         async function ringForSelected() {
             if (!viewer.siteName || !viewer.selectedName) return null;
             // The floor's cells are the canvas ring's Pictures › Floor.
             const spec = viewer.selectedName === '@floor' ? canvasSpec(null, false) : nodeSpec(viewer.selectedName, null, false);
             const picture = await spec.picture;
             const key = ringKey(spec, picture);
-            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site, device: spec.device, picture }).catch(() => null));
+            if (!rings.has(key)) rings.set(key, resolveRing({ base: BASE, context: spec.context, site: spec.site, device: spec.device, sketch: spec.sketch, picture }).catch(() => null));
             return rings.get(key);
         }
         function annotateControls(ring) {

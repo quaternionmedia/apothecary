@@ -120,7 +120,7 @@ def test_a_printers_pin_pins_its_mainboard_where_device_machine_and_slice_find_i
 
     # Slice, on a part standing in the garage, slices for it.
     _ring_on(page, "footpedal")
-    assert _labels(page)[-1] == "Slice", _labels(page)
+    assert "Slice" in _labels(page), _labels(page)  # Flash sketch may follow it
     _press(page, "Slice")
     _said(page, "slicing footpedal for printer_1")
     expect(machine.locator("#print-slice-said")).to_contain_text(

@@ -170,10 +170,11 @@ export function annotate(ring, pairs) {
 
 /* `picture` is what the page knows about pictures and cameras where the ring
  * stands (apothecary/menu.py's PictureContext), or a promise of it. */
-export async function resolveRing({ base = "", context, site, device, picture }) {
+export async function resolveRing({ base = "", context, site, device, picture, sketch }) {
     const body = { context };
     if (site) body.site = site;
     if (device) body.device = device;
+    if (sketch) body.sketch = sketch;
     const told = await picture;
     if (told) body.picture = told;
     const r = await fetch(`${base}/menu/resolve`, {
@@ -256,9 +257,9 @@ export function close() {
  * label of an option with children, the ring opens entered down to it, as if
  * its digits had been pressed.
  */
-export async function openRing({ base = "", context, site, device, picture, at = null, into = null, onIntent, onClose }) {
+export async function openRing({ base = "", context, site, device, picture, sketch, at = null, into = null, onIntent, onClose }) {
     close();
-    const ring = await resolveRing({ base, context, site, device, picture });
+    const ring = await resolveRing({ base, context, site, device, picture, sketch });
     if (current) current.close(false); // somebody opened another while we fetched
     const instance = new RingInstance({ ring, context, site, device, at, onIntent, onClose });
     current = instance;
@@ -579,6 +580,7 @@ export function installRing({ base = "", whatFor, onIntent, onResolved, onError,
                 site: spec.site,
                 device: spec.device,
                 picture: spec.picture,
+                sketch: spec.sketch,
                 at: at ?? spec.at ?? null,
                 into: spec.into ?? null,
                 onIntent,

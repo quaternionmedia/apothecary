@@ -232,6 +232,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "dev-via": (WIDGET, WHAT_YOU_SEE, "a link to the piece inside that holds the board"),
     "dev-rescan": (WIDGET, WHAT_YOU_SEE, "a button that looks for boards again"),
+    "dev-flash-sketch": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that opens the Bench on the piece's own sketch, which no board runs",
+    ),
     "dev-manual": (WIDGET, WHAT_IS_THERE, "a box for typing a port, S/N or address to pin"),
     "dev-pin-manual": (WIDGET, WHAT_IS_THERE, "the button that pins the typed board"),
     "dev-pick": (WIDGET, WHAT_YOU_SEE, "a drop-down of boards not yet pinned"),
@@ -522,6 +527,7 @@ RING_BACKED: Dict[str, str] = {
     "dev-pin-manual": "device:pin",
     "dev-unpin": "device:unpin",
     "dev-rescan": "device:rescan",
+    "dev-flash-sketch": "device:flash-sketch",
     "devOpen:click:openMachine": "device:open",
     "devQuery:click:queryPort": "device:query",
     "devPin:click:setNodeDevice": "device:pin",
@@ -529,6 +535,7 @@ RING_BACKED: Dict[str, str] = {
     "manualIn:keydown:pinManual": "device:pin",
     "devUnpin:click:setNodeDevice": "device:unpin",
     "devRescan:click:rescanDevices": "device:rescan",
+    "devFlashSketch:click:flashSketchOf": "device:flash-sketch",
     # a board's Machine: its header and control overlay
     "poll": "device:poll",
     "identify": "device:query",
@@ -1007,6 +1014,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "going to the piece inside that holds the board",
     ),
     "devRescan:click:rescanDevices": (WIDGET, WHAT_YOU_SEE, "looking for boards again"),
+    "devFlashSketch:click:flashSketchOf": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "opening the Bench on the piece's own sketch",
+    ),
     "devPinManual:click:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board"),
     "manualIn:keydown:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board, by Enter"),
     # the page reacting to itself
@@ -1171,6 +1183,7 @@ FETCHED_BY_LABEL: Sequence[Tuple[str, str]] = (
     (r"\.dev-query", "devQuery"),
     (r"\.dev-via", "devVia"),
     (r"\.dev-rescan", "devRescan"),
+    (r"\.dev-flash-sketch", "devFlashSketch"),
 )
 
 # Fetched by id through a module's one-letter helper: `$("auto")`.

@@ -32,7 +32,7 @@
  * its window's ✕, puts it back as the last thing in the Machine's column; its
  * ⧉ Pop out pops it out again.
  *
- * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, name, say, padWindow, variantFor, sections })
+ * mountMachine(root, { base, port, host, boards, kind, inPrinter, pin, name, say, padWindow, variantFor, sections, afterPrint, afterHello })
  * renders into `root` -- the head, what the board is and its state -- and each of
  * its sections (the Machine's entry in apothecary/systems.py: Status, Temperature,
  * Print, Bed level, Sketch, Flashing, Log) into the element `sections` gives for it,
@@ -72,7 +72,9 @@
  * as in the log; a print started is said there, naming where it is followed, and
  * a print that ends, how it ended (failed, and why, as an error). `variantFor(path)`
  * names the applied variant the page draws a part from, or null, so Slice slices
- * the part as drawn. destroy() stops watching and frees what the module put on the
+ * the part as drawn. `afterPrint(job)` names what comes next once a print is done,
+ * said after how it ended, or null; `afterHello(sketch)` the same once a devkit is
+ * heard saying the hello of the sketch it runs. destroy() stops watching and frees what the module put on the
  * window.
  */
 
@@ -295,7 +297,7 @@ const BY_CMD = {
 };
 
 
-export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, say = null, padWindow = null, variantFor = null, sections = {}, onVerb = null, onKind = null } = {}) {
+export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, say = null, padWindow = null, variantFor = null, sections = {}, onVerb = null, onKind = null, afterPrint = null, afterHello = null } = {}) {
     const BASE = base;
     const model = boards || mountBoards({ base });
     root.classList.add("machine", `host-${host}`);
@@ -662,7 +664,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         try {
             if (state.kind === "devkit") {
                 const heard = await model.listen(state.port);
-                if (heard.running_sketch) return;
+                if (heard.running_sketch) {
+                    const next = afterHello ? afterHello(heard.running_sketch) : null;
+                    tell(`heard ${heard.running_sketch} say hello${next ? `; ${next}` : ""}`);
+                    return;
+                }
                 if (!pressed) { logLine("sys", "no hello heard -- Identify asks M115 too, when pressed"); return; }
                 try { await model.identify(state.port); }
                 catch (e) { refuse(`no hello heard in ${heard.seconds} s, and ${e.message}`); }
@@ -1158,7 +1164,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     function toldEnded(job) {
         const what = `${job.name} on ${state.port}${job.part ? `, making ${job.part}` : ""}`;
         if (job.stage === "failed") { if (say) say(`${what}, failed: ${job.error || "no reason was given"}`, "error"); return; }
-        tell(`${what}, ended: ${job.stage}, ${job.sent}/${job.total} lines`);
+        const next = job.stage === "done" && afterPrint ? afterPrint(job) : null;
+        tell(`${what}, ended: ${job.stage}, ${job.sent}/${job.total} lines${next ? `; ${next}` : ""}`);
     }
     // A print followed until it ends; its end is told (the printer's jobs, the site's,
     // and a poll for the state it left), a print that was not running is only drawn.

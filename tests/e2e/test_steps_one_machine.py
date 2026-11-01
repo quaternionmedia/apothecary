@@ -76,9 +76,10 @@ class Walk:
 
 
 def open_(w: Walk) -> None:
-    """printer_1's ring, Device › Open (⌗78): its Machine a tab beside Pictures; the
-    world's ring, Panels › Windows › Machine view, lays its sections out beside it: idle,
-    at room temperature, the chart filling as it is polled."""
+    """printer_1's ring, Device › Open (⌗78): its Machine a tab beside Pictures (on the
+    demo's tab, wherever the layout remembered there keeps it); the world's ring, Panels ›
+    Windows › Machine view, lays its sections out beside it: idle, at room temperature, the
+    chart filling as it is polled."""
     w.page.goto(f"{w.base}/viewer/sites/garage")
     expect(w.page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     settled(w.page)
@@ -86,8 +87,9 @@ def open_(w: Walk) -> None:
     assert _press(w.page, "Device", "Open") == "78"
     expect(w.page.locator(MACHINE)).to_be_visible(timeout=5000)
     expect(windows.tab(w.page, "machine")).to_contain_text("printer_1")
-    state = windows.state(w.page, "machine")
-    assert state["where"] == "layout" and "pictures" in state["stack"], state
+    if not w.on_the_demo:  # the demo's tab keeps the layout its person left it in
+        state = windows.state(w.page, "machine")
+        assert state["where"] == "layout" and "pictures" in state["stack"], state
     _said(w.page, "Opened printer_1")
     windows.machine_ready(w.page, "printer", by_hand=True)
     expect(w.machine.locator("#c-state")).to_contain_text("idle", timeout=WITHIN_A_POLL)

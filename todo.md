@@ -21,6 +21,10 @@ here: run `apothecary problems`.
   tarballs (codeload publishes no checksum). A source build takes no nested
   submodules and no `.1` second build of a night. Windows on ARM is refused:
   no ARM64 snapshot is published.
+- `parts/footpedal/footpedal.ino` would not build on a real board: `pushbutton` is
+  never declared, and `ledpin` is pin 6, which `b5` reads too. It prints no
+  `apothecary footpedal: hello`, since its serial line carries Hairless MIDI, so
+  the made thing's Query hears its hello only from the demo's scripted monitor.
 - A host-side bound on where the print head ends. Each jog's move is capped
   (`JOG_MAX_MM`), jogs one after another add up, and the firmware's soft
   endstops, after a homing, are what keeps the head on the machine
@@ -42,10 +46,18 @@ here: run `apothecary problems`.
   merge-tree` loop, run by hand; and `apothecary test all` runs the unit part,
   then the browser files in file order, where the longest browser files first,
   beside the unit part, is the order that shortens a landing run.
+- A phase's bound does not allow for a loaded machine: at a load of 12 on four
+  cores the camera test (`test_docs_bench_walkthrough.py::test_the_bench_as_it_is`)
+  ran 153 s against the 75 s it records, near the bound of twice the longest
+  recorded test, so a little more load ends a run that is only slow.
 - Walkthrough pictures that move with no change to the page: a full browser
   run rewrites a few by a few pixels (the masked clocks' shade, the SCAD
   editor's sideways scroll in page 06's), so a run leaves the tree changed.
   Such a run's pictures are not committed.
+- Walkthrough picture 06-01 (taken on `main` in 3635934b) has a focus ring on
+  the Cube size slider that two full browser runs of the stack above `main` no
+  longer draw. No commit in the stack is found that explains it, so the picture
+  stays as `main` has it until one is.
 - A browser shard in CI was cancelled at its job's limit on #85's and #89's
   pushes with no test named. The browser suite runs in CI at a version tag
   alone, and none has run since; there, each phase's bound names a test that

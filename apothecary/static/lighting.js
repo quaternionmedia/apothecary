@@ -4,7 +4,9 @@
  * /sites/{s}/lighting/state, polled), with a beam cone from its lens. The
  * unplaced patches are listed in a panel with their live levels, and the panel
  * says when the feed is silent. The rig comes from GET /sites/{s}/lighting when
- * the site changes; a site with no rig (rig: null) gets no overlay.
+ * the site changes; a site with no rig (rig: null) gets no overlay. A poll the server
+ * does not answer (it is restarting, or stopped) is no error: the panel says the
+ * server is not answering, and the next poll asks again.
  *
  * The panel is the host's to place: `onPanel(el)` is told the panel's element when
  * a rig is drawn, and `onPanel(null)` when the site has none (the page makes it a
@@ -49,10 +51,18 @@ export function mountLighting({ scene, base, onPanel = null }) {
   let placed = [];  // { channel, fixture_type, glow, beam } for each located patch
   let unplaced = [];
   let feed = { seq: 0, age: null, rgb: {}, status: {} };
+  let answering = true;
 
+  // null for a refusal or for no answer at all; `answering` says which it was.
   const getJson = async (url) => {
-    const r = await fetch(url, { cache: "no-store" });
-    return r.ok ? r.json() : null;
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      answering = true;
+      return r.ok ? r.json() : null;
+    } catch {
+      answering = false;
+      return null;
+    }
   };
 
   const clear = () => {
@@ -100,7 +110,7 @@ export function mountLighting({ scene, base, onPanel = null }) {
 
   // A list of text, not markup: a label is whatever the rig's export holds.
   const renderPanel = () => {
-    const head = feed.seq === 0 ? "no console feed" : `console ${Math.round(feed.age)} s ago`;
+    const head = !answering ? "the server is not answering" : feed.seq === 0 ? "no console feed" : `console ${Math.round(feed.age)} s ago`;
     panel.replaceChildren();
     const title = document.createElement("div");
     title.style.fontWeight = "bold";
@@ -143,6 +153,7 @@ export function mountLighting({ scene, base, onPanel = null }) {
     try {
       const s = await getJson(`${base}/sites/${site}/lighting/state`);
       if (mine === token && s) apply(s);
+      else if (mine === token && !answering) renderPanel();
     } finally {
       busy = false;
     }

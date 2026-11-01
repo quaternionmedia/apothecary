@@ -12,7 +12,11 @@ with every machine simulated:
   esptool is none;
 - **the slicer** is the person's own OrcaSlicer when one is installed, read where
   it is; with none, Slice says how to install it;
-- **printing** goes to the simulated printer.
+- **printing** goes to the simulated printer;
+- **a lighting console** sweeps every site's rig -- the theatre's -- as
+  ``apothecary lighting simulate`` does (``console_feedback.simulate_levels``), ten
+  times a second, set in the server's own state with nothing sent anywhere; not
+  while a real console is listened for (``--console-sacn``, ``--console-osc``).
 
 Every serial port is the simulated engine's (``APOTHECARY_SERIAL_ENGINE``), so no
 real port is opened or even listed.
@@ -38,6 +42,8 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Optional
@@ -52,6 +58,7 @@ SITE = "garage"
 PRINTER = "/dev/ttyFAKE1"  # the scripted arduino-cli's unmatched board: the simulated Ender
 BOARD = "printer_1.frame_system.mainboard"
 DEVKIT = "/dev/ttyFAKE2"  # the scripted bench's devkit
+CONSOLE_HZ = 10  # the simulated console's levels a second, as `lighting simulate` sends them
 
 log = logging.getLogger(__name__)
 
@@ -229,4 +236,33 @@ def create_app():
     from .api import app
 
     seed()
+    if not (os.environ.get("APOTHECARY_CONSOLE_SACN") or os.environ.get("APOTHECARY_CONSOLE_OSC")):
+        threading.Thread(target=sweep_the_rigs, name="demo-console", daemon=True).start()
     return app
+
+
+def sweep_the_rigs_once(t: float) -> int:
+    """Every site's rig given the simulated console's levels at ``t`` seconds, as a
+    PUT of them would set them; how many rigs were swept."""
+    from .console_feedback import simulate_levels
+    from .routes.lighting import RIG_LOADERS, _rig_state
+
+    swept = 0
+    for name in list(RIG_LOADERS):
+        state = _rig_state(name)
+        if state is not None:
+            state.set_levels(simulate_levels(state.rig, t))
+            swept += 1
+    return swept
+
+
+def sweep_the_rigs(stop: Optional[threading.Event] = None) -> None:
+    """The simulated console, CONSOLE_HZ times a second until ``stop`` is set (never,
+    in the demo's server: its thread ends with the process)."""
+    stop = stop or threading.Event()
+    started = time.monotonic()
+    while not stop.wait(1 / CONSOLE_HZ):
+        try:
+            sweep_the_rigs_once(time.monotonic() - started)
+        except Exception:  # a rig's files changed under it: the next sweep tries again
+            log.exception("the demo's console could not sweep a rig")

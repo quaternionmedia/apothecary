@@ -719,6 +719,39 @@ def test_the_wheels_momentum_takes_no_step(page: Page, url: str):
     assert _orbit(page)["focus"] == ["workbench"], _orbit(page)["focus"]
 
 
+DISTANCE = "() => window.fractalViewer.orbitControls.getDistance()"
+BELOW_100_PERCENT = "() => Object.defineProperty(window, 'devicePixelRatio', { configurable: true, get: () => 0.9 })"
+
+
+@pytest.mark.e2e
+def test_a_turn_dollies_by_its_size_at_any_pixel_ratio(page: Page, url: str):
+    """A notch dollies the view one step; a trackpad's small turns that add up to a
+    notch dolly it as far; and on a page zoomed below 100% (a pixel ratio under 1)
+    a notch is still one step, not a throw to the nearest the view goes."""
+    _open(page, url)
+    middle = page.evaluate(
+        "() => { const r = window.fractalViewer.canvas.getBoundingClientRect(); "
+        "return [r.left + r.width / 2, r.top + r.height / 2]; }"
+    )
+    page.mouse.move(*page.evaluate(FREE_SPOT, middle))
+
+    def dolly(turns: list[float]) -> float:
+        before = page.evaluate(DISTANCE)
+        for turn in turns:
+            page.mouse.wheel(0, turn)
+        settled(page)
+        return page.evaluate(DISTANCE) / before
+
+    notch = dolly([-NOTCH])
+    trackpad = dolly([-NOTCH / 24] * 24)
+    assert 0.8 < notch < 0.99, notch
+    assert abs(trackpad - notch) < 0.01, (notch, trackpad)
+    page.evaluate(BELOW_100_PERCENT)
+    zoomed_out_page = dolly([-NOTCH])
+    assert abs(zoomed_out_page - notch) < 0.01, (notch, zoomed_out_page)
+    assert dolly([NOTCH]) > 1, "a turn down did not dolly out"
+
+
 # --------------------------------------------------------------------------
 # Badges, a Machine, a long press, Ctrl+S
 # --------------------------------------------------------------------------

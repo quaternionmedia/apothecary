@@ -228,7 +228,7 @@ def test_the_demo_says_it_is_the_demo_and_has_printer_1_pinned(page: Page, demo,
     _open_garage(page, url)
     banner = page.locator("#demo-banner")
     expect(banner).to_be_visible()
-    expect(banner).to_contain_text("The demo: a simulated printer and ESP32")
+    expect(banner).to_contain_text("The demo: a simulated printer, ESP32 and lighting console")
     expect(banner).to_contain_text("run apothecary serve without --demo")
     assert banner.bounding_box()["height"] < 30  # one quiet line
     pins = page.request.get(f"{url}/sites/garage/devices").json()["bindings"]
@@ -442,7 +442,7 @@ def test_a_demo_with_no_slicer_says_how_to_install_one(browser, demo_without_a_s
     try:
         _open_garage(page, url)
         _ring_on(page, "footpedal")
-        assert _labels(page)[-1] == "Slice", _labels(page)
+        assert "Slice" in _labels(page), _labels(page)  # Flash sketch may follow it
         _press(page, "Slice")
         expect(_status(page)).to_contain_text(
             "OrcaSlicer is not installed: apothecary slicer install", timeout=30000

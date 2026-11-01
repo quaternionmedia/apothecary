@@ -117,7 +117,8 @@ DEMO_HELP = (
     "is pinned to a simulated Ender, idle; a simulated ESP32 devkit says the hello of "
     "what is flashed to it; arduino-cli, cargo and espflash are scripted. It slices "
     "with your OrcaSlicer when one is installed (else Slice says how to install it) "
-    "and prints to the simulated printer. No real serial port is opened. Its state is "
+    "and prints to the simulated printer. A simulated console sweeps the theatre's "
+    "lighting rig. No real serial port is opened. Its state is "
     "a folder of its own, .cache/demo in the checkout (under $APOTHECARY_CACHE_DIR when "
     "set), never ~/.apothecary or your pins; it is kept between runs, and deleting it "
     "starts the demo afresh. Serve without --demo to leave it."
@@ -236,6 +237,7 @@ def _start_the_demo() -> None:
     click.echo(f"  Printer:  {BOARD} pinned to a simulated Ender on {PRINTER}, idle")
     click.echo(f"  Devkit:   a simulated ESP32 on {DEVKIT}; arduino-cli, cargo, espflash scripted")
     click.echo(f"  Slicer:   {slicer}")
+    click.echo("  Console:  a simulated console sweeps the theatre's lighting rig")
     click.echo("  To leave: stop it, and run apothecary serve without --demo")
 
 

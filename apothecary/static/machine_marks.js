@@ -252,7 +252,7 @@ export function makeBoardBadge(anchors, key, boardPath, { point, selected }) {
 export function sayBoard(anchors, key, sum, device) {
     const badge = anchors.get(key);
     if (!badge) return;
-    badge.classList.remove("printing", "offline", "job", "mismatch");
+    badge.classList.remove("printing", "offline", "job", "mismatch", "heating");
     let line;
     if (sum.kind === "devkit") {
         line = `⚡ ${esc(device.label)} · <span class="state">${esc(sum.short)}</span>`;

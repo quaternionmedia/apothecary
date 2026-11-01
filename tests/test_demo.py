@@ -177,9 +177,29 @@ def test_the_seed_pins_printer_1s_mainboard_and_touches_no_real_port(person, mon
     assert not person["state"].exists()
 
 
+def test_the_demos_console_sweeps_every_rig_as_a_put_would(monkeypatch):
+    """The demo's simulated console sets the theatre's levels in the server's own
+    state: its fixtures show a colour, and a sweep a moment later a different one."""
+    from fastapi.testclient import TestClient
+
+    from apothecary.api import app
+    from apothecary.routes import lighting as lighting_routes
+
+    monkeypatch.setattr(lighting_routes, "_states", {})
+    here = TestClient(app)
+    assert demo.sweep_the_rigs_once(0.0) >= 1
+    first = here.get("/sites/theatre/lighting/state").json()
+    assert first["seq"] > 0 and any(any(rgb) for rgb in first["rgb"].values()), first
+    demo.sweep_the_rigs_once(2.0)
+    second = here.get("/sites/theatre/lighting/state").json()
+    assert second["seq"] > first["seq"] and second["rgb"] != first["rgb"]
+
+
 def test_serve_help_describes_the_demo_and_shows_the_defaults():
     said = CliRunner().invoke(cli, ["serve", "--help"], terminal_width=200).output
     assert "--demo" in said and "simulated Ender" in said and ".cache/demo" in said
-    assert "Serve without --demo to leave it" in said
+    flat = " ".join(said.split())
+    assert "Serve without --demo to leave it" in flat
+    assert "A simulated console sweeps the theatre's lighting rig" in flat
     assert "[default: 127.0.0.1]" in said
     assert f"[env var: {PORT_ENV}; default: {DEFAULT_PORT}]" in said

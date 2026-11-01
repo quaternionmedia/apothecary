@@ -56,7 +56,7 @@ RUN_CLONE = re.compile(r"/[^\s`'\"]*?/server\d*/variants\.git")
 # What differs on every run whatever the page does, blanked in the pictures: when each
 # variant was saved, a grey of one width whatever the time, and the run's own folder
 # where the status line names it.
-BLANK = (*all_words(".saved-when"), ("#status", RUN_CLONE.pattern))
+BLANK = (*all_words(".saved-when"), ("#status", RUN_CLONE.pattern), (".scad-said", RUN_CLONE.pattern))
 
 # How long after a check that passes the page renders a SCAD edit, read from the page.
 RENDER_AFTER_CHECK_MS = int(
@@ -254,6 +254,10 @@ def _settled_render(page: Page) -> None:
 
 def _saved(page: Page, name: str) -> None:
     expect(_status(page)).to_contain_text(f"{PART} saved as the variant {name}", timeout=20000)
+    # Drawn from what it saved: the amber mark over it and Selected name the variant.
+    mark = page.locator(f".world-badge.variant-mark[data-part='{PART}'] .badge-words")
+    expect(mark).to_have_text(f"{PART}: {name}, saved in git")
+    expect(page.locator("#part-drawn")).to_have_text(f"{name}, saved in git")
     # Listed in Variants (a tab of the Part view, in front or not), and in the editor.
     expect(page.locator(f"#part-saved .saved-variant[data-variant='{name}']")).to_be_attached()
     expect(

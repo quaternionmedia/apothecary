@@ -153,17 +153,18 @@ def picture(page: Page, blanks: Sequence[Blank] = ()) -> bytes:
     ``blanks`` blanked. The blanks are in the page while it settles: a blanked word is
     one width, so the line holding it can take another number of rows and the world
     beside it another size, and a canvas given a new size is cleared until a frame is
-    drawn at it."""
+    drawn at it. Taken with CSS animations stopped: a board's pulse, which never ends,
+    at its first frame, so a picture does not depend on the moment it was taken."""
     settled(page)
     if not blanks:
-        return page.screenshot()
+        return page.screenshot(animations="disabled")
     words = [list(b) for b in blanks if not isinstance(b, str)]
     if words:
         page.evaluate(WRAP_WORDS, words)
     style = page.add_style_tag(content=_blanked(blanks))
     try:
         settled(page)
-        return page.screenshot()
+        return page.screenshot(animations="disabled")
     finally:
         style.evaluate("(tag) => tag.remove()")
         if words:
