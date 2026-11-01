@@ -125,10 +125,7 @@ def ask_cmd(picture, box, properties, labels, address, as_json):
 @click.argument("origin")
 def off_cmd(origin):
     """Switch an origin off (plain/colour, or qmcp/<model>@<version>): it is not asked, and what it said leaves every view."""
-    try:
-        switches.switch(origin, False)
-    except ValueError as refused:
-        raise click.UsageError(str(refused)) from None
+    _switch(origin, False)
     click.echo(f"{origin} is switched off")
 
 
@@ -136,5 +133,12 @@ def off_cmd(origin):
 @click.argument("origin")
 def on_cmd(origin):
     """Switch an origin back on."""
-    switches.switch(origin, True)
+    _switch(origin, True)
     click.echo(f"{origin} is switched on")
+
+
+def _switch(origin: str, on: bool) -> None:
+    try:
+        switches.switch(origin, on)
+    except ValueError as refused:
+        raise click.UsageError(str(refused)) from None
