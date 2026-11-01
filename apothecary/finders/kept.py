@@ -5,12 +5,13 @@ said of a sighting. Asking reads the shape's colour with the plain reader and
 asks qmcp, each unless its origin is switched off; a person's word on a property
 is kept as stated, and overrules a guess about the same property, which is kept
 and marked. Nothing here is written to disk: what is kept lasts as long as the
-server.
+server, and at most ``KEPT_MOST`` shapes' worth of it.
 """
 
 from __future__ import annotations
 
 import threading
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -22,8 +23,11 @@ ASKABLE = ("colour", "material", "label")
 
 Key = Tuple[str, str, int]  # site, view, shape index
 
+# The most shapes kept about; the least recently used go first.
+KEPT_MOST = 2048
+
 _lock = threading.Lock()
-_kept: Dict[Key, List[Observation]] = {}
+_kept: "OrderedDict[Key, List[Observation]]" = OrderedDict()
 
 
 def forget_all() -> None:
@@ -56,6 +60,9 @@ def _keep(key: Key, seen: Sequence[Observation]) -> None:
     guess about its property overruled."""
     with _lock:
         held = _kept.setdefault(key, [])
+        _kept.move_to_end(key)
+        while len(_kept) > KEPT_MOST:
+            _kept.popitem(last=False)
         for new in seen:
             held[:] = [
                 o
@@ -148,6 +155,8 @@ def about(key: Key) -> Dict[str, Any]:
     the reading. An origin switched off is left out of the row and counted."""
     with _lock:
         held = list(_kept.get(key, []))
+        if key in _kept:
+            _kept.move_to_end(key)
     switched = switches.read()
     rows = []
     for prop in ASKABLE:
