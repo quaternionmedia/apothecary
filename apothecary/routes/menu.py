@@ -316,10 +316,17 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
             )
         site = check_host(name, host)
         camera = cameras.add_here(name, site, host)
-        did = (
-            f"added {camera.name} above {host or 'the floor'}, looking straight down: "
-            "its Device says which of this browser's cameras it is"
-        )
+        place = host or "the floor"
+        if cameras.over(name, site, host, camera.pose):
+            did = (
+                f"added {camera.name} above {place}, looking straight down: "
+                "its Device says which of this browser's cameras it is"
+            )
+        else:
+            did = (
+                f"added {camera.name} outside {place}: no room is left above it, "
+                f"so it is not one of {place}'s cameras"
+            )
         added = camera.name
     elif action == "camera:remove":
         site = _site(name)

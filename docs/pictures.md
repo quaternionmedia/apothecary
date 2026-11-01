@@ -34,7 +34,9 @@ drawn as the library's webcam (`parts/cameras/webcam`) standing where it is put
 
 - **Camera › Add here**, on a host's ring, stands one above the host, looking
   straight down, and selects it; added where one already stands, it stands a
-  step beside it, clear of it. A camera can also be dropped from the library.
+  step beside it, clear of it, the next few filling the place's top in rows; with
+  no room left over it, it stands outside, and the line says it is not one of the
+  place's cameras. A camera can also be dropped from the library.
 - **Device** on the camera's ring chooses which of this browser's cameras it
   is; **Allow** asks the browser once. One device is one camera: choosing it
   for one takes it off any other. A device is one browser's, as a board is one
@@ -121,8 +123,9 @@ a view rebuilds every piece made from it whose sides no person stated.
 - **Rebuild** builds the site again from its factory, and its made pieces go.
 
 Views and made pieces are kept in the server's memory and are gone after a
-restart; whether they may be kept in the state folder waits on what the draft
-record *Personal data stays on the device* counts as this machine. Nothing
+restart; whether they may be kept in the state folder waits on the draft
+record *Personal data stays on the device*, which counts the one machine as
+the device, being ratified. Nothing
 picture-shaped is stored in the browser, its HTTP cache included.
 
 ## From the command line

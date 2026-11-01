@@ -54,5 +54,7 @@ circle.ws-bed { fill: var(--bed); cursor: pointer; }
 .ws-stale td { color: var(--ink-3); }
 .ws-opened { position: relative; padding: 0.4rem 1.6rem 0.4rem 0.4rem; border: 1px solid var(--line); border-radius: 4px; }
 .ws-close { position: absolute; top: 0.2rem; right: 0.2rem; line-height: 1; }
+/* The poll a frame rests on: a link in the page's blue, as a saved variant's name is. */
+.ws-opened a { color: #4a9eff; }
 .ws-opened pre { max-height: 14rem; overflow: auto; background: #161816; border: 1px solid var(--line); padding: 0.4rem; font-size: 11px; }
 .ws-frame-large { display: block; max-width: 100%; margin-top: 0.4rem; border: 1px solid var(--line); }

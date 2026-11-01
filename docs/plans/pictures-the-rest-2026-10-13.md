@@ -5,8 +5,8 @@ whose Phases 0 and 2 to 4 are built and which `docs/README.md` lists under
 History. The design these two phases serve is that plan's, in the words it
 was decided in; this page holds what is not built, as it stands on the
 branch it was split on. Phase 6 (Selected tethered to the selection) is not
-carried here: Selected is in the one rail, and whether Phase 6 is dropped is
-a person's question in `todo.md`. Plans are dated and exempt from the
+carried here: it was dropped on 2026-10-31, since every section of the viewer
+is a window and Selected is one. Plans are dated and exempt from the
 durable-text rule.*
 
 ## Phase 1 — Gathering leaves core
