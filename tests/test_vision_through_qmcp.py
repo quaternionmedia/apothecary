@@ -193,6 +193,17 @@ def test_the_plain_reader_switched_off_reads_nothing(client):
     assert _row(answer, "colour")["reading"] is None
 
 
+@pytest.mark.parametrize("word", ["off", "on"])
+def test_a_persons_word_is_not_switched_from_the_command_line(world, word):
+    from click.testing import CliRunner
+
+    from apothecary.cli.main import cli
+
+    result = CliRunner().invoke(cli, ["vision", word, "person"])
+    assert result.exit_code == 2, result.output
+    assert "a person's word is never switched off" in result.output
+
+
 @pytest.mark.parametrize(
     "address, state, says",
     [

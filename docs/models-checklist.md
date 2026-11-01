@@ -1,8 +1,10 @@
 # The models checklist: image models through qmcp, by hand
 
 `tests/test_vision_through_qmcp.py` holds every path below against the
-simulated qmcp; this is how a person confirms the same paths in the viewer and
-at the command line, and that each one reads well. The plan is
+simulated qmcp, and `tests/e2e/test_models_window.py` the window's own: opened,
+a shape asked about, a person's word, a model switched off and kept so. This is
+how a person confirms the same paths in the viewer and at the command line, and
+that each one reads well. The plan is
 [image models through qmcp](plans/image-models-through-qmcp-2026-10-30.md).
 
 Every model here is the **simulated qmcp** (`apothecary/finders/simulated.py`):

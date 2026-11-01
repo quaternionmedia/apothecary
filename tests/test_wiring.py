@@ -272,6 +272,27 @@ def test_a_pinned_board_says_it_is_present_and_known_by_its_serial_number():
     assert wiring.states.modules[HOST_MODULE].level == "ok"
 
 
+@pytest.mark.parametrize(
+    "identity, kind",
+    [
+        ("A106ZTEU", "its USB serial number"),
+        ("24:6f:28:aa:bb:cc", "its MAC"),
+        ("/dev/ttyUSB0", "its port"),
+    ],
+)
+def test_a_pinned_board_not_answering_is_known_by_what_its_pin_names(identity, kind):
+    row = NodeBinding(
+        path=MAINBOARD,
+        name="mainboard",
+        part_ref="creality_v422",
+        binding_source="manual",
+        identity=identity,
+    )
+    state = wiring_for_site("garage", create_example_site(), [row]).states.modules[MAINBOARD]
+    assert state.level == "fault"
+    assert state.says == ["absent: expected, and not answering", f"known by: pinned, by {kind}"]
+
+
 def test_a_board_flashed_from_an_older_source_is_a_warning():
     from datetime import datetime, timezone
 
@@ -381,6 +402,35 @@ def test_the_follower_sends_once_for_an_unchanged_bench_and_again_when_it_change
     assert not follower.look() and follower.last_error.endswith("(422): not a rig")
     answer.update(status=200, body={"ok": True})
     assert follower.look()
+
+
+def test_a_look_that_fails_the_same_way_is_logged_once(caplog):
+    """APOTHECARY_CARLOS_SITE naming no site fails every look with the route's 404:
+    one traceback for it, and one more when a look fails another way."""
+    import threading
+
+    from fastapi import HTTPException
+
+    from apothecary.wiring.carlos import Follower
+
+    looks = []
+    six = threading.Event()
+
+    def wiring():
+        looks.append(1)
+        if len(looks) >= 6:
+            six.set()
+        if len(looks) <= 3:
+            raise HTTPException(status_code=404, detail="Site 'nowhere' not found")
+        raise OSError("the state folder is not there")
+
+    follower = Follower("http://127.0.0.1:1", wiring, every=0.01)
+    with caplog.at_level("ERROR", logger="apothecary.wiring.carlos"):
+        follower.start()
+        assert six.wait(5)
+        follower.stop()
+    failed = [r for r in caplog.records if r.getMessage() == "wiring: a look at the bench failed"]
+    assert [type(r.exc_info[1]).__name__ for r in failed] == ["HTTPException", "OSError"]
 
 
 def test_carlos_is_reached_on_this_machine_only():

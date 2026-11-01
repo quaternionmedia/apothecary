@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from ..firmware.bindings import walk_paths
-from ..firmware.models import DeviceInfo, NodeBinding
+from ..firmware.models import MAC_RE, PORT_RE, USB_SERIAL_RE, DeviceInfo, NodeBinding
 from ..hierarchy import Assembly
 from . import catalogue
 
@@ -148,16 +148,14 @@ def _evidence(path: str, device: str, node: Assembly, row: Optional[NodeBinding]
     return known
 
 
-def _identity_kind(identity: str, device: Optional[DeviceInfo]) -> str:
-    if device is not None and device.mac and device.mac.lower() == identity.lower():
+def _identity_kind(identity: str) -> str:
+    """What a pin names, told by its shape as validate_identity tells it, so a
+    board that is not answering is described as one that is."""
+    if MAC_RE.match(identity.lower()):
         return "its MAC"
-    if (
-        device is not None
-        and device.serial_number
-        and device.serial_number.lower() == identity.lower()
-    ):
-        return "its USB serial number"
-    return "its port"
+    if PORT_RE.match(identity) or not USB_SERIAL_RE.match(identity):
+        return "its port"
+    return "its USB serial number"
 
 
 def _state(known: Evidence, row: Optional[NodeBinding]) -> ModuleState:
@@ -202,7 +200,7 @@ def _state(known: Evidence, row: Optional[NodeBinding]) -> ModuleState:
         _printing(state, row.printer_status)
     # How it is known.
     if known.binding_source == "manual":
-        state.says.append(f"known by: pinned, by {_identity_kind(known.identity or '', device)}")
+        state.says.append(f"known by: pinned, by {_identity_kind(known.identity or '')}")
     elif known.binding_source == "sketch":
         state.says.append(
             f"known by: the board {known.flashed or known.sketch} was last flashed to"
