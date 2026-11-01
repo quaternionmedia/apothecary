@@ -106,6 +106,28 @@ def test_a_mixed_region_reads_one_colour_and_is_guessed_another(client, monkeypa
     assert colour["guesses"][0]["agrees"] is False
 
 
+def test_a_black_disc_is_read_black_and_guessed_another_colour(client, world, monkeypatch):
+    """The models checklist's black disc: on a light ground it is read black, its box's
+    median, and guessed another colour, its box's mean, which the ground in the box's
+    corners draws lighter; the guess disagrees."""
+    monkeypatch.setenv(qmcp.ENV, "simulated")
+    img = Image.new("RGB", (200, 200), (245, 245, 245))
+    ImageDraw.Draw(img).ellipse((50, 50, 150, 150), fill=(30, 30, 30))
+    out = io.BytesIO()
+    img.save(out, format="PNG")
+    (world / "disc.png").write_bytes(out.getvalue())
+    r = client.post("/sites/garage/views", json={"host": "workbench", "picture": "disc.png"})
+    assert r.status_code == 201, r.text
+    client.view = r.json()["id"]
+    r = client.post(f"/sites/garage/views/{client.view}/find", json={"finder": "plain"})
+    assert r.status_code == 200, r.text
+    (disc,) = r.json()["shapes"]
+    colour = _row(_ask(client, disc["index"], ["colour"]), "colour")
+    assert colour["reading"]["value"] == "black"
+    guess = colour["guesses"][0]
+    assert guess["value"] != "black" and guess["agrees"] is False, guess
+
+
 def test_a_persons_word_overrules_a_guess_which_is_kept(client, monkeypatch):
     monkeypatch.setenv(qmcp.ENV, "simulated")
     index = _red(client)

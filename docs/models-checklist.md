@@ -19,9 +19,10 @@ status bar said, word for word.
 - [ ] `uv run apothecary serve --demo` (`--port` for a port of its own), and
       open the viewer. The demo runs with the simulated qmcp unless
       `APOTHECARY_QMCP` names another.
-- [ ] A picture with a few things of plain colours on a light ground: a
-      photograph of the bench, or a drawn one. **Pictures › Add** keeps it, and
-      the ring's **Picture › Folder** pins it at the workbench.
+- [ ] A picture with a few things of plain colours on a light ground, a black
+      disc among them (a lens cap, a puck): a photograph of the bench, or a
+      drawn one. **Pictures › Add** keeps it, and the ring's **Picture ›
+      Folder** pins it at the workbench.
 - [ ] The ring's **Picture › Find shapes** finds its shapes, and each sits on
       the picture's mat at the workbench.
 
@@ -60,11 +61,11 @@ status bar said, word for word.
   - [ ] **label:** *unread: the model answered 'block'* (or *'bar'*)
         *, which is outside the words asked among*. A word outside the list
         is shown, and used for nothing.
-- [ ] **Ask** on a shape whose reading and guess name different colours:
-      the guess says *disagrees* in red, and the reading stays as read. The
-      simulated model names a region's mean colour and the plain reader its
-      median, so a dark shape, or one with a large patch of another colour
-      inside it, often disagrees; on a shape where they agree, try another.
+- [ ] **Ask** on the black disc: the reading says *black*, and the guess
+      names another colour and says *disagrees* in red; the reading stays as
+      read. The plain reader takes the median of the disc's box, which is the
+      disc's; the simulated model takes the mean, which the light ground in
+      the box's corners draws lighter.
 - [ ] Choose another shape: Models follows it, with that shape's own rows.
       Choose the first again: what was asked about it is still there.
 - [ ] The ring's **Panels › Pictures › Models › Ask** does the same as the
