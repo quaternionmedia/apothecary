@@ -138,18 +138,25 @@ def show_path(path: Path) -> Optional[str]:
 
 _DIGESTS: Dict[Tuple[str, int, int], str] = {}
 _DIGESTS_GUARD = threading.Lock()
+# A digest is remembered only once its file's mtime is this far behind the clock. The
+# filesystem stamps mtimes from a coarse clock, a few ms a tick, so a rewrite at the
+# same size within one tick keeps size and mtime, and a digest remembered before it
+# would outlive it.
+SETTLED_NS = 1_000_000_000
 
 
 def _file_digest(path: Path) -> str:
-    """A file's sha256, remembered while its size and mtime stay the same."""
+    """A file's sha256, remembered while its size and mtime stay the same, once that
+    mtime is settled (``SETTLED_NS`` behind the clock)."""
     stat = path.stat()
     memo = (str(path), stat.st_size, stat.st_mtime_ns)
     with _DIGESTS_GUARD:
         known = _DIGESTS.get(memo)
     if known is None:
         known = hashlib.sha256(path.read_bytes()).hexdigest()
-        with _DIGESTS_GUARD:
-            _DIGESTS[memo] = known
+        if time.time_ns() - stat.st_mtime_ns >= SETTLED_NS:
+            with _DIGESTS_GUARD:
+                _DIGESTS[memo] = known
     return known
 
 
