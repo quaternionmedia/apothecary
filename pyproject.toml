@@ -13,6 +13,8 @@ dependencies = [
     "fastapi>=0.121.1",
     "jinja2>=3.1.6",
     "pydantic>=2.12.4",
+    # to_jsonable_python, which pydantic does not re-export.
+    "pydantic-core>=2.41.5",
     "click>=8.1.7",
     "uvicorn>=0.30.0",
     # Reading pixels for the shape finder; it runs on this machine only.
@@ -29,6 +31,8 @@ dev = [
     "pytest>=8.3.0",
     "httpx>=0.27.2",
     "pytest-cov>=4.1.0",
+    # apothecary/cli/coverage_summary.py reads coverage data directly.
+    "coverage>=7.0",
     # The browser tests and `apothecary docs generate`; not needed to run the app.
     "playwright>=1.57.0",
     "pytest-playwright>=0.4.0",
@@ -37,7 +41,6 @@ dev = [
     # In CI, each browser test's own cap, twice the time recorded for it
     # (tests/e2e/conftest.py), so a hung wait fails that test and names it.
     "pytest-timeout>=2.3.0",
-    "httpx2>=2.13.1",
     # Reading a workflow as `apothecary preflight` stages it (tests/test_preflight_staging.py).
     "pyyaml>=6.0",
 ]
