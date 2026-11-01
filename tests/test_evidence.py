@@ -167,3 +167,21 @@ def test_a_line_that_is_not_json_is_counted_not_read(state_dir):
     with day.open("a") as out:
         out.write('{"half a line\n')
     assert log.document("garage", at=T0 + timedelta(seconds=1))["unreadable"] == 1
+
+
+def test_a_change_the_log_could_not_write_is_written_with_the_next_poll(state_dir, monkeypatch):
+    """A change the log failed to write -- a full disk, a folder it may not write --
+    is not taken as said: the next poll writes it, unchanged or not."""
+    collector = printers.Collector()
+    written = log.write
+
+    def full(space, observations):
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(log, "write", full)
+    with pytest.raises(OSError):
+        collector.take(poll(), [PIN], "A106ZTEU")
+    monkeypatch.setattr(log, "write", written)
+    collector.take(poll(T0 + timedelta(seconds=2)), [PIN], "A106ZTEU")
+    kept = log.read("garage", log.OBSERVATIONS).records
+    assert ("garage:printer_1", "state") in {(r["subject"], r["property"]) for r in kept}
