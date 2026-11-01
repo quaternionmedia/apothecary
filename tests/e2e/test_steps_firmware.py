@@ -21,7 +21,7 @@ from typing import Callable, List, Tuple
 
 import pytest
 import windows
-from boards import ARDUINO, DEVKIT, NODE, RUST
+from boards import ARDUINO, DEVKIT, NODE, RUST, wears, worn
 from boards import ended as _ended
 from firmware_helpers import write_fake_arduino_cli, write_fake_cargo, write_fake_espflash
 from playwright.sync_api import Page, expect
@@ -125,7 +125,7 @@ def upload(w: Walk) -> None:
     _canvas_ring(w.page, "4", "3", "4")
     _ended(w.bench, f"Upload {ARDUINO} → {DEVKIT}")
     assert asked == [f'Compile and upload "{ARDUINO}" to {DEVKIT}?'], asked
-    expect(w.page.locator(f".world-badge[data-path='{NODE}']")).to_be_visible(timeout=15000)
+    wears(w.page)
     w.bench.locator(".task-title").scroll_into_view_if_needed()
 
 
@@ -136,7 +136,7 @@ def hello(w: Walk) -> None:
     where(
         "Hello",
         "esp32_blink wearing the devkit it was uploaded to",
-        w.page.locator(f".world-badge[data-path='{NODE}']").is_visible(),
+        worn(w.page),
     )
     if w.bench.is_visible():
         windows.show(w.page, "pictures")  # Pictures in front: the Bench behind it
