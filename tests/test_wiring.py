@@ -356,35 +356,6 @@ def test_the_hold_carries_the_rig_every_entry_it_names_and_the_states():
     assert hold["states"]["modules"][MAINBOARD]["level"] == "ok"
 
 
-@pytest.fixture
-def a_carlos():
-    """A stand-in for carlos on loopback: what it was sent, and what it answers."""
-    import threading
-    from http.server import BaseHTTPRequestHandler, HTTPServer
-
-    heard = []
-    answer = {"status": 200, "body": {"ok": True}}
-
-    class Cue(BaseHTTPRequestHandler):
-        def do_POST(self):
-            length = int(self.headers["Content-Length"])
-            heard.append((self.path, json.loads(self.rfile.read(length))))
-            self.send_response(answer["status"])
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps(answer["body"]).encode())
-
-        def log_message(self, *args):
-            pass
-
-    server = HTTPServer(("127.0.0.1", 0), Cue)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    yield f"http://127.0.0.1:{server.server_port}", heard, answer
-    server.shutdown()
-    server.server_close()
-
-
 def test_the_follower_sends_once_for_an_unchanged_bench_and_again_when_it_changes(a_carlos):
     from apothecary.wiring.carlos import Follower
 

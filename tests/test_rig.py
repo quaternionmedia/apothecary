@@ -5,9 +5,7 @@ module's and lead's state, and a concert's frames followed into carlos."""
 from __future__ import annotations
 
 import json
-import threading
 from datetime import datetime, timezone
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
@@ -363,10 +361,8 @@ def test_the_reader_is_measured_on_drawn_pictures(setup):
 
 
 @pytest.fixture
-def a_carlos():
-    """A stand-in for carlos on loopback: its catalogue routes, and what it was sent."""
-    heard = []
-    routes = {
+def carlos_routes():
+    return {
         "/api/catalogue/devices/made-up.synth/examples": {
             "device": SYNTH["id"],
             "examples": {"simple": RIG, "complex": RIG},
@@ -375,33 +371,9 @@ def a_carlos():
         "/api/catalogue/devices/made-up.desk": DESK,
     }
 
-    class Carlos(BaseHTTPRequestHandler):
-        def _answer(self, status, body):
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps(body).encode())
-
-        def do_GET(self):
-            found = routes.get(self.path)
-            self._answer(200 if found else 404, found or {"detail": "Not Found"})
-
-        def do_POST(self):
-            heard.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
-            self._answer(200, {"ok": True})
-
-        def log_message(self, *args):
-            pass
-
-    server = HTTPServer(("127.0.0.1", 0), Carlos)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    yield f"http://127.0.0.1:{server.server_port}", heard
-    server.shutdown()
-    server.server_close()
-
 
 def test_a_concert_is_followed_into_carlos_and_recorded(a_carlos, tmp_path):
-    url, heard = a_carlos
+    url, heard, _ = a_carlos
     rig_doc, devices = reading.rig_from_carlos(url, "made-up.synth.complex")
     assert rig_doc["name"] == RIG["name"] and [d["id"] for d in devices] == [
         "made-up.desk",
@@ -425,7 +397,7 @@ def test_a_concert_is_followed_into_carlos_and_recorded(a_carlos, tmp_path):
     # carlos is sent one fewer than there are frames whenever two are the same.
     sent = [line["held"] for line in record]
     assert sent[0] is True and len(heard) == sent.count(True)
-    cue = heard[0]
+    _, cue = heard[0]
     assert cue["cue"]["number"] == "frame-0001" and cue["cue"]["fired_at"] == truth[0]["at"]
     held = cue["action"]["hold"]
     assert held["patch"]["display"]["mode"] == "irl"
