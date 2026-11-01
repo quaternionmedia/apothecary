@@ -54,6 +54,10 @@ here: run `apothecary problems`.
   run rewrites a few by a few pixels (the masked clocks' shade, the SCAD
   editor's sideways scroll in page 06's), so a run leaves the tree changed.
   Such a run's pictures are not committed.
+- Walkthrough picture 06-01 (taken on `main` in 3635934b) has a focus ring on
+  the Cube size slider that two full browser runs of the stack above `main` no
+  longer draw. No commit in the stack is found that explains it, so the picture
+  stays as `main` has it until one is.
 - A browser shard in CI was cancelled at its job's limit on #85's and #89's
   pushes with no test named. The browser suite runs in CI at a version tag
   alone, and none has run since; there, each phase's bound names a test that
