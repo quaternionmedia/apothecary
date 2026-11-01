@@ -401,3 +401,26 @@ def test_the_kept_observations_are_bounded_and_the_least_recently_used_key_goes_
     assert [_holds(k) for k in keys] == [True, False, False, True, True]
     kept.forget_all()
     assert not any(_holds(k) for k in keys)
+
+
+def test_a_qmcp_that_hangs_costs_one_deadline_and_one_call(client, monkeypatch):
+    import time
+
+    from apothecary.finders.simulated import SimulatedQmcp
+
+    calls = []
+
+    def hang(self, tool, arguments):
+        calls.append(tool)
+        time.sleep(1.5)
+        return {}
+
+    monkeypatch.setattr(SimulatedQmcp, "call", hang)
+    monkeypatch.setenv(qmcp.ENV, "simulated")
+    monkeypatch.setattr(qmcp, "DEADLINE_MS", 200)
+    started = time.monotonic()
+    answer = _ask(client, _red(client), ["colour"])
+    elapsed = time.monotonic() - started
+    assert "not answering" in answer["said"]
+    assert len(calls) == 1
+    assert elapsed < 0.2 + 0.15

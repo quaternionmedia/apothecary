@@ -107,7 +107,10 @@ def ask_about(
     status = qmcp.status()
     origins = [model_key(m.get("name"), m.get("version")) for m in status["models"]]
     off = [m for m in origins if not switches.is_on(m)]
-    if origins and len(off) == len(origins):
+    if status["state"] == qmcp.NOT_ANSWERING:
+        # status has used the deadline: asking again would cost it twice.
+        said.append(f"{status['says']}: no model answered")
+    elif origins and len(off) == len(origins):
         said.append("every model is switched off: qmcp was not asked")
     else:
         req = qmcp.request(
