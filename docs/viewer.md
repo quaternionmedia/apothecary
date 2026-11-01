@@ -211,7 +211,8 @@ expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
 
 - **Panels** › Site › Site, Problems, Pinned, Jobs, SCAD and Workspace (the
   Working space, [working-space.md](working-space.md)); Selected;
-  Pictures › Pictures and Gather; Machine › Machine (the selected board's) and
+  Pictures › Pictures, Models (the Models window, then Ask and a person's Colour
+  and Material, [models-checklist.md](models-checklist.md)) and Gather; Machine › Machine (the selected board's) and
   Control pad (an armed printer's pad in a loud window of its own or back in its
   Machine, as the pad's ⧉ Pop out and ⇥ Put back); Windows › World alone (as
   `~`), Reset layout, Part view, Machine view and Airgap view; Bench › Bench (show it), Install (a cell per toolchain
