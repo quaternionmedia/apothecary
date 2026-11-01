@@ -1689,8 +1689,9 @@
                         window.apothecaryWorkingSpace = this.workingSpace;
                         this.workingOpened = this.workingSpace.open(this.workingOn);
                     },
-                    onOpen: () => this.workingSpace?.refresh(),
-                    // Closed, it stops watching the printer and keeping its frames.
+                    // Closed, it stops watching the printer and keeping its frames;
+                    // opened again, it opens on the site, as ⊞ Windows always does.
+                    onOpen: () => this.workingSpace?.shown(),
                     onClose: () => this.workingSpace?.close(),
                 });
                 // ⊞ Windows: drawn afresh each time it opens, so it says which are open.
@@ -2153,6 +2154,8 @@
                     this.pictureMarks.unchoose();
                     this.pictures.still();
                     this.pictureMarks.load(name);
+                    // A Working space in front shows this site; behind, it does once shown.
+                    if (this.panels.isShown('working')) this.workingSpace?.open(null);
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
                     console.error(err);

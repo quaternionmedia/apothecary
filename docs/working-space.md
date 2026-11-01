@@ -65,6 +65,7 @@ frames are kept and Keep a set now. The status line says the same.
     polls: a frame from each of those cameras whose device is this browser's,
     when the printer's state changes, at every 5 % of its progress and when a
     camera is newly this browser's, never closer together than ten seconds.
+    Closed, it keeps none, even while the printer's Machine polls it.
   - Under the rows, how much its kept frames take of their budget, and a box
     to set it.
 
