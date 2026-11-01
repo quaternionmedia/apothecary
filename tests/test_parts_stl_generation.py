@@ -4,6 +4,7 @@ Cases come from the registry, so a part described by a part.json or living in
 a nested package is checked like any other.
 """
 
+import logging
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -409,7 +410,7 @@ class TestGridfinityOpenSCAD:
         assert _calls(stable) == ["--version"]
 
     def test_the_server_does_not_render_it_at_startup(
-        self, installed, monkeypatch, tmp_path, capsys
+        self, installed, monkeypatch, tmp_path, capsys, caplog
     ):
         import asyncio
         from concurrent.futures import ThreadPoolExecutor
@@ -417,6 +418,7 @@ class TestGridfinityOpenSCAD:
         from apothecary import api
         from apothecary.projects.registry import ProjectInfo
 
+        caplog.set_level(logging.INFO, logger="apothecary.api")
         stable, _ = installed(default="2021.01")
         entry = ProjectInfo(
             name="gridfinity",
@@ -435,9 +437,82 @@ class TestGridfinityOpenSCAD:
         # same process can leave Playwright's loop running on this one.
         with ThreadPoolExecutor(1) as thread:
             thread.submit(asyncio.run, api._generate_missing_stls()).result()
-        assert "skipped: needs OpenSCAD" in capsys.readouterr().out
+        said = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == "apothecary.api"]
+        warned = [m for level, m in said if level == "WARNING"]
+        assert [m.startswith("Skipped gridfinity: needs OpenSCAD") for m in warned] == [True], said
+        assert capsys.readouterr().out == ""
         assert _calls(stable) == ["--version"]
         assert not (tmp_path / "gridfinity.stl").exists()
+
+
+class TestStartupStlGenerationIsLogged:
+    def _run(self, coroutine):
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(1) as thread:
+            thread.submit(asyncio.run, coroutine).result()
+
+    def test_a_skip_by_setting_and_a_missing_openscad_are_records(
+        self, monkeypatch, caplog, capsys
+    ):
+        caplog.set_level(logging.INFO, logger="apothecary.api")
+        from apothecary import api
+
+        monkeypatch.setenv("APOTHECARY_SKIP_STL_GENERATION", "1")
+        self._run(api._generate_missing_stls())
+        monkeypatch.delenv("APOTHECARY_SKIP_STL_GENERATION")
+        monkeypatch.setattr(
+            api, "get_stl_renderer", lambda: type("R", (), {"is_available": False})()
+        )
+        self._run(api._generate_missing_stls())
+        said = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == "apothecary.api"]
+        assert [level for level, _ in said] == ["INFO", "WARNING"], said
+        assert "APOTHECARY_SKIP_STL_GENERATION" in said[0][1]
+        assert "OpenSCAD not found" in said[1][1]
+        assert capsys.readouterr().out == ""
+
+    def test_a_build_that_fails_and_one_that_succeeds_are_records(
+        self, monkeypatch, tmp_path, caplog, capsys
+    ):
+        caplog.set_level(logging.INFO, logger="apothecary.api")
+        from types import SimpleNamespace
+
+        from apothecary import api
+
+        parts = [SimpleNamespace(name=n, get_stl_output_path=lambda: tmp_path / "none.stl")
+                 for n in ("good", "bad")]
+        results = {
+            "good": SimpleNamespace(skipped=None, success=True, render_time_seconds=1.5,
+                                    error_message=None),
+            "bad": SimpleNamespace(skipped=None, success=False, render_time_seconds=0.0,
+                                   error_message="boom"),
+        }
+        handed = list(parts)
+        monkeypatch.delenv("APOTHECARY_SKIP_STL_GENERATION", raising=False)
+        monkeypatch.setattr(
+            api, "get_stl_renderer", lambda: type("R", (), {"is_available": True})()
+        )
+        monkeypatch.setattr(api, "scan_projects", lambda root: [SimpleNamespace(kind="part")] * 2)
+        monkeypatch.setattr(api, "_registered_part", lambda info: handed.pop(0))
+        monkeypatch.setattr(api, "build_stl", lambda part, timeout: results[part.name])
+        self._run(api._generate_missing_stls())
+        said = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == "apothecary.api"]
+        assert ("INFO", "Built good in 1.5s") in said, said
+        assert ("ERROR", "Failed to build bad: boom") in said, said
+        assert capsys.readouterr().out == ""
+
+    def test_a_background_failure_is_an_error_record(self, monkeypatch, caplog, capsys):
+        from apothecary import api
+
+        async def broken():
+            raise RuntimeError("no disk")
+
+        monkeypatch.setattr(api, "_generate_missing_stls", broken)
+        self._run(api._generate_missing_stls_in_background())
+        errors = [r for r in caplog.records if r.name == "apothecary.api" and r.levelname == "ERROR"]
+        assert [r.getMessage() for r in errors] == ["Background STL generation failed: no disk"]
+        assert capsys.readouterr().out == ""
 
 
 class TestGridfinityOutput:

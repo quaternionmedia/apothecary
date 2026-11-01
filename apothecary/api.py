@@ -134,6 +134,9 @@ def _registered_part(item: ProjectInfo) -> BasePart:
     return BasePart(name=item.name, source_file=item.path)
 
 
+logger = logging.getLogger(__name__)
+
+
 async def _generate_missing_stls():
     """Build the STL of every registered part that has none.
 
@@ -142,12 +145,11 @@ async def _generate_missing_stls():
     built on this machine is skipped with its reason.
     """
     if os.environ.get("APOTHECARY_SKIP_STL_GENERATION", "").lower() in ("1", "true", "yes"):
-        print("STL generation skipped (APOTHECARY_SKIP_STL_GENERATION=1)")
+        logger.info("STL generation skipped (APOTHECARY_SKIP_STL_GENERATION=1)")
         return
 
     if not get_stl_renderer().is_available:
-        print("OpenSCAD not found - STL generation skipped")
-        print("Install OpenSCAD to enable automatic STL generation")
+        logger.warning("OpenSCAD not found - STL generation skipped; install OpenSCAD to enable it")
         return
 
     parts = [_registered_part(p) for p in scan_projects(ROOT) if p.kind == "part"]
@@ -155,16 +157,15 @@ async def _generate_missing_stls():
     if not missing:
         return
 
-    print(f"Generating {len(missing)} missing STL file(s)...")
+    logger.info("Generating %d missing STL file(s)", len(missing))
     for part in missing:
-        print(f"  Generating {part.name}...", end=" ", flush=True)
         result = await asyncio.to_thread(build_stl, part, timeout=120)
         if result.skipped == "refused":
-            print(f"skipped: {result.error_message}")
+            logger.warning("Skipped %s: %s", part.name, result.error_message)
         elif result.success:
-            print(f"OK ({result.render_time_seconds:.1f}s)")
+            logger.info("Built %s in %.1fs", part.name, result.render_time_seconds)
         else:
-            print(f"FAILED: {result.error_message}")
+            logger.error("Failed to build %s: %s", part.name, result.error_message)
 
 
 async def _generate_missing_stls_in_background():
@@ -172,7 +173,7 @@ async def _generate_missing_stls_in_background():
     try:
         await _generate_missing_stls()
     except Exception as exc:  # pragma: no cover - defensive; log, don't crash the server
-        print(f"Background STL generation failed: {exc}")
+        logger.error("Background STL generation failed: %s", exc, exc_info=True)
 
 
 @asynccontextmanager
