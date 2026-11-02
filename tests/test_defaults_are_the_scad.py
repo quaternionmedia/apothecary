@@ -43,7 +43,7 @@ class TestWhereTheyDisagree:
         assert defaults_disagree(part) == []
 
     def test_nothing_to_compare_without_a_model_or_for_generated_scad(self, tmp_path):
-        from apothecary.projects.parts.rc_snowplow import DEFAULT as SNOWPLOW
+        from apothecary.projects.parts.rc.snowplow import DEFAULT as SNOWPLOW
 
         assert defaults_disagree(_part(tmp_path, "size = 3;\n", model=None)) is None
         assert defaults_disagree(SNOWPLOW) is None

@@ -94,8 +94,6 @@ Decided, not started. Each waits on what its line names.
 - One registry for firmware ports. It drives real heaters and motion, so it
   lands with a bench session on the Ender
   ([docs/bench-checklist.md](docs/bench-checklist.md)).
-- Data-only part wrappers become `part.json`; the import hook goes; the
-  snowplow gets one name.
 - The unit suite under pytest-xdist.
 - A licence gate for the Rust crates (the workspace's `Cargo.lock` and each Rust
   sketch's) and the vendored three.js and CodeMirror. `license-check.yml` gates

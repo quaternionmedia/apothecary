@@ -137,7 +137,7 @@ def _library_house(_workdir: Path) -> Scene:
 
 
 def _library_snowplow(_workdir: Path) -> Scene:
-    from .projects.parts.rc_snowplow import DEFAULT, Params
+    from .projects.parts.rc.snowplow import DEFAULT, Params
 
     geometry = DEFAULT.geometry(Params().model_dump())
     return Scene(name="snowplow", objects=[geometry])
@@ -387,7 +387,7 @@ CASES: Tuple[Case, ...] = (
         "library_snowplow",
         "library",
         _library_snowplow,
-        "rc_snowplow's Python geometry: a rotated blade, a drilled mount",
+        "the snowplow's Python geometry: a rotated blade, a drilled mount",
     ),
 )
 

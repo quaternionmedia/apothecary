@@ -214,7 +214,7 @@ class TestACommentOnlyEdit:
         assert len([c for c in calls(exe) if c["format"] == "csg"]) == 2
 
     def test_the_part_built_by_python_is_keyed_on_its_text_alone(self, openscad):
-        from apothecary.projects.parts.rc_snowplow import DEFAULT as SNOWPLOW
+        from apothecary.projects.parts.rc.snowplow import DEFAULT as SNOWPLOW
 
         assert variants.compiled_for(SNOWPLOW, {}, stl_renderer.get_renderer(), None) is None
 
@@ -274,13 +274,13 @@ class TestDownload:
         assert r.text == RECOMMENTED and "attachment" in r.headers["content-disposition"]
 
     def test_a_part_built_by_python_has_no_draft_to_download(self):
-        r = TestClient(app).post("/parts/rc.snowplow/draft/scad", json={"scad": "cube(1);"})
+        r = TestClient(app).post("/parts/snowplow/draft/scad", json={"scad": "cube(1);"})
         assert r.status_code == 403
 
 
 class TestTheSCADOfAVariant:
     def test_the_snowplows_is_generated_for_the_parameters_applied(self, tmp_path, monkeypatch):
-        from apothecary.projects.parts.rc_snowplow import DEFAULT as SNOWPLOW
+        from apothecary.projects.parts.rc.snowplow import DEFAULT as SNOWPLOW
         from apothecary.projects.parts.stl_renderer import geometry_scad
 
         monkeypatch.setenv("APOTHECARY_CACHE_DIR", str(tmp_path / "cache"))
@@ -289,12 +289,12 @@ class TestTheSCADOfAVariant:
         stl.parent.mkdir(parents=True)
         stl.write_bytes(b"\0" * 84)
         record.write_text('{"params": {"blade_width": 80.0}}')
-        r = TestClient(app).get(f"/parts/rc.snowplow/scad?variant={key}")
+        r = TestClient(app).get(f"/parts/snowplow/scad?variant={key}")
         assert r.status_code == 200 and r.headers["x-part-scad"] == "generated"
         wider = geometry_scad(SNOWPLOW, SNOWPLOW.validate_overrides({"blade_width": 80.0}))
         assert r.text == wider and r.text != geometry_scad(SNOWPLOW, {})
         assert r.headers["x-part-variant"] == key
-        missing = TestClient(app).get("/parts/rc.snowplow/scad?variant=" + "f" * 24)
+        missing = TestClient(app).get("/parts/snowplow/scad?variant=" + "f" * 24)
         assert missing.status_code == 404
 
     def test_an_editable_parts_is_its_draft_or_its_own(self, openscad, block):

@@ -29,7 +29,7 @@ from apothecary.projects.parts.drafts import (
     draft_digest,
     written_beside,
 )
-from apothecary.projects.parts.rc_snowplow import DEFAULT as SNOWPLOW
+from apothecary.projects.parts.rc.snowplow import DEFAULT as SNOWPLOW
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.stl_renderer import OpenSCADRenderer, geometry_scad
 from apothecary.projects.parts.variants import make_variant, read_variant_draft, variant_paths

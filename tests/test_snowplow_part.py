@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from apothecary import Cylinder, Rotate, Scene, Translate, Vector3D
 from apothecary.api import app
 from apothecary.meshes import bounds, read_mesh
-from apothecary.projects.parts import rc_snowplow, stl_renderer
+from apothecary.projects.parts import stl_renderer
 from apothecary.projects.parts.rc.snowplow import (
     DEFAULT,
     SnowplowPart,
@@ -19,6 +19,7 @@ from apothecary.projects.parts.rc.snowplow import (
     snowplow_assembly,
 )
 from apothecary.projects.parts.rc.snowplow.mount import SnowplowMount
+from apothecary.projects.parts.rc.snowplow.part import Params
 from apothecary.projects.parts.stl_renderer import (
     RenderResult,
     geometry_scad,
@@ -40,8 +41,8 @@ def test_snowplow_assembly_renders():
 
 
 def test_the_tracked_scad_is_the_code_at_its_defaults():
-    """What a reader, the registry and `/parts/rc.snowplow/scad` see is what
-    builds the STL. `apothecary parts render rc.snowplow -o
+    """What a reader, the registry and `/parts/snowplow/scad` see is what
+    builds the STL. `apothecary parts render snowplow -o
     parts/rc/snowplow/snowplow.scad` rewrites it."""
     assert DEFAULT.source_file.read_text(encoding="utf-8") == geometry_scad(DEFAULT, {})
 
@@ -49,8 +50,7 @@ def test_the_tracked_scad_is_the_code_at_its_defaults():
 def test_the_stl_goes_stale_when_the_code_that_builds_it_changes():
     sources = stl_renderer._sources(DEFAULT)
     code = {
-        Path(rc_snowplow.__file__),
-        *(PACKAGE / f for f in ("__init__.py", "blade.py", "mount.py")),
+        *(PACKAGE / f for f in ("__init__.py", "blade.py", "mount.py", "part.py")),
     }
     assert code | {DEFAULT.source_file} <= set(sources)
     # Each once: the checklist names the ones newer than the render.
@@ -150,7 +150,7 @@ def test_the_parts_stl_has_the_holes_where_the_assembly_puts_the_mount():
     """What build_stl, the viewer and `parts verify` render: the plate's
     origin mount_thickness / 2 behind its front face, mount_height / 2 up,
     as snowplow.yaml says."""
-    p = rc_snowplow.Params()
+    p = Params()
     front = mount_front_y(p.blade_height, p.blade_thickness, p.blade_angle, p.mount_height)
     origin = (0.0, front - p.mount_thickness / 2, p.mount_height / 2)
     _assert_holes(_cylinders(DEFAULT.geometry({})), origin, p.mount_thickness)
@@ -192,7 +192,7 @@ def test_a_slider_changes_the_scad_openscad_is_handed(snowplow_stl, monkeypatch)
     stand_in = _StandIn()
     monkeypatch.setattr(stl_renderer, "_renderer", stand_in)
     r = TestClient(app).post(
-        "/parts/rc.snowplow/stl/generate", json={"params": {"blade_width": 80}}
+        "/parts/snowplow/stl/generate", json={"params": {"blade_width": 80}}
     )
     assert r.status_code == 200, r.text
     [(scad, definitions)] = stand_in.handed
@@ -200,7 +200,7 @@ def test_a_slider_changes_the_scad_openscad_is_handed(snowplow_stl, monkeypatch)
     assert not definitions
     # A variant is the cache's: the snowplow's own STL stays the default one.
     assert r.json()["params"] == {"blade_width": 80.0}
-    assert r.json()["stl_url"] == f"/parts/rc.snowplow/variants/{r.json()['variant']}/stl"
+    assert r.json()["stl_url"] == f"/parts/snowplow/variants/{r.json()['variant']}/stl"
     assert not snowplow_stl.exists() and read_params_sidecar(snowplow_stl) is None
 
 
@@ -208,7 +208,7 @@ def test_a_slider_changes_the_scad_openscad_is_handed(snowplow_stl, monkeypatch)
 @needs_openscad
 def test_a_slider_changes_the_stl(snowplow_stl, tmp_path):
     client = TestClient(app)
-    r = client.post("/parts/rc.snowplow/stl/generate", json={"params": {"blade_width": 80}})
+    r = client.post("/parts/snowplow/stl/generate", json={"params": {"blade_width": 80}})
     assert r.status_code == 200, r.text
     variant = tmp_path / "variant.stl"
     variant.write_bytes(client.get(r.json()["stl_url"]).content)

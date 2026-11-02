@@ -72,8 +72,8 @@ def snowplow_assembly(
     )
 
 
-# Registry wrapper: the BasePart lives in rc_snowplow.py; re-export it here so
+# Registry wrapper: the BasePart lives in part.py; re-export it here so
 # parts/rc/snowplow/snowplow.scad resolves to this package.
-from apothecary.projects.parts.rc_snowplow import DEFAULT, Params, SnowplowPart  # noqa: E402
+from .part import DEFAULT, Params, SnowplowPart  # noqa: E402
 
 __all__ = ["DEFAULT", "Params", "SnowplowPart", "mount_front_y", "snowplow_assembly"]

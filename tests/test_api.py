@@ -179,8 +179,8 @@ def test_a_part_name_from_a_url_is_never_an_import_path(name):
 def test_a_nested_part_is_found_by_the_name_the_listing_gives_it():
     client = TestClient(app)
     listed = {part["name"] for part in client.get("/parts").json()}
-    assert "rc.snowplow" in listed
-    assert client.get("/parts/rc.snowplow/scad").status_code == 200
+    assert "snowplow" in listed
+    assert client.get("/parts/snowplow/scad").status_code == 200
 
 
 # POST /parts/{name}/stl/generate goes through the variant cache

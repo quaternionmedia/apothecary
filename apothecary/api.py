@@ -305,7 +305,7 @@ def _load_part_wrapper(name: str):
     # Only a registered part: a name from a URL is never turned into an import
     # path, so GET /parts/stl_renderer is a 404 and imports nothing.
     # Spellings a link may carry: the registry's name in any case of - and _
-    # (datum-core), or a nested part's package path (rc.snowplow). Each resolves
+    # (datum-core), or a nested part's package path. Each resolves
     # to a registered wrapper, never to a module constructed from the URL.
     wanted = _sanitize_module_name(name)
     entry = next(

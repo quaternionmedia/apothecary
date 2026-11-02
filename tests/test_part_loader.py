@@ -115,3 +115,13 @@ def test_only_the_registry_imports_a_wrapper_by_its_module_path():
         if path.name != "test_part_loader.py" and pattern.search(path.read_text(encoding="utf-8"))
     ]
     assert found == ["apothecary/projects/registry.py"]
+
+
+def test_a_part_has_the_name_of_its_folder():
+    """The registry's name, the part's own name and the name a URL or the CLI
+    takes are one."""
+    from apothecary.projects.parts.skeleton import ROOT
+
+    loaded = load_parts(ROOT)
+    assert loaded.failed == []
+    assert {item.name: part.name for item, part in loaded.parts if item.name != part.name} == {}
