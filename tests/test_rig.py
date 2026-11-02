@@ -66,6 +66,25 @@ def test_a_socket_naming_no_side_is_on_the_layout_s_face():
     assert panels.panel(entry, "front").sockets == []
 
 
+@pytest.mark.parametrize("kind", ["fader", "drawbar"])
+def test_a_travel_with_no_length_is_not_read(kind):
+    from PIL import Image
+
+    entry = {
+        **SYNTH,
+        "layout": {
+            **SYNTH["layout"],
+            "controls": {
+                "level": {"x": 0.5, "y": 0.5, "side": "front", "kind": kind, "length": 0},
+            },
+        },
+    }
+    panel = panels.panel(entry, "front")
+    grey = look.Grey.of(Image.new("L", (400, 200), 90))
+    seen, _ = look.read_face(grey, panel, CORNERS)
+    assert [(s.name, s.value, s.why) for s in seen] == [("level", None, "the travel has no length")]
+
+
 def test_the_scene_pins_each_face_the_camera_sees(setup):
     assert sorted(setup.faces) == ["one", "two"]
     one, two = setup.faces["one"].corners, setup.faces["two"].corners

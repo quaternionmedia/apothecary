@@ -192,6 +192,8 @@ def _knob(face: Face, control: Control) -> Seen:
 
 
 def _fader(face: Face, control: Control) -> Seen:
+    if control.length <= 0:
+        return Seen(name=control.name, kind=control.kind, why="the travel has no length")
     vertical = control.orient == "vertical"
     cap_across, cap_along = (mm * control.size for mm in panels.CAP_MM)
     if vertical:
