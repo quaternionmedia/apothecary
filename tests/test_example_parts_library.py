@@ -13,7 +13,7 @@ from apothecary.projects.registry import scan_projects
 
 
 def _registered_part_names():
-    return {p.name for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper}
+    return {p.name for p in scan_projects(ROOT) if p.kind == "part" and p.has_part}
 
 
 def test_site_has_one_leaf_per_registered_part_but_a_building():

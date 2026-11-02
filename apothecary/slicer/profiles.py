@@ -126,18 +126,15 @@ def read_profile(part_name: str, path: Path) -> PrinterProfile:
 def load_part(name: str):
     """A registered part by its registry name, or SlicerError. A name is matched
     against the registry and never turned into an import path."""
-    from importlib import import_module
-
-    from ..projects.registry import scan_projects
+    from ..projects.registry import PartLoadError, load_part, scan_projects
 
     for item in scan_projects(_root()):
-        if item.kind == "part" and item.wrapper and item.name == name:
-            return getattr(import_module(item.wrapper), "DEFAULT", None) or _no_default(name)
+        if item.kind == "part" and item.has_part and item.name == name:
+            try:
+                return load_part(item)
+            except PartLoadError as exc:
+                raise SlicerError(f"the part {name!r} does not load: {exc.cause}") from exc
     raise SlicerError(f"no part named {name!r}")
-
-
-def _no_default(name: str):
-    raise SlicerError(f"the part {name!r} has no DEFAULT in its wrapper")
 
 
 def load_profile(part_name: str) -> PrinterProfile:
@@ -151,19 +148,11 @@ def load_profile(part_name: str) -> PrinterProfile:
 
 def printers() -> List[str]:
     """Every part that keeps a slicer profile: the printers a slice can be for."""
-    from importlib import import_module
-
-    from ..projects.registry import scan_projects
+    from ..projects.registry import load_parts
 
     found = []
-    for item in scan_projects(_root()):
-        if item.kind != "part" or not item.wrapper:
-            continue
-        try:
-            part = getattr(import_module(item.wrapper), "DEFAULT", None)
-        except Exception:  # noqa: BLE001 - a broken wrapper is `apothecary check`'s to report
-            continue
-        if part is not None and profile_file(part).is_file():
+    for item, part in load_parts(_root()).parts:
+        if profile_file(part).is_file():
             found.append(item.name)
     return sorted(found)
 

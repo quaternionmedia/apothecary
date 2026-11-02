@@ -3,7 +3,6 @@
 import importlib.metadata
 import os
 import sys
-from importlib import import_module
 
 import click
 
@@ -15,7 +14,7 @@ from ..projects.parts.stl_renderer import (
     has_manifold,
     openscad_version,
 )
-from ..projects.registry import scan_projects
+from ..projects.registry import PartLoadError, load_part, scan_projects
 from .retired import retired
 from .utils import _safe_echo
 
@@ -29,12 +28,12 @@ def _parts():
     for item in scan_projects(ROOT):
         if item.kind != "part":
             continue
-        if not item.wrapper:
+        if not item.has_part:
             found.append((item.name, BasePart(name=item.name, source_file=item.path)))
             continue
         try:
-            found.append((item.name, import_module(item.wrapper).DEFAULT))
-        except Exception:
+            found.append((item.name, load_part(item)))
+        except PartLoadError:
             found.append((item.name, None))
     return sorted(found, key=lambda pair: pair[0])
 
@@ -182,7 +181,7 @@ def check():
     click.echo(f"  Found {len(items)} part(s)")
     if items:
         for item in items[:5]:
-            status = "✓" if item.wrapper else "•"
+            status = "✓" if item.has_part else "•"
             _safe_echo(f"    {status} {item.name}")
         if len(items) > 5:
             click.echo(f"    ... and {len(items) - 5} more")

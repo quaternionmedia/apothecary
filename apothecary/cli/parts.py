@@ -5,7 +5,6 @@ import os
 import shutil
 import tempfile
 from datetime import date
-from importlib import import_module
 from pathlib import Path
 
 import click
@@ -15,11 +14,11 @@ from ..meshes import UNIT_SCALES, MeshError, bounds, read_mesh, transform, write
 from ..projects.parts.base import BasePart
 from ..projects.parts.skeleton import ROOT
 from ..projects.parts.stl_renderer import read_params_sidecar
-from ..projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
+from ..projects.registry import ProjectInfo, _sanitize_module_name, load_part, scan_projects
 from ..templates import TemplateRenderer
 from . import status
 from .utils import (
-    _load_part_wrapper,
+    _load_part,
     _parse_param_overrides,
     _safe_echo,
 )
@@ -28,8 +27,8 @@ from .utils import (
 def _part_of(item: ProjectInfo) -> BasePart:
     """The part a registry entry names: its wrapper's DEFAULT, or a bare part
     for a SCAD that has no wrapper."""
-    if item.wrapper:
-        return import_module(item.wrapper).DEFAULT
+    if item.has_part:
+        return load_part(item)
     return BasePart(name=item.name, source_file=item.path)
 
 
@@ -65,19 +64,20 @@ def _is_stub(item: ProjectInfo) -> bool:
 @parts.command("list")
 @click.option("--json-out/--text", default=False, help="Every field of each, as JSON.")
 def parts_list(json_out: bool):
-    """List the registered parts, each with the wrapper that describes it.
+    """List the registered parts, each with what describes it.
 
     A part is a folder under parts/ holding a SCAD named after it, at any depth
-    of category folders (parts/boards/arduino_uno). Its wrapper is a Python
-    module, or the described-part importer for a part.json beside the SCAD, or
-    None; a part.json tagged stub is marked as one.
+    of category folders (parts/boards/arduino_uno). Its description is a
+    part.json beside the SCAD, or a Python wrapper module, or None; a part.json
+    tagged stub is marked as one.
     """
     items = [p for p in scan_projects(ROOT) if p.kind == "part"]
     if json_out:
         click.echo(json.dumps([p.to_json() for p in items], indent=2))
         return
     for p in items:
-        click.echo(f"{p.name} (wrapper={p.wrapper})" + (" -- a stub" if _is_stub(p) else ""))
+        described_by = "part.json" if p.sidecar else f"wrapper={p.wrapper}"
+        click.echo(f"{p.name} ({described_by})" + (" -- a stub" if _is_stub(p) else ""))
 
 
 FIELD_OF_USE = ("-NC", "-ND", "NonCommercial", "NoDerivatives", "personal")
@@ -220,8 +220,7 @@ def parts_info(name: str, json_out: bool):
     """Everything about one part: its SCAD, category, tags, description, README,
     parameters, the bounds it declares at its defaults, and the parameters its
     STL on disk was built with."""
-    mod = _load_part_wrapper(name)
-    part = mod.DEFAULT
+    part = _load_part(name)
     # A consumer sizing an assembly around this part needs the envelope, not
     # just the file path. Parts that neither override get_bounds nor set
     # default_bounds report null rather than a guess.
@@ -285,7 +284,7 @@ def parts_verify(
         raise click.ClickException("OpenSCAD not found; cannot measure geometry.")
 
     if verify_all:
-        names = sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper})
+        names = sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.has_part})
     elif name:
         names = [name]
     else:
@@ -295,7 +294,7 @@ def parts_verify(
 
     for part_name in status.iterate(names, "Verifying"):
         try:
-            part = _load_part_wrapper(part_name).DEFAULT
+            part = _load_part(part_name)
         except click.ClickException:
             skipped.append((part_name, "no wrapper"))
             continue
@@ -393,7 +392,7 @@ def parts_checklist(name, check_all, build_volume, tolerance):
             raise click.ClickException("--build-volume wants three numbers: X,Y,Z") from None
 
     if check_all:
-        names = sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper})
+        names = sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.has_part})
     elif name:
         names = [name]
     else:
@@ -405,7 +404,7 @@ def parts_checklist(name, check_all, build_volume, tolerance):
     # Assessing renders and measures, so it is slow enough to watch.
     with status.progress(names, "Assessing") as bar:
         for part_name in bar:
-            part = _load_part_wrapper(part_name).DEFAULT
+            part = _load_part(part_name)
             reports.append((part_name, assess(part, build_volume=volume, tolerance=tolerance)))
 
     for part_name, report in reports:
@@ -465,8 +464,7 @@ def parts_render(name: str, params_json: str | None, template: str | None, outpu
     another), or, for a part built by Python geometry, that geometry's SCAD at
     the parameters given. No STL is built: `apothecary parts generate-stl` builds
     one."""
-    mod = _load_part_wrapper(name)
-    part = mod.DEFAULT
+    part = _load_part(name)
     params_data = {}
     if params_json:
         try:
@@ -572,7 +570,7 @@ def parts_generate_stl(
     if generate_all:
         to_build = [_part_of(item) for item in scan_projects(ROOT) if item.kind == "part"]
     elif name:
-        to_build = [_load_part_wrapper(name).DEFAULT]
+        to_build = [_load_part(name)]
     else:
         raise click.ClickException("Specify a part name or use --all")
 

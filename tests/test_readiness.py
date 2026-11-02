@@ -314,9 +314,9 @@ class TestThePartDecidesWhereItsStlLives:
     """
 
     def test_readiness_reads_the_path_the_part_names(self):
-        from apothecary.cli.utils import _load_part_wrapper
+        from apothecary.cli.utils import _load_part
 
-        part = _load_part_wrapper("gridfinity").DEFAULT
+        part = _load_part("gridfinity")
         assert part.get_stl_output_path() != part.source_file.with_suffix(".stl")
 
         report = assess(part)
@@ -335,15 +335,13 @@ class TestThePartDecidesWhereItsStlLives:
 
 def test_a_described_part_counts_its_part_json_as_a_source(tmp_path):
     """A described part's wrapper is its part.json; an edit there makes its render stale."""
-    import importlib
     import os
 
     from apothecary.projects.parts.readiness import _sources_newer_than
     from apothecary.projects.parts.skeleton import ROOT
-    from apothecary.projects.registry import scan_projects
+    from apothecary.projects.registry import part_named
 
-    item = next(p for p in scan_projects(ROOT) if p.kind == "part" and p.name == "esp32_devkitc")
-    part = importlib.import_module(item.wrapper).DEFAULT
+    part = part_named("esp32_devkitc", ROOT)
     old_render = tmp_path / "old.stl"
     old_render.write_text("solid x\nendsolid x\n")
     os.utime(old_render, (0, 0))

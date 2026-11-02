@@ -10,7 +10,6 @@ whatever its scope, so the renders are kept here, not by the fixture.
 
 from __future__ import annotations
 
-from importlib import import_module
 from pathlib import Path
 
 import pytest
@@ -18,7 +17,7 @@ import pytest
 from apothecary.projects.parts.base import BasePart
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.stl_renderer import RenderResult, get_renderer, render_part
-from apothecary.projects.registry import scan_projects
+from apothecary.projects.registry import PartLoadError, load_part, scan_projects
 
 # Parts whose render genuinely takes longer than the default budget.
 RENDER_BUDGET = {"gridfinity": 240.0}
@@ -28,17 +27,17 @@ _RENDERS: dict[str, RenderResult] = {}
 
 def registered_parts() -> list[tuple[str, BasePart | None]]:
     """(name, part) for every part the registry lists; None where the wrapper
-    will not import, so a broken wrapper is a failing case, not a missing one."""
+    will not load, so a broken part is a failing case, not a missing one."""
     found = []
     for item in scan_projects(ROOT):
         if item.kind != "part":
             continue
-        if not item.wrapper:
+        if not item.has_part:
             found.append((item.name, BasePart(name=item.name, source_file=item.path)))
             continue
         try:
-            found.append((item.name, import_module(item.wrapper).DEFAULT))
-        except Exception:
+            found.append((item.name, load_part(item)))
+        except PartLoadError:
             found.append((item.name, None))
     return sorted(found, key=lambda pair: pair[0])
 

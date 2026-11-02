@@ -10,5 +10,5 @@ def test_all_known_parts_have_wrappers():
     # Ensure at least some parts exist
     assert len(parts) >= 5
     # All scanned parts in this repo should have a wrapper module present
-    missing = [p.name for p in parts if not p.wrapper]
+    missing = [p.name for p in parts if not p.has_part]
     assert not missing, f"Missing wrappers for: {missing}"

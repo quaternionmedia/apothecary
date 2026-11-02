@@ -4,15 +4,13 @@ problems`` say so, naming each value."""
 
 from __future__ import annotations
 
-from importlib import import_module
-
 from pydantic import BaseModel, Field
 
 from apothecary.projects.parts.base import BasePart
 from apothecary.projects.parts.readiness import BLOCKED, DEFAULTS, PASS, assess
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.texts import defaults_disagree
-from apothecary.projects.registry import scan_projects
+from apothecary.projects.registry import load_part, scan_projects
 from apothecary.spaces import APOTHECARY, KIND_OWNER, _readiness_problems
 
 
@@ -72,9 +70,9 @@ class TestTheChecklistAndProblemsSayIt:
         """Every part of the library with a model agrees with its SCAD."""
         disagree = {}
         for item in scan_projects(ROOT):
-            if item.kind != "part" or not item.wrapper:
+            if item.kind != "part" or not item.has_part:
                 continue
-            found = defaults_disagree(import_module(item.wrapper).DEFAULT)
+            found = defaults_disagree(load_part(item))
             if found:
                 disagree[item.name] = found
         assert disagree == {}

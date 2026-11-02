@@ -28,7 +28,6 @@ import threading
 import time
 import weakref
 from contextlib import asynccontextmanager, suppress
-from importlib import import_module
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional, Union
 from urllib.parse import quote
@@ -98,7 +97,13 @@ from .projects.parts.variants import (
     variant_record,
 )
 from .projects.parts.variants import wants as request_wants
-from .projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
+from .projects.registry import (
+    PartLoadError,
+    ProjectInfo,
+    _sanitize_module_name,
+    load_part,
+    scan_projects,
+)
 from .routes import lighting as lighting_routes
 from .routes import wiring as wiring_routes
 from .routes.airgap import router as airgap_router
@@ -130,8 +135,8 @@ from .vocabulary.word import WORD_PRINT_SETTINGS_STUB
 
 def _registered_part(item: ProjectInfo) -> BasePart:
     """A registry entry's part: its wrapper's DEFAULT, or a bare part for a SCAD with none."""
-    if item.wrapper:
-        return import_module(item.wrapper).DEFAULT
+    if item.has_part:
+        return load_part(item)
     return BasePart(name=item.name, source_file=item.path)
 
 
@@ -303,12 +308,12 @@ def _load_part_wrapper(name: str):
     # (datum-core), or a nested part's package path (rc.snowplow). Each resolves
     # to a registered wrapper, never to a module constructed from the URL.
     wanted = _sanitize_module_name(name)
-    full = next(
+    entry = next(
         (
-            p.wrapper
+            p
             for p in scan_projects(ROOT)
             if p.kind == "part"
-            and p.wrapper
+            and p.has_part
             and (
                 _sanitize_module_name(p.name) == wanted
                 or p.wrapper == f"apothecary.projects.parts.{name}"
@@ -316,12 +321,12 @@ def _load_part_wrapper(name: str):
         ),
         None,
     )
-    if full is None:
+    if entry is None:
         raise HTTPException(status_code=404, detail=f"Part '{name}' not found")
-    module = import_module(full)
-    if not hasattr(module, "DEFAULT"):
-        raise HTTPException(status_code=500, detail=f"Wrapper '{full}' missing DEFAULT part")
-    part = module.DEFAULT
+    try:
+        part = load_part(entry)
+    except PartLoadError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     if not part.exists:
         raise HTTPException(status_code=404, detail=f"SCAD source for part '{name}' not found")
     return part
@@ -344,7 +349,7 @@ def is_board(part_ref: Optional[str]) -> bool:
 
 
 def _available_part_names() -> List[str]:
-    return sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper})
+    return sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.has_part})
 
 
 def _repo_relative_path(path: Path) -> str:

@@ -8,7 +8,6 @@ only be edited, which is the loop this tooling exists to replace.
 from __future__ import annotations
 
 import re
-from importlib import import_module
 
 import pytest
 
@@ -17,7 +16,7 @@ from apothecary.projects.parts.datum_cap import DEFAULT as CAP
 from apothecary.projects.parts.datum_core import DEFAULT as CORE
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.stl_renderer import geometry_scad, scad_definitions
-from apothecary.projects.registry import scan_projects
+from apothecary.projects.registry import load_part, scan_projects
 
 PARTS = [pytest.param(CORE, id="datum_core"), pytest.param(CAP, id="datum_cap")]
 
@@ -25,8 +24,8 @@ PARTS = [pytest.param(CORE, id="datum_core"), pytest.param(CAP, id="datum_cap")]
 def _parts_with_params():
     found = {}
     for item in scan_projects(ROOT):
-        if item.kind == "part" and item.wrapper:
-            part = import_module(item.wrapper).DEFAULT
+        if item.kind == "part" and item.has_part:
+            part = load_part(item)
             if part.params_model is not None:
                 found[item.name] = part
     return [pytest.param(part, id=name) for name, part in sorted(found.items())]
