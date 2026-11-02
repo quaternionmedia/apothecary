@@ -19,108 +19,11 @@ from apothecary.vision.projection import CORNERS
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 # A made-up desktop synth, measured as a carlos catalogue entry is: two knobs, a
-# fader, a switch and an encoder on its front, three sockets there and one on its back.
-SYNTH = {
-    "id": "made-up.synth",
-    "maker": "Made Up",
-    "model": "Synth",
-    "category": "semi-modular",
-    "summary": "A synth for the tests.",
-    "fidelity": "sketch",
-    "jacks": [
-        {
-            "name": "gate_in",
-            "label": "GATE",
-            "type": "input",
-            "signal": "gate",
-            "connector": "3.5mm",
-        },
-        {"name": "cv_out", "label": "CV", "type": "output", "signal": "cv", "connector": "3.5mm"},
-        {
-            "name": "spare_in",
-            "label": "SPARE",
-            "type": "input",
-            "signal": "cv",
-            "connector": "3.5mm",
-        },
-        {
-            "name": "audio_out",
-            "label": "OUT",
-            "type": "output",
-            "signal": "audio",
-            "connector": "1/4in",
-            "side": "back",
-        },
-    ],
-    "parameters": [
-        {"name": "cutoff", "label": "CUTOFF", "min": 0, "max": 127, "default": 64},
-        {"name": "decay", "label": "DECAY", "min": 0, "max": 10, "default": 2},
-        {"name": "level", "label": "LEVEL", "min": 0, "max": 127, "default": 100},
-        {"name": "range", "label": "RANGE", "min": 0, "max": 1, "default": 0},
-        {"name": "select", "label": "SELECT", "min": 0, "max": 127, "default": 0},
-    ],
-    "layout": {
-        "box": {"width": 200, "height": 100, "depth": 80},
-        "controls": {
-            "cutoff": {"x": 0.15, "y": 0.3, "side": "front", "size": 1.2},
-            "decay": {"x": 0.35, "y": 0.3, "side": "front"},
-            "level": {"x": 0.15, "y": 0.75, "side": "front", "kind": "fader", "length": 0.3},
-            "range": {"x": 0.35, "y": 0.75, "side": "front", "kind": "switch"},
-            "select": {"x": 0.55, "y": 0.3, "side": "front", "kind": "encoder"},
-        },
-        "jacks": {
-            "gate_in": {"x": 0.75, "y": 0.3, "side": "front"},
-            "cv_out": {"x": 0.9, "y": 0.3, "side": "front"},
-            "spare_in": {"x": 0.75, "y": 0.7, "side": "front"},
-            "audio_out": {"x": 0.5, "y": 0.5, "side": "back"},
-        },
-    },
-}
-# A desk the camera never sees, with one socket a lead runs to.
-DESK = {
-    "id": "made-up.desk",
-    "maker": "Made Up",
-    "model": "Desk",
-    "category": "mixer",
-    "summary": "A desk for the tests.",
-    "fidelity": "sketch",
-    "jacks": [
-        {
-            "name": "in_1",
-            "label": "IN 1",
-            "type": "input",
-            "signal": "audio",
-            "connector": "1/4in",
-            "side": "back",
-        }
-    ],
-    "parameters": [],
-    "layout": {
-        "box": {"width": 300, "height": 90, "depth": 400},
-        "jacks": {"in_1": {"x": 0.5, "y": 0.5, "side": "back"}},
-    },
-}
-RIG = {
-    "format": "carlos.patch",
-    "version": 3,
-    "name": "two synths and a desk",
-    "modules": [
-        {"id": "one", "type": "made-up.synth", "view": "front", "parameters": {"cutoff": 30}},
-        {"id": "two", "type": "made-up.synth", "view": "front", "parameters": {}},
-        {"id": "desk", "type": "made-up.desk", "view": "back", "parameters": {}},
-    ],
-    "connections": [
-        {
-            "source": {"module": "one", "jack": "cv_out"},
-            "target": {"module": "two", "jack": "gate_in"},
-        },
-        {
-            "source": {"module": "two", "jack": "audio_out"},
-            "target": {"module": "desk", "jack": "in_1"},
-        },
-    ],
-    "groups": [],
-}
+# fader, a switch and an encoder on its front, three sockets there and one on its back;
+# a desk the camera never sees, with one socket a lead runs to; and a rig of two
+# synths and the desk, with a lead between them and one to the desk.
+_CATALOGUE = json.loads(Path(__file__).with_name("rig_catalogue.json").read_text(encoding="utf-8"))
+SYNTH, DESK, RIG = _CATALOGUE["synth"], _CATALOGUE["desk"], _CATALOGUE["rig"]
 
 
 @pytest.fixture
@@ -156,6 +59,14 @@ def test_the_scene_pins_each_face_the_camera_sees(setup):
     # Side by side, the second to the right of the first, both inside the picture.
     assert one[1][0] < two[0][0]
     assert all(0 < u < 1 and 0 < v < 1 for u, v in one + two)
+
+
+def _held_off(setup, tmp_path, values, plugged, scale: float = 1.0):
+    picture = simulated.draw(setup, values, plugged)
+    if scale != 1.0:
+        picture = picture.resize((round(picture.width * scale), round(picture.height * scale)))
+    picture.save(tmp_path / "rig.png")
+    return reading.held(setup, reading.read(setup, tmp_path / "rig.png"))
 
 
 def test_a_drawn_picture_reads_back_at_the_values_it_was_drawn_at(setup, tmp_path):
@@ -197,9 +108,7 @@ def test_held_is_the_rig_at_the_values_read_with_each_module_s_and_lead_s_state(
     values["one"]["cutoff"] = 90
     plugged["one"]["spare_in"] = True  # a plug no lead names
     plugged["one"]["cv_out"] = False  # the lead's near end pulled
-    picture = tmp_path / "rig.png"
-    simulated.draw(setup, values, plugged).save(picture)
-    patch, states = reading.held(setup, reading.read(setup, picture))
+    patch, states = _held_off(setup, tmp_path, values, plugged)
 
     assert patch["display"]["mode"] == "irl"
     one = next(m for m in patch["modules"] if m["id"] == "one")
@@ -239,14 +148,6 @@ def test_held_is_the_rig_at_the_values_read_with_each_module_s_and_lead_s_state(
         "not seen: OUT on two is not in the picture",
         "not seen: IN 1 on desk is not in the picture",
     ]
-
-
-def _held_off(setup, tmp_path, values, plugged, scale: float = 1.0):
-    picture = simulated.draw(setup, values, plugged)
-    if scale != 1.0:
-        picture = picture.resize((round(picture.width * scale), round(picture.height * scale)))
-    picture.save(tmp_path / "rig.png")
-    return reading.held(setup, reading.read(setup, tmp_path / "rig.png"))
 
 
 def test_a_plug_moved_to_a_socket_no_lead_names_is_held_moved_there(setup, tmp_path):
@@ -503,9 +404,7 @@ def test_a_rig_of_sockets_alone_is_laid_by_its_sockets_and_read(tmp_path):
     measured = {row.kind: row for row in simulated.measure(setup, count=3)}
     assert set(measured) == {"socket"} and measured["socket"].mean == 0
 
-    picture = tmp_path / "uno.png"
-    simulated.draw(setup, {}, {"uno": {"usb": False, "power": True}}).save(picture)
-    patch, states = reading.held(setup, reading.read(setup, picture))
+    patch, states = _held_off(setup, tmp_path, {}, {"uno": {"usb": False, "power": True}})
     usb, power = states.connections
     assert usb.level == "fault" and usb.says[0] == "declared: nothing plugged into USB on uno"
     assert power.level == "none"  # a plug seen in the Uno; the supply is not in the picture
