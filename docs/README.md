@@ -2,7 +2,8 @@
 
 `apothecary serve` serves this folder at `/docs` and the walkthrough at
 `/walkthrough`; links between pages work because the URL is the path. The
-HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
+root [README](../README.md), with the map of what the browser suite walks, is served
+at `/README.md`, and every page's bar links it. The HTTP API is described at `/openapi.json`, the commands by `apothecary --help`.
 
 ## The walkthrough
 

@@ -1,5 +1,10 @@
+import json
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+
+import pytest
 
 # Ensure repository root is on sys.path so `import apothecary` works
 ROOT = Path(__file__).resolve().parents[1]
@@ -103,7 +108,6 @@ def pytest_collection_modifyitems(config, items):
 # that wire it in are here.
 
 
-import pytest  # noqa: E402
 from firmware_helpers import (  # noqa: E402
     _isolate_firmware_state,
     write_fake_arduino_cli,
@@ -354,3 +358,43 @@ def listing_openscad():
     if found is None:
         pytest.skip("no OpenSCAD here lists parameters (`apothecary openscad install`)")
     return found
+
+
+@pytest.fixture
+def carlos_routes():
+    """What a stand-in carlos answers to a GET, by path; a test module that reads
+    from carlos overrides it."""
+    return {}
+
+
+@pytest.fixture
+def a_carlos(carlos_routes):
+    """A stand-in for carlos on loopback: its routes, what it was sent as
+    (path, body), and what it answers a POST, which a test may change."""
+    heard = []
+    answer = {"status": 200, "body": {"ok": True}}
+
+    class Carlos(BaseHTTPRequestHandler):
+        def _answer(self, status, body):
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(body).encode())
+
+        def do_GET(self):
+            found = carlos_routes.get(self.path)
+            self._answer(200 if found else 404, found or {"detail": "Not Found"})
+
+        def do_POST(self):
+            length = int(self.headers["Content-Length"])
+            heard.append((self.path, json.loads(self.rfile.read(length))))
+            self._answer(answer["status"], answer["body"])
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Carlos)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_port}", heard, answer
+    server.shutdown()
+    server.server_close()

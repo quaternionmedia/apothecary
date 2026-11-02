@@ -14,7 +14,6 @@ appear in its screenshots.
 
 from __future__ import annotations
 
-import importlib
 import re
 import socket
 from types import SimpleNamespace
@@ -85,7 +84,7 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
     from apothecary.projects.parts import ender3
     from apothecary.projects.parts.described import part_from_sidecar
     from apothecary.projects.parts.skeleton import ROOT
-    from apothecary.projects.registry import scan_projects
+    from apothecary.projects.registry import part_named, scan_projects
     from apothecary.stays_local import LeftTheMachine
 
     page, base_url, picture_folder = bench.page, bench.url, bench.folder
@@ -166,18 +165,16 @@ def test_the_bench_as_it_is(bench, walkthrough, tmp_path):
 
     item = next(p for p in scan_projects(ROOT) if p.kind == "part" and p.name == "esp32_devkitc")
     described = part_from_sidecar(item.path)
-    module = importlib.import_module(item.wrapper)
-    assert module.DEFAULT.name == described.name == "esp32_devkitc"
+    assert part_named("esp32_devkitc", ROOT).name == described.name == "esp32_devkitc"
     assert described.source is not None and described.source.license == "MIT"
     assert described.default_bounds is not None
     story.says(
         "A part can be a folder with a sidecar and no Python",
         "A `part.json` beside a SCAD says what a wrapper module would have said: "
         "category, colour, bounds, and who made it under what licence. The registry "
-        "names such a part's wrapper anyway, and importing that name builds the "
-        "part from the sidecar.",
+        "loads such a part from that file, with no module to import.",
         shown=(
-            f"{item.wrapper}\n"
+            f"{item.sidecar.relative_to(ROOT).as_posix()}\n"
             f"{described.category}; {described.source.author}, {described.source.license}; "
             f"{described.default_bounds.max_point.x:g} x "
             f"{described.default_bounds.max_point.y:g} x "

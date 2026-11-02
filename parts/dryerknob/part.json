@@ -1,0 +1,27 @@
+{
+  "description": "Dryer knob replacement",
+  "category": "appliance",
+  "tags": [
+    "knob",
+    "dryer",
+    "replacement"
+  ],
+  "readme": "../README.md",
+  "preview_color": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "bounds": {
+    "min": [
+      -16.5,
+      -16.5,
+      0.0
+    ],
+    "max": [
+      16.5,
+      16.5,
+      20.0
+    ]
+  }
+}

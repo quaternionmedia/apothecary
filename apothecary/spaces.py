@@ -37,7 +37,6 @@ Ownership is the boundary between the two repositories, made machine-readable:
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from importlib import import_module
 from typing import Dict, List, Optional
 
 APOTHECARY = "apothecary"
@@ -202,16 +201,20 @@ def problems(build_volume: Optional[tuple] = None) -> List[Problem]:
     """Every open question this repository can state, worst-owned first."""
     from .projects.parts.readiness import assess
     from .projects.parts.skeleton import ROOT
-    from .projects.registry import scan_projects
+    from .projects.registry import PartLoadError, load_part, scan_projects
 
     found: List[Problem] = []
 
     for entry in sorted(
-        {p.name: p for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper}.values(),
+        {p.name: p for p in scan_projects(ROOT) if p.kind == "part" and p.has_part}.values(),
         key=lambda p: p.name,
     ):
         try:
-            part = import_module(entry.wrapper).DEFAULT
+            part = load_part(entry)
+        except PartLoadError as exc:
+            found.append(_broken(entry.name, exc.cause))
+            continue
+        try:
             open_here = _contested_problems(part)
             open_here += _readiness_problems(part, assess(part, build_volume=build_volume))
         except Exception as exc:  # any failure to read a part is the problem to report
@@ -238,17 +241,17 @@ def problems(build_volume: Optional[tuple] = None) -> List[Problem]:
 def capabilities() -> List[Capability]:
     """What this repository offers against those problems."""
     from .projects.parts.skeleton import ROOT
-    from .projects.registry import scan_projects
+    from .projects.registry import PartLoadError, load_part, scan_projects
 
     found: List[Capability] = []
 
     for entry in sorted(
-        {p.name: p for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper}.values(),
+        {p.name: p for p in scan_projects(ROOT) if p.kind == "part" and p.has_part}.values(),
         key=lambda p: p.name,
     ):
         try:
-            part = import_module(entry.wrapper).DEFAULT
-        except Exception:  # problems() reports it as broken; it offers nothing
+            part = load_part(entry)
+        except PartLoadError:  # problems() reports it as broken; it offers nothing
             continue
         found.append(
             Capability(

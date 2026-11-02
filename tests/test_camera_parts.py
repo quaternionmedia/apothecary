@@ -648,3 +648,22 @@ def test_a_camera_in_the_air_overlaps_nothing_and_one_moved_into_a_printer_does_
     pairs = [sorted(v["structures"]) for v in r.json()["violations"] if v["kind"] == "overlap"]
     assert any("camera_1" in pair for pair in pairs), r.json()["violations"]
     forget_cameras()
+
+
+def test_adding_beside_other_cameras_computes_the_surfaces_once():
+    c = TestClient(app)
+    for _ in range(3):
+        _add(c)
+    calls = []
+    real = cameras.surfaces
+
+    def counted(site_name, site):
+        calls.append(site_name)
+        return real(site_name, site)
+
+    cameras.surfaces = counted
+    try:
+        cameras.add_here("garage", _site_store.get("garage"), "workbench")
+    finally:
+        cameras.surfaces = real
+    assert len(calls) == 1

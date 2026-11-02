@@ -19,7 +19,8 @@ run is still going or how it ended. It is off by default: a plain ``serve``
 regenerates nothing, and ``apothecary docs generate`` does it by hand. A link
 to a generated page that is not there yet says how to make it.
 
-``/walkthrough`` is an index of the walkthrough's pages, in order.
+``/walkthrough`` is an index of the walkthrough's pages, in order. The root
+README is ``/README.md`` (``routes/readme.py``), and every page's bar links it.
 """
 
 from __future__ import annotations
@@ -360,7 +361,7 @@ PAGE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>{style}</style></head>
 <body>
-<div class="bar"><a href="/viewer">🧪 Apothecary</a> <a href="/docs/README.md">docs</a>
+<div class="bar"><a href="/viewer">🧪 Apothecary</a> <a href="/README.md">README</a> <a href="/docs/README.md">docs</a>
 <a href="/walkthrough">walkthrough</a>
 <span class="crumb">{crumb}</span><span class="spacer"></span>
 <span class="refresh {refresh_class}" title="{refresh_title}">{refresh_text}</span>

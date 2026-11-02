@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from importlib import import_module
 from typing import Optional, Tuple
 
 import click
@@ -16,15 +15,15 @@ def parts_floor() -> Tuple[Optional[str], Optional[str]]:
     that part's name: ``(None, None)`` when none declares one."""
     from ..projects.parts.skeleton import ROOT
     from ..projects.parts.stl_renderer import parse_openscad_version
-    from ..projects.registry import scan_projects
+    from ..projects.registry import PartLoadError, load_part, scan_projects
 
     best: Tuple[Optional[str], Optional[str]] = (None, None)
     for item in scan_projects(ROOT):
-        if item.kind != "part" or not item.wrapper:
+        if item.kind != "part" or not item.has_part:
             continue
         try:
-            part = import_module(item.wrapper).DEFAULT
-        except Exception:  # a broken wrapper is `apothecary check`'s to report
+            part = load_part(item)
+        except PartLoadError:  # a broken part is `apothecary check`'s to report
             continue
         wanted = getattr(part, "openscad_min_version", None)
         if wanted and (

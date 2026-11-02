@@ -28,7 +28,6 @@ import threading
 import time
 import weakref
 from contextlib import asynccontextmanager, suppress
-from importlib import import_module
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional, Union
 from urllib.parse import quote
@@ -98,7 +97,13 @@ from .projects.parts.variants import (
     variant_record,
 )
 from .projects.parts.variants import wants as request_wants
-from .projects.registry import ProjectInfo, _sanitize_module_name, scan_projects
+from .projects.registry import (
+    PartLoadError,
+    ProjectInfo,
+    _sanitize_module_name,
+    load_part,
+    scan_projects,
+)
 from .routes import lighting as lighting_routes
 from .routes import wiring as wiring_routes
 from .routes.airgap import router as airgap_router
@@ -108,6 +113,7 @@ from .routes.jobs import router as jobs_router
 from .routes.lighting import router as lighting_router
 from .routes.part_edits import router as part_edits_router
 from .routes.pictures import router as pictures_router
+from .routes.readme import router as readme_router
 from .routes.views import router as views_router
 from .routes.vision import router as vision_router
 from .routes.wiring import router as wiring_router
@@ -129,9 +135,12 @@ from .vocabulary.word import WORD_PRINT_SETTINGS_STUB
 
 def _registered_part(item: ProjectInfo) -> BasePart:
     """A registry entry's part: its wrapper's DEFAULT, or a bare part for a SCAD with none."""
-    if item.wrapper:
-        return import_module(item.wrapper).DEFAULT
+    if item.has_part:
+        return load_part(item)
     return BasePart(name=item.name, source_file=item.path)
+
+
+logger = logging.getLogger(__name__)
 
 
 async def _generate_missing_stls():
@@ -142,12 +151,11 @@ async def _generate_missing_stls():
     built on this machine is skipped with its reason.
     """
     if os.environ.get("APOTHECARY_SKIP_STL_GENERATION", "").lower() in ("1", "true", "yes"):
-        print("STL generation skipped (APOTHECARY_SKIP_STL_GENERATION=1)")
+        logger.info("STL generation skipped (APOTHECARY_SKIP_STL_GENERATION=1)")
         return
 
     if not get_stl_renderer().is_available:
-        print("OpenSCAD not found - STL generation skipped")
-        print("Install OpenSCAD to enable automatic STL generation")
+        logger.warning("OpenSCAD not found - STL generation skipped; install OpenSCAD to enable it")
         return
 
     parts = [_registered_part(p) for p in scan_projects(ROOT) if p.kind == "part"]
@@ -155,16 +163,15 @@ async def _generate_missing_stls():
     if not missing:
         return
 
-    print(f"Generating {len(missing)} missing STL file(s)...")
+    logger.info("Generating %d missing STL file(s)", len(missing))
     for part in missing:
-        print(f"  Generating {part.name}...", end=" ", flush=True)
         result = await asyncio.to_thread(build_stl, part, timeout=120)
         if result.skipped == "refused":
-            print(f"skipped: {result.error_message}")
+            logger.warning("Skipped %s: %s", part.name, result.error_message)
         elif result.success:
-            print(f"OK ({result.render_time_seconds:.1f}s)")
+            logger.info("Built %s in %.1fs", part.name, result.render_time_seconds)
         else:
-            print(f"FAILED: {result.error_message}")
+            logger.error("Failed to build %s: %s", part.name, result.error_message)
 
 
 async def _generate_missing_stls_in_background():
@@ -172,7 +179,7 @@ async def _generate_missing_stls_in_background():
     try:
         await _generate_missing_stls()
     except Exception as exc:  # pragma: no cover - defensive; log, don't crash the server
-        print(f"Background STL generation failed: {exc}")
+        logger.error("Background STL generation failed: %s", exc, exc_info=True)
 
 
 @asynccontextmanager
@@ -251,6 +258,8 @@ class _AskedAgain(StaticFiles):
 
 app.mount("/static", _AskedAgain(directory=STATIC_ROOT), name="static")
 app.include_router(docs_router)
+# The root README, as a page of the same kind.
+app.include_router(readme_router)
 # Mounted before the photo routes below, so /photos/pictures and /photos/gather
 # are matched before /photos/{name} can take "pictures" for a name. The router
 # reaches back into this module only inside its handlers.
@@ -296,15 +305,15 @@ def _load_part_wrapper(name: str):
     # Only a registered part: a name from a URL is never turned into an import
     # path, so GET /parts/stl_renderer is a 404 and imports nothing.
     # Spellings a link may carry: the registry's name in any case of - and _
-    # (datum-core), or a nested part's package path (rc.snowplow). Each resolves
+    # (datum-core), or a nested part's package path. Each resolves
     # to a registered wrapper, never to a module constructed from the URL.
     wanted = _sanitize_module_name(name)
-    full = next(
+    entry = next(
         (
-            p.wrapper
+            p
             for p in scan_projects(ROOT)
             if p.kind == "part"
-            and p.wrapper
+            and p.has_part
             and (
                 _sanitize_module_name(p.name) == wanted
                 or p.wrapper == f"apothecary.projects.parts.{name}"
@@ -312,12 +321,12 @@ def _load_part_wrapper(name: str):
         ),
         None,
     )
-    if full is None:
+    if entry is None:
         raise HTTPException(status_code=404, detail=f"Part '{name}' not found")
-    module = import_module(full)
-    if not hasattr(module, "DEFAULT"):
-        raise HTTPException(status_code=500, detail=f"Wrapper '{full}' missing DEFAULT part")
-    part = module.DEFAULT
+    try:
+        part = load_part(entry)
+    except PartLoadError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     if not part.exists:
         raise HTTPException(status_code=404, detail=f"SCAD source for part '{name}' not found")
     return part
@@ -340,7 +349,7 @@ def is_board(part_ref: Optional[str]) -> bool:
 
 
 def _available_part_names() -> List[str]:
-    return sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper})
+    return sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.has_part})
 
 
 def _repo_relative_path(path: Path) -> str:

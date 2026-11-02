@@ -266,7 +266,7 @@ from a scratch file, with no `-D`; `apothecary parts render NAME -o FILE`
 writes that SCAD; and the STL goes stale when the part's code changes. The
 SCAD file stays as the geometry at the default parameters, for a reader and
 the registry. The snowplow is one: `SnowplowPart.geometry` returns
-`snowplow_assembly(...)`, `apothecary parts render rc.snowplow -o
+`snowplow_assembly(...)`, `apothecary parts render snowplow -o
 parts/rc/snowplow/snowplow.scad` rewrites the file, and
 `tests/test_snowplow_part.py` fails when the two differ. A parameter of
 such a part lives in `Params` and in the code;

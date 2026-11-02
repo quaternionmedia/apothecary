@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import shutil
-from importlib import import_module
 
 import pytest
 from click.testing import CliRunner
@@ -25,7 +24,7 @@ from apothecary.primitives import Import
 from apothecary.projects.parts import ender3
 from apothecary.projects.parts.described import DescribedPart, part_from_sidecar
 from apothecary.projects.parts.skeleton import ROOT
-from apothecary.projects.registry import resolve_wrapper_module, scan_projects
+from apothecary.projects.registry import part_named, scan_projects
 
 BRICK_OBJ = (
     "v 0 0 0\nv 2 0 0\nv 2 1 0\nv 0 1 0\nv 0 0 3\nv 2 0 3\nv 2 1 3\nv 0 1 3\n"
@@ -118,9 +117,8 @@ def test_a_part_described_by_a_sidecar_is_a_part(tmp_path):
             encoding="utf-8",
         )
         found = next(p for p in scan_projects(ROOT) if p.name == "zz_described_test")
-        assert found.wrapper == "apothecary.projects.parts.described.zz_described_test"
-        module = import_module(resolve_wrapper_module("zz_described_test", ROOT))
-        part = module.DEFAULT
+        assert found.wrapper is None and found.sidecar == folder / "part.json"
+        part = part_named("zz_described_test", ROOT)
         assert isinstance(part, DescribedPart)
         assert part.category == "testing" and part.tags == ["described"]
         assert part.source.license == "CC0-1.0" and part.exists
@@ -135,8 +133,8 @@ def test_a_part_described_by_a_sidecar_is_a_part(tmp_path):
         assert client.get("/parts/zz_described_test").status_code == 200
     finally:
         shutil.rmtree(folder, ignore_errors=True)
-    with pytest.raises(ModuleNotFoundError):
-        import_module("apothecary.projects.parts.described.zz_described_test_gone")
+    with pytest.raises(KeyError):
+        part_named("zz_described_test", ROOT)
 
 
 def test_parts_import_brings_a_file_in_as_a_part(tmp_path):
@@ -187,7 +185,7 @@ def test_parts_import_brings_a_file_in_as_a_part(tmp_path):
         ]
         tag = "SPDX-License-" + "Identifier"  # in halves: REUSE reads a tag anywhere in a file
         assert f"{tag}: CC-BY-4.0" in (folder / "zz_imported_brick.mesh.stl.license").read_text()
-        part = import_module(resolve_wrapper_module("zz_imported_brick", ROOT)).DEFAULT
+        part = part_named("zz_imported_brick", ROOT)
         assert part.source.author == "Someone" and part.category == "imported"
         assert round(part.get_bounds().size.y, 1) == 76.2
         again = CliRunner().invoke(
@@ -256,7 +254,7 @@ def test_the_board_models_are_the_boards_they_say(tmp_path):
         "creality_v422": (102.0, 74.0),
     }
     for name, (w, d) in expected.items():
-        part = import_module(resolve_wrapper_module(name, ROOT)).DEFAULT
+        part = part_named(name, ROOT)
         assert isinstance(part, DescribedPart) and part.category == "electrical"
         text = part.source_file.read_text(encoding="utf-8")
         assert f"size = [{w}, {d}];" in text or f"size = [{int(w)}, {int(d)}];" in text, name

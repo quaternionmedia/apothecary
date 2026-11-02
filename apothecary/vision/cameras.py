@@ -332,11 +332,16 @@ def surfaces(site_name: str, site: Assembly) -> List[Box]:
     return boxes
 
 
-def lands(site_name: str, site: Assembly, pose: Pose) -> Optional[Hit]:
+def lands(
+    site_name: str, site: Assembly, pose: Pose, boxes: Optional[List[Box]] = None
+) -> Optional[Hit]:
     """Where a camera at ``pose`` would land a picture: a host's top (its name) or
-    the floor (``""``), and the point its centre ray reaches; None for a wall or the sky."""
+    the floor (``""``), and the point its centre ray reaches; None for a wall or the sky.
+    ``boxes`` are the site's ``surfaces``, when a caller asks again and again."""
     eye = (pose.position.x, pose.position.y, pose.position.z)
-    hit = first_surface(eye, looking(pose.turn, pose.tilt), surfaces(site_name, site))
+    if boxes is None:
+        boxes = surfaces(site_name, site)
+    hit = first_surface(eye, looking(pose.turn, pose.tilt), boxes)
     if hit is None or hit.side:
         return None
     return hit
@@ -367,7 +372,9 @@ def _free_name(site_name: str, site: Assembly) -> str:
     return f"{CATEGORY}_{n}"
 
 
-def starting_pose(site_name: str, site: Assembly, host: str) -> Pose:
+def starting_pose(
+    site_name: str, site: Assembly, host: str, boxes: Optional[List[Box]] = None
+) -> Pose:
     """Where Add here stands a camera: above the middle of its place, looking
     straight down, ``START_HEIGHT`` above the first top under it -- the place's
     own, or the top of what stands on it there (a printer on a bench), so it
@@ -384,7 +391,8 @@ def starting_pose(site_name: str, site: Assembly, host: str) -> Pose:
         middle = Vector3D(x=anchor.x + width / 2, y=anchor.y, z=anchor.z)
     else:
         middle = top_centre(next(c for c in site.children if c.name == host))
-    boxes = surfaces(site_name, site)
+    if boxes is None:
+        boxes = surfaces(site_name, site)
     above = max([middle.z, *(box.high[2] for box in boxes)]) + 1.0
     under = first_surface((middle.x, middle.y, above), (0.0, 0.0, -1.0), boxes)
     top = max(middle.z, under.point[2]) if under is not None else middle.z
@@ -445,10 +453,12 @@ def beside(pose: Pose, others: Sequence[Pose], stays: Callable[[Pose], bool]) ->
     return pose
 
 
-def over(site_name: str, site: Assembly, host: str, pose: Pose) -> bool:
+def over(
+    site_name: str, site: Assembly, host: str, pose: Pose, boxes: Optional[List[Box]] = None
+) -> bool:
     """Whether a camera at ``pose`` lands its picture on ``host``'s top (``""``, the
     floor): one of the cameras of that place."""
-    hit = lands(site_name, site, pose)
+    hit = lands(site_name, site, pose, boxes)
     return hit is not None and hit.name == host
 
 
@@ -456,13 +466,14 @@ def add_here(site_name: str, site: Assembly, host: str) -> Camera:
     """Add a camera above ``host``'s middle (``""``, the floor's), looking straight
     down -- beside a camera already standing there -- its record kept, its node
     appended to the site. ``host`` is one ``check_host`` has let through."""
-    start = starting_pose(site_name, site, host)
+    boxes = surfaces(site_name, site)
+    start = starting_pose(site_name, site, host, boxes)
     with _LOCK:
         cameras = _load()
         pose = beside(
             start,
             [c.pose for c in cameras if c.site == site_name],
-            lambda moved: over(site_name, site, host, moved),
+            lambda moved: over(site_name, site, host, moved, boxes),
         )
         camera = Camera(
             site=site_name,

@@ -367,7 +367,10 @@ def test_a_real_snapshot_gives_the_librarys_model_less_parts_controls(
     monkeypatch, listing_openscad
 ):
     """solderfan has no Python model; its SCAD's own numbers are its controls."""
-    from apothecary.projects.parts.solderfan import DEFAULT as solderfan
+    from apothecary.projects.parts.skeleton import ROOT
+    from apothecary.projects.registry import part_named
+
+    solderfan = part_named("solderfan", ROOT)
 
     spec = customizer_spec(solderfan, OpenSCADRenderer(str(listing_openscad)))
     fields = {f.name: f for f in spec.fields}

@@ -1,0 +1,222 @@
+{
+  "synth": {
+    "id": "made-up.synth",
+    "maker": "Made Up",
+    "model": "Synth",
+    "category": "semi-modular",
+    "summary": "A synth for the tests.",
+    "fidelity": "sketch",
+    "jacks": [
+      {
+        "name": "gate_in",
+        "label": "GATE",
+        "type": "input",
+        "signal": "gate",
+        "connector": "3.5mm"
+      },
+      {
+        "name": "cv_out",
+        "label": "CV",
+        "type": "output",
+        "signal": "cv",
+        "connector": "3.5mm"
+      },
+      {
+        "name": "spare_in",
+        "label": "SPARE",
+        "type": "input",
+        "signal": "cv",
+        "connector": "3.5mm"
+      },
+      {
+        "name": "audio_out",
+        "label": "OUT",
+        "type": "output",
+        "signal": "audio",
+        "connector": "1/4in",
+        "side": "back"
+      }
+    ],
+    "parameters": [
+      {
+        "name": "cutoff",
+        "label": "CUTOFF",
+        "min": 0,
+        "max": 127,
+        "default": 64
+      },
+      {
+        "name": "decay",
+        "label": "DECAY",
+        "min": 0,
+        "max": 10,
+        "default": 2
+      },
+      {
+        "name": "level",
+        "label": "LEVEL",
+        "min": 0,
+        "max": 127,
+        "default": 100
+      },
+      {
+        "name": "range",
+        "label": "RANGE",
+        "min": 0,
+        "max": 1,
+        "default": 0
+      },
+      {
+        "name": "select",
+        "label": "SELECT",
+        "min": 0,
+        "max": 127,
+        "default": 0
+      }
+    ],
+    "layout": {
+      "box": {
+        "width": 200,
+        "height": 100,
+        "depth": 80
+      },
+      "controls": {
+        "cutoff": {
+          "x": 0.15,
+          "y": 0.3,
+          "side": "front",
+          "size": 1.2
+        },
+        "decay": {
+          "x": 0.35,
+          "y": 0.3,
+          "side": "front"
+        },
+        "level": {
+          "x": 0.15,
+          "y": 0.75,
+          "side": "front",
+          "kind": "fader",
+          "length": 0.3
+        },
+        "range": {
+          "x": 0.35,
+          "y": 0.75,
+          "side": "front",
+          "kind": "switch"
+        },
+        "select": {
+          "x": 0.55,
+          "y": 0.3,
+          "side": "front",
+          "kind": "encoder"
+        }
+      },
+      "jacks": {
+        "gate_in": {
+          "x": 0.75,
+          "y": 0.3,
+          "side": "front"
+        },
+        "cv_out": {
+          "x": 0.9,
+          "y": 0.3,
+          "side": "front"
+        },
+        "spare_in": {
+          "x": 0.75,
+          "y": 0.7,
+          "side": "front"
+        },
+        "audio_out": {
+          "x": 0.5,
+          "y": 0.5,
+          "side": "back"
+        }
+      }
+    }
+  },
+  "desk": {
+    "id": "made-up.desk",
+    "maker": "Made Up",
+    "model": "Desk",
+    "category": "mixer",
+    "summary": "A desk for the tests.",
+    "fidelity": "sketch",
+    "jacks": [
+      {
+        "name": "in_1",
+        "label": "IN 1",
+        "type": "input",
+        "signal": "audio",
+        "connector": "1/4in",
+        "side": "back"
+      }
+    ],
+    "parameters": [],
+    "layout": {
+      "box": {
+        "width": 300,
+        "height": 90,
+        "depth": 400
+      },
+      "jacks": {
+        "in_1": {
+          "x": 0.5,
+          "y": 0.5,
+          "side": "back"
+        }
+      }
+    }
+  },
+  "rig": {
+    "format": "carlos.patch",
+    "version": 3,
+    "name": "two synths and a desk",
+    "modules": [
+      {
+        "id": "one",
+        "type": "made-up.synth",
+        "view": "front",
+        "parameters": {
+          "cutoff": 30
+        }
+      },
+      {
+        "id": "two",
+        "type": "made-up.synth",
+        "view": "front",
+        "parameters": {}
+      },
+      {
+        "id": "desk",
+        "type": "made-up.desk",
+        "view": "back",
+        "parameters": {}
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "module": "one",
+          "jack": "cv_out"
+        },
+        "target": {
+          "module": "two",
+          "jack": "gate_in"
+        }
+      },
+      {
+        "source": {
+          "module": "two",
+          "jack": "audio_out"
+        },
+        "target": {
+          "module": "desk",
+          "jack": "in_1"
+        }
+      }
+    ],
+    "groups": []
+  }
+}

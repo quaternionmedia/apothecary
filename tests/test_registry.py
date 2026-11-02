@@ -20,12 +20,14 @@ def test_scan_templates_and_summarize():
 
 def test_locate_wrapper_for_known_parts():
     root = Path(__file__).resolve().parents[1]
-    # parametric_star should have a wrapper
-    scad = root / "parts" / "parametric_star.scad"
-    assert _locate_wrapper_for_part(scad) == "apothecary.projects.parts.parametric_star"
-    # cookiecutter (modern spelling) should have a wrapper
-    scad2 = root / "parts" / "star_cookiecutter.scad"
-    assert _locate_wrapper_for_part(scad2) == "apothecary.projects.parts.star_cookiecutter"
+    # datum_core keeps a Python wrapper
+    scad = root / "parts" / "datum_core" / "datum_core.scad"
+    assert _locate_wrapper_for_part(scad) == "apothecary.projects.parts.datum_core"
+    # parametric_star is described by its part.json and has no wrapper
+    star = root / "parts" / "parametric_star" / "parametric_star.scad"
+    assert _locate_wrapper_for_part(star) is None
+    item = next(p for p in scan_projects(root) if p.name == "parametric_star")
+    assert item.sidecar == star.parent / "part.json" and item.has_part
 
 
 def _add_part(root: Path, name: str) -> None:

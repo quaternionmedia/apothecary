@@ -30,14 +30,14 @@ class Params(BaseModel):
 class SnowplowPart(BasePart):
     """Python-parametric snowplow assembly (blade + chassis mount).
 
-    Geometry is produced by ``apothecary.projects.parts.rc.snowplow.snowplow_assembly``
+    Geometry is produced by ``snowplow_assembly`` in this package
     rather than by the ``.scad`` file, so bounds are computed from the same
     parameters that drive that assembly.
     """
 
     def geometry(self, params: Mapping[str, Any]) -> OpenSCADObject:
         # Imported here: that package imports this module for its DEFAULT.
-        from .rc.snowplow import snowplow_assembly
+        from . import snowplow_assembly
 
         return snowplow_assembly(**Params(**params).model_dump())
 
@@ -56,7 +56,7 @@ class SnowplowPart(BasePart):
         blade_max = Vector3D(x=p.blade_width / 2, y=half_y, z=p.blade_height / 2 + half_z)
         # Mount: cube (mw, mt, mh) on the bed, its front face where
         # snowplow_assembly puts it, against the blade's back face.
-        from .rc.snowplow import mount_front_y
+        from . import mount_front_y
 
         front = mount_front_y(p.blade_height, p.blade_thickness, p.blade_angle, p.mount_height)
         mount_min = Vector3D(x=-p.mount_width / 2, y=front - p.mount_thickness, z=0)
@@ -77,10 +77,10 @@ class SnowplowPart(BasePart):
 
 def create(metadata_root: Path) -> SnowplowPart:
     # The .scad is geometry() at the default parameters, for readers and the
-    # registry; `apothecary parts render rc.snowplow -o <this file>` rewrites it.
+    # registry; `apothecary parts render snowplow -o <this file>` rewrites it.
     scad = metadata_root / "parts" / "rc" / "snowplow" / "snowplow.scad"
     return SnowplowPart(
-        name="rc.snowplow",
+        name="snowplow",
         source_file=scad,
         description="Modular RC snowplow (Python parametric)",
         params_model=Params,

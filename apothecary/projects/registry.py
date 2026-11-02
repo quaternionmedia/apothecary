@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Tuple
+
+if TYPE_CHECKING:
+    from .parts.base import BasePart
 
 
 @dataclass(frozen=True)
@@ -14,10 +17,17 @@ class ProjectInfo:
     files: List[Path]
     readme: bool
     wrapper: str | None = None  # dotted module path for part wrapper if available
+    sidecar: Path | None = None  # the part.json beside the SCAD, which wins over a wrapper
+
+    @property
+    def has_part(self) -> bool:
+        """Whether a part can be loaded for this entry: it has a ``part.json`` or a wrapper."""
+        return self.sidecar is not None or self.wrapper is not None
 
     def to_json(self) -> Dict[str, Any]:
         d = asdict(self)
         d["path"] = str(self.path)
+        d["sidecar"] = str(self.sidecar) if self.sidecar else None
         d["files"] = [str(p) for p in self.files]
         return d
 
@@ -44,15 +54,84 @@ def stl_output_for(item: ProjectInfo) -> Path:
     wrapper overrides this precisely so a render does not land in somebody
     else's checkout. A caller that guesses writes a stray file in there.
     """
-    if item.wrapper:
+    if item.has_part:
         try:
-            part = getattr(import_module(item.wrapper), "DEFAULT", None)
-            getter = getattr(part, "get_stl_output_path", None)
+            getter = getattr(load_part(item), "get_stl_output_path", None)
             if callable(getter):
                 return Path(getter())
-        except Exception:  # a wrapper that will not import is not a path answer
+        except PartLoadError:  # a part that will not load is not a path answer
             pass
     return item.path.with_suffix(".stl")
+
+
+class PartLoadError(Exception):
+    """A registered part that would not load: which one, from what, and why."""
+
+    def __init__(self, name: str, source: str, cause: BaseException):
+        self.name = name
+        self.source = source
+        self.cause = cause
+        super().__init__(f"{name}: {source} did not load: {type(cause).__name__}: {cause}")
+
+
+@dataclass(frozen=True)
+class PartFailure:
+    name: str
+    source: str  # the part.json path or the wrapper's dotted name
+    error: str
+
+
+@dataclass
+class LoadedParts:
+    """Every registered part that loaded, and a record of each that did not."""
+
+    parts: List[Tuple[ProjectInfo, "BasePart"]] = field(default_factory=list)
+    failed: List[PartFailure] = field(default_factory=list)
+
+
+def load_part(item: ProjectInfo) -> "BasePart":
+    """The part a registry entry names, from its ``part.json`` when it has one
+    and else from its wrapper's ``DEFAULT``; ``PartLoadError`` says which entry
+    failed and from what."""
+    if item.sidecar is not None:
+        from .parts.described import part_from_sidecar
+
+        try:
+            return part_from_sidecar(item.path, item.sidecar)
+        except Exception as exc:
+            raise PartLoadError(item.name, str(item.sidecar), exc) from exc
+    if item.wrapper is None:
+        raise PartLoadError(
+            item.name, str(item.path), LookupError("it has neither a part.json nor a wrapper")
+        )
+    try:
+        module = import_module(item.wrapper)
+        return module.DEFAULT
+    except Exception as exc:
+        raise PartLoadError(item.name, item.wrapper, exc) from exc
+
+
+def part_named(name: str, root: Path) -> "BasePart":
+    """The registered part called ``name``; ``KeyError`` when none is, and
+    ``PartLoadError`` when it will not load."""
+    for item in scan_projects(root):
+        if item.kind == "part" and item.name == name and item.has_part:
+            return load_part(item)
+    raise KeyError(name)
+
+
+def load_parts(root: Path) -> LoadedParts:
+    """Load every registered part under ``root``; one that fails is recorded in
+    ``failed``, never dropped."""
+    loaded = LoadedParts()
+    for item in scan_projects(root):
+        if item.kind != "part" or not item.has_part:
+            continue
+        try:
+            loaded.parts.append((item, load_part(item)))
+        except PartLoadError as exc:
+            loaded.failed.append(PartFailure(item.name, exc.source, str(exc)))
+    return loaded
 
 
 _PARTS_PKG_DIR = Path(__file__).resolve().parent / "parts"
@@ -172,6 +251,7 @@ def _scan(root: Path) -> List[ProjectInfo]:
                     files=[scad],
                     readme=False,
                     wrapper=_locate_wrapper_for_part(scad),
+                    sidecar=_sidecar_for(scad),
                 )
             )
 
@@ -275,9 +355,7 @@ def _locate_wrapper_for_part(scad_path: Path) -> str | None:
     Flat wrappers live at ``apothecary/projects/parts/<name>.py``. Nested parts
     (``parts/rc/snowplow/snowplow.scad``) may instead use a package mirroring
     the folder: ``parts/rc/snowplow/<name>.py`` or ``parts/rc/snowplow/__init__.py``.
-    A part with no module of its own but a ``part.json`` beside its SCAD is
-    described by that sidecar, and its wrapper is the described-part importer
-    (``apothecary/projects/parts/described.py``).
+    A ``part.json`` beside the SCAD is read before any module (``load_part``).
     """
     module_name = _sanitize_module_name(scad_path.stem)
     parts_pkg_dir = Path(__file__).resolve().parent / "parts"
@@ -290,26 +368,22 @@ def _locate_wrapper_for_part(scad_path: Path) -> str | None:
     try:
         rel_dir = scad_path.resolve().relative_to(repo_parts_dir).parent
     except ValueError:
-        return _described_wrapper(scad_path)
+        return None
     if rel_dir == Path("."):
-        return _described_wrapper(scad_path)
+        return None
     sub_pkg = ".".join(_sanitize_module_name(part) for part in rel_dir.parts)
     pkg_dir = parts_pkg_dir.joinpath(*(_sanitize_module_name(part) for part in rel_dir.parts))
     if (pkg_dir / f"{module_name}.py").exists():
         return f"apothecary.projects.parts.{sub_pkg}.{module_name}"
     if (pkg_dir / "__init__.py").exists():
         return f"apothecary.projects.parts.{sub_pkg}"
-    return _described_wrapper(scad_path)
+    return None
 
 
-def _described_wrapper(scad_path: Path) -> str | None:
-    """The importer's module name for a part with a ``part.json`` beside it."""
-    from .parts import described
+def _sidecar_for(scad_path: Path) -> Path | None:
+    from .parts.described import sidecar_for
 
-    if described.sidecar_for(scad_path) is None:
-        return None
-    described.install_finder()
-    return described.module_name_for(scad_path.stem)
+    return sidecar_for(scad_path)
 
 
 def _scan_submodule_parts(root: Path, already_discovered: set) -> List[ProjectInfo]:

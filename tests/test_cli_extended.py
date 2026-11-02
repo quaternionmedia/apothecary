@@ -81,13 +81,13 @@ def test_cli_parts_render_fallback_template(tmp_path):
 def test_cli_parts_info_missing_wrapper_errors():
     r = CliRunner().invoke(cli, ["parts", "info", "nonexistent_part"])
     assert r.exit_code != 0
-    assert "No wrapper module found" in r.output
+    assert "No part found" in r.output
 
 
 def test_cli_parts_render_refuses_to_overwrite_source(tmp_path):
-    from apothecary.cli.utils import _load_part_wrapper
+    from apothecary.cli.utils import _load_part
 
-    src = _load_part_wrapper("parametric_star").DEFAULT.source_file
+    src = _load_part("parametric_star").source_file
     before = src.read_bytes()
     r = CliRunner().invoke(cli, ["parts", "render", "parametric_star", "-o", str(src)])
     assert r.exit_code != 0
@@ -102,7 +102,7 @@ def test_cli_parts_render_snowplow_uses_validated_params(tmp_path):
         [
             "parts",
             "render",
-            "rc.snowplow",
+            "snowplow",
             "--params-json",
             '{"blade_width": "200"}',
             "-o",
@@ -134,7 +134,7 @@ def test_cli_parts_render_snowplow_rejects_bad_params(tmp_path):
     out = tmp_path / "snowplow.scad"
     r = CliRunner().invoke(
         cli,
-        ["parts", "render", "rc.snowplow", "--params-json", '{"blade_width": -1}', "-o", str(out)],
+        ["parts", "render", "snowplow", "--params-json", '{"blade_width": -1}', "-o", str(out)],
     )
     assert r.exit_code != 0
     assert isinstance(r.exception, SystemExit)  # ClickException, not a pydantic traceback

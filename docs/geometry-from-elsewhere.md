@@ -91,9 +91,9 @@ with no Python module -- the sidecar says what the wrapper would have said:
 }
 ```
 
-The registry names such a part's wrapper
-`apothecary.projects.parts.described.<name>`, and importing that name builds
-the part from the sidecar (`apothecary/projects/parts/described.py`). A
+The registry records the sidecar on the part's entry and
+`apothecary.projects.registry.load_part` builds the part from it
+(`apothecary/projects/parts/described.py`), with no module to import. A
 folder whose subfolders are parts is a category (`parts/boards/`); a SCAD
 file of its own there is a library its parts include, not a part.
 

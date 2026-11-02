@@ -1,0 +1,27 @@
+{
+  "description": "Couch block spacer",
+  "category": "furniture",
+  "tags": [
+    "couch",
+    "spacer",
+    "block"
+  ],
+  "readme": "../README.md",
+  "preview_color": [
+    0.5450980392156862,
+    0.27058823529411763,
+    0.07450980392156863
+  ],
+  "bounds": {
+    "min": [
+      -76.2,
+      0.0,
+      0.0
+    ],
+    "max": [
+      76.2,
+      101.6,
+      50.8
+    ]
+  }
+}

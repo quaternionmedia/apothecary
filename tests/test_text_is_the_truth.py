@@ -154,11 +154,11 @@ class TestAPartWhoseSCADIsGenerated:
     @pytest.mark.parametrize(
         "method,path,body",
         [
-            ("get", "/parts/rc.snowplow/assignments", None),
-            ("post", "/parts/rc.snowplow/assignments", {"scad": "cube(1);"}),
-            ("post", "/parts/rc.snowplow/draft/check", {"scad": "cube(1);"}),
-            ("post", "/parts/rc.snowplow/draft/render", {"scad": "cube(1);"}),
-            ("post", "/parts/rc.snowplow/saved", {"name": "x", "scad": "cube(1);"}),
+            ("get", "/parts/snowplow/assignments", None),
+            ("post", "/parts/snowplow/assignments", {"scad": "cube(1);"}),
+            ("post", "/parts/snowplow/draft/check", {"scad": "cube(1);"}),
+            ("post", "/parts/snowplow/draft/render", {"scad": "cube(1);"}),
+            ("post", "/parts/snowplow/saved", {"name": "x", "scad": "cube(1);"}),
         ],
     )
     def test_its_text_is_not_edited_and_says_why(self, method, path, body, openscad):
@@ -227,7 +227,7 @@ class TestAPartInASubmodule:
         assert "include <upstream/lib.scad>\n" in r.text and texts.own_text(thing) == r.text
         up = client.get("/parts/thing/upstream")
         assert (up.text, up.headers["x-part-scad"]) == (UPSTREAM, "upstream")
-        assert client.get("/parts/rc.snowplow/upstream").status_code == 404
+        assert client.get("/parts/snowplow/upstream").status_code == 404
 
     def test_its_assignments_are_the_overlays_and_the_upstream_values_it_does_not_set(self, thing):
         text = texts.own_text(thing) + "size = 20;\n"

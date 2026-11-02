@@ -41,12 +41,14 @@ here: run `apothecary problems`.
   the only element given a `tabindex`.
 - The 2026-10-24 review's items not listed here
   ([docs/plans/review-2026-10-24.md](docs/plans/review-2026-10-24.md)): the
-  four installers as one; the wrapper-import pattern; logging in place of
-  `api.py`'s prints; the example modules at the package root; `httpx2` among
-  the dev dependencies, and `pydantic_core` imported without being declared;
-  a `docs/architecture.md`; the slowest browser file profiled, a marker on the
-  order-dependent files, a JavaScript unit layer and the remaining
+  four installers as one; the wrapper-import pattern; the example modules at
+  the package root; a `docs/architecture.md`; the slowest browser file
+  profiled, a marker on the order-dependent files, a JavaScript unit layer and the remaining
   `wait_for_timeout` calls.
+- Starlette's test client warns that `httpx` is deprecated in favour of
+  `httpx2` (seen at `conftest.py`'s import of `starlette.testclient`) once
+  `httpx2` is not installed: move the test client to `httpx2`, or filter the
+  warning where it is raised.
 - The landing method has no command. A stack tested once on the tree `main`
   ends at ([CONTRIBUTING.md](CONTRIBUTING.md)) is the
   [landing plan](docs/plans/landing-the-stack-2026-10-20.md)'s `git
@@ -92,8 +94,6 @@ Decided, not started. Each waits on what its line names.
 - One registry for firmware ports. It drives real heaters and motion, so it
   lands with a bench session on the Ender
   ([docs/bench-checklist.md](docs/bench-checklist.md)).
-- Data-only part wrappers become `part.json`; the import hook goes; the
-  snowplow gets one name.
 - The unit suite under pytest-xdist.
 - A licence gate for the Rust crates (the workspace's `Cargo.lock` and each Rust
   sketch's) and the vendored three.js and CodeMirror. `license-check.yml` gates
@@ -108,9 +108,6 @@ Decided, not started. Each waits on what its line names.
   folder, editable from then on, as the draft record *Personal data stays on
   the device* (§6) says. The page offers a made piece no Save now, and shows
   its SCAD read only.
-- The root README served in the app, rendered as `/docs` is, its map's links
-  going to the pages the app serves. The map lists what the browser suite
-  walks; a feature gets a row when a test walks it.
 - The review cycle in
   [docs/plans/review-cycle-2026-10-24.md](docs/plans/review-cycle-2026-10-24.md),
   taken as proposed: a merge queue tested once a batch, releases reviewed by

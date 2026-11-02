@@ -370,3 +370,57 @@ def test_the_one_module_holds_a_region_a_models_origin_a_pictures_reference_and_
     ):
         with pytest.raises(ValueError):
             bad()
+
+
+def _stated(key, value="red"):
+    return Observation(
+        subject=Sighting(
+            sighting=Region(picture="a" * 64, region=kept.region(key[2]), box=(0, 0, 1, 1))
+        ),
+        property="colour",
+        value=value,
+        origin=Origin(kind="stated", by={"name": "a person, on the page"}),
+        at="2026-10-31T00:00:00+00:00",
+        recorded_at=datetime(2026, 10, 31, tzinfo=timezone.utc),
+    )
+
+
+def _holds(key):
+    return any(row["person"] for row in kept.about(key)["rows"])
+
+
+def test_the_kept_observations_are_bounded_and_the_least_recently_used_key_goes_first(monkeypatch):
+    kept.forget_all()
+    monkeypatch.setattr(kept, "KEPT_MOST", 3)
+    keys = [("garage", "v", i) for i in range(5)]
+    for key in keys[:3]:
+        kept._keep(key, [_stated(key)])
+    assert _holds(keys[0])  # read again: now the newest
+    kept._keep(keys[3], [_stated(keys[3])])
+    kept._keep(keys[4], [_stated(keys[4])])
+    assert [_holds(k) for k in keys] == [True, False, False, True, True]
+    kept.forget_all()
+    assert not any(_holds(k) for k in keys)
+
+
+def test_a_qmcp_that_hangs_costs_one_deadline_and_one_call(client, monkeypatch):
+    import time
+
+    from apothecary.finders.simulated import SimulatedQmcp
+
+    calls = []
+
+    def hang(self, tool, arguments):
+        calls.append(tool)
+        time.sleep(1.5)
+        return {}
+
+    monkeypatch.setattr(SimulatedQmcp, "call", hang)
+    monkeypatch.setenv(qmcp.ENV, "simulated")
+    monkeypatch.setattr(qmcp, "DEADLINE_MS", 200)
+    started = time.monotonic()
+    answer = _ask(client, _red(client), ["colour"])
+    elapsed = time.monotonic() - started
+    assert "not answering" in answer["said"]
+    assert len(calls) == 1
+    assert elapsed < 0.2 + 0.15

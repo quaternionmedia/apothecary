@@ -18,8 +18,12 @@ forgotten. A forgotten frame is a record too, so the log says where it went.
 from __future__ import annotations
 
 import json
+import os
+import tempfile
+import threading
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 from . import log
 
@@ -71,8 +75,35 @@ def forgotten(site: str, path: str, why: str, at: Optional[datetime] = None) -> 
     log.append(site, log.FRAMES, {"id": path, "at": at.isoformat(), "forgotten": why}, at)
 
 
+# The frames a space keeps, as last read, and the files (name, mtime, size) they were read
+# from: the files are read again only when one has changed or another has come.
+_READ: Dict[str, Tuple[tuple, List[dict]]] = {}
+_READING = threading.Lock()
+
+
+def _files(site: str) -> tuple:
+    folder = log.space_dir(site) / log.FRAMES
+    try:
+        found = sorted(folder.glob("*.jsonl"))
+        return (str(folder), *((p.name, p.stat().st_mtime_ns, p.stat().st_size) for p in found))
+    except OSError:
+        return (str(folder),)
+
+
 def kept(site: str) -> List[dict]:
     """Every kept frame of a space not since forgotten, oldest first."""
+    signature = _files(site)
+    with _READING:
+        held = _READ.get(signature[0])
+        if held is not None and held[0] == signature:
+            return [dict(r) for r in held[1]]
+    found = _read_kept(site)
+    with _READING:
+        _READ[signature[0]] = (signature, found)
+    return [dict(r) for r in found]
+
+
+def _read_kept(site: str) -> List[dict]:
     live: Dict[str, dict] = {}
     for record in log.read(site, log.FRAMES).records:
         if record.get("forgotten"):
@@ -101,7 +132,14 @@ def set_budget(site: str, subject: str, size: int) -> None:
     from ..firmware.devices import private_folder
 
     private_folder(path.parent)
-    path.write_text(json.dumps(named, indent=2) + "\n", encoding="utf-8")
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".budgets.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            out.write(json.dumps(named, indent=2) + "\n")
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def sizes(site: str) -> Dict[str, dict]:

@@ -8,13 +8,11 @@ build: nothing constrains where a leaf sits (see ``validate_parts_library``).
 
 from __future__ import annotations
 
-from importlib import import_module
-
 from .hierarchy import Assembly, LayoutReport, Site
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .projects.parts.skeleton import ROOT
-from .projects.registry import scan_projects
+from .projects.registry import load_parts
 
 # Catalog grid layout (mm) -- generous fixed pitch so parts of varying size
 # don't need individual placement; visual sensibility only, since layout
@@ -29,19 +27,6 @@ CELL_PITCH = 300.0
 FALLBACK_BOUNDS = BoundingBox3D.for_cube(40.0)
 
 
-def _registered_wrappers() -> dict[str, str]:
-    """Every registered part that has a wrapper module, by name (the same filter
-    as api.py's ``_available_part_names``; not imported, so an example does not
-    depend on the API layer)."""
-    return {p.name: p.wrapper for p in scan_projects(ROOT) if p.kind == "part" and p.wrapper}
-
-
-def _load_part_bounds(wrapper_module: str) -> BoundingBox3D:
-    module = import_module(wrapper_module)
-    part = module.DEFAULT
-    return part.get_bounds() or FALLBACK_BOUNDS
-
-
 def _grid_position(index: int) -> Vector3D:
     row, col = divmod(index, GRID_COLUMNS)
     return Vector3D(x=col * CELL_PITCH, y=row * CELL_PITCH, z=0)
@@ -54,10 +39,11 @@ NOT_ON_THE_BENCH = {"building"}
 
 def create_parts_library_site() -> Assembly:
     """A Site made entirely of part leaves -- one per registered ``parts/`` entry but a building."""
-    wrappers = {
-        name: module
-        for name, module in _registered_wrappers().items()
-        if import_module(module).DEFAULT.category not in NOT_ON_THE_BENCH
+    # A part that does not load is left off the grid; `apothecary problems` reports it.
+    parts = {
+        item.name: part
+        for item, part in load_parts(ROOT).parts
+        if part.category not in NOT_ON_THE_BENCH
     }
     leaves = [
         Assembly(
@@ -65,9 +51,9 @@ def create_parts_library_site() -> Assembly:
             role="part",
             part_ref=name,
             position=_grid_position(index),
-            footprint=_load_part_bounds(wrappers[name]),
+            footprint=parts[name].get_bounds() or FALLBACK_BOUNDS,
         )
-        for index, name in enumerate(sorted(wrappers))
+        for index, name in enumerate(sorted(parts))
     ]
     return Site(name="Parts Library", structures=leaves)
 

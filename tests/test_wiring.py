@@ -127,7 +127,8 @@ def test_a_connected_board_is_leaded_to_the_computer_and_its_evidence_says_how()
     _carlos_rules_hold(wiring.patch)
 
 
-def test_what_was_flashed_and_whether_it_has_moved_on_ride_in_the_evidence():
+def _flashed_from_an_older_source(**binding):
+    """A bound esp32_blink whose board was flashed from a source that has since changed."""
     from datetime import datetime, timezone
 
     board = DeviceInfo(port="/dev/ttyUSB1", mac="24:6f:28:aa:bb:cc")
@@ -137,17 +138,21 @@ def test_what_was_flashed_and_whether_it_has_moved_on_ride_in_the_evidence():
         sketch="esp32_blink",
         flashed_at=datetime(2026, 10, 29, tzinfo=timezone.utc),
     )
-    row = NodeBinding(
+    return NodeBinding(
         path="esp32_blink",
         name="esp32_blink",
         part_ref="esp32_devkitc",
-        sketch_ref="esp32_blink",
         sketch="esp32_blink",
         binding_source="sketch",
         identity=board.identity,
         device=board,
         expected=ExpectedFirmware(record=record, source_changed=True),
+        **binding,
     )
+
+
+def test_what_was_flashed_and_whether_it_has_moved_on_ride_in_the_evidence():
+    row = _flashed_from_an_older_source(sketch_ref="esp32_blink")
     wiring = wiring_for_site("garage", create_example_site(), [row])
     known = next(e for e in wiring.evidence if e.module == "esp32_blink")
     assert known.flashed == "esp32_blink" and known.source_changed and not known.build_changed
@@ -294,25 +299,7 @@ def test_a_pinned_board_not_answering_is_known_by_what_its_pin_names(identity, k
 
 
 def test_a_board_flashed_from_an_older_source_is_a_warning():
-    from datetime import datetime, timezone
-
-    board = DeviceInfo(port="/dev/ttyUSB1", mac="24:6f:28:aa:bb:cc")
-    record = FlashRecord(
-        identity=board.identity,
-        port=board.port,
-        sketch="esp32_blink",
-        flashed_at=datetime(2026, 10, 29, tzinfo=timezone.utc),
-    )
-    row = NodeBinding(
-        path="esp32_blink",
-        name="esp32_blink",
-        part_ref="esp32_devkitc",
-        sketch="esp32_blink",
-        binding_source="sketch",
-        identity=board.identity,
-        device=board,
-        expected=ExpectedFirmware(record=record, source_changed=True),
-    )
+    row = _flashed_from_an_older_source()
     state = wiring_for_site("garage", create_example_site(), [row]).states.modules["esp32_blink"]
     assert state.level == "warn"
     assert "firmware: esp32_blink, flashed from an older source" in state.says
@@ -354,35 +341,6 @@ def test_the_hold_carries_the_rig_every_entry_it_names_and_the_states():
     assert hold["patch"] == wiring.patch
     assert {d["id"] for d in hold["devices"]} == {m["type"] for m in wiring.patch["modules"]}
     assert hold["states"]["modules"][MAINBOARD]["level"] == "ok"
-
-
-@pytest.fixture
-def a_carlos():
-    """A stand-in for carlos on loopback: what it was sent, and what it answers."""
-    import threading
-    from http.server import BaseHTTPRequestHandler, HTTPServer
-
-    heard = []
-    answer = {"status": 200, "body": {"ok": True}}
-
-    class Cue(BaseHTTPRequestHandler):
-        def do_POST(self):
-            length = int(self.headers["Content-Length"])
-            heard.append((self.path, json.loads(self.rfile.read(length))))
-            self.send_response(answer["status"])
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps(answer["body"]).encode())
-
-        def log_message(self, *args):
-            pass
-
-    server = HTTPServer(("127.0.0.1", 0), Cue)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    yield f"http://127.0.0.1:{server.server_port}", heard, answer
-    server.shutdown()
-    server.server_close()
 
 
 def test_the_follower_sends_once_for_an_unchanged_bench_and_again_when_it_changes(a_carlos):

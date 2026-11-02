@@ -36,7 +36,7 @@ Left to right, one row:
   closed ([below](#the-windows)); a window chosen opens, or comes in front.
 - **Docs** opens the documentation in a new tab, the world left where it
   was: the guides, and from its bar the walkthrough's index (`/walkthrough`),
-  its pages in order. The ring's Panels › Docs opens the same.
+  its pages in order; the bar of every page links the README, served at `/README.md`. The ring's Panels › Docs opens the same.
 - **⌗ Ring** opens the ring for the chosen piece, as `m` does; its tooltip names
   the key and the modifier Settings gives the ring.
 - **The validity count**, "Layout valid" or the number of violations: a click

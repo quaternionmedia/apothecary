@@ -970,8 +970,8 @@ def scad_dependencies(scad: Path, text: Optional[str] = None) -> Dict[str, Optio
 
 def _sources(part: BasePart) -> List[Path]:
     """What a part's STL is built from: its SCAD and every file the SCAD
-    includes, uses or imports, and each loaded wrapper module whose DEFAULT
-    is this part (a described part's part.json), which sets its rotation and
+    includes, uses or imports, its part.json when it has one, and each loaded
+    wrapper module whose DEFAULT is this part; either sets its rotation and
     output path. A part built by Python geometry is also built from its code:
     the module that defines its class, and every module of a wrapper that is
     a package."""
@@ -995,6 +995,9 @@ def _sources(part: BasePart) -> List[Path]:
             sources.extend(sorted(path.parent.glob("*.py")))
         else:
             sources.append(path)
+    sidecar = getattr(part, "sidecar_path", None)
+    if sidecar is not None:
+        sources.append(Path(sidecar))
     # A part's class may live in the module that is also its wrapper.
     return list(dict.fromkeys(sources))
 

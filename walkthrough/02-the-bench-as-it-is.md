@@ -36,10 +36,10 @@ ends up at z 0.0..50.8 mm
 
 ## 3. A part can be a folder with a sidecar and no Python
 
-A `part.json` beside a SCAD says what a wrapper module would have said: category, colour, bounds, and who made it under what licence. The registry names such a part's wrapper anyway, and importing that name builds the part from the sidecar.
+A `part.json` beside a SCAD says what a wrapper module would have said: category, colour, bounds, and who made it under what licence. The registry loads such a part from that file, with no module to import.
 
 ```
-apothecary.projects.parts.described.esp32_devkitc
+parts/boards/esp32_devkitc/part.json
 electrical; Quaternion Media, MIT; 56 x 28 x 17.1 mm
 ```
 

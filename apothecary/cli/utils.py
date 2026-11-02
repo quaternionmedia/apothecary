@@ -5,7 +5,7 @@ from importlib import import_module
 import click
 
 from ..projects.parts.skeleton import ROOT
-from ..projects.registry import resolve_wrapper_module
+from ..projects.registry import PartLoadError, load_part, resolve_wrapper_module, scan_projects
 
 
 def _safe_echo(message: str, **style):
@@ -25,19 +25,25 @@ def _safe_echo(message: str, **style):
         click.secho(message, **style)
 
 
-def _load_part_wrapper(name: str):
-    """Import a part wrapper by part name (stem)."""
+def _load_part(name: str):
+    """A registered part by part name (stem), from its part.json or its wrapper."""
+    for item in scan_projects(ROOT):
+        if item.kind == "part" and item.name == name and item.has_part:
+            try:
+                return load_part(item)
+            except PartLoadError as e:
+                raise click.ClickException(str(e)) from e
     full = resolve_wrapper_module(name, ROOT)
     try:
         mod = import_module(full)
     except ModuleNotFoundError as e:
         raise click.ClickException(
-            f"No wrapper module found for part '{name}'. Tried module '{full}'. "
+            f"No part found for '{name}'. Tried module '{full}'. "
             "Run 'apothecary parts list' to see available parts."
         ) from e
     if not hasattr(mod, "DEFAULT"):
         raise click.ClickException(f"Wrapper module '{full}' has no DEFAULT instance")
-    return mod
+    return mod.DEFAULT
 
 
 def _coerce_scalar(text: str):

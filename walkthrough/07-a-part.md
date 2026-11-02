@@ -8,18 +8,18 @@ part that needs no Python.
 
     parts/<name>/<name>.scad              the geometry
     apothecary/projects/parts/<name>.py   the wrapper, underscored
-    parts/<name>/part.json                or a sidecar, read as the wrapper
+    parts/<name>/part.json                or a sidecar, read instead of a wrapper
 
 A folder whose subfolders hold parts is a category, searched the same way:
 `parts/boards/arduino_uno/arduino_uno.scad` is the part `arduino_uno`.
 Nothing registers a part but that naming. `scan_projects` finds the folder;
-`_locate_wrapper_for_part` finds the wrapper by sanitising the name, and
-falls back to the sidecar.
+`load_part` reads a `part.json` beside the SCAD when there is one, and
+otherwise the wrapper found by sanitising the name.
 
-    >>> from apothecary.projects.registry import _locate_wrapper_for_part
+    >>> from apothecary.projects.registry import part_named
     >>> from apothecary.projects.parts.skeleton import ROOT
-    >>> _locate_wrapper_for_part(ROOT / "parts" / "boards" / "arduino_uno" / "arduino_uno.scad")
-    'apothecary.projects.parts.described.arduino_uno'
+    >>> part_named("arduino_uno", ROOT).sidecar_path.name
+    'part.json'
 
     >>> from apothecary.projects.registry import scan_projects, _sanitize_module_name
     >>> _sanitize_module_name("datum_core")
