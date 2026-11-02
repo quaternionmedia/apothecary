@@ -1,0 +1,27 @@
+{
+  "description": "Parametric star cookie cutter",
+  "category": "cookie-cutter",
+  "tags": [
+    "star",
+    "parametric",
+    "cookie"
+  ],
+  "readme": "../README.md",
+  "preview_color": [
+    1.0,
+    0.8431372549019608,
+    0.0
+  ],
+  "bounds": {
+    "min": [
+      -12.135,
+      -14.266,
+      0.0
+    ],
+    "max": [
+      15.0,
+      14.266,
+      3.0
+    ]
+  }
+}

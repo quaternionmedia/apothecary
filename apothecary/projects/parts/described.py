@@ -19,6 +19,7 @@ from __future__ import annotations
 import importlib.abc
 import importlib.machinery
 import json
+import os
 import sys
 import types
 from pathlib import Path
@@ -63,6 +64,9 @@ class Description(BaseModel):
     bounds: Optional[Dict[str, List[float]]] = Field(
         None, description='{"min": [x, y, z], "max": [x, y, z]} in mm, as placed'
     )
+    readme: Optional[str] = Field(
+        None, description="a README shared with other parts, relative to this folder"
+    )
     source: Optional[Provenance] = None
 
 
@@ -101,7 +105,7 @@ def part_from_sidecar(scad_path: Path, sidecar_path: Optional[Path] = None) -> D
         "sidecar_path": sidecar_path,
         "source": described.source,
     }
-    readme = scad_path.parent / "README.md"
+    readme = Path(os.path.normpath(scad_path.parent / (described.readme or "README.md")))
     if readme.is_file():
         kwargs["readme_path"] = readme
     if described.preview_color and len(described.preview_color) == 3:

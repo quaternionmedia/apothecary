@@ -108,7 +108,9 @@ def test_a_part_without_a_model_refuses_a_name_its_scad_does_not_declare():
     """dryerknob has no Python model; a name its SCAD does not declare
     (`-p knob_diameter=60`) is refused, because OpenSCAD ignores an unknown -D and
     would render the defaults and report success."""
-    from apothecary.projects.parts.dryerknob import DEFAULT as knob
+    from apothecary.projects.registry import part_named
+
+    knob = part_named("dryerknob", ROOT)
 
     declared = scad_variables(knob.source_file)
     with pytest.raises(ValueError, match="unknown parameter"):

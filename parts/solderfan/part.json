@@ -1,0 +1,15 @@
+{
+  "description": "Soldering fan mount",
+  "category": "electronics",
+  "tags": [
+    "fan",
+    "mount",
+    "soldering"
+  ],
+  "readme": "../README.md",
+  "display_rotation": [
+    90.0,
+    0.0,
+    0.0
+  ]
+}

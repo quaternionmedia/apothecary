@@ -79,3 +79,12 @@ def _root():
     from apothecary.projects.parts.skeleton import ROOT
 
     return ROOT
+
+
+def test_a_part_json_names_the_readme_it_shares(tmp_path):
+    _folder(tmp_path, "zz_shared_readme", sidecar=json.dumps({"readme": "../README.md"}))
+    (tmp_path / "parts" / "README.md").write_text("# parts\n", encoding="utf-8")
+    assert part_named("zz_shared_readme", tmp_path).readme_path == tmp_path / "parts" / "README.md"
+    own = _folder(tmp_path, "zz_own_readme", sidecar="{}")
+    (own / "README.md").write_text("# own\n", encoding="utf-8")
+    assert part_named("zz_own_readme", tmp_path).readme_path == own / "README.md"
