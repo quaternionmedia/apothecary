@@ -7,21 +7,16 @@ mesh brought from elsewhere, where it came from (source, author, licence,
 units, up axis) -- the provenance the open-license record asks every
 vendored thing to carry.
 
-The registry names such a part's wrapper ``apothecary.projects.parts.described.<name>``,
-and this module is an importer for that name: importing it builds a module
-holding ``DEFAULT``, a :class:`DescribedPart`, from the sidecar, so every
-place that does ``import_module(wrapper).DEFAULT`` -- the API, the CLI, the
-readiness checks, the elephant walk -- sees one more ordinary part.
+The registry records the sidecar on the part's entry (``ProjectInfo.sidecar``)
+and ``registry.load_part`` builds a :class:`DescribedPart` from it, so every
+place that loads a part -- the API, the CLI, the readiness checks, the
+elephant walk -- sees one more ordinary part, with no module to import.
 """
 
 from __future__ import annotations
 
-import importlib.abc
-import importlib.machinery
 import json
 import os
-import sys
-import types
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -32,10 +27,6 @@ from apothecary.models import BoundingBox3D, Color, Vector3D
 from .base import BasePart
 
 SIDECAR = "part.json"
-PACKAGE = __name__  # apothecary.projects.parts.described
-# A module with a __path__ is a package to the import system, which is what
-# lets ``described.<name>`` be looked up through the finder below.
-__path__: List[str] = []
 
 
 class Provenance(BaseModel):
@@ -123,58 +114,11 @@ def part_from_sidecar(scad_path: Path, sidecar_path: Optional[Path] = None) -> D
     return DescribedPart(**kwargs)
 
 
-def module_name_for(part_name: str) -> str:
-    """The wrapper name the registry gives a described part."""
-    from ..registry import _sanitize_module_name
-
-    return f"{PACKAGE}.{_sanitize_module_name(part_name)}"
-
-
-class _DescribedFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
-    """Resolves ``apothecary.projects.parts.described.<name>`` to a module built
-    from the part's sidecar, found through the registry by name."""
-
-    def find_spec(self, fullname, path=None, target=None):
-        prefix = PACKAGE + "."
-        if not fullname.startswith(prefix) or "." in fullname[len(prefix) :]:
-            return None
-        return importlib.machinery.ModuleSpec(fullname, self, origin="part.json")
-
-    def create_module(self, spec):
-        return types.ModuleType(spec.name)
-
-    def exec_module(self, module):
-        from ..registry import _sanitize_module_name, scan_projects
-        from .skeleton import ROOT
-
-        wanted = module.__name__.rsplit(".", 1)[1]
-        for item in scan_projects(ROOT):
-            if item.kind != "part" or item.wrapper != module.__name__:
-                continue
-            if _sanitize_module_name(item.name) != wanted:
-                continue
-            module.DEFAULT = part_from_sidecar(item.path)
-            module.__file__ = str(item.path.parent / SIDECAR)
-            return
-        raise ModuleNotFoundError(
-            f"no part described under parts/ as {wanted!r}", name=module.__name__
-        )
-
-
-def install_finder() -> None:
-    """Put the importer on ``sys.meta_path`` once; the registry does this when it
-    first names a described part's wrapper."""
-    if not any(isinstance(finder, _DescribedFinder) for finder in sys.meta_path):
-        sys.meta_path.append(_DescribedFinder())
-
-
 __all__ = [
     "SIDECAR",
     "DescribedPart",
     "Description",
     "Provenance",
-    "install_finder",
-    "module_name_for",
     "part_from_sidecar",
     "read_description",
     "sidecar_for",

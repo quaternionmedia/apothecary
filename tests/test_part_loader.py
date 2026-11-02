@@ -88,3 +88,30 @@ def test_a_part_json_names_the_readme_it_shares(tmp_path):
     own = _folder(tmp_path, "zz_own_readme", sidecar="{}")
     (own / "README.md").write_text("# own\n", encoding="utf-8")
     assert part_named("zz_own_readme", tmp_path).readme_path == own / "README.md"
+
+
+def test_no_import_hook_serves_a_part_json_part():
+    import sys
+    from importlib import import_module
+
+    from apothecary.projects.parts import described
+
+    assert not any("Described" in type(f).__name__ for f in sys.meta_path)
+    assert not hasattr(described, "install_finder") and not hasattr(described, "__path__")
+    with pytest.raises(ModuleNotFoundError):
+        import_module("apothecary.projects.parts.described.arduino_uno")
+
+
+def test_only_the_registry_imports_a_wrapper_by_its_module_path():
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    pattern = re.compile(r"import_module\(\s*\w+\.wrapper\b")
+    found = [
+        str(path.relative_to(root))
+        for folder in ("apothecary", "tests")
+        for path in sorted((root / folder).rglob("*.py"))
+        if path.name != "test_part_loader.py" and pattern.search(path.read_text(encoding="utf-8"))
+    ]
+    assert found == ["apothecary/projects/registry.py"]

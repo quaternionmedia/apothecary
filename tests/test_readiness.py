@@ -334,7 +334,7 @@ class TestThePartDecidesWhereItsStlLives:
 
 
 def test_a_described_part_counts_its_part_json_as_a_source(tmp_path):
-    """A described part's wrapper is its part.json; an edit there makes its render stale."""
+    """A described part is its part.json; an edit there makes its render stale."""
     import os
 
     from apothecary.projects.parts.readiness import _sources_newer_than
