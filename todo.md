@@ -41,12 +41,14 @@ here: run `apothecary problems`.
   the only element given a `tabindex`.
 - The 2026-10-24 review's items not listed here
   ([docs/plans/review-2026-10-24.md](docs/plans/review-2026-10-24.md)): the
-  four installers as one; the wrapper-import pattern; logging in place of
-  `api.py`'s prints; the example modules at the package root; `httpx2` among
-  the dev dependencies, and `pydantic_core` imported without being declared;
-  a `docs/architecture.md`; the slowest browser file profiled, a marker on the
-  order-dependent files, a JavaScript unit layer and the remaining
+  four installers as one; the wrapper-import pattern; the example modules at
+  the package root; a `docs/architecture.md`; the slowest browser file
+  profiled, a marker on the order-dependent files, a JavaScript unit layer and the remaining
   `wait_for_timeout` calls.
+- Starlette's test client warns that `httpx` is deprecated in favour of
+  `httpx2` (seen at `conftest.py`'s import of `starlette.testclient`) once
+  `httpx2` is not installed: move the test client to `httpx2`, or filter the
+  warning where it is raised.
 - The landing method has no command. A stack tested once on the tree `main`
   ends at ([CONTRIBUTING.md](CONTRIBUTING.md)) is the
   [landing plan](docs/plans/landing-the-stack-2026-10-20.md)'s `git
