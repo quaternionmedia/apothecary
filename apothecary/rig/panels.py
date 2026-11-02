@@ -115,7 +115,7 @@ def panel(entry: Dict[str, Any], side: str) -> Optional[Panel]:
             size=float(place.get("size", 1)),
         )
         for name, place in (layout.get("jacks") or {}).items()
-        if place.get("side", "front") == side
+        if place.get("side", face) == side
     ]
     return Panel(entry["id"], side, float(width), float(height), controls, sockets)
 

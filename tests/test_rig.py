@@ -53,6 +53,19 @@ def test_a_panel_is_one_face_of_an_entry_with_each_control_s_range():
     assert panels.panel({**SYNTH, "layout": {}}, "front") is None
 
 
+def test_a_socket_naming_no_side_is_on_the_layout_s_face():
+    entry = {
+        **DESK,
+        "layout": {
+            **DESK["layout"],
+            "face": "back",
+            "jacks": {"in_1": {"x": 0.5, "y": 0.5}},
+        },
+    }
+    assert [s.name for s in panels.panel(entry, "back").sockets] == ["in_1"]
+    assert panels.panel(entry, "front").sockets == []
+
+
 def test_the_scene_pins_each_face_the_camera_sees(setup):
     assert sorted(setup.faces) == ["one", "two"]
     one, two = setup.faces["one"].corners, setup.faces["two"].corners
