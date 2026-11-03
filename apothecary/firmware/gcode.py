@@ -523,7 +523,15 @@ def serial_engine() -> str:
 
 
 def open_transport(port: str, baud: int) -> Transport:
-    return ENGINES[serial_engine()](port, baud)
+    engine = serial_engine()
+    if engine == "simulated":
+        # A port named in APOTHECARY_SIMULATED_ROUTER answers as a GRBL router, every
+        # other as the Marlin printer.
+        from . import grbl
+
+        if port in grbl.simulated_ports():
+            return grbl.SimulatedRouter(port, baud)
+    return ENGINES[engine](port, baud)
 
 
 # --- comms log: everything said on a port, for a board's Machine ---------------------
@@ -576,7 +584,8 @@ class CommsLog:
 # --- link: one open port, request/response with a lock ------------------------------
 
 OK_RE = re.compile(r"^ok\b")
-ERROR_RE = re.compile(r"^(Error:|!!)")
+# Marlin objects with `Error:` or `!!`; GRBL with `error:N` and, out of turn, `ALARM:N`.
+ERROR_RE = re.compile(r"^(Error:|!!|error:\d|ALARM:)")
 BUSY_RE = re.compile(r"^echo:busy:")
 RESEND_RE = re.compile(r"^Resend:")
 
@@ -600,6 +609,9 @@ class GcodeLink:
         self._write_lock = threading.Lock()  # one line on the wire at a time
         self._buf = b""
         self.unsolicited: List[str] = []
+        # The last `ALARM:N` the board said, whenever it said it: a GRBL status report
+        # says a controller is in alarm and not which (grbl.poll_router reads this).
+        self.alarm: Optional[str] = None
         self.opened_at = datetime.now(timezone.utc)
         self.log = log or CommsLog(port)
         self.engine = type(transport).__name__
@@ -621,7 +633,10 @@ class GcodeLink:
                 continue
             self._buf += chunk
         line, self._buf = self._buf.split(b"\n", 1)
-        return line.decode("utf-8", "replace").rstrip("\r")
+        text = line.decode("utf-8", "replace").rstrip("\r")
+        if text.startswith("ALARM:"):
+            self.alarm = text
+        return text
 
     def drain(self, quiet: float = 0.3, limit: float = 5.0) -> List[str]:
         """Read until the board has been silent for ``quiet`` seconds (or ``limit``)."""
@@ -721,6 +736,59 @@ class GcodeLink:
                     return lines
                 elif objected:
                     raise ToolchainError(f"{self.port}: {cmd} -> {line}")
+        finally:
+            self._lock.release()
+
+    def realtime(
+        self,
+        data: bytes,
+        until: Optional["re.Pattern[str]"] = None,
+        timeout: float = 1.0,
+        wait: Optional[float] = None,
+        label: Optional[str] = None,
+        now: bool = False,
+        origin: str = "poll",
+    ) -> List[str]:
+        """GRBL's realtime characters (``?``, ``!``, ``~``, a reset), written as the
+        bytes they are, with no newline and no ``ok`` to wait for; what the board
+        says within ``timeout`` is returned, and with ``until`` the read ends at the
+        first line matching it (a status report) or raises if none comes. ``now``
+        writes ahead of an exchange in flight, as the emergency stop does -- a hold
+        is for a machine in motion -- and then reads only if nothing else is;
+        otherwise the write waits its turn, ``wait`` bounding the queueing."""
+        name = label or data.decode("ascii", "backslashreplace")
+        if now:
+            self.log.add("tx", name, origin)
+            with self._write_lock:
+                self._t.write(data)
+            if not self._lock.acquire(blocking=False):
+                return []
+        else:
+            if not self._lock.acquire(timeout=-1 if wait is None else wait):
+                raise LinkBusy(
+                    f"{self.port}: the link is busy ({self.job['kind'] if self.job else 'an exchange'})"
+                )
+            self.log.add("tx", name, origin)
+            with self._write_lock:
+                self._t.write(data)
+        try:
+            lines: List[str] = []
+            end = time.monotonic() + timeout * self.time_scale
+            while (left := end - time.monotonic()) > 0:
+                line = self._read_line(left)
+                if line is None:
+                    break
+                lines.append(line)
+                self.log.add("rx", line, origin)
+                if until is not None and until.match(line.strip()):
+                    return lines
+            if until is not None:
+                self.log.add("sys", f"timeout: no report for {name} within {timeout:.0f}s")
+                raise ToolchainError(
+                    f"{self.port}: no report for {name} within {timeout:.0f}s "
+                    f"({len(lines)} lines received)"
+                )
+            return lines
         finally:
             self._lock.release()
 
@@ -900,6 +968,7 @@ HOTEND_MAX_C = 300
 BED_MAX_C = 130
 JOG_MAX_MM = 300
 FEED_MAX = 12000
+SPINDLE_MAX_RPM = 24000  # the trim router on the garage's router (grbl.py bounds M3 by it)
 CONTROL_CODES: List[tuple] = [
     (re.compile(r"^M104 S(\d{1,3})$"), "hotend target"),
     (re.compile(r"^M140 S(\d{1,3})$"), "bed target"),
@@ -1059,18 +1128,23 @@ def parse_leveling_state(lines: List[str]) -> Optional[bool]:
 
 # --- host printing: what a file may carry, and how long a line may take ----------------
 
-# Codes a print file is refused for, whatever else it says: they write the
-# board's settings or take it down, and a slicer never needs them.
+# Codes a streamed file is refused for, whatever else it says: they write the
+# board's settings or take it down, or wait for a hand, and neither a slicer nor
+# a CAM post needs them. One list for both dialects: a Marlin file carries no
+# `$` line and a GRBL file no M500, and refusing each in both costs nothing.
 PRINT_REFUSED: Dict[str, str] = {
     "M500": "saves settings to EEPROM",
     "M502": "resets settings to the firmware's defaults",
     "M997": "starts a firmware update",
     "M999": "restarts the board after a stop",
     "M112": "kills the board",
-    "M0": "stops and waits for a button on the printer",
-    "M1": "stops and waits for a button on the printer",
+    "M0": "stops and waits for a button on the machine",
+    "M1": "stops and waits for a button on the machine",
+    "M6": "is a tool change, which the host does not yet carry",
 }
 TEMP_CODES = {"M104": HOTEND_MAX_C, "M109": HOTEND_MAX_C, "M140": BED_MAX_C, "M190": BED_MAX_C}
+SPINDLE_CODES = ("M3", "M4")
+SPINDLE_ARG_RE = re.compile(r"S(\d+(?:\.\d+)?)")
 COMMENT_RE = re.compile(r";.*$|\([^)]*\)")
 TEMP_ARG_RE = re.compile(r"[SR](\d+(?:\.\d+)?)")
 # Lines the firmware answers only when it is done: heating, homing, probing, a dwell.
@@ -1104,13 +1178,21 @@ def check_gcode(text: str) -> Tuple[int, List[str]]:
             continue
         total += 1
         code = cmd.split(" ", 1)[0]
-        if code in PRINT_REFUSED:
+        if cmd.startswith("$"):
+            problems.append(f"line {n}: {cmd[:12]} is a controller setting, not a job's to send")
+        elif code in PRINT_REFUSED:
             problems.append(f"line {n}: {code} {PRINT_REFUSED[code]}")
         elif code in TEMP_CODES:
             m = TEMP_ARG_RE.search(cmd[len(code) :])
             if m and float(m.group(1)) > TEMP_CODES[code]:
                 problems.append(
                     f"line {n}: {code} asks for {m.group(1)} degC, above {TEMP_CODES[code]}"
+                )
+        elif code in SPINDLE_CODES:
+            m = SPINDLE_ARG_RE.search(cmd[len(code) :])
+            if m and float(m.group(1)) > SPINDLE_MAX_RPM:
+                problems.append(
+                    f"line {n}: {code} asks for {m.group(1)} rpm, above {SPINDLE_MAX_RPM}"
                 )
         if len(problems) >= 20:
             problems.append("... and the check stopped here")

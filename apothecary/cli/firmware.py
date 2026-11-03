@@ -9,7 +9,7 @@ from typing import Optional, Tuple
 
 import click
 
-from ..firmware import devices, gcode, service
+from ..firmware import devices, gcode, grbl, service
 from ..firmware.installer import InstallSpec
 from ..firmware.models import validate_core_id, validate_fqbn, validate_port
 from ..firmware.modules.rust_esp32 import RUST_ESP32
@@ -491,7 +491,8 @@ def _fmt_heater(h) -> str:
 def firmware_printer(
     port: str, baud: Optional[int], reset: bool, queries: Tuple[str, ...], json_out: bool
 ):
-    """Identify a G-code printer on PORT (M115) and poll it once (M105/M114/M27/M119).
+    """Identify a G-code machine on PORT -- a printer by M115, a GRBL router by $I --
+    and poll it once (M105/M114/M27/M119, or ? and $G).
 
     The port is released on exit with DTR left asserted, so the board is
     not rebooted by this command unless --reset asks for it.
@@ -502,7 +503,7 @@ def firmware_printer(
         _die(exc)
     try:
         for q in queries:
-            gcode.normalise_query(q)
+            devices.normalise_query(port, q)
     except ValueError as exc:
         _die(exc)
     try:
@@ -521,13 +522,25 @@ def firmware_printer(
         return
     _print_device(d)
     click.echo(f"    state: {status.state}" + ("  (heating)" if status.heating else ""))
+    if status.machine_state:
+        alarm = f"  alarm {status.alarm}: {grbl.alarm_text(status.alarm)}" if status.alarm else ""
+        click.echo(f"    controller: {status.machine_state}{alarm}")
+    if status.spindle is not None:
+        s = status.spindle
+        click.echo(f"    spindle: {'on' if s.on else 'off'}  {s.rpm:.0f} rpm (S{s.target:.0f})")
     if status.hotends:
         hot = "  ".join(f"T{i}: {_fmt_heater(h)}" for i, h in enumerate(status.hotends))
         bed = f"  bed: {_fmt_heater(status.bed)}" if status.bed else ""
         click.echo(f"    temps: {hot}{bed}")
     if status.position:
         p = status.position
-        click.echo(f"    position: X{p['x']:.2f} Y{p['y']:.2f} Z{p['z']:.2f} E{p['e']:.2f}")
+        e = f" E{p['e']:.2f}" if "e" in p else ""
+        click.echo(f"    position: X{p['x']:.2f} Y{p['y']:.2f} Z{p['z']:.2f}{e}")
+    if status.work_position:
+        w = status.work_position
+        click.echo(f"    work position: X{w['x']:.2f} Y{w['y']:.2f} Z{w['z']:.2f}")
+    if status.pins:
+        click.echo(f"    pins on: {' '.join(status.pins)}")
     if status.endstops:
         stops = "  ".join(f"{k}={v}" for k, v in status.endstops.items())
         click.echo(f"    endstops: {stops}")

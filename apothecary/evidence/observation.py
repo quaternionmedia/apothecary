@@ -60,6 +60,14 @@ PROPERTIES = frozenset(
         "filament",
         "moving",
         "clear",
+        # A router's (apothecary/firmware/grbl.py): its controller's own state word,
+        # where the tool is in the person's zero, the spindle's speed, the feed, and
+        # the input pins its report says are on.
+        "machine_state",
+        "work_position",
+        "rpm",
+        "feed",
+        "pins",
         # The image models' (docs/plans/image-models-through-qmcp-2026-10-30.md), and
         # rgb, a colour's measured sRGB, which only a reader of pixels gives.
         "label",
