@@ -149,14 +149,17 @@ def test_printers_default_to_idle_with_a_build_volume():
         assert printer["build_volume"] == [220.0, 220.0, 250.0]
 
 
-def test_cnc_router_has_no_build_volume():
-    """Unlike the printers, the CNC router stub has no build volume (see
-    example_hierarchy.py's BENCH_MOUNTED_STRUCTURES comment).
-    """
+def test_the_cnc_router_s_build_volume_is_its_working_area():
+    """The router is the AnoleX 4060-Evo Ultra 2 drawn as it is: its working area
+    is its build volume, on a stand of its own beside storage."""
     data = client.get("/sites/garage").json()
     router = next(s for s in data["structures"] if s["name"] == "cnc_router")
     assert router["status"] == "idle"
-    assert router["build_volume"] is None
+    assert router["build_volume"] == [400.0, 600.0, 80.0]
+    node = next(c for c in data["tree"]["children"] if c["name"] == "cnc_router")
+    assert node["part_ref"] == "anolex_4060_evo_ultra_2"
+    stand = next(s for s in data["structures"] if s["name"] == "cnc_stand")
+    assert stand["build_volume"] is None
 
 
 def test_update_structure_status():

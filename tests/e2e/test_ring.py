@@ -309,8 +309,8 @@ def test_the_pointer_uses_the_same_cells(page: Page, ring_url: str):
     expect(page.locator("#ring-overlay")).to_have_attribute("aria-activedescendant", "ring-cell-6")
     expect(page.locator("#ring-cell-6")).to_have_attribute("data-cell", "6")
     # Over an empty cell the pointer highlights nothing. printer_1's ring is
-    # full (its eighth cell is Part), so that is shown on the CNC router's, which
-    # has no board pinned and no part, and leaves cell 7 empty.
+    # full (its eighth cell is Device), so that is shown on the CNC router's, which
+    # has no board pinned, and leaves cell 7 empty.
     page.keyboard.press("Escape")
     expect(page.locator("#ring-overlay")).to_have_count(0)
     page.locator("#contents-list .contents-item[data-path='cnc_router']").click(

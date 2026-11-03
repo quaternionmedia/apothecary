@@ -40,6 +40,7 @@ def test_site_has_the_bench_printer_and_the_expanded_garage_systems():
         "electrical",
         "fluids",
         "storage_shelving",
+        "cnc_stand",
         "cnc_router",
     } <= names
 
@@ -113,11 +114,22 @@ def test_garage_shell_fixtures_storage_and_cnc_router_render():
     assert "Feature: cable_pass_through" in rendered  # unaffected by the additions above
 
 
-def test_cnc_router_is_idle_and_has_no_build_volume():
+def test_the_cnc_router_is_idle_on_its_stand_with_its_working_area():
+    """The router sits on its stand's top as printer_1 sits on the bench's, its
+    working area its build volume, its controller in the control box the node a
+    port is pinned to."""
     site = create_example_site()
     router = next(s for s in site.children if s.name == "cnc_router")
+    stand = next(s for s in site.children if s.name == "cnc_stand")
     assert router.status == "idle"
-    assert router.build_volume is None
+    assert router.build_volume == Vector3D(x=400, y=600, z=80)
+    assert router.world_bounds().min_point.z == stand.world_bounds().max_point.z
+    top, machine = stand.world_bounds(), router.world_bounds()
+    assert top.min_point.x <= machine.min_point.x and machine.max_point.x <= top.max_point.x
+    assert top.min_point.y <= machine.min_point.y and machine.max_point.y <= top.max_point.y
+    box = next(c for c in router.children if c.name == "frame_system")
+    controller = next(c for c in box.children if c.name == "controller")
+    assert controller.category == "electrical" and controller.part_ref is None
 
 
 def test_site_renders_valid_jscad():
