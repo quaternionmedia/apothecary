@@ -43,6 +43,9 @@ export function tempsText(st) {
     return `T ${heaterText(st.hotends[0])}${st.bed ? " · B " + heaterText(st.bed) : ""}`;
 }
 
+// A position as the page writes one, wherever it writes one.
+export const xyz = (p) => `X${p.x.toFixed(1)} Y${p.y.toFixed(1)} Z${p.z.toFixed(2)}`;
+
 // A router's poll as one line: its state and the controller's word, the tool in the
 // work zero, the spindle, and the alarm when it is in one.
 export function routerLine(st) {
@@ -50,20 +53,10 @@ export function routerLine(st) {
     if (st.state === "offline") return `offline${st.raw && st.raw[0] ? " " + st.raw[0] : ""}`;
     let line = st.state + (st.machine_state ? ` (${st.machine_state})` : "");
     const p = st.work_position || st.position;
-    if (p) line += ` · X${p.x.toFixed(1)} Y${p.y.toFixed(1)} Z${p.z.toFixed(2)}`;
+    if (p) line += ` · ${xyz(p)}`;
     if (st.spindle) line += st.spindle.on ? ` · spindle ${st.spindle.rpm.toFixed(0)} rpm` : " · spindle off";
     if (st.alarm != null) line += ` · alarm ${st.alarm}`;
     return line;
-}
-
-// Where a router's tool stands in its working area, from the machine position its
-// controller reports: a Grbl machine homed to its maximum switches counts down from
-// that corner, so the tool is at mpos + travel. `volume` is the working area.
-export function routerToolPosition(st, volume) {
-    const p = st && st.position;
-    if (!p) return null;
-    const [vx, vy, vz] = volume || [0, 0, 0];
-    return { x: p.x + vx, y: p.y + vy, z: p.z + vz };
 }
 
 // A printer's poll as one line: state, temperatures, where the head is, how far a
@@ -99,6 +92,9 @@ export function sketchWords(expected, observed) {
     return { should, observed: observed || null, verdict, drift, short, rec };
 }
 
+// The class a drawer wears for a G-code machine's state word; none for the rest.
+const STATE_CLS = { printing: "printing", running: "printing", offline: "offline", heating: "heating", alarm: "mismatch" };
+
 // One board, summed up for the drawers that show it small: the badges and
 // Selected's line. `board` is boards.js's board (device, status, expected,
 // observed). Answers { kind, icon, state, short, line, cls, title }.
@@ -116,7 +112,7 @@ export function boardSummary(board) {
             readings: null, temps: null, extra: parts, job: !!(st && st.job),
             short: st ? word : "not polled yet",
             line: routerLine(st),
-            cls: word === "running" ? "printing" : (word === "offline" ? "offline" : (word === "alarm" ? "mismatch" : "")),
+            cls: STATE_CLS[word] || "",
             title: `${label} on ${d.port} — ${routerLine(st)}`,
         };
     }
@@ -133,7 +129,7 @@ export function boardSummary(board) {
             extra: parts, job: !!(st && st.job),
             short: st ? (st.state === "offline" ? "offline" : word) : "not polled yet",
             line: printerLine(st),
-            cls: word === "printing" ? "printing" : (word === "offline" ? "offline" : (word === "heating" ? "heating" : "")),
+            cls: STATE_CLS[word] || "",
             title: `${label} on ${d.port} — ${printerLine(st)}`,
         };
     }

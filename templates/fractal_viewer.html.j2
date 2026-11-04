@@ -820,7 +820,7 @@
         import { mountPanels } from '/static/panels.js';
         import { mountMachine } from '/static/widgets/machine.js';
         import { mountBoards } from '/static/boards.js';
-        import { boardLabel, boardSummary, routerToolPosition } from '/static/board_text.js';
+        import { boardLabel, boardSummary } from '/static/board_text.js';
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
         import { mountPictureList } from '/static/widgets/picture_list.js';
@@ -833,7 +833,7 @@
         import { mountScadEditor, variantChoices } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
         import { parseAssignments, lastOf, literalText, writeValues } from '/static/widgets/assignments.js';
-        import { makeMachineMarks, makeBoardBadge, sayBoard, toScene as marksToScene } from '/static/machine_marks.js';
+        import { makeMachineMarks, makeBoardBadge, sayBoard, toScene as marksToScene, toolPosition as toolPositionOf } from '/static/machine_marks.js';
         import { mountPictureMarks, axes as cameraAxes } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
         import { makeSettings, mountSettings, keyLabel, modifierLabel } from '/static/widgets/settings.js';
@@ -1009,6 +1009,8 @@
         const PRINTER_STATUSES = ['idle', 'printing', 'offline', 'maintenance'];
         // And ROUTER_STATUSES, with them: every status a machine's polls set on its node.
         const MACHINE_STATUSES = ['idle', 'printing', 'running', 'hold', 'alarm', 'offline', 'maintenance'];
+        // A router's words a person sets by hand: its statuses less those its polls set.
+        const ROUTER_BY_HAND = ['idle', 'offline', 'maintenance'];
         const STATUS_COLORS = {
             idle: 0x4488cc,
             printing: 0xffaa00,
@@ -7406,11 +7408,9 @@
                 });
             }
 
-            // Where a poll puts the tool in the machine's volume: a printer's position as it
-            // is; a router's from its machine coordinates and its working area.
+            // Where a poll puts the tool in the machine's volume (machine_marks.js).
             toolPosition(st, where) {
-                if (st && st.dialect === 'grbl') return routerToolPosition(st, where && where.printer ? where.printer.build_volume : null) || st.position;
-                return st.position;
+                return toolPositionOf(st, where && where.printer ? where.printer.build_volume : null);
             }
 
             // The newest bed reading for a printer's port, laid over its bed;
@@ -7462,7 +7462,7 @@
                 if (!node || !MACHINE_STATUSES.includes(node.status)) return null;
                 const { row } = this.bindingFor(path);
                 const router = !!(row && row.device && row.device.printer && row.device.printer.machine === 'router');
-                const words = router ? ['idle', 'offline', 'maintenance'] : [...PRINTER_STATUSES];
+                const words = router ? ROUTER_BY_HAND : [...PRINTER_STATUSES];
                 return [...new Set([node.status, ...words])];
             }
 

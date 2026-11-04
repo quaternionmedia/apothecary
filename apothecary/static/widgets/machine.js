@@ -79,7 +79,8 @@
  */
 
 import { mountBoards } from "/static/boards.js";
-import { esc, heaterText, boardLabel, sketchWords, routerToolPosition } from "/static/board_text.js";
+import { esc, heaterText, boardLabel, sketchWords, xyz } from "/static/board_text.js";
+import { toolPosition as toolPositionOf } from "/static/machine_marks.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
 import { again } from "/static/twice.js";
@@ -102,17 +103,17 @@ const HEAD = `
     <label class="auto printer-only gcode"><input type="checkbox" id="auto" checked> auto-poll
         <select id="interval"><option value="1000">1 s</option><option value="2000" selected>2 s</option><option value="5000">5 s</option><option value="10000">10 s</option></select>
     </label>
-    <button type="button" id="poll" class="printer-only gcode" title="One poll now (M105/M114/M27/M119)">⟳ Poll</button>
-    <button type="button" id="reconnect" title="Release and reopen the serial link (no reset); the remedy for a wedged port">⇄ Reconnect</button>
-    <button type="button" id="identify" title="Ask M115 again (no reset)">M115</button>
+    <button type="button" id="poll" class="printer-only gcode">⟳ Poll</button>
+    <button type="button" id="reconnect">⇄ Reconnect</button>
+    <button type="button" id="identify">Identify</button>
     <button type="button" id="reset" class="danger printer-only gcode" title="Reboot the board with a DTR pulse — never mid-print">⏻ Reboot</button>
-    <button type="button" id="release" title="Drop the held link so another program can open the port">Release</button>
+    <button type="button" id="release">Release</button>
     <button type="button" id="listen" class="devkit-only" title="Open the port and stream what the board says into the log. Opening the port may reset the board">Listen</button>
     <button type="button" id="probe" class="devkit-only" title="Ask esptool for the chip, its MAC and its flash size (an Espressif board; this resets it)">Probe</button>
-    <label class="ctl printer-only gcode" id="ctl-label" title="Arm the control latch: heaters, fan, homing, bounded jogs and SD pause/resume/abort become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can heat or move the machine.">
+    <label class="ctl printer-only gcode" id="ctl-label">
         <input type="checkbox" id="ctl"> ⚙ Control <span class="ttl" id="ctl-ttl"></span>
     </label>
-    <button type="button" id="estop" class="printer-only gcode" title="M112: emergency stop. Always available, latch or not. Halts the board until it is reset.">⏹ E-STOP</button>
+    <button type="button" id="estop" class="printer-only gcode">⏹ E-STOP</button>
 </div>`;
 
 const CARDS = `
@@ -169,14 +170,14 @@ const CARDS = `
 <div data-section="print">
 <div class="cards">
     <div class="card wide printer-only gcode" id="print-card">
-        <div class="k"><span id="print-title">Print from here</span> <span class="s" id="print-note" style="text-transform: none; letter-spacing: 0;">· no SD card needed: the file streams over the link, one line per ok</span></div>
+        <div class="k"><span id="print-title"></span> <span class="s" id="print-note" style="text-transform: none; letter-spacing: 0;"></span></div>
         <div class="row">
             <input type="file" id="print-file" accept=".gcode,.gco,.g,.txt,text/plain" title="A sliced G-code file to keep on the host. It is checked (no EEPROM writes, no temperatures over the caps) and listed here; nothing is sent until Print">
             <select id="print-pick" title="The files kept on the host, newest first"><option value="">— no files kept —</option></select>
             <button type="button" id="print-delete" title="Forget the chosen file">✕</button>
             <span class="grow"></span>
-            <button type="button" id="print-start" class="warm" title="Stream the chosen file to the printer. Heats and moves: control must be armed. ⌗ Control › Print › Send file">▶ Print</button>
-            <button type="button" id="print-pause" title="Stop feeding lines; the printer finishes what it has queued">⏸ Pause</button>
+            <button type="button" id="print-start" class="warm">▶ Send</button>
+            <button type="button" id="print-pause">⏸ Pause</button>
             <button type="button" id="print-resume" title="Feed lines again (control must be armed)">▶ Resume</button>
             <button type="button" id="print-cancel" title="Stop feeding, then heaters off, fan off, motors free">■ Cancel</button>
         </div>
@@ -209,7 +210,7 @@ const LOG = `
 <div class="log-head">
     <span class="title">Log</span>
     <form id="qform" class="printer-only gcode" autocomplete="off">
-        <input id="q" list="qcodes" aria-label="Report-only G-code to send" placeholder="report code — M503, M119, M20, M420 V …" spellcheck="false">
+        <input id="q" list="qcodes" aria-label="Report-only G-code to send" spellcheck="false">
         <datalist id="qcodes"></datalist>
         <button type="submit">send</button>
     </form>
@@ -342,10 +343,13 @@ const BY_CMD = {
     "G10 L20 P1 X0 Y0 Z0": "control:zero-xyz", "G10 L20 P1 Z0": "control:zero-z", "G0 X0 Y0": "control:go-zero", "G53 G0 Z0": "control:top-z",
     "G38.2 Z-{r-probe} F100": "control:probe-z", "JOG-CANCEL": "control:jog-cancel", "RESUME": "control:job-resume", "HOLD": "control:job-hold", "RESET": "control:job-abort",
 };
-// The words of each G-code machine's kind: the job it runs, its stop, what arming lets it do.
+// The words of each G-code machine's kind: the job it runs, its stop, what arming lets
+// it do, how it is not yet known, its jog feed's bound and default (mm/min), the files a
+// job streams, and whether a file is sliced here. applyKind writes them into the markup,
+// which carries none of its own.
 const KINDS = {
-    printer: { job: "print", running: "printing", stop: "M112", can: "heat and move", identify: "M115", poll: "One poll now (M105/M114/M27/M119)", queries: "report code — M503, M119, M20, M420 V …", start: "▶ Print", note: "· no SD card needed: the file streams over the link, one line per ok", title: "Print from here", idle: "nothing printing from here", startTitle: "Stream the chosen file to the printer. Heats and moves: control must be armed. ⌗ Control › Print › Send file", pause: "Stop feeding lines; the printer finishes what it has queued", cancel: "Stop feeding, then heaters off, fan off, motors free", estop: "M112: emergency stop. Always available, latch or not. Halts the board until it is reset.", arm: "Arm the control latch: heaters, fan, homing, bounded jogs and SD pause/resume/abort become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can heat or move the machine." },
-    router: { job: "cut", running: "running", stop: "RESET", can: "turn and move", identify: "$I", poll: "One poll now (? and $G)", queries: "query — $$, $#, $G, $I, ?", start: "▶ Cut", note: "· a CAM post's file streams over the link, one line per ok", title: "Cut from here", idle: "nothing cutting from here", startTitle: "Stream the chosen file to the router. Turns the spindle and moves: control must be armed. ⌗ Control › Cut › Send file", pause: "Feed hold: the controller stops where it is, and nothing more is fed", cancel: "Hold, then the soft reset: the queue empties and the spindle is off", estop: "Soft reset (0x18): everything halts, the queue empties, the spindle is off. Always available, latch or not. A reset in motion leaves the controller in alarm: Unlock or Home.", arm: "Arm the control latch: homing, unlock, bounded jogs, the spindle, work zero, a probe and the cut's hold and resume become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can turn or move the machine." },
+    printer: { job: "print", dialect: "marlin", running: "printing", stop: "M112", can: "heat and move", notIdentified: "not identified as a printer", feedMax: 12000, feedDefault: 3000, files: ".gcode,.gco,.g,.txt,text/plain", slice: true, identify: "M115", poll: "One poll now (M105/M114/M27/M119)", queries: "report code — M503, M119, M20, M420 V …", start: "▶ Print", note: "· no SD card needed: the file streams over the link, one line per ok", title: "Print from here", idle: "nothing printing from here", startTitle: "Stream the chosen file to the printer. Heats and moves: control must be armed. ⌗ Control › Print › Send file", pause: "Stop feeding lines; the printer finishes what it has queued", cancel: "Stop feeding, then heaters off, fan off, motors free", estop: "M112: emergency stop. Always available, latch or not. Halts the board until it is reset.", arm: "Arm the control latch: heaters, fan, homing, bounded jogs and SD pause/resume/abort become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can heat or move the machine." },
+    router: { job: "cut", dialect: "grbl", running: "running", stop: "RESET", can: "turn and move", notIdentified: "not identified as a router", feedMax: 4000, feedDefault: 1000, files: ".nc,.ngc,.gcode,.tap,.txt,text/plain", slice: false, identify: "$I", poll: "One poll now (? and $G)", queries: "query — $$, $#, $G, $I, ?", start: "▶ Cut", note: "· a CAM post's file streams over the link, one line per ok", title: "Cut from here", idle: "nothing cutting from here", startTitle: "Stream the chosen file to the router. Turns the spindle and moves: control must be armed. ⌗ Control › Cut › Send file", pause: "Feed hold: the controller stops where it is, and nothing more is fed", cancel: "Hold, then the soft reset: the queue empties and the spindle is off", estop: "Soft reset (0x18): everything halts, the queue empties, the spindle is off. Always available, latch or not. A reset in motion leaves the controller in alarm: Unlock or Home.", arm: "Arm the control latch: homing, unlock, bounded jogs, the spindle, work zero, a probe and the cut's hold and resume become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can turn or move the machine." },
 };
 
 
@@ -441,12 +445,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             $("print-title").textContent = w.title; $("print-note").textContent = w.note;
             $("print-start").textContent = w.start; $("print-start").title = w.startTitle;
             $("print-pause").title = w.pause; $("print-cancel").title = w.cancel;
-            $("print-slice").hidden = k === "router";
-            // The jog feed's bound is the machine's: the router's 4000 mm/min, a printer's 12000.
-            const feed = $("h-feed"), fast = k === "router" ? 4000 : 12000;
-            feed.max = String(fast);
-            if (Number(feed.value) > fast) feed.value = String(k === "router" ? 1000 : 3000);
-            $("print-file").accept = k === "router" ? ".nc,.ngc,.gcode,.tap,.txt,text/plain" : ".gcode,.gco,.g,.txt,text/plain";
+            $("print-slice").hidden = !w.slice;
+            const feed = $("h-feed");  // the jog feed's bound is the machine's
+            feed.max = String(w.feedMax);
+            if (Number(feed.value) > w.feedMax) feed.value = String(w.feedDefault);
+            $("print-file").accept = w.files;
         }
         if (changed) state.codesLoaded = false;
         if (changed && state.port) {
@@ -466,7 +469,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             if (w && w.printer && w.printer.build_volume) level.volume = w.printer.build_volume;
         } catch (e) { /* the marks keep the default */ }
     }
-    const toolPosition = (st) => (state.kind === "router" ? routerToolPosition(st, level.volume) : st.position);
+    // A jog's position carries no dialect of its own: the kind's is used.
+    const toolPosition = (st) => toolPositionOf({ ...(st || {}), dialect: words().dialect }, level.volume);
     const interval = () => Number($("interval").value) || 2000;
     const isLive = () => (state.kind === "devkit" ? state.listening : $("auto").checked);
     function watchNow() {
@@ -495,7 +499,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const bd = state.port ? b() : null;
         const st = bd && bd.status, d = bd && bd.device;
         const pr = d && d.printer;
-        $("ident").innerHTML = pr ? `<b>${esc(pr.firmware_name)}</b>${pr.machine_type ? " · " + esc(pr.machine_type) : ""}` : (d ? `${esc(d.port)} — not identified as a printer` : (state.port ? (bd.info ? "not detected" : "connecting…") : "—"));
+        $("ident").innerHTML = identLine(bd, d, pr);
         if (!st) { $("c-state").textContent = "—"; $("c-state-s").textContent = ""; renderBoard(); return; }
         const offline = st.state === "offline";
         $("dot").className = "dot " + (offline ? "bad" : "on");
@@ -507,7 +511,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("c-bed").textContent = heaterText(st.bed); $("c-bed-s").textContent = st.bed && st.bed.power != null ? `power ${st.bed.power}/127` : "";
         $("b-bed").style.width = st.bed && st.bed.target > 0 ? Math.min(100, st.bed.actual / st.bed.target * 100).toFixed(0) + "%" : "0";
         const p = st.position;
-        $("c-pos").textContent = p ? `X${p.x.toFixed(1)} Y${p.y.toFixed(1)} Z${p.z.toFixed(2)}` : "—";
+        $("c-pos").textContent = p ? xyz(p) : "—";
         $("c-pos-s").textContent = p ? `E ${p.e.toFixed(1)}` : "";
         if (st.sd_printing) {
             const pct = st.sd_progress != null ? (st.sd_progress * 100).toFixed(1) + "%" : "…";
@@ -520,12 +524,19 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         renderBoard();
     }
 
+    // The head's line: what the board said it is, or how far from known it is.
+    function identLine(bd, d, pr) {
+        if (pr) return `<b>${esc(pr.firmware_name)}</b>${pr.machine_type ? " · " + esc(pr.machine_type) : ""}`;
+        if (d) return `${esc(d.port)} — ${words().notIdentified}`;
+        return state.port ? (bd.info ? "not detected" : "connecting…") : "—";
+    }
+
     // A router: its controller's state and word, the tool in the work zero and in machine
     // coordinates, the spindle, the feed and the overrides, the input pins on.
     function renderRouter() {
         const bd = state.port ? b() : null;
         const st = bd && bd.status, d = bd && bd.device, pr = d && d.printer;
-        $("ident").innerHTML = pr ? `<b>${esc(pr.firmware_name)}</b>${pr.machine_type ? " · " + esc(pr.machine_type) : ""}` : (d ? `${esc(d.port)} — not identified as a router` : (state.port ? (bd.info ? "not detected" : "connecting…") : "—"));
+        $("ident").innerHTML = identLine(bd, d, pr);
         if (!st) { $("c-state").textContent = "—"; $("c-state-s").textContent = ""; renderBoard(); return; }
         const offline = st.state === "offline";
         $("dot").className = "dot " + (offline ? "bad" : "on");
@@ -534,8 +545,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const controller = `${st.machine_state || ""}${st.alarm != null ? ` · alarm ${st.alarm}${st.alarm_text ? `: ${st.alarm_text}` : ""}` : ""}`;
         $("c-state-s").textContent = st.job ? `${st.job.kind} from here: ${st.job.stage} ${(st.job.progress * 100).toFixed(0)}% · ${controller}` : (offline ? (st.raw[0] || "") : `${controller} · polled ${new Date(st.polled_at).toLocaleTimeString()}`);
         const p = st.position, wp = st.work_position;
-        $("c-pos").textContent = wp ? `X${wp.x.toFixed(1)} Y${wp.y.toFixed(1)} Z${wp.z.toFixed(2)}` : (p ? `X${p.x.toFixed(1)} Y${p.y.toFixed(1)} Z${p.z.toFixed(2)}` : "—");
-        $("c-pos-s").textContent = p && wp ? `work zero · machine X${p.x.toFixed(1)} Y${p.y.toFixed(1)} Z${p.z.toFixed(2)}` : (p ? "machine coordinates" : "");
+        $("c-pos").textContent = wp ? xyz(wp) : (p ? xyz(p) : "—");
+        $("c-pos-s").textContent = p && wp ? `work zero · machine ${xyz(p)}` : (p ? "machine coordinates" : "");
         const sp = st.spindle;
         $("c-spindle").textContent = sp ? (sp.on ? `${sp.rpm.toFixed(0)} rpm` : "off") : "—";
         $("c-spindle-s").textContent = sp && sp.target ? `S${sp.target.toFixed(0)} programmed` : "";
