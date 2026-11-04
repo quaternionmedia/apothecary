@@ -470,6 +470,7 @@ class PrinterStatus(BaseModel):
     feed: Optional[float] = None
     pins: List[str] = Field(default_factory=list)
     alarm: Optional[int] = None
+    alarm_text: Optional[str] = None  # the alarm in the dialect's words
     overrides: Optional[dict] = None
 
     @property

@@ -552,9 +552,18 @@ def _identify(link: gcode.GcodeLink, reset: bool) -> PrinterInfo:
         return gcode.identify_printer(link, reset=reset)
     except ToolchainError as marlin_said:
         try:
-            return grbl.identify_router(link)
+            info = grbl.identify_router(link)
         except ToolchainError:
             raise marlin_said from None
+        _annotated(link, info.dialect)
+        return info
+
+
+def _annotated(link: gcode.GcodeLink, dialect: Optional[str]) -> gcode.GcodeLink:
+    """The link keeping the dialect's words beside what the board says (a GRBL
+    controller's error and alarm numbers); a printer's link has none."""
+    link.annotate = grbl.explain if dialect == grbl.DIALECT else None
+    return link
 
 
 def dialect_of(port: str, state: Optional[FirmwareState] = None) -> Optional[str]:
@@ -711,7 +720,7 @@ def printer_status(
             link = links.get(port)
         else:
             get_streams().close(port)
-            link = links.open(port, rate)
+            link = _annotated(links.open(port, rate), cached.printer.dialect)
     assert link is not None
     job = _live_job(port, link.job)
     if job is not None and job.get("kind") not in STREAMED:

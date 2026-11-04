@@ -109,6 +109,22 @@ def test_serve_listens_on_loopback_and_does_not_wait_on_open_streams(uvicorn_run
     assert kw["timeout_graceful_shutdown"] == 3
 
 
+def test_serve_reload_watches_the_package_and_the_templates_alone(uvicorn_runs):
+    """A worktree checked out under .claude/ or a ledger written under .git/ is no
+    change to the server: the reloader watches the package and the templates."""
+    from apothecary.projects.parts.skeleton import ROOT
+
+    result = CliRunner().invoke(cli, ["serve", "--no-viewer", "--port", "8124", "--reload"])
+    assert result.exit_code == 0, result.output
+    [(_target, kw)] = uvicorn_runs
+    assert kw["reload"] is True
+    assert kw["reload_dirs"] == [str(ROOT / "apothecary"), str(ROOT / "templates")]
+    uvicorn_runs.clear()
+    CliRunner().invoke(cli, ["serve", "--no-viewer", "--port", "8125"])
+    [(_target, kw)] = uvicorn_runs
+    assert kw["reload_dirs"] is None
+
+
 def test_serve_refuses_an_address_off_this_machine(uvicorn_runs):
     result = CliRunner().invoke(cli, ["serve", "--host", "0.0.0.0"])
     assert result.exit_code == 1

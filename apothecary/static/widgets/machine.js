@@ -531,7 +531,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("dot").className = "dot " + (offline ? "bad" : "on");
         const word = { offline: '<span class="bad">offline</span>', alarm: '<span class="bad">alarm</span>', hold: '<span class="warn">hold</span>', running: '<span class="ok">running</span>' }[st.state] || esc(st.state);
         $("c-state").innerHTML = word;
-        const controller = `${st.machine_state || ""}${st.alarm != null ? ` · alarm ${st.alarm}` : ""}`;
+        const controller = `${st.machine_state || ""}${st.alarm != null ? ` · alarm ${st.alarm}${st.alarm_text ? `: ${st.alarm_text}` : ""}` : ""}`;
         $("c-state-s").textContent = st.job ? `${st.job.kind} from here: ${st.job.stage} ${(st.job.progress * 100).toFixed(0)}% · ${controller}` : (offline ? (st.raw[0] || "") : `${controller} · polled ${new Date(st.polled_at).toLocaleTimeString()}`);
         const p = st.position, wp = st.work_position;
         $("c-pos").textContent = wp ? `X${wp.x.toFixed(1)} Y${wp.y.toFixed(1)} Z${wp.z.toFixed(2)}` : (p ? `X${p.x.toFixed(1)} Y${p.y.toFixed(1)} Z${p.z.toFixed(2)}` : "—");
@@ -655,9 +655,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!e.drawn) return "";
         const d = new Date(e.t);
         const t = isNaN(d) ? e.t.slice(11, 23) : d.toLocaleTimeString([], { hour12: false }) + "." + String(d.getMilliseconds()).padStart(3, "0");
-        const cls = e.kind + (e.origin === "control" || e.origin === "print" ? " control" : "") + (/^\s*(ok\s+)?T:\s*-?\d/.test(e.text) ? " temp" : "")
-            + (/^(Error:|!!)/.test(e.text) ? " err" : "") + (/apothecary\s+\S+:\s*hello/.test(e.text) ? " banner" : (e.text.startsWith("[apothecary:") ? " marker" : ""));
-        return `<span><span class="t">${t}</span> <span class="${cls}">${e.kind === "tx" ? "&gt; " : ""}${esc(e.text)}</span>\n</span>`;
+        const cls = e.kind + (e.origin === "control" || e.origin === "print" || e.origin === "cut" ? " control" : "") + (/^\s*(ok\s+)?T:\s*-?\d/.test(e.text) ? " temp" : "")
+            + (/^(Error:|!!|error:\d|ALARM:)/.test(e.text) ? " err" : "") + (/apothecary\s+\S+:\s*hello/.test(e.text) ? " banner" : (e.text.startsWith("[apothecary:") ? " marker" : ""));
+        // A line the dialect has words for (a GRBL error or alarm number) wears them.
+        const note = e.note ? ` <span class="note">— ${esc(e.note)}</span>` : "";
+        return `<span><span class="t">${t}</span> <span class="${cls}">${e.kind === "tx" ? "&gt; " : ""}${esc(e.text)}</span>${note}\n</span>`;
     }
     function drawLog(draw) {
         const log = $("log");

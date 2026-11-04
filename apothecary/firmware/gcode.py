@@ -553,17 +553,18 @@ class CommsLog:
         self._base = 0  # index of _entries[0]
         self._lock = threading.Lock()
 
-    def add(self, kind: str, text: str, origin: str = "") -> None:
+    def add(self, kind: str, text: str, origin: str = "", note: Optional[str] = None) -> None:
         with self._lock:
-            self._entries.append(
-                {
-                    "i": self._base + len(self._entries),
-                    "t": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
-                    "kind": kind,  # tx | rx | boot | sys
-                    "origin": origin,  # poll | query | identify -- who sent the command
-                    "text": text,
-                }
-            )
+            entry = {
+                "i": self._base + len(self._entries),
+                "t": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+                "kind": kind,  # tx | rx | boot | sys
+                "origin": origin,  # poll | query | identify -- who sent the command
+                "text": text,
+            }
+            if note:
+                entry["note"] = note  # the line in words, where the dialect has them (error:15)
+            self._entries.append(entry)
             if len(self._entries) > self.capacity:
                 drop = self.capacity // 4
                 del self._entries[:drop]
@@ -628,6 +629,14 @@ class GcodeLink:
     # at once, so the tests set it near 0 rather than wait out real silences.
     time_scale: float = 1.0
 
+    # The dialect's words for a line the board says, kept beside it in the log
+    # (grbl.explain: `error:15` is a jog past the travel); None for a dialect with
+    # none. Set once the board is identified.
+    annotate: Optional[Callable[[str], Optional[str]]] = None
+
+    def _note(self, line: str) -> Optional[str]:
+        return self.annotate(line) if self.annotate is not None else None
+
     def _acquire(self, wait: Optional[float]) -> bool:
         """The link's lock, waiting ``wait`` seconds at most (forever for None), through
         the turnstile: exchanges take the lock in the order they asked for it."""
@@ -691,7 +700,7 @@ class GcodeLink:
                 if line is None:
                     break
                 lines.append(line)
-                self.log.add("boot", line)
+                self.log.add("boot", line, note=self._note(line))
         self.unsolicited.extend(lines)
         return lines
 
@@ -754,7 +763,7 @@ class GcodeLink:
                 if not quiet or objected:
                     if quiet:
                         self.log.add("tx", cmd, origin)  # the line it objected to, for the record
-                    self.log.add("rx", line, origin)
+                    self.log.add("rx", line, origin, note=self._note(line))
                 if BUSY_RE.match(line):
                     end = time.monotonic() + timeout * self.time_scale  # heating/homing
                 elif OK_RE.match(line):
@@ -804,7 +813,7 @@ class GcodeLink:
                 if line is None:
                     break
                 lines.append(line)
-                self.log.add("rx", line, origin)
+                self.log.add("rx", line, origin, note=self._note(line))
                 if until is not None and until.match(line.strip()):
                     return lines
             if until is not None:
@@ -837,7 +846,7 @@ class GcodeLink:
                     if line is None:
                         break
                     lines.append(line)
-                    self.log.add("rx", line, "control")
+                    self.log.add("rx", line, "control", note=self._note(line))
             finally:
                 self._lock.release()
         return lines

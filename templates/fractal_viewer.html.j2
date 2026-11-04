@@ -3675,13 +3675,14 @@
             }
 
             renderEditablePanel(node) {
-                // Only a printer's status is chosen here. Any other status (a
-                // piece from a picture is "unsized") is a fact shown as text:
-                // a drop-down would show a printer status the node does not have.
-                const statusRow = PRINTER_STATUSES.includes(node.status)
+                // Only a machine's status is chosen here, in its own words (statusWordsFor).
+                // Any other status (a piece from a picture is "unsized") is a fact shown
+                // as text: a drop-down would show a status the node does not have.
+                const statusWords = this.statusWordsFor(node, this.selectedName);
+                const statusRow = statusWords
                     ? `<div class="prop-row"><label>Status</label>
                          <select id="status-select">
-                           ${PRINTER_STATUSES.map((s) => `<option value="${s}"${s === node.status ? ' selected' : ''}>${s}</option>`).join('')}
+                           ${statusWords.map((s) => `<option value="${s}"${s === node.status ? ' selected' : ''}>${s}</option>`).join('')}
                          </select>
                        </div>`
                     : node.status ? `<div class="prop-row"><label>Status</label><span>${esc(node.status)}</span></div>` : '';
@@ -7444,9 +7445,25 @@
                 }
                 if (this.selectedName === path) {
                     const sel = document.getElementById('status-select');
-                    if (sel && document.activeElement !== sel) sel.value = status;
+                    if (sel && document.activeElement !== sel) {
+                        // A word the polls set (running, hold, alarm) is shown even
+                        // where a hand would not set it.
+                        if (![...sel.options].some((o) => o.value === status)) sel.add(new Option(status, status), 0);
+                        sel.value = status;
+                    }
                 }
                 return true;
+            }
+
+            // The words a machine's Status offers: a printer's own, or a router's --
+            // idle, offline and maintenance by hand, and whatever its polls set, which
+            // is shown but never offered. A node with no machine status offers none.
+            statusWordsFor(node, path) {
+                if (!node || !MACHINE_STATUSES.includes(node.status)) return null;
+                const { row } = this.bindingFor(path);
+                const router = !!(row && row.device && row.device.printer && row.device.printer.machine === 'router');
+                const words = router ? ['idle', 'offline', 'maintenance'] : [...PRINTER_STATUSES];
+                return [...new Set([node.status, ...words])];
             }
 
             pathOf(node) {
@@ -8333,7 +8350,11 @@
         function deviceFor(path) {
             const { row } = viewer.bindingFor(path);
             if (!row || !row.device) return undefined;
-            return { port: row.device.port, printer: !!row.device.printer, machine: row.device.printer ? row.device.printer.machine || 'printer' : null, armed: false, bound: true };
+            // The latch as the board's open Machine knows it, so the ring says Disarm
+            // while it is armed; a board with no Machine open is taken as disarmed.
+            const m = viewer.machine;
+            const armed = !!(m && m.handle && m.port === row.device.port && m.handle.ctl.armed);
+            return { port: row.device.port, printer: !!row.device.printer, machine: row.device.printer ? row.device.printer.machine || 'printer' : null, armed, bound: true };
         }
         // The sketch of a part of its own that no board connected runs: the ring's
         // Flash its sketch.

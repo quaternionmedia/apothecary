@@ -176,6 +176,13 @@ def test_control_allowlist_normalises_and_bounds():
         grbl.normalise_query("M503")
 
 
+def test_the_controller_s_numbers_have_words():
+    """An error or alarm number is said in words beside the line and in a refusal."""
+    assert grbl.explain("error:15") == "a jog would go past the travel"
+    assert grbl.explain("ALARM:3") == "reset while in motion: machine position is lost"
+    assert grbl.explain("error:999") == "error 999" and grbl.explain("ok") is None
+
+
 def test_a_streamed_file_may_not_carry_settings_tool_changes_or_a_fast_spindle():
     text = "G21 G90\n$110=4000\nM6 T1\nM3 S30000\nM0\nG1 X10 F800\nS12000 M3\nM5\nM30\n"
     total, problems = gcode.check_gcode(text)
@@ -239,6 +246,13 @@ def test_the_simulated_router_is_a_plausible_grbl(router_links):
     # Not this dialect's: Marlin's codes get error:20, which the link raises.
     with pytest.raises(ToolchainError, match="error:20"):
         link.command("M105")
+    # A refusal from the controller says the words, and the log keeps them beside the line.
+    link.annotate = grbl.explain
+    with pytest.raises(ToolchainError, match="error:15 \\(a jog would go past the travel\\)"):
+        grbl.control_router(link, "$J=G91 G21 X500 F500")
+    noted = [e for e in link.log.since(0)["entries"] if e.get("note")]
+    assert noted and noted[-1]["text"] == "error:15"
+    assert noted[-1]["note"] == "a jog would go past the travel"
 
 
 def test_a_move_takes_its_time_and_a_hold_stops_it_where_it_is(router_links, monkeypatch):
@@ -259,6 +273,7 @@ def test_a_move_takes_its_time_and_a_hold_stops_it_where_it_is(router_links, mon
     assert "ALARM:3" in said
     st = grbl.poll_router(link)
     assert st.state == "alarm" and st.alarm == 3
+    assert st.alarm_text == "reset while in motion: machine position is lost"
     with pytest.raises(ToolchainError, match="error:9"):
         link.command("G1 X-50 F600")
     assert grbl.control_router(link, "$X")[0] == "[MSG:Caution: Unlocked]"
@@ -292,6 +307,7 @@ def test_a_port_that_answers_grbl_is_a_router_polled_in_its_dialect(fake_arduino
     assert devices.machine_kind(device) == "router" and devices.dialect_of(PORT) == "grbl"
     st = devices.printer_status(PORT)
     assert st.dialect == "grbl" and st.state == "idle" and st.machine_state == "Idle"
+    assert router_links.get(PORT).annotate is grbl.explain  # the words ride the link
     assert "$G" in devices.query_codes(PORT) and "M503" not in devices.query_codes(PORT)
     assert "M503" in devices.query_codes(None)
     assert devices.printer_query(PORT, "$G").lines[-1] == "ok"

@@ -884,6 +884,7 @@ def poll_router(link: GcodeLink, wait: Optional[float] = None) -> PrinterStatus:
         feed=status["feed"],
         pins=list(status["pins"]),
         alarm=alarm,
+        alarm_text=alarm_text(alarm),
         overrides=status["overrides"],
         raw=raw,
     )
@@ -899,7 +900,14 @@ def control_router(link: GcodeLink, command: str, timeout: float = 60.0) -> List
         return link.realtime(
             REALTIME[cmd], until=None, timeout=settle, label=cmd, now=True, origin="control"
         )
-    return link.command(cmd, timeout=timeout, origin="control")
+    try:
+        return link.command(cmd, timeout=timeout, origin="control")
+    except ToolchainError as exc:
+        # A refusal says the controller's words, not its code alone.
+        words = explain(str(exc).rsplit("-> ", 1)[-1])
+        if words is None:
+            raise
+        raise ToolchainError(f"{exc} ({words})") from None
 
 
 def query_router(link: GcodeLink, command: str, timeout: float = 15.0) -> List[str]:
@@ -913,4 +921,19 @@ def query_router(link: GcodeLink, command: str, timeout: float = 15.0) -> List[s
 def alarm_text(code: Optional[int]) -> Optional[str]:
     if code is None:
         return None
+    return ALARMS.get(code, f"alarm {code}")
+
+
+EXPLAINED_RE = re.compile(r"^(error|ALARM):(\d+)")
+
+
+def explain(line: str) -> Optional[str]:
+    """The words for a controller's ``error:N`` or ``ALARM:N``, kept beside the line
+    in the port's log and said in a refusal; None for any other line."""
+    m = EXPLAINED_RE.match(line.strip())
+    if not m:
+        return None
+    code = int(m.group(2))
+    if m.group(1) == "error":
+        return ERRORS.get(code, f"error {code}")
     return ALARMS.get(code, f"alarm {code}")
