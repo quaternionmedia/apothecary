@@ -127,6 +127,7 @@ AREAS = {
         "tests": (
             "test_one_machine.py",
             "test_printer_ui.py",
+            "test_router_ui.py",
             "test_bench.py",
             "test_the_firmware_loop.py",
             "test_the_made_thing.py",
