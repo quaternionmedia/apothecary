@@ -733,6 +733,9 @@ def printer_status(
 
 # The jobs that stream a file over the link: a print (Marlin) and a cut (GRBL).
 STREAMED = ("print", "cut")
+# A line that names the operation the lines after it belong to, as apothecary.cam
+# writes one: `(op 2/4 pass 1/6: hole 3 mm at 110,36.667 plunged to z -2)`.
+OPERATION_RE = re.compile(r"^\((op \d+/\d+[^)]*)\)$")
 
 
 def busy_word(kind: str) -> str:
@@ -1167,6 +1170,9 @@ class PrintJob:
         self.sent = 0
         self.total = file.lines
         self.current: Optional[str] = None
+        # The operation the file says it is in (`(op i/n pass p/m: ...)`, as
+        # apothecary.cam writes one before each): a cut names it as it streams.
+        self.operation: Optional[str] = None
         self.started = datetime.now(timezone.utc)
         self.finished: Optional[datetime] = None
         self.error: Optional[str] = None
@@ -1222,6 +1228,7 @@ class PrintJob:
             "total": self.total,
             "progress": (self.sent / self.total) if self.total else 0.0,
             "current": self.current,
+            "operation": self.operation,
             "since": self.started.isoformat(),
             "finished": self.finished.isoformat() if self.finished else None,
             "elapsed_s": round(elapsed, 1),
@@ -1327,6 +1334,10 @@ class PrintJob:
             self.stage = self.running_stage
             self._announce()
             for raw in text.splitlines():
+                named = OPERATION_RE.match(raw.strip())
+                if named:
+                    self.operation = named.group(1)
+                    self._announce()
                 cmd = gcode.strip_gcode(raw)
                 if not cmd:
                     continue

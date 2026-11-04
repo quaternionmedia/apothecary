@@ -547,6 +547,9 @@ class SimulatedRouter:
         self._queue: List[tuple] = []
         self._current: Optional[Tuple[dict, dict, float, float, str]] = None
         self._held_at: Optional[float] = None  # the fraction of the current block done when held
+        # Every block run, in work coordinates: where it began and ended, at what feed,
+        # and whether it was a rapid. What a cut did, for apothecary.cam.measure.
+        self.trace: List[dict] = []
         # Multiplies every block's time: 1 is real time, 0 skips them.
         self.time_scale = float(os.environ.get("APOTHECARY_SIMULATED_SPEED", "1"))
         self.probe: Optional[dict] = None
@@ -583,6 +586,14 @@ class SimulatedRouter:
                 return
             self.pos = dict(end)
             self._current = None
+            if kind in ("move", "rapid"):
+                self.trace.append(
+                    {
+                        "start": {k: round(start[k] - self.wco[k], 3) for k in "xyz"},
+                        "end": {k: round(end[k] - self.wco[k], 3) for k in "xyz"},
+                        "rapid": kind == "rapid",
+                    }
+                )
             if kind == "home":
                 self.homed = True
                 self.alarm = None
@@ -759,8 +770,9 @@ class SimulatedRouter:
                 ):
                     self.state, self.alarm = "Alarm", 2
                     return ["error:2", "ALARM:2"]
-                feed = self.RAPID if code in ("G0", "G00") else self.f * self.feed_override / 100
-                self._enqueue(target, feed)
+                rapid = code in ("G0", "G00")
+                feed = self.RAPID if rapid else self.f * self.feed_override / 100
+                self._enqueue(target, feed, "rapid" if rapid else "move")
         elif code == "G53":
             # G53 G0 Z0: the top of Z travel, in machine coordinates
             target = self._end_of_queue()

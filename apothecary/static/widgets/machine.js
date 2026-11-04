@@ -348,8 +348,8 @@ const BY_CMD = {
 // job streams, and whether a file is sliced here. applyKind writes them into the markup,
 // which carries none of its own.
 const KINDS = {
-    printer: { job: "print", dialect: "marlin", running: "printing", stop: "M112", can: "heat and move", notIdentified: "not identified as a printer", feedMax: 12000, feedDefault: 3000, files: ".gcode,.gco,.g,.txt,text/plain", slice: true, identify: "M115", poll: "One poll now (M105/M114/M27/M119)", queries: "report code — M503, M119, M20, M420 V …", start: "▶ Print", note: "· no SD card needed: the file streams over the link, one line per ok", title: "Print from here", idle: "nothing printing from here", startTitle: "Stream the chosen file to the printer. Heats and moves: control must be armed. ⌗ Control › Print › Send file", pause: "Stop feeding lines; the printer finishes what it has queued", cancel: "Stop feeding, then heaters off, fan off, motors free", estop: "M112: emergency stop. Always available, latch or not. Halts the board until it is reset.", arm: "Arm the control latch: heaters, fan, homing, bounded jogs and SD pause/resume/abort become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can heat or move the machine." },
-    router: { job: "cut", dialect: "grbl", running: "running", stop: "RESET", can: "turn and move", notIdentified: "not identified as a router", feedMax: 4000, feedDefault: 1000, files: ".nc,.ngc,.gcode,.tap,.txt,text/plain", slice: false, identify: "$I", poll: "One poll now (? and $G)", queries: "query — $$, $#, $G, $I, ?", start: "▶ Cut", note: "· a CAM post's file streams over the link, one line per ok", title: "Cut from here", idle: "nothing cutting from here", startTitle: "Stream the chosen file to the router. Turns the spindle and moves: control must be armed. ⌗ Control › Cut › Send file", pause: "Feed hold: the controller stops where it is, and nothing more is fed", cancel: "Hold, then the soft reset: the queue empties and the spindle is off", estop: "Soft reset (0x18): everything halts, the queue empties, the spindle is off. Always available, latch or not. A reset in motion leaves the controller in alarm: Unlock or Home.", arm: "Arm the control latch: homing, unlock, bounded jogs, the spindle, work zero, a probe and the cut's hold and resume become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can turn or move the machine." },
+    printer: { job: "print", dialect: "marlin", running: "printing", stop: "M112", can: "heat and move", notIdentified: "not identified as a printer", feedMax: 12000, feedDefault: 3000, files: ".gcode,.gco,.g,.txt,text/plain", slice: true, prepare: "Slice", prepareTitle: "Slice what is chosen under makes for this printer: its G-code is kept here and chosen, so ▶ Print follows. Writes files only; nothing is sent to the printer. Its ring's Slice does the same", identify: "M115", poll: "One poll now (M105/M114/M27/M119)", queries: "report code — M503, M119, M20, M420 V …", start: "▶ Print", note: "· no SD card needed: the file streams over the link, one line per ok", title: "Print from here", idle: "nothing printing from here", startTitle: "Stream the chosen file to the printer. Heats and moves: control must be armed. ⌗ Control › Print › Send file", pause: "Stop feeding lines; the printer finishes what it has queued", cancel: "Stop feeding, then heaters off, fan off, motors free", estop: "M112: emergency stop. Always available, latch or not. Halts the board until it is reset.", arm: "Arm the control latch: heaters, fan, homing, bounded jogs and SD pause/resume/abort become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can heat or move the machine." },
+    router: { job: "cut", dialect: "grbl", running: "running", stop: "RESET", can: "turn and move", notIdentified: "not identified as a router", feedMax: 4000, feedDefault: 1000, files: ".nc,.ngc,.gcode,.tap,.txt,text/plain", slice: false, prepare: "Toolpath", prepareTitle: "Write the toolpath of what is chosen under makes for this router, from the cuts the part declares: it is kept here and chosen, so ▶ Cut follows. Writes files only; nothing is sent to the router. Its ring's Toolpath does the same", identify: "$I", poll: "One poll now (? and $G)", queries: "query — $$, $#, $G, $I, ?", start: "▶ Cut", note: "· a CAM post's file streams over the link, one line per ok", title: "Cut from here", idle: "nothing cutting from here", startTitle: "Stream the chosen file to the router. Turns the spindle and moves: control must be armed. ⌗ Control › Cut › Send file", pause: "Feed hold: the controller stops where it is, and nothing more is fed", cancel: "Hold, then the soft reset: the queue empties and the spindle is off", estop: "Soft reset (0x18): everything halts, the queue empties, the spindle is off. Always available, latch or not. A reset in motion leaves the controller in alarm: Unlock or Home.", arm: "Arm the control latch: homing, unlock, bounded jogs, the spindle, work zero, a probe and the cut's hold and resume become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can turn or move the machine." },
 };
 
 
@@ -445,7 +445,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             $("print-title").textContent = w.title; $("print-note").textContent = w.note;
             $("print-start").textContent = w.start; $("print-start").title = w.startTitle;
             $("print-pause").title = w.pause; $("print-cancel").title = w.cancel;
-            $("print-slice").hidden = !w.slice;
+            $("print-slice").textContent = w.prepare;
             const feed = $("h-feed");  // the jog feed's bound is the machine's
             feed.max = String(w.feedMax);
             if (Number(feed.value) > w.feedMax) feed.value = String(w.feedDefault);
@@ -1110,6 +1110,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (slc.running || id === slc.shown) return;
         slc.shown = id;
         const r = id && prt.slices[id];
+        if (r && r.toolpath) { $("print-slice-box").hidden = false; $("print-slice-task").hidden = true; $("print-slice-said").innerHTML = toolpathSaid(r); return; }
         $("print-slice-task").hidden = true;
         $("print-slice-said").innerHTML = r ? sliceSaid(r) : "";
         $("print-slice-box").hidden = !r;
@@ -1122,15 +1123,15 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-resume").disabled = !paused;
         $("print-cancel").disabled = !running;
         $("print-delete").disabled = !$("print-pick").value || (running && job.file_id === $("print-pick").value);
-        const slicerOk = !!(slc.status && slc.status.ok);
+        const slicerOk = words().job !== "print" || !!(slc.status && slc.status.ok);
         $("print-slice").disabled = slc.running || !$("print-part").value;
         $("print-slice").title = slicerOk
-            ? "Slice what is chosen under makes for this printer: its G-code is kept here and chosen, so ▶ Print follows. Writes files only; nothing is sent to the printer. Its ring's Slice does the same"
+            ? words().prepareTitle
             : `No slicer: ${(slc.status && slc.status.why) || "asking"}. Panels › Bench › Install › OrcaSlicer installs it`;
         if (job && (running || job.stage)) {
             const pct = (job.progress * 100).toFixed(1);
             $("print-progress").className = "";
-            $("print-progress").textContent = `${job.name} · ${job.stage} · ${job.sent}/${job.total} lines (${pct}%) · ${fmtDur(job.elapsed_s)}` + (job.current && running ? ` · ${job.current}` : "") + (job.error ? ` · ${job.error}` : "");
+            $("print-progress").textContent = `${job.name} · ${job.stage} · ${job.sent}/${job.total} lines (${pct}%) · ${fmtDur(job.elapsed_s)}` + (job.operation && running ? ` · ${job.operation}` : "") + (job.current && running ? ` · ${job.current}` : "") + (job.error ? ` · ${job.error}` : "");
             $("b-print").style.width = pct + "%";
         } else {
             $("print-progress").className = "empty"; $("print-progress").textContent = words().idle; $("b-print").style.width = "0";
@@ -1150,13 +1151,17 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         return `<div><span class="${esc(j.outcome)}">${when} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${esc(j.outcome)}${lines}${why}</span><a href="${BASE}/jobs/${encodeURIComponent(j.id)}" download="${esc(j.id)}.json" title="The job as JSON, with the tail of what the firmware said">⤓ log</a></div>`;
     }
     // A kept file a slice made says what it was sliced from, and for which printer.
+    // What a kept file came from: a slice's piece and printer, or a toolpath's part and router.
     const slicedFrom = (f) => {
         const r = prt.slices[f.id];
-        return r ? ` · sliced from ${esc(r.made.name)} for ${esc(r.printer.name)}` : "";
+        if (!r) return "";
+        if (r.toolpath) return ` · toolpath of ${esc(r.part)} for ${esc(r.router.name)}`;
+        return ` · sliced from ${esc(r.made.name)} for ${esc(r.printer.name)}`;
     };
     async function loadPrintFiles(pick) {
         try { prt.files = await api("/firmware/printers/prints"); } catch (e) { prt.files = []; }
         try { prt.slices = Object.fromEntries((await api("/slicer/slices")).map((r) => [r.file_id, r])); } catch (e) { prt.slices = {}; }
+        try { for (const r of await api("/cam/cuts")) prt.slices[r.file_id] = { ...r, toolpath: true }; } catch (e) { /* no toolpaths kept */ }
         const sel = $("print-pick"), had = pick || sel.value;
         sel.innerHTML = prt.files.length
             ? prt.files.map((f) => `<option value="${esc(f.id)}" ${f.problems.length ? 'class="bad"' : ""}>${esc(f.name)} · ${f.lines} lines${slicedFrom(f)}${f.problems.length ? " · refused: " + esc(f.problems[0]) : ""}</option>`).join("")
@@ -1222,6 +1227,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // Slice: what makes names, sliced for this printer by the slicer's task, its log
     // in the card with Cancel. True when it started.
     async function startSlice() {
+        if (words().job === "cut") return startToolpath();
         const part = $("print-part").value;
         if (!state.port) { refuse("slice: no printer chosen"); return false; }
         if (!part) { refuse("slice: choose what it makes under makes first"); return false; }
@@ -1243,6 +1249,39 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-card").scrollIntoView({ block: "nearest" });
         ending.then(sliced);
         return true;
+    }
+    // Toolpath: what makes names, its cuts written for this router (POST /cam/cut),
+    // the file kept and chosen, what it holds said under makes. True when it was kept.
+    async function startToolpath() {
+        const part = $("print-part").value;
+        if (!state.port) { refuse("toolpath: no router chosen"); return false; }
+        if (!part) { refuse("toolpath: choose what it makes under makes first"); return false; }
+        const variant = variantFor ? variantFor(part) : null;
+        const site = prt.choices && prt.choices.site, at = prt.choices && prt.choices.machine && prt.choices.machine.path;
+        let r;
+        try { r = await post("/cam/cut", { port: state.port, part, site: site || undefined, router: at || undefined, variant: variant || undefined }); }
+        catch (e) { refuse(`toolpath: ${e.message}`); return false; }
+        await loadPrintFiles(r.file_id);
+        $("print-slice-box").hidden = false;
+        $("print-slice-task").hidden = true;
+        $("print-slice-said").innerHTML = toolpathSaid(r);
+        const cut = r.operations.filter((o) => o.cut).length;
+        tell(`${r.name} kept and chosen: the toolpath of ${r.part}${r.variant ? `, the variant drawn (${r.variant.slice(0, 8)})` : ""} for ${r.router.name}, ${cut} of ${r.operations.length} operations, ${r.lines} lines, ${fmtDur(r.time_s)} at the feeds written${r.messages.length ? `; ${r.messages.length} said` : ""}; ▶ Cut cuts it`);
+        $("print-card").scrollIntoView({ block: "nearest" });
+        emit("apothecary:sliced", { port: state.port, file_id: r.file_id });
+        return true;
+    }
+    // What a toolpath holds: its tool, stock and feeds, each operation with its
+    // passes, and what it left out or changed, and why.
+    function toolpathSaid(r) {
+        const head = `<div class="slice-head">${esc(r.part)}${r.variant ? ` (the variant ${esc(r.variant.slice(0, 8))})` : ""} toolpath for ${esc(r.router.name)} · ${esc(String(r.lines))} lines · ${esc(fmtDur(r.time_s))} · ${esc(String(r.length_mm))} mm cut</div>`;
+        const rows = [
+            ["tool", `${r.tool.label}`], ["stock", `${r.stock.x} x ${r.stock.y} x ${r.stock.thickness} mm, zero at its front-left top corner`],
+            ["feeds", `cut ${r.feeds.cut}, plunge ${r.feeds.plunge} mm/min, ${r.feeds.rpm} rpm`],
+            ...r.operations.map((o) => [`op ${o.index}`, `${o.words}${o.cut ? ` · ${o.passes} pass${o.passes === 1 ? "" : "es"}` : " · not cut"}`]),
+        ].map(([k, v]) => `<div class="declared"><span>${esc(k)}</span> <span>${esc(v)}</span> <span class="meta">part</span></div>`).join("");
+        const said = r.messages.map((m) => `<div class="warn">${esc(m)}</div>`).join("");
+        return head + `<div class="slice-settings">${rows}</div>` + said;
     }
     // The printer, as its site names it: the node above the board its port is pinned to.
     function printerName() {

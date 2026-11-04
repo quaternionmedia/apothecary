@@ -7121,6 +7121,15 @@
                 if (!handle || handle.kind() !== 'printer') return { refused: `${printer}'s board has not said it is a printer: Identify in its Machine asks it (M115), then Slice again` };
                 return handle.print.slice(piece);
             }
+            // Toolpath on a part that says how it is cut: the router's Machine opened
+            // with it chosen under makes, and its toolpath written there (the Cut
+            // card's Toolpath, the slicer's analogue).
+            async toolpathPiece(piece, router) {
+                if (!this.openMachine(router)) return { refused: this.noMachine(router, 'Toolpath') };
+                const handle = this.machine && this.machine.handle;
+                if (!handle || handle.kind() !== 'router') return { refused: `${router}'s board has not said it is a router: Identify in its Machine asks it ($I), then Toolpath again` };
+                return handle.print.slice(piece);
+            }
             // A board's Machine by its port, pinned in this site or nowhere here --
             // what a link to the printer monitor opens.
             openMachineFor(port) {
@@ -8497,6 +8506,13 @@
                 // Slice, on a made piece or a part, names the printer it slices for.
                 if (action.startsWith('slice:piece:')) {
                     const done = await viewer.slicePiece(path, action.slice('slice:piece:'.length));
+                    if (done.refused) viewer.setStatus(`${intent.label}: ${done.refused}${tail}`, 'error');
+                    else viewer.setStatus(`${intent.label}: ${done.said}${tail}`, 'success');
+                    return;
+                }
+                // Toolpath, on a part that says how it is cut, names the router it is cut on.
+                if (action.startsWith('toolpath:piece:')) {
+                    const done = await viewer.toolpathPiece(path, action.slice('toolpath:piece:'.length));
                     if (done.refused) viewer.setStatus(`${intent.label}: ${done.refused}${tail}`, 'error');
                     else viewer.setStatus(`${intent.label}: ${done.said}${tail}`, 'success');
                     return;

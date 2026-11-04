@@ -719,6 +719,34 @@ def _build_bench_board(name: str, part: str, position: Vector3D, size: Vector3D)
     )
 
 
+# The router coupon (parts/router_coupon) on the router's table: its stock's
+# front-left top corner at the router's work zero, the plate the toolpath leaves
+# standing stock_margin in from it on each side (the part's own defaults).
+ROUTER_COUPON_SIZE = Vector3D(x=120.0, y=80.0, z=10.0)
+ROUTER_COUPON_MARGIN = 10.0
+ROUTER_COUPON_POSITION = Vector3D(
+    x=CNC_ROUTER_POSITION.x + anolex.WORK_ORIGIN.x + ROUTER_COUPON_MARGIN,
+    y=CNC_ROUTER_POSITION.y + anolex.WORK_ORIGIN.y + ROUTER_COUPON_MARGIN,
+    z=CNC_ROUTER_POSITION.z + anolex.WORK_ORIGIN.z,
+)
+
+
+def _build_router_coupon() -> Assembly:
+    """The router coupon on the router's table, where its toolpath cuts it: the
+    part walkthrough 20 takes through the subtractive loop. ``part_ref`` gives the
+    viewer the real STL and the toolpath the part's declared cuts; the Cube is the
+    envelope the site render and layout checks need."""
+    return Assembly(
+        name="router_coupon",
+        role="structure",
+        position=ROUTER_COUPON_POSITION,
+        base=Cube(size=ROUTER_COUPON_SIZE, comment="router coupon envelope (real STL in the viewer)"),
+        footprint=BoundingBox3D(min_point=Vector3D(), max_point=ROUTER_COUPON_SIZE),
+        category="structure",
+        part_ref="router_coupon",
+    )
+
+
 def _build_footpedal() -> Assembly:
     """The footpedal part on the bench. ``part_ref`` gives the viewer the real
     STL and gives the firmware seam the sketch in the same folder; the Cube
@@ -761,11 +789,41 @@ def create_example_site() -> Assembly:
             _build_storage(),
             _build_cnc_stand(),
             _build_cnc_router(),
+            _build_router_coupon(),
             _build_esp32_blink(),
             _build_footpedal(),
             *(_build_bench_board(*board) for board in BENCH_BOARDS),
         ],
     )
+
+
+def _stock_in_a_working_area(site: Assembly, violation: LayoutViolation) -> bool:
+    """Whether an overlap is a piece standing in a machine's working area -- stock
+    on the router's table, as the coupon is -- which is where a machine's work
+    belongs rather than two things in one place."""
+    if violation.kind != "overlap" or len(violation.paths) != 2:
+        return False
+    pieces = [next((c for c in site.children if c.name == path), None) for path in violation.paths]
+    if any(piece is None for piece in pieces):
+        return False
+    for machine, piece in (pieces, pieces[::-1]):
+        if machine.build_volume is None or machine.build_origin is None:
+            continue
+        bounds = piece.world_bounds()
+        if bounds is None:
+            continue
+        low = machine.position + machine.build_origin
+        high = low + machine.build_volume
+        if (
+            low.x <= bounds.min_point.x
+            and low.y <= bounds.min_point.y
+            and low.z <= bounds.min_point.z + 1e-6
+            and bounds.max_point.x <= high.x
+            and bounds.max_point.y <= high.y
+            and bounds.max_point.z <= high.z + 1e-6
+        ):
+            return True
+    return False
 
 
 def validate_garage_layout(site: Assembly) -> LayoutReport:
@@ -780,7 +838,9 @@ def validate_garage_layout(site: Assembly) -> LayoutReport:
     above, just not against this bench-specific rule -- they were never
     meant to be bench-mounted in the first place.
     """
-    violations: List[LayoutViolation] = list(site.validate().violations)
+    violations: List[LayoutViolation] = [
+        v for v in site.validate().violations if not _stock_in_a_working_area(site, v)
+    ]
 
     bench = next((s for s in site.children if s.name == "workbench"), None)
     if bench is None:

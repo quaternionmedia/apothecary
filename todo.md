@@ -54,6 +54,12 @@ here: run `apothecary problems`.
   wait hanging; the test servers answered throughout. What to measure next:
   the frames per second the headless page draws during the run, and what
   moves the camera between frames once the hand has stopped.
+- A part through the subtractive loop, design to monitoring, the loop the app
+  is built around from here: slice 1 (a part's declared cuts, the app's own
+  toolpath, Cut from here, the job's operation, the simulated router's
+  footprint, one iteration executed in walkthrough 20) is built; next the
+  bench, then the cut watched from the Working space and a camera:
+  [docs/plans/subtractive-loop-2026-11-04.md](docs/plans/subtractive-loop-2026-11-04.md).
 - A host-side bound on where the print head ends. Each jog's move is capped
   (`JOG_MAX_MM`), jogs one after another add up, and the firmware's soft
   endstops, after a homing, are what keeps the head on the machine
