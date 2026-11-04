@@ -121,7 +121,9 @@ def test_the_toolbar_button_and_ctrl_right_click_open_it_too(page: Page, ring_ur
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     assert _title(page) == "cnc_router"
     # Nothing pinned: no Device option at all, not a greyed one, and no cell moved.
+    # A machine drawn from a part carries Part, as printer_1 does.
     assert _wedges(page) == {
+        "1": "Part",
         "8": "Step in",
         "6": "Move",
         "2": "Why this",
