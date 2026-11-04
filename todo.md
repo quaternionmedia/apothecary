@@ -40,6 +40,20 @@ here: run `apothecary problems`.
   controller, which way it homes, and the bounds `apothecary/firmware/grbl.py`
   takes from the maker's figures. No toolpath is made here: a cut is a CAM
   post's file ([docs/cnc.md](docs/cnc.md#not-built)).
+- The bench walkthrough crawls in the full browser order. In `pytest tests/e2e
+  --start-server`, `tests/e2e/test_docs_bench_walkthrough.py` ran out its cap
+  (`Timeout (0:02:50)`) in seven of ten runs, and passed the rest in about seventy
+  seconds; alone it passes, and the seven files up to it stall as the whole
+  suite does. It stalls on main's own tree (`baaedee`, under Python 3.14) as
+  on a branch above it (Python 3.12), so it predates the router. The test's
+  frame, taken every twenty seconds through one stall, was in
+  `viewer_ready.settled` each time -- its wait for the camera at rest
+  (`CAMERA_AT_REST`, three hundred frames at most per call), under `by_hand`
+  framing printer_1 for the third picture, then under the picture itself --
+  so the waits run to their frame bound one after another rather than one
+  wait hanging; the test servers answered throughout. What to measure next:
+  the frames per second the headless page draws during the run, and what
+  moves the camera between frames once the hand has stopped.
 - A host-side bound on where the print head ends. Each jog's move is capped
   (`JOG_MAX_MM`), jogs one after another add up, and the firmware's soft
   endstops, after a homing, are what keeps the head on the machine
