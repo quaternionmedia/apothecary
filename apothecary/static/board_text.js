@@ -43,6 +43,29 @@ export function tempsText(st) {
     return `T ${heaterText(st.hotends[0])}${st.bed ? " · B " + heaterText(st.bed) : ""}`;
 }
 
+// A router's poll as one line: its state and the controller's word, the tool in the
+// work zero, the spindle, and the alarm when it is in one.
+export function routerLine(st) {
+    if (!st) return "not polled yet";
+    if (st.state === "offline") return `offline${st.raw && st.raw[0] ? " " + st.raw[0] : ""}`;
+    let line = st.state + (st.machine_state ? ` (${st.machine_state})` : "");
+    const p = st.work_position || st.position;
+    if (p) line += ` · X${p.x.toFixed(1)} Y${p.y.toFixed(1)} Z${p.z.toFixed(2)}`;
+    if (st.spindle) line += st.spindle.on ? ` · spindle ${st.spindle.rpm.toFixed(0)} rpm` : " · spindle off";
+    if (st.alarm != null) line += ` · alarm ${st.alarm}`;
+    return line;
+}
+
+// Where a router's tool stands in its working area, from the machine position its
+// controller reports: a Grbl machine homed to its maximum switches counts down from
+// that corner, so the tool is at mpos + travel. `volume` is the working area.
+export function routerToolPosition(st, volume) {
+    const p = st && st.position;
+    if (!p) return null;
+    const [vx, vy, vz] = volume || [0, 0, 0];
+    return { x: p.x + vx, y: p.y + vy, z: p.z + vz };
+}
+
 // A printer's poll as one line: state, temperatures, where the head is, how far a
 // print on its card is, and the filament when it has run out.
 export function printerLine(st) {
@@ -83,6 +106,20 @@ export function boardSummary(board) {
     const d = board && board.device;
     if (!d) return { kind: "none", icon: "⌁", state: "off", short: "not connected", line: "not connected", cls: "off", title: "not connected" };
     const label = boardLabel(d);
+    if (d.printer && d.printer.machine === "router") {
+        const st = board.status;
+        const word = st ? st.state : null;
+        const parts = [];
+        if (st && st.job) parts.push(`${st.job.kind} ${(st.job.progress * 100).toFixed(0)}%`);
+        return {
+            kind: "router", icon: "🪚", state: word || "not polled",
+            readings: null, temps: null, extra: parts, job: !!(st && st.job),
+            short: st ? word : "not polled yet",
+            line: routerLine(st),
+            cls: word === "running" ? "printing" : (word === "offline" ? "offline" : (word === "alarm" ? "mismatch" : "")),
+            title: `${label} on ${d.port} — ${routerLine(st)}`,
+        };
+    }
     if (d.printer) {
         const st = board.status;
         const word = stateWord(st);

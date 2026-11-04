@@ -769,7 +769,7 @@ def _last_status_with(port: str, job: dict) -> gcode.PrinterStatus:
     status.job = dict(job)
     status.synced = []
     if job.get("kind") in STREAMED and status.state == "idle":
-        status.state = "printing"
+        status.state = busy_word(job["kind"])
     return status
 
 
@@ -1239,7 +1239,10 @@ class PrintJob:
         }
 
     def pause(self) -> None:
-        if self.finished is None and self.stage == self.running_stage:
+        # A router's lines are answered when queued, so a cut whose last line is sent
+        # is still running on the controller (``finishing``): it is held the same.
+        if self.finished is None and self.stage in (self.running_stage, "finishing"):
+            self._paused_from = self.stage
             self._go.clear()
             self.stage = "paused"
             self._realtime("HOLD")  # a router stops where it is; a printer finishes its queue
@@ -1247,7 +1250,7 @@ class PrintJob:
 
     def resume(self) -> None:
         if self.finished is None and self.stage == "paused":
-            self.stage = self.running_stage
+            self.stage = getattr(self, "_paused_from", self.running_stage)
             self._realtime("RESUME")
             self._go.set()
             self._announce()
@@ -1265,6 +1268,59 @@ class PrintJob:
 
     def _timeout(self, cmd: str) -> float:
         return grbl.line_timeout(cmd) if self.grbl else gcode.line_timeout(cmd)
+
+    # The planner's room, as the controller's last status report said it (``Bf:``,
+    # blocks free), counted down a line at a time between reports; None when the
+    # controller does not say (grbl 1.1 reports it only when $10 asks), and the
+    # line's `ok` is the flow control then, as a printer's is.
+    _room: Optional[int] = None
+    _room_known = False
+
+    def _room_for(self, link: gcode.GcodeLink, cmd: str) -> bool:
+        """Wait, with the link free, until the controller's planner has room for
+        ``cmd``: a sender that counts the planner's blocks never blocks the port on a
+        full one, so a hold and a poll go through meanwhile. False when the job was
+        paused or stopped while waiting."""
+        if cmd.split(" ", 1)[0] not in grbl.PLANNED:
+            return True
+        if not self._room_known or (self._room is not None and self._room <= 1):
+            end = time.monotonic() + grbl.JOB_MOVE_TIMEOUT_S
+            while True:
+                try:
+                    status, _lines = grbl.report(link, wait=1.0)
+                except (gcode.LinkBusy, ToolchainError):
+                    status = None
+                if status is not None:
+                    self._room_known = True
+                    buffer = status["buffer"]
+                    if buffer:
+                        self._room = buffer["planner"]
+                    elif status["machine_state"] == "Idle":
+                        self._room = grbl.PLANNER_BLOCKS  # idle: the whole planner is free
+                    else:
+                        self._room = None  # busy and not saying: the `ok` is the flow control
+                    if self._room is None or self._room >= 1:
+                        break
+                if self._stop.is_set() or not self._go.is_set() or time.monotonic() > end:
+                    return False
+                time.sleep(0.05)
+        if self._room is not None:
+            self._room -= 1
+        return True
+
+    def _await_idle(self, link: gcode.GcodeLink) -> None:
+        """Poll the controller until it is idle, in alarm or offline, or the job is
+        cancelled, or a move's time runs out; a held controller is waited for."""
+        end = time.monotonic() + grbl.JOB_MOVE_TIMEOUT_S
+        while time.monotonic() < end and not self._stop.is_set():
+            try:
+                status, _lines = grbl.report(link, wait=1.0)
+            except gcode.LinkBusy:
+                time.sleep(0.2)
+                continue
+            if status["machine_state"] not in ("Run", "Jog", "Home", "Hold", "Door"):
+                return
+            time.sleep(0.3)
 
     def cancel(self, quiet: bool = False) -> None:
         """Stop feeding; ``quiet`` skips the safe-off (the board is already halted)."""
@@ -1337,6 +1393,8 @@ class PrintJob:
                 if self._stop.is_set():
                     outcome = "cancelled"
                     break
+                if self.grbl and not self._room_for(link, cmd):
+                    continue  # paused or stopped while waiting: the loop's head decides
                 self.current = cmd
                 lines = link.command(cmd, timeout=self._timeout(cmd), origin=kind, quiet=True)
                 tail = (tail + [f"> {cmd}", *lines])[-200:]
@@ -1345,9 +1403,21 @@ class PrintJob:
                     self._announce()
                 if self.sent % PRINT_LOG_EVERY == 0:
                     link.log.add("sys", f"{kind}: {self.sent}/{self.total} lines sent", kind)
-                time.sleep(0.001)  # let a poll take the lock between lines
+                # Let a poll take the link between lines: a moment when one waits for
+                # it, since the next line would take the lock back the instant it is
+                # let go; a tick otherwise.
+                time.sleep(0.02 if link.waiters else 0.001)
             else:
-                self.stage = "done"
+                if self.grbl:
+                    # The last line is answered when it is queued, not when it is done:
+                    # the router is finished when its controller is idle again.
+                    self.stage = "finishing"
+                    self._announce()
+                    self._await_idle(link)
+                if self._stop.is_set():
+                    outcome = "cancelled"
+                else:
+                    self.stage = "done"
             if outcome == "cancelled":
                 self.stage = "cancelled"
         except (ToolchainError, ValueError, OSError) as exc:

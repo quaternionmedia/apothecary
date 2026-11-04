@@ -1,7 +1,9 @@
 /* What a printer wears in a three.js scene, wherever that scene is: the
  * build volume as a wire box on the printer's base, the bed plane, a nozzle
  * marker at the position the board last reported, and -- when there is a
- * bed reading -- the mesh as a relief over the bed.
+ * bed reading -- the mesh as a relief over the bed. A router wears the same:
+ * its working area, its table and its tool, placed by the position the page
+ * computes from its controller's (board_text.js's routerToolPosition).
  *
  * One group, in the printer's own frame (apothecary's z-up, relative to the
  * printer's origin); the caller places it: the world scene at the printer's
@@ -257,7 +259,7 @@ export function sayBoard(anchors, key, sum, device) {
     if (sum.kind === "devkit") {
         line = `⚡ ${esc(device.label)} · <span class="state">${esc(sum.short)}</span>`;
     } else {
-        const parts = [`🖨 <span class="state">${esc(sum.state)}</span>`];
+        const parts = [`${sum.icon || "🖨"} <span class="state">${esc(sum.state)}</span>`];
         if (sum.readings) parts.push(sum.readings);
         parts.push(...sum.extra.map(esc));
         line = parts.join(" · ");

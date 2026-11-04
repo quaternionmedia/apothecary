@@ -32,6 +32,14 @@ here: run `apothecary problems`.
   never declared, and `ledpin` is pin 6, which `b5` reads too. It prints no
   `apothecary footpedal: hello`, since its serial line carries Hairless MIDI, so
   the made thing's Query hears its hello only from the demo's scripted monitor.
+- The router at the bench. The AnoleX 4060-Evo Ultra 2 is drawn, its
+  controller's dialect spoken and its Machine built against the simulated
+  controller; the machine itself has not answered this seam. Section I of
+  [docs/bench-checklist.md](docs/bench-checklist.md) is what a person confirms
+  there: what `$I` and `$$` say, the bridge and whether its DTR resets the
+  controller, which way it homes, and the bounds `apothecary/firmware/grbl.py`
+  takes from the maker's figures. No toolpath is made here: a cut is a CAM
+  post's file ([docs/cnc.md](docs/cnc.md#not-built)).
 - A host-side bound on where the print head ends. Each jog's move is capped
   (`JOG_MAX_MM`), jogs one after another add up, and the firmware's soft
   endstops, after a homing, are what keeps the head on the machine

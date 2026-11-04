@@ -5,6 +5,9 @@ with every machine simulated:
 
 - **printer_1's mainboard** is pinned to the simulated Ender
   (``firmware/gcode.py``'s ``SimulatedPrinter``), idle, on ``/dev/ttyFAKE1``;
+- **cnc_router's controller** is pinned to the simulated GRBL router
+  (``firmware/grbl.py``'s ``SimulatedRouter``), idle with its tool over the middle
+  of the table, on ``/dev/ttyFAKE3``;
 - **an ESP32 devkit** on ``/dev/ttyFAKE2`` runs whatever was last flashed to it and
   says that sketch's hello (the scripted bench's ``FAKE_DEVKIT``);
 - **arduino-cli, cargo and espflash** are the scripted ones the browser suites run
@@ -58,6 +61,8 @@ SITE = "garage"
 PRINTER = "/dev/ttyFAKE1"  # the scripted arduino-cli's unmatched board: the simulated Ender
 BOARD = "printer_1.frame_system.mainboard"
 DEVKIT = "/dev/ttyFAKE2"  # the scripted bench's devkit
+ROUTER = "/dev/ttyFAKE3"  # the scripted bench's router controller: the simulated Grbl_ESP32
+CONTROLLER = "cnc_router.frame_system.controller"
 CONSOLE_HZ = 10  # the simulated console's levels a second, as `lighting simulate` sends them
 
 log = logging.getLogger(__name__)
@@ -179,6 +184,7 @@ def prepare(root: Optional[Path] = None) -> Demo:
         # and no real port is opened or listed.
         "APOTHECARY_SERIAL_ENGINE": "simulated",
         "APOTHECARY_SIMULATED_PRINTER": "idle",
+        "APOTHECARY_SIMULATED_ROUTER": ROUTER,  # that port answers as the simulated router
         "APOTHECARY_SIMULATED_DEVKIT": "",  # the scripted arduino-cli finds the devkit
         "ARDUINO_CLI": str(write_fake_arduino_cli(bench / "arduino-cli")),
         "CARGO": str(write_fake_cargo(bench / "cargo")),
@@ -188,6 +194,7 @@ def prepare(root: Optional[Path] = None) -> Demo:
         # the person named another (simulated:slow, simulated:down, ...).
         "APOTHECARY_QMCP": os.environ.get("APOTHECARY_QMCP", "").strip() or "simulated",
         "FAKE_DEVKIT": "1",
+        "FAKE_ROUTER": "1",  # the scripted arduino-cli lists the router's port too
     }
     variants = _variants_repo(root / "variants.git")
     if variants is not None:
@@ -201,15 +208,22 @@ def prepare(root: Optional[Path] = None) -> Demo:
 
 def seed() -> Optional[str]:
     """printer_1's mainboard pinned to the simulated Ender, identified (``M115``) as
-    the bench's real board is: what it is pinned to, or None when it could not be
-    (the page's Device section pins it by hand then). Refuses outside the demo's
-    environment, where a port would be a real one."""
+    the bench's real board is, and cnc_router's controller to the simulated router,
+    identified (``$I``): what the printer's is pinned to, or None when it could not
+    be (the page's Device section pins it by hand then; the router's the same, said
+    in the log). Refuses outside the demo's environment, where a port would be a
+    real one."""
     from .firmware import devices
     from .firmware.gcode import serial_engine
     from .firmware.toolchains import ToolchainError
 
     if running() is None or serial_engine() != "simulated":
         raise RuntimeError("the demo's pin is seeded in the demo's environment only")
+    try:
+        devices.identify_printer(ROUTER)
+        devices.get_state().set_binding(SITE, CONTROLLER, devices.stable_identity(ROUTER))
+    except (ToolchainError, OSError) as exc:
+        log.warning("demo: cnc_router's controller not pinned: %s", exc)
     try:
         devices.identify_printer(PRINTER)
         identity = devices.stable_identity(PRINTER)

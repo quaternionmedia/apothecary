@@ -84,7 +84,7 @@ def machine_ready(
 
     ``by_hand`` lays it out as a person does, the world's ring's Panels › Windows ›
     Machine view: for a walk, whose pictures show what a person pressed."""
-    known = f".kind-{kind}" if kind else ":is(.kind-printer, .kind-devkit)"
+    known = f".kind-{kind}" if kind else ":is(.kind-printer, .kind-router, .kind-devkit)"
     expect(page.locator(f"{MACHINE} > .machine{known}")).to_be_attached(timeout=timeout)
     if by_hand:
         rings.on_world(page, "Panels", "Windows", by_id("machine").cell)

@@ -607,6 +607,12 @@ class GcodeLink:
         self._t = transport
         self._lock = threading.RLock()
         self._write_lock = threading.Lock()  # one line on the wire at a time
+        # The turnstile: an exchange takes it before the lock and lets it go once it
+        # holds the lock, so one that waits with a bound (a poll between two streamed
+        # lines) gets the link before the stream's next line, which would otherwise
+        # take the lock back the instant it let go. ``waiters`` counts the bounded ones.
+        self._turn = threading.Lock()
+        self.waiters = 0
         self._buf = b""
         self.unsolicited: List[str] = []
         # The last `ALARM:N` the board said, whenever it said it: a GRBL status report
@@ -621,6 +627,25 @@ class GcodeLink:
     # multiplied by this. 1 against hardware; the tests' scripted boards answer
     # at once, so the tests set it near 0 rather than wait out real silences.
     time_scale: float = 1.0
+
+    def _acquire(self, wait: Optional[float]) -> bool:
+        """The link's lock, waiting ``wait`` seconds at most (forever for None), through
+        the turnstile: exchanges take the lock in the order they asked for it."""
+        if wait is None:
+            with self._turn:
+                self._lock.acquire()
+            return True
+        self.waiters += 1
+        try:
+            end = time.monotonic() + wait
+            if not self._turn.acquire(timeout=wait):
+                return False
+            try:
+                return self._lock.acquire(timeout=max(0.0, end - time.monotonic()))
+            finally:
+                self._turn.release()
+        finally:
+            self.waiters -= 1
 
     def _read_line(self, timeout: float) -> Optional[str]:
         end = time.monotonic() + timeout
@@ -702,7 +727,7 @@ class GcodeLink:
         cmd = cmd.strip()
         if not cmd or "\n" in cmd:
             raise ValueError("one G-code command per call")
-        if not self._lock.acquire(timeout=-1 if wait is None else wait):
+        if not self._acquire(wait):
             raise LinkBusy(
                 f"{self.port}: the link is busy ({self.job['kind'] if self.job else 'an exchange'})"
             )
@@ -764,7 +789,7 @@ class GcodeLink:
             if not self._lock.acquire(blocking=False):
                 return []
         else:
-            if not self._lock.acquire(timeout=-1 if wait is None else wait):
+            if not self._acquire(wait):
                 raise LinkBusy(
                     f"{self.port}: the link is busy ({self.job['kind'] if self.job else 'an exchange'})"
                 )

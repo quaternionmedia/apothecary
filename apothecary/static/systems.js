@@ -75,7 +75,8 @@ export function mountSystems(panels, systems, hooks = {}) {
         }
         const attach = ({ kind = null, without = [] } = {}) => {
             for (const sec of system.sections) {
-                if ((sec.kind && sec.kind !== kind) || without.includes(sec.id)) { panels.unregister(sec.window); continue; }
+                const fits = !sec.kind || (Array.isArray(sec.kind) ? sec.kind.includes(kind) : sec.kind === kind);
+                if (!fits || without.includes(sec.id)) { panels.unregister(sec.window); continue; }
                 if (panels.state(sec.window)?.registered) continue;  // there already, where a person left it
                 panels.register(sec.window, {
                     title: sec.title, hint: `${system.title}: ${sec.holds}`, group: system.group,

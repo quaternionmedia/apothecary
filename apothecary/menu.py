@@ -112,6 +112,10 @@ class Device(BaseModel):
     printer: bool = False
     armed: bool = False
     bound: bool = False
+    # The kind of machine a G-code board drives, when the page knows it: ``printer``
+    # or ``router`` (apothecary/jobs.py's machine kinds). A router's Control ring is
+    # its own: no heaters or bed, but the spindle, work zero and a probe.
+    machine: Optional[str] = None
 
 
 class CameraSeen(BaseModel):
@@ -1593,8 +1597,11 @@ def control_options(device: Device) -> List[Option]:
     Machine's control chain, which is where the latch is checked. Jog is
     seated so the keypad is the jog pad: Y+ up, X+ right, Y- down, X- left,
     and Z+ and Z- in the right-hand corners. Stop is E-STOP and is marked
-    destructive, since the board halts until it is reset.
+    destructive, since the board halts until it is reset. A router's ring is
+    ``router_control_options``.
     """
+    if device.machine == "router":
+        return router_control_options(device)
     return [
         Option(
             id="control:heat",
@@ -1662,6 +1669,75 @@ def control_options(device: Device) -> List[Option]:
                 Option(id="control:motors-off", label="Off", action="control:motors-off"),
                 Option(id="control:quickstop", label="Quickstop", action="control:quickstop"),
                 Option(id="control:break-wait", label="Break wait", action="control:break-wait"),
+            ],
+        ),
+        Option(id="control:estop", label="Stop", action="control:estop", destructive=True),
+        (
+            Option(id="control:disarm", label="Disarm", action="control:disarm")
+            if device.armed
+            else Option(id="control:arm", label="Arm", action="control:arm")
+        ),
+    ]
+
+
+def router_control_options(device: Device) -> List[Option]:
+    """A router's control ring: every allowlisted thing its controller can be told
+    (``firmware.grbl.CONTROL_CODES`` and the realtime characters), sent by the
+    Machine's control chain as a printer's are. Home, Unlock and Jog first, as a
+    person homes before anything else; the spindle; work zero and the probe
+    together, since a probe is how Z is zeroed; the cut's own verbs; Stop is the
+    soft reset, destructive as E-STOP is. Eight, as a ring holds.
+    """
+    return [
+        Option(
+            id="control:home",
+            label="Home",
+            children=[
+                Option(id="control:home:all", label="All", action="control:home"),
+                Option(id="control:home-x", label="X", action="control:home-x"),
+                Option(id="control:home-y", label="Y", action="control:home-y"),
+                Option(id="control:home-z", label="Z", action="control:home-z"),
+            ],
+        ),
+        Option(id="control:unlock", label="Unlock", action="control:unlock"),
+        Option(
+            id="control:jog",
+            label="Jog",
+            children=[
+                Option(id=f"control:jog:{axis}", label=axis, action=f"control:jog:{axis}")
+                for axis in ("Y+", "X+", "Y-", "X-", "Z+", "Z-")
+            ]
+            + [Option(id="control:jog-cancel", label="Stop jog", action="control:jog-cancel")],
+        ),
+        Option(
+            id="control:spindle",
+            label="Spindle",
+            children=[
+                Option(id="control:spindle-on", label="On", action="control:spindle-on"),
+                Option(id="control:spindle-off", label="Off", action="control:spindle-off"),
+            ],
+        ),
+        Option(
+            id="control:zero",
+            label="Zero",
+            children=[
+                Option(id="control:zero-xyz", label="XYZ here", action="control:zero-xyz"),
+                Option(id="control:zero-z", label="Z here", action="control:zero-z"),
+                Option(id="control:go-zero", label="Go to zero", action="control:go-zero"),
+                Option(id="control:top-z", label="Top of Z", action="control:top-z"),
+                Option(id="control:probe-z", label="Probe Z", action="control:probe-z"),
+            ],
+        ),
+        # The cut, whichever is running: a hold and a resume reach the controller at
+        # once and the stream with them; Send file starts a cut of the file chosen.
+        Option(
+            id="control:job",
+            label="Cut",
+            children=[
+                Option(id="control:job-resume", label="Resume", action="control:job-resume"),
+                Option(id="control:job-hold", label="Hold", action="control:job-hold"),
+                Option(id="control:job-abort", label="Abort", action="control:job-abort"),
+                Option(id="print:start", label="Send file", action="print:start"),
             ],
         ),
         Option(id="control:estop", label="Stop", action="control:estop", destructive=True),

@@ -23,6 +23,8 @@ from pathlib import Path
 # hello, as esp32_blink does, at boot and every ten blinks. Each fake keeps the
 # flashes in fake-boards.json beside itself, so the fakes in one folder are one
 # bench. Without FAKE_DEVKIT the monitor says fake_blink, whatever was flashed.
+# With FAKE_ROUTER set, a third port, /dev/ttyFAKE3 (a CP2102 bridge too), is
+# listed: the simulated GRBL router's, when APOTHECARY_SIMULATED_ROUTER names it.
 FAKE_BOARD = r"""
 def _boards_file():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "fake-boards.json")
@@ -52,6 +54,7 @@ FAKE_ARDUINO_CLI = textwrap.dedent(r"""
         f.write(json.dumps(args) + "\n")
     cmd = " ".join(args[:2])
     devkit = bool(os.environ.get("FAKE_DEVKIT"))
+    router = bool(os.environ.get("FAKE_ROUTER"))
     port = args[args.index("--port") + 1] if "--port" in args else None
     if cmd == "version --json":
         print(json.dumps({"Application": "arduino-cli", "VersionString": "9.9.9"}))
@@ -67,6 +70,11 @@ FAKE_ARDUINO_CLI = textwrap.dedent(r"""
                                    "protocol": "serial",
                                    "properties": {"vid": "0x10c4", "pid": "0xea60",
                                                   "serialNumber": "FAKEDEVKIT2"}}})
+        if router:
+            ports.append({"port": {"address": "/dev/ttyFAKE3", "label": "/dev/ttyFAKE3",
+                                   "protocol": "serial",
+                                   "properties": {"vid": "0x10c4", "pid": "0xea60",
+                                                  "serialNumber": "FAKEROUTER3"}}})
         print(json.dumps({"detected_ports": ports}))
     elif cmd == "board listall":
         print(json.dumps({"boards": [{"name": "Arduino Uno", "fqbn": "arduino:avr:uno"},

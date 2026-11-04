@@ -413,6 +413,11 @@ def normalise_control(command: str) -> str:
 JOB_MOVE_TIMEOUT_S = 900.0
 JOB_LINE_TIMEOUT_S = 30.0
 MOVE_CODES = {"G0", "G1", "G2", "G3", "G38.2", "G38.3", "G38.4", "G38.5", "G4", "$H"}
+# The lines that take a block of the planner: a sender counts its room for these.
+PLANNED = {"G0", "G00", "G1", "G01", "G2", "G02", "G3", "G03", "G4", "G53"}
+# The blocks an idle controller's planner holds, the smallest Grbl builds with: what a
+# sender may queue before the next report says how many are free.
+PLANNER_BLOCKS = 15
 
 
 def line_timeout(cmd: str) -> float:
@@ -434,9 +439,12 @@ class SimulatedRouter:
     """A pretend Grbl_ESP32 behind the transport slot: no port, no hardware.
 
     Answers ``$I``, ``?``, ``$G``, ``$$``, ``$#``, homing, unlocking, jogs and
-    moves (each taking the time its distance and feed say, so a job streams and
-    a hold has something to stop), the spindle, work zero and a probe, and the
-    realtime characters. Its machine coordinates are negative from the home
+    moves, the spindle, work zero and a probe, and the realtime characters. Moves
+    and dwells go into a planner queue fifteen deep, as Grbl's does: a line is
+    answered ``ok`` once queued, the queue runs in its own time (each move the
+    time its distance and feed say), and a line that finds the queue full waits
+    for room, as a sender counting characters would. Homing answers when it is
+    done, as Grbl's does. Its machine coordinates are negative from the home
     corner at the back right and the top of Z, as a Grbl machine homed to its
     maximum switches has them, so the tool stands in the working area at
     ``mpos + travel``. It starts idle with the tool over the middle of the
@@ -451,6 +459,9 @@ class SimulatedRouter:
     TRAVEL = {"x": 400.0, "y": 600.0, "z": 80.0}
     RAPID = 4000.0  # mm/min, the maker's figure for X and Y
     PULL_OFF = 3.0  # mm back from the switches after homing
+    PLANNER = 15  # blocks the queue holds before a line waits for room
+    REALTIME_BYTES = (ord("?"), ord("!"), ord("~"), 0x18, 0x85)
+    QUEUED = ("G0", "G00", "G1", "G01", "G2", "G02", "G3", "G03", "G4", "G53")
 
     def __init__(self, port: str, baud: int):
         self.port, self.baud = port, baud
@@ -474,69 +485,56 @@ class SimulatedRouter:
         self.s = 0.0
         self.f = 0.0
         self.feed_override = 100
-        # A move in flight: from where, to where, since when, how long.
-        self._move: Optional[Tuple[dict, dict, float, float, str]] = None
-        self._held_at: Optional[float] = None  # the fraction done when held
-        # Multiplies every move's and dwell's time: 1 is real time, 0 skips them.
+        # The planner: blocks waiting to run, each a target and a feed (a move) or a
+        # length of time (a dwell), and the one running: its start, its end, when it
+        # began, how long it takes, and what it is (a move, a jog, homing, a dwell).
+        self._queue: List[tuple] = []
+        self._current: Optional[Tuple[dict, dict, float, float, str]] = None
+        self._held_at: Optional[float] = None  # the fraction of the current block done when held
+        # Multiplies every block's time: 1 is real time, 0 skips them.
         self.time_scale = float(os.environ.get("APOTHECARY_SIMULATED_SPEED", "1"))
         self.probe: Optional[dict] = None
         self.settings = {
-            0: 10,
-            1: 255,
-            2: 0,
-            3: 0,
-            4: 0,
-            5: 0,
-            6: 0,
-            10: 1,
-            11: 0.010,
-            12: 0.002,
-            13: 0,
-            20: 1,
-            21: 0,
-            22: 1,
-            23: 3,
-            24: 200.000,
-            25: 2000.000,
-            26: 250,
-            27: 3.000,
-            30: 24000,
-            31: 0,
-            32: 0,
-            100: 800.000,
-            101: 800.000,
-            102: 800.000,
-            110: 4000.000,
-            111: 4000.000,
-            112: 2000.000,
-            120: 200.000,
-            121: 200.000,
-            122: 100.000,
-            130: 400.000,
-            131: 600.000,
-            132: 80.000,
-        }
+            0: 10, 1: 255, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 10: 1, 11: 0.010, 12: 0.002,
+            13: 0, 20: 1, 21: 0, 22: 1, 23: 3, 24: 200.000, 25: 2000.000, 26: 250,
+            27: 3.000, 30: 24000, 31: 0, 32: 0, 100: 800.000, 101: 800.000, 102: 800.000,
+            110: 4000.000, 111: 4000.000, 112: 2000.000, 120: 200.000, 121: 200.000,
+            122: 100.000, 130: 400.000, 131: 600.000, 132: 80.000,
+        }  # fmt: skip
 
-    # -- where the tool is, as time passes ----------------------------------------------
+    # -- the planner, as time passes -----------------------------------------------------
     def _settle(self) -> None:
-        """Finish a move whose time has passed."""
-        if self._move is None:
-            return
-        start, end, since, length, after = self._move
+        """Run the queue up to now: finish the blocks whose time has passed, start the next."""
         if self._held_at is not None:
             return
-        if time.monotonic() - since >= length:
+        while True:
+            if self._current is None:
+                if not self._queue:
+                    if self.state in ("Run", "Jog", "Home"):
+                        self.state = "Idle"
+                    return
+                target, feed, kind = self._queue.pop(0)
+                start = dict(self.pos)
+                if kind == "dwell":
+                    length = feed * self.time_scale  # a dwell's "feed" is its seconds
+                else:
+                    dist = sum((target[k] - start[k]) ** 2 for k in "xyz") ** 0.5
+                    length = (dist / max(feed, 1.0)) * 60.0 * self.time_scale
+                self._current = (start, dict(target), time.monotonic(), length, kind)
+                self.state = {"jog": "Jog", "home": "Home"}.get(kind, "Run")
+            start, end, since, length, kind = self._current
+            if time.monotonic() - since < length:
+                return
             self.pos = dict(end)
-            self._move = None
-            if after == "home":
+            self._current = None
+            if kind == "home":
                 self.homed = True
                 self.alarm = None
-            self.state = "Idle"
 
     def _where(self) -> dict:
-        if self._move is None:
+        if self._current is None:
             return dict(self.pos)
-        start, end, since, length, _ = self._move
+        start, end, since, length, _ = self._current
         done = (
             self._held_at
             if self._held_at is not None
@@ -544,16 +542,18 @@ class SimulatedRouter:
         )
         return {k: round(start[k] + (end[k] - start[k]) * done, 3) for k in "xyz"}
 
-    def _begin_move(self, target: dict, feed: float, state: str = "Run", after: str = "") -> None:
-        start = self._where()
-        dist = sum((target[k] - start[k]) ** 2 for k in "xyz") ** 0.5
-        length = (dist / max(feed, 1.0)) * 60.0 * self.time_scale
-        self._move = (start, dict(target), time.monotonic(), length, after)
-        self._held_at = None
-        self.state = state
+    def _end_of_queue(self) -> dict:
+        """Where the tool will be once every queued block has run."""
+        if self._queue:
+            return dict(self._queue[-1][0])
+        return dict(self._current[1]) if self._current is not None else dict(self.pos)
+
+    def _enqueue(self, target: dict, feed: float, kind: str = "move") -> None:
+        self._queue.append((dict(target), feed, kind))
+        self._settle()
 
     def _target(self, args: Dict[str, str], relative: bool) -> dict:
-        here = self._where()
+        here = self._end_of_queue()
         target = dict(here)
         for axis in "xyz":
             if axis.upper() in args:
@@ -561,31 +561,35 @@ class SimulatedRouter:
                 target[axis] = (here[axis] + v) if relative else (v + self.wco[axis])
         return target
 
+    def _busy(self) -> bool:
+        self._settle()
+        return self._current is not None or bool(self._queue)
+
     # -- the realtime characters ------------------------------------------------------
     def _realtime(self, byte: int) -> None:
         self._settle()
         if byte == ord("?"):
             self._pending += (self._status() + "\n").encode()
         elif byte == ord("!"):
-            if self._move is not None and self._held_at is None:
-                self._held_at = self._where_fraction()
-                self.state = "Hold"
-            elif self.state == "Idle":
+            if self.state in ("Run", "Jog", "Home", "Idle") and self._held_at is None:
+                self._held_at = self._fraction_done() if self._current is not None else None
                 self.state = "Hold"
         elif byte == ord("~"):
             if self.state == "Hold":
-                if self._move is not None and self._held_at is not None:
-                    start, end, _since, length, after = self._move
+                if self._current is not None and self._held_at is not None:
+                    start, end, _since, length, kind = self._current
                     left = length * (1.0 - self._held_at)
-                    self._move = (self._where(), end, time.monotonic(), left, after)
+                    self._current = (self._where(), end, time.monotonic(), left, kind)
                     self._held_at = None
-                    self.state = "Run"
+                    self.state = {"jog": "Jog", "home": "Home"}.get(kind, "Run")
                 else:
-                    self.state = "Idle"
+                    self._held_at = None
+                    self.state = "Idle" if not self._queue else "Run"
         elif byte == 0x18:
-            moving = self._move is not None and self._held_at is None
+            moving = self._current is not None and self._held_at is None
             self.pos = self._where()
-            self._move, self._held_at = None, None
+            self._queue.clear()
+            self._current, self._held_at = None, None
             self.spindle_on, self.s = False, 0.0
             if moving:
                 self.state, self.alarm, self.homed = "Alarm", 3, False
@@ -598,10 +602,11 @@ class SimulatedRouter:
         elif byte == 0x85:
             if self.state == "Jog":
                 self.pos = self._where()
-                self._move, self.state = None, "Idle"
+                self._queue.clear()
+                self._current, self.state = None, "Idle"
 
-    def _where_fraction(self) -> float:
-        start, end, since, length, _ = self._move  # type: ignore[misc]
+    def _fraction_done(self) -> float:
+        start, end, since, length, _ = self._current  # type: ignore[misc]
         return 1.0 if length <= 0 else min(1.0, (time.monotonic() - since) / length)
 
     def _status(self) -> str:
@@ -609,11 +614,14 @@ class SimulatedRouter:
         mpos = ",".join(f"{where[k]:.3f}" for k in "xyz")
         state = self.state
         if state == "Hold":
-            state = "Hold:1" if (self._move is not None and self._held_at is not None) else "Hold:0"
+            state = (
+                "Hold:1" if (self._current is not None and self._held_at is not None) else "Hold:0"
+            )
         rpm = self.s if self.spindle_on else 0.0
-        fields = [state, f"MPos:{mpos}", f"FS:{self.f:.0f},{rpm:.0f}"]
-        if self._move is not None:
-            fields.append("Bf:14,127")
+        feed = self.f if self._current is not None and self._current[4] == "move" else 0.0
+        fields = [state, f"MPos:{mpos}", f"FS:{feed:.0f},{rpm:.0f}"]
+        if self._current is not None or self._queue:
+            fields.append(f"Bf:{self.PLANNER - len(self._queue)},127")
         fields.append("WCO:" + ",".join(f"{self.wco[k]:.3f}" for k in "xyz"))
         fields.append(f"Ov:{self.feed_override},100,100")
         if self.spindle_on:
@@ -622,6 +630,7 @@ class SimulatedRouter:
 
     # -- lines ----------------------------------------------------------------------------
     def _reply(self, cmd: str) -> List[str]:
+        """The reply lines to one line; ``[]`` for homing, which answers when done."""
         self._settle()
         upper = cmd.upper()
         if upper == "$I":
@@ -652,12 +661,12 @@ class SimulatedRouter:
         if self.state == "Alarm" and not upper.startswith(("$X", "$H", "$", "G4")):
             return ["error:9"]
         if upper.startswith("$H"):
+            if self._busy():
+                return ["error:8"]  # a $ command needs the machine idle
             home = {"x": -self.PULL_OFF, "y": -self.PULL_OFF, "z": -self.PULL_OFF}
             self.alarm = None
-            self._begin_move(home, self.RAPID / 2, state="Home", after="home")
-            # Homing answers when it is done.
-            self._wait_out()
-            return ["ok"]
+            self._enqueue(home, self.RAPID / 2, "home")
+            return []  # ok once it is done: _answer waits
         if upper == "$X":
             if self.state == "Alarm":
                 self.state, self.alarm = "Idle", None
@@ -667,11 +676,10 @@ class SimulatedRouter:
             if self.state not in ("Idle", "Jog"):
                 return ["error:8"]
             args = self._args(upper[3:])
-            relative = "G91" in upper
-            target = self._target(args, relative)
+            target = self._target(args, "G91" in upper)
             if any(target[k] > 0 or target[k] < -self.TRAVEL[k] for k in "xyz"):
                 return ["error:15"]
-            self._begin_move(target, float(args.get("F", self.RAPID)), state="Jog")
+            self._enqueue(target, float(args.get("F", self.RAPID)), "jog")
             return ["ok"]
         if upper.startswith("$"):
             m = SETTING_RE.match(upper)
@@ -686,10 +694,10 @@ class SimulatedRouter:
             self.relative = False
         elif code == "G91":
             self.relative = True
-        elif code in ("G0", "G1", "G00", "G01"):
+        elif code in ("G0", "G1", "G00", "G01", "G2", "G3", "G02", "G03"):
             if "F" in args:
                 self.f = float(args["F"])
-            if code in ("G1", "G01") and not self.f:
+            if code not in ("G0", "G00") and not self.f:
                 return ["error:22"]
             # A line that only sets modes (G1 F800) moves nothing.
             if any(a in args for a in "XYZ"):
@@ -700,18 +708,16 @@ class SimulatedRouter:
                     self.state, self.alarm = "Alarm", 2
                     return ["error:2", "ALARM:2"]
                 feed = self.RAPID if code in ("G0", "G00") else self.f * self.feed_override / 100
-                self._wait_out()  # one move at a time: the queue is one deep here
-                self._begin_move(target, feed)
+                self._enqueue(target, feed)
         elif code == "G53":
             # G53 G0 Z0: the top of Z travel, in machine coordinates
-            self._wait_out()
-            target = self._where()
+            target = self._end_of_queue()
             if "Z" in args:
                 target["z"] = float(args["Z"])
-            self._begin_move(target, self.RAPID)
+            self._enqueue(target, self.RAPID)
         elif code == "G4":
             secs = float(args.get("P", 0)) or 0.0
-            time.sleep(min(2.0, secs) * self.time_scale)
+            self._enqueue(self._end_of_queue(), min(2.0, secs), "dwell")
         elif code in ("M3", "M4"):
             if "S" in args:
                 self.s = float(args["S"])
@@ -719,19 +725,20 @@ class SimulatedRouter:
         elif code == "M5":
             self.spindle_on = False
         elif code == "G10" and args.get("L") == "20":
-            here = self._where()
+            here = self._end_of_queue()
             for axis in "xyz":
                 if axis.upper() in args:
                     self.wco[axis] = round(here[axis] - float(args[axis.upper()]), 3)
         elif code == "G38.2":
             # The plate is 20 mm below where the tool stands, or the move ends short.
-            here = self._where()
+            here = self._end_of_queue()
             depth = float(args.get("Z", 0))
             plate = here["z"] - 20.0
             touched = here["z"] + depth <= plate
             z = plate if touched else here["z"] + depth
             self.pos = {**here, "z": z}
-            self._move = None
+            self._queue.clear()
+            self._current = None
             self.probe = {"x": here["x"], "y": here["y"], "z": z, "touched": touched}
             if not touched:
                 self.state, self.alarm = "Alarm", 5
@@ -759,21 +766,31 @@ class SimulatedRouter:
                 self.s = float(code[1:] or 0)
             else:
                 self.f = float(code[1:] or 0)
-        elif code in ("G2", "G3", "G02", "G03"):
-            if "F" in args:
-                self.f = float(args["F"])
-            self._wait_out()
-            self._begin_move(self._target(args, self.relative), self.f or self.RAPID)
         elif code.startswith("M"):
             return ["error:20"]  # a tool change, M115, M105: not this dialect's
         return ["ok"]
 
-    def _wait_out(self) -> None:
-        """Let a move in flight finish before the next, as the planner would."""
-        while self._move is not None and self._held_at is None:
-            self._settle()
-            if self._move is not None:
-                time.sleep(0.005)
+    def _answer(self, cmd: str) -> None:
+        """Reply to one line: wait for room in the planner as a counting sender would
+        (the lock let go meanwhile, so a realtime character still gets through),
+        and for homing to finish before its ``ok``."""
+        code = cmd.upper().split()[0] if cmd.split() else ""
+        while True:
+            with self._lock:
+                self._settle()
+                if code not in self.QUEUED or len(self._queue) < self.PLANNER:
+                    reply = self._reply(cmd)
+                    if reply:
+                        self._pending += "".join(ln + "\n" for ln in reply).encode()
+                        return
+                    break  # homing: ok when done
+            time.sleep(0.005)
+        while True:
+            with self._lock:
+                if not self._busy() or self.state in ("Alarm", "Hold"):
+                    self._pending += b"ok\n"
+                    return
+            time.sleep(0.005)
 
     @staticmethod
     def _args(text: str) -> Dict[str, str]:
@@ -781,16 +798,16 @@ class SimulatedRouter:
 
     # -- the transport ---------------------------------------------------------------
     def write(self, data: bytes) -> None:
-        with self._lock:
-            text = b""
-            for byte in data:
-                if byte in (ord("?"), ord("!"), ord("~"), 0x18, 0x85):
+        text = b""
+        for byte in data:
+            if byte in self.REALTIME_BYTES:
+                with self._lock:
                     self._realtime(byte)
-                else:
-                    text += bytes([byte])
-            for cmd in text.decode("utf-8", "replace").split("\n"):
-                if cmd.strip():
-                    self._pending += "".join(ln + "\n" for ln in self._reply(cmd.strip())).encode()
+            else:
+                text += bytes([byte])
+        for cmd in text.decode("utf-8", "replace").split("\n"):
+            if cmd.strip():
+                self._answer(cmd.strip())
 
     def read(self, timeout: float) -> bytes:
         with self._lock:
@@ -821,10 +838,13 @@ def identify_router(link: GcodeLink, reset: bool = False) -> PrinterInfo:
 
 
 def report(
-    link: GcodeLink, wait: Optional[float] = None, timeout: float = 3.0
+    link: GcodeLink, wait: Optional[float] = None, timeout: float = 3.0, origin: str = "poll"
 ) -> Tuple[dict, List[str]]:
-    """One realtime status report, and every line read for it."""
-    lines = link.realtime(REALTIME["STATUS"], until=STATUS_RE, timeout=timeout, wait=wait)
+    """One realtime status report, and every line read for it. ``origin`` tags it in
+    the log: a poll's is hidden with the poll traffic, a person's query is kept."""
+    lines = link.realtime(
+        REALTIME["STATUS"], until=STATUS_RE, timeout=timeout, wait=wait, origin=origin
+    )
     status = next((parse_status(ln) for ln in reversed(lines) if is_status_line(ln)), None)
     if status is None:
         raise ToolchainError(f"{link.port}: no status report for `?` within {timeout:.0f}s")
@@ -876,14 +896,16 @@ def control_router(link: GcodeLink, command: str, timeout: float = 60.0) -> List
     cmd = normalise_control(command)
     if cmd in REALTIME:
         settle = 1.0 if cmd == EMERGENCY_STOP else 0.3
-        return link.realtime(REALTIME[cmd], until=None, timeout=settle, label=cmd, now=True)
+        return link.realtime(
+            REALTIME[cmd], until=None, timeout=settle, label=cmd, now=True, origin="control"
+        )
     return link.command(cmd, timeout=timeout, origin="control")
 
 
 def query_router(link: GcodeLink, command: str, timeout: float = 15.0) -> List[str]:
     cmd = normalise_query(command)
     if cmd == "?":
-        _status, lines = report(link, timeout=timeout)
+        _status, lines = report(link, timeout=timeout, origin="query")
         return lines
     return link.command(cmd, timeout=timeout, origin="query")
 

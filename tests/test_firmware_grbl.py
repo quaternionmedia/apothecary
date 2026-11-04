@@ -364,7 +364,10 @@ def test_a_cut_holds_when_paused_and_a_cancel_holds_and_resets(
             break
         time.sleep(0.02)
     st = devices.printer_status(PORT)
-    assert st.job["kind"] == "cut" and st.state == "running" and st.job["stage"] == "running"
+    # The lines are answered as they are queued, fifteen at a time: the cut's last line
+    # may be sent while the controller still runs them (``finishing``).
+    assert st.job["kind"] == "cut" and st.state == "running"
+    assert st.job["stage"] in ("running", "finishing")
     with pytest.raises(PortHeld, match="a cut holds the port"):
         devices.printer_control(PORT, "$H")
     assert devices.printer_control(PORT, "M3 S9000").lines == ["ok"]  # the spindle stays in reach
@@ -376,9 +379,11 @@ def test_a_cut_holds_when_paused_and_a_cancel_holds_and_resets(
     sent = job.sent
     time.sleep(0.3)
     assert job.sent == sent  # nothing streams while paused
+    assert devices.printer_status(PORT).machine_state.startswith("Hold")
     job.resume()
     time.sleep(0.3)
-    assert job.stage == "running" and job.sent > sent
+    assert job.stage in ("running", "finishing") and job.finished is None
+    assert not devices.printer_status(PORT).machine_state.startswith("Hold")
     job.cancel()
     job.thread.join(5)
     rec = job.record

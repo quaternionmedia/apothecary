@@ -153,10 +153,12 @@ export function mountBoards({ base = "", site = () => null } = {}) {
         })();
         return b.polling;
     }
-    // The live watchers: a printer's poll interval is the shortest one asked for.
+    // The live watchers: a machine's poll interval is the shortest one asked for.
     const live = (b, kind) => [...b.watchers.values()].filter((w) => w.live && w.kind === kind);
+    // The kinds polled over a held link: a printer, and a router (GRBL's dialect).
+    const polled = (b) => [...b.watchers.values()].filter((w) => w.live && (w.kind === "printer" || w.kind === "router"));
     function interval(b) {
-        const ms = live(b, "printer").map((w) => w.interval);
+        const ms = polled(b).map((w) => w.interval);
         return ms.length ? Math.min(...ms) : null;
     }
     // Self-scheduled, never overlapping: the next poll is asked for only once the
@@ -208,12 +210,12 @@ export function mountBoards({ base = "", site = () => null } = {}) {
     // --- watching: what makes a board polled or listened to -------------------------------------
     function follow(b, fresh = false) {
         if (live(b, "devkit").length) openStream(b); else closeStream(b);
-        if (fresh && live(b, "printer").length) poll(b.port).catch(() => {}).finally(() => schedule(b));
+        if (fresh && polled(b).length) poll(b.port).catch(() => {}).finally(() => schedule(b));
         else schedule(b);
     }
     // `who` is the watcher (any object), `kind` what it takes the board for:
-    // "printer" is polled, "devkit" listened to; `live` false keeps it watched
-    // and quiet. A first live printer watcher polls at once.
+    // "printer" and "router" are polled, "devkit" listened to; `live` false keeps it
+    // watched and quiet. A first live polled watcher polls at once.
     function watch(port, who, { kind = "printer", interval: ms = 2000, live: on = true } = {}) {
         const b = board(port);
         const was = live(b, kind).length;
