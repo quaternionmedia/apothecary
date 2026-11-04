@@ -32,7 +32,7 @@ from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
-from ..firmware.models import PrinterStatus
+from ..firmware.models import GRBL, PrinterStatus
 from ..stamped import stamp
 from . import log
 from .observation import By, Observation, Origin, Ref
@@ -82,7 +82,7 @@ def observations_of(
     evidence = [Ref(kind="poll", id=poll_id(status))]
     if pin is not None:
         evidence.append(Ref(kind="pin", id=f"{pin.site}:{pin.path}"))
-    origin = Origin(kind="measured", by=By(name=BY_GRBL if status.dialect == "grbl" else BY))
+    origin = Origin(kind="measured", by=By(name=BY_GRBL if status.dialect == GRBL else BY))
 
     def said(subject: str, prop: str, value: Any, unit: Optional[str] = None) -> Observation:
         return Observation(
@@ -115,7 +115,7 @@ def observations_of(
         out.append(said(f"{printer}#spindle:main", "target", status.spindle.target, "rpm"))
     if status.feed is not None:
         out.append(said(printer, "feed", status.feed, "mm/min"))
-    if status.dialect == "grbl":
+    if status.dialect == GRBL:
         out.append(said(printer, "pins", sorted(status.pins)))
     heaters = [(f"hotend{i}", h) for i, h in enumerate(status.hotends)]
     if status.bed is not None:

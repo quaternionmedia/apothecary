@@ -53,6 +53,7 @@ from .example_hierarchy import (
 from .example_parts_library import create_parts_library_site, validate_parts_library
 from .firmware import devices as firmware_devices
 from .firmware import gcode as firmware_gcode
+from .firmware import grbl as firmware_grbl
 from .firmware.api import _device_view as firmware_device_view
 from .firmware.api import router as firmware_router
 from .firmware.bindings import bindings_for_site, device_for_identity, same_device
@@ -2341,7 +2342,7 @@ def printers_in(site_name: str) -> List[str]:
             continue
         on_port = device_for_identity(binding.identity, plugged)
         known = firmware_devices.known_device(on_port.port, state) if on_port else None
-        if firmware_devices.machine_kind(known) == "router":
+        if firmware_devices.machine_kind(known) == firmware_grbl.MACHINE:
             continue  # a router cuts; nothing is printed on it
         found.add(bearer)
     return sorted(found)

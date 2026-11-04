@@ -110,8 +110,8 @@ def test_serve_listens_on_loopback_and_does_not_wait_on_open_streams(uvicorn_run
 
 
 def test_serve_reload_watches_the_package_and_the_templates_alone(uvicorn_runs):
-    """A worktree checked out under .claude/ or a ledger written under .git/ is no
-    change to the server: the reloader watches the package and the templates."""
+    """The reloader watches the package and the templates: nothing else in the
+    checkout is the server."""
     from apothecary.projects.parts.skeleton import ROOT
 
     result = CliRunner().invoke(cli, ["serve", "--no-viewer", "--port", "8124", "--reload"])

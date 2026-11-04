@@ -109,10 +109,9 @@ def run_server(
         host=_loopback_or_die(host),
         port=port,
         reload=reload,
-        # What a reload watches: the package and the templates, not the checkout. A
-        # worktree checked out under .claude/, a cache written under .cache/ or a
-        # ledger under .git/ is not a change to the server, and the reloader's
-        # fallback without watchfiles honours the folders alone.
+        # What a reload watches: the package and the templates; nothing else in the
+        # checkout is the server. The reloader's fallback without watchfiles honours
+        # the folders alone, not an exclude.
         reload_dirs=[str(ROOT / "apothecary"), str(ROOT / "templates")] if reload else None,
         log_level=log_level,
         timeout_graceful_shutdown=3,

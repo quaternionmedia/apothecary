@@ -28,13 +28,13 @@ import re
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
-from .gcode import SPINDLE_MAX_RPM, GcodeLink
-from .models import PrinterInfo, PrinterStatus, Spindle
+from .gcode import SPINDLE_MAX_RPM, GcodeLink, LinkBusy, OutOfBounds
+from .models import GRBL, PrinterInfo, PrinterStatus, Spindle
 from .toolchains import ToolchainError
 
-DIALECT = "grbl"
+DIALECT = GRBL
 MACHINE = "router"
 
 # --- parsers: grbl 1.1's documented replies ---------------------------------------
@@ -256,16 +256,6 @@ def parse_parser_state(lines: List[str]) -> dict:
     return out
 
 
-def parse_settings(lines: List[str]) -> Dict[int, float]:
-    """``$$``'s answer: each setting's number and value."""
-    found: Dict[int, float] = {}
-    for raw in lines:
-        m = SETTING_RE.match(raw.strip())
-        if m:
-            found[int(m.group(1))] = float(m.group(2))
-    return found
-
-
 def parse_alarm(lines: List[str]) -> Optional[int]:
     """The last ``ALARM:N`` among ``lines``, or None."""
     found = None
@@ -274,16 +264,6 @@ def parse_alarm(lines: List[str]) -> Optional[int]:
         if m:
             found = int(m.group(1))
     return found
-
-
-def parse_probe(lines: List[str]) -> Optional[dict]:
-    """``[PRB:x,y,z:1]`` after a probe: where it touched, and whether it did."""
-    for raw in lines:
-        m = PRB_RE.match(raw.strip())
-        if m:
-            x, y, z, ok = m.groups()
-            return {"x": float(x), "y": float(y), "z": float(z), "touched": ok == "1"}
-    return None
 
 
 def router_info_from(lines: List[str], baud: int, boot_lines: List[str] = ()) -> PrinterInfo:
@@ -377,7 +357,7 @@ CONTROL_CODES: List[tuple] = [
 
 def normalise_control(command: str) -> str:
     """Upper-cased, single-spaced control line or realtime name; ValueError if not
-    allowed or out of bounds."""
+    allowed, ``OutOfBounds`` if allowed but over a bound."""
     cmd = " ".join(command.strip().upper().split())
     if cmd in REALTIME and cmd != "STATUS":
         return cmd
@@ -387,22 +367,27 @@ def normalise_control(command: str) -> str:
             continue
         for axis_val in re.findall(r" [XYZ](-?\d+(?:\.\d+)?)", cmd):
             if abs(float(axis_val)) > JOG_MAX_MM and not cmd.startswith("G38.2"):
-                raise ValueError(f"move beyond {JOG_MAX_MM} mm: {command!r}")
+                raise OutOfBounds(f"move beyond {JOG_MAX_MM} mm: {command!r}")
         feed = re.search(r" F(\d+)", cmd)
         if cmd.startswith("G38.2"):
             depth = re.search(r" Z-(\d+(?:\.\d+)?)", cmd)
             if depth and float(depth.group(1)) > PROBE_MAX_MM:
-                raise ValueError(f"probe deeper than {PROBE_MAX_MM} mm: {command!r}")
+                raise OutOfBounds(f"probe deeper than {PROBE_MAX_MM} mm: {command!r}")
             if feed and int(feed.group(1)) > PROBE_FEED_MAX:
-                raise ValueError(f"probe feed above {PROBE_FEED_MAX}: {command!r}")
+                raise OutOfBounds(f"probe feed above {PROBE_FEED_MAX}: {command!r}")
         elif feed and int(feed.group(1)) > FEED_MAX:
-            raise ValueError(f"feedrate above {FEED_MAX}: {command!r}")
+            raise OutOfBounds(f"feedrate above {FEED_MAX}: {command!r}")
         if cmd.startswith("M3"):
             rpm = int(cmd.split("S")[1])
             if rpm > SPINDLE_MAX_RPM:
-                raise ValueError(f"spindle above {SPINDLE_MAX_RPM} rpm: {command!r}")
+                raise OutOfBounds(f"spindle above {SPINDLE_MAX_RPM} rpm: {command!r}")
         return cmd
     raise ValueError(f"not an allowed GRBL control: {command!r}")
+
+
+# What a person may still send while a cut holds the port: the hold, the resume and
+# the spindle; motion is the cut's.
+JOB_ALLOWS = re.compile(r"^(HOLD|RESUME|M5|M3 S\d+)$")
 
 
 # --- a streamed job: how long a line may take (what a file may carry is gcode.check_gcode) --
@@ -420,9 +405,80 @@ PLANNED = {"G0", "G00", "G1", "G01", "G2", "G02", "G3", "G03", "G4", "G53"}
 PLANNER_BLOCKS = 15
 
 
+# A move written without a space before its first word (`G1X10`), as a post may.
+UNSPACED_MOVE_RE = re.compile(r"^G0?[0-3](?![0-9.])")
+
+
 def line_timeout(cmd: str) -> float:
     code = cmd.split(" ", 1)[0] if cmd else ""
-    return JOB_MOVE_TIMEOUT_S if code in MOVE_CODES or code.startswith("G1") else JOB_LINE_TIMEOUT_S
+    moves = code in MOVE_CODES or UNSPACED_MOVE_RE.match(code) is not None
+    return JOB_MOVE_TIMEOUT_S if moves else JOB_LINE_TIMEOUT_S
+
+
+def busy(status: dict) -> bool:
+    """Whether the report says the controller still has a job in it: running, homing,
+    jogging, or held; idle, in alarm and the rest are not."""
+    return STATE_WORDS.get(status["machine_state"]) in ("running", "hold")
+
+
+class PlannerRoom:
+    """The planner's room as a streamed job counts it: what the controller's last
+    status report said (``Bf:``, blocks free), counted down a line at a time between
+    reports. A sender that counts the planner's blocks never blocks the port on a
+    full one, so a hold and a poll go through meanwhile. None when the controller
+    does not say (grbl 1.1 reports it only when $10 asks), and the line's ``ok`` is
+    the flow control then, as a printer's is."""
+
+    def __init__(self) -> None:
+        self.free: Optional[int] = None
+        self.known = False
+
+    def wait(self, link: GcodeLink, cmd: str, abandoned: Callable[[], bool]) -> bool:
+        """Wait, with the link free, until the planner has room for ``cmd``; False
+        when ``abandoned()`` says the job was paused or stopped meanwhile, or a move's
+        time ran out."""
+        if cmd.split(" ", 1)[0] not in PLANNED:
+            return True
+        if not self.known or (self.free is not None and self.free <= 1):
+            end = time.monotonic() + JOB_MOVE_TIMEOUT_S
+            while True:
+                try:
+                    status, _lines = report(link, wait=1.0)
+                except (LinkBusy, ToolchainError):
+                    status = None
+                if status is not None:
+                    self.known = True
+                    buffer = status["buffer"]
+                    if buffer:
+                        self.free = buffer["planner"]
+                    elif status["machine_state"] == "Idle":
+                        self.free = PLANNER_BLOCKS  # idle: the whole planner is free
+                    else:
+                        self.free = None  # busy and not saying: the `ok` is the flow control
+                    if self.free is None or self.free >= 1:
+                        break
+                if abandoned() or time.monotonic() > end:
+                    return False
+                time.sleep(0.05)
+        if self.free is not None:
+            self.free -= 1
+        return True
+
+
+def await_idle(link: GcodeLink, abandoned: Callable[[], bool]) -> None:
+    """Poll the controller until it is idle, in alarm or offline, or ``abandoned()``
+    says the job was cancelled, or a move's time runs out; a held controller is
+    waited for. A cut's last line is answered when it is queued, not when it is done."""
+    end = time.monotonic() + JOB_MOVE_TIMEOUT_S
+    while time.monotonic() < end and not abandoned():
+        try:
+            status, _lines = report(link, wait=1.0)
+        except LinkBusy:
+            time.sleep(0.2)
+            continue
+        if not busy(status):
+            return
+        time.sleep(0.3)
 
 
 # --- the simulated controller ---------------------------------------------------------
@@ -459,9 +515,9 @@ class SimulatedRouter:
     TRAVEL = {"x": 400.0, "y": 600.0, "z": 80.0}
     RAPID = 4000.0  # mm/min, the maker's figure for X and Y
     PULL_OFF = 3.0  # mm back from the switches after homing
-    PLANNER = 15  # blocks the queue holds before a line waits for room
-    REALTIME_BYTES = (ord("?"), ord("!"), ord("~"), 0x18, 0x85)
-    QUEUED = ("G0", "G00", "G1", "G01", "G2", "G02", "G3", "G03", "G4", "G53")
+    PLANNER = PLANNER_BLOCKS  # blocks the queue holds before a line waits for room
+    REALTIME_BYTES = tuple(b[0] for b in REALTIME.values())
+    QUEUED = PLANNED
 
     def __init__(self, port: str, baud: int):
         self.port, self.baud = port, baud
@@ -535,11 +591,7 @@ class SimulatedRouter:
         if self._current is None:
             return dict(self.pos)
         start, end, since, length, _ = self._current
-        done = (
-            self._held_at
-            if self._held_at is not None
-            else (1.0 if length <= 0 else min(1.0, (time.monotonic() - since) / length))
-        )
+        done = self._held_at if self._held_at is not None else self._fraction_done()
         return {k: round(start[k] + (end[k] - start[k]) * done, 3) for k in "xyz"}
 
     def _end_of_queue(self) -> dict:
@@ -936,4 +988,4 @@ def explain(line: str) -> Optional[str]:
     code = int(m.group(2))
     if m.group(1) == "error":
         return ERRORS.get(code, f"error {code}")
-    return ALARMS.get(code, f"alarm {code}")
+    return alarm_text(code)

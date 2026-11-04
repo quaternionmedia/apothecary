@@ -388,6 +388,12 @@ class ListenRequest(ProbeRequest):
 # --- printers: a G-code firmware (Marlin and kin) on a serial port ----------------
 
 
+# The dialect a board answers in, as ``PrinterInfo.dialect`` carries it: Marlin's
+# G-code on a printer (gcode.py), GRBL's on a router (grbl.py).
+MARLIN = "marlin"
+GRBL = "grbl"
+
+
 class PrinterInfo(BaseModel):
     """What ``M115`` says a board is: firmware, machine, capabilities.
 
@@ -412,7 +418,7 @@ class PrinterInfo(BaseModel):
     # on a router (grbl.py). The dialect decides how it is polled and what may be
     # typed at it; the kind decides which operations it offers and what its
     # Machine shows.
-    dialect: str = "marlin"
+    dialect: str = MARLIN
     machine: str = "printer"
 
 
@@ -462,7 +468,7 @@ class PrinterStatus(BaseModel):
     # offset between them, the spindle, the feed, the input pins the report says
     # are on (X, Y, Z limits, P probe, D door, H hold), the alarm's number while
     # it is in one, and the feed, rapid and spindle overrides, each a percentage.
-    dialect: str = "marlin"
+    dialect: str = MARLIN
     machine_state: Optional[str] = None
     work_position: Optional[dict] = None
     work_offset: Optional[dict] = None

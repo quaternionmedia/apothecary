@@ -40,7 +40,7 @@ import time
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Protocol, Tuple
 
-from .models import Heater, PrinterInfo, PrinterStatus
+from .models import MARLIN, Heater, PrinterInfo, PrinterStatus
 from .toolchains import PortHeld, ToolchainError
 
 # --- parsers: Marlin's documented replies -------------------------------------
@@ -1030,8 +1030,21 @@ CONTROL_CODES: List[tuple] = [
 EMERGENCY_STOP = "M112"  # always accepted, latch or not; halts the board until reset
 
 
+# This dialect, as a board's ``PrinterInfo`` names it, and the kind of machine it
+# drives (apothecary/jobs.py's machine kinds).
+DIALECT = MARLIN
+MACHINE = "printer"
+
+
+class OutOfBounds(ValueError):
+    """A control line the dialect knows, asking for more than its bound allows: a
+    hotend target, a move, a feed, a spindle speed. Distinct from a line it does not
+    know, for a port not yet identified (devices.normalise_control)."""
+
+
 def normalise_control(command: str) -> str:
-    """Upper-cased, single-spaced control line; ValueError if not allowed or out of bounds."""
+    """Upper-cased, single-spaced control line; ValueError if not allowed,
+    ``OutOfBounds`` if allowed but over a bound."""
     cmd = " ".join(command.strip().upper().split())
     if cmd == EMERGENCY_STOP:
         return cmd
@@ -1040,20 +1053,26 @@ def normalise_control(command: str) -> str:
         if not m:
             continue
         if cmd.startswith("M104") and int(m.group(1)) > HOTEND_MAX_C:
-            raise ValueError(f"hotend target above {HOTEND_MAX_C} degC: {command!r}")
+            raise OutOfBounds(f"hotend target above {HOTEND_MAX_C} degC: {command!r}")
         if cmd.startswith("M140") and int(m.group(1)) > BED_MAX_C:
-            raise ValueError(f"bed target above {BED_MAX_C} degC: {command!r}")
+            raise OutOfBounds(f"bed target above {BED_MAX_C} degC: {command!r}")
         if cmd.startswith("M106") and m.group(1) and int(m.group(1)) > 255:
-            raise ValueError(f"fan speed above 255: {command!r}")
+            raise OutOfBounds(f"fan speed above 255: {command!r}")
         if cmd[0] == "G" and cmd[1] in "01":
             for axis_val in re.findall(r" [XYZ](-?\d+(?:\.\d+)?)", cmd):
                 if abs(float(axis_val)) > JOG_MAX_MM:
-                    raise ValueError(f"move beyond {JOG_MAX_MM} mm: {command!r}")
+                    raise OutOfBounds(f"move beyond {JOG_MAX_MM} mm: {command!r}")
             feed = re.search(r" F(\d+)", cmd)
             if feed and int(feed.group(1)) > FEED_MAX:
-                raise ValueError(f"feedrate above {FEED_MAX}: {command!r}")
+                raise OutOfBounds(f"feedrate above {FEED_MAX}: {command!r}")
         return cmd
     raise ValueError(f"not an allowed control code: {command!r}")
+
+
+# What a person may still send while a print holds the port: the heaters, the fan
+# and the break-wait (a hotend a few degrees off is fixed mid-print); motion and the
+# SD card are the print's.
+JOB_ALLOWS = re.compile(r"^(M104|M140|M106|M107|M108)\b")
 
 
 # --- bed leveling: reading Marlin's mesh -------------------------------------------------
@@ -1174,7 +1193,7 @@ PRINT_REFUSED: Dict[str, str] = {
     "M112": "kills the board",
     "M0": "stops and waits for a button on the machine",
     "M1": "stops and waits for a button on the machine",
-    "M6": "is a tool change, which the host does not yet carry",
+    "M6": "is a tool change: the host streams one tool",
 }
 TEMP_CODES = {"M104": HOTEND_MAX_C, "M109": HOTEND_MAX_C, "M140": BED_MAX_C, "M190": BED_MAX_C}
 SPINDLE_CODES = ("M3", "M4")
