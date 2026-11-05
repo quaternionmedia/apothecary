@@ -19,8 +19,8 @@ again. [docs/cam.md](../docs/cam.md) is the reference for the toolpath,
 ## The design: a coupon on the router's table
 
 The garage holds a router coupon -- a plate with a pocket and a column of
-holes (`parts/router_coupon`) -- standing on the router's table, its stock's
-front-left top corner at the router's work zero and the plate `stock_margin`
+holes (`parts/router_coupon`) -- on a spoilboard on the router's table, its
+stock's front-left corner at the working area's and the plate `stock_margin`
 in from it:
 
     >>> from apothecary.example_hierarchy import CNC_ROUTER_POSITION, create_example_site
@@ -31,7 +31,7 @@ in from it:
     'router_coupon'
     >>> zero = CNC_ROUTER_POSITION + anolex.WORK_ORIGIN
     >>> (coupon.position.x - zero.x, coupon.position.y - zero.y, coupon.position.z - zero.z)
-    (10.0, 10.0, 0.0)
+    (10.0, 10.0, 5.0)
 
 Beside its geometry the part says how it is cut: the stock it comes from, and
 the operations that make it, in order -- the pocket, the holes, the outline --

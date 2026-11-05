@@ -206,6 +206,24 @@ def prepare(root: Optional[Path] = None) -> Demo:
     return Demo(root=root, env=env, orcaslicer=orcaslicer, openscad=openscad)
 
 
+def _work_zero_on_the_coupon() -> None:
+    """The router's work zero at the coupon's stock, wherever the tool stands, as a person
+    touching off at its corner would leave it: so the coupon's toolpath is drawn on the
+    coupon, and its cut stays within the travel."""
+    from .example_hierarchy import ROUTER_COUPON_WORK_ZERO as zero
+    from .firmware import gcode, grbl
+    from .projects.parts.anolex_4060_evo_ultra_2 import WORK
+
+    link = gcode.get_printer_links().get(ROUTER)
+    at = grbl.poll_router(link).position
+    x, y, z = (
+        at["x"] + WORK.x - zero.x,
+        at["y"] + WORK.y - zero.y,
+        at["z"] + WORK.z - zero.z,
+    )
+    link.command(f"G10 L20 P1 X{x:g} Y{y:g} Z{z:g}", origin="control")
+
+
 def seed() -> Optional[str]:
     """printer_1's mainboard pinned to the simulated Ender, identified (``M115``) as
     the bench's real board is, and cnc_router's controller to the simulated router,
@@ -222,6 +240,7 @@ def seed() -> Optional[str]:
     try:
         devices.identify_printer(ROUTER)
         devices.get_state().set_binding(SITE, CONTROLLER, devices.stable_identity(ROUTER))
+        _work_zero_on_the_coupon()
     except (ToolchainError, OSError) as exc:
         log.warning("demo: cnc_router's controller not pinned: %s", exc)
     try:

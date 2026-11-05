@@ -166,6 +166,17 @@ def test_the_seed_pins_printer_1s_mainboard_and_touches_no_real_port(person, mon
         assert pins == {demo.BOARD: "FAKESERIAL1", demo.CONTROLLER: "FAKEROUTER3"}
         printer = devices.known_device(demo.PRINTER)
         assert printer.printer.machine_type == "Simulated Ender"
+        # The router's work zero is the coupon's stock, wherever the tool stands: a file's
+        # zero, in the working area, is the machine's offset plus its travel.
+        from apothecary.example_hierarchy import ROUTER_COUPON_WORK_ZERO as zero
+        from apothecary.projects.parts.anolex_4060_evo_ultra_2 import WORK
+
+        offset = devices.printer_status(demo.ROUTER).work_offset
+        assert (offset["x"] + WORK.x, offset["y"] + WORK.y, offset["z"] + WORK.z) == (
+            zero.x,
+            zero.y,
+            zero.z,
+        )
         router = devices.known_device(demo.ROUTER)
         assert router.printer.dialect == "grbl" and router.printer.machine == "router"
         # Every port the demo has is the scripted bench's: the printer, the devkit and
