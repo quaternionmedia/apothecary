@@ -23,7 +23,7 @@ from playwright.sync_api import Error as PlaywrightError
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import garage  # noqa: E402
-from browsers import FAKE_CAMERA, launch, launched  # noqa: E402
+from browsers import launch, launched  # noqa: E402
 from doc_capture import GENERATED_DOCS_ROOT, DocRecorder, Walkthrough  # noqa: E402
 from firmware_helpers import write_fake_arduino_cli  # noqa: E402
 from parts_built import described  # noqa: E402
@@ -475,6 +475,7 @@ def doc_recorder(page, docs_enabled, request, every_stl_built):
 # Chromium's fake camera: a synthetic picture with colour bars and a moving
 # mark, so there is a camera to allow, see live, capture from and place in the
 # world on every machine, and no real camera is ever opened by a test.
+FAKE_CAMERA = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"]
 
 
 @pytest.fixture(scope="session")
