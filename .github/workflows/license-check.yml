@@ -51,8 +51,10 @@ jobs:
 
       - name: No locked dependency has a known vulnerability
         # Audits uv.lock as exported, not the environment: apothecary itself is
-        # not on PyPI, so a plain `pip-audit --strict` fails on it.
+        # not on PyPI, so a plain `pip-audit --strict` fails on it. Nor is
+        # qm-hearth until its first tag, so it is left out by name, and what it
+        # depends on is still audited.
         run: |
           requirements=$(mktemp)
-          uv export --no-hashes --no-emit-project --format requirements-txt > "$requirements"
+          uv export --no-hashes --no-emit-project --no-emit-package qm-hearth --format requirements-txt > "$requirements"
           uv run --with pip-audit pip-audit --strict --disable-pip --no-deps -r "$requirements"

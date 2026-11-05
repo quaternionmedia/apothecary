@@ -410,6 +410,32 @@ def test_sending_asks_for_a_carlos_and_says_what_it_answered(
     monkeypatch.setenv("APOTHECARY_CARLOS", url)
     sent = client.post("/sites/garage/wiring/send")
     assert sent.status_code == 200 and sent.json() == {"sent": url, "answer": {"ok": True}}
+    # It went through the family's hub, whose audit keeps it.
+    kept = client.get("/family/").json()["last"][-1]
+    assert (kept["member"], kept["via"], kept["status"]) == ("carlos", "push", 200)
     hold = heard[-1][1]["action"]["hold"]
     # The scripted bench's two ports no node names are in the rig, unexpected.
     assert {"usb:/dev/ttyFAKE0", "usb:FAKESERIAL1"} <= set(hold["states"]["modules"])
+
+
+def test_the_follower_in_the_server_holds_through_the_hub(
+    fake_arduino_cli, garage, a_carlos, monkeypatch
+):
+    import time
+
+    from apothecary.family import hub
+    from apothecary.routes import wiring as wiring_routes
+
+    url, heard, _ = a_carlos
+    monkeypatch.setenv("APOTHECARY_CARLOS", url)
+    wiring_routes.start_following()
+    try:
+        for _ in range(100):
+            if heard:
+                break
+            time.sleep(0.05)
+    finally:
+        wiring_routes.stop_following()
+    assert heard, "the follower sent nothing"
+    kept = hub.running().snapshot()["last"]
+    assert [(k["member"], k["via"], k["status"]) for k in kept][:1] == [("carlos", "push", 200)]
