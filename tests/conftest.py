@@ -306,6 +306,31 @@ def served():
     thread.join(timeout=5)
 
 
+@pytest.fixture
+def family_bench(fake_arduino_cli, monkeypatch):
+    """The demo's bench under the family's hub: the Ender and the router simulated and
+    pinned, the devkit scripted; yields the machines' links."""
+    from apothecary.demo import BOARD, CONTROLLER, PRINTER, ROUTER, SITE
+    from apothecary.family import hub
+    from apothecary.firmware import devices, gcode, tasks
+
+    monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "simulated")
+    monkeypatch.setenv("APOTHECARY_SIMULATED_ROUTER", ROUTER)
+    monkeypatch.setenv("APOTHECARY_SIMULATED_SPEED", "0")
+    monkeypatch.setenv("FAKE_DEVKIT", "1")
+    monkeypatch.setenv("FAKE_ROUTER", "1")
+    links = gcode.PrinterLinks()
+    monkeypatch.setattr(gcode, "_LINKS", links)
+    monkeypatch.setattr(tasks, "_RUNNER", tasks.TaskRunner())
+    hub.close()
+    for port, path in ((PRINTER, BOARD), (ROUTER, CONTROLLER)):
+        devices.identify_printer(port)
+        devices.get_state().set_binding(SITE, path, port)
+    yield links
+    links.stop_all()
+    hub.close()
+
+
 # --- the slicer's fake -----------------------------------------------------------
 #
 # A scripted OrcaSlicer (tests/slicer_helpers.py) with its profiles beside it, named

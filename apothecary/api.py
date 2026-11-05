@@ -118,6 +118,7 @@ from .routes.jobs import router as jobs_router
 from .routes.lighting import router as lighting_router
 from .routes.part_edits import router as part_edits_router
 from .routes.pictures import router as pictures_router
+from .routes.procedures import router as procedures_router
 from .routes.readme import router as readme_router
 from .routes.views import router as views_router
 from .routes.vision import router as vision_router
@@ -293,6 +294,7 @@ app.include_router(wiring_router)
 app.include_router(family_hub.router())
 for _hosted in family_members.routers():
     app.include_router(_hosted)
+app.include_router(procedures_router)
 # A working space seen from every kind of evidence: the log's document for a site.
 app.include_router(evidence_router)
 # Image models through qmcp, and the plain reader beside them: asked only when a person asks.

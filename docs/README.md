@@ -36,6 +36,7 @@ written by the browser tests that walk them; page 00, pages 07 to 17 and page
 | [20 — A part through the router](../walkthrough/20-a-part-through-the-router.md) | The subtractive loop on one part: the coupon's declared cuts, its toolpath written and checked, kept and cut from here with the work zeroed, the job naming its operation, the cut measured against the design, and the design changed and cut again |
 | [21 — A toolpath, previewed](../walkthrough/21-a-toolpath-previewed.md) | One interpreter and two processes: a print's layers and a cut's passes read through one core, held to the toolpath's own writer, and a design change seen in the moves |
 | [22 — The irl family's hub](../walkthrough/22-the-irl-hub.md) | apothecary as the family's hub on hearth's contract: what it says it is, its table, a fire and what is kept |
+| [23 — A procedure](../walkthrough/23-a-procedure.md) | What the family fires: the steps that bring a site's blueprint into working order, each waiting for GO and the evidence it names, a person's own, a member's refusal, a page's read and a member that is not there, and what the log keeps |
 
 ## Guides
 

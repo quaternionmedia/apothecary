@@ -21,6 +21,7 @@ import queue
 import threading
 import time
 from collections import deque
+from contextlib import suppress
 from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
 
 import hearth
@@ -176,7 +177,11 @@ class Machine(Hosted):
     @staticmethod
     def _home(port: str) -> Dict[str, Any]:
         line = devices.dialect_for(port).home
-        return {"line": line, "said": devices.printer_control(port, line).lines}
+        said = devices.printer_control(port, line).lines
+        # So what it did is in the log, for a step that waits on it. It has homed either way.
+        with suppress(ToolchainError, OSError):
+            devices.printer_status(port)
+        return {"line": line, "said": said}
 
     @staticmethod
     def _run(port: str, file_id: str, part: Optional[str]) -> Dict[str, Any]:

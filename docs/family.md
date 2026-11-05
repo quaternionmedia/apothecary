@@ -4,7 +4,8 @@ apothecary is the `irl` family's hub: it runs hearth's coordinator, so a member 
 the family is handed its part of whatever fires and every outcome is kept.
 [hearth](https://github.com/quaternionmedia/hearth) holds the contract, `family/1`,
 and the coordinator, imported from `qm-hearth`, never copied.
-[Walkthrough page 22](../walkthrough/22-the-irl-hub.md) runs it;
+[Walkthrough page 22](../walkthrough/22-the-irl-hub.md) runs it, and
+[page 23](../walkthrough/23-a-procedure.md) a procedure through it;
 [the plan](plans/irl-hub-2026-11-02.md) is what is built on it next.
 
 ## What it answers
@@ -16,6 +17,11 @@ and the coordinator, imported from `qm-hearth`, never copied.
 | `GET /family/members/<name>` | A pull member's last cue and action |
 | `GET /family/members/<name>/events` | The same, as a stream |
 | `/machine/family/*`, `/board/family/*` | A hosted member's own four routes |
+| `GET /sites/<s>/procedures` | The names of the site's procedures |
+| `GET /sites/<s>/procedures/<p>` | One as it stands: each step's status, why, whether GO will fire it, and the outcome of its last fire per member |
+| `PUT /sites/<s>/procedures/<p>` | One written, whole |
+| `POST /sites/<s>/procedures/<p>/steps/<n>/go` | One step fired through the hub, and the procedure as it then stands; a 409 for a step not standing by |
+| `POST /sites/<s>/procedures/<p>/again` | The procedure started over |
 
 `hearth check` judges it from outside, by these routes alone:
 
@@ -78,12 +84,52 @@ hearth's `from_table` reads. Each key is optional, and with no file there are no
 changed table starts a new coordinator, whose audit starts empty, and the audit is
 not kept across a restart.
 
+## A procedure
+
+What the family fires is a step of a procedure, one file under its site in the state
+folder, `procedures/<site>/<name>.json`:
+
+```json
+{"steps": [
+  {"number": "1", "name": "Fit the lead", "discipline": "electrical", "node": "garage:esp32_blink"},
+  {"number": "2", "name": "Home the printer", "discipline": "mechanical",
+   "node": "garage:printer_1.frame_system.mainboard",
+   "notes": "Arm its control in the Machine window first.",
+   "waits": {"subject": "garage:printer_1", "property": "state", "value": "idle"},
+   "family": {"machine": {"home": {"node": "garage:printer_1.frame_system.mainboard"}}}}
+]}
+```
+
+- **`discipline`** is what the step touches: mechanical, electrical, firmware, network,
+  optical, audio or lighting.
+- **`family`** is what each member is handed when the step fires. An empty one is a
+  person's own step, and its GO says the person did it.
+- **`waits`** is the evidence it waits for: a subject's property at a value, as the log
+  last said it.
+
+Every step waits for a person's GO, and only the step standing by fires: the one whose
+predecessor has fired, once the evidence it names is in.
+
+| Status | What it means |
+|---|---|
+| waiting | For the step before it, or for its evidence; `why` says which |
+| standing by | GO fires it |
+| fired | Delivered, and not finished: a page has not read it, or a member beside the hub answered 202. The next step may go on |
+| done | Every member took it, and a hosted member's work has ended well |
+| refused | A member refused it, in the words `why` holds. It may be fired again |
+| failed | A member is down, is not in the hub's table, or its work failed. It may be fired again |
+
+Each delivery's outcome is kept in the evidence log, `actions/<day>.jsonl`, each naming
+its procedure, its step and its node, so a restart leaves what each step did. What a
+member says later is read live and is not kept: a page's read of its action, or how
+work answered 202 ended, which reads as fired after a restart.
+
 ## What goes through it
 
-Carlos's holds. A site's wiring sent to carlos, by the follower or by
-`POST /sites/{name}/wiring/send`, is a delivery through the hub, so it is in the
-audit. `apothecary rig` runs outside the server, where there is no hub, and sends to
-carlos directly.
+A procedure's steps, and carlos's holds. A site's wiring sent to carlos, by the
+follower or by `POST /sites/{name}/wiring/send`, is a delivery through the hub, so it
+is in the audit. `apothecary rig` runs outside the server, where there is no hub, and
+sends to carlos directly.
 
 Carlos on its `feat/hold-the-rig` answers no `/family/identity` and no
 `/family/events`, so a delivery to it is kept with no instance, and `hearth check`
@@ -92,6 +138,5 @@ says that carlos does not conform. Its side is carlos's to close:
 
 ## Not built
 
-Everything else the plan orders: steps on the blueprint and their GO, a page reading
-the camera's actions, the reader as a member hosted here, and the corpus's `irl`
-phase. Nothing but a delivery of carlos's fires yet.
+Everything else the plan orders: a page reading the camera's actions, the reader as a
+member hosted here, a step that fires itself, and the corpus's `irl` phase.
