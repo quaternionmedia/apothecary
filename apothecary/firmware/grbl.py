@@ -28,13 +28,13 @@ import re
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
-from .gcode import SPINDLE_MAX_RPM, GcodeLink
-from .models import PrinterInfo, PrinterStatus, Spindle
+from .gcode import SPINDLE_MAX_RPM, GcodeLink, LinkBusy, OutOfBounds
+from .models import GRBL, PrinterInfo, PrinterStatus, Spindle
 from .toolchains import ToolchainError
 
-DIALECT = "grbl"
+DIALECT = GRBL
 MACHINE = "router"
 
 # --- parsers: grbl 1.1's documented replies ---------------------------------------
@@ -256,16 +256,6 @@ def parse_parser_state(lines: List[str]) -> dict:
     return out
 
 
-def parse_settings(lines: List[str]) -> Dict[int, float]:
-    """``$$``'s answer: each setting's number and value."""
-    found: Dict[int, float] = {}
-    for raw in lines:
-        m = SETTING_RE.match(raw.strip())
-        if m:
-            found[int(m.group(1))] = float(m.group(2))
-    return found
-
-
 def parse_alarm(lines: List[str]) -> Optional[int]:
     """The last ``ALARM:N`` among ``lines``, or None."""
     found = None
@@ -274,16 +264,6 @@ def parse_alarm(lines: List[str]) -> Optional[int]:
         if m:
             found = int(m.group(1))
     return found
-
-
-def parse_probe(lines: List[str]) -> Optional[dict]:
-    """``[PRB:x,y,z:1]`` after a probe: where it touched, and whether it did."""
-    for raw in lines:
-        m = PRB_RE.match(raw.strip())
-        if m:
-            x, y, z, ok = m.groups()
-            return {"x": float(x), "y": float(y), "z": float(z), "touched": ok == "1"}
-    return None
 
 
 def router_info_from(lines: List[str], baud: int, boot_lines: List[str] = ()) -> PrinterInfo:
@@ -377,7 +357,7 @@ CONTROL_CODES: List[tuple] = [
 
 def normalise_control(command: str) -> str:
     """Upper-cased, single-spaced control line or realtime name; ValueError if not
-    allowed or out of bounds."""
+    allowed, ``OutOfBounds`` if allowed but over a bound."""
     cmd = " ".join(command.strip().upper().split())
     if cmd in REALTIME and cmd != "STATUS":
         return cmd
@@ -387,22 +367,27 @@ def normalise_control(command: str) -> str:
             continue
         for axis_val in re.findall(r" [XYZ](-?\d+(?:\.\d+)?)", cmd):
             if abs(float(axis_val)) > JOG_MAX_MM and not cmd.startswith("G38.2"):
-                raise ValueError(f"move beyond {JOG_MAX_MM} mm: {command!r}")
+                raise OutOfBounds(f"move beyond {JOG_MAX_MM} mm: {command!r}")
         feed = re.search(r" F(\d+)", cmd)
         if cmd.startswith("G38.2"):
             depth = re.search(r" Z-(\d+(?:\.\d+)?)", cmd)
             if depth and float(depth.group(1)) > PROBE_MAX_MM:
-                raise ValueError(f"probe deeper than {PROBE_MAX_MM} mm: {command!r}")
+                raise OutOfBounds(f"probe deeper than {PROBE_MAX_MM} mm: {command!r}")
             if feed and int(feed.group(1)) > PROBE_FEED_MAX:
-                raise ValueError(f"probe feed above {PROBE_FEED_MAX}: {command!r}")
+                raise OutOfBounds(f"probe feed above {PROBE_FEED_MAX}: {command!r}")
         elif feed and int(feed.group(1)) > FEED_MAX:
-            raise ValueError(f"feedrate above {FEED_MAX}: {command!r}")
+            raise OutOfBounds(f"feedrate above {FEED_MAX}: {command!r}")
         if cmd.startswith("M3"):
             rpm = int(cmd.split("S")[1])
             if rpm > SPINDLE_MAX_RPM:
-                raise ValueError(f"spindle above {SPINDLE_MAX_RPM} rpm: {command!r}")
+                raise OutOfBounds(f"spindle above {SPINDLE_MAX_RPM} rpm: {command!r}")
         return cmd
     raise ValueError(f"not an allowed GRBL control: {command!r}")
+
+
+# What a person may still send while a cut holds the port: the hold, the resume and
+# the spindle; motion is the cut's.
+JOB_ALLOWS = re.compile(r"^(HOLD|RESUME|M5|M3 S\d+)$")
 
 
 # --- a streamed job: how long a line may take (what a file may carry is gcode.check_gcode) --
@@ -413,11 +398,87 @@ def normalise_control(command: str) -> str:
 JOB_MOVE_TIMEOUT_S = 900.0
 JOB_LINE_TIMEOUT_S = 30.0
 MOVE_CODES = {"G0", "G1", "G2", "G3", "G38.2", "G38.3", "G38.4", "G38.5", "G4", "$H"}
+# The lines that take a block of the planner: a sender counts its room for these.
+PLANNED = {"G0", "G00", "G1", "G01", "G2", "G02", "G3", "G03", "G4", "G53"}
+# The blocks an idle controller's planner holds, the smallest Grbl builds with: what a
+# sender may queue before the next report says how many are free.
+PLANNER_BLOCKS = 15
+
+
+# A move written without a space before its first word (`G1X10`), as a post may.
+UNSPACED_MOVE_RE = re.compile(r"^G0?[0-3](?![0-9.])")
 
 
 def line_timeout(cmd: str) -> float:
     code = cmd.split(" ", 1)[0] if cmd else ""
-    return JOB_MOVE_TIMEOUT_S if code in MOVE_CODES or code.startswith("G1") else JOB_LINE_TIMEOUT_S
+    moves = code in MOVE_CODES or UNSPACED_MOVE_RE.match(code) is not None
+    return JOB_MOVE_TIMEOUT_S if moves else JOB_LINE_TIMEOUT_S
+
+
+def busy(status: dict) -> bool:
+    """Whether the report says the controller still has a job in it: running, homing,
+    jogging, or held; idle, in alarm and the rest are not."""
+    return STATE_WORDS.get(status["machine_state"]) in ("running", "hold")
+
+
+class PlannerRoom:
+    """The planner's room as a streamed job counts it: what the controller's last
+    status report said (``Bf:``, blocks free), counted down a line at a time between
+    reports. A sender that counts the planner's blocks never blocks the port on a
+    full one, so a hold and a poll go through meanwhile. None when the controller
+    does not say (grbl 1.1 reports it only when $10 asks), and the line's ``ok`` is
+    the flow control then, as a printer's is."""
+
+    def __init__(self) -> None:
+        self.free: Optional[int] = None
+        self.known = False
+
+    def wait(self, link: GcodeLink, cmd: str, abandoned: Callable[[], bool]) -> bool:
+        """Wait, with the link free, until the planner has room for ``cmd``; False
+        when ``abandoned()`` says the job was paused or stopped meanwhile, or a move's
+        time ran out."""
+        if cmd.split(" ", 1)[0] not in PLANNED:
+            return True
+        if not self.known or (self.free is not None and self.free <= 1):
+            end = time.monotonic() + JOB_MOVE_TIMEOUT_S
+            while True:
+                try:
+                    status, _lines = report(link, wait=1.0)
+                except (LinkBusy, ToolchainError):
+                    status = None
+                if status is not None:
+                    self.known = True
+                    buffer = status["buffer"]
+                    if buffer:
+                        self.free = buffer["planner"]
+                    elif status["machine_state"] == "Idle":
+                        self.free = PLANNER_BLOCKS  # idle: the whole planner is free
+                    else:
+                        self.free = None  # busy and not saying: the `ok` is the flow control
+                    if self.free is None or self.free >= 1:
+                        break
+                if abandoned() or time.monotonic() > end:
+                    return False
+                time.sleep(0.05)
+        if self.free is not None:
+            self.free -= 1
+        return True
+
+
+def await_idle(link: GcodeLink, abandoned: Callable[[], bool]) -> None:
+    """Poll the controller until it is idle, in alarm or offline, or ``abandoned()``
+    says the job was cancelled, or a move's time runs out; a held controller is
+    waited for. A cut's last line is answered when it is queued, not when it is done."""
+    end = time.monotonic() + JOB_MOVE_TIMEOUT_S
+    while time.monotonic() < end and not abandoned():
+        try:
+            status, _lines = report(link, wait=1.0)
+        except LinkBusy:
+            time.sleep(0.2)
+            continue
+        if not busy(status):
+            return
+        time.sleep(0.3)
 
 
 # --- the simulated controller ---------------------------------------------------------
@@ -434,9 +495,12 @@ class SimulatedRouter:
     """A pretend Grbl_ESP32 behind the transport slot: no port, no hardware.
 
     Answers ``$I``, ``?``, ``$G``, ``$$``, ``$#``, homing, unlocking, jogs and
-    moves (each taking the time its distance and feed say, so a job streams and
-    a hold has something to stop), the spindle, work zero and a probe, and the
-    realtime characters. Its machine coordinates are negative from the home
+    moves, the spindle, work zero and a probe, and the realtime characters. Moves
+    and dwells go into a planner queue fifteen deep, as Grbl's does: a line is
+    answered ``ok`` once queued, the queue runs in its own time (each move the
+    time its distance and feed say), and a line that finds the queue full waits
+    for room, as a sender counting characters would. Homing answers when it is
+    done, as Grbl's does. Its machine coordinates are negative from the home
     corner at the back right and the top of Z, as a Grbl machine homed to its
     maximum switches has them, so the tool stands in the working area at
     ``mpos + travel``. It starts idle with the tool over the middle of the
@@ -451,6 +515,9 @@ class SimulatedRouter:
     TRAVEL = {"x": 400.0, "y": 600.0, "z": 80.0}
     RAPID = 4000.0  # mm/min, the maker's figure for X and Y
     PULL_OFF = 3.0  # mm back from the switches after homing
+    PLANNER = PLANNER_BLOCKS  # blocks the queue holds before a line waits for room
+    REALTIME_BYTES = tuple(b[0] for b in REALTIME.values())
+    QUEUED = PLANNED
 
     def __init__(self, port: str, baud: int):
         self.port, self.baud = port, baud
@@ -474,86 +541,71 @@ class SimulatedRouter:
         self.s = 0.0
         self.f = 0.0
         self.feed_override = 100
-        # A move in flight: from where, to where, since when, how long.
-        self._move: Optional[Tuple[dict, dict, float, float, str]] = None
-        self._held_at: Optional[float] = None  # the fraction done when held
-        # Multiplies every move's and dwell's time: 1 is real time, 0 skips them.
+        # The planner: blocks waiting to run, each a target and a feed (a move) or a
+        # length of time (a dwell), and the one running: its start, its end, when it
+        # began, how long it takes, and what it is (a move, a jog, homing, a dwell).
+        self._queue: List[tuple] = []
+        self._current: Optional[Tuple[dict, dict, float, float, str]] = None
+        self._held_at: Optional[float] = None  # the fraction of the current block done when held
+        # Multiplies every block's time: 1 is real time, 0 skips them.
         self.time_scale = float(os.environ.get("APOTHECARY_SIMULATED_SPEED", "1"))
         self.probe: Optional[dict] = None
         self.settings = {
-            0: 10,
-            1: 255,
-            2: 0,
-            3: 0,
-            4: 0,
-            5: 0,
-            6: 0,
-            10: 1,
-            11: 0.010,
-            12: 0.002,
-            13: 0,
-            20: 1,
-            21: 0,
-            22: 1,
-            23: 3,
-            24: 200.000,
-            25: 2000.000,
-            26: 250,
-            27: 3.000,
-            30: 24000,
-            31: 0,
-            32: 0,
-            100: 800.000,
-            101: 800.000,
-            102: 800.000,
-            110: 4000.000,
-            111: 4000.000,
-            112: 2000.000,
-            120: 200.000,
-            121: 200.000,
-            122: 100.000,
-            130: 400.000,
-            131: 600.000,
-            132: 80.000,
-        }
+            0: 10, 1: 255, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 10: 1, 11: 0.010, 12: 0.002,
+            13: 0, 20: 1, 21: 0, 22: 1, 23: 3, 24: 200.000, 25: 2000.000, 26: 250,
+            27: 3.000, 30: 24000, 31: 0, 32: 0, 100: 800.000, 101: 800.000, 102: 800.000,
+            110: 4000.000, 111: 4000.000, 112: 2000.000, 120: 200.000, 121: 200.000,
+            122: 100.000, 130: 400.000, 131: 600.000, 132: 80.000,
+        }  # fmt: skip
 
-    # -- where the tool is, as time passes ----------------------------------------------
+    # -- the planner, as time passes -----------------------------------------------------
     def _settle(self) -> None:
-        """Finish a move whose time has passed."""
-        if self._move is None:
-            return
-        start, end, since, length, after = self._move
+        """Run the queue up to now: finish the blocks whose time has passed, start the next."""
         if self._held_at is not None:
             return
-        if time.monotonic() - since >= length:
+        while True:
+            if self._current is None:
+                if not self._queue:
+                    if self.state in ("Run", "Jog", "Home"):
+                        self.state = "Idle"
+                    return
+                target, feed, kind = self._queue.pop(0)
+                start = dict(self.pos)
+                if kind == "dwell":
+                    length = feed * self.time_scale  # a dwell's "feed" is its seconds
+                else:
+                    dist = sum((target[k] - start[k]) ** 2 for k in "xyz") ** 0.5
+                    length = (dist / max(feed, 1.0)) * 60.0 * self.time_scale
+                self._current = (start, dict(target), time.monotonic(), length, kind)
+                self.state = {"jog": "Jog", "home": "Home"}.get(kind, "Run")
+            start, end, since, length, kind = self._current
+            if time.monotonic() - since < length:
+                return
             self.pos = dict(end)
-            self._move = None
-            if after == "home":
+            self._current = None
+            if kind == "home":
                 self.homed = True
                 self.alarm = None
-            self.state = "Idle"
 
     def _where(self) -> dict:
-        if self._move is None:
+        if self._current is None:
             return dict(self.pos)
-        start, end, since, length, _ = self._move
-        done = (
-            self._held_at
-            if self._held_at is not None
-            else (1.0 if length <= 0 else min(1.0, (time.monotonic() - since) / length))
-        )
+        start, end, since, length, _ = self._current
+        done = self._held_at if self._held_at is not None else self._fraction_done()
         return {k: round(start[k] + (end[k] - start[k]) * done, 3) for k in "xyz"}
 
-    def _begin_move(self, target: dict, feed: float, state: str = "Run", after: str = "") -> None:
-        start = self._where()
-        dist = sum((target[k] - start[k]) ** 2 for k in "xyz") ** 0.5
-        length = (dist / max(feed, 1.0)) * 60.0 * self.time_scale
-        self._move = (start, dict(target), time.monotonic(), length, after)
-        self._held_at = None
-        self.state = state
+    def _end_of_queue(self) -> dict:
+        """Where the tool will be once every queued block has run."""
+        if self._queue:
+            return dict(self._queue[-1][0])
+        return dict(self._current[1]) if self._current is not None else dict(self.pos)
+
+    def _enqueue(self, target: dict, feed: float, kind: str = "move") -> None:
+        self._queue.append((dict(target), feed, kind))
+        self._settle()
 
     def _target(self, args: Dict[str, str], relative: bool) -> dict:
-        here = self._where()
+        here = self._end_of_queue()
         target = dict(here)
         for axis in "xyz":
             if axis.upper() in args:
@@ -561,31 +613,35 @@ class SimulatedRouter:
                 target[axis] = (here[axis] + v) if relative else (v + self.wco[axis])
         return target
 
+    def _busy(self) -> bool:
+        self._settle()
+        return self._current is not None or bool(self._queue)
+
     # -- the realtime characters ------------------------------------------------------
     def _realtime(self, byte: int) -> None:
         self._settle()
         if byte == ord("?"):
             self._pending += (self._status() + "\n").encode()
         elif byte == ord("!"):
-            if self._move is not None and self._held_at is None:
-                self._held_at = self._where_fraction()
-                self.state = "Hold"
-            elif self.state == "Idle":
+            if self.state in ("Run", "Jog", "Home", "Idle") and self._held_at is None:
+                self._held_at = self._fraction_done() if self._current is not None else None
                 self.state = "Hold"
         elif byte == ord("~"):
             if self.state == "Hold":
-                if self._move is not None and self._held_at is not None:
-                    start, end, _since, length, after = self._move
+                if self._current is not None and self._held_at is not None:
+                    start, end, _since, length, kind = self._current
                     left = length * (1.0 - self._held_at)
-                    self._move = (self._where(), end, time.monotonic(), left, after)
+                    self._current = (self._where(), end, time.monotonic(), left, kind)
                     self._held_at = None
-                    self.state = "Run"
+                    self.state = {"jog": "Jog", "home": "Home"}.get(kind, "Run")
                 else:
-                    self.state = "Idle"
+                    self._held_at = None
+                    self.state = "Idle" if not self._queue else "Run"
         elif byte == 0x18:
-            moving = self._move is not None and self._held_at is None
+            moving = self._current is not None and self._held_at is None
             self.pos = self._where()
-            self._move, self._held_at = None, None
+            self._queue.clear()
+            self._current, self._held_at = None, None
             self.spindle_on, self.s = False, 0.0
             if moving:
                 self.state, self.alarm, self.homed = "Alarm", 3, False
@@ -598,10 +654,11 @@ class SimulatedRouter:
         elif byte == 0x85:
             if self.state == "Jog":
                 self.pos = self._where()
-                self._move, self.state = None, "Idle"
+                self._queue.clear()
+                self._current, self.state = None, "Idle"
 
-    def _where_fraction(self) -> float:
-        start, end, since, length, _ = self._move  # type: ignore[misc]
+    def _fraction_done(self) -> float:
+        start, end, since, length, _ = self._current  # type: ignore[misc]
         return 1.0 if length <= 0 else min(1.0, (time.monotonic() - since) / length)
 
     def _status(self) -> str:
@@ -609,11 +666,14 @@ class SimulatedRouter:
         mpos = ",".join(f"{where[k]:.3f}" for k in "xyz")
         state = self.state
         if state == "Hold":
-            state = "Hold:1" if (self._move is not None and self._held_at is not None) else "Hold:0"
+            state = (
+                "Hold:1" if (self._current is not None and self._held_at is not None) else "Hold:0"
+            )
         rpm = self.s if self.spindle_on else 0.0
-        fields = [state, f"MPos:{mpos}", f"FS:{self.f:.0f},{rpm:.0f}"]
-        if self._move is not None:
-            fields.append("Bf:14,127")
+        feed = self.f if self._current is not None and self._current[4] == "move" else 0.0
+        fields = [state, f"MPos:{mpos}", f"FS:{feed:.0f},{rpm:.0f}"]
+        if self._current is not None or self._queue:
+            fields.append(f"Bf:{self.PLANNER - len(self._queue)},127")
         fields.append("WCO:" + ",".join(f"{self.wco[k]:.3f}" for k in "xyz"))
         fields.append(f"Ov:{self.feed_override},100,100")
         if self.spindle_on:
@@ -622,6 +682,7 @@ class SimulatedRouter:
 
     # -- lines ----------------------------------------------------------------------------
     def _reply(self, cmd: str) -> List[str]:
+        """The reply lines to one line; ``[]`` for homing, which answers when done."""
         self._settle()
         upper = cmd.upper()
         if upper == "$I":
@@ -652,12 +713,12 @@ class SimulatedRouter:
         if self.state == "Alarm" and not upper.startswith(("$X", "$H", "$", "G4")):
             return ["error:9"]
         if upper.startswith("$H"):
+            if self._busy():
+                return ["error:8"]  # a $ command needs the machine idle
             home = {"x": -self.PULL_OFF, "y": -self.PULL_OFF, "z": -self.PULL_OFF}
             self.alarm = None
-            self._begin_move(home, self.RAPID / 2, state="Home", after="home")
-            # Homing answers when it is done.
-            self._wait_out()
-            return ["ok"]
+            self._enqueue(home, self.RAPID / 2, "home")
+            return []  # ok once it is done: _answer waits
         if upper == "$X":
             if self.state == "Alarm":
                 self.state, self.alarm = "Idle", None
@@ -667,11 +728,10 @@ class SimulatedRouter:
             if self.state not in ("Idle", "Jog"):
                 return ["error:8"]
             args = self._args(upper[3:])
-            relative = "G91" in upper
-            target = self._target(args, relative)
+            target = self._target(args, "G91" in upper)
             if any(target[k] > 0 or target[k] < -self.TRAVEL[k] for k in "xyz"):
                 return ["error:15"]
-            self._begin_move(target, float(args.get("F", self.RAPID)), state="Jog")
+            self._enqueue(target, float(args.get("F", self.RAPID)), "jog")
             return ["ok"]
         if upper.startswith("$"):
             m = SETTING_RE.match(upper)
@@ -686,10 +746,10 @@ class SimulatedRouter:
             self.relative = False
         elif code == "G91":
             self.relative = True
-        elif code in ("G0", "G1", "G00", "G01"):
+        elif code in ("G0", "G1", "G00", "G01", "G2", "G3", "G02", "G03"):
             if "F" in args:
                 self.f = float(args["F"])
-            if code in ("G1", "G01") and not self.f:
+            if code not in ("G0", "G00") and not self.f:
                 return ["error:22"]
             # A line that only sets modes (G1 F800) moves nothing.
             if any(a in args for a in "XYZ"):
@@ -700,18 +760,16 @@ class SimulatedRouter:
                     self.state, self.alarm = "Alarm", 2
                     return ["error:2", "ALARM:2"]
                 feed = self.RAPID if code in ("G0", "G00") else self.f * self.feed_override / 100
-                self._wait_out()  # one move at a time: the queue is one deep here
-                self._begin_move(target, feed)
+                self._enqueue(target, feed)
         elif code == "G53":
             # G53 G0 Z0: the top of Z travel, in machine coordinates
-            self._wait_out()
-            target = self._where()
+            target = self._end_of_queue()
             if "Z" in args:
                 target["z"] = float(args["Z"])
-            self._begin_move(target, self.RAPID)
+            self._enqueue(target, self.RAPID)
         elif code == "G4":
             secs = float(args.get("P", 0)) or 0.0
-            time.sleep(min(2.0, secs) * self.time_scale)
+            self._enqueue(self._end_of_queue(), min(2.0, secs), "dwell")
         elif code in ("M3", "M4"):
             if "S" in args:
                 self.s = float(args["S"])
@@ -719,19 +777,20 @@ class SimulatedRouter:
         elif code == "M5":
             self.spindle_on = False
         elif code == "G10" and args.get("L") == "20":
-            here = self._where()
+            here = self._end_of_queue()
             for axis in "xyz":
                 if axis.upper() in args:
                     self.wco[axis] = round(here[axis] - float(args[axis.upper()]), 3)
         elif code == "G38.2":
             # The plate is 20 mm below where the tool stands, or the move ends short.
-            here = self._where()
+            here = self._end_of_queue()
             depth = float(args.get("Z", 0))
             plate = here["z"] - 20.0
             touched = here["z"] + depth <= plate
             z = plate if touched else here["z"] + depth
             self.pos = {**here, "z": z}
-            self._move = None
+            self._queue.clear()
+            self._current = None
             self.probe = {"x": here["x"], "y": here["y"], "z": z, "touched": touched}
             if not touched:
                 self.state, self.alarm = "Alarm", 5
@@ -759,21 +818,31 @@ class SimulatedRouter:
                 self.s = float(code[1:] or 0)
             else:
                 self.f = float(code[1:] or 0)
-        elif code in ("G2", "G3", "G02", "G03"):
-            if "F" in args:
-                self.f = float(args["F"])
-            self._wait_out()
-            self._begin_move(self._target(args, self.relative), self.f or self.RAPID)
         elif code.startswith("M"):
             return ["error:20"]  # a tool change, M115, M105: not this dialect's
         return ["ok"]
 
-    def _wait_out(self) -> None:
-        """Let a move in flight finish before the next, as the planner would."""
-        while self._move is not None and self._held_at is None:
-            self._settle()
-            if self._move is not None:
-                time.sleep(0.005)
+    def _answer(self, cmd: str) -> None:
+        """Reply to one line: wait for room in the planner as a counting sender would
+        (the lock let go meanwhile, so a realtime character still gets through),
+        and for homing to finish before its ``ok``."""
+        code = cmd.upper().split()[0] if cmd.split() else ""
+        while True:
+            with self._lock:
+                self._settle()
+                if code not in self.QUEUED or len(self._queue) < self.PLANNER:
+                    reply = self._reply(cmd)
+                    if reply:
+                        self._pending += "".join(ln + "\n" for ln in reply).encode()
+                        return
+                    break  # homing: ok when done
+            time.sleep(0.005)
+        while True:
+            with self._lock:
+                if not self._busy() or self.state in ("Alarm", "Hold"):
+                    self._pending += b"ok\n"
+                    return
+            time.sleep(0.005)
 
     @staticmethod
     def _args(text: str) -> Dict[str, str]:
@@ -781,16 +850,16 @@ class SimulatedRouter:
 
     # -- the transport ---------------------------------------------------------------
     def write(self, data: bytes) -> None:
-        with self._lock:
-            text = b""
-            for byte in data:
-                if byte in (ord("?"), ord("!"), ord("~"), 0x18, 0x85):
+        text = b""
+        for byte in data:
+            if byte in self.REALTIME_BYTES:
+                with self._lock:
                     self._realtime(byte)
-                else:
-                    text += bytes([byte])
-            for cmd in text.decode("utf-8", "replace").split("\n"):
-                if cmd.strip():
-                    self._pending += "".join(ln + "\n" for ln in self._reply(cmd.strip())).encode()
+            else:
+                text += bytes([byte])
+        for cmd in text.decode("utf-8", "replace").split("\n"):
+            if cmd.strip():
+                self._answer(cmd.strip())
 
     def read(self, timeout: float) -> bytes:
         with self._lock:
@@ -821,10 +890,13 @@ def identify_router(link: GcodeLink, reset: bool = False) -> PrinterInfo:
 
 
 def report(
-    link: GcodeLink, wait: Optional[float] = None, timeout: float = 3.0
+    link: GcodeLink, wait: Optional[float] = None, timeout: float = 3.0, origin: str = "poll"
 ) -> Tuple[dict, List[str]]:
-    """One realtime status report, and every line read for it."""
-    lines = link.realtime(REALTIME["STATUS"], until=STATUS_RE, timeout=timeout, wait=wait)
+    """One realtime status report, and every line read for it. ``origin`` tags it in
+    the log: a poll's is hidden with the poll traffic, a person's query is kept."""
+    lines = link.realtime(
+        REALTIME["STATUS"], until=STATUS_RE, timeout=timeout, wait=wait, origin=origin
+    )
     status = next((parse_status(ln) for ln in reversed(lines) if is_status_line(ln)), None)
     if status is None:
         raise ToolchainError(f"{link.port}: no status report for `?` within {timeout:.0f}s")
@@ -864,6 +936,7 @@ def poll_router(link: GcodeLink, wait: Optional[float] = None) -> PrinterStatus:
         feed=status["feed"],
         pins=list(status["pins"]),
         alarm=alarm,
+        alarm_text=alarm_text(alarm),
         overrides=status["overrides"],
         raw=raw,
     )
@@ -876,14 +949,23 @@ def control_router(link: GcodeLink, command: str, timeout: float = 60.0) -> List
     cmd = normalise_control(command)
     if cmd in REALTIME:
         settle = 1.0 if cmd == EMERGENCY_STOP else 0.3
-        return link.realtime(REALTIME[cmd], until=None, timeout=settle, label=cmd, now=True)
-    return link.command(cmd, timeout=timeout, origin="control")
+        return link.realtime(
+            REALTIME[cmd], until=None, timeout=settle, label=cmd, now=True, origin="control"
+        )
+    try:
+        return link.command(cmd, timeout=timeout, origin="control")
+    except ToolchainError as exc:
+        # A refusal says the controller's words, not its code alone.
+        words = explain(str(exc).rsplit("-> ", 1)[-1])
+        if words is None:
+            raise
+        raise ToolchainError(f"{exc} ({words})") from None
 
 
 def query_router(link: GcodeLink, command: str, timeout: float = 15.0) -> List[str]:
     cmd = normalise_query(command)
     if cmd == "?":
-        _status, lines = report(link, timeout=timeout)
+        _status, lines = report(link, timeout=timeout, origin="query")
         return lines
     return link.command(cmd, timeout=timeout, origin="query")
 
@@ -892,3 +974,18 @@ def alarm_text(code: Optional[int]) -> Optional[str]:
     if code is None:
         return None
     return ALARMS.get(code, f"alarm {code}")
+
+
+EXPLAINED_RE = re.compile(r"^(error|ALARM):(\d+)")
+
+
+def explain(line: str) -> Optional[str]:
+    """The words for a controller's ``error:N`` or ``ALARM:N``, kept beside the line
+    in the port's log and said in a refusal; None for any other line."""
+    m = EXPLAINED_RE.match(line.strip())
+    if not m:
+        return None
+    code = int(m.group(2))
+    if m.group(1) == "error":
+        return ERRORS.get(code, f"error {code}")
+    return alarm_text(code)

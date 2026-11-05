@@ -162,13 +162,16 @@ def test_the_seed_pins_printer_1s_mainboard_and_touches_no_real_port(person, mon
     try:
         identity = demo.seed()
         assert identity == "FAKESERIAL1"
-        (pin,) = devices.get_state().bindings(demo.SITE)
-        assert (pin.path, pin.identity) == (demo.BOARD, "FAKESERIAL1")
+        pins = {b.path: b.identity for b in devices.get_state().bindings(demo.SITE)}
+        assert pins == {demo.BOARD: "FAKESERIAL1", demo.CONTROLLER: "FAKEROUTER3"}
         printer = devices.known_device(demo.PRINTER)
         assert printer.printer.machine_type == "Simulated Ender"
-        # Every port the demo has is the scripted bench's: the printer and the devkit.
+        router = devices.known_device(demo.ROUTER)
+        assert router.printer.dialect == "grbl" and router.printer.machine == "router"
+        # Every port the demo has is the scripted bench's: the printer, the devkit and
+        # the router.
         ports = [d.port for d in devices.detected_devices(fresh=True)]
-        assert set(ports) == {"/dev/ttyFAKE0", demo.PRINTER, demo.DEVKIT}, ports
+        assert set(ports) == {"/dev/ttyFAKE0", demo.PRINTER, demo.DEVKIT, demo.ROUTER}, ports
     finally:
         links.stop_all()
         toolchains.reset_toolchains()

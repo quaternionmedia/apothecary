@@ -42,15 +42,16 @@ reports, the offset between them; whichever is missing is computed.
 
 What may be typed at an armed router is a short list, each line bounded for
 this machine -- a jog no longer than its longest axis, a feed no faster than
-the maker's figure, a spindle no faster than the trim router turns -- and the
-rest is refused before it reaches the port:
+the maker's figure, a spindle no faster than the trim router turns. A line
+the dialect knows but bounds is refused as `OutOfBounds`, a `ValueError` of
+its own, and the rest is refused before it reaches the port:
 
     >>> grbl.normalise_control("$J=G91 G21 x10 f500")
     '$J=G91 G21 X10 F500'
     >>> grbl.normalise_control("M3 S30000")
     Traceback (most recent call last):
     ...
-    ValueError: spindle above 24000 rpm: 'M3 S30000'
+    apothecary.firmware.gcode.OutOfBounds: spindle above 24000 rpm: 'M3 S30000'
 
 A file a CAM post wrote is checked once before its first line, with the
 same list a printer's is checked against and the router's own: a controller

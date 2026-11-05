@@ -370,7 +370,7 @@ def firmware_printer_command(body: PrinterControlRequest):
     jogs and SD pause/resume/abort; a router's homing, unlock, jogs, spindle, work zero,
     probe, hold and resume -- while the latch is armed. The stop (``M112``; a router's
     ``RESET``) always goes."""
-    if not devices.is_emergency_stop(body.port, body.command):
+    if not devices.is_emergency_stop(body.command):
         _busy_guard(body.port)
     data = devices.printer_control(body.port, body.command).model_dump(mode="json")
     data["control"] = _control_state(body.port)

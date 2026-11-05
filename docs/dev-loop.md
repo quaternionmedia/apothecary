@@ -31,7 +31,7 @@ uv run apothecary serve --reload     # or --demo, for a bench with nothing real 
 | A change to | Shows after |
 |---|---|
 | `apothecary/static/`, the page's scripts and styles | A browser reload: the server serves them as they are |
-| The package's Python | A restart: under `--reload`, each saved `.py` file restarts the server |
+| The package's Python | A restart: under `--reload`, each saved `.py` file under `apothecary/` or `templates/` restarts the server; a worktree under `.claude/` or a cache under `.cache/` does not |
 | A part's SCAD | Its next build: `apothecary parts generate-stl <name>` builds an STL older than its SCAD again |
 | `docs/` or `walkthrough/` | A browser reload of the page under `/docs` or `/walkthrough`, rendered as it is asked for |
 | `uv.lock` or `pyproject.toml` | `uv sync`, then a restart: `--reload` does not see a new package |

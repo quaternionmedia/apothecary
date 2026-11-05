@@ -40,7 +40,7 @@ import time
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Protocol, Tuple
 
-from .models import Heater, PrinterInfo, PrinterStatus
+from .models import MARLIN, Heater, PrinterInfo, PrinterStatus
 from .toolchains import PortHeld, ToolchainError
 
 # --- parsers: Marlin's documented replies -------------------------------------
@@ -553,17 +553,18 @@ class CommsLog:
         self._base = 0  # index of _entries[0]
         self._lock = threading.Lock()
 
-    def add(self, kind: str, text: str, origin: str = "") -> None:
+    def add(self, kind: str, text: str, origin: str = "", note: Optional[str] = None) -> None:
         with self._lock:
-            self._entries.append(
-                {
-                    "i": self._base + len(self._entries),
-                    "t": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
-                    "kind": kind,  # tx | rx | boot | sys
-                    "origin": origin,  # poll | query | identify -- who sent the command
-                    "text": text,
-                }
-            )
+            entry = {
+                "i": self._base + len(self._entries),
+                "t": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+                "kind": kind,  # tx | rx | boot | sys
+                "origin": origin,  # poll | query | identify -- who sent the command
+                "text": text,
+            }
+            if note:
+                entry["note"] = note  # the line in words, where the dialect has them (error:15)
+            self._entries.append(entry)
             if len(self._entries) > self.capacity:
                 drop = self.capacity // 4
                 del self._entries[:drop]
@@ -607,6 +608,12 @@ class GcodeLink:
         self._t = transport
         self._lock = threading.RLock()
         self._write_lock = threading.Lock()  # one line on the wire at a time
+        # The turnstile: an exchange takes it before the lock and lets it go once it
+        # holds the lock, so one that waits with a bound (a poll between two streamed
+        # lines) gets the link before the stream's next line, which would otherwise
+        # take the lock back the instant it let go. ``waiters`` counts the bounded ones.
+        self._turn = threading.Lock()
+        self.waiters = 0
         self._buf = b""
         self.unsolicited: List[str] = []
         # The last `ALARM:N` the board said, whenever it said it: a GRBL status report
@@ -621,6 +628,33 @@ class GcodeLink:
     # multiplied by this. 1 against hardware; the tests' scripted boards answer
     # at once, so the tests set it near 0 rather than wait out real silences.
     time_scale: float = 1.0
+
+    # The dialect's words for a line the board says, kept beside it in the log
+    # (grbl.explain: `error:15` is a jog past the travel); None for a dialect with
+    # none. Set once the board is identified.
+    annotate: Optional[Callable[[str], Optional[str]]] = None
+
+    def _note(self, line: str) -> Optional[str]:
+        return self.annotate(line) if self.annotate is not None else None
+
+    def _acquire(self, wait: Optional[float]) -> bool:
+        """The link's lock, waiting ``wait`` seconds at most (forever for None), through
+        the turnstile: exchanges take the lock in the order they asked for it."""
+        if wait is None:
+            with self._turn:
+                self._lock.acquire()
+            return True
+        self.waiters += 1
+        try:
+            end = time.monotonic() + wait
+            if not self._turn.acquire(timeout=wait):
+                return False
+            try:
+                return self._lock.acquire(timeout=max(0.0, end - time.monotonic()))
+            finally:
+                self._turn.release()
+        finally:
+            self.waiters -= 1
 
     def _read_line(self, timeout: float) -> Optional[str]:
         end = time.monotonic() + timeout
@@ -666,7 +700,7 @@ class GcodeLink:
                 if line is None:
                     break
                 lines.append(line)
-                self.log.add("boot", line)
+                self.log.add("boot", line, note=self._note(line))
         self.unsolicited.extend(lines)
         return lines
 
@@ -702,7 +736,7 @@ class GcodeLink:
         cmd = cmd.strip()
         if not cmd or "\n" in cmd:
             raise ValueError("one G-code command per call")
-        if not self._lock.acquire(timeout=-1 if wait is None else wait):
+        if not self._acquire(wait):
             raise LinkBusy(
                 f"{self.port}: the link is busy ({self.job['kind'] if self.job else 'an exchange'})"
             )
@@ -729,7 +763,7 @@ class GcodeLink:
                 if not quiet or objected:
                     if quiet:
                         self.log.add("tx", cmd, origin)  # the line it objected to, for the record
-                    self.log.add("rx", line, origin)
+                    self.log.add("rx", line, origin, note=self._note(line))
                 if BUSY_RE.match(line):
                     end = time.monotonic() + timeout * self.time_scale  # heating/homing
                 elif OK_RE.match(line):
@@ -764,7 +798,7 @@ class GcodeLink:
             if not self._lock.acquire(blocking=False):
                 return []
         else:
-            if not self._lock.acquire(timeout=-1 if wait is None else wait):
+            if not self._acquire(wait):
                 raise LinkBusy(
                     f"{self.port}: the link is busy ({self.job['kind'] if self.job else 'an exchange'})"
                 )
@@ -779,7 +813,7 @@ class GcodeLink:
                 if line is None:
                     break
                 lines.append(line)
-                self.log.add("rx", line, origin)
+                self.log.add("rx", line, origin, note=self._note(line))
                 if until is not None and until.match(line.strip()):
                     return lines
             if until is not None:
@@ -812,7 +846,7 @@ class GcodeLink:
                     if line is None:
                         break
                     lines.append(line)
-                    self.log.add("rx", line, "control")
+                    self.log.add("rx", line, "control", note=self._note(line))
             finally:
                 self._lock.release()
         return lines
@@ -996,8 +1030,21 @@ CONTROL_CODES: List[tuple] = [
 EMERGENCY_STOP = "M112"  # always accepted, latch or not; halts the board until reset
 
 
+# This dialect, as a board's ``PrinterInfo`` names it, and the kind of machine it
+# drives (apothecary/jobs.py's machine kinds).
+DIALECT = MARLIN
+MACHINE = "printer"
+
+
+class OutOfBounds(ValueError):
+    """A control line the dialect knows, asking for more than its bound allows: a
+    hotend target, a move, a feed, a spindle speed. Distinct from a line it does not
+    know, for a port not yet identified (devices.normalise_control)."""
+
+
 def normalise_control(command: str) -> str:
-    """Upper-cased, single-spaced control line; ValueError if not allowed or out of bounds."""
+    """Upper-cased, single-spaced control line; ValueError if not allowed,
+    ``OutOfBounds`` if allowed but over a bound."""
     cmd = " ".join(command.strip().upper().split())
     if cmd == EMERGENCY_STOP:
         return cmd
@@ -1006,20 +1053,26 @@ def normalise_control(command: str) -> str:
         if not m:
             continue
         if cmd.startswith("M104") and int(m.group(1)) > HOTEND_MAX_C:
-            raise ValueError(f"hotend target above {HOTEND_MAX_C} degC: {command!r}")
+            raise OutOfBounds(f"hotend target above {HOTEND_MAX_C} degC: {command!r}")
         if cmd.startswith("M140") and int(m.group(1)) > BED_MAX_C:
-            raise ValueError(f"bed target above {BED_MAX_C} degC: {command!r}")
+            raise OutOfBounds(f"bed target above {BED_MAX_C} degC: {command!r}")
         if cmd.startswith("M106") and m.group(1) and int(m.group(1)) > 255:
-            raise ValueError(f"fan speed above 255: {command!r}")
+            raise OutOfBounds(f"fan speed above 255: {command!r}")
         if cmd[0] == "G" and cmd[1] in "01":
             for axis_val in re.findall(r" [XYZ](-?\d+(?:\.\d+)?)", cmd):
                 if abs(float(axis_val)) > JOG_MAX_MM:
-                    raise ValueError(f"move beyond {JOG_MAX_MM} mm: {command!r}")
+                    raise OutOfBounds(f"move beyond {JOG_MAX_MM} mm: {command!r}")
             feed = re.search(r" F(\d+)", cmd)
             if feed and int(feed.group(1)) > FEED_MAX:
-                raise ValueError(f"feedrate above {FEED_MAX}: {command!r}")
+                raise OutOfBounds(f"feedrate above {FEED_MAX}: {command!r}")
         return cmd
     raise ValueError(f"not an allowed control code: {command!r}")
+
+
+# What a person may still send while a print holds the port: the heaters, the fan
+# and the break-wait (a hotend a few degrees off is fixed mid-print); motion and the
+# SD card are the print's.
+JOB_ALLOWS = re.compile(r"^(M104|M140|M106|M107|M108)\b")
 
 
 # --- bed leveling: reading Marlin's mesh -------------------------------------------------
@@ -1140,7 +1193,7 @@ PRINT_REFUSED: Dict[str, str] = {
     "M112": "kills the board",
     "M0": "stops and waits for a button on the machine",
     "M1": "stops and waits for a button on the machine",
-    "M6": "is a tool change, which the host does not yet carry",
+    "M6": "is a tool change: the host streams one tool",
 }
 TEMP_CODES = {"M104": HOTEND_MAX_C, "M109": HOTEND_MAX_C, "M140": BED_MAX_C, "M190": BED_MAX_C}
 SPINDLE_CODES = ("M3", "M4")

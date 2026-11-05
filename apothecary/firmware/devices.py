@@ -13,10 +13,11 @@ Views of one board, kept separate so the GUI can show where they disagree:
   port (``arduino-cli monitor``, or Apothecary's own pyserial monitor for
   Rust, ``serial_monitor.py``); a sketch that prints ``apothecary <name>:
   hello`` at boot identifies itself.
-* **Identified** -- for a board running a G-code firmware (a printer
-  mainboard), ``M115`` over a held-open link (``gcode.py``): firmware name,
-  machine type, capabilities. Cached like a probe; polled for temperatures
-  and progress afterwards.
+* **Identified** -- for a board running a G-code firmware (a printer's
+  mainboard, a router's controller), ``M115`` then ``$I`` over a held-open link
+  (``gcode.py``, ``grbl.py``): firmware name, machine type, capabilities, and
+  the dialect it answered in. Cached like a probe; polled for temperatures,
+  positions and progress afterwards.
 
 Records live in ``~/.apothecary/firmware-state.json`` (``APOTHECARY_STATE_DIR``
 overrides): machine state, not repository state, so it is never committed. A
@@ -50,7 +51,7 @@ from .. import jobs
 from ..projects.parts.skeleton import ROOT
 from ..stamped import claim, stamp
 from ..stays_local import subprocess_env
-from . import gcode, grbl
+from . import dialects, gcode, grbl
 from .models import (
     PRINT_FILE_ID,
     BoardInfo,
@@ -518,7 +519,7 @@ def identify_printer(
     links: Optional[gcode.PrinterLinks] = None,
     reset: bool = False,
 ) -> DeviceInfo:
-    """Ask ``M115`` on ``port`` and cache the answer on the device.
+    """Ask ``M115``, then ``$I``, on ``port`` and cache the answer on the device.
 
     Opens (and keeps) the printer link; a serial stream on that port (a
     devkit's Machine listening) is closed first so only one process reads it. ``reset`` reboots the
@@ -552,9 +553,18 @@ def _identify(link: gcode.GcodeLink, reset: bool) -> PrinterInfo:
         return gcode.identify_printer(link, reset=reset)
     except ToolchainError as marlin_said:
         try:
-            return grbl.identify_router(link)
+            info = grbl.identify_router(link)
         except ToolchainError:
             raise marlin_said from None
+        _annotated(link, info.dialect)
+        return info
+
+
+def _annotated(link: gcode.GcodeLink, dialect: Optional[str]) -> gcode.GcodeLink:
+    """The link keeping the dialect's words beside what the board says (a GRBL
+    controller's error and alarm numbers); a printer's link has none."""
+    link.annotate = dialects.by_word(dialect).explain
+    return link
 
 
 def dialect_of(port: str, state: Optional[FirmwareState] = None) -> Optional[str]:
@@ -564,71 +574,52 @@ def dialect_of(port: str, state: Optional[FirmwareState] = None) -> Optional[str
     return cached.printer.dialect if cached is not None and cached.printer is not None else None
 
 
+def dialect_for(port: str, state: Optional[FirmwareState] = None) -> dialects.Dialect:
+    """The dialect the board on ``port`` is driven in; Marlin's for a port nothing
+    has identified."""
+    return dialects.by_word(dialect_of(port, state))
+
+
 def normalise_control(port: str, command: str, state: Optional[FirmwareState] = None) -> str:
     """``command`` as the port's dialect would send it; a port not yet identified
     takes a line either dialect allows. ValueError when neither does."""
     dialect = dialect_of(port, state)
-    if dialect == grbl.DIALECT:
-        return grbl.normalise_control(command)
-    if dialect is not None:
-        return gcode.normalise_control(command)
-    try:
-        return gcode.normalise_control(command)
-    except ValueError as marlin_said:
-        try:
-            return grbl.normalise_control(command)
-        except ValueError as grbl_said:
-            # A line one dialect knows and bounds is refused for its bound, not as
-            # unknown to the other.
-            if str(grbl_said).startswith("not an allowed"):
-                raise marlin_said from None
-            raise grbl_said from None
+    if dialect is None:
+        return dialects.either(command, "normalise_control")
+    return dialects.by_word(dialect).normalise_control(command)
 
 
 def normalise_query(port: str, command: str, state: Optional[FirmwareState] = None) -> str:
     """``command`` as a report-only query of the port's dialect; a port not yet
     identified takes a query either dialect has. ValueError when neither does."""
     dialect = dialect_of(port, state)
-    if dialect == grbl.DIALECT:
-        return grbl.normalise_query(command)
-    if dialect is not None:
-        return gcode.normalise_query(command)
-    try:
-        return gcode.normalise_query(command)
-    except ValueError as marlin_said:
-        try:
-            return grbl.normalise_query(command)
-        except ValueError:
-            raise marlin_said from None
+    if dialect is None:
+        return dialects.either(command, "normalise_query")
+    return dialects.by_word(dialect).normalise_query(command)
 
 
 def emergency_stop_for(port: str, state: Optional[FirmwareState] = None) -> str:
     """The port's dialect's stop: Marlin's ``M112``, GRBL's soft reset."""
-    return grbl.EMERGENCY_STOP if dialect_of(port, state) == grbl.DIALECT else gcode.EMERGENCY_STOP
+    return dialect_for(port, state).stop
 
 
-def is_emergency_stop(port: str, command: str, state: Optional[FirmwareState] = None) -> bool:
+def is_emergency_stop(command: str) -> bool:
     """Whether ``command`` is a stop in either dialect: the one line that goes
     whatever holds the port."""
-    cmd = " ".join(command.strip().upper().split())
-    return cmd in (gcode.EMERGENCY_STOP, grbl.EMERGENCY_STOP)
+    return " ".join(command.strip().upper().split()) in dialects.STOPS
 
 
 def query_codes(
     port: Optional[str] = None, state: Optional[FirmwareState] = None
 ) -> Dict[str, str]:
     """The report-only queries a port's dialect accepts; Marlin's for no port."""
-    return (
-        grbl.QUERY_CODES if port and dialect_of(port, state) == grbl.DIALECT else gcode.QUERY_CODES
-    )
+    return dialect_for(port, state).query_codes if port else dialects.MARLIN.query_codes
 
 
 def _poll(
     link: gcode.GcodeLink, dialect: Optional[str], wait: Optional[float]
 ) -> gcode.PrinterStatus:
-    if dialect == grbl.DIALECT:
-        return grbl.poll_router(link, wait=wait)
-    return gcode.poll_printer(link, wait=wait)
+    return dialects.by_word(dialect).poll(link, wait=wait)
 
 
 def known_device(port: str, state: Optional[FirmwareState] = None) -> Optional[DeviceInfo]:
@@ -711,7 +702,7 @@ def printer_status(
             link = links.get(port)
         else:
             get_streams().close(port)
-            link = links.open(port, rate)
+            link = _annotated(links.open(port, rate), cached.printer.dialect)
     assert link is not None
     job = _live_job(port, link.job)
     if job is not None and job.get("kind") not in STREAMED:
@@ -769,7 +760,7 @@ def _last_status_with(port: str, job: dict) -> gcode.PrinterStatus:
     status.job = dict(job)
     status.synced = []
     if job.get("kind") in STREAMED and status.state == "idle":
-        status.state = "printing"
+        status.state = busy_word(job["kind"])
     return status
 
 
@@ -822,8 +813,10 @@ def printer_control(
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
-    cmd = normalise_control(port, command, state)  # ValueError when not allowed / out of bounds
-    stop = is_emergency_stop(port, cmd, state)
+    # ValueError when not allowed or out of bounds, in the port's dialect when it is
+    # known; a port identified below (its first use) is asked again in its own.
+    cmd = normalise_control(port, command, state)
+    stop = is_emergency_stop(cmd)
     if not stop and not links.control.armed(port):
         raise gcode.ControlNotArmed(f"{port}: control is not armed -- arm it first")
     held = links.get(port)
@@ -834,40 +827,34 @@ def printer_control(
     link = links.get(port)
     if link is None:
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
-    dialect = dialect_of(port, state)
-    cmd = normalise_control(port, command, state)  # now in the dialect the port speaks
-    if cmd != emergency_stop_for(port, state) and stop:
+    dialect = dialect_for(port, state)
+    cmd = normalise_control(port, command, state)
+    if stop and cmd != dialect.stop:
         raise ValueError(f"not an allowed control code for this machine: {command!r}")
     if stop:
         running = _PRINTS.get(port)
         if running and running.finished is None:
             running.cancel(quiet=True)  # the board halts; nothing more is sent
-    if dialect == grbl.DIALECT:
-        lines = grbl.control_router(link, cmd)
-    else:
-        lines = gcode.control_printer(link, cmd)
+    lines = dialect.control(link, cmd)
     links.control.renew(port)
     return PrinterQueryResult(
         port=port, command=cmd, lines=lines, queried_at=datetime.now(timezone.utc)
     )
 
 
-# What a person may still send while a job holds the port. A print keeps the
-# heaters, the fan and the break-wait in reach (a hotend a few degrees off is
-# fixed mid-print); motion and the SD card are the job's. A cut keeps the hold,
-# the resume and the spindle. A probe keeps only the stop.
-PRINT_ALLOWS = re.compile(r"^(M104|M140|M106|M107|M108)\b")
-CUT_ALLOWS = re.compile(r"^(HOLD|RESUME|M5|M3 S\d+)$")
+# What a person may still send while a job holds the port: the stop always; while a
+# streamed job runs, what its dialect allows (``Dialect.job_allows``); a probe keeps
+# only the stop.
 WHAT_HOLDS = {"print": "a print", "cut": "a cut"}
 
 
 def _job_allows(job: dict, cmd: str) -> None:
-    if cmd in (gcode.EMERGENCY_STOP, grbl.EMERGENCY_STOP):
+    if cmd in dialects.STOPS:
         return
-    if job.get("kind") == "print" and PRINT_ALLOWS.match(cmd):
-        return
-    if job.get("kind") == "cut" and CUT_ALLOWS.match(cmd):
-        return
+    op = jobs.operation(job.get("kind", ""))
+    if op is not None and op.kind in STREAMED:
+        if dialects.BY_MACHINE[op.machine].job_allows.match(cmd):
+            return
     what = WHAT_HOLDS.get(job.get("kind"), "a bed reading")
     raise PortHeld(f"{port_of(job)}: {what} holds the port ({job.get('stage')})")
 
@@ -1169,7 +1156,12 @@ class PrintJob:
         self.op = jobs.operation(kind)
         if self.op is None:
             raise ValueError(f"no machine offers a {kind!r}")
+        self.dialect = dialects.BY_MACHINE[self.op.machine]
         self.grbl = self.op.machine == grbl.MACHINE
+        # A router's planner room, counted as a sender counts it; a printer's `ok` is
+        # its flow control.
+        self._room = grbl.PlannerRoom() if self.grbl else None
+        self._paused_from: Optional[str] = None
         self.running_stage = self.op.busy or kind
         self.stage = "starting"
         self.sent = 0
@@ -1239,7 +1231,10 @@ class PrintJob:
         }
 
     def pause(self) -> None:
-        if self.finished is None and self.stage == self.running_stage:
+        # A router's lines are answered when queued, so a cut whose last line is sent
+        # is still running on the controller (``finishing``): it is held the same.
+        if self.finished is None and self.stage in (self.running_stage, "finishing"):
+            self._paused_from = self.stage
             self._go.clear()
             self.stage = "paused"
             self._realtime("HOLD")  # a router stops where it is; a printer finishes its queue
@@ -1247,7 +1242,7 @@ class PrintJob:
 
     def resume(self) -> None:
         if self.finished is None and self.stage == "paused":
-            self.stage = self.running_stage
+            self.stage = self._paused_from or self.running_stage
             self._realtime("RESUME")
             self._go.set()
             self._announce()
@@ -1264,7 +1259,11 @@ class PrintJob:
                 pass  # the stream's own next line says whether the board is still there
 
     def _timeout(self, cmd: str) -> float:
-        return grbl.line_timeout(cmd) if self.grbl else gcode.line_timeout(cmd)
+        return self.dialect.line_timeout(cmd)
+
+    def _interrupted(self) -> bool:
+        """Whether the job was paused or stopped: what a wait on the controller watches."""
+        return self._stop.is_set() or not self._go.is_set()
 
     def cancel(self, quiet: bool = False) -> None:
         """Stop feeding; ``quiet`` skips the safe-off (the board is already halted)."""
@@ -1337,6 +1336,8 @@ class PrintJob:
                 if self._stop.is_set():
                     outcome = "cancelled"
                     break
+                if self._room is not None and not self._room.wait(link, cmd, self._interrupted):
+                    continue  # paused or stopped while waiting: the loop's head decides
                 self.current = cmd
                 lines = link.command(cmd, timeout=self._timeout(cmd), origin=kind, quiet=True)
                 tail = (tail + [f"> {cmd}", *lines])[-200:]
@@ -1345,9 +1346,20 @@ class PrintJob:
                     self._announce()
                 if self.sent % PRINT_LOG_EVERY == 0:
                     link.log.add("sys", f"{kind}: {self.sent}/{self.total} lines sent", kind)
-                time.sleep(0.001)  # let a poll take the lock between lines
+                # Let a poll take the link between lines: a moment when one waits for
+                # it, since the next line would take the lock back the instant it is
+                # let go; a tick otherwise.
+                time.sleep(0.02 if link.waiters else 0.001)
             else:
-                self.stage = "done"
+                if self.grbl:
+                    # The router is finished when its controller is idle again.
+                    self.stage = "finishing"
+                    self._announce()
+                    grbl.await_idle(link, self._stop.is_set)
+                if self._stop.is_set():
+                    outcome = "cancelled"
+                else:
+                    self.stage = "done"
             if outcome == "cancelled":
                 self.stage = "cancelled"
         except (ToolchainError, ValueError, OSError) as exc:
@@ -1489,10 +1501,7 @@ def printer_query(
     if link is None:
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
     cmd = normalise_query(port, command, state)  # in the dialect the port speaks
-    if dialect_of(port, state) == grbl.DIALECT:
-        lines = grbl.query_router(link, cmd)
-    else:
-        lines = gcode.query_printer(link, cmd)
+    lines = dialect_for(port, state).query(link, cmd)
     return PrinterQueryResult(
         port=port, command=cmd, lines=lines, queried_at=datetime.now(timezone.utc)
     )

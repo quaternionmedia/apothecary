@@ -39,7 +39,7 @@ needed: each has a default.
 | `ARDUINO_CLI` | The arduino-cli the Arduino module runs, checked first; `none` means none | The tools dir, then `PATH` |
 | `ESPTOOL` | The esptool the Arduino module runs; `none` means none | `PATH`, the `esp32:esp32` core's, or the Python module |
 | `CARGO`, `ESPFLASH` | The cargo and espflash a Rust sketch is built and flashed with; `none` means none | The tools dir, then `PATH` |
-| `FAKE_DEVKIT`, `FAKE_MONITOR` | Read by the scripted arduino-cli the demo and the tests run (`apothecary/firmware/scripted.py`), never by a real one: a devkit in its board list, and a monitor that sends far more than a serial line carries | Unset |
+| `FAKE_DEVKIT`, `FAKE_ROUTER`, `FAKE_MONITOR` | Read by the scripted arduino-cli the demo and the tests run (`apothecary/firmware/scripted.py`), never by a real one: a devkit in its board list, the router's controller in it, and a monitor that sends far more than a serial line carries | Unset |
 | `OPENSCADPATH` | OpenSCAD's own library path, read for the files a SCAD includes | Unset |
 
 [firmware.md](firmware.md#setup) says how each toolchain finds its tools. The

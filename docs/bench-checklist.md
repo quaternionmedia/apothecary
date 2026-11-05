@@ -1,9 +1,9 @@
-# The bench checklist: the Ender 3 and the ESP32, for real
+# The bench checklist: the Ender 3, the ESP32 and the router, for real
 
-The suites hold every path below against the simulated printer and the
-scripted devkit; this is how the same paths are confirmed on the real Ender 3
-and a real ESP32 devkit. A person runs it, at the bench. No test flashes a
-board or moves a printer.
+The suites hold every path below against the simulated printer, the
+scripted devkit and the simulated router; this is how the same paths are
+confirmed on the real Ender 3, a real ESP32 devkit and the AnoleX router. A
+person runs it, at the bench. No test flashes a board or moves a machine.
 
 Tick each box as it passes. When one fails, note the time and the port, and
 download the board's log (the Machine's `⤓`): it holds every line sent and
@@ -171,6 +171,61 @@ Machine, Ctrl + right-click opens the board's own ring (the device ring); from
       the port reset the board; it should not. **Probe** asks espflash for
       the chip and its MAC (this one resets it).
 
+## I. The router: the AnoleX 4060-Evo Ultra 2
+
+The suites hold every path below against the simulated router; this is how
+the same paths are confirmed on the real machine. Its controller has not yet
+answered this seam, so the first section records what it says
+([docs/cnc.md](cnc.md) says what is assumed). Stay at the machine while
+anything turns or moves, with a hand on its own red stop: the page's ⏹ E-STOP
+is the controller's soft reset, and the button is faster. Spindle and motion
+only with the table clear and no tool in the collet until the last box.
+
+- [ ] `uv run apothecary firmware devices` with the router's USB lead in: its
+      port, the bridge's vid:pid and whether it has a serial number (a pin
+      follows the board when it has one, the port when it has not). Note them.
+- [ ] `uv run apothecary firmware printer <port> --query '$I' --query '$$'`:
+      the firmware line (`Grbl 1.3a` is what the maker's listing says), the
+      machine name, the build, the settings. Note whether opening the port
+      reset the controller (a banner in the log), which way it homes (`$23`),
+      the travel (`$130` to `$132`) and the maximum feeds (`$110` to `$112`);
+      `apothecary/firmware/grbl.py`'s bounds are the maker's figures, and
+      they are held to what `$$` says here.
+- [ ] **Pin the router.** Select `cnc_router` in Site, choose the port in its
+      Device section, **Pin**: the pin goes to the controller in the control
+      box, the status line says it was asked `$I`, and `cnc_router` wears 🪚.
+- [ ] Open its Machine: `idle`, the controller's word beside it (`Idle`, or
+      `Alarm` with homing required on power-up), the tool's work and machine
+      positions, the spindle off, no pins on. Press each limit switch by
+      hand: its pin shows within one poll and goes when let go.
+- [ ] **⚙ Control**: the pad, headed *cnc_router armed: it can turn and move*.
+      **Home** (`$H`): the gantry seeks its switches, the state card reads
+      `running (Home)` and then `idle`, the machine position reads the
+      pull-off near zero. Note which corner is home.
+- [ ] Step **10**, **X−**, **Y−**, **Z−** once each: the tool moves 10 mm, the
+      work position follows within one poll, and the marker in the world
+      moves the same way over the table; a jog past the travel is refused by
+      the controller (`error:15`) and said so in the log.
+- [ ] **Spindle On** at 8000 with no tool: the router turns and the card reads
+      the speed; **Off**. 30000 in the box → Set: refused before the port.
+- [ ] **XYZ zero here**, then jog away and **Go to zero**: the tool returns.
+      **Z zero here** with the plate under the collet, then **Probe Z** 25 mm:
+      the touch is in the log (`[PRB:…:1]`) and `$#` says where.
+- [ ] **⏸ Hold** mid-jog of 50 mm: the gantry stops where it is, `hold
+      (Hold:0)`; **▶ Resume**: it finishes the move.
+- [ ] **⏹ E-STOP** while jogging: the soft reset, the banner in the log, the
+      state `alarm` with `3` (reset while in motion); **Unlock** (`$X`) or
+      **Home** brings it back.
+- [ ] *Cut from here* → `docs/validation/dry-run-square.nc` (a square 10 mm
+      above the table, the spindle off): kept, listed with its line count; a
+      file with a `$` line or `M6` lists as refused and ▶ Cut stays refused.
+- [ ] **▶ Cut** → the dialog → the tool traces the square; **Pause** holds it
+      mid-side, **Resume** goes on; **Cancel**, pressed twice: a hold, the
+      reset, the spindle off, the job *cancelled* in Site's Jobs; cut again to
+      the end: *done*.
+- [ ] With a tool and stock, the first real cut from a CAM post's file, the
+      spindle at its dial's speed: watch the first pass.
+
 ## Results
 
 | Section | Date | Passed | Notes |
@@ -184,3 +239,4 @@ Machine, Ctrl + right-click opens the board's own ring (the device ring); from
 | F. Slice and print | | | |
 | G. Stop and let go | | | |
 | H. The ESP32 | | | |
+| I. The router | | | |

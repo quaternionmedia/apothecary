@@ -43,6 +43,10 @@ class Opening:
 
 
 UNO = "/dev/ttyFAKE0"
+# The simulated GRBL router, on the port the scripted arduino-cli lists with FAKE_ROUTER
+# (test_router_ui.py): identified and pinned to cnc_router's controller, it has a Machine.
+ROUTER = "/dev/ttyFAKE3"
+CONTROLLER = "cnc_router.frame_system.controller"
 
 # Each subject a test opens, by case: a system with subjects of more than one kind has a
 # case for each.
@@ -64,6 +68,15 @@ OPENING = {
         ),
         kind="printer",
     ),
+    # cnc_router's controller, pinned at the start: a router's Machine, the same way.
+    "machine-router": Opening(
+        "machine",
+        "/viewer/sites/garage",
+        lambda page: page.wait_for_function(
+            "() => window.fractalViewer.openMachine('cnc_router')", timeout=RING_MS
+        ),
+        kind="router",
+    ),
     # The scripted Uno, pinned nowhere: a devkit's Machine, by its port.
     "machine-devkit": Opening(
         "machine",
@@ -81,14 +94,16 @@ OPENING = {
 
 
 # What a section's window shows once its subject is open: a selector inside it that is
-# visible. A printer's Machine shows a devkit's sections as a line saying so.
+# visible. A printer's Machine shows a devkit's sections as a line saying so. A window
+# two kinds share names a card of each, the one shown: Status, a printer's hotend or a
+# router's spindle (the other kind's card is in the page, hidden).
 SHOWS = {
     "part-parameters": "#part-params input",
     "part-scad": ".scad-editor .cm-content",
     "part-variants": "#part-saved",
     "part-history": "#part-history-none",
     "part-readiness": "#part-checklist",
-    "machine-status": "#c-hot",
+    "machine-status": "#c-hot:visible, #c-spindle:visible",
     "machine-temperature": "#chart",
     "machine-print": "#print-start",
     "machine-level": "#level-read",
@@ -113,6 +128,7 @@ SHOWS = {
 VERB = {
     "part": ("calibration_cube", ("Part", "Edit"), "part-parameters"),
     "machine-printer": ("printer_1", ("Device", "Poll"), "machine-status"),
+    "machine-router": ("cnc_router", ("Device", "Poll"), "machine-status"),
     "airgap": ("", ("Panels", "Airgap", "Sweep"), "airgap-sweep"),
 }
 
@@ -123,6 +139,7 @@ CASES = list(OPENING)
 LINK = {
     "part": "/viewer/parts/calibration_cube",
     "machine-printer": f"/firmware/monitor?port={PRINTER}",
+    "machine-router": f"/firmware/monitor?port={ROUTER}",
     "machine-devkit": f"/firmware/monitor?port={UNO}",
 }
 
@@ -137,12 +154,19 @@ EMPTY = {
 }
 
 
+def _kinds(section) -> tuple[str, ...]:
+    """The kinds of subject a section is for: one, or several (a Machine's Status is
+    a printer's and a router's); none for a section every kind has."""
+    kind = section.kind
+    return () if kind is None else kind if isinstance(kind, tuple) else (kind,)
+
+
 def _sections(case: str):
     """The sections a case's subject has: its system's, those for another kind of
     subject left out."""
     opening = OPENING[case]
     system = by_id(opening.system)
-    return system, [s for s in system.sections if s.kind in (None, opening.kind)]
+    return system, [s for s in system.sections if s.kind is None or opening.kind in _kinds(s)]
 
 
 @pytest.fixture(autouse=True)
@@ -156,13 +180,15 @@ def no_page_errors(page: Page):
 
 @pytest.fixture(scope="module")
 def url(start_server):
-    url = start_server()
-    # The simulated printer identified and pinned to printer_1, so it has a Machine.
-    httpx.post(f"{url}/firmware/devices/identify", json={"port": PRINTER}, timeout=15.0)
-    r = httpx.put(
-        f"{url}/sites/garage/nodes/printer_1/device", json={"identity": PRINTER}, timeout=15.0
-    )
-    assert r.status_code == 200, r.text
+    url = start_server({"APOTHECARY_SIMULATED_ROUTER": ROUTER, "FAKE_ROUTER": "1"})
+    # The simulated printer identified and pinned to printer_1, and the simulated router
+    # to cnc_router's controller, so each has a Machine.
+    for port, node in ((PRINTER, "printer_1"), (ROUTER, CONTROLLER)):
+        httpx.post(f"{url}/firmware/devices/identify", json={"port": port}, timeout=15.0)
+        r = httpx.put(
+            f"{url}/sites/garage/nodes/{node}/device", json={"identity": port}, timeout=15.0
+        )
+        assert r.status_code == 200, r.text
     return url
 
 
@@ -207,7 +233,7 @@ def test_every_system_and_section_has_a_line_here():
     assert {o.system for o in OPENING.values()} == {system.id for system in SYSTEMS}
     # A system with sections for kinds of subject has a case for each kind.
     for system in SYSTEMS:
-        kinds = {s.kind for s in system.sections if s.kind}
+        kinds = {k for s in system.sections for k in _kinds(s)}
         assert kinds <= {o.kind for o in OPENING.values() if o.system == system.id}, system.id
     assert {OPENING[c].system for c in VERB} == {
         system.id for system in SYSTEMS if any(s.verbs for s in system.sections)
@@ -215,10 +241,10 @@ def test_every_system_and_section_has_a_line_here():
     assert set(SHOWS) == {system.window(s.id) for system in SYSTEMS for s in system.sections}
     # A system with sections a link asks for has a link for each kind of its subject.
     for system in SYSTEMS:
-        kinds = {s.kind for s in system.sections if s.on_link}
+        kinds = {k for s in system.sections if s.on_link for k in _kinds(s)}
         if kinds:
             linked = {OPENING[c].kind for c in LINK if OPENING[c].system == system.id}
-            assert linked and kinds - {None} <= linked, system.id
+            assert linked and kinds <= linked, system.id
 
 
 @pytest.mark.e2e

@@ -53,6 +53,7 @@ from .example_hierarchy import (
 from .example_parts_library import create_parts_library_site, validate_parts_library
 from .firmware import devices as firmware_devices
 from .firmware import gcode as firmware_gcode
+from .firmware import grbl as firmware_grbl
 from .firmware.api import _device_view as firmware_device_view
 from .firmware.api import router as firmware_router
 from .firmware.bindings import bindings_for_site, device_for_identity, same_device
@@ -1491,6 +1492,7 @@ def _assembly_tree(
     node: Assembly,
     parent_world_position: Vector3D | None = None,
     parent_category: str | None = None,
+    inside_machine: bool = False,
 ) -> Dict[str, object]:
     """Recursive serialization of an Assembly node and everything beneath it.
 
@@ -1546,8 +1548,16 @@ def _assembly_tree(
         "comment": node.comment,
         "part_ref": node.part_ref,
         "sketch_ref": node.sketch_ref,
-        # A board (a printer's mainboard, a devkit): where a printer's Pin puts its port.
-        "board": is_board(node.part_ref),
+        # A board (a printer's mainboard, a devkit): where a machine's Pin puts its port.
+        # Inside a machine, an electrical leaf no part draws is its board too: the
+        # router's controller, which the maker publishes no drawing of.
+        "board": is_board(node.part_ref)
+        or (
+            inside_machine
+            and node.part_ref is None
+            and node.category == "electrical"
+            and not node.children
+        ),
         "category": category,
         "position": {"x": world_position.x, "y": world_position.y, "z": world_position.z},
         "footprint": _bounds_dict(node.footprint),
@@ -1566,7 +1576,12 @@ def _assembly_tree(
             _primitive_descriptor(node.base, world_position) if node.base is not None else None
         ),
         "children": [
-            {**_assembly_tree(child, world_position, category), "composition": composition}
+            {
+                **_assembly_tree(
+                    child, world_position, category, inside_machine or node.status is not None
+                ),
+                "composition": composition,
+            }
             for child, composition in composed
         ],
     }
@@ -2327,7 +2342,7 @@ def printers_in(site_name: str) -> List[str]:
             continue
         on_port = device_for_identity(binding.identity, plugged)
         known = firmware_devices.known_device(on_port.port, state) if on_port else None
-        if firmware_devices.machine_kind(known) == "router":
+        if firmware_devices.machine_kind(known) == firmware_grbl.MACHINE:
             continue  # a router cuts; nothing is printed on it
         found.add(bearer)
     return sorted(found)

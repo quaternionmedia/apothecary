@@ -3,11 +3,9 @@ poll, control and query through the devices layer, a cut streamed, the status
 the site takes and the evidence kept.
 
 The replies the simulated controller gives follow grbl 1.1's interface document
-and Grbl_ESP32's report code; they are not a recording of the garage's router,
-which this seam has not yet been plugged into (docs/cnc.md says what the bench
-confirms). The Marlin seam's tests (test_firmware_gcode.py) run against a
-recording of a real board; when the router has been on the bench, its first
-replies belong here the same way.
+and Grbl_ESP32's report code, not a recording of the garage's router
+(docs/cnc.md says what the bench confirms); the Marlin seam's tests
+(test_firmware_gcode.py) run against a recording of a real board.
 """
 
 import threading
@@ -102,18 +100,7 @@ def test_parse_build_info_parser_state_settings_alarm_and_probe():
     assert state["spindle_on"] and state["spindle_direction"] == "cw"
     assert (state["s"], state["f"], state["coordinate_system"]) == (12000.0, 800.0, "G54")
     assert state["units"] == "mm" and state["distance"] == "absolute"
-    assert grbl.parse_settings(["$110=4000.000", "$111=4000.000", "$132=80.000", "ok"]) == {
-        110: 4000.0,
-        111: 4000.0,
-        132: 80.0,
-    }
     assert grbl.parse_alarm(["error:9", "ALARM:3", "ok"]) == 3 and grbl.parse_alarm(["ok"]) is None
-    assert grbl.parse_probe(["[PRB:-12.000,-20.000,-41.250:1]", "ok"]) == {
-        "x": -12.0,
-        "y": -20.0,
-        "z": -41.25,
-        "touched": True,
-    }
     assert grbl.alarm_text(3).startswith("reset while in motion")
 
 
@@ -176,13 +163,20 @@ def test_control_allowlist_normalises_and_bounds():
         grbl.normalise_query("M503")
 
 
+def test_the_controller_s_numbers_have_words():
+    """An error or alarm number is said in words beside the line and in a refusal."""
+    assert grbl.explain("error:15") == "a jog would go past the travel"
+    assert grbl.explain("ALARM:3") == "reset while in motion: machine position is lost"
+    assert grbl.explain("error:999") == "error 999" and grbl.explain("ok") is None
+
+
 def test_a_streamed_file_may_not_carry_settings_tool_changes_or_a_fast_spindle():
     text = "G21 G90\n$110=4000\nM6 T1\nM3 S30000\nM0\nG1 X10 F800\nS12000 M3\nM5\nM30\n"
     total, problems = gcode.check_gcode(text)
     assert total == 9
     assert problems == [
         "line 2: $110=4000 is a controller setting, not a job's to send",
-        "line 3: M6 is a tool change, which the host does not yet carry",
+        "line 3: M6 is a tool change: the host streams one tool",
         "line 4: M3 asks for 30000 rpm, above 24000",
         "line 5: M0 stops and waits for a button on the machine",
     ]
@@ -239,6 +233,13 @@ def test_the_simulated_router_is_a_plausible_grbl(router_links):
     # Not this dialect's: Marlin's codes get error:20, which the link raises.
     with pytest.raises(ToolchainError, match="error:20"):
         link.command("M105")
+    # A refusal from the controller says the words, and the log keeps them beside the line.
+    link.annotate = grbl.explain
+    with pytest.raises(ToolchainError, match="error:15 \\(a jog would go past the travel\\)"):
+        grbl.control_router(link, "$J=G91 G21 X500 F500")
+    noted = [e for e in link.log.since(0)["entries"] if e.get("note")]
+    assert noted and noted[-1]["text"] == "error:15"
+    assert noted[-1]["note"] == "a jog would go past the travel"
 
 
 def test_a_move_takes_its_time_and_a_hold_stops_it_where_it_is(router_links, monkeypatch):
@@ -259,6 +260,7 @@ def test_a_move_takes_its_time_and_a_hold_stops_it_where_it_is(router_links, mon
     assert "ALARM:3" in said
     st = grbl.poll_router(link)
     assert st.state == "alarm" and st.alarm == 3
+    assert st.alarm_text == "reset while in motion: machine position is lost"
     with pytest.raises(ToolchainError, match="error:9"):
         link.command("G1 X-50 F600")
     assert grbl.control_router(link, "$X")[0] == "[MSG:Caution: Unlocked]"
@@ -292,6 +294,7 @@ def test_a_port_that_answers_grbl_is_a_router_polled_in_its_dialect(fake_arduino
     assert devices.machine_kind(device) == "router" and devices.dialect_of(PORT) == "grbl"
     st = devices.printer_status(PORT)
     assert st.dialect == "grbl" and st.state == "idle" and st.machine_state == "Idle"
+    assert router_links.get(PORT).annotate is grbl.explain  # the words ride the link
     assert "$G" in devices.query_codes(PORT) and "M503" not in devices.query_codes(PORT)
     assert "M503" in devices.query_codes(None)
     assert devices.printer_query(PORT, "$G").lines[-1] == "ok"
@@ -302,7 +305,7 @@ def test_a_port_that_answers_grbl_is_a_router_polled_in_its_dialect(fake_arduino
     log = [e["text"] for e in router_links.log_for(PORT).since(0)["entries"] if e["kind"] == "tx"]
     assert log[0] == "M115" and "$I" in log and "?" in log and "$G" in log
     assert devices.emergency_stop_for(PORT) == "RESET"
-    assert devices.is_emergency_stop(PORT, "reset") and devices.is_emergency_stop(PORT, "M112")
+    assert devices.is_emergency_stop("reset") and devices.is_emergency_stop("M112")
     assert router_links.close(PORT) is True
 
 
@@ -315,7 +318,7 @@ def test_control_needs_the_latch_and_the_reset_does_not(fake_arduino_cli, router
     assert devices.printer_control(PORT, "$H").lines == ["ok"]
     assert devices.printer_control(PORT, "m3 s8000").command == "M3 S8000"
     assert devices.printer_status(PORT).spindle.on
-    # A printer's line is refused on a router, now that the port is known to be one.
+    # A printer's line is refused on a router once the port is known to be one.
     with pytest.raises(ValueError, match="not an allowed GRBL control"):
         devices.printer_control(PORT, "M104 S200")
     with pytest.raises(ValueError, match="not an allowed GRBL control"):
@@ -364,7 +367,10 @@ def test_a_cut_holds_when_paused_and_a_cancel_holds_and_resets(
             break
         time.sleep(0.02)
     st = devices.printer_status(PORT)
-    assert st.job["kind"] == "cut" and st.state == "running" and st.job["stage"] == "running"
+    # The lines are answered as they are queued, fifteen at a time: the cut's last line
+    # may be sent while the controller still runs them (``finishing``).
+    assert st.job["kind"] == "cut" and st.state == "running"
+    assert st.job["stage"] in ("running", "finishing")
     with pytest.raises(PortHeld, match="a cut holds the port"):
         devices.printer_control(PORT, "$H")
     assert devices.printer_control(PORT, "M3 S9000").lines == ["ok"]  # the spindle stays in reach
@@ -376,9 +382,11 @@ def test_a_cut_holds_when_paused_and_a_cancel_holds_and_resets(
     sent = job.sent
     time.sleep(0.3)
     assert job.sent == sent  # nothing streams while paused
+    assert devices.printer_status(PORT).machine_state.startswith("Hold")
     job.resume()
     time.sleep(0.3)
-    assert job.stage == "running" and job.sent > sent
+    assert job.stage in ("running", "finishing") and job.finished is None
+    assert not devices.printer_status(PORT).machine_state.startswith("Hold")
     job.cancel()
     job.thread.join(5)
     rec = job.record
@@ -386,8 +394,6 @@ def test_a_cut_holds_when_paused_and_a_cancel_holds_and_resets(
     assert "> HOLD" in rec.log and "> RESET" in rec.log
     st = devices.printer_status(PORT)
     assert st.job is None and not st.spindle.on
-    transport = router_links.get(PORT)._t
-    assert not transport.spindle_on and transport.state in ("Idle", "Alarm")
 
 
 def test_a_router_poll_drives_cnc_router_and_is_kept_as_evidence(

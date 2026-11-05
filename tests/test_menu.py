@@ -33,6 +33,7 @@ from apothecary.menu import (
     Intent,
     NoSuchCell,
     Option,
+    PictureContext,
     Pointing,
     Ring,
     RingTooFull,
@@ -730,6 +731,79 @@ def test_the_control_ring_offers_every_allowlisted_verb():
     }
 
 
+ROUTER = Device(port="/dev/ttyUSB1", printer=True, machine="router", armed=False, bound=True)
+
+
+def test_a_machine_drawn_as_a_part_has_no_slice_and_its_ring_holds():
+    """The router is a part (anolex_4060_evo_ultra_2) standing in the garage; with a
+    printer pinned there it is no more sliced than printer_1 is, and its ring, with its
+    controller's Device last, holds eight."""
+    garage = _garage()
+    seen = PictureContext(printers=["printer_1"])
+    ring = resolve(
+        Context(pointing=Pointing.NODE, targets=["cnc_router"]), garage, device=ROUTER, picture=seen
+    )
+    labels = [o.label for o in ring.options]
+    assert "Slice" not in labels and labels[-2:] == ["Part", "Device"]
+    assert len(ring.options) <= 8
+    device = next(o for o in ring.options if o.label == "Device")
+    control = next(o for o in device.children if o.label == "Control")
+    assert [o.label for o in control.children][:3] == ["Home", "Unlock", "Jog"]
+
+
+def test_a_router_s_control_ring_is_its_own():
+    """A router's Control ring has no heaters or bed: homing, unlock and jog first, the
+    spindle, work zero and the probe, the cut's verbs, and Stop, destructive."""
+    ring = _control_ring(ROUTER)
+    assert [o.label for o in ring.options] == [
+        "Home",
+        "Unlock",
+        "Jog",
+        "Spindle",
+        "Zero",
+        "Cut",
+        "Stop",
+        "Arm",
+    ]
+    assert set(every_action([ring])) == {
+        "control:home",
+        "control:home-x",
+        "control:home-y",
+        "control:home-z",
+        "control:unlock",
+        "control:jog:Y+",
+        "control:jog:X+",
+        "control:jog:Y-",
+        "control:jog:X-",
+        "control:jog:Z+",
+        "control:jog:Z-",
+        "control:jog-cancel",
+        "control:spindle-on",
+        "control:spindle-off",
+        "control:zero-xyz",
+        "control:zero-z",
+        "control:go-zero",
+        "control:top-z",
+        "control:probe-z",
+        "control:job-resume",
+        "control:job-hold",
+        "control:job-abort",
+        "print:start",
+        "control:estop",
+        "control:arm",
+    }
+    stop = next(o for o in ring.options if o.label == "Stop")
+    assert stop.destructive and not any(o.destructive for o in ring.options if o is not stop)
+    # The jog pad is seated as a printer's is: the keypad's arrows, then Stop jog.
+    jog = next(o for o in ring.options if o.label == "Jog")
+    printers = next(o for o in _control_ring().options if o.label == "Jog").children
+    assert [(c.label, c.cell) for c in jog.children[:6]] == [(c.label, c.cell) for c in printers]
+    armed = every_action([_control_ring(ROUTER.model_copy(update={"armed": True}))])
+    assert "control:disarm" in armed and "control:arm" not in armed
+    # A printer's ring is unchanged by the router's.
+    assert "control:hotend-on" in every_action([_control_ring()])
+
+
 def test_stop_is_marked_destructive_and_nothing_else_on_the_ring_is():
     ring = _control_ring()
     assert {o.id for o in ring.options if o.destructive} == {"control:estop"}
@@ -1101,7 +1175,14 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     colour = next(c for c in models.children if c.label == "Colour")
     # The common colours a cell each, the rest under More: no word under another's name.
     assert [c.label for c in colour.children] == [
-        "black", "white", "grey", "red", "yellow", "green", "blue", "More"
+        "black",
+        "white",
+        "grey",
+        "red",
+        "yellow",
+        "green",
+        "blue",
+        "More",
     ]
     assert [c.label for c in colour.children[-1].children] == ["orange", "purple", "pink", "brown"]
     material = next(c for c in models.children if c.label == "Material")

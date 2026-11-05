@@ -1,7 +1,9 @@
 /* What a printer wears in a three.js scene, wherever that scene is: the
  * build volume as a wire box on the printer's base, the bed plane, a nozzle
  * marker at the position the board last reported, and -- when there is a
- * bed reading -- the mesh as a relief over the bed.
+ * bed reading -- the mesh as a relief over the bed. A router wears the same:
+ * its working area, its table and its tool, placed by the position the page
+ * computes from its controller's (toolPosition below).
  *
  * One group, in the printer's own frame (apothecary's z-up, relative to the
  * printer's origin); the caller places it: the world scene at the printer's
@@ -27,6 +29,18 @@ const MESH_INSET = 10;                 // Marlin's default MESH_INSET, mm from t
 // apothecary (x, y, z) z-up -> three.js (x, z, -y) y-up: a quarter turn about x, as the
 // viewer's sceneAt turns it.
 export const toScene = (p) => new THREE.Vector3(p.x, p.z, -p.y);
+
+// Where a poll puts the tool in the machine's volume: a printer's position as it
+// is; a router's from the machine position its controller reports, since a Grbl
+// machine homed to its maximum switches counts down from that corner, so the tool
+// is at mpos + travel. `volume` is the working area; null for no position.
+export function toolPosition(st, volume) {
+    const p = st && st.position;
+    if (!p) return null;
+    if (st.dialect !== "grbl") return p;
+    const [vx, vy, vz] = volume || [0, 0, 0];
+    return { x: p.x + vx, y: p.y + vy, z: p.z + vz };
+}
 
 /* Where the mesh points lie, in bed coordinates. Marlin prints the grid
  * without its positions; the probeable rectangle is the bed less what the
@@ -257,7 +271,7 @@ export function sayBoard(anchors, key, sum, device) {
     if (sum.kind === "devkit") {
         line = `⚡ ${esc(device.label)} · <span class="state">${esc(sum.short)}</span>`;
     } else {
-        const parts = [`🖨 <span class="state">${esc(sum.state)}</span>`];
+        const parts = [`${sum.icon || "🖨"} <span class="state">${esc(sum.state)}</span>`];
         if (sum.readings) parts.push(sum.readings);
         parts.push(...sum.extra.map(esc));
         line = parts.join(" · ");

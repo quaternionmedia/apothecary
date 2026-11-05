@@ -56,7 +56,7 @@ written by the browser tests that walk them; page 00, pages 07 to 17 and page
 | [The router](cnc.md) | The garage's CNC router beside the Ender: the AnoleX 4060-Evo Ultra 2 as a part on its stand, its Grbl_ESP32 controller as the node a port is pinned to, GRBL's dialect of the machine seam -- identified, polled, driven within bounds, stopped, a cut streamed -- the simulated controller, and what is not built |
 | [The slicer](slicer.md) | OrcaSlicer installed and pinned, the printer's profile kept with its part, a part or a made piece sliced for the pinned printer and kept for the Print card |
 | [The Airgap](airgap.md) | The `airgap` part -- a rotor/stator pair computed in its SCAD -- and the Airgap panel: the part as a field, torque and dynamics model that follows its text in the editor, its verbs on the ring, its rig and sweep as documents, and the metrics document Python reads back |
-| [The bench checklist](bench-checklist.md) | The Ender 3 and an ESP32 for real: pinning, the link, heat, motion, levelling, printing from here, slicing, the emergency stop, and the Rust and Arduino blinks |
+| [The bench checklist](bench-checklist.md) | The Ender 3, an ESP32 and the router for real: pinning, the link, heat, motion, levelling, printing from here, slicing, the emergency stop, the Rust and Arduino blinks, and the router's homing, jogs, spindle, zero, probe and a cut |
 | [The models checklist](models-checklist.md) | Image models through qmcp by hand, against the simulated qmcp: the Models window, asking about a shape, a person's word, switching an origin off, and each way qmcp can be missing |
 
 ## The Rust workspace
@@ -120,6 +120,7 @@ whose work is done leaves the table above for this list.
 
 ### Records from the bench
 
+- 2026-11-03 — [The router walked in the demo](validation/2026-11-03-router-walk.md): the AnoleX 4060-Evo Ultra 2's Machine, pad, cut and stop against the simulated controller, step by step with the owner, and what the walk changed.
 - 2026-10-12 — [OpenSCAD runs at once](validation/2026-10-12-openscad-runs-at-once.md): the timing behind the queue's default of two.
 - 2026-10-11 — [Walkthrough picture drift](validation/2026-10-11-walkthrough-picture-drift.md): how far two runs' pictures differ, behind CI's tolerance.
 - 2026-10-10 — [What the installs reach](validation/2026-10-10-what-the-installs-reach.md): the hosts the Rust and slicer installs reached under strace, and that a build and a slice reach none.

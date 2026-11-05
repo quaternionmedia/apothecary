@@ -56,7 +56,7 @@ and released exactly as a printer's is.
 | The bounds | hotend 300 °C, bed 130 °C, a move 300 mm, feed 12000 | a move 600 mm, feed 4000 mm/min (the maker's figure for X and Y), the spindle 24000 rpm, a probe 80 mm deep at 500 mm/min at most |
 | The stop | `M112`, always accepted | `RESET`, the soft reset (`0x18`), always accepted: everything halts, the queue empties, the spindle is off, and a reset in motion leaves the controller in alarm until unlocked or homed |
 | Report-only queries | `M503`, `M119`, `M20`, `M420 V` ... | `$$` (settings), `$#` (offsets, the probe's last touch), `$G`, `$I`, `$N`, `?` |
-| A streamed job | a print, from the slicer's G-code | a cut, from a CAM post's `.nc`, `.ngc`, `.gcode` or `.tap`, refused for a `$` line, a tool change (`M6`), a stop (`M0`, `M1`) or a spindle over the cap; a pause holds the controller (`!`) so it stops where it is, a cancel holds and resets |
+| A streamed job | a print, from the slicer's G-code | a cut, from a CAM post's `.nc`, `.ngc`, `.gcode` or `.tap`, refused for a `$` line, a tool change (`M6`), a stop (`M0`, `M1`) or a spindle over the cap; a pause holds the controller (`!`) so it stops where it is, a cancel holds and resets; a line is answered when queued, so the host counts the planner's room from the status report (`Bf:`) and never blocks the port on a full one, and the cut is done when the controller is idle again after its last line (`finishing`) |
 | Its job's word | `print`, the node `printing` | `cut`, the node `running` (`apothecary/jobs.py`) |
 
 Machine coordinates on a Grbl machine run negative from the home corner --
@@ -82,24 +82,48 @@ position; `--query '$G'` and the other GRBL queries work there.
 `APOTHECARY_SERIAL_ENGINE=simulated` answers every port as the simulated
 Ender; the ports `APOTHECARY_SIMULATED_ROUTER` names (comma-separated) answer
 as the simulated router instead, a pretend Grbl_ESP32 (`grbl.SimulatedRouter`):
-it homes, unlocks, jogs and moves, each move taking the time its distance and
-feed say (`APOTHECARY_SIMULATED_SPEED` scales it, `0` skips it), holds and
-resumes, runs its spindle, takes a work zero, probes a plate 20 mm under the
-tool, answers `$I`, `$$`, `$#`, `$G` and `?`, and goes into alarm on a reset
-in motion or a move past its travel. It starts idle with the tool over the
+it homes, unlocks, jogs and moves, its moves and dwells queued fifteen deep as
+Grbl's planner holds them -- a line is answered `ok` once queued, the queue
+runs in its own time, each move the time its distance and feed say
+(`APOTHECARY_SIMULATED_SPEED` scales it, `0` skips it), and a line that finds
+the queue full waits for room -- holds and resumes, runs its spindle, takes a
+work zero, probes a plate 20 mm under the tool, answers `$I`, `$$`, `$#`,
+`$G` and `?`, and goes into alarm on a reset in motion or a move past its
+travel. It starts idle with the tool over the
 middle of the table, as the part draws it; `APOTHECARY_SIMULATED_ROUTER_STATE=alarm`
 starts it as a real one powers up with homing enabled, in alarm until homed.
 `tests/test_firmware_grbl.py` holds the dialect against it, and says that its
 replies follow grbl 1.1's interface and Grbl_ESP32's report code rather than a
 recording of the garage's router.
 
+## In the page
+
+A board identified as a router has a router's Machine: the same window and
+head as a printer's -- auto-poll, Poll (`?` and `$G`), Reconnect, `$I`,
+Reboot, Release, ⚙ Control and ⏹ E-STOP, which is the soft reset -- and its
+own cards in Status: the state and the controller's word, the tool in the
+work zero and in machine coordinates, the spindle, the feed and the
+overrides, the input pins on. Armed, its control pad holds Motion (the jog
+pad, `$J=` at the feed set, Home `$H`, Unlock `$X`, Top of Z, Go to zero,
+Stop jog), Spindle (On at a speed, Off), Zero and probe (XYZ zero here, Z
+zero here, Probe Z down a depth), and Cut (Resume, Hold, Abort). *Cut from
+here* is the Print section with a router's words: a CAM post's file kept and
+checked, ▶ Cut, Pause (a hold), Resume, Cancel (a hold and a reset), the
+cut's progress and the router's jobs; it offers no Slice. A line the controller refuses
+(`error:15`) or an alarm it raises (`ALARM:3`) is said in GRBL's words beside
+the line in the log, in the refusal the status line carries, and in the state
+card. The ring's Control
+on a router is its own (`menu.router_control_options`): Home, Unlock, Jog
+(with Stop jog), Spindle, Zero (with Probe Z), Cut, Stop, Arm. The router's badge in the world and
+on Site's tree wears 🪚 and its state, and its marks stand on the table:
+the working area, the table and the tool, placed from the controller's
+machine coordinates and the working area (`mpos + travel`, a Grbl machine
+homed to its maximum switches). `apothecary serve --demo` pins the router's
+controller to the simulated router on `/dev/ttyFAKE3`, beside the printer's
+pin; `tests/e2e/test_router_ui.py` walks the Machine against it.
+
 ## Not built
 
-- The page: a router's Machine (its state and positions, the spindle, the
-  pins, a control pad of its own with home, unlock, jog, spindle, zero and
-  probe, a cut from here), its badge and marks in the world, and the demo's
-  pin of the router's controller. The seam answers for them already; the
-  windows and the ring's cells are the next change.
 - The bench: the router has not been plugged into this seam. What the
   controller really answers to `$I`, which USB bridge it has, whether its
   DTR resets it, what `$$` holds and which way it homes are confirmed at the

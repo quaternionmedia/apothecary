@@ -144,8 +144,14 @@
 #control .steps button.on { background: #3a3020; border-color: #7a5a1a; color: var(--warn); }
 #control .sent { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem; color: var(--tx); min-height: 1.1em; }
 #control .sent.bad { color: var(--bad); }
-/* A printer's controls and cards, or a devkit's: the root's kind shows one set. */
-.machine.kind-devkit .printer-only, .machine.kind-printer .devkit-only { display: none !important; }
+/* A line's words, where the dialect has them: beside the line, quieter. */
+#log .note { color: var(--ink-3, #8a948c); font-style: italic; }
+/* A printer's controls and cards, a router's, or a devkit's: the root's kind shows one
+   set; what the two G-code machines share (`gcode`) shows for both. The control pad
+   wears the kind too, since popped out it stands in a window of its own. */
+:is(.machine, .machine-pad).kind-devkit .printer-only, :is(.machine, .machine-pad).kind-devkit .router-only,
+:is(.machine, .machine-pad).kind-printer .devkit-only, :is(.machine, .machine-pad).kind-printer .router-only,
+:is(.machine, .machine-pad).kind-router .devkit-only, :is(.machine, .machine-pad).kind-router .printer-only:not(.gcode) { display: none !important; }
 /* A board pinned inside a printer is never flashed: its Flashing folds away. */
 .machine.in-printer #flash-card { display: none !important; }
 #c-sketch .ok { color: var(--ok); } #c-sketch .bad { color: var(--bad); } #c-sketch .warn { color: var(--warn); }

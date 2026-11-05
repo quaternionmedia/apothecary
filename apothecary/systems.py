@@ -17,7 +17,7 @@ entry. docs/plans/focused-systems-2026-10-22.md is the plan these follow.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # A view's layout is written in window ids, as panels.js's resolveView reads it:
 # "id" is a window (a stack of its own); {"stack": [...ids], "size", "active"} a
@@ -42,9 +42,10 @@ class Section:
     # The ring's verbs that act on it, which open it: an action named, or every
     # action under a prefix that ends with ":".
     verbs: Tuple[str, ...] = ()
-    # The kind of subject it is for (a board that is a printer, or a devkit), where it
-    # is for one kind only: a subject of another kind has no such window.
-    kind: Optional[str] = None
+    # The kind of subject it is for (a board that is a printer, a router or a devkit),
+    # where it is for some kinds only, one or a tuple: a subject of another kind has
+    # no such window.
+    kind: Optional[Union[str, Tuple[str, ...]]] = None
     # Opened when a link to its subject is followed: a link is a request for it.
     on_link: bool = False
 
@@ -248,16 +249,19 @@ MACHINE = System(
     opened_by="a board's ring, Device › Open",
     transient=True,
     # In one stack of their own under the Machine, so its head and E-STOP stay in view.
-    # A printer's Machine has a printer's sections and a devkit's a devkit's: the page
-    # attaches those of the board's kind, again when it is identified as another.
+    # A printer's Machine has a printer's sections, a router's a router's and a
+    # devkit's a devkit's: the page attaches those of the board's kind, again when it
+    # is identified as another. Status and Print serve the two G-code machines, each
+    # showing that machine's cards and words.
     sections=(
         Section(
             "status",
             "Status",
-            "a printer's hotend, bed, position, SD print, endstops and filament",
+            "a printer's hotend, bed, position, SD print, endstops and filament; "
+            "a router's state, positions, spindle, feed and pins",
             home="column",
             verbs=("device:poll",),
-            kind="printer",
+            kind=("printer", "router"),
             on_link=True,
         ),
         Section(
@@ -270,10 +274,11 @@ MACHINE = System(
         Section(
             "print",
             "Print",
-            "a printer's print from here: the files kept, what it makes, Slice, the print",
+            "a printer's print from here, or a router's cut: the files kept, what it "
+            "makes, Slice (a printer's), the job",
             home="column",
             verbs=("print:", "slice:"),
-            kind="printer",
+            kind=("printer", "router"),
         ),
         Section(
             "level",
@@ -368,7 +373,7 @@ def manifest(systems: Tuple[System, ...] = SYSTEMS) -> List[Dict[str, Any]]:
                     "window": s.window(sec.id),
                     "home": s.home(sec),
                     "verbs": list(sec.verbs),
-                    "kind": sec.kind,
+                    "kind": list(sec.kind) if isinstance(sec.kind, tuple) else sec.kind,
                     "on_link": sec.on_link,
                 }
                 for sec in s.sections

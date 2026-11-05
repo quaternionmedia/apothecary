@@ -684,7 +684,7 @@
 <body>
     <div class="app-container">
         {% if demo %}
-        <div id="demo-banner" class="demo-banner" role="note" title="apothecary serve --demo: printer_1's mainboard is pinned to a simulated Ender, an ESP32 devkit is simulated, a simulated lighting console sweeps the theatre's rig, arduino-cli, cargo and espflash are scripted, and no real serial port is opened. Its state is {{ demo }}, kept between runs; your own ~/.apothecary and pins are not touched.">The demo: a simulated printer, ESP32 and lighting console, scripted firmware tools, its own state in {{ demo }}. To leave it, stop the server and run <code>apothecary serve</code> without --demo.</div>
+        <div id="demo-banner" class="demo-banner" role="note" title="apothecary serve --demo: printer_1's mainboard is pinned to a simulated Ender, cnc_router's controller to a simulated GRBL router, an ESP32 devkit is simulated, a simulated lighting console sweeps the theatre's rig, arduino-cli, cargo and espflash are scripted, and no real serial port is opened. Its state is {{ demo }}, kept between runs; your own ~/.apothecary and pins are not touched.">The demo: a simulated printer, router, ESP32 and lighting console, scripted firmware tools, its own state in {{ demo }}. To leave it, stop the server and run <code>apothecary serve</code> without --demo.</div>
         {% endif %}
         <div class="toolbar">
             <h1>🧪 Apothecary</h1>
@@ -833,7 +833,7 @@
         import { mountScadEditor, variantChoices } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
         import { parseAssignments, lastOf, literalText, writeValues } from '/static/widgets/assignments.js';
-        import { makeMachineMarks, makeBoardBadge, sayBoard, toScene as marksToScene } from '/static/machine_marks.js';
+        import { makeMachineMarks, makeBoardBadge, sayBoard, toScene as marksToScene, toolPosition as toolPositionOf } from '/static/machine_marks.js';
         import { mountPictureMarks, axes as cameraAxes } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
         import { makeSettings, mountSettings, keyLabel, modifierLabel } from '/static/widgets/settings.js';
@@ -1007,6 +1007,10 @@
         // Mirrors example_hierarchy.PRINTER_STATUSES: no endpoint reports the
         // allowed set, so it is repeated here.
         const PRINTER_STATUSES = ['idle', 'printing', 'offline', 'maintenance'];
+        // And ROUTER_STATUSES, with them: every status a machine's polls set on its node.
+        const MACHINE_STATUSES = ['idle', 'printing', 'running', 'hold', 'alarm', 'offline', 'maintenance'];
+        // A router's words a person sets by hand: its statuses less those its polls set.
+        const ROUTER_BY_HAND = ['idle', 'offline', 'maintenance'];
         const STATUS_COLORS = {
             idle: 0x4488cc,
             printing: 0xffaa00,
@@ -3673,13 +3677,14 @@
             }
 
             renderEditablePanel(node) {
-                // Only a printer's status is chosen here. Any other status (a
-                // piece from a picture is "unsized") is a fact shown as text:
-                // a drop-down would show a printer status the node does not have.
-                const statusRow = PRINTER_STATUSES.includes(node.status)
+                // Only a machine's status is chosen here, in its own words (statusWordsFor).
+                // Any other status (a piece from a picture is "unsized") is a fact shown
+                // as text: a drop-down would show a status the node does not have.
+                const statusWords = this.statusWordsFor(node, this.selectedName);
+                const statusRow = statusWords
                     ? `<div class="prop-row"><label>Status</label>
                          <select id="status-select">
-                           ${PRINTER_STATUSES.map((s) => `<option value="${s}"${s === node.status ? ' selected' : ''}>${s}</option>`).join('')}
+                           ${statusWords.map((s) => `<option value="${s}"${s === node.status ? ' selected' : ''}>${s}</option>`).join('')}
                          </select>
                        </div>`
                     : node.status ? `<div class="prop-row"><label>Status</label><span>${esc(node.status)}</span></div>` : '';
@@ -6996,7 +7001,7 @@
             afterBindings() {
                 for (const [path, row] of Object.entries(this.bindings)) {
                     const st = row.printer_status;
-                    if (!st || !PRINTER_STATUSES.includes(st.state)) continue;
+                    if (!st || !MACHINE_STATUSES.includes(st.state)) continue;
                     const node = this.statusBearerFor(path);
                     if (node && node.status !== 'maintenance' && node.status !== st.state) this.applyNodeStatus(node._path || this.pathOf(node), st.state);
                 }
@@ -7137,7 +7142,7 @@
                 const machine = { port, path: anchor, pin: row, handle: null };
                 this.machine = machine;
                 const bearer = row ? this.statusBearerFor(row.path) : null;
-                const inPrinter = !!(bearer && PRINTER_STATUSES.includes(bearer.status));
+                const inPrinter = !!(bearer && MACHINE_STATUSES.includes(bearer.status));
                 // Its sections for any kind of board now (the Log); its kind's once the
                 // Machine says what the board is (onKind). A board inside a printer is
                 // the printer's: it has no Flashing.
@@ -7376,7 +7381,7 @@
                 const st = row.printer_status;
                 const have = this.marks[path];
                 if (have) {
-                    if (have.marks && st && st.position) have.marks.setPosition(st.position);
+                    if (have.marks && st && st.position) have.marks.setPosition(this.toolPosition(st, have.where));
                     if (have.marks) this.refreshReading(path);
                     return;
                 }
@@ -7397,10 +7402,15 @@
                     marks.group.userData.key = path;  // the printer's: they never dim its board's badge
                     this.scene.add(marks.group);
                     const first = this.bindings[row.path] && this.bindings[row.path].printer_status;
-                    if (first && first.position) marks.setPosition(first.position, { immediate: true });
+                    if (first && first.position) marks.setPosition(this.toolPosition(first, where), { immediate: true });
                     this.marks[path] = { marks, port, where, readingAt: 0, readingId: null };
                     this.refreshReading(path);
                 });
+            }
+
+            // Where a poll puts the tool in the machine's volume (machine_marks.js).
+            toolPosition(st, where) {
+                return toolPositionOf(st, where && where.printer ? where.printer.build_volume : null);
             }
 
             // The newest bed reading for a printer's port, laid over its bed;
@@ -7435,9 +7445,25 @@
                 }
                 if (this.selectedName === path) {
                     const sel = document.getElementById('status-select');
-                    if (sel && document.activeElement !== sel) sel.value = status;
+                    if (sel && document.activeElement !== sel) {
+                        // A word the polls set (running, hold, alarm) is shown even
+                        // where a hand would not set it.
+                        if (![...sel.options].some((o) => o.value === status)) sel.add(new Option(status, status), 0);
+                        sel.value = status;
+                    }
                 }
                 return true;
+            }
+
+            // The words a machine's Status offers: a printer's own, or a router's --
+            // idle, offline and maintenance by hand, and whatever its polls set, which
+            // is shown but never offered. A node with no machine status offers none.
+            statusWordsFor(node, path) {
+                if (!node || !MACHINE_STATUSES.includes(node.status)) return null;
+                const { row } = this.bindingFor(path);
+                const router = !!(row && row.device && row.device.printer && row.device.printer.machine === 'router');
+                const words = router ? ROUTER_BY_HAND : [...PRINTER_STATUSES];
+                return [...new Set([node.status, ...words])];
             }
 
             pathOf(node) {
@@ -7571,8 +7597,8 @@
                 }
                 const sum = boardSummary(this.boards.board(row.device.port));
                 span.dataset.port = row.device.port;
-                if (sum.kind === 'printer') {
-                    span.textContent = sum.readings ? `🖨 ${sum.readings}${sum.extra.length ? ' ' + sum.extra[0] : ''}` : '🖨';
+                if (sum.kind === 'printer' || sum.kind === 'router') {
+                    span.textContent = sum.readings ? `${sum.icon} ${sum.readings}${sum.extra.length ? ' ' + sum.extra[0] : ''}` : (sum.extra.length ? `${sum.icon} ${sum.extra[0]}` : sum.icon);
                 } else {
                     span.textContent = '⚡';
                 }
@@ -7601,7 +7627,7 @@
                     const d = row.device;
                     const sum = boardSummary(this.boards.board(d.port));
                     const how = row.binding_source === 'manual' ? 'pinned' : `bound by its sketch ${row.sketch}`;
-                    const state = sum.kind === 'printer'
+                    const state = sum.kind === 'printer' || sum.kind === 'router'
                         ? `<span class="${sum.cls === 'printing' ? 'ok' : (sum.cls === 'offline' ? 'bad' : '')}">${esc(sum.short)}</span>${sum.temps ? ` <span class="temps">${esc(sum.temps)}</span>` : ''}`
                         : `<span class="${sum.words.verdict === 'match' ? 'ok' : (sum.words.verdict === 'mismatch' ? 'bad' : '')}">${esc(sum.short)}</span>`;
                     body = `<div class="device-line" title="${esc(`${boardLabel(d)} on ${d.port}, ${how} — ${sum.line}`)}"><b>${esc(d.port)}</b> · ${state}${viaLink}
@@ -7635,7 +7661,7 @@
             holdsABoard(node, path) {
                 if (!node) return false;
                 if (node.board || node.sketch_ref) return true;
-                if (node.build_volume || PRINTER_STATUSES.includes(node.status)) return true;
+                if (node.build_volume || MACHINE_STATUSES.includes(node.status)) return true;
                 return Boolean(this.bindings[path]);
             }
 
@@ -7645,7 +7671,7 @@
             devicesProblemAt(path) {
                 const problem = this.devicesProblem;
                 const bearer = this.statusBearerFor(path);
-                if (!bearer || !PRINTER_STATUSES.includes(bearer.status) || !/arduino-cli is not installed/.test(problem || '')) return problem;
+                if (!bearer || !MACHINE_STATUSES.includes(bearer.status) || !/arduino-cli is not installed/.test(problem || '')) return problem;
                 return 'arduino-cli finds the boards on this machine, and it is not installed: apothecary firmware install installs it. A printer needs it only to be found; it is never built for or flashed.';
             }
 
@@ -7681,7 +7707,7 @@
             // anything that is not a printer holding a board.
             boardInside(path) {
                 const node = this.nodeByPath(path);
-                if (!node || !PRINTER_STATUSES.includes(node.status)) return null;
+                if (!node || !MACHINE_STATUSES.includes(node.status)) return null;
                 const walk = (n, at) => {
                     for (const child of n.children || []) {
                         const here = `${at}.${child.name}`;
@@ -8324,7 +8350,11 @@
         function deviceFor(path) {
             const { row } = viewer.bindingFor(path);
             if (!row || !row.device) return undefined;
-            return { port: row.device.port, printer: !!row.device.printer, armed: false, bound: true };
+            // The latch as the board's open Machine knows it, so the ring says Disarm
+            // while it is armed; a board with no Machine open is taken as disarmed.
+            const m = viewer.machine;
+            const armed = !!(m && m.handle && m.port === row.device.port && m.handle.ctl.armed);
+            return { port: row.device.port, printer: !!row.device.printer, machine: row.device.printer ? row.device.printer.machine || 'printer' : null, armed, bound: true };
         }
         // The sketch of a part of its own that no board connected runs: the ring's
         // Flash its sketch.

@@ -49,6 +49,7 @@ from slicer_helpers import write_fake_orcaslicer
 from viewer_ready import settled
 from windows import BENCH
 
+from apothecary.demo import CONTROLLER, ROUTER
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.stl_renderer import get_renderer
 
@@ -223,18 +224,26 @@ def page(drawing_camera_browser, demo):
 @pytest.mark.e2e
 def test_the_demo_says_it_is_the_demo_and_has_printer_1_pinned(page: Page, demo, shots):
     """A quiet line above the header says it is the demo and how to leave it;
-    printer_1's mainboard is pinned to the simulated Ender, which said what it is."""
+    printer_1's mainboard is pinned to the simulated Ender, which said what it is, and
+    cnc_router's controller to the simulated router."""
     url = demo["url"]
     _open_garage(page, url)
     banner = page.locator("#demo-banner")
     expect(banner).to_be_visible()
-    expect(banner).to_contain_text("The demo: a simulated printer, ESP32 and lighting console")
+    expect(banner).to_contain_text(
+        "The demo: a simulated printer, router, ESP32 and lighting console"
+    )
     expect(banner).to_contain_text("run apothecary serve without --demo")
     assert banner.bounding_box()["height"] < 30  # one quiet line
     pins = page.request.get(f"{url}/sites/garage/devices").json()["bindings"]
-    (board,) = [r for r in pins if r["binding_source"] == "manual"]
-    assert board["path"] == BOARD and board["device"]["port"] == PRINTER
+    manual = {r["path"]: r for r in pins if r["binding_source"] == "manual"}
+    assert set(manual) == {BOARD, CONTROLLER}
+    board = manual[BOARD]
+    assert board["device"]["port"] == PRINTER
     assert board["device"]["printer"]["machine_type"] == "Simulated Ender"
+    controller = manual[CONTROLLER]
+    assert controller["device"]["port"] == ROUTER
+    assert controller["device"]["printer"]["dialect"] == "grbl"
     settled(page)
     page.screenshot(path=str(shots / "demo-banner.png"))
 
