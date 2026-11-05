@@ -46,26 +46,16 @@ here: run `apothecary problems`.
   controller, which way it homes, and the bounds `apothecary/firmware/grbl.py`
   takes from the maker's figures. No toolpath is made here: a cut is a CAM
   post's file ([docs/cnc.md](docs/cnc.md#not-built)).
-- The bench walkthrough crawls in the full browser order. In `pytest tests/e2e
-  --start-server`, `tests/e2e/test_docs_bench_walkthrough.py` ran out its cap
-  (`Timeout (0:02:50)`) in seven of ten runs, and passed the rest in about seventy
-  seconds; alone it passes, and the seven files up to it stall as the whole
-  suite does. It stalls on main's own tree (`baaedee`, under Python 3.14) as
-  on a branch above it (Python 3.12), so it predates the router. The test's
-  frame, taken every twenty seconds through one stall, was in
-  `viewer_ready.settled` each time -- its wait for the camera at rest
-  (`CAMERA_AT_REST`, three hundred frames at most per call), under `by_hand`
-  framing printer_1 for the third picture, then under the picture itself --
-  so the waits run to their frame bound one after another rather than one
-  wait hanging; the test servers answered throughout. What to measure next:
-  the frames per second the headless page draws during the run, and what
-  moves the camera between frames once the hand has stopped.
-- A part through the subtractive loop, design to monitoring, the loop the app
-  is built around from here: slice 1 (a part's declared cuts, the app's own
-  toolpath, Cut from here, the job's operation, the simulated router's
-  footprint, one iteration executed in walkthrough 20) is built; next the
-  bench, then the cut watched from the Working space and a camera:
-  [docs/plans/subtractive-loop-2026-11-04.md](docs/plans/subtractive-loop-2026-11-04.md).
+- A check before a cut that its toolpath fits the travel from the work zero, in the
+  Cut card, from the toolpath's recorded bounds and the controller's position: a cut
+  zeroed too low or too high stops at its first move past the travel, with the
+  spindle on (`ALARM:2`). It waits on the bench, which has not confirmed which way
+  the machine homes (section I of [docs/bench-checklist.md](docs/bench-checklist.md)).
+- What the round of unification left: the Machine's main window at full size (a
+  person's call: doors are new controls, and opening as its view is against a
+  tested decision), a cut's operation beside each poll in the Working space, and
+  the as-cut measure in the Cut card:
+  [docs/plans/ui-refresh-2026-11-04.md](docs/plans/ui-refresh-2026-11-04.md).
 - A host-side bound on where the print head ends. Each jog's move is capped
   (`JOG_MAX_MM`), jogs one after another add up, and the firmware's soft
   endstops, after a homing, are what keeps the head on the machine

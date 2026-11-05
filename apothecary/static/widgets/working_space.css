@@ -1,10 +1,7 @@
 /* The Working space window (widgets/working_space.js): a site as every kind of
- * evidence has it, and a printer's hour in it. The series' colours are the
- * Machine's (widgets/machine.css), so a heater reads the same in both. */
+ * evidence has it, and a machine's hour in it, on the page's palette
+ * (static/tokens.css), so a heater reads the same here as in the Machine. */
 .working-space {
-    --line: #2a302a; --ink: #d8e0d8; --ink-2: #9aa89a; --ink-3: #66746a;
-    --ok: #6fdb75; --warn: #ffcc66; --bad: #ff8080;
-    --hotend: #e8b04a; --bed: #6fb3e8;
     display: flex; flex-direction: column; gap: 0.5rem; font-size: 13px;
 }
 .working-space .muted { color: var(--ink-3); }
@@ -19,7 +16,10 @@
 .ws-key { display: inline-block; width: 12px; height: 8px; margin-right: 0.25rem; vertical-align: middle; background: #3a403a; }
 .ws-key.ws-printing { background: var(--ok); }
 .ws-key.ws-idle { background: #6a786a; }
-.ws-key.ws-offline { background: var(--bad); }
+.ws-key.ws-offline, .ws-key.ws-alarm { background: var(--bad); }
+.ws-key.ws-running { background: var(--ok); }
+.ws-key.ws-hold, .ws-key.ws-maintenance { background: var(--warn); }
+.ws-key.ws-spindle { background: var(--tx); }
 .ws-key.ws-line { height: 2px; }
 .ws-key.ws-hotend { background: var(--hotend); }
 .ws-key.ws-bed { background: var(--bed); }
@@ -27,12 +27,15 @@
 .ws-state { cursor: pointer; fill: #3a403a; }
 .ws-state.ws-printing { fill: var(--ok); }
 .ws-state.ws-idle { fill: #6a786a; }
-.ws-state.ws-offline { fill: var(--bad); }
-.ws-state.ws-maintenance { fill: var(--warn); }
+.ws-state.ws-running { fill: var(--ok); }
+.ws-state.ws-offline, .ws-state.ws-alarm { fill: var(--bad); }
+.ws-state.ws-maintenance, .ws-state.ws-hold { fill: var(--warn); }
 path.ws-hotend { stroke: var(--hotend); stroke-width: 1.5; }
 path.ws-bed { stroke: var(--bed); stroke-width: 1.5; }
+path.ws-spindle { stroke: var(--tx); stroke-width: 1.5; }
 circle.ws-hotend { fill: var(--hotend); cursor: pointer; }
 circle.ws-bed { fill: var(--bed); cursor: pointer; }
+circle.ws-spindle { fill: var(--tx); cursor: pointer; }
 .ws-axis { display: flex; justify-content: space-between; font-size: 11px; }
 .ws-camera-row { display: flex; align-items: center; gap: 0.5rem; min-height: 44px; }
 .ws-camera-name { flex: 0 0 12rem; display: flex; flex-direction: column; gap: 0.15rem; color: var(--ink-2); font-size: 12px; overflow: hidden; }

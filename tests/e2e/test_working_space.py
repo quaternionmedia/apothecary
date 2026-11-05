@@ -130,7 +130,7 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
             "slice 1 (docs/plans/working-space-view-2026-10-30.md); the frames here are "
             "the fake cameras' test picture, blanked, since it moves.",
             "**A print going by.** The progress is held still, so the frames kept at "
-            "every 5 % of a print, and with each change of its state, are not shown; "
+            "every 5 % of a job, and with each change of its state, are not shown; "
             "this page keeps a set when a camera is newly chosen and when asked.",
             "**What changes on every run.** The moments, how many observations the hour "
             "holds, where each poll fell in it, a temperature to its tenth and how much "
@@ -149,7 +149,7 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
 
     # 1. ⊞ Windows › Working space: the site, a row per pinned printer.
     windows.from_the_windows_menu(page, "working")
-    expect(lead).to_contain_text("Choose a printer to see its hour")
+    expect(lead).to_contain_text("Choose a machine to see its hour")
     printer = window.locator(".ws-printer[data-printer='printer_1']")
     expect(printer).to_contain_text("printing", timeout=FRAMES_MS)
     expect(printer).to_contain_text("answering now")
@@ -231,7 +231,7 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
         "camera newly this browser's has a frame kept with the next poll, ten seconds "
         "apart at the least, laid where it fell in the hour, and the line under the rows "
         "counts them against their budget. The first line says when frames are kept -- "
-        "when printer_1's state changes and at every 5 % of a print, while the window "
+        "when printer_1's state changes and at every 5 % of a job, while the window "
         "is open -- and offers Keep a set now.",
         shown=said_first.inner_text(),
         blank=CHANGING,
@@ -287,7 +287,7 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
 
     # 8. ‹ garage: the site again, printer_1 with its cameras.
     window.get_by_role("button", name="‹ garage").click()
-    said(page, "the Working space of garage: Choose a printer")
+    said(page, "the Working space of garage: Choose a machine")
     expect(printer).to_contain_text(f"{CAMERAS} cameras")
     expect(window.locator(".ws-subject", has_text="printer_1 › bed heater")).to_be_visible()
     story.shows(
@@ -306,7 +306,7 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
     expect(window.locator(".ws-title")).to_have_text("garage › printer_1")
     hour = _words(status(page).inner_text())
     on_world(page, "Panels", "Site", "Workspace")
-    said(page, "the Working space of garage: Choose a printer")
+    said(page, "the Working space of garage: Choose a machine")
     expect(window.locator(".ws-title")).to_have_text("garage")
     story.says(
         "Camera › Workspace on printer_1's ring, and Panels › Site › Workspace",
@@ -387,7 +387,7 @@ def test_opened_again_from_the_windows_menu_it_is_the_site_and_read_again(page, 
     windows.from_the_windows_menu(page, "working")
     window = page.locator(WINDOW)
     expect(window.locator(".ws-title")).to_have_text("garage")
-    expect(window.locator(".ws-next")).to_contain_text("Choose a printer to see its hour")
+    expect(window.locator(".ws-next")).to_contain_text("Choose a machine to see its hour")
     assert len(_refreshes(page, "/sites/garage/evidence/printers")) == 1
 
 

@@ -37,7 +37,7 @@ VERSION = 1
 HEARD_S = 90.0
 # Numbers this close are the same value when two sources are compared.
 SAME = {"temperature": 1.0, "target": 0.0, "progress": 0.01}
-NUMBERS = ("temperature", "target", "progress")
+NUMBERS = ("temperature", "target", "progress", "rpm")
 
 
 def _same(prop: str, a: Any, b: Any) -> bool:

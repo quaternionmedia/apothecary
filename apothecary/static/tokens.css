@@ -1,0 +1,9 @@
+/* The page's palette, said once: the Machine (widgets/machine.css), the Working space
+ * (widgets/working_space.css) and the control pad read these; a host that sets them
+ * differently recolours all of them together. The two series, a hotend and a bed, are
+ * validated against --bg (dark). The Airgap keeps a palette of its own, its charts'. */
+:root {
+    --bg: #141614; --panel: #1c1f1c; --line: #2a302a; --ink: #d8e0d8; --ink-2: #9aa89a; --ink-3: #66746a;
+    --ok: #6fdb75; --warn: #ffcc66; --bad: #ff8080; --tx: #9cd2ff;
+    --hotend: #e8b04a; --bed: #6fb3e8;
+}

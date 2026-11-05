@@ -166,7 +166,8 @@ The world is drawn only when something in it changes -- the view turned or
 easing to a stop, a piece or its colour, the handles, the window's size, a live
 camera's video, a texture arriving, a printer's nozzle moving -- so a machine
 drawing in software, without a GPU, idles between them and answers typing at
-once.
+once. A view left alone stays exactly where it is: what the orbit's arithmetic
+rounds away is no move.
 
 ## The ring
 

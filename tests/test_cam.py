@@ -211,6 +211,29 @@ def test_a_cut_names_the_operation_it_is_in_and_its_trace_measures_the_pocket(
     assert measure.size(bored) == (cuts.tool.diameter, cuts.tool.diameter)
 
 
+def test_a_cut_past_the_travel_fails_in_the_controller_s_words(
+    fake_arduino_cli, router_links, tmp_path, monkeypatch
+):
+    """Zeroed with no depth under the tool, the first plunge leaves the travel. The cut
+    stops there, and its job says why in words, not in a code."""
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    record = service.cut_into("router_coupon", CutFor(name="cnc_router", port=PORT))
+    devices.identify_printer(PORT)
+    router_links.control.arm(PORT)
+    assert devices.printer_control(PORT, "$J=G91 G21 Z-40 F1000").lines == ["ok"]  # the bottom of Z
+    assert devices.printer_control(PORT, "G10 L20 P1 X0 Y0 Z0").lines == ["ok"]
+    job = devices.start_print(PORT, record.file_id)
+    job.thread.join(10)
+    assert job.stage == "failed"
+    assert job.record.outcome == "failed"
+    assert job.record.reason.endswith(
+        "G1 Z-2 F300 -> ALARM:2 (a move would go past the soft limits)"
+    )
+    # The host reset it, so the spindle is off and the controller says what it wants next.
+    status = devices.printer_status(PORT)
+    assert status.state == "alarm" and not status.spindle.on
+
+
 def test_routers_in_names_the_router_a_board_answered_as(fake_arduino_cli, router_links, garage):
     from apothecary.api import printers_in
 

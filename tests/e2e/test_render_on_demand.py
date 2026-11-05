@@ -60,6 +60,59 @@ def test_a_page_left_alone_draws_nothing_and_a_change_draws(page: Page, base_url
     assert _drawn_while(page, 1000) == 0
 
 
+# Views whose target the orbit rounds to two neighbouring numbers in turn, every frame:
+# each is a camera and a target a person's drag and wheel left. Moved to one of them from
+# anywhere else, a page used to draw at full rate until its next input.
+VIEWS_THAT_ROUND = [
+    (
+        (827.4846464530666, 1741.163449704511, 776.0549923050911),
+        (32.99242313259885, 654.7572078442754, -1010.7002636794815),
+    ),
+    (
+        (1061.8675776762364, 2061.663854859062, 1303.1651665567879),
+        (32.99242313259885, 654.7572078442754, -1010.7002636794815),
+    ),
+    (
+        (1365.395752661731, 2476.71499595963, 1985.7779676338632),
+        (32.99242313259885, 654.7572078442754, -1010.7002636794814),
+    ),
+    (
+        (920.5706972623743, 1868.4513748231427, 985.3987538428171),
+        (32.99242313259885, 654.7572078442754, -1010.7002636794814),
+    ),
+]
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize(("camera", "target"), VIEWS_THAT_ROUND)
+def test_a_view_left_alone_draws_nothing_whatever_its_numbers_round_to(
+    page: Page, base_url: str, camera, target
+):
+    """Nothing moves, so nothing draws, for every view: the camera stays exactly where
+    it is, and a settled page's wait for it ends at once rather than at its bound."""
+    _open(page, base_url)
+    page.evaluate(
+        """([camera, target]) => {
+            const v = window.fractalViewer;
+            v.camera.position.set(...camera);
+            v.orbitControls.target.set(...target);
+            v.invalidate();
+        }""",
+        [camera, target],
+    )
+    page.wait_for_timeout(300)
+    assert _drawn_while(page, 800) == 0
+    moved = page.evaluate(
+        """() => new Promise((done) => {
+            const v = window.fractalViewer;
+            const view = () => [...v.camera.position.toArray(), ...v.orbitControls.target.toArray()].join();
+            const was = view();
+            requestAnimationFrame(() => requestAnimationFrame(() => done(view() !== was)));
+        })"""
+    )
+    assert not moved
+
+
 @pytest.mark.e2e
 def test_typing_in_the_scad_editor_draws_nothing_until_it_renders(page: Page, base_url: str):
     page.set_viewport_size({"width": 1280, "height": 800})

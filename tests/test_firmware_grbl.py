@@ -457,6 +457,10 @@ def test_a_router_poll_drives_cnc_router_and_is_kept_as_evidence(
     assert said[("garage:cnc_router", "pins")].value == []
     assert said[("garage:cnc_router", "state")].origin.by.name == evidence_printers.BY_GRBL
     assert ("garage:cnc_router#heater:bed", "temperature") not in said
+    # The Working space opens on it as on a printer: it is listed, and its hour answers.
+    watched = c.get("/sites/garage/evidence/printers").json()["printers"]
+    assert [m["path"] for m in watched] == ["cnc_router"] and watched[0]["port"] == PORT
+    assert c.get("/sites/garage/evidence/printers/cnc_router").json()["port"] == PORT
     c.delete(f"/sites/garage/nodes/{CONTROLLER}/device")
 
 

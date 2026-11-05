@@ -1,14 +1,9 @@
 /* The machine (widgets/machine.js), a board's one surface in front of the
- * world. The variables are the monitor page's palette, which it kept; a host
- * that sets them differently recolours the whole thing. The control pad
- * carries them too, popped out of the Machine into a window of its own. */
+ * world, on the page's palette (static/tokens.css). The control pad carries the
+ * same rules, popped out of the Machine into a window of its own. */
 .machine, .machine-pad {
-    --bg: #141614; --panel: #1c1f1c; --line: #2a302a; --ink: #d8e0d8; --ink-2: #9aa89a; --ink-3: #66746a;
-    --ok: #6fdb75; --warn: #ffcc66; --bad: #ff8080; --tx: #9cd2ff;
-    --hotend: #e8b04a; --bed: #6fb3e8;  /* the two series; validated against --bg (dark) */
     color: var(--ink); font-size: 14px;
 }
-.machine-head { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 1rem; background: #1a1d1a; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .machine-main { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.2fr); gap: 0.75rem; padding: 0.75rem 1rem; }
 @media (max-width: 900px) { .machine-main { grid-template-columns: 1fr; height: auto; } }
 * { box-sizing: border-box; }
@@ -32,7 +27,7 @@
 .card .s { font-size: 0.75rem; color: var(--ink-2); margin-top: 0.15rem; }
 .card .ok { color: var(--ok); } .card .warn { color: var(--warn); } .card .bad { color: var(--bad); }
 .card.wide { grid-column: 1 / -1; }
-.bar { height: 6px; background: #2a302a; border-radius: 3px; margin-top: 0.4rem; overflow: hidden; }
+.bar { height: 6px; background: var(--line); border-radius: 3px; margin-top: 0.4rem; overflow: hidden; }
 .bar > i { display: block; height: 100%; border-radius: 3px; background: var(--ink-2); }
 .bar.hotend > i { background: var(--hotend); } .bar.bed > i { background: var(--bed); } .bar.sd > i { background: var(--ok); }
 .chips { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.2rem; }
@@ -120,7 +115,7 @@
 /* The control pad. Put back, it is the Machine's last child, bordered in amber.
  * Popped out (.out) it fills a loud window of its own -- the window's red frame
  * and tab say a real machine armed can heat and move -- and its head is loud too. */
-#control { background: #1c1f1c; border: 1px solid #7a5a1a; border-radius: 8px; margin: 0.5rem 0.5rem 0; }
+#control { background: var(--panel); border: 1px solid #7a5a1a; border-radius: 8px; margin: 0.5rem 0.5rem 0; }
 #control[hidden] { display: none; }
 #control .head { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; padding: 0.45rem 0.7rem; border-bottom: 1px solid #3a3020; background: #2a2410; border-radius: 8px 8px 0 0; font-size: 0.8rem; color: var(--warn); }
 #control.out { border: 0; border-radius: 0; margin: 0; background: transparent; }
@@ -167,3 +162,8 @@
 .machine.machine-section .cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .machine.host-world #log { min-height: 140px; max-height: 40vh; }
 .machine.machine-section #log { flex: 1 1 auto; max-height: none; }
+
+/* The head's controls in three clusters -- polling, the link, the latch and the stop --
+ * that wrap as clusters rather than one control at a time. */
+.machine-head .cluster { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+.machine .nb { white-space: nowrap; }

@@ -769,7 +769,9 @@ class SimulatedRouter:
                     target[k] > 0.001 or target[k] < -self.TRAVEL[k] - 0.001 for k in "xyz"
                 ):
                     self.state, self.alarm = "Alarm", 2
-                    return ["error:2", "ALARM:2"]
+                    # The line is neither accepted nor refused: the controller alarms,
+                    # and says it wants a reset.
+                    return ["ALARM:2", "[MSG:Reset to continue]"]
                 rapid = code in ("G0", "G00")
                 feed = self.RAPID if rapid else self.f * self.feed_override / 100
                 self._enqueue(target, feed, "rapid" if rapid else "move")
@@ -964,14 +966,7 @@ def control_router(link: GcodeLink, command: str, timeout: float = 60.0) -> List
         return link.realtime(
             REALTIME[cmd], until=None, timeout=settle, label=cmd, now=True, origin="control"
         )
-    try:
-        return link.command(cmd, timeout=timeout, origin="control")
-    except ToolchainError as exc:
-        # A refusal says the controller's words, not its code alone.
-        words = explain(str(exc).rsplit("-> ", 1)[-1])
-        if words is None:
-            raise
-        raise ToolchainError(f"{exc} ({words})") from None
+    return link.command(cmd, timeout=timeout, origin="control")
 
 
 def query_router(link: GcodeLink, command: str, timeout: float = 15.0) -> List[str]:

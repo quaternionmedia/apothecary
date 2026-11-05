@@ -16,7 +16,7 @@ entry. docs/plans/focused-systems-2026-10-22.md is the plan these follow.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 # A view's layout is written in window ids, as panels.js's resolveView reads it:
@@ -42,6 +42,9 @@ class Section:
     # The ring's verbs that act on it, which open it: an action named, or every
     # action under a prefix that ends with ":".
     verbs: Tuple[str, ...] = ()
+    # Its title for a kind of subject where it differs from ``title`` (a Print
+    # section is a router's Cut): the page titles its window by the subject's kind.
+    titles: Dict[str, str] = field(default_factory=dict)
     # The kind of subject it is for (a board that is a printer, a router or a devkit),
     # where it is for some kinds only, one or a tuple: a subject of another kind has
     # no such window.
@@ -275,10 +278,11 @@ MACHINE = System(
             "print",
             "Print",
             "a printer's print from here, or a router's cut: the files kept, what it "
-            "makes, Slice (a printer's), the job",
+            "makes, Slice (a printer's) or Toolpath (a router's), the job",
             home="column",
-            verbs=("print:", "slice:"),
+            verbs=("print:", "slice:", "toolpath:"),
             kind=("printer", "router"),
+            titles={"router": "Cut"},
         ),
         Section(
             "level",
@@ -369,6 +373,7 @@ def manifest(systems: Tuple[System, ...] = SYSTEMS) -> List[Dict[str, Any]]:
                 {
                     "id": sec.id,
                     "title": sec.title,
+                    "titles": dict(sec.titles),
                     "holds": sec.holds,
                     "window": s.window(sec.id),
                     "home": s.home(sec),

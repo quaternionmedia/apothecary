@@ -79,8 +79,9 @@
  */
 
 import { mountBoards } from "/static/boards.js";
-import { esc, heaterText, boardLabel, sketchWords, xyz } from "/static/board_text.js";
+import { esc, heaterText, boardLabel, sketchWords, xyz, xyzHtml } from "/static/board_text.js";
 import { toolPosition as toolPositionOf } from "/static/machine_marks.js";
+import { KINDS, kindOf as kindOfBoard } from "/static/machine_words.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
 import { again } from "/static/twice.js";
@@ -100,20 +101,26 @@ const HEAD = `
     <span class="dot" id="dot"></span>
     <span id="ident" class="kv">—</span>
     <span class="grow"></span>
+    <span class="cluster">
     <label class="auto printer-only gcode"><input type="checkbox" id="auto" checked> auto-poll
         <select id="interval"><option value="1000">1 s</option><option value="2000" selected>2 s</option><option value="5000">5 s</option><option value="10000">10 s</option></select>
     </label>
     <button type="button" id="poll" class="printer-only gcode">⟳ Poll</button>
+    </span>
+    <span class="cluster">
     <button type="button" id="reconnect">⇄ Reconnect</button>
     <button type="button" id="identify">Identify</button>
-    <button type="button" id="reset" class="danger printer-only gcode" title="Reboot the board with a DTR pulse — never mid-print">⏻ Reboot</button>
+    <button type="button" id="reset" class="danger printer-only gcode" title="Reboot the board with a DTR pulse — never during a job">⏻ Reboot</button>
     <button type="button" id="release">Release</button>
     <button type="button" id="listen" class="devkit-only" title="Open the port and stream what the board says into the log. Opening the port may reset the board">Listen</button>
     <button type="button" id="probe" class="devkit-only" title="Ask esptool for the chip, its MAC and its flash size (an Espressif board; this resets it)">Probe</button>
+    </span>
+    <span class="cluster">
     <label class="ctl printer-only gcode" id="ctl-label">
         <input type="checkbox" id="ctl"> ⚙ Control <span class="ttl" id="ctl-ttl"></span>
     </label>
     <button type="button" id="estop" class="printer-only gcode">⏹ E-STOP</button>
+    </span>
 </div>`;
 
 const CARDS = `
@@ -171,27 +178,28 @@ const CARDS = `
 <div class="cards">
     <div class="card wide printer-only gcode" id="print-card">
         <div class="k"><span id="print-title"></span> <span class="s" id="print-note" style="text-transform: none; letter-spacing: 0;"></span></div>
-        <div class="row">
-            <input type="file" id="print-file" accept=".gcode,.gco,.g,.txt,text/plain" title="A sliced G-code file to keep on the host. It is checked (no EEPROM writes, no temperatures over the caps) and listed here; nothing is sent until Print">
+        <div class="row"><label for="print-part">makes</label>
+            <select id="print-part"><option value="">— no part named —</option></select>
+            <button type="button" id="print-slice">Slice</button>
+            <span class="s" id="print-where"></span>
+        </div>
+        <div class="row"><label for="print-pick">file</label>
             <select id="print-pick" title="The files kept on the host, newest first"><option value="">— no files kept —</option></select>
             <button type="button" id="print-delete" title="Forget the chosen file">✕</button>
-            <span class="grow"></span>
+            <input type="file" id="print-file" accept=".gcode,.gco,.g,.txt,text/plain">
+        </div>
+        <div class="row">
             <button type="button" id="print-start" class="warm">▶ Send</button>
             <button type="button" id="print-pause">⏸ Pause</button>
             <button type="button" id="print-resume" title="Feed lines again (control must be armed)">▶ Resume</button>
-            <button type="button" id="print-cancel" title="Stop feeding, then heaters off, fan off, motors free">■ Cancel</button>
+            <button type="button" id="print-cancel">■ Cancel</button>
         </div>
-        <div class="row"><label for="print-part">makes</label>
-            <select id="print-part" title="The part or piece this print makes, from the site the printer is pinned in: the print's job records it, and Site lists the job. The ring's Send file prints what is chosen here"><option value="">— no part named —</option></select>
-            <button type="button" id="print-slice" title="Slice what is chosen under makes for this printer: its G-code is kept here and chosen, so ▶ Print follows. Writes files only; nothing is sent to the printer. Its ring's Slice does the same">Slice</button>
-            <span class="s" id="print-where"></span>
-        </div>
+        <div class="row"><span id="print-progress" class="empty"></span><span class="grow"></span><span class="job" id="print-job"></span></div>
+        <div class="bar print"><i id="b-print" style="width:0"></i></div>
         <div id="print-slice-box" class="slice-box" hidden>
             <div class="bench-ui" id="print-slice-task"></div>
             <div id="print-slice-said" class="slice-said"></div>
         </div>
-        <div class="row"><span id="print-progress" class="empty">nothing printing from here</span><span class="grow"></span><span class="job" id="print-job"></span></div>
-        <div class="bar print"><i id="b-print" style="width:0"></i></div>
         <div id="print-history"></div>
     </div>
 </div>
@@ -343,14 +351,8 @@ const BY_CMD = {
     "G10 L20 P1 X0 Y0 Z0": "control:zero-xyz", "G10 L20 P1 Z0": "control:zero-z", "G0 X0 Y0": "control:go-zero", "G53 G0 Z0": "control:top-z",
     "G38.2 Z-{r-probe} F100": "control:probe-z", "JOG-CANCEL": "control:jog-cancel", "RESUME": "control:job-resume", "HOLD": "control:job-hold", "RESET": "control:job-abort",
 };
-// The words of each G-code machine's kind: the job it runs, its stop, what arming lets
-// it do, how it is not yet known, its jog feed's bound and default (mm/min), the files a
-// job streams, and whether a file is sliced here. applyKind writes them into the markup,
-// which carries none of its own.
-const KINDS = {
-    printer: { job: "print", dialect: "marlin", running: "printing", stop: "M112", can: "heat and move", notIdentified: "not identified as a printer", feedMax: 12000, feedDefault: 3000, files: ".gcode,.gco,.g,.txt,text/plain", slice: true, prepare: "Slice", prepareTitle: "Slice what is chosen under makes for this printer: its G-code is kept here and chosen, so ▶ Print follows. Writes files only; nothing is sent to the printer. Its ring's Slice does the same", identify: "M115", poll: "One poll now (M105/M114/M27/M119)", queries: "report code — M503, M119, M20, M420 V …", start: "▶ Print", note: "· no SD card needed: the file streams over the link, one line per ok", title: "Print from here", idle: "nothing printing from here", startTitle: "Stream the chosen file to the printer. Heats and moves: control must be armed. ⌗ Control › Print › Send file", pause: "Stop feeding lines; the printer finishes what it has queued", cancel: "Stop feeding, then heaters off, fan off, motors free", estop: "M112: emergency stop. Always available, latch or not. Halts the board until it is reset.", arm: "Arm the control latch: heaters, fan, homing, bounded jogs and SD pause/resume/abort become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can heat or move the machine." },
-    router: { job: "cut", dialect: "grbl", running: "running", stop: "RESET", can: "turn and move", notIdentified: "not identified as a router", feedMax: 4000, feedDefault: 1000, files: ".nc,.ngc,.gcode,.tap,.txt,text/plain", slice: false, prepare: "Toolpath", prepareTitle: "Write the toolpath of what is chosen under makes for this router, from the cuts the part declares: it is kept here and chosen, so ▶ Cut follows. Writes files only; nothing is sent to the router. Its ring's Toolpath does the same", identify: "$I", poll: "One poll now (? and $G)", queries: "query — $$, $#, $G, $I, ?", start: "▶ Cut", note: "· a CAM post's file streams over the link, one line per ok", title: "Cut from here", idle: "nothing cutting from here", startTitle: "Stream the chosen file to the router. Turns the spindle and moves: control must be armed. ⌗ Control › Cut › Send file", pause: "Feed hold: the controller stops where it is, and nothing more is fed", cancel: "Hold, then the soft reset: the queue empties and the spindle is off", estop: "Soft reset (0x18): everything halts, the queue empties, the spindle is off. Always available, latch or not. A reset in motion leaves the controller in alarm: Unlock or Home.", arm: "Arm the control latch: homing, unlock, bounded jogs, the spindle, work zero, a probe and the cut's hold and resume become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can turn or move the machine." },
-};
+// The words of each kind are machine_words.js's (KINDS): applyKind writes them into
+// the markup, which carries none of its own.
 
 
 export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, say = null, padWindow = null, variantFor = null, sections = {}, onVerb = null, onKind = null, afterPrint = null, afterHello = null } = {}) {
@@ -417,7 +419,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (kind) return kind;
         const d = state.port ? b().device : null;
         if (!d || !d.printer) return d ? "devkit" : "printer";
-        return d.printer.machine === "router" ? "router" : "printer";
+        return kindOfBoard(d);
     }
     // A G-code machine: a printer or a router, polled over its held link.
     const isGcode = () => state.kind === "printer" || state.kind === "router";
@@ -448,8 +450,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             $("print-slice").textContent = w.prepare;
             const feed = $("h-feed");  // the jog feed's bound is the machine's
             feed.max = String(w.feedMax);
-            if (Number(feed.value) > w.feedMax) feed.value = String(w.feedDefault);
-            $("print-file").accept = w.files;
+            if (changed || Number(feed.value) > w.feedMax) feed.value = String(w.feedDefault);
+            $("print-file").accept = w.files; $("print-file").title = w.fileTitle;
+            $("print-part").title = w.partTitle;
         }
         if (changed) state.codesLoaded = false;
         if (changed && state.port) {
@@ -504,14 +507,14 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const offline = st.state === "offline";
         $("dot").className = "dot " + (offline ? "bad" : "on");
         $("c-state").innerHTML = offline ? '<span class="bad">offline</span>' : (st.state === "printing" ? '<span class="ok">printing</span>' : (st.heating ? '<span class="warn">heating</span>' : "idle"));
-        $("c-state-s").textContent = st.job ? (st.job.kind === "print" ? `print from here: ${st.job.stage} ${(st.job.progress * 100).toFixed(0)}%` : `${st.job.kind}: ${st.job.stage}`) : (offline ? (st.raw[0] || "") : `polled ${new Date(st.polled_at).toLocaleTimeString()}`);
+        $("c-state-s").textContent = st.job ? (st.job.kind === words().job ? `${st.job.kind} from here: ${st.job.stage} ${(st.job.progress * 100).toFixed(0)}%` : `${st.job.kind}: ${st.job.stage}`) : (offline ? (st.raw[0] || "") : `polled ${new Date(st.polled_at).toLocaleTimeString()}`);
         const hot = st.hotends[0];
         $("c-hot").textContent = heaterText(hot); $("c-hot-s").textContent = hot && hot.power != null ? `power ${hot.power}/127` : "";
         $("b-hot").style.width = hot && hot.target > 0 ? Math.min(100, hot.actual / hot.target * 100).toFixed(0) + "%" : "0";
         $("c-bed").textContent = heaterText(st.bed); $("c-bed-s").textContent = st.bed && st.bed.power != null ? `power ${st.bed.power}/127` : "";
         $("b-bed").style.width = st.bed && st.bed.target > 0 ? Math.min(100, st.bed.actual / st.bed.target * 100).toFixed(0) + "%" : "0";
         const p = st.position;
-        $("c-pos").textContent = p ? xyz(p) : "—";
+        $("c-pos").innerHTML = p ? xyzHtml(p) : "—";
         $("c-pos-s").textContent = p ? `E ${p.e.toFixed(1)}` : "";
         if (st.sd_printing) {
             const pct = st.sd_progress != null ? (st.sd_progress * 100).toFixed(1) + "%" : "…";
@@ -545,8 +548,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const controller = `${st.machine_state || ""}${st.alarm != null ? ` · alarm ${st.alarm}${st.alarm_text ? `: ${st.alarm_text}` : ""}` : ""}`;
         $("c-state-s").textContent = st.job ? `${st.job.kind} from here: ${st.job.stage} ${(st.job.progress * 100).toFixed(0)}% · ${controller}` : (offline ? (st.raw[0] || "") : `${controller} · polled ${new Date(st.polled_at).toLocaleTimeString()}`);
         const p = st.position, wp = st.work_position;
-        $("c-pos").textContent = wp ? xyz(wp) : (p ? xyz(p) : "—");
-        $("c-pos-s").textContent = p && wp ? `work zero · machine ${xyz(p)}` : (p ? "machine coordinates" : "");
+        $("c-pos").innerHTML = wp ? xyzHtml(wp) : (p ? xyzHtml(p) : "—");
+        $("c-pos-s").innerHTML = p && wp ? `work zero · machine ${xyzHtml(p)}` : (p ? "machine coordinates" : "");
         const sp = st.spindle;
         $("c-spindle").textContent = sp ? (sp.on ? `${sp.rpm.toFixed(0)} rpm` : "off") : "—";
         $("c-spindle-s").textContent = sp && sp.target ? `S${sp.target.toFixed(0)} programmed` : "";
@@ -943,7 +946,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const p = st && st.position ? { ...st.position } : { x: 0, y: 0, z: 0 };
         p[axis.toLowerCase()] = (p[axis.toLowerCase()] || 0) + Number(d);
         emit("apothecary:position", { position: toolPosition({ ...(st || {}), position: p }), source: "jog", port: state.port });
-        const f = Number($("h-feed").value) || (state.kind === "router" ? 1000 : 3000);
+        const f = Number($("h-feed").value) || words().feedDefault;
         if (state.kind === "router") {
             // GRBL's jog: one line, relative, in mm, with its own feed; it never changes the
             // modal state, and a jog cancel stops it.
@@ -1123,7 +1126,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-resume").disabled = !paused;
         $("print-cancel").disabled = !running;
         $("print-delete").disabled = !$("print-pick").value || (running && job.file_id === $("print-pick").value);
-        const slicerOk = words().job !== "print" || !!(slc.status && slc.status.ok);
+        const slicerOk = !words().slice || !!(slc.status && slc.status.ok);
         $("print-slice").disabled = slc.running || !$("print-part").value;
         $("print-slice").title = slicerOk
             ? words().prepareTitle
@@ -1227,7 +1230,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // Slice: what makes names, sliced for this printer by the slicer's task, its log
     // in the card with Cancel. True when it started.
     async function startSlice() {
-        if (words().job === "cut") return startToolpath();
+        if (!words().slice) return startToolpath();
         const part = $("print-part").value;
         if (!state.port) { refuse("slice: no printer chosen"); return false; }
         if (!part) { refuse("slice: choose what it makes under makes first"); return false; }
@@ -1378,7 +1381,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!ctl.armed) { refuse(`a ${w.job} ${w.can.replace(" and ", "s and ")}s the machine: arm control first`); return; }
         const f = prt.files.find((x) => x.id === fileId);
         const part = $("print-part").value || null;
-        if (!confirm(`${w.job === "cut" ? "Cut" : "Print"} ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}?\n${f ? f.lines + " lines" : ""} will stream from here; the ${state.kind} will ${w.can}.`)) return;
+        if (!confirm(`${w.verb} ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}?\n${f ? f.lines + " lines" : ""} will stream from here; the ${state.kind} will ${w.can}.`)) return;
         try {
             prt.job = await post("/firmware/printers/print", { port: state.port, file_id: fileId, part });
             tell(`started ${f ? f.name : fileId} on ${state.port}${part ? `, making ${part}` : ""}: ${w.title} follows it to its end, and Site's Jobs lists it`);

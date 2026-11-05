@@ -114,6 +114,8 @@ AREAS = {
             "apothecary/routes/jobs.py",
             "apothecary/static/boards.js",
             "apothecary/static/board_text.js",
+            "apothecary/static/machine_words.js",
+            "apothecary/static/tokens.css",
             "apothecary/static/machine_marks.js",
             "apothecary/static/widgets/machine.js",
             "apothecary/static/widgets/sketches.js",

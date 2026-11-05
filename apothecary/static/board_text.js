@@ -7,6 +7,8 @@
  * nothing here fetches, listens or keeps state (boards.js does that).
  */
 
+import { KINDS, STATE_CLS, kindOf } from "/static/machine_words.js";
+
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 // One heater: what it reads over what it is set to; "—" when there is none.
@@ -45,6 +47,9 @@ export function tempsText(st) {
 
 // A position as the page writes one, wherever it writes one.
 export const xyz = (p) => `X${p.x.toFixed(1)} Y${p.y.toFixed(1)} Z${p.z.toFixed(2)}`;
+// The same as markup, for a card that may wrap it: between its axes, never inside a
+// number, where a minus sign would otherwise end a line and the number start the next.
+export const xyzHtml = (p) => xyz(p).split(" ").map((axis) => `<span class="nb">${axis}</span>`).join(" ");
 
 // A router's poll as one line: its state and the controller's word, the tool in the
 // work zero, the spindle, and the alarm when it is in one.
@@ -92,50 +97,44 @@ export function sketchWords(expected, observed) {
     return { should, observed: observed || null, verdict, drift, short, rec };
 }
 
-// The class a drawer wears for a G-code machine's state word; none for the rest.
-const STATE_CLS = { printing: "printing", running: "printing", offline: "offline", heating: "heating", alarm: "mismatch" };
+// A router's one reading at a glance, as a printer's is its temperatures: its
+// spindle's speed while it turns; none otherwise, and its state word says enough.
+export function spindleText(st) {
+    return st && st.spindle && st.spindle.on ? `${st.spindle.rpm.toFixed(0)} rpm` : null;
+}
 
 // One board, summed up for the drawers that show it small: the badges and
 // Selected's line. `board` is boards.js's board (device, status, expected,
-// observed). Answers { kind, icon, state, short, line, cls, title }.
+// observed). Answers { kind, icon, state, short, line, cls, title }: for a G-code
+// machine, the kind's icon, its state word, one reading (a printer's temperatures,
+// a router's spindle), the job's progress, and the class the state word wears.
 export function boardSummary(board) {
     const d = board && board.device;
     if (!d) return { kind: "none", icon: "⌁", state: "off", short: "not connected", line: "not connected", cls: "off", title: "not connected" };
     const label = boardLabel(d);
-    if (d.printer && d.printer.machine === "router") {
-        const st = board.status;
-        const word = st ? st.state : null;
+    const kind = kindOf(d);
+    if (kind !== "devkit") {
+        const st = board.status, words = KINDS[kind];
+        const word = kind === "router" ? (st ? st.state : null) : stateWord(st);
+        const offline = !!(st && st.state === "offline");
         const parts = [];
-        if (st && st.job) parts.push(`${st.job.kind} ${(st.job.progress * 100).toFixed(0)}%`);
+        if (kind === "printer" && st && st.sd_printing && st.sd_progress != null) parts.push(`${(st.sd_progress * 100).toFixed(0)}%`);
+        if (st && st.job) parts.push(st.job.kind === words.job ? `${st.job.kind} ${(st.job.progress * 100).toFixed(0)}%` : `${st.job.kind}: ${st.job.stage}`);
+        const line = kind === "router" ? routerLine(st) : printerLine(st);
         return {
-            kind: "router", icon: "🪚", state: word || "not polled",
-            readings: null, temps: null, extra: parts, job: !!(st && st.job),
-            short: st ? word : "not polled yet",
-            line: routerLine(st),
-            cls: STATE_CLS[word] || "",
-            title: `${label} on ${d.port} — ${routerLine(st)}`,
-        };
-    }
-    if (d.printer) {
-        const st = board.status;
-        const word = stateWord(st);
-        const parts = [];
-        if (st && st.sd_printing && st.sd_progress != null) parts.push(`${(st.sd_progress * 100).toFixed(0)}%`);
-        if (st && st.job) parts.push(st.job.kind === "print" ? `print ${(st.job.progress * 100).toFixed(0)}%` : `${st.job.kind}: ${st.job.stage}`);
-        return {
-            kind: "printer", icon: "🖨", state: word || "not polled",
-            readings: st && st.state !== "offline" ? readingsText(st) : null,
-            temps: st && st.state !== "offline" ? tempsText(st) : null,
+            kind, icon: words.icon, state: word || "not polled",
+            readings: st && !offline ? (kind === "router" ? spindleText(st) : readingsText(st)) : null,
+            temps: kind === "printer" && st && !offline ? tempsText(st) : null,
             extra: parts, job: !!(st && st.job),
-            short: st ? (st.state === "offline" ? "offline" : word) : "not polled yet",
-            line: printerLine(st),
+            short: st ? (offline ? "offline" : word) : "not polled yet",
+            line,
             cls: STATE_CLS[word] || "",
-            title: `${label} on ${d.port} — ${printerLine(st)}`,
+            title: `${label} on ${d.port} — ${line}`,
         };
     }
     const words = sketchWords(board.expected, board.observed);
     return {
-        kind: "devkit", icon: "⚡", state: words.short, short: words.short, line: words.short, words,
+        kind: "devkit", icon: KINDS.devkit.icon, state: words.short, short: words.short, line: words.short, words,
         cls: words.verdict === "mismatch" ? "mismatch" : "", extra: [], job: false,
         title: `${label} on ${d.port} — ${words.short}${words.drift.length ? " (" + words.drift.join("; ") + ")" : ""}`,
     };

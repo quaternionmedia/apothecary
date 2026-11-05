@@ -215,25 +215,107 @@ def test_toolpath_writes_the_coupon_s_cut_and_the_cut_names_its_operation(page: 
     # names the operation, from the first pass of the pocket.
     machine.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
-    # The tool jogged to where a stock's corner would be touched off -- the toolpath's
-    # reach within the travel from there -- then the pad's Zero makes it the work zero.
+    # The tool jogged over where a stock's corner would be touched off, from wherever an
+    # earlier test left it: the cut's depth under it and the safe height over it, within
+    # the travel. Then the pad's Zero makes it the work zero.
+    at = httpx.get(f"{url}/firmware/printers/status", params={"port": ROUTER}, timeout=15.0).json()
+    dx, dy, dz = (
+        want - at["position"][axis] for axis, want in zip("xyz", (-200, -300, -40), strict=True)
+    )
     jogged = httpx.post(
         f"{url}/firmware/printers/command",
-        json={"port": ROUTER, "command": "$J=G91 G21 X-100 Y-200 Z-40 F1000"},
+        json={"port": ROUTER, "command": f"$J=G91 G21 X{dx:.3f} Y{dy:.3f} Z{dz:.3f} F4000"},
         timeout=15.0,
     )
     assert jogged.status_code == 200 and jogged.json()["lines"] == ["ok"], jogged.text
-    expect(machine.locator("#c-pos")).to_contain_text("X-200.0 Y-300.0", timeout=2 * WITHIN_A_POLL)
+    expect(machine.locator("#c-pos-s")).to_contain_text(
+        "machine X-200.0 Y-300.0 Z-40.00", timeout=4 * WITHIN_A_POLL
+    )
     page.locator("#control button[data-cmd='G10 L20 P1 X0 Y0 Z0']").click()
     expect(_log(page)).to_contain_text("> G10 L20 P1 X0 Y0 Z0", timeout=5000)
     expect(machine.locator("#c-pos")).to_contain_text("X0.0 Y0.0 Z0.00", timeout=WITHIN_A_POLL)
     page.once("dialog", lambda d: d.accept())
     machine.locator("#print-start").click()
-    expect(machine.locator("#print-progress")).to_contain_text(
-        "op 1/4 pass 1/2: pocket 40 x 30 at 30,35 to z -2", timeout=10000
+    # It names the operation it is in, and goes on past every depth to the last of them:
+    # the outline, below the stock's top and within the travel. The lines go faster than
+    # the polls that show them, so which pass a poll finds is not said here.
+    progress = machine.locator("#print-progress")
+    expect(progress).to_contain_text(re.compile(r"op \d/4 pass \d/\d: "), timeout=10000)
+    expect(progress).to_contain_text(
+        re.compile(r"op 4/4 pass \d/6: outline 120 x 80 at 10,10 to z -"), timeout=30000
     )
     machine.locator("#print-cancel").click()  # pressed twice: the first press asks
     expect(page.locator("#status")).to_contain_text("press again to cancel the cut", timeout=5000)
     machine.locator("#print-cancel").click()
     expect(machine.locator("#print-progress")).to_contain_text("cancelled", timeout=20000)
     expect(machine.locator("#c-state")).to_have_text("idle", timeout=WITHIN_A_POLL)
+
+
+@pytest.mark.e2e
+def test_a_part_changed_in_its_editor_gets_its_toolpath_from_the_variant_drawn(
+    page: Page, url: str
+):
+    """One turn of the design loop in the page: the coupon's holes are smaller than the
+    tool and the toolpath says so; the hole's size typed in Part › Edit and applied, the
+    Cut card's Toolpath writes the variant drawn, and has nothing to say."""
+    from part_editing import edit, param
+
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    edit(page, "router_coupon", view=False)
+    box = param(page, "hole_diameter").locator(".param-number")
+    box.fill("8")
+    box.press("Tab")
+    apply = page.locator("#apply-btn")
+    expect(apply).to_be_enabled(timeout=10000)
+    with page.expect_response(lambda r: "/draft/render" in r.url and r.ok, timeout=60000):
+        apply.click()
+    _select(page, "cnc_router")
+    page.locator("#selected-body .device-section .dev-open").click()
+    windows.machine_ready(page, "router")
+    machine = windows.machine(page)
+    machine.locator("#print-part").select_option("router_coupon")
+    machine.locator("#print-slice").click()
+    said = machine.locator("#print-slice-said")
+    expect(said).to_contain_text("(the variant", timeout=10000)
+    expect(said).to_contain_text("hole 8 mm at 110,36.667")
+    expect(said).not_to_contain_text("bored to the tool")
+    record = httpx.get(f"{url}/cam/cuts", timeout=15.0).json()[0]
+    assert record["variant"] and record["params"]["hole_diameter"] == 8
+    assert record["messages"] == []
+
+
+@pytest.mark.e2e
+def test_the_page_says_a_router_in_a_router_s_words(page: Page, url: str):
+    """What a printer's words would get wrong, on a router: its row and its badge say its
+    state once, its facts call its volume its working area, a negative position never
+    breaks inside a number, and its hour in the Working space names the states it was in
+    and the spindle, with no printer's words among them."""
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    row = page.locator("#contents-list .contents-item[data-path='cnc_router']")
+    expect(row).to_contain_text("🪚 idle", timeout=WITHIN_A_POLL)
+    expect(row).not_to_contain_text("(structure)")
+    badge = page.locator(".world-badge[data-path='cnc_router']")
+    assert "idle · idle" not in badge.evaluate("(b) => b.textContent")
+    _select(page, "cnc_router")
+    facts = page.locator("#selected-body .prop-readonly:not(.picture-facts)")
+    expect(facts).to_contain_text("Working area: 400 × 600 × 80 mm")
+    expect(facts).not_to_contain_text("Build volume")
+    page.locator("#selected-body .device-section .dev-open").click()
+    windows.machine_ready(page, "router")
+    machine = windows.machine(page)
+    windows.from_the_windows_menu(page, "machine-print")
+    expect(windows.tab(page, "machine-print")).to_contain_text("Cut")
+    windows.from_the_windows_menu(page, "machine-status")
+    expect(machine.locator("#c-pos .nb")).to_have_count(3, timeout=WITHIN_A_POLL)
+    windows.from_the_windows_menu(page, "working")
+    space = page.locator(".working-space")
+    hour = space.locator(".ws-hour[data-path='cnc_router']")
+    expect(hour).to_be_visible(timeout=WITHIN_A_POLL)
+    hour.click()
+    legend = space.locator(".ws-legend")
+    expect(legend).to_contain_text("idle", timeout=2 * WITHIN_A_POLL)
+    expect(legend).to_contain_text("spindle")
+    for printers_own in ("printing", "hotend", "bed"):
+        expect(legend).not_to_contain_text(printers_own)

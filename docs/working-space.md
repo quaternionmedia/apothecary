@@ -4,7 +4,7 @@ A site as every kind of evidence has it: what is there, what state it is in,
 how that is known, and what changed. The plan it builds toward, its decisions
 and its open questions are
 [plans/working-space-view-2026-10-30.md](plans/working-space-view-2026-10-30.md).
-What exists is a printer's polls and the frames its cameras keep with them.
+What exists is a machine's polls -- a printer's or a router's -- and the frames its cameras keep with them.
 
 ## What is kept
 
@@ -54,7 +54,7 @@ frames are kept and Keep a set now. The status line says the same.
   cameras look at it, and its hour's button -- then every subject the log has
   said of, named as a person names it (printer_1 › bed heater), each value
   with how it is known and when.
-- **Camera › Workspace** on a printer's ring, or its row's button, opens it on
+- **Camera › Workspace** on a machine's ring, or its row's button, opens it on
   that printer: its state as a strip and its heaters as lines over the last
   hour, a key under them, and a row for each camera that looks at it, with the
   frames kept at its polls. ‹ and the site's name go back.
@@ -78,7 +78,7 @@ the poll it was kept with, every line the printer sent -- and × closes it.
 |---|---|
 | `GET /sites/{s}/evidence?at=&since=` | the `apothecary.evidence` document: every subject, each value at `at` with its sources and evidence, and the transitions, series and frames since `since` |
 | `GET /sites/{s}/evidence/printers` | each printer a board pinned in the site drives, as the next door answers it |
-| `GET /sites/{s}/evidence/printers/{path}` | the port a printer's board answers on, the cameras that look at it, and what its kept frames take of their budget |
+| `GET /sites/{s}/evidence/printers/{path}` | the port a machine's board answers on, the cameras that look at it, and what its kept frames take of their budget |
 | `PUT /sites/{s}/evidence/printers/{path}/budget` `{gb}` | that budget set |
 | `GET /evidence/polls/{id}?space=` | one poll, every line the printer sent |
 | `POST /photos/pictures?site=&camera=&poll=` | a frame kept with a poll |
