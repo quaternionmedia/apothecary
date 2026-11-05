@@ -17,6 +17,7 @@ and the coordinator, imported from `qm-hearth`, never copied.
 | `GET /family/members/<name>` | A pull member's last cue and action |
 | `GET /family/members/<name>/events` | The same, as a stream |
 | `/machine/family/*`, `/board/family/*` | A hosted member's own four routes |
+| `GET /family/beside` | What each member the hub started itself is doing now: its state, pid, instance and restarts |
 | `GET /sites/<s>/procedures` | The names of the site's procedures |
 | `GET /sites/<s>/procedures/<p>` | One as it stands: each step's status, why, whether GO will fire it, and the outcome of its last fire per member |
 | `PUT /sites/<s>/procedures/<p>` | One written, whole |
@@ -84,6 +85,28 @@ hearth's `from_table` reads. Each key is optional, and with no file there are no
 changed table starts a new coordinator, whose audit starts empty, and the audit is
 not kept across a restart.
 
+### Members it starts
+
+- **`start`** names a member beside the hub by how it is started, and the hub keeps it
+  running with `hearth.supervise`: it knows the member is up when `ready` answers, and
+  starts it again when it stops. It is a push member at its `url`, which is on this
+  machine.
+
+```json
+{"start": {"carlos": {"command": ["carlos", "serve", "--port", "<its port>"],
+                      "url": "http://127.0.0.1:<its port>",
+                      "cwd": "<its checkout>", "ready": "/family/state"}}}
+```
+
+`ready` is the path that answers 200 once it is up, a redirect not counting:
+`/family/identity` unless named, for a member that does not keep that route yet. A
+member that does not answer it within two minutes is stopped and started again, so a
+wrong `ready` restarts a healthy member. `cwd` is optional. `start` is read when the
+server starts, each member's output is in `family-logs/` in the state folder, and every
+member stops with the server. A member is its own program, as the slicer is, so
+this process's guard does not reach it; it is started without the variables that would
+redirect a fetch. Its own record of what it reaches is its own repository's.
+
 ## A procedure
 
 What the family fires is a step of a procedure, one file under its site in the state
@@ -129,8 +152,9 @@ work answered 202 ended, which reads as fired after a restart.
 ## What goes through it
 
 A procedure's steps, and carlos's holds. A site's wiring sent to carlos, by the
-follower or by `POST /sites/{name}/wiring/send`, is a delivery through the hub, so it
-is in the audit. `apothecary rig` runs outside the server, where there is no hub, and
+follower, by `POST /sites/{name}/wiring/send` or by a step whose block says `{"carlos":
+{"hold": {"wiring": "garage"}}}`, is a delivery through the hub, so it is in the audit.
+A carlos named in the table is carlos to all three, as `serve --carlos` names one. `apothecary rig` runs outside the server, where there is no hub, and
 sends to carlos directly.
 
 Carlos on its `feat/hold-the-rig` answers no `/family/identity` and no

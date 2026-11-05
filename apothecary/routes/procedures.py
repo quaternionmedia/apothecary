@@ -8,6 +8,7 @@
 - ``POST /sites/{s}/procedures/{p}/steps/{n}/go``: one step fired through the family's
   hub, and the procedure as it then stands; a 409 for a step not standing by.
 - ``POST /sites/{s}/procedures/{p}/again``: the procedure started over.
+- ``GET /family/beside``: what each member the hub started itself is doing now.
 
 Plain ``def``: a GO waits for each member's answer, and reading a procedure reads the
 evidence log.
@@ -20,7 +21,7 @@ from typing import Annotated, Any, Dict
 from fastapi import APIRouter, HTTPException, Path, Request
 from fastapi.routing import APIRoute
 
-from ..family import procedures
+from ..family import beside, procedures
 from .jobs import SITE_NAME
 
 
@@ -100,3 +101,9 @@ def again(site: Site, name: Name) -> Dict[str, Any]:
     if board is None:
         raise _no_procedure(site, name)
     return board
+
+
+@router.get("/family/beside")
+def family_beside() -> Dict[str, Any]:
+    """What each member the hub started itself is doing now."""
+    return beside.status()

@@ -19,6 +19,7 @@
 .procedure-ui .procedure-family { display: flex; flex-wrap: wrap; gap: 0.2rem 0.7rem; }
 .procedure-ui .dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; margin-right: 0.3rem; background: var(--ink-3); }
 .procedure-ui .dot.ok { background: var(--ok); }
+.procedure-ui .dot.warn { background: var(--warn); }
 .procedure-ui ol, .procedure-ui ul { list-style: none; margin: 0; padding: 0; }
 .procedure-ui .procedure-step { border-top: 1px solid var(--line); padding: 0.4rem 0.2rem; display: flex; flex-direction: column; gap: 0.12rem; }
 .procedure-ui .number { color: var(--ink-3); min-width: 1.2rem; }

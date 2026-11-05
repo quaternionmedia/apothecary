@@ -3,10 +3,11 @@
 The family's own members are hosted here (``members``), and a camera is read from
 the page, whatever the table says. The table names the rest: it is ``family.json`` in
 the state folder, in the shape hearth's ``from_table`` reads: ``{"members": {name:
-url}, "pull": [name], "timeout": seconds}``, each optional. ``serve --carlos`` adds
-carlos to it as a push member. A member is on this machine or it is left out and said,
-as the process's guard would refuse it anyway. The table is read afresh at each use,
-and a changed table starts a new coordinator, whose audit starts empty.
+url}, "pull": [name], "timeout": seconds}``, each optional, and ``start``, the members
+the hub starts itself (``beside``). ``serve --carlos`` adds carlos to it as a push
+member. A member is on this machine or it is left out and said, as the process's guard
+would refuse it anyway. The table is read afresh at each use, and a changed table starts
+a new coordinator, whose audit starts empty.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from hearth import coordinator
 from ..firmware.devices import state_dir
 from ..version import __version__
 from ..wiring.carlos import CARLOS, carlos_url, loopback_url
+from . import beside
 from . import members as hosted
 from .members import FAMILY
 
@@ -71,11 +73,9 @@ def _on_this_machine(members: Any) -> Any:
         try:
             kept[name] = loopback_url(url)
         except (AttributeError, TypeError, ValueError):
-            log.warning(
-                "family: %s.members %s = %r is not on this machine, so it is left out",
-                TABLE,
-                name,
-                url,
+            beside.say_once(
+                f"family: {TABLE}.members {name} = {url!r} is not on this machine, "
+                "so it is left out"
             )
     return kept
 
@@ -85,6 +85,8 @@ def settings() -> Dict[str, Any]:
     members a page reads."""
     table = _table()
     members = _on_this_machine(table.get("members") or {})
+    if isinstance(members, dict):
+        members.update({spec.name: spec.url for spec in beside.specs(table.get("start"), TABLE)})
     named = carlos_url()
     if named and isinstance(members, dict):
         members[CARLOS] = named
@@ -107,13 +109,24 @@ def running() -> coordinator.Coordinator:
         return _running
 
 
+def start() -> None:
+    """At the app's start: the members beside the hub."""
+    beside.start(_table().get("start"), TABLE)
+
+
 def close() -> None:
     """At the app's stop."""
     global _running, _read
+    beside.stop()
     with _lock:
         if _running is not None:
             _running.close()
         _running, _read = None, None
+
+
+def carlos_at() -> Optional[str]:
+    """Where the family's carlos answers, however it is named."""
+    return running().members.get(CARLOS)
 
 
 def identity() -> Dict[str, Any]:

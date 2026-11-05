@@ -201,6 +201,7 @@ async def lifespan(app: FastAPI):
     stl_task = asyncio.create_task(_generate_missing_stls_in_background())
     app.state.stl_generation_task = stl_task  # keep a strong reference (asyncio GC gotcha)
     lighting_routes.start_console_feeds()
+    family_hub.start()
     wiring_routes.start_following()
     yield
     wiring_routes.stop_following()

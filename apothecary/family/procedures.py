@@ -7,6 +7,9 @@ its discipline, the node it sits on, its notes, the evidence it waits for and it
 family block, what each member is handed when it fires. A step whose block is empty
 is a person's own: its GO says the person did it.
 
+A hold of carlos's names the site whose wiring it holds, ``{"carlos": {"hold": {"wiring":
+"garage"}}}``, and that wiring is read when the step fires.
+
 A step stands by once the step before it has been fired and the evidence it names is
 in, as the log last said it. Nothing fires itself: every step waits for GO. A step
 refused or failed may be fired again, and ``again`` starts the procedure over.
@@ -30,6 +33,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..evidence import log
 from ..firmware.devices import private_folder, state_dir
+from ..wiring.carlos import CARLOS
 from . import hub, members
 
 Discipline = Literal[
@@ -221,6 +225,18 @@ def _append(site: str, record: Dict[str, Any], at: datetime) -> None:
     log.append(site, log.ACTIONS, {"at": at.isoformat(), **record}, at)
 
 
+def _handed(family: Dict[str, Any]) -> Dict[str, Any]:
+    """A step's block as its members are handed it: a wiring is read when it is held."""
+    from ..routes.wiring import hold_action
+
+    handed = {}
+    for member, action in family.items():
+        hold = action.get("hold")
+        named = member == CARLOS and isinstance(hold, dict) and set(hold) == {"wiring"}
+        handed[member] = hold_action(hold["wiring"]) if named else action
+    return handed
+
+
 _going = threading.Lock()
 
 
@@ -238,7 +254,7 @@ def go(site: str, name: str, number: str) -> Dict[str, Any]:
         at = datetime.now(timezone.utc)
         cue = {"number": number, "name": step["name"], "fired_at": at.isoformat()}
         running = hub.running()
-        running.fire(cue, step["family"])
+        running.fire(cue, _handed(step["family"]))
         running.wait(running.timeout + hub.GRACE_SECONDS)
         audit = [each for each in running.snapshot()["last"] if each["cue"] == cue]
         person = {"member": None, "via": None, "status": None, "ms": None}

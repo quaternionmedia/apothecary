@@ -48,10 +48,16 @@ export function mountProcedure(root, { base = "", siteName, log = null } = {}) {
     const siteUrl = () => `/sites/${encodeURIComponent(siteName())}/procedures`;
     const chosenUrl = () => `${siteUrl()}/${encodeURIComponent(name)}`;
 
-    function renderFamily(members) {
+    // A member the hub started itself says so while it is not up.
+    function renderFamily(members, started) {
         const rows = Object.entries(members).sort(([a], [b]) => a.localeCompare(b));
-        $(".procedure-family").innerHTML = rows.map(([who, how]) =>
-            `<span class="procedure-member" title="${esc(REACHED[how.via] || how.via)}"><span class="dot ${how.via === "pull" ? "off" : "ok"}"></span>${esc(who)}</span>`).join("");
+        $(".procedure-family").innerHTML = rows.map(([who, how]) => {
+            const state = started[who]?.state;
+            const dot = how.via === "pull" ? "off" : state && state !== "up" ? "warn" : "ok";
+            const words = state && state !== "up" ? ` (${state})` : "";
+            const title = state ? `${REACHED[how.via]}, started by the hub: ${state}, restarted ${started[who].restarts} times` : REACHED[how.via] || how.via;
+            return `<span class="procedure-member" title="${esc(title)}"><span class="dot ${dot}"></span>${esc(who)}${esc(words)}</span>`;
+        }).join("");
     }
 
     // The step's own line says its first error, so an outcome says only another's.
@@ -88,8 +94,8 @@ export function mountProcedure(root, { base = "", siteName, log = null } = {}) {
 
     async function load() {
         try {
-            const [family, listed] = await Promise.all([api("/family/"), api(siteUrl())]);
-            renderFamily(family.members);
+            const [family, started, listed] = await Promise.all([api("/family/"), api("/family/beside"), api(siteUrl())]);
+            renderFamily(family.members, started);
             names = listed.procedures;
             if (!names.includes(name)) name = names[0] ?? null;
             board = name ? await api(chosenUrl()) : null;
