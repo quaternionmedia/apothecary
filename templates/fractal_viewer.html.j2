@@ -791,6 +791,7 @@
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/machine.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/bench.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/working_space.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/procedure.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/airgap.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/models.css">
     <script type="importmap">
@@ -829,6 +830,7 @@
         import { KINDS as MACHINE_WORDS, GCODE_KINDS, kindOf as boardKindOf } from '/static/machine_words.js';
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
+        import { mountProcedure } from '/static/widgets/procedure.js';
         import { mountPictureList } from '/static/widgets/picture_list.js';
         import { mountModels } from '/static/widgets/models.js';
         import { mountToolchain } from '/static/widgets/toolchain.js';
@@ -1706,6 +1708,24 @@
                     onOpen: () => this.workingSpace?.shown(),
                     onClose: () => this.workingSpace?.close(),
                 });
+                // Procedure: the site's procedures, each step fired through the family's
+                // hub on GO (widgets/procedure.js) -- a stack of its own beside the world,
+                // for the height its steps take. Closed, it stops asking.
+                this.procedure = null;
+                this.panels.register('procedure', {
+                    title: 'Procedure', group: 'Site', home: 'beside', open: false,
+                    hint: 'The steps that bring this site into working order, each fired through the family\'s hub on GO',
+                    body: (slot) => {
+                        this.procedure = mountProcedure(slot, {
+                            base: BASE_URL, siteName: () => this.siteName,
+                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                        });
+                        window.apothecaryProcedure = this.procedure;
+                        this.procedure.shown();
+                    },
+                    onOpen: () => this.procedure?.shown(),
+                    onClose: () => this.procedure?.close(),
+                });
                 // ⊞ Windows: drawn afresh each time it opens, so it says which are open.
                 const windowsBody = this.windowsMenuEl.querySelector('.windows-menu-body');
                 this.windowsMenuEl.addEventListener('toggle', () => {
@@ -2195,6 +2215,7 @@
                     this.pictureMarks.load(name);
                     // A Working space in front shows this site; behind, it does once shown.
                     if (this.panels.isShown('working')) this.workingSpace?.open(null);
+                    if (this.panels.isShown('procedure')) this.procedure?.load();
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
                     console.error(err);
@@ -8614,6 +8635,14 @@
                     viewer.panels.open('models');
                     viewer.setStatus(`${intent.label}${tail}`, 'success');
                     if (viewer.modelsWidget) { viewer.modelsWidget.follow(); viewer.modelsWidget.act(action.slice('models:'.length)); }
+                    return;
+                }
+                // A Procedure verb: the window shown, and GO or Start over done; what came
+                // of it is the window's own last word.
+                if (action.startsWith('procedure:')) {
+                    viewer.panels.open('procedure');
+                    viewer.setStatus(`${intent.label}${tail}`, 'success');
+                    if (viewer.procedure) viewer.procedure.act(action.slice('procedure:'.length));
                     return;
                 }
                 // An Airgap verb: the panel shown, and the verb done; what it did, or

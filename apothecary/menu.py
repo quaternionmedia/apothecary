@@ -685,6 +685,9 @@ PANELS: Sequence[Tuple[str, str]] = (
     # a printer's ring opens it on that printer. A ring's label holds twelve
     # characters, so its cells say Workspace.
     ("working", "Workspace"),
+    # Procedure: the steps that bring a site into working order, each fired through the
+    # family's hub on GO, a tab of Site's ring registered by the page's script.
+    ("procedure", "Procedure"),
     # Registered by the page's script rather than marked in its markup: Pictures
     # (every picture under the picture root, each pinned here or forgotten), Models
     # (image models through qmcp asked about the shape chosen on a mat, closed until
@@ -722,7 +725,7 @@ VIEWS = tuple((system.id, system.cell) for system in SYSTEMS)
 # Machine and its control pad.
 _BEFORE_WINDOWS = ("site", "selected", "pictures", "machine")
 _RINGS = {
-    "site": ("site", "problems", "pinned", "jobs", "scad", "working"),
+    "site": ("site", "problems", "pinned", "jobs", "scad", "working", "procedure"),
     # Models before Gather, so Models keeps its address when Gather goes
     # (docs/plans/ui-coordination-2026-10-31.md).
     "pictures": ("pictures", "models", "gather"),
@@ -756,6 +759,8 @@ def _panels() -> Option:
             children=[
                 _models(toggle(each, labels[each]))
                 if each == "models"
+                else _procedure(toggle(each, labels[each]))
+                if each == "procedure"
                 else toggle(each, labels[each])
                 for each in _RINGS[pid]
             ],
@@ -849,6 +854,20 @@ def _colours(words: Sequence[str]) -> List[Option]:
     if rest:
         cells.append(Option(id="models:colour:more", label="More", children=[say(w) for w in rest]))
     return cells
+
+
+def _procedure(toggle: Option) -> Option:
+    """Panels › Site › Procedure: the window, then its verbs, which the page hands to it
+    (widgets/procedure.js). Seated after the window's own cell."""
+    return Option(
+        id="panels:procedure",
+        label="Procedure",
+        children=[
+            toggle,
+            Option(id="procedure:go", label="GO", action="procedure:go"),
+            Option(id="procedure:again", label="Start over", action="procedure:again"),
+        ],
+    )
 
 
 def _models(toggle: Option) -> Option:
@@ -1840,6 +1859,9 @@ CARRIED_BY: Dict[str, Carries] = {
     # A printer's Working space: the page opens the window on the printer, watches
     # its board and keeps frames with its polls (widgets/working_space.js).
     "working": Carries.VIEWER,
+    # GO and Start over: the page hands each to the Procedure window, which fires
+    # through the family's hub (widgets/procedure.js).
+    "procedure": Carries.VIEWER,
     # How the world is drawn: the header's View menu (snapping, detail, outlines,
     # whether a click picks a wall).
     "view": Carries.VIEWER,

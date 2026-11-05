@@ -1151,7 +1151,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Jobs", "panel:toggle:jobs", 4),
         ("SCAD", "panel:toggle:scad", 9),
         ("Workspace", "panel:toggle:working", 3),
+        ("Procedure", None, 1),
     ]
+    procedure = next(c for c in site.children if c.label == "Procedure")
+    assert [(c.label, c.action) for c in procedure.children] == [
+        ("Procedure", "panel:toggle:procedure"),
+        ("GO", "procedure:go"),
+        ("Start over", "procedure:again"),
+    ]
+    assert carried_by("procedure:go").name == "VIEWER"
     assert address_of(root, "panel:site") == "488"  # by the option's id
     assert address_of(root, "panel:problems") == "486"
     pictures = next(c for c in panels.children if c.label == "Pictures")

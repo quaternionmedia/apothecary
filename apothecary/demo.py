@@ -16,6 +16,9 @@ with every machine simulated:
 - **the slicer** is the person's own OrcaSlicer when one is installed, read where
   it is; with none, Slice says how to install it;
 - **printing** goes to the simulated printer;
+- **a procedure**, ``bring-up``, stands under the garage: a person's check of a lead,
+  the devkit flashed and heard, each machine homed, each step fired through the
+  family's hub on GO (``family/procedures.py``); written once and kept;
 - **a lighting console** sweeps every site's rig -- the theatre's -- as
   ``apothecary lighting simulate`` does (``console_feedback.simulate_levels``), ten
   times a second, set in the server's own state with nothing sent anywhere; not
@@ -224,19 +227,73 @@ def _work_zero_on_the_coupon() -> None:
     link.command(f"G10 L20 P1 X{x:g} Y{y:g} Z{z:g}", origin="control")
 
 
+def _bring_up():
+    """The procedure the demo's garage starts with, on its simulated bench."""
+    from .family.procedures import Procedure
+
+    devkit = f"{SITE}:esp32_blink"
+    printer, router = f"{SITE}:{BOARD}", f"{SITE}:{CONTROLLER}"
+    arm = "Arm its control in the Machine window first: GO never does."
+    return Procedure(
+        steps=[
+            {
+                "number": "1",
+                "name": "Check the devkit's lead",
+                "discipline": "electrical",
+                "node": devkit,
+                "notes": "A person's own step: its GO says the person did it.",
+            },
+            {
+                "number": "2",
+                "name": "Flash the devkit",
+                "discipline": "firmware",
+                "node": devkit,
+                "family": {"board": {"flash": {"port": DEVKIT, "sketch": "esp32_blink@arduino"}}},
+            },
+            {
+                "number": "3",
+                "name": "Hear its hello",
+                "discipline": "firmware",
+                "node": devkit,
+                "family": {"board": {"expect": {"node": devkit}}},
+            },
+            {
+                "number": "4",
+                "name": "Home the printer",
+                "discipline": "mechanical",
+                "node": printer,
+                "notes": arm,
+                "family": {"machine": {"home": {"node": printer}}},
+            },
+            {
+                "number": "5",
+                "name": "Home the router",
+                "discipline": "mechanical",
+                "node": router,
+                "notes": arm,
+                "waits": {"subject": f"{SITE}:printer_1", "property": "state", "value": "idle"},
+                "family": {"machine": {"home": {"node": router}}},
+            },
+        ]
+    )
+
+
 def seed() -> Optional[str]:
     """printer_1's mainboard pinned to the simulated Ender, identified (``M115``) as
     the bench's real board is, and cnc_router's controller to the simulated router,
     identified (``$I``): what the printer's is pinned to, or None when it could not
     be (the page's Device section pins it by hand then; the router's the same, said
-    in the log). Refuses outside the demo's environment, where a port would be a
-    real one."""
+    in the log). The garage's procedure is written once, then kept. Refuses outside the
+    demo's environment, where a port would be a real one."""
+    from .family import procedures
     from .firmware import devices
     from .firmware.gcode import serial_engine
     from .firmware.toolchains import ToolchainError
 
     if running() is None or serial_engine() != "simulated":
         raise RuntimeError("the demo's pin is seeded in the demo's environment only")
+    if procedures.load(SITE, "bring-up") is None:
+        procedures.save(SITE, "bring-up", _bring_up())
     try:
         devices.identify_printer(ROUTER)
         devices.get_state().set_binding(SITE, CONTROLLER, devices.stable_identity(ROUTER))

@@ -483,6 +483,19 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "print-pause": (WIDGET, WHAT_IS_THERE, "a button that stops feeding the print from here"),
     "print-resume": (WIDGET, WHAT_IS_THERE, "a button that feeds the print from here again"),
     "print-cancel": (WIDGET, WHAT_IS_THERE, "a button that ends the print from here, heaters off"),
+    # ---- Procedure, apothecary/static/widgets/procedure.js -------------------
+    # A site's procedures. GO and Start over are Site › Procedure too (RING_BACKED).
+    "procedure-choice": (WIDGET, WHAT_YOU_SEE, "a drop-down of the site's procedures"),
+    "procedure-go": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button on the step standing by, firing it through the family's hub",
+    ),
+    "procedure-again": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that starts a procedure over, what came before staying in the log",
+    ),
     # ---- Settings, apothecary/static/widgets/settings.js -------------------
     # Every shortcut and navigation setting: one row each, its default shown and a
     # reset beside it, and Reset all. They change how the page takes a press, not
@@ -591,6 +604,10 @@ RING_BACKED: Dict[str, str] = {
     "models:click:closest": "models:ask",
     "models-word": "models:say:colour:red",
     "models:keydown:closest": "models:say:colour:red",
+    # GO and Start over are the cells of Panels › Site › Procedure
+    "procedure-go": "procedure:go",
+    "procedure-again": "procedure:again",
+    "procedure:click:closest": "procedure:go",
     # the Airgap's verbs are the cells of Panels › Airgap
     "airgap-play": "airgap:play",
     "playEl:click:setPlaying": "airgap:play",
@@ -1081,6 +1098,13 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "gather-out:click:closest": (WIDGET, WHAT_YOU_SEE, "answering a question with a button"),
     "pic-file:change:addFiles": (WIDGET, WHAT_YOU_SEE, "adding the chosen pictures"),
     # ---- Site --------------------------------------------------------------
+    "print-preview:input:previewOn": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the Cut or Print card's preview slider, drawing a file's toolpath in the world",
+    ),
+    "procedure:click:closest": (WIDGET, WHAT_IS_THERE, "GO or Start over"),
+    "procedure:change:closest": (WIDGET, WHAT_YOU_SEE, "the procedure chosen"),
     "models:click:closest": (WIDGET, WHAT_IS_THERE, "Ask, about the shape chosen on a mat"),
     "models:change:closest": (WIDGET, WHAT_IS_THERE, "an origin's tick-box, switching it"),
     "models:keydown:closest": (WIDGET, WHAT_IS_THERE, "Enter in a person's word, saying it"),

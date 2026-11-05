@@ -1,0 +1,35 @@
+/* Procedure (widgets/procedure.js): the family, and a procedure's steps with their GO.
+ * Scoped to .procedure-ui, so the page's own rules are left alone. */
+.procedure-ui { font-size: 0.8rem; color: var(--ink); display: flex; flex-direction: column; gap: 0.35rem; }
+.procedure-ui .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); margin-top: 0.3rem; }
+.procedure-ui .row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.procedure-ui .row[hidden] { display: none; }
+.procedure-ui .grow { flex: 1; min-width: 0; }
+.procedure-ui .meta { color: var(--ink-3); font-size: 0.72rem; overflow-wrap: anywhere; }
+.procedure-ui .note { color: var(--ink-2); font-size: 0.72rem; font-style: italic; }
+.procedure-ui .note:empty { display: none; }
+.procedure-ui .empty { color: var(--ink-3); font-style: italic; }
+.procedure-ui .bad { color: var(--bad); }
+.procedure-ui button, .procedure-ui select {
+    font: inherit; font-size: 0.78rem; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 0.2rem 0.45rem;
+}
+.procedure-ui button { cursor: pointer; }
+.procedure-ui button:hover { border-color: var(--ink-3); }
+.procedure-ui button:disabled { opacity: 0.45; cursor: not-allowed; }
+.procedure-ui .procedure-family { display: flex; flex-wrap: wrap; gap: 0.2rem 0.7rem; }
+.procedure-ui .dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; margin-right: 0.3rem; background: var(--ink-3); }
+.procedure-ui .dot.ok { background: var(--ok); }
+.procedure-ui ol, .procedure-ui ul { list-style: none; margin: 0; padding: 0; }
+.procedure-ui .procedure-step { border-top: 1px solid var(--line); padding: 0.4rem 0.2rem; display: flex; flex-direction: column; gap: 0.12rem; }
+.procedure-ui .number { color: var(--ink-3); min-width: 1.2rem; }
+.procedure-ui .name { font-weight: 600; overflow-wrap: anywhere; }
+.procedure-ui .procedure-status { font-size: 0.7rem; color: var(--ink-2); white-space: nowrap; }
+.procedure-ui .procedure-why { font-size: 0.74rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.procedure-ui .procedure-outcome { font-size: 0.72rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.procedure-ui .procedure-outcome .who { color: var(--ink); }
+.procedure-ui .procedure-go { background: var(--ok); color: var(--bg); border-color: var(--ok); font-weight: 700; padding: 0.15rem 0.7rem; }
+.procedure-ui .is-done .procedure-status { color: var(--ok); }
+.procedure-ui .is-standing-by .procedure-status, .procedure-ui .is-fired .procedure-status { color: var(--warn); }
+.procedure-ui .is-refused .procedure-status, .procedure-ui .is-failed .procedure-status,
+.procedure-ui .is-refused .procedure-why, .procedure-ui .is-failed .procedure-why { color: var(--bad); }
+.procedure-ui .is-waiting .name { color: var(--ink-2); font-weight: 400; }

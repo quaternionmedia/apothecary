@@ -108,7 +108,9 @@ folder, `procedures/<site>/<name>.json`:
   last said it.
 
 Every step waits for a person's GO, and only the step standing by fires: the one whose
-predecessor has fired, once the evidence it names is in.
+predecessor has fired, once the evidence it names is in. GO is in the **Procedure**
+window, ⊞ Windows › Procedure, which says who the family is and how each step stands.
+`apothecary serve --demo` starts with one, `bring-up`, on the garage's simulated bench.
 
 | Status | What it means |
 |---|---|

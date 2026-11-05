@@ -206,6 +206,14 @@ AREAS = {
         ),
         "tests": ("test_working_space.py",),
     },
+    "procedure": {
+        "sources": (
+            "apothecary/family/*",
+            "apothecary/routes/procedures.py",
+            "apothecary/static/widgets/procedure.*",
+        ),
+        "tests": ("test_procedure_window.py",),
+    },
     "models": {
         "sources": (
             "apothecary/finders/*",
