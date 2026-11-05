@@ -1490,7 +1490,9 @@ def _node_ring(
     # site there is nothing to slice for, and no Slice.
     in_a_printer = any(path == p or path.startswith(p + ".") for p in picture.printers)
     board = bool(node is not None and (node.sketch_ref or (picture.part and picture.part.board)))
-    part = bool(node is not None and node.part_ref and not camera and not board)
+    # A machine drawn as a part (the router) is no more sliced than a printer is.
+    machine = bool(node is not None and node.build_volume is not None)
+    part = bool(node is not None and node.part_ref and not camera and not board and not machine)
     if (made or part) and picture.printers and not in_a_printer:
         options.append(_slice_option(picture.printers))
     # A piece with a board pinned to it can be watched, polled and, when the board is

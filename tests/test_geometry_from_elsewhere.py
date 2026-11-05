@@ -21,6 +21,7 @@ from apothecary.example_hierarchy import BENCH_BOARDS, create_example_site, vali
 from apothecary.hierarchy import Assembly
 from apothecary.models.vectors import Vector3D
 from apothecary.primitives import Import
+from apothecary.projects.parts import anolex_4060_evo_ultra_2 as anolex
 from apothecary.projects.parts import ender3
 from apothecary.projects.parts.described import DescribedPart, part_from_sidecar
 from apothecary.projects.parts.skeleton import ROOT
@@ -241,6 +242,35 @@ def test_the_garage_printers_are_ender_3s_drawn_as_they_are(monkeypatch):
     rows = {r["path"] for r in client.get("/sites/garage/devices").json()["bindings"]}
     assert "esp32_blink" in rows and "footpedal" in rows
     assert not {"printer_1", "arduino_uno", "raspberry_pi_4", "teensy_40"} & rows
+
+
+def test_the_garage_router_is_an_anolex_4060_drawn_as_it_is(monkeypatch):
+    """The router is the AnoleX 4060-Evo Ultra 2 part on its stand, its controller in
+    the control box at the back, its working area where the machine's table is; the
+    layout is valid, and the site's render imports the part."""
+    site = create_example_site()
+    router = next(s for s in site.children if s.name == "cnc_router")
+    assert router.part_ref == "anolex_4060_evo_ultra_2" and router.base is None
+    assert router.build_volume == anolex.WORK == Vector3D(x=400, y=600, z=80)
+    assert router.build_origin == anolex.WORK_ORIGIN == Vector3D(x=115, y=165, z=100)
+    assert router.footprint.max_point == anolex.OVERALL
+    box = next(c for c in router.children if c.name == "frame_system")
+    assert box.position == anolex.CONTROL_BOX.min_point
+    controller = next(c for c in box.children if c.name == "controller")
+    assert controller.category == "electrical" and "pin the router's port" in controller.comment
+    assert validate_garage_layout(site).is_valid
+    monkeypatch.setattr(hierarchy, "part_stl_path", lambda ref: f"parts/{ref}.stl")
+    assert site.render().count('import("parts/anolex_4060_evo_ultra_2.stl"') == 1
+    # The part says which of its numbers the maker publishes, as the Ender's does.
+    scad = anolex.DEFAULT.source_file.read_text(encoding="utf-8")
+    assert scad.count("published") >= 2
+    assert "work_x = 400; work_y = 600; work_z = 80;" in scad
+    # The API carries the working area and its origin to the viewers.
+    client = TestClient(app)
+    tree = client.get("/sites/garage").json()["tree"]
+    node = next(c for c in tree["children"] if c["name"] == "cnc_router")
+    assert node["build_volume"] == [400.0, 600.0, 80.0]
+    assert node["build_origin"] == [115.0, 165.0, 100.0]
 
 
 def test_the_board_models_are_the_boards_they_say(tmp_path):

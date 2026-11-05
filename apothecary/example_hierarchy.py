@@ -1,6 +1,6 @@
-"""Worked example: a garage workbench with a 3D printer on it, inside its
-own building shell, alongside abstract utility fixtures, storage, and a
-subtractive-manufacturing stub.
+"""Worked example: a garage workbench with a 3D printer on it, a CNC router on
+its stand, inside its own building shell, alongside abstract utility fixtures
+and storage.
 
 A prototype, under hierarchy.py's draft record: it demonstrates
 apothecary/hierarchy.py's fractal Assembly against a concrete, spatially
@@ -9,14 +9,14 @@ verifiable scene rather than an eyeballed one: one Site
 workbench, the 3D printer sitting on top of it, the boards beside it, the garage
 building itself (walls with a door and a window cut into them), one
 Structure per abstract utility fixture (lighting, HVAC, electrical, fluids),
-a storage shelving unit, and a floor-standing CNC router standing in for
-subtractive manufacturing. Each is built from one or more named Substructure
+a storage shelving unit, and a CNC router on a stand of its own. Each is
+built from one or more named Substructure
 systems -- a printer (and the building, and each fixture) is bought/built as
 a whole unit, same as the bench, so all are Structures (siblings within the
 Site); the *systems within* a Structure (a frame, a gantry, a wall, a
 fixture's housing) are Substructures.
 
-The fixtures, storage, and CNC router are deliberately simple stubs -- a
+The fixtures and storage are deliberately simple stubs -- a
 housing plus, where relevant, one named "output" Feature standing in for the
 system's actual business end (a lens, a vent grille, a receptacle face, a
 spigot, a shelf) -- left for further development, not modeled in functional
@@ -28,14 +28,17 @@ pane.
 ``tests/test_garage_workbench.py`` checks, in code, that each sits exactly on
 the bench's top surface, stays within the bench's footprint, and doesn't
 overlap its neighbours -- and that the rest (the building, fixtures, storage,
-CNC router) don't overlap anything either, without being
+the router and its stand) don't overlap anything either, without being
 held to that same bench-specific rule (see ``BENCH_MOUNTED_STRUCTURES`` and
 ``validate_garage_layout``) -- not just that the generated .scad "looks about
 right."
 
 A printer's ``status`` (``PRINTER_STATUSES``) is set by hand from the viewer
-(maintenance, offline) and by the machine itself, through its polls. The CNC
-router carries no ``build_volume`` and has no operation of its own yet.
+(maintenance, offline) and by the machine itself, through its polls; the
+router's (``ROUTER_STATUSES``) the same way, from its controller's polls. The
+router is an AnoleX 4060-Evo Ultra 2 (parts/anolex_4060_evo_ultra_2), drawn
+as the machine is, its working area its ``build_volume`` and its controller
+the node a port is pinned to.
 """
 
 from __future__ import annotations
@@ -54,6 +57,7 @@ from .hierarchy import (
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder
+from .projects.parts import anolex_4060_evo_ultra_2 as anolex
 from .projects.parts import ender3
 from .transforms import Translate
 
@@ -95,6 +99,11 @@ PRINTER_Y_POSITION = 150.0
 # a Structure's status is a free-form string there, this is the scenario's
 # closed set of meaningful values for *this* example.
 PRINTER_STATUSES = ["idle", "printing", "offline", "maintenance"]
+# The router's: its controller's state word folded to the site's vocabulary
+# (apothecary/firmware/grbl.py says how), and the two a person sets by hand.
+ROUTER_STATUSES = ["idle", "running", "hold", "alarm", "offline", "maintenance"]
+# Every status a machine's polls may set on its node: what the status sync accepts.
+MACHINE_STATUSES = list(dict.fromkeys([*PRINTER_STATUSES, *ROUTER_STATUSES]))
 
 # Structures meant to sit on the workbench's top surface in this scenario --
 # an explicit role list, not inferred from current position (which is
@@ -154,8 +163,8 @@ BENCH_BOARDS = [
 # its equipment needs, with open floor between the door and the workbench,
 # not a room sized to shrink-wrap its contents. Width (x) is 6000 mm, set by
 # the east wall (GARAGE_MAX.x): electrical and fluids stand by the west wall,
-# and storage_shelving and cnc_router are placed from GARAGE_MAX.x, below, so
-# they stand against the east wall wherever it is.
+# and storage_shelving and the router's stand are placed from GARAGE_MAX.x,
+# below, so they stand against the east wall wherever it is.
 GARAGE_MIN = Vector3D(x=-500.0, y=-500.0, z=0.0)
 GARAGE_MAX = Vector3D(x=5500.0, y=5500.0, z=2600.0)
 WALL_THICKNESS = 100.0
@@ -184,12 +193,24 @@ STORAGE_SIZE = Vector3D(x=500.0, y=600.0, z=2000.0)
 SHELF_THICKNESS = 30.0
 SHELF_HEIGHTS = [400.0, 900.0, 1400.0]
 
-# --- Subtractive manufacturing (mm) -- a floor-standing CNC router, next to
-# storage: unlike the bench-top additive printers, deliberately given no
-# build_volume -- a visual stub for a machine type no job runs on yet, not a
-# functional gap to hide.
-CNC_ROUTER_POSITION = Vector3D(x=GARAGE_MAX.x - 600.0, y=900.0, z=0.0)
-CNC_ROUTER_SIZE = Vector3D(x=500.0, y=600.0, z=900.0)
+# --- Subtractive manufacturing (mm) -- the CNC router, an AnoleX 4060-Evo
+# Ultra 2 drawn as the machine is (parts/anolex_4060_evo_ultra_2, from
+# published dimensions), on a steel stand of its own next to storage, against
+# the east wall. The stand is the router's bench: the machine sits on its top
+# as printer_1 sits on the workbench's, and its working area is its
+# build_volume, where the tool's (0, 0, 0) is on the table.
+CNC_STAND_SIZE = Vector3D(x=800.0, y=1100.0, z=750.0)
+CNC_STAND_POSITION = Vector3D(x=GARAGE_MAX.x - 100.0 - CNC_STAND_SIZE.x, y=900.0, z=0.0)
+CNC_STAND_LEG = 50.0
+CNC_STAND_TOP = 40.0
+CNC_ROUTER_SIZE = anolex.OVERALL  # the frame, with the X and Y motors past it
+# Where the router stands on its stand (world X, world Y): centred on the top,
+# so a person can reach round it.
+CNC_ROUTER_POSITION = Vector3D(
+    x=CNC_STAND_POSITION.x + (CNC_STAND_SIZE.x - CNC_ROUTER_SIZE.x) / 2,
+    y=CNC_STAND_POSITION.y + (CNC_STAND_SIZE.y - CNC_ROUTER_SIZE.y) / 2,
+    z=CNC_STAND_SIZE.z,
+)
 
 
 def _leg_corners() -> list[tuple[float, float]]:
@@ -579,23 +600,92 @@ def _build_storage() -> Assembly:
     )
 
 
+def _build_cnc_stand() -> Assembly:
+    """The steel stand the router sits on: four legs and a top, the router's bench."""
+    legs = [
+        Feature(
+            name=f"stand_leg_{i}",
+            geometry=Translate(
+                v=Vector3D(x=x, y=y, z=0),
+                children=[
+                    Cube(size=Vector3D(x=CNC_STAND_LEG, y=CNC_STAND_LEG, z=CNC_STAND_SIZE.z))
+                ],
+            ),
+        )
+        for i, (x, y) in enumerate(
+            [
+                (0.0, 0.0),
+                (CNC_STAND_SIZE.x - CNC_STAND_LEG, 0.0),
+                (0.0, CNC_STAND_SIZE.y - CNC_STAND_LEG),
+                (CNC_STAND_SIZE.x - CNC_STAND_LEG, CNC_STAND_SIZE.y - CNC_STAND_LEG),
+            ]
+        )
+    ]
+    top = Feature(
+        name="stand_top",
+        geometry=Translate(
+            v=Vector3D(x=0, y=0, z=CNC_STAND_SIZE.z - CNC_STAND_TOP),
+            children=[Cube(size=Vector3D(x=CNC_STAND_SIZE.x, y=CNC_STAND_SIZE.y, z=CNC_STAND_TOP))],
+        ),
+    )
+    return Structure(
+        name="cnc_stand",
+        material="Steel, powder-coated",
+        position=CNC_STAND_POSITION,
+        footprint=BoundingBox3D(min_point=Vector3D(), max_point=CNC_STAND_SIZE),
+        category="mechanical",
+        substructures=[Substructure(name="frame", additions=[*legs, top])],
+    )
+
+
+# The router's controller, in the control box at the back of the base: the
+# Grbl_ESP32 board the machine's USB lead reaches. This is the node a real
+# router's serial port is pinned to (firmware/bindings.py), as printer_1's
+# mainboard is: the controller is what Apothecary talks to, and the router
+# Structure above it takes its status from the controller's polls. The maker
+# publishes no drawing of the board, so it is a box of the size a board of
+# its kind has, and no part draws it.
+CONTROLLER_SIZE = Vector3D(x=100.0, y=80.0, z=20.0)
+CONTROLLER_POSITION = Vector3D(x=50.0, y=10.0, z=10.0)  # in the control box's frame
+CONTROL_BOX = anolex.CONTROL_BOX  # the box, in the router's frame
+
+
+def _build_controller() -> Assembly:
+    board = Substructure(
+        name="controller",
+        position=CONTROLLER_POSITION,
+        base=Cube(size=CONTROLLER_SIZE, comment="controller board envelope (no published drawing)"),
+        footprint=BoundingBox3D(min_point=Vector3D(), max_point=CONTROLLER_SIZE),
+        comment="Controller (Grbl_ESP32) -- pin the router's port here",
+    )
+    board.category = "electrical"
+    return board
+
+
 def _build_cnc_router() -> Assembly:
-    """Subtractive manufacturing, as a floor-standing stub next to storage --
-    deliberately not given a build_volume (see BENCH_MOUNTED_STRUCTURES and
-    the module-level comment on CNC_ROUTER_POSITION): a visual placeholder
-    for a machine type no job runs on yet.
+    """The router: the AnoleX 4060-Evo Ultra 2 part, with its controller in the
+    control box at the back of the base. Its working area is its build volume,
+    starting where the part says the tool's (0, 0, 0) is: on the table, at the
+    working area's front-left corner.
     """
     frame_system = Substructure(
         name="frame_system",
-        base=Cube(size=CNC_ROUTER_SIZE, comment="CNC router body (stub)"),
+        position=CONTROL_BOX.min_point,
+        footprint=BoundingBox3D(
+            min_point=Vector3D(), max_point=CONTROL_BOX.max_point - CONTROL_BOX.min_point
+        ),
+        children=[_build_controller()],
     )
     return Structure(
         name="cnc_router",
-        material="Steel frame, subtractive (CNC router)",
+        material="Aluminium beams and plates, steel rails and screws",
         position=CNC_ROUTER_POSITION,
         footprint=BoundingBox3D(min_point=Vector3D(), max_point=CNC_ROUTER_SIZE),
+        build_volume=anolex.WORK,
+        build_origin=anolex.WORK_ORIGIN,
         status="idle",
         category="mechanical",
+        part_ref="anolex_4060_evo_ultra_2",
         substructures=[frame_system],
     )
 
@@ -647,8 +737,8 @@ def _build_footpedal() -> Assembly:
 
 def create_example_site() -> Assembly:
     """A garage: a workbench with a printer on top of it, inside its
-    own building shell, alongside abstract utility fixtures, storage, a
-    subtractive-manufacturing stub, and the boards on the bench that the
+    own building shell, alongside abstract utility fixtures, storage, the
+    router on its stand, and the boards on the bench that the
     firmware seam binds devices to -- see this module's docstring.
     """
 
@@ -669,6 +759,7 @@ def create_example_site() -> Assembly:
             _build_electrical(),
             _build_fluids(),
             _build_storage(),
+            _build_cnc_stand(),
             _build_cnc_router(),
             _build_esp32_blink(),
             _build_footpedal(),
@@ -684,8 +775,8 @@ def validate_garage_layout(site: Assembly) -> LayoutReport:
     workbench's top surface and stay within its footprint -- a scenario
     rule ("machines sit on the bench"), not a general hierarchy invariant,
     so it lives here rather than in ``hierarchy.py``. Everything else in the
-    garage (the building shell, fixtures, storage, the floor-standing CNC
-    router) is still checked for generic overlap by ``site.validate()``
+    garage (the building shell, fixtures, storage, the router on its own
+    stand) is still checked for generic overlap by ``site.validate()``
     above, just not against this bench-specific rule -- they were never
     meant to be bench-mounted in the first place.
     """

@@ -1639,12 +1639,14 @@ def test_a_made_piece_and_a_part_slice_for_a_printer_pinned_in_their_site():
         ("printer_1", "slice:piece:printer_1"),
         ("printer_2", "slice:piece:printer_2"),
     ]
-    # A host, the printer, a board inside it and a camera have no Slice.
+    # A host, the printer, a board inside it, a camera, and the router -- a machine
+    # drawn as a part, which is no more sliced than the printer is -- have no Slice.
     for path, cameras in (
         ("workbench", ()),
         ("printer_1", ()),
         ("printer_1.frame_system.mainboard", ()),
         ("footpedal", ("footpedal",)),
+        ("cnc_router", ()),
     ):
         labels = [o.label for o in on(path, ["printer_1"], cameras).options]
         assert "Slice" not in labels, path

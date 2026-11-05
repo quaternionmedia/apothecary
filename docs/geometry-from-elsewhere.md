@@ -107,7 +107,11 @@ parameters, so the model stands where the last poll said, and
 sidecar. Their READMEs say what each is. The printer's `mainboard` node is
 the Creality board in its electronics box; `esp32_blink` is the DevKitC
 standing on its pins; an Uno, a Pi and a Teensy lie at the right end of the
-bench.
+bench. The garage's router is an AnoleX 4060-Evo Ultra 2, drawn the same way
+([`parts/anolex_4060_evo_ultra_2`](../parts/anolex_4060_evo_ultra_2/README.md))
+on a stand of its own beside storage, its working area its build volume and
+its `controller` node, in the control box at the back, the one a port is
+pinned to; the maker publishes no drawing of that board, so no part draws it.
 
 A machine drawn as it is needs one more thing than a block: where its build
 volume starts. `build_origin` on a node with a `build_volume` says where

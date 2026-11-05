@@ -121,7 +121,9 @@ def test_the_toolbar_button_and_ctrl_right_click_open_it_too(page: Page, ring_ur
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     assert _title(page) == "cnc_router"
     # Nothing pinned: no Device option at all, not a greyed one, and no cell moved.
+    # A machine drawn from a part carries Part, as printer_1 does.
     assert _wedges(page) == {
+        "1": "Part",
         "8": "Step in",
         "6": "Move",
         "2": "Why this",
@@ -309,8 +311,8 @@ def test_the_pointer_uses_the_same_cells(page: Page, ring_url: str):
     expect(page.locator("#ring-overlay")).to_have_attribute("aria-activedescendant", "ring-cell-6")
     expect(page.locator("#ring-cell-6")).to_have_attribute("data-cell", "6")
     # Over an empty cell the pointer highlights nothing. printer_1's ring is
-    # full (its eighth cell is Part), so that is shown on the CNC router's, which
-    # has no board pinned and no part, and leaves cell 7 empty.
+    # full (its eighth cell is Device), so that is shown on the CNC router's, which
+    # has no board pinned, and leaves cell 7 empty.
     page.keyboard.press("Escape")
     expect(page.locator("#ring-overlay")).to_have_count(0)
     page.locator("#contents-list .contents-item[data-path='cnc_router']").click(

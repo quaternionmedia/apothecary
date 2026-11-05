@@ -13,6 +13,8 @@ parts/
 ├── cameras/                a category: the library's webcam, and mounts for it
 │   ├── webcam/             webcam.scad and part.json
 │   └── webcam_desk_stand/  part.json tags it a stub, as it does the clamp arm and the ceiling mount
+├── anolex_4060_evo_ultra_2/
+│   └── anolex_4060_evo_ultra_2.scad   the router, drawn as it is
 ├── ender3/
 │   ├── ender3.scad         the printer, drawn as it is
 │   └── slicer.json         printer_1's slicer profile, kept with its part
