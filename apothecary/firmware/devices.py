@@ -35,6 +35,7 @@ import tempfile
 import threading
 import time
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Dict, Iterator, List, Optional
 
@@ -48,6 +49,10 @@ except ImportError:
     msvcrt = None
 
 from .. import jobs
+from ..preview import Preview, for_machine
+from ..preview import of as preview_of
+from ..preview.moves import split_comments
+from ..preview.process import OPERATION_COMMENT
 from ..projects.parts.skeleton import ROOT
 from ..stamped import claim, stamp
 from ..stays_local import subprocess_env
@@ -733,9 +738,6 @@ def printer_status(
 
 # The jobs that stream a file over the link: a print (Marlin) and a cut (GRBL).
 STREAMED = ("print", "cut")
-# A line that names the operation the lines after it belong to, as apothecary.cam
-# writes one: `(op 2/4 pass 1/6: hole 3 mm at 110,36.667 plunged to z -2)`.
-OPERATION_RE = re.compile(r"^\((op \d+/\d+[^)]*)\)$")
 
 
 def busy_word(kind: str) -> str:
@@ -1070,6 +1072,22 @@ def save_print_file(name: str, data: bytes) -> PrintFile:
     return meta
 
 
+@lru_cache(maxsize=4)
+def _preview_of_file(file_id: str, machine: str) -> Preview:
+    with open(_print_file_path(file_id), encoding="utf-8", errors="replace") as handle:
+        return preview_of(handle, for_machine(machine))
+
+
+def print_preview(file_id: str, machine: str) -> Optional[Preview]:
+    """A kept file's toolpath as ``machine`` would run it, or None for no such file; a
+    kept file does not change, so the last few are kept. KeyError for a kind of machine
+    that has no process."""
+    for_machine(machine)
+    if print_file(file_id) is None:
+        return None
+    return _preview_of_file(file_id, machine)
+
+
 def print_files() -> List[PrintFile]:
     """Every kept file, newest first."""
     folder = prints_dir()
@@ -1334,10 +1352,10 @@ class PrintJob:
             self.stage = self.running_stage
             self._announce()
             for raw in text.splitlines():
-                named = OPERATION_RE.match(raw.strip())
-                if named:
-                    self.operation = named.group(1)
-                    self._announce()
+                for said in split_comments(raw)[1]:
+                    if OPERATION_COMMENT.match(said):
+                        self.operation = said
+                        self._announce()
                 cmd = gcode.strip_gcode(raw)
                 if not cmd:
                     continue

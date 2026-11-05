@@ -13,6 +13,8 @@ from apothecary.cam import measure, service, toolpath
 from apothecary.cam.models import CutFor, Cuts, Feeds, Hole, Outline, Pocket, Stock
 from apothecary.firmware import devices, gcode, grbl
 from apothecary.menu import Context, PartSeen, PictureContext, Pointing, resolve
+from apothecary.preview.moves import split_comments
+from apothecary.preview.process import OPERATION_COMMENT
 from apothecary.projects.parts.router_coupon import DEFAULT as COUPON
 from apothecary.projects.parts.router_coupon import Params
 
@@ -57,7 +59,11 @@ def test_the_coupons_toolpath_is_checked_clean_and_names_each_operation():
     assert [o.kind for o in written.operations] == ["pocket", "hole", "hole", "outline"]
     assert all(o.cut for o in written.operations)
     # Each operation's lines are announced for the cut that streams them.
-    named = [ln for ln in written.lines if devices.OPERATION_RE.match(ln)]
+    named = [
+        ln
+        for ln in written.lines
+        if OPERATION_COMMENT.match(split_comments(ln)[1][0] if ln[0] == "(" else "")
+    ]
     assert named[0].startswith("(op 1/4 pass 1/2: pocket 40 x 30 at 30,35 to z -2)")
     assert sum(o.passes for o in written.operations) == len(named)
     # The holes are smaller than the tool: bored to it, and said.
