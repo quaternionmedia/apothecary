@@ -24,7 +24,7 @@ The header's ⊞ Windows, Working space under Site: the window opens on the gara
 ![⊞ Windows › Working space opens it on the site](screenshots/18-01-windows-working-space-opens-it-on-the-site.png)
 
 ```
-Choose a printer to see its hour: its state, its heaters, the frames its cameras keep, and what each value rests on.
+Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on.
 ```
 
 ## 2. printer_1's hour ›: its state, its heaters, and no camera yet
@@ -49,12 +49,12 @@ camera_1, camera_2, camera_3 have no device in this browser: choose one in their
 
 ## 4. Each camera's device, chosen in its row, keeps a frame with the next poll
 
-Each row's box, one of this browser's three cameras: the row names it, and a camera newly this browser's has a frame kept with the next poll, ten seconds apart at the least, laid where it fell in the hour, and the line under the rows counts them against their budget. The first line says when frames are kept -- when printer_1's state changes and at every 5 % of a print, while the window is open -- and offers Keep a set now.
+Each row's box, one of this browser's three cameras: the row names it, and a camera newly this browser's has a frame kept with the next poll, ten seconds apart at the least, laid where it fell in the hour, and the line under the rows counts them against their budget. The first line says when frames are kept -- when printer_1's state changes and at every 5 % of a job, while the window is open -- and offers Keep a set now.
 
 ![Each camera's device, chosen in its row, keeps a frame with the next poll](screenshots/18-04-each-camera-s-device-chosen-in-its-row-keeps-a-fra.png)
 
 ```
-Frames from camera_1, camera_2, camera_3 are kept when printer_1's state changes and at every 5 % of a print, while this window is open. Click a frame or a dot to see what it rests on.
+Frames from camera_1, camera_2, camera_3 are kept when printer_1's state changes and at every 5 % of a job, while this window is open. Click a frame or a dot to see what it rests on.
 ```
 
 ## 5. Keep a set now keeps one from every camera, with one poll
@@ -90,7 +90,7 @@ printer_1's frames now live under 1 GB: past it, the oldest are forgotten as the
 ![‹ garage goes back to the site](screenshots/18-08-garage-goes-back-to-the-site.png)
 
 ```
-the Working space of garage: Choose a printer to see its hour: its state, its heaters, the frames its cameras keep, and what each value rests on.
+the Working space of garage: Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on.
 ```
 
 ## 9. Camera › Workspace on printer_1's ring, and Panels › Site › Workspace
@@ -98,14 +98,14 @@ the Working space of garage: Choose a printer to see its hour: its state, its he
 The window restored to its place by a double-click on its tab. printer_1's ring, Camera › Workspace, opens the same hour, its cameras still this browser's; the canvas ring's Panels › Site › Workspace opens the site. The status line says the window's next step whichever door opened it.
 
 ```
-printer_1's hour in the Working space: Frames from camera_1, camera_2, camera_3 are kept when printer_1's state changes and at every 5 % of a print, while this window is open. Click a frame or a dot to see what it rests on. (⌗96)
-the Working space of garage: Choose a printer to see its hour: its state, its heaters, the frames its cameras keep, and what each value rests on. (⌗483)
+printer_1's hour in the Working space: Frames from camera_1, camera_2, camera_3 are kept when printer_1's state changes and at every 5 % of a job, while this window is open. Click a frame or a dot to see what it rests on. (⌗96)
+the Working space of garage: Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on. (⌗483)
 ```
 
 ## What this page does not show
 
 - **A real camera or a real printer.** The bench's three cameras -- the bed, the head, the room -- and where each stands are the working-space plan's slice 1 (docs/plans/working-space-view-2026-10-30.md); the frames here are the fake cameras' test picture, blanked, since it moves.
-- **A print going by.** The progress is held still, so the frames kept at every 5 % of a print, and with each change of its state, are not shown; this page keeps a set when a camera is newly chosen and when asked.
+- **A print going by.** The progress is held still, so the frames kept at every 5 % of a job, and with each change of its state, are not shown; this page keeps a set when a camera is newly chosen and when asked.
 - **What changes on every run.** The moments, how many observations the hour holds, where each poll fell in it, a temperature to its tenth and how much the frames take are blanked in the pictures and left out of the words.
 - **Looking back past the hour.** The window shows the last hour; an earlier one is `apothecary evidence changed --since` and the evidence document's `at` and `since` (docs/working-space.md).
 
