@@ -17,6 +17,11 @@ here: run `apothecary problems`.
 - The Models window, what its walk left ([docs/models-checklist.md](docs/models-checklist.md)): opened again after a reload, it takes room from the world each time, until windows beside the world share one stack; a person's word is kept by Models in memory, where the Working space should keep it and Models offer it; and the status bar keeps "choose a shape … first" in red after a shape is chosen, until the next action.
 - A synth rig photographed through a concert, held in carlos: the first real photographs, the Ender's mainboard's power and USB through the camera aimed at the Ender, waiting for that camera (slice 4, rehearsed on an Uno's drawn pictures: `examples/rigs/uno-power-and-usb.json`, `apothecary rig setup`), then the DFAM and Subharmonicon, then the viewer's window for pinning faces, cues in the record, a mount and corner tabs printed; then the airgap's test rig and a server room: [docs/plans/carlos-concert-rig-2026-10-29.md](docs/plans/carlos-concert-rig-2026-10-29.md).
 - The viewer across the efforts in flight, one observation module first, then the words and seats: [docs/plans/ui-coordination-2026-10-31.md](docs/plans/ui-coordination-2026-10-31.md).
+- A check before a cut that its toolpath fits the travel from the work zero, in the
+  Cut card, from the toolpath's recorded bounds and the controller's position: a cut
+  zeroed too low or too high stops at its first move past the travel, with the
+  spindle on (`ALARM:2`). It waits on the bench, which has not confirmed which way
+  the machine homes (section I of [docs/bench-checklist.md](docs/bench-checklist.md)).
 - What the round of unification left: the Machine's main window at full size (a
   person's call: doors are new controls, and opening as its view is against a
   tested decision), a cut's operation beside each poll in the Working space, and
