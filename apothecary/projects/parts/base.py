@@ -171,6 +171,17 @@ class BasePart(BaseModel):
         SCAD translates here; the params sidecar still records ``params``."""
         return dict(params)
 
+    def cuts(self, params: Optional[Mapping[str, Any]] = None):
+        """The cuts that make this part from its stock, for a part cut on the router
+        (``apothecary.cam.models.Cuts``, from ``params`` as ``Params`` reads them);
+        None for a part that is printed, bought or only drawn."""
+        return None
+
+    @property
+    def has_cuts(self) -> bool:
+        """Whether this part says how it is cut: its wrapper defines ``cuts``."""
+        return type(self).cuts is not BasePart.cuts
+
     def geometry(self, params: Mapping[str, Any]) -> Optional[OpenSCADObject]:
         """The part built in Python for already-validated ``params``, or None:
         the SCAD file is the source. A part that returns an object is rendered

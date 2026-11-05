@@ -130,8 +130,8 @@ pin; `tests/e2e/test_router_ui.py` walks the Machine against it.
   bench, the first replies kept as the Ender's are
   (`docs/validation/2026-09-20-ender-bench.md`), and the checklist gains a
   section for it.
-- A toolpath: nothing here turns a part into a cut. A job is a file a CAM
-  post wrote (Easel, Carbide Create, Fusion), kept and streamed as a print is;
-  the slicer has no analogue on this machine yet.
+- A toolpath from geometry: the toolpath is written from the cuts a part
+  declares ([docs/cam.md](cam.md)), not from a mesh; a file a CAM post wrote
+  (Easel, Carbide Create, Fusion) is kept and streamed as it is.
 - WiFi: the controller's own web page (ESP3D) and its SD card are not used;
   the seam is serial, and nothing leaves this machine.

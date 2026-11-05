@@ -40,6 +40,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
 from . import jobs
+from .cam.api import router as cam_router
 from .core import OpenSCADObject
 from .datum_core_site import create_datum_core_site, validate_datum_core
 from .docs_site import router as docs_router
@@ -215,7 +216,8 @@ app = FastAPI(
         "The viewer's server, answering this machine only: sites and their layout; "
         "parts, rendered by OpenSCAD and kept as variants; photos, the views pinned "
         "from them, the cameras that take them and the shapes found in them; firmware "
-        "for the boards and printers, with their control and prints; the slicer; jobs; "
+        "for the boards and printers, with their control and prints; the slicer, and cam, "
+        "the router's toolpath; jobs; "
         "the evidence a site's printers and cameras leave, as one view of it; "
         "the airgap part's metrics document, its schema and its check; the ring's menu; "
         "and the documentation and walkthrough it serves."
@@ -274,6 +276,7 @@ app.include_router(cameras_router)
 app.include_router(jobs_router)
 # The slicer: its status and install, and a part or a made piece sliced for a printer.
 app.include_router(slicer_router)
+app.include_router(cam_router)
 # A part's SCAD edited: drafts checked and rendered, and saves as variants in git.
 app.include_router(part_edits_router)
 app.include_router(lighting_router)
@@ -2323,6 +2326,17 @@ def printers_in(site_name: str) -> List[str]:
     the site drives, when that node is a printer (it carries a printer's status, and
     the board pinned is not a router's controller), sorted. A made piece's Print
     offers them (``menu.py``)."""
+    return _machines_in(site_name, PRINTER_STATUSES, router=False)
+
+
+def routers_in(site_name: str) -> List[str]:
+    """The routers of ``site_name`` a cut can go to: each node a board pinned in the
+    site drives, when the board answered as a GRBL router, sorted. A part's
+    Toolpath offers them (``menu.py``)."""
+    return _machines_in(site_name, MACHINE_STATUSES, router=True)
+
+
+def _machines_in(site_name: str, statuses, router: bool) -> List[str]:
     if site_name not in _site_store.names():
         return []
     try:
@@ -2338,12 +2352,13 @@ def printers_in(site_name: str) -> List[str]:
     for binding in state.bindings(site_name):
         bearer = status_bearer_for(site, binding.path)
         node = _find_node_by_path(site, bearer) if bearer else None
-        if node is None or node.status not in PRINTER_STATUSES:
+        if node is None or node.status not in statuses:
             continue
         on_port = device_for_identity(binding.identity, plugged)
         known = firmware_devices.known_device(on_port.port, state) if on_port else None
-        if firmware_devices.machine_kind(known) == firmware_grbl.MACHINE:
-            continue  # a router cuts; nothing is printed on it
+        # A router cuts and a printer prints; a board that answered as neither is nothing's.
+        if (firmware_devices.machine_kind(known) == firmware_grbl.MACHINE) != router:
+            continue
         found.add(bearer)
     return sorted(found)
 

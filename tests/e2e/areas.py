@@ -108,6 +108,8 @@ AREAS = {
         "sources": (
             "apothecary/firmware/*",
             "apothecary/slicer/*",
+            "apothecary/cam/*",
+            "parts/router_coupon/*",
             "apothecary/jobs.py",
             "apothecary/routes/jobs.py",
             "apothecary/static/boards.js",
@@ -123,6 +125,7 @@ AREAS = {
             "walkthrough/screenshots/02-*",
             "walkthrough/05-*",
             "walkthrough/screenshots/05-*",
+            "walkthrough/20-*",
         ),
         "tests": (
             "test_one_machine.py",

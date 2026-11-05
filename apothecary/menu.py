@@ -170,6 +170,9 @@ class PartSeen(BaseModel):
     # Its deleted variants, in the trash (refs/apothecary/trash/), newest first.
     deleted: List[str] = Field(default_factory=list)
     board: bool = False
+    # Whether it says how it is cut (its wrapper's `cuts`): a router's Toolpath is
+    # offered on such a part, as Slice is on a printed one.
+    cuts: bool = False
 
 
 class PictureContext(BaseModel):
@@ -194,6 +197,8 @@ class PictureContext(BaseModel):
     made: List[str] = Field(default_factory=list)
     camera_parts: List[str] = Field(default_factory=list)
     printers: List[str] = Field(default_factory=list)
+    # The site's routers with a board pinned, which a part's Toolpath offers.
+    routers: List[str] = Field(default_factory=list)
     words: List[str] = Field(default_factory=list)
     here: Place = Field(default_factory=Place)
     part: Optional[PartSeen] = None
@@ -1235,6 +1240,20 @@ def _slice_option(printers: Sequence[str]) -> Option:
     )
 
 
+def _toolpath_option(routers: Sequence[str]) -> Option:
+    """Toolpath on a part that says how it is cut: the pinned router's Machine opened
+    with it chosen under its Cut from here's *makes*, and its toolpath written there
+    for that router, kept and chosen, so Cut follows. One router pinned in the site
+    is the cell itself; several are a cell each under Toolpath. The page carries it."""
+    if len(routers) == 1:
+        return Option(id="toolpath:piece", label="Toolpath", action=f"toolpath:piece:{routers[0]}")
+    return Option(
+        id="toolpath:piece",
+        label="Toolpath",
+        children=_listed("toolpath:piece", [(f"toolpath:piece:{r}", r) for r in routers]),
+    )
+
+
 def _print_option(printers: Sequence[str]) -> Option:
     """Print on a made piece: the pinned printer's Machine opened with the piece chosen
     under its Print from here's *makes*. One printer pinned in the site is the cell
@@ -1499,6 +1518,10 @@ def _node_ring(
     part = bool(node is not None and node.part_ref and not camera and not board and not machine)
     if (made or part) and picture.printers and not in_a_printer:
         options.append(_slice_option(picture.printers))
+    # Toolpath, the same place for a part that says how it is cut, with a router
+    # pinned in the site to cut it on.
+    if part and picture.part and picture.part.cuts and picture.routers:
+        options.append(_toolpath_option(picture.routers))
     # A piece with a board pinned to it can be watched, polled and, when the board is
     # a printer, driven. A piece with none gets no Device option at all rather than
     # one greyed out. A camera's Device is which browser camera it is, among its own

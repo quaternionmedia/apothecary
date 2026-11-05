@@ -15,6 +15,8 @@ parts/
 │   └── webcam_desk_stand/  part.json tags it a stub, as it does the clamp arm and the ceiling mount
 ├── anolex_4060_evo_ultra_2/
 │   └── anolex_4060_evo_ultra_2.scad   the router, drawn as it is
+├── router_coupon/
+│   └── router_coupon.scad   a plate with a pocket and holes, cut on the router (its cuts in the wrapper)
 ├── ender3/
 │   ├── ender3.scad         the printer, drawn as it is
 │   └── slicer.json         printer_1's slicer profile, kept with its part
