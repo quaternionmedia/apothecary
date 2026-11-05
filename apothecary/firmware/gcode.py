@@ -769,7 +769,11 @@ class GcodeLink:
                 elif OK_RE.match(line):
                     return lines
                 elif objected:
-                    raise ToolchainError(f"{self.port}: {cmd} -> {line}")
+                    # A refusal says the dialect's words for it, where it has them, so
+                    # a typed control and a job that stops both read as more than a code.
+                    note = self._note(line)
+                    words = f" ({note})" if note else ""
+                    raise ToolchainError(f"{self.port}: {cmd} -> {line}{words}")
         finally:
             self._lock.release()
 

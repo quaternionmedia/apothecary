@@ -31,7 +31,7 @@
         .toolbar h1 { margin: 0; font-size: 1.15rem; font-weight: 600; color: #fff; }
         .toolbar .badge {
             font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 3px;
-            background: #664400; color: #ffcc66; font-weight: 600; cursor: help;
+            background: #664400; color: var(--warn); font-weight: 600; cursor: help;
         }
         .toolbar select {
             min-width: 160px; padding: 0.5rem; border-radius: 4px;
@@ -74,8 +74,8 @@
             font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 4px;
             font-weight: 600;
         }
-        .validity-indicator.valid { background: #1e4620; color: #6fdb75; }
-        .validity-indicator.invalid { background: #4a1e1e; color: #ff8080; }
+        .validity-indicator.valid { background: #1e4620; color: var(--ok); }
+        .validity-indicator.invalid { background: #4a1e1e; color: var(--bad); }
 
         /* The trail: where you are, a crumb going up to its level. The one part of
            the header that gives way: too long for its row, its start is cut, so
@@ -227,7 +227,7 @@
         .panel-ui .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
         .panel-ui .grow { flex: 1; }
         .panel-ui .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #777; margin-top: 0.3rem; }
-        .panel-ui .note { color: #8a9a8a; font-style: italic; } .panel-ui .note.bad, .panel-ui .bad { color: #ff8080; font-style: normal; }
+        .panel-ui .note { color: #8a9a8a; font-style: italic; } .panel-ui .note.bad, .panel-ui .bad { color: var(--bad); font-style: normal; }
         .panel-ui button, .panel-ui input:not([type=checkbox]), .panel-ui textarea { font: inherit; font-size: 0.78rem; background: #232823; color: #ddd; border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.45rem; }
         .panel-ui button:hover { background: #2f382f; } .panel-ui button:disabled { opacity: 0.45; cursor: not-allowed; }
         .panel-ui .empty { color: #666; font-style: italic; }
@@ -280,7 +280,7 @@
         .camera-actions .key { color: #777; font-size: 0.7rem; }
         .camera-thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.25rem; margin-top: 0.35rem; }
         .camera-thumbs img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 2px; cursor: pointer; border: 1px solid transparent; }
-        .camera-thumbs img.drawn { border-color: #ffcc66; }
+        .camera-thumbs img.drawn { border-color: var(--warn); }
         .camera-thumbs img.nowhere { opacity: 0.55; }
         .camera-thumbs .empty { grid-column: 1 / -1; color: #666; }
         /* A fold inside an editor: the part's recent applies, the variants' trash. */
@@ -292,12 +292,12 @@
            camera part), in the world (picture_marks.js). Their own classes, never
            a panel's: a panel class's `display: flex` would override the `hidden`
            the anchor layer sets when the thing is out of view. */
-        .world-badge.place-mark { border-color: #7a5a1a; color: #ffcc66; }
+        .world-badge.place-mark { border-color: #7a5a1a; color: var(--warn); }
         .world-badge.place-mark::after { border-top-color: #7a5a1a; }
         .world-badge.camera-mark { border-color: #3d5a7a; color: #9cd2ff; }
         .world-badge.camera-mark::after { border-top-color: #3d5a7a; }
         .picture-facts .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #777; margin-top: 0.3rem; }
-        .picture-facts .view-row.drawn { color: #ffcc66; }
+        .picture-facts .view-row.drawn { color: var(--warn); }
         .picture-facts .chosen-shape { color: #9cd2ff; }
 
         .contents-list { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
@@ -349,7 +349,7 @@
         .device-section .device-title { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: #777; margin-bottom: 0.3rem; }
         .device-section .device-line { color: #bbb; line-height: 1.5; }
         .device-section .device-line b { color: #ddd; font-weight: 600; }
-        .device-section .device-line .ok { color: #6fdb75; } .device-section .device-line .warn { color: #ffcc66; } .device-section .device-line .bad { color: #ff8080; }
+        .device-section .device-line .ok { color: var(--ok); } .device-section .device-line .warn { color: var(--warn); } .device-section .device-line .bad { color: var(--bad); }
         .device-section .temps { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #e8c98a; }
         .device-section .device-actions { display: flex; gap: 0.35rem; margin-top: 0.4rem; flex-wrap: wrap; align-items: center; }
         .device-section button, .device-section select {
@@ -364,7 +364,7 @@
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap;
         }
         .contents-item .dev-badge.off { background: #2a2424; color: #b08a8a; border-color: #3f2f2f; }
-        .contents-item .dev-badge.printing { background: #2a2410; color: #ffcc66; border-color: #4a3f1a; }
+        .contents-item .dev-badge.printing { background: #2a2410; color: var(--warn); border-color: #4a3f1a; }
         .contents-item .dev-badge.mismatch { color: #ff9b9b; border-color: #4a2f2f; }
         .contents-item .dev-badge.via { opacity: 0.75; }
         /* A board's lights, on Site's tree and in the world: a printer heating pulses
@@ -420,7 +420,7 @@
         .world-badge.cluster .cluster-row:hover { background: #2a342a; }
         .world-badge.cluster .cluster-row.selected { color: #9cd2ff; }
         .world-badge .state { color: #8fc78f; }
-        .world-badge.printing { border-color: #7a5a1a; color: #ffcc66; background: rgba(42, 36, 16, 0.92); }
+        .world-badge.printing { border-color: #7a5a1a; color: var(--warn); background: rgba(42, 36, 16, 0.92); }
         .world-badge.printing::after { border-top-color: #7a5a1a; }
         .world-badge.offline { color: #b08a8a; border-color: #3f2f2f; }
         .world-badge.mismatch { color: #ff9b9b; }
@@ -430,10 +430,14 @@
         .world-badge:hover { opacity: 1; filter: brightness(1.15); }
         .no-selection { color: #666; font-size: 0.85rem; font-style: italic; }
         .zoom-in-btn {
-            margin-top: 0.6rem; padding: 0.4rem 0.6rem; border-radius: 4px; cursor: pointer;
-            border: none; background: #0d6efd; color: white; font-size: 0.8rem; width: 100%;
+            display: block; margin-top: 0.5rem; padding: 0.3rem 0.7rem; border-radius: 4px; cursor: pointer;
+            border: 1px solid #444; background: #2a2a2a; color: #e0e0e0; font-size: 0.8rem;
         }
-        .zoom-in-btn:hover { background: #0b5ed7; }
+        .zoom-in-btn:hover { background: #33403a; }
+        /* X, Y and Z on one line, whatever the column's width: each box gives way. */
+        .pos-row { gap: 0.3rem; }
+        .pos-row input[type="number"] { width: 0; min-width: 0; padding: 0.3rem 0.3rem; font-size: 0.78rem; }
+        .pos-row .axis { font-size: 0.72rem; color: #777; flex: 0 0 auto; }
 
         .part-actions { display: flex; gap: 0.5rem; margin: 0.5rem 0; }
         .part-actions button, .part-actions a {
@@ -455,7 +459,7 @@
             background: #3a1f1f; color: #ff9d9d; cursor: pointer;
         }
         .problem-list li:hover { background: #4a2626; }
-        .contents-item.invalid .item-label { color: #ff8080; }
+        .contents-item.invalid .item-label { color: var(--bad); }
         .contents-item .problem-mark { flex: 0 0 auto; font-size: 0.72rem; color: #ff6060; }
         .contents-item.invalid-inside .problem-mark { color: #b06060; }
         .validity-indicator { cursor: pointer; }
@@ -463,7 +467,7 @@
         .site-jobs { list-style: none; margin: 0; padding: 0; font-size: 0.78rem; }
         .site-jobs li { padding: 0.25rem 0.45rem; margin-bottom: 0.15rem; border-radius: 4px; color: #ccc; cursor: pointer; }
         .site-jobs li:hover { background: #2f2f2f; }
-        .site-jobs li.running { color: #ffcc66; background: #2e2716; }
+        .site-jobs li.running { color: var(--warn); background: #2e2716; }
         .site-jobs li.cancelled, .site-jobs li.failed { color: #dc9a7a; }
         .site-jobs li.empty { cursor: default; color: #888; font-style: italic; background: none; }
 
@@ -783,6 +787,7 @@
         repository, then reload.
     </div>
     {% endif %}
+    <link rel="stylesheet" href="{{ base_url }}/static/tokens.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/machine.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/bench.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/working_space.css">
@@ -821,6 +826,7 @@
         import { mountMachine } from '/static/widgets/machine.js';
         import { mountBoards } from '/static/boards.js';
         import { boardLabel, boardSummary } from '/static/board_text.js';
+        import { KINDS as MACHINE_WORDS, GCODE_KINDS, kindOf as boardKindOf } from '/static/machine_words.js';
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
         import { mountPictureList } from '/static/widgets/picture_list.js';
@@ -1009,8 +1015,6 @@
         const PRINTER_STATUSES = ['idle', 'printing', 'offline', 'maintenance'];
         // And ROUTER_STATUSES, with them: every status a machine's polls set on its node.
         const MACHINE_STATUSES = ['idle', 'printing', 'running', 'hold', 'alarm', 'offline', 'maintenance'];
-        // A router's words a person sets by hand: its statuses less those its polls set.
-        const ROUTER_BY_HAND = ['idle', 'offline', 'maintenance'];
         const STATUS_COLORS = {
             idle: 0x4488cc,
             printing: 0xffaa00,
@@ -1367,7 +1371,6 @@
                 await this.boards.scan();
                 if (this.openMachineFor(port)) {
                     this.systems.machine.openLinked();
-                    this.setStatus(`Opened ${port}'s Machine`, 'success');
                 }
             }
 
@@ -3030,7 +3033,9 @@
                 const label = document.createElement('span');
                 label.className = 'item-label';
                 const inside = hasChildren ? ` — ${node.children.length} inside` : '';
-                label.textContent = `${node.name} (${node.role})${inside}`;
+                // Its role only where it is not what a piece at this level usually is.
+                const role = ['structure', 'substructure'].includes(node.role) ? '' : ` (${node.role})`;
+                label.textContent = `${node.name}${role}${inside}`;
                 li.appendChild(label);
                 // A piece a problem names is red, saying what is wrong on hover; a
                 // piece with one somewhere inside it says so.
@@ -3428,6 +3433,10 @@
                 // A machine drawn as a part shows the one row until Part › Edit asks
                 // for its editor (openEditor); a leaf that is a part has it always.
                 if (selected.part_ref) this.appendPartPanel(selected, selected.children.length === 0 || this.editorOpenFor === this.selectedName);
+                // Stepping in follows what the piece is: its facts, then its part's one row.
+                // An editor open under them keeps it above, rather than a long way down.
+                const stepIn = this.selectedBodyEl.querySelector('.zoom-in-btn');
+                if (stepIn && this.editorOpenFor !== this.selectedName) this.selectedBodyEl.appendChild(stepIn);
                 // The Device section stands only where a board belongs:
                 // on a board, on a printer, on what names a sketch, and on anything a
                 // board is pinned to already, so its Unpin stays in reach. A plain printed
@@ -3693,21 +3702,25 @@
                 const camera = this.isCameraNode(node);
                 const facts = camera ? '' : `
                     <div class="prop-readonly">
-                        Material: ${esc(node.material ?? '—')}<br>
+                        ${node.material ? `Material: ${esc(node.material)}<br>` : ''}
                         ${node.comment ? `Comment: ${esc(node.comment)}<br>` : ''}
-                        Footprint: <span data-facts="footprint">${esc(this.footprintText(node))}</span><br>
-                        Build volume: ${node.build_volume
-                            ? node.build_volume.map((v) => v.toFixed(0)).join(' × ') + ' mm '
+                        Footprint: <span data-facts="footprint">${esc(this.footprintText(node))}</span>
+                        ${node.build_volume
+                            ? `<br>${MACHINE_WORDS[this.machineKindAt(this.selectedName)].volume}: `
+                              + node.build_volume.map((v) => v.toFixed(0)).join(' × ') + ' mm '
                               + `<span style="display:inline-block;width:8px;height:8px;border:1px solid #${BUILD_VOLUME_COLOR.toString(16).padStart(6, '0')};vertical-align:middle;"></span>`
-                            : '—'}
+                            : ''}
                     </div>`;
                 const at = camera ? ' title="Where its lens is"' : '';
                 this.selectedBodyEl.innerHTML = `
                     <div class="prop-row"><label>Name</label><span>${esc(node.name)}</span></div>
                     ${statusRow}
-                    <div class="prop-row"><label${at}>X (mm)</label><input type="number" id="pos-x" step="10" value="${node.position.x}"></div>
-                    <div class="prop-row"><label${at}>Y (mm)</label><input type="number" id="pos-y" step="10" value="${node.position.y}"></div>
-                    <div class="prop-row"><label${at}>Z (mm)</label><input type="number" id="pos-z" step="10" value="${node.position.z}"></div>
+                    <div class="prop-row pos-row"><label${at}>Position</label>
+                        <span class="axis">X</span><input type="number" id="pos-x" aria-label="X in mm" step="10" value="${node.position.x}">
+                        <span class="axis">Y</span><input type="number" id="pos-y" aria-label="Y in mm" step="10" value="${node.position.y}">
+                        <span class="axis">Z</span><input type="number" id="pos-z" aria-label="Z in mm" step="10" value="${node.position.z}">
+                        <span class="axis">mm</span>
+                    </div>
                     ${facts}
                     ${this.detailAffordanceHtml(node)}
                     ${this.zoomInAffordanceHtml(node)}
@@ -7141,6 +7154,8 @@
                 if (this.machine && this.machine.port === port) { this.panels.open('machine'); return true; }
                 this.mountMachinePanel(port, anchor, row);
                 this.panels.open('machine');
+                // Opened alone, as a system's main window is: the next step is named.
+                this.setStatus(`Opened ${anchor || port}'s Machine: ⌗ Panels › Windows › Machine view lays out its sections`, 'success');
                 return true;
             }
             // The Machine's panel, its body mounted when it is first in front of a
@@ -7469,10 +7484,13 @@
             // is shown but never offered. A node with no machine status offers none.
             statusWordsFor(node, path) {
                 if (!node || !MACHINE_STATUSES.includes(node.status)) return null;
+                return [...new Set([node.status, ...MACHINE_WORDS[this.machineKindAt(path)].byHand])];
+            }
+            // The kind of G-code machine at a node: a router once its board has said so; a
+            // printer otherwise, a board pinned and not yet asked among them.
+            machineKindAt(path) {
                 const { row } = this.bindingFor(path);
-                const router = !!(row && row.device && row.device.printer && row.device.printer.machine === 'router');
-                const words = router ? ROUTER_BY_HAND : [...PRINTER_STATUSES];
-                return [...new Set([node.status, ...words])];
+                return row && row.device && boardKindOf(row.device) === 'router' ? 'router' : 'printer';
             }
 
             pathOf(node) {
@@ -7606,10 +7624,12 @@
                 }
                 const sum = boardSummary(this.boards.board(row.device.port));
                 span.dataset.port = row.device.port;
-                if (sum.kind === 'printer' || sum.kind === 'router') {
-                    span.textContent = sum.readings ? `${sum.icon} ${sum.readings}${sum.extra.length ? ' ' + sum.extra[0] : ''}` : (sum.extra.length ? `${sum.icon} ${sum.extra[0]}` : sum.icon);
+                if (GCODE_KINDS.includes(sum.kind)) {
+                    // The icon, then what is most worth a glance: its reading, else its job, else its state.
+                    const said = sum.readings ? `${sum.readings}${sum.extra.length ? ' ' + sum.extra[0] : ''}` : (sum.extra[0] || sum.state);
+                    span.textContent = `${sum.icon} ${said}`;
                 } else {
-                    span.textContent = '⚡';
+                    span.textContent = sum.icon;
                 }
                 if (sum.cls && sum.cls !== 'offline') span.classList.add(sum.cls);
                 span.title = (via ? `via ${via}: ` : '') + sum.title;
@@ -7636,7 +7656,7 @@
                     const d = row.device;
                     const sum = boardSummary(this.boards.board(d.port));
                     const how = row.binding_source === 'manual' ? 'pinned' : `bound by its sketch ${row.sketch}`;
-                    const state = sum.kind === 'printer' || sum.kind === 'router'
+                    const state = GCODE_KINDS.includes(sum.kind)
                         ? `<span class="${sum.cls === 'printing' ? 'ok' : (sum.cls === 'offline' ? 'bad' : '')}">${esc(sum.short)}</span>${sum.temps ? ` <span class="temps">${esc(sum.temps)}</span>` : ''}`
                         : `<span class="${sum.words.verdict === 'match' ? 'ok' : (sum.words.verdict === 'mismatch' ? 'bad' : '')}">${esc(sum.short)}</span>`;
                     body = `<div class="device-line" title="${esc(`${boardLabel(d)} on ${d.port}, ${how} — ${sum.line}`)}"><b>${esc(d.port)}</b> · ${state}${viaLink}

@@ -79,7 +79,7 @@ export function mountSystems(panels, systems, hooks = {}) {
                 if (!fits || without.includes(sec.id)) { panels.unregister(sec.window); continue; }
                 if (panels.state(sec.window)?.registered) continue;  // there already, where a person left it
                 panels.register(sec.window, {
-                    title: sec.title, hint: `${system.title}: ${sec.holds}`, group: system.group,
+                    title: (sec.titles && sec.titles[kind]) || sec.title, hint: `${system.title}: ${sec.holds}`, group: system.group,
                     body: sections[sec.id], home: sec.home || system.main, after: system.main, open: false,
                     onOpen: () => { const h = widget(); if (h && h.redraw) h.redraw(); },
                 });

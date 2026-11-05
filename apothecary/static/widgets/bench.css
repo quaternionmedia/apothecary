@@ -9,7 +9,7 @@
 .bench-ui .meta { color: #7a867a; font-size: 0.72rem; }
 .bench-ui .note { color: #8a9a8a; font-size: 0.72rem; font-style: italic; }
 .bench-ui .empty { color: #666; font-style: italic; }
-.bench-ui .ok { color: #6fdb75; } .bench-ui .warn { color: #ffcc66; } .bench-ui .bad { color: #ff8080; }
+.bench-ui .ok { color: var(--ok); } .bench-ui .warn { color: var(--warn); } .bench-ui .bad { color: var(--bad); }
 .bench-ui .kv { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; line-height: 1.5; word-break: break-all; }
 .bench-ui button, .bench-ui input:not([type=checkbox]), .bench-ui select, .bench-ui textarea {
     font: inherit; font-size: 0.78rem; background: #232823; color: #ddd; border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.45rem;
@@ -28,8 +28,8 @@
 .bench-ui .task-history li[data-id]:hover { background: #262d26; }
 .bench-ui .task-title { font-size: 0.78rem; }
 .bench-ui .task-log {
-    margin: 0.2rem 0 0; padding: 0.35rem 0.5rem; max-height: 220px; min-height: 3.2rem; overflow: auto; background: #0f120f; border: 1px solid #2a302a; border-radius: 4px;
+    margin: 0.2rem 0 0; padding: 0.35rem 0.5rem; max-height: 220px; min-height: 3.2rem; overflow: auto; background: #0f120f; border: 1px solid var(--line); border-radius: 4px;
     font: 0.7rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; color: #b8c8b8; white-space: pre-wrap; word-break: break-all;
 }
 .bench-ui .task-log:empty { display: none; }
-.bench-ui .task-log .cmd { color: #9cd2ff; } .bench-ui .task-log .err { color: #ff8080; }
+.bench-ui .task-log .cmd { color: var(--tx); } .bench-ui .task-log .err { color: var(--bad); }

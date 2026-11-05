@@ -35,6 +35,17 @@
  */
 
 const KEEP_EVERY = 0.05;        // a frame set at every 5 % of progress
+// What a machine's hour draws over its state: a printer's heaters, a router's spindle,
+// each on its own scale. Those the machine's polls said are drawn and named; the rest
+// are not there.
+const SERIES = [
+    { subject: "#heater:hotend0", property: "temperature", name: "hotend", cls: "ws-hotend", most: 300, unit: "°C" },
+    { subject: "#heater:bed", property: "temperature", name: "bed", cls: "ws-bed", most: 300, unit: "°C" },
+    { subject: "#spindle:main", property: "rpm", name: "spindle", cls: "ws-spindle", most: 24000, unit: "rpm" },
+];
+// How far a job is: a card's print says it, as does a job streamed from here.
+const progressOf = (st) => st.sd_progress ?? (st.job ? st.job.progress : null);
+const stepOf = (st) => { const at = progressOf(st); return at == null ? null : Math.floor(at / KEEP_EVERY); };
 const KEEP_APART_MS = 10000;    // and never two closer together than this
 const POLL_MS = 2000;           // the printer's poll while the window is open on it
 const REFRESH_MS = 5000;        // the document asked for again
@@ -95,14 +106,14 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
     const cameras = () => ready().map((c) => c.name).join(",");
     function due(st, now) {
         if (!st || !st.poll || !ready().length || now - state.kept.at < KEEP_APART_MS) return false;
-        const step = st.sd_progress == null ? null : Math.floor(st.sd_progress / KEEP_EVERY);
+        const step = stepOf(st);
         return !state.kept.at || st.state !== state.kept.state || step !== state.kept.step || cameras() !== state.kept.cameras;
     }
     async function keepSet(st, { now: asked = false } = {}) {
         const now = Date.now();
         if (state.keeping || !state.watch || !st || !st.poll || (!asked && !due(st, now))) return null;
         state.keeping = true;
-        state.kept = { at: now, state: st.state, step: st.sd_progress == null ? null : Math.floor(st.sd_progress / KEEP_EVERY), cameras: cameras() };
+        state.kept = { at: now, state: st.state, step: stepOf(st), cameras: cameras() };
         const kept = [], refused = [], turn = state.turn;
         try {
             for (const cam of ready()) {
@@ -172,8 +183,8 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
     function lead() {
         const path = state.path;
         if (!path) {
-            if (!state.printers.length) return { text: `No printer is pinned in ${site()} yet: a printer's Device, on its ring, pins its board, and its polls are kept from then.` };
-            return { text: "Choose a printer to see its hour: its state, its heaters, the frames its cameras keep, and what each value rests on." };
+            if (!state.printers.length) return { text: `No machine is pinned in ${site()} yet: a printer's or a router's Device, on its ring, pins its board, and its polls are kept from then.` };
+            return { text: "Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on." };
         }
         if (!state.watch) return { text: `${path} is not watched: ${state.refused || "its board is not known here"}.` };
         if (!state.watch.port) return { text: `${path}'s board is not answering: Device, on ${path}'s ring, pins it, and its polls are kept from then. What the log already holds is below.` };
@@ -185,7 +196,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
         }
         if (!state.last) return { text: `Waiting for ${path}'s first poll: a frame set is kept with it.` };
         return {
-            text: `Frames from ${ready().map((c) => c.name).join(", ")} are kept when ${path}'s state changes and at every 5 % of a print, while this window is open. Click a frame or a dot to see what it rests on.`,
+            text: `Frames from ${ready().map((c) => c.name).join(", ")} are kept when ${path}'s state changes and at every 5 % of a job, while this window is open. Click a frame or a dot to see what it rests on.`,
             buttons: [["keep", "Keep a set now"], ["add-camera", "Add another camera"]],
         };
     }
@@ -201,9 +212,10 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
         return state.printers.map((pr) => {
             const s = pr.subject;
             const st = doc ? prop(doc, s, "state") : null;
-            const heat = doc ? [["hotend0", "hotend"], ["bed", "bed"]].map(([h, word]) => {
-                const t = prop(doc, `${s}#heater:${h}`, "temperature");
-                return t && t.value != null ? `${word} ${degrees(t.value)} °C` : "";
+            const heat = doc ? SERIES.map((line) => {
+                const t = prop(doc, `${s}${line.subject}`, line.property);
+                if (!t || t.value == null) return "";
+                return line.unit === "°C" ? `${line.name} ${degrees(t.value)} °C` : `${line.name} ${esc(t.value)} ${line.unit}`;
             }).filter(Boolean).join(" · ") : "";
             const heard = st ? (st.current ? "answering now" : `last heard ${hhmm(st.at)}`) : pr.port ? "not polled yet" : "its board is not answering";
             const cams = pr.cameras.length ? `${pr.cameras.length} camera${pr.cameras.length === 1 ? "" : "s"}` : "no camera";
@@ -228,17 +240,21 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
             const poll = (ev || []).find((r) => r.kind === "poll");
             return `<rect class="ws-state ws-${esc(v)}" x="${x(a)}" y="0" width="${Math.max(1, x(b) - x(a))}" height="${STRIP}"${poll ? ` data-poll="${esc(poll.id)}"` : ""}><title>${esc(v)} from ${hhmm(a)}</title></rect>`;
         }).join("");
-        // The heaters, as lines over the same hour.
-        const lines = [["hotend0", "ws-hotend"], ["bed", "ws-bed"]].map(([name, cls]) => {
-            const pts = doc.series[`${s}#heater:${name}|temperature`] || [];
+        // Its readings, as lines over the same hour.
+        const pointsOf = (line) => doc.series[`${s}${line.subject}|${line.property}`] || [];
+        const lines = SERIES.map((line) => {
+            const pts = pointsOf(line), { name, cls, most, unit } = line;
             if (!pts.length) return "";
-            const most = 300, y = (v) => STRIP + 4 + LINES - (Math.max(0, Math.min(most, v)) / most) * LINES;
+            const y = (v) => STRIP + 4 + LINES - (Math.max(0, Math.min(most, v)) / most) * LINES;
             const d = pts.map(([at, v], i) => `${i ? "L" : "M"}${x(at).toFixed(1)},${y(v).toFixed(1)}`).join(" ") + ` L${W},${y(pts[pts.length - 1][1]).toFixed(1)}`;
-            const marks = pts.map(([at, v, poll]) => `<circle cx="${x(at).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.5" class="${cls}"${poll ? ` data-poll="${esc(poll)}"` : ""}><title>${esc(name)} ${esc(v)} °C at ${hhmm(at)}</title></circle>`).join("");
+            const marks = pts.map(([at, v, poll]) => `<circle cx="${x(at).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.5" class="${cls}"${poll ? ` data-poll="${esc(poll)}"` : ""}><title>${esc(name)} ${esc(v)} ${unit} at ${hhmm(at)}</title></circle>`).join("");
             return `<path d="${d}" class="${cls}" fill="none"/>${marks}`;
         }).join("");
-        const svg = `<svg class="ws-chart" viewBox="0 0 ${W} ${STRIP + LINES + 8}" preserveAspectRatio="none" role="img" aria-label="${esc(state.path)}'s state and temperatures">${strip}${lines}</svg>`;
-        const legend = `<div class="ws-legend muted"><span><i class="ws-key ws-printing"></i>printing</span><span><i class="ws-key ws-idle"></i>idle</span><span><i class="ws-key ws-offline"></i>offline</span><span><i class="ws-key ws-line ws-hotend"></i>hotend</span><span><i class="ws-key ws-line ws-bed"></i>bed</span><span>a dot is a poll: click it for its lines</span></div>`;
+        const svg = `<svg class="ws-chart" viewBox="0 0 ${W} ${STRIP + LINES + 8}" preserveAspectRatio="none" role="img" aria-label="${esc(state.path)}'s state and readings">${strip}${lines}</svg>`;
+        // Named from the hour itself: the states it was in, the readings it has.
+        const states = [...new Set(bands.map(([, , word]) => word))].map((word) => `<span><i class="ws-key ws-${esc(word)}"></i>${esc(word)}</span>`);
+        const readings = SERIES.filter((line) => pointsOf(line).length).map((line) => `<span><i class="ws-key ws-line ${line.cls}"></i>${line.name}</span>`);
+        const legend = `<div class="ws-legend muted">${states.join("")}${readings.join("")}<span>a dot is a poll: click it for its lines</span></div>`;
         // A row per camera that looks at it: what it is in this browser, and the frames
         // kept with its polls.
         const watched = state.watch ? state.watch.cameras : [];
@@ -279,7 +295,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
             const poll = (p.evidence || []).find((r) => r.kind === "poll");
             const heard = p.current ? "now" : `last known ${hhmm(p.at)}`;
             return `<tr class="ws-property${p.current ? "" : " ws-stale"}"${poll ? ` data-poll="${esc(poll.id)}"` : ""} title="${esc(p.origin.kind)} by ${esc(p.origin.by.name)}${poll ? ": click for the poll's lines" : ""}"><td>${esc(p.property)}</td><td>${value(p)}</td><td>${known(p)}</td><td>${heard}</td></tr>`;
-        }).join("")).join("") || `<tr><td class="muted">nothing is said of ${esc(s ? state.path : site())} yet: a printer pinned here says it once it is polled</td></tr>`;
+        }).join("")).join("") || `<tr><td class="muted">nothing is said of ${esc(s ? state.path : site())} yet: a machine pinned here says it once it is polled</td></tr>`;
     }
     function render() {
         const doc = state.doc;
@@ -305,13 +321,13 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
     }
     async function openPoll(id) {
         const poll = await api(`/evidence/polls/${encodeURIComponent(id)}?space=${encodeURIComponent(site())}`);
-        opened(`<strong>The poll at ${hhmm(poll.polled_at)}</strong> · ${esc(poll.port)} · ${esc(poll.state)} · every line the printer sent<pre>${esc((poll.raw || []).join("\n"))}</pre>`);
+        opened(`<strong>The poll at ${hhmm(poll.polled_at)}</strong> · ${esc(poll.port)} · ${esc(poll.state)} · every line the machine sent<pre>${esc((poll.raw || []).join("\n"))}</pre>`);
         say(`the poll at ${hhmm(poll.polled_at)}: every line ${poll.port} sent, under the timeline; × closes it`);
     }
     function openFrame(path, poll) {
         const cam = (path.match(/--([^/]+?)\.[a-z]+$/) || [])[1] || "a camera";
         opened(`<strong>${esc(cam)}'s frame</strong> · kept with <a href="#" data-poll="${esc(poll)}">the poll it rests on</a><img class="ws-frame-large" alt="${esc(path)}" src="${base}/photos/pictures/file?px=1024&path=${encodeURIComponent(path)}">`);
-        say(`${cam}'s frame, under the timeline: the poll it rests on shows every line the printer sent then`);
+        say(`${cam}'s frame, under the timeline: the poll it rests on shows every line the machine sent then`);
     }
 
     // --- what a person does here ------------------------------------------------------------------

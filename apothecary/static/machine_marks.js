@@ -269,9 +269,9 @@ export function sayBoard(anchors, key, sum, device) {
     badge.classList.remove("printing", "offline", "job", "mismatch", "heating");
     let line;
     if (sum.kind === "devkit") {
-        line = `⚡ ${esc(device.label)} · <span class="state">${esc(sum.short)}</span>`;
+        line = `${sum.icon} ${esc(device.label)} · <span class="state">${esc(sum.short)}</span>`;
     } else {
-        const parts = [`${sum.icon || "🖨"} <span class="state">${esc(sum.state)}</span>`];
+        const parts = [`${sum.icon} <span class="state">${esc(sum.state)}</span>`];
         if (sum.readings) parts.push(sum.readings);
         parts.push(...sum.extra.map(esc));
         line = parts.join(" · ");

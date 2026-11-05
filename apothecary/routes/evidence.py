@@ -98,23 +98,27 @@ def _found():
 
 
 def _printer_or_404(name: str, path: str):
-    from ..api import PRINTER_STATUSES, _find_node_by_path, _get_site_or_404
+    """The site, when ``path`` is one of its machines (a printer or a router: a node
+    that carries a machine's status); 404 otherwise."""
+    from ..api import MACHINE_STATUSES, _find_node_by_path, _get_site_or_404
 
     site = _get_site_or_404(name)
     node = _find_node_by_path(site, path)
-    if node is None or node.status not in PRINTER_STATUSES:
-        raise HTTPException(status_code=404, detail=f"{path} is no printer of {name}")
+    if node is None or node.status not in MACHINE_STATUSES:
+        raise HTTPException(status_code=404, detail=f"{path} is no machine of {name}")
     return site
 
 
 @router.get("/sites/{name}/evidence/printers")
 def printers_watched(name: str) -> Dict[str, Any]:
-    """Each printer a board pinned in the site drives, as the Working space opens on it."""
-    from ..api import _get_site_or_404, printers_in
+    """Each machine a board pinned in the site drives -- its printers and its routers,
+    sorted -- as the Working space opens on one."""
+    from ..api import _get_site_or_404, printers_in, routers_in
 
     site = _get_site_or_404(name)
     found = _found()
-    return {"site": name, "printers": [_watched(name, site, p, found) for p in printers_in(name)]}
+    machines = sorted({*printers_in(name), *routers_in(name)})
+    return {"site": name, "printers": [_watched(name, site, p, found) for p in machines]}
 
 
 @router.get("/sites/{name}/evidence/printers/{path}")

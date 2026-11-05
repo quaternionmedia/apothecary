@@ -1832,6 +1832,7 @@ CARRIED_BY: Dict[str, Carries] = {
     # chosen under makes and starts the slice there (POST /slicer/slice), a task the
     # card follows; nothing is sent to the printer.
     "slice": Carries.VIEWER,
+    "toolpath": Carries.VIEWER,
     # Opening and closing the windows beside the world (panels.js).
     "panel": Carries.VIEWER,
     # A printer's Working space: the page opens the window on the printer, watches

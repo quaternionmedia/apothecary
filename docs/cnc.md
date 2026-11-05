@@ -106,16 +106,22 @@ work zero and in machine coordinates, the spindle, the feed and the
 overrides, the input pins on. Armed, its control pad holds Motion (the jog
 pad, `$J=` at the feed set, Home `$H`, Unlock `$X`, Top of Z, Go to zero,
 Stop jog), Spindle (On at a speed, Off), Zero and probe (XYZ zero here, Z
-zero here, Probe Z down a depth), and Cut (Resume, Hold, Abort). *Cut from
-here* is the Print section with a router's words: a CAM post's file kept and
-checked, ▶ Cut, Pause (a hold), Resume, Cancel (a hold and a reset), the
-cut's progress and the router's jobs; it offers no Slice. A line the controller refuses
+zero here, Probe Z down a depth), and Cut (Resume, Hold, Abort). The Cut window,
+*Cut from here*, is a printer's Print with a router's words, in the loop's
+order: what it makes and its Toolpath ([docs/cam.md](cam.md)) where a printer has
+Slice, the file, kept and checked, or a CAM post's, then ▶ Cut, Pause (a hold),
+Resume, Cancel (a hold and a reset), the cut's progress with the operation it is
+in, what the file holds, and the router's jobs. A line the controller refuses
 (`error:15`) or an alarm it raises (`ALARM:3`) is said in GRBL's words beside
-the line in the log, in the refusal the status line carries, and in the state
-card. The ring's Control
+the line in the log, in the refusal the status line carries, in the reason a
+job that stopped gives, and in the state card. A cut that would leave the travel
+stops where it would, as `ALARM:2`, so the tool is zeroed with the cut's depth
+under it. The ring's Control
 on a router is its own (`menu.router_control_options`): Home, Unlock, Jog
-(with Stop jog), Spindle, Zero (with Probe Z), Cut, Stop, Arm. The router's badge in the world and
-on Site's tree wears 🪚 and its state, and its marks stand on the table:
+(with Stop jog), Spindle, Zero (with Probe Z), Cut, Stop, Arm. The router's badge
+in the world and its row on Site's tree say 🪚 and its state, its spindle while
+it turns and the cut's progress, its hour in the Working space charts the spindle,
+and its marks stand on the table:
 the working area, the table and the tool, placed from the controller's
 machine coordinates and the working area (`mpos + travel`, a Grbl machine
 homed to its maximum switches). `apothecary serve --demo` pins the router's

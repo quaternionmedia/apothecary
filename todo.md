@@ -17,6 +17,11 @@ here: run `apothecary problems`.
 - The Models window, what its walk left ([docs/models-checklist.md](docs/models-checklist.md)): opened again after a reload, it takes room from the world each time, until windows beside the world share one stack; a person's word is kept by Models in memory, where the Working space should keep it and Models offer it; and the status bar keeps "choose a shape … first" in red after a shape is chosen, until the next action.
 - A synth rig photographed through a concert, held in carlos: the first real photographs, the Ender's mainboard's power and USB through the camera aimed at the Ender, waiting for that camera (slice 4, rehearsed on an Uno's drawn pictures: `examples/rigs/uno-power-and-usb.json`, `apothecary rig setup`), then the DFAM and Subharmonicon, then the viewer's window for pinning faces, cues in the record, a mount and corner tabs printed; then the airgap's test rig and a server room: [docs/plans/carlos-concert-rig-2026-10-29.md](docs/plans/carlos-concert-rig-2026-10-29.md).
 - The viewer across the efforts in flight, one observation module first, then the words and seats: [docs/plans/ui-coordination-2026-10-31.md](docs/plans/ui-coordination-2026-10-31.md).
+- What the round of unification left: the Machine's main window at full size (a
+  person's call: doors are new controls, and opening as its view is against a
+  tested decision), a cut's operation beside each poll in the Working space, and
+  the as-cut measure in the Cut card:
+  [docs/plans/ui-refresh-2026-11-04.md](docs/plans/ui-refresh-2026-11-04.md).
 - Waiting behind it, the bench as a rig carlos draws, slices 2 and 3 (a picture names a device, IO configuration): [docs/plans/qm-family-carlos-2026-10-29.md](docs/plans/qm-family-carlos-2026-10-29.md).
 - A working space seen from every kind of evidence at once: its cameras, one thing from several angles among them, a printer's polls and a board's port, its sensors, a person's goals, directives and actions, and the image models' guesses, each line of the view opening its evidence. First the Ender's three cameras, on the bed for its timelapse, on the head and across the room, tied to its polls (frames kept with polls, then its lead, its motion and its bed seen two ways), then the rig through a concert, the airgap's test rig and a server room. Its first two steps are built and walked from each door in [walkthrough 18](walkthrough/18-the-working-space.md); the next is the Ender's cameras at the bench: [docs/plans/working-space-view-2026-10-30.md](docs/plans/working-space-view-2026-10-30.md).
 - Pictures lists every frame the Working space keeps with a poll as one of its camera's pictures, so a print fills it: those frames belong to the Working space, and Pictures would count them rather than tile them.
@@ -40,26 +45,15 @@ here: run `apothecary problems`.
   controller, which way it homes, and the bounds `apothecary/firmware/grbl.py`
   takes from the maker's figures. No toolpath is made here: a cut is a CAM
   post's file ([docs/cnc.md](docs/cnc.md#not-built)).
-- The bench walkthrough crawls in the full browser order. In `pytest tests/e2e
-  --start-server`, `tests/e2e/test_docs_bench_walkthrough.py` ran out its cap
-  (`Timeout (0:02:50)`) in seven of ten runs, and passed the rest in about seventy
-  seconds; alone it passes, and the seven files up to it stall as the whole
-  suite does. It stalls on main's own tree (`baaedee`, under Python 3.14) as
-  on a branch above it (Python 3.12), so it predates the router. The test's
-  frame, taken every twenty seconds through one stall, was in
-  `viewer_ready.settled` each time -- its wait for the camera at rest
-  (`CAMERA_AT_REST`, three hundred frames at most per call), under `by_hand`
-  framing printer_1 for the third picture, then under the picture itself --
-  so the waits run to their frame bound one after another rather than one
-  wait hanging; the test servers answered throughout. What to measure next:
-  the frames per second the headless page draws during the run, and what
-  moves the camera between frames once the hand has stopped.
-- A part through the subtractive loop, design to monitoring, the loop the app
-  is built around from here: slice 1 (a part's declared cuts, the app's own
-  toolpath, Cut from here, the job's operation, the simulated router's
-  footprint, one iteration executed in walkthrough 20) is built; next the
-  bench, then the cut watched from the Working space and a camera:
-  [docs/plans/subtractive-loop-2026-11-04.md](docs/plans/subtractive-loop-2026-11-04.md).
+- Why a browser other tests have used draws slowly. Sharing the camera browser
+  `tests/e2e/test_camera.py` had used, `tests/e2e/test_docs_bench_walkthrough.py`
+  ran out its cap (`Timeout (0:02:50)`) in 9 runs of 13, on main's tree as on a
+  branch above it, its frame in `viewer_ready.settled`'s wait for the camera at
+  rest each time it was caught, while the test servers answered at once. In a
+  browser of its own, the same files in the same order passed 4 runs of 4 in
+  about the same two minutes, in the same hour as a control that stalled 2 of 3;
+  so it has one now, and the symptom is gone. What a used browser keeps is not
+  known, and other tests sharing that browser may be slower for it.
 - A host-side bound on where the print head ends. Each jog's move is capped
   (`JOG_MAX_MM`), jogs one after another add up, and the firmware's soft
   endstops, after a homing, are what keeps the head on the machine
