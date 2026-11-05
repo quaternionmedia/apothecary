@@ -21,20 +21,25 @@ contract hearth holds. [docs/family.md](../docs/family.md) is the reference, and
     >>> said["hub"], said["family"], said["contract"]
     ('apothecary', 'irl', 'family/1')
 
-With no table it has no members, and its audit is empty.
+With no table it has the family's own members: a machine and a board hosted in its
+process, and a camera, whose device is a browser's, read from the page. Its audit is
+empty.
 
-    >>> client.get("/family/").json()
-    {'members': {}, 'last': []}
+    >>> said = client.get("/family/").json()
+    >>> {name: member["via"] for name, member in said["members"].items()}
+    {'machine': 'local', 'board': 'local', 'camera': 'pull'}
+    >>> said["last"]
+    []
 
 ## Its table
 
-`family.json` in the state folder names them. A member is on this machine, so one
+`family.json` in the state folder names the rest. A member is on this machine, so one
 elsewhere is left out.
 
     >>> table = {"members": {"far": "http://192.168.1.4:9"}, "pull": ["a-page"]}
     >>> _ = hub.table_file().write_text(json.dumps(table), encoding="utf-8")
     >>> hub.members()
-    ['a-page']
+    ['a-page', 'board', 'camera', 'machine']
 
 ## A fire, and what is kept
 
@@ -57,6 +62,17 @@ is raised for it.
 
     >>> hub.deliver("nobody", cue, {"show": "anything"})["error"]
     'nobody is not a member in family.json'
+
+## A member of its own
+
+A hosted member keeps the same contract under its own name, and apothecary's bounds
+under that. Nothing is pinned here, so the hub's fire is refused, and the refusal is
+what the audit keeps.
+
+    >>> client.get("/machine/family/identity").json()["family"]
+    'irl'
+    >>> hub.deliver("machine", cue, {"home": True})["error"]
+    "name the machine's node: none is pinned"
 
     >>> hub.close()
     >>> _ = os.environ.pop("APOTHECARY_STATE_DIR") if before is None else os.environ.update(APOTHECARY_STATE_DIR=before)

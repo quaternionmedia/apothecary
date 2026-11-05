@@ -53,6 +53,7 @@ from .example_hierarchy import (
 )
 from .example_parts_library import create_parts_library_site, validate_parts_library
 from .family import hub as family_hub
+from .family import members as family_members
 from .firmware import devices as firmware_devices
 from .firmware import gcode as firmware_gcode
 from .firmware import grbl as firmware_grbl
@@ -290,6 +291,8 @@ app.include_router(wiring_router)
 
 # The irl family's hub: hearth's coordinator, at /family/ (docs/family.md).
 app.include_router(family_hub.router())
+for _hosted in family_members.routers():
+    app.include_router(_hosted)
 # A working space seen from every kind of evidence: the log's document for a site.
 app.include_router(evidence_router)
 # Image models through qmcp, and the plain reader beside them: asked only when a person asks.

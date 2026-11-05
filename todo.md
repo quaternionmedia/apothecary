@@ -19,9 +19,10 @@ here: run `apothecary problems`.
 - The viewer across the efforts in flight, one observation module first, then the words and seats: [docs/plans/ui-coordination-2026-10-31.md](docs/plans/ui-coordination-2026-10-31.md).
 - An irl hub of ShowRunner's class: apothecary as hearth's second exemplar, a
   procedure of steps on the blueprint in place of a cue list on a script, the
-  printer, the boards and the cameras hosted in it and carlos, joe with vox,
+  machines, the boards and the cameras hosted in it and carlos, joe with vox,
   alfred with otto, datum, ira and ShowRunner reached beside it, every outcome
-  kept in the evidence log; nothing built, the owner's questions open:
+  kept in the evidence log; the hub and its own machine and board members are built,
+  the owner's questions open:
   [docs/plans/irl-hub-2026-11-02.md](docs/plans/irl-hub-2026-11-02.md).
 - Carlos keeping `family/1`: `/family/identity` and `/family/events` on its
   `feat/hold-the-rig`, so `hearth check` passes it and the hub's audit names the

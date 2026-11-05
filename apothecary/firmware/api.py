@@ -199,6 +199,17 @@ def _board(sketch, given):
     return service.resolve_board(sketch, given)
 
 
+def upload_sketch(sketch, board: str | None, port: str):
+    """Flash a sketch to ``port`` as the one task, recorded once it has succeeded."""
+    plan = service.flash_plan(sketch, board, port)
+
+    def remember(task, status):
+        if status.value == "succeeded":
+            service.record_upload(port, sketch, board, task_id=task.id)
+
+    return _start("upload", service.upload_title(sketch, port), plan, on_done=remember, port=port)
+
+
 @router.post("/sketches/{name}/compile", status_code=202)
 async def firmware_compile(name: str, body: CompileRequest):
     """Build a sketch with its toolchain module. ``name`` is a sketch's id: an
@@ -212,20 +223,7 @@ async def firmware_compile(name: str, body: CompileRequest):
 @router.post("/sketches/{name}/upload", status_code=202)
 async def firmware_upload(name: str, body: UploadRequest):
     sketch = _sketch_or_404(name)
-    board = _board(sketch, body.fqbn)
-    plan = service.flash_plan(sketch, board, body.port)
-
-    def remember(task, status):
-        if status.value == "succeeded":
-            service.record_upload(body.port, sketch, board, task_id=task.id)
-
-    return _start(
-        "upload",
-        service.upload_title(sketch, body.port),
-        plan,
-        on_done=remember,
-        port=body.port,
-    )
+    return upload_sketch(sketch, _board(sketch, body.fqbn), body.port)
 
 
 @router.post("/esptool/flash", status_code=202)

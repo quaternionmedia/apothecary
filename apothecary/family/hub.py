@@ -1,11 +1,12 @@
 """The irl family's hub: hearth's coordinator, its table and what it says it is.
 
-The table is ``family.json`` in the state folder, in the shape hearth's
-``from_table`` reads: ``{"members": {name: url}, "pull": [name], "timeout": seconds}``,
-each optional. ``serve --carlos`` adds carlos to it as a push member. A member is on
-this machine or it is left out and said, as the process's guard would refuse it
-anyway. The table is read afresh at each use, and a changed table starts a new
-coordinator, whose audit starts empty.
+The family's own members are hosted here (``members``), and a camera is read from
+the page, whatever the table says. The table names the rest: it is ``family.json`` in
+the state folder, in the shape hearth's ``from_table`` reads: ``{"members": {name:
+url}, "pull": [name], "timeout": seconds}``, each optional. ``serve --carlos`` adds
+carlos to it as a push member. A member is on this machine or it is left out and said,
+as the process's guard would refuse it anyway. The table is read afresh at each use,
+and a changed table starts a new coordinator, whose audit starts empty.
 """
 
 from __future__ import annotations
@@ -22,12 +23,16 @@ from hearth import coordinator
 from ..firmware.devices import state_dir
 from ..version import __version__
 from ..wiring.carlos import CARLOS, carlos_url, loopback_url
+from . import members as hosted
+from .members import FAMILY
 
 log = logging.getLogger(__name__)
 
 HUB = "apothecary"
-FAMILY = "irl"
 TABLE = "family.json"
+
+# A camera's device is a browser's, so a page reads what the camera is to do.
+PAGE_MEMBERS = ["camera"]
 
 # How long past a member's own timeout a delivery waited for is given up on.
 GRACE_SECONDS = 1.0
@@ -76,13 +81,17 @@ def _on_this_machine(members: Any) -> Any:
 
 
 def settings() -> Dict[str, Any]:
-    """The table as the coordinator is given it: this machine's members, and carlos."""
+    """The table as the coordinator is given it: this machine's members, carlos and the
+    members a page reads."""
     table = _table()
     members = _on_this_machine(table.get("members") or {})
     named = carlos_url()
     if named and isinstance(members, dict):
         members[CARLOS] = named
-    return {**table, "members": members}
+    pull = table.get("pull") or []
+    if isinstance(pull, list):
+        pull = [*pull, *(name for name in PAGE_MEMBERS if name not in pull)]
+    return {**table, "members": members, "pull": pull}
 
 
 def running() -> coordinator.Coordinator:
@@ -93,7 +102,7 @@ def running() -> coordinator.Coordinator:
         if _running is None or wanted != _read:
             if _running is not None:
                 _running.close()
-            _running = coordinator.from_table(wanted, table=TABLE)
+            _running = coordinator.from_table(wanted, local=hosted.receivers(), table=TABLE)
             _read = wanted
         return _running
 
@@ -118,7 +127,7 @@ def router() -> APIRouter:
 
 
 def members() -> List[str]:
-    """Every member the table names, however it is reached."""
+    """Every member, however it is reached."""
     return sorted(running().snapshot()["members"])
 
 

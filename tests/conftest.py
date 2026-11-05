@@ -274,6 +274,38 @@ def fresh_task_runner(monkeypatch):
     return runner
 
 
+@pytest.fixture
+def served():
+    """The application on a port of its own, its startup's work left out."""
+    import socket
+    import threading
+    import time
+
+    import httpx
+    import uvicorn
+
+    from apothecary.api import app
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    server = uvicorn.Server(
+        uvicorn.Config(app, host="127.0.0.1", port=port, lifespan="off", log_level="warning")
+    )
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{port}"
+    for _ in range(100):
+        try:
+            httpx.get(f"{url}/family/identity", timeout=1.0).raise_for_status()
+            break
+        except httpx.HTTPError:
+            time.sleep(0.1)
+    yield url
+    server.should_exit = True
+    thread.join(timeout=5)
+
+
 # --- the slicer's fake -----------------------------------------------------------
 #
 # A scripted OrcaSlicer (tests/slicer_helpers.py) with its profiles beside it, named
