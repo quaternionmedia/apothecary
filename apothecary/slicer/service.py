@@ -42,6 +42,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Protocol
 
+from .. import preview
 from ..firmware import devices
 from .models import Bounds, Estimate, Made, Setting, SlicedFor, SliceRecord, SlicerMessage
 from .modules import Log, NotInstalled, SlicerError, chosen_id, get_module
@@ -388,63 +389,19 @@ def records() -> List[SliceRecord]:
 
 # --- where the moves reach ------------------------------------------------------------
 
-_WORD = re.compile(r"([A-Z])\s*(-?\d*\.?\d+)")
 
 
 def gcode_bounds(path: Path) -> Optional[Bounds]:
     """Where the extruding moves reach (both ends of each), in the printer's own
-    coordinates: absolute or relative moves (G90/G91), absolute or relative
-    extrusion (M82/M83), and ``G92`` setting where it stands. None for a file
-    that extrudes nothing."""
-    pos = {"X": 0.0, "Y": 0.0, "Z": 0.0, "E": 0.0}
-    relative = relative_e = False
-    low = [float("inf")] * 3
-    high = [float("-inf")] * 3
-    seen = False
+    coordinates, as the preview's interpreter reads them. None for a file that extrudes
+    nothing."""
     try:
         handle = open(path, encoding="utf-8", errors="replace")
     except OSError:
         return None
     with handle:
-        for raw in handle:
-            line = raw.split(";", 1)[0].strip().upper()
-            if not line:
-                continue
-            code = line.split(None, 1)[0]
-            if code == "G90":
-                relative = relative_e = False
-            elif code == "G91":
-                relative = relative_e = True
-            elif code == "M82":
-                relative_e = False
-            elif code == "M83":
-                relative_e = True
-            elif code == "G92":
-                for axis, value in _WORD.findall(line[3:]):
-                    if axis in pos:
-                        pos[axis] = float(value)
-            elif code in ("G0", "G1", "G00", "G01"):
-                words = dict(_WORD.findall(line[len(code) :]))
-                start = (pos["X"], pos["Y"], pos["Z"])
-                for axis in "XYZ":
-                    if axis in words:
-                        value = float(words[axis])
-                        pos[axis] = pos[axis] + value if relative else value
-                extruded = False
-                if "E" in words:
-                    e = float(words["E"])
-                    extruded = e > 0 if relative_e else e > pos["E"]
-                    pos["E"] = pos["E"] + e if relative_e else e
-                moved = start != (pos["X"], pos["Y"], pos["Z"])
-                if extruded and moved:
-                    seen = True
-                    for point in (start, (pos["X"], pos["Y"], pos["Z"])):
-                        for i in range(3):
-                            low[i] = min(low[i], point[i])
-                            high[i] = max(high[i], point[i])
-    if not seen:
-        return None
-    return Bounds(min=[round(v, 3) for v in low], max=[round(v, 3) for v in high])
+        box = preview.reach(handle, preview.ADDITIVE)
+    return Bounds(min=box.min, max=box.max) if box is not None else None
 
 
 # --- answers kept for a task -----------------------------------------------------------

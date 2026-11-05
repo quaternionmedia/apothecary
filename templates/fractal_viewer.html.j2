@@ -1234,6 +1234,7 @@
                 this.categoryFiltersEl = document.getElementById('category-filters');
                 this.contentsEl = document.getElementById('contents-list');
                 this.selectedBodyEl = document.getElementById('selected-body');
+                this.toolpathByPort = {};
                 this.problemsNoneEl = document.getElementById('site-problems-none');
                 this.problemListEl = document.getElementById('problem-list');
                 this.validityEl = document.getElementById('validity-indicator');
@@ -1830,6 +1831,14 @@
                 // jog sent from it moves the nozzle ahead of the poll that confirms it.
                 window.addEventListener('apothecary:mesh', (ev) => {
                     for (const m of Object.values(this.marks)) if (m.marks && ev.detail && ev.detail.port === m.port) m.marks.setMesh(ev.detail);
+                });
+                // The chosen file's path: drawn where its machine's marks stand, and kept
+                // for marks not there yet (the site is still loading).
+                window.addEventListener('apothecary:toolpath', (ev) => {
+                    if (!ev.detail) return;
+                    this.toolpathByPort[ev.detail.port] = ev.detail;
+                    for (const m of Object.values(this.marks)) if (m.marks && ev.detail.port === m.port) m.marks.setToolpath(ev.detail.preview, ev.detail);
+                    this.invalidate();
                 });
                 window.addEventListener('apothecary:position', (ev) => {
                     if (!ev.detail || ev.detail.source !== 'jog') return;
@@ -7451,6 +7460,8 @@
                     const first = this.bindings[row.path] && this.bindings[row.path].printer_status;
                     if (first && first.position) marks.setPosition(this.toolPosition(first, where), { immediate: true });
                     this.marks[path] = { marks, port, where, readingAt: 0, readingId: null };
+                    const toolpath = this.toolpathByPort[port];
+                    if (toolpath) marks.setToolpath(toolpath.preview, toolpath);
                     this.refreshReading(path);
                 });
             }

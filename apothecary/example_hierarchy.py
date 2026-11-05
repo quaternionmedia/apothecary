@@ -724,11 +724,17 @@ def _build_bench_board(name: str, part: str, position: Vector3D, size: Vector3D)
 # standing stock_margin in from it on each side (the part's own defaults).
 ROUTER_COUPON_SIZE = Vector3D(x=120.0, y=80.0, z=10.0)
 ROUTER_COUPON_MARGIN = 10.0
+# The sacrificial board a through cut goes into, which the garage does not draw: the
+# router's Z travel ends at its table, so a cut through stock lying on the table would
+# leave the travel.
+ROUTER_SPOILBOARD = 5.0
 ROUTER_COUPON_POSITION = Vector3D(
     x=CNC_ROUTER_POSITION.x + anolex.WORK_ORIGIN.x + ROUTER_COUPON_MARGIN,
     y=CNC_ROUTER_POSITION.y + anolex.WORK_ORIGIN.y + ROUTER_COUPON_MARGIN,
-    z=CNC_ROUTER_POSITION.z + anolex.WORK_ORIGIN.z,
+    z=CNC_ROUTER_POSITION.z + anolex.WORK_ORIGIN.z + ROUTER_SPOILBOARD,
 )
+# The toolpath's work zero, in the router's working area: the stock's front-left top corner.
+ROUTER_COUPON_WORK_ZERO = Vector3D(x=0.0, y=0.0, z=ROUTER_SPOILBOARD + ROUTER_COUPON_SIZE.z)
 
 
 def _build_router_coupon() -> Assembly:

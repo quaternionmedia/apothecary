@@ -440,6 +440,19 @@ async def firmware_print_upload(
     return kept.model_dump(mode="json")
 
 
+@router.get("/printers/prints/{file_id}/preview")
+def firmware_print_preview(file_id: str, machine: str = Query("printer", max_length=20)):
+    """A kept file's toolpath as a kind of machine would run it, to draw and scrub through
+    (docs/toolpath-preview.md). Plain ``def``: reading a long file takes seconds."""
+    try:
+        found = devices.print_preview(file_id, machine)
+    except KeyError:
+        raise HTTPException(status_code=422, detail=f"no way to preview a {machine!r}") from None
+    if found is None:
+        raise HTTPException(status_code=404, detail="no such print file")
+    return found.model_dump(mode="json")
+
+
 @router.delete("/printers/prints/{file_id}")
 async def firmware_print_delete(file_id: str):
     if not devices.delete_print_file(file_id):
