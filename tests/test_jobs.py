@@ -55,11 +55,14 @@ def _run(job: jobs.Job, outcome="done", reason=None) -> jobs.Job:
     return jobs.end(_ended(job, outcome, reason))
 
 
-def test_a_printer_offers_print():
+def test_a_printer_offers_print_and_a_router_a_cut():
     (only,) = jobs.operations("printer")
     assert (only.kind, only.machine, only.label) == ("print", "printer", "Print")
     assert ".gcode" in only.inputs
     assert jobs.operation("print") is only
+    (cut,) = jobs.operations("router")
+    assert (cut.kind, cut.machine, cut.label, cut.busy) == ("cut", "router", "Cut", "running")
+    assert ".nc" in cut.inputs and ".gcode" in cut.inputs
     assert jobs.operations("mill") == []
 
 
@@ -68,8 +71,8 @@ def test_a_second_kind_registers_and_lists_beside_print():
     kept and listed the same way, and a kind is one machine's."""
     mill = jobs.register(jobs.Operation(kind="mill", machine="mill", label="Mill", inputs=(".nc",)))
     assert jobs.operations("mill") == [mill]
-    assert [op.kind for op in jobs.operations()] == ["print", "mill"]
-    assert jobs.machine_kinds() == ["printer", "mill"]
+    assert [op.kind for op in jobs.operations()] == ["print", "cut", "mill"]
+    assert jobs.machine_kinds() == ["printer", "router", "mill"]
     assert jobs.register(jobs.Operation(kind="mill", machine="mill", label="Mill", inputs=(".nc",)))
     with pytest.raises(ValueError, match="already"):
         jobs.register(jobs.Operation(kind="mill", machine="laser", label="Cut"))

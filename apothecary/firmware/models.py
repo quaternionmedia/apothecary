@@ -407,6 +407,13 @@ class PrinterInfo(BaseModel):
     baud: int = 115200
     boot_lines: List[str] = Field(default_factory=list)  # banner captured after the DTR reset
     identified_at: Optional[datetime] = None
+    # The G-code dialect the board speaks, and the kind of machine it drives
+    # (apothecary/jobs.py's machine kinds): Marlin's on a printer (gcode.py), GRBL's
+    # on a router (grbl.py). The dialect decides how it is polled and what may be
+    # typed at it; the kind decides which operations it offers and what its
+    # Machine shows.
+    dialect: str = "marlin"
+    machine: str = "printer"
 
 
 class Heater(BaseModel):
@@ -415,13 +422,24 @@ class Heater(BaseModel):
     power: Optional[int] = None  # PWM duty from the `@:` field
 
 
+class Spindle(BaseModel):
+    """A router's spindle: the speed its controller reports, the one programmed, and
+    whether it is on (``M3``/``M4`` in the parser state)."""
+
+    rpm: float = 0.0
+    target: float = 0.0
+    on: bool = False
+
+
 class PrinterStatus(BaseModel):
-    """One poll of a printer: temperatures, position, endstops, SD progress.
+    """One poll of a machine: a printer's temperatures, position, endstops and SD
+    progress, or a router's controller state, positions, spindle and pins.
 
     ``state`` is drawn from the garage site's ``PRINTER_STATUSES`` (idle,
-    printing, offline, maintenance) so a node bound to this port can take
+    printing, offline, maintenance) or, for a router, its ``ROUTER_STATUSES``
+    (idle, running, hold, alarm, offline), so a node bound to this port can take
     it verbatim; ``heating`` is folded into ``printing``/``idle`` by whether
-    an SD print is in progress.
+    an SD print is in progress. ``dialect`` says which fields a poll fills.
     """
 
     port: str
@@ -439,6 +457,20 @@ class PrinterStatus(BaseModel):
     synced: List[dict] = Field(default_factory=list)  # scene nodes this poll updated (api.py)
     job: Optional[dict] = None  # a long exchange holding the port (a bed probe): kind, stage, since
     poll: Optional[str] = None  # its id in the evidence log (apothecary/evidence), when kept there
+    # A router's poll (grbl.py): the controller's own state word (Idle, Run, Hold:0,
+    # Jog, Alarm, Home ...), its positions in machine and work coordinates and the
+    # offset between them, the spindle, the feed, the input pins the report says
+    # are on (X, Y, Z limits, P probe, D door, H hold), the alarm's number while
+    # it is in one, and the feed, rapid and spindle overrides, each a percentage.
+    dialect: str = "marlin"
+    machine_state: Optional[str] = None
+    work_position: Optional[dict] = None
+    work_offset: Optional[dict] = None
+    spindle: Optional[Spindle] = None
+    feed: Optional[float] = None
+    pins: List[str] = Field(default_factory=list)
+    alarm: Optional[int] = None
+    overrides: Optional[dict] = None
 
     @property
     def heating(self) -> bool:

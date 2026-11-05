@@ -45,6 +45,7 @@ from .datum_core_site import create_datum_core_site, validate_datum_core
 from .docs_site import router as docs_router
 from .evidence import printers as evidence_printers
 from .example_hierarchy import (
+    MACHINE_STATUSES,
     PRINTER_STATUSES,
     create_example_site,
     validate_garage_layout,
@@ -2304,20 +2305,31 @@ slicing.PRINTERS.append(_printer_to_slice_for)
 
 def printers_in(site_name: str) -> List[str]:
     """The printers of ``site_name`` a print can go to: each node a board pinned in
-    the site drives, when that node is a printer (it carries a printer's status),
-    sorted. A made piece's Print offers them (``menu.py``)."""
+    the site drives, when that node is a printer (it carries a printer's status, and
+    the board pinned is not a router's controller), sorted. A made piece's Print
+    offers them (``menu.py``)."""
     if site_name not in _site_store.names():
         return []
     try:
         site = _site_store.get(site_name)
     except KeyError:
         return []
+    state = firmware_devices.get_state()
+    try:
+        plugged = firmware_devices.detected_devices(state=state)
+    except ToolchainError:
+        plugged = []
     found = set()
-    for binding in firmware_devices.get_state().bindings(site_name):
+    for binding in state.bindings(site_name):
         bearer = status_bearer_for(site, binding.path)
         node = _find_node_by_path(site, bearer) if bearer else None
-        if node is not None and node.status in PRINTER_STATUSES:
-            found.add(bearer)
+        if node is None or node.status not in PRINTER_STATUSES:
+            continue
+        on_port = device_for_identity(binding.identity, plugged)
+        known = firmware_devices.known_device(on_port.port, state) if on_port else None
+        if firmware_devices.machine_kind(known) == "router":
+            continue  # a router cuts; nothing is printed on it
+        found.add(bearer)
     return sorted(found)
 
 
@@ -2379,7 +2391,7 @@ def _sync_printer_status(status) -> List[Dict[str, object]]:
     may well be idle *because* someone is working on it.
     """
     out: List[Dict[str, object]] = []
-    if status.state not in PRINTER_STATUSES:
+    if status.state not in MACHINE_STATUSES:
         return out
     state = firmware_devices.get_state()
     known = firmware_devices.known_device(status.port, state)

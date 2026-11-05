@@ -366,9 +366,11 @@ async def firmware_printer_control_state(port: Port):
 
 @router.post("/printers/command")
 def firmware_printer_command(body: PrinterControlRequest):
-    """Send one allowlisted control line -- heaters, fan, homing, bounded jogs, SD
-    pause/resume/abort -- while the latch is armed. ``M112`` (emergency stop) always goes."""
-    if gcode.normalise_control(body.command) != gcode.EMERGENCY_STOP:
+    """Send one allowlisted control line -- a printer's heaters, fan, homing, bounded
+    jogs and SD pause/resume/abort; a router's homing, unlock, jogs, spindle, work zero,
+    probe, hold and resume -- while the latch is armed. The stop (``M112``; a router's
+    ``RESET``) always goes."""
+    if not devices.is_emergency_stop(body.port, body.command):
         _busy_guard(body.port)
     data = devices.printer_control(body.port, body.command).model_dump(mode="json")
     data["control"] = _control_state(body.port)
@@ -492,9 +494,12 @@ def firmware_print_cancel(body: ProbeRequest):
 
 
 @router.get("/printers/queries")
-async def firmware_printer_queries():
-    """The report-only G-code the query route accepts, with what each reports."""
-    return [{"command": c, "reports": what} for c, what in gcode.QUERY_CODES.items()]
+async def firmware_printer_queries(port: PortOrAll = ""):
+    """The report-only G-code the query route accepts, with what each reports: the
+    dialect of the board on ``port`` (a router's ``$$``, ``$G``, ``?``), Marlin's for none."""
+    return [
+        {"command": c, "reports": what} for c, what in devices.query_codes(port or None).items()
+    ]
 
 
 @router.post("/printers/query")

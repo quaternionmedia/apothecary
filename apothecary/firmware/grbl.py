@@ -1,0 +1,894 @@
+"""GRBL dialect of the G-code machine seam: a CNC router's controller over serial.
+
+``gcode.py`` talks to boards running Marlin's dialect -- a printer's. A desktop
+router's controller speaks GRBL's: the garage's AnoleX 4060-Evo Ultra 2 runs
+Grbl_ESP32, which reports as ``Grbl 1.3a``, and by the same interface grbl 1.1
+on an Arduino, FluidNC and grblHAL. The wire protocol is the one every sender
+(UGS, Candle, bCNC, LightBurn) speaks: a line of G-code out, ``ok`` or
+``error:N`` back to close it, and a few single characters that the controller
+acts on at once, outside the line queue -- ``?`` for a status report, ``!`` to
+hold, ``~`` to resume, ``0x18`` to reset. Multiple independent implementations
+on both ends, so it passes the replaceability test; the parsers below are
+written to grbl 1.1's documented interface and note where Grbl_ESP32 differs.
+
+The held-open link, its log, the control latch and the registry of links are
+``gcode.py``'s, shared: a router's port is opened, kept and released exactly as
+a printer's is. What differs is here -- how a board is identified (``$I``,
+there being no ``M115``), how it is polled (the realtime ``?`` and ``$G``),
+which lines may be typed at it while control is armed and what bounds them,
+what the emergency stop is (a soft reset), what a streamed job may not carry,
+and a pretend controller behind the transport slot for demos and tests. The
+site's words for its state are ``example_hierarchy.ROUTER_STATUSES``.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import threading
+import time
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Tuple
+
+from .gcode import SPINDLE_MAX_RPM, GcodeLink
+from .models import PrinterInfo, PrinterStatus, Spindle
+from .toolchains import ToolchainError
+
+DIALECT = "grbl"
+MACHINE = "router"
+
+# --- parsers: grbl 1.1's documented replies ---------------------------------------
+
+# <Idle|MPos:0.000,0.000,0.000|FS:0,0|WCO:0.000,0.000,0.000>
+# <Run|WPos:12.500,-3.000,-1.000|Bf:12,120|FS:800,12000|Pn:XZ|Ov:100,100,100|A:S>
+STATUS_RE = re.compile(r"^<([A-Za-z]+)(?::(\d+))?((?:\|[^|>]*)*)>$")
+XYZ_RE = re.compile(r"^(-?\d+\.?\d*),(-?\d+\.?\d*),(-?\d+\.?\d*)")
+# [VER:1.3a.20230715:]  (grbl 1.1: [VER:1.1h.20190825:]); [OPT:VNMPH,35,1024,3]
+VER_RE = re.compile(r"^\[VER:([^:\]]*):?([^\]]*)\]$")
+OPT_RE = re.compile(r"^\[OPT:([^\]]*)\]$")
+MSG_RE = re.compile(r"^\[MSG:\s*(.*?)\s*\]$")
+# [GC:G0 G54 G17 G21 G90 G94 M5 M9 T0 F0 S0]
+GC_RE = re.compile(r"^\[GC:(.*)\]$")
+# $110=4000.000
+SETTING_RE = re.compile(r"^\$(\d+)=(-?\d+\.?\d*)")
+ALARM_RE = re.compile(r"^ALARM:(\d+)")
+# Grbl 1.3a ['$' for help]
+BANNER_RE = re.compile(r"^Grbl (\S+) \[")
+# [PRB:-12.000,-20.000,-41.250:1]
+PRB_RE = re.compile(r"^\[PRB:(-?\d+\.?\d*),(-?\d+\.?\d*),(-?\d+\.?\d*):([01])\]$")
+
+# The controller's state word, folded to the site's vocabulary
+# (example_hierarchy.ROUTER_STATUSES). Hold and Door are a machine stopped with
+# a job in it; Check and Sleep move nothing.
+STATE_WORDS: Dict[str, str] = {
+    "Idle": "idle",
+    "Run": "running",
+    "Jog": "running",
+    "Home": "running",
+    "Hold": "hold",
+    "Door": "hold",
+    "Alarm": "alarm",
+    "Check": "idle",
+    "Sleep": "idle",
+}
+
+# grbl 1.1's alarm codes, by number.
+ALARMS: Dict[int, str] = {
+    1: "hard limit triggered: machine position is lost",
+    2: "a move would go past the soft limits",
+    3: "reset while in motion: machine position is lost",
+    4: "probe fail: the probe was already triggered",
+    5: "probe fail: the probe did not touch within the move",
+    6: "homing fail: reset during homing",
+    7: "homing fail: the safety door opened",
+    8: "homing fail: a limit switch stayed on after pull-off",
+    9: "homing fail: no limit switch found within the search distance",
+    10: "homing fail: a second limit switch triggered",
+}
+
+# grbl 1.1's error codes, the ones a typed line meets.
+ERRORS: Dict[int, str] = {
+    1: "a G-code word has no number",
+    2: "a number is badly formed",
+    3: "an unrecognised $ command",
+    4: "a negative value where none is allowed",
+    5: "homing is not enabled",
+    8: "a $ command needs the machine idle",
+    9: "G-code locked out: alarm or jog",
+    10: "soft limits need homing",
+    11: "the line is too long",
+    15: "a jog would go past the travel",
+    20: "an unsupported or invalid G-code",
+    22: "a feed rate is missing",
+}
+
+
+def _xyz(text: str) -> Optional[dict]:
+    m = XYZ_RE.match(text)
+    if not m:
+        return None
+    x, y, z = (float(v) for v in m.groups())
+    return {"x": x, "y": y, "z": z}
+
+
+def parse_status(line: str) -> Optional[dict]:
+    """A realtime status report, ``<State|Field:value|...>``, as a dict, or None.
+
+    ``MPos`` or ``WPos`` is reported, by ``$10``; ``WCO`` every few reports.
+    Whichever is missing is computed from the other when the offset is known
+    (WPos = MPos - WCO).
+    """
+    m = STATUS_RE.match(line.strip())
+    if not m:
+        return None
+    word, sub, rest = m.group(1), m.group(2), m.group(3)
+    out: dict = {
+        "machine_state": word,
+        "substate": int(sub) if sub else None,
+        "mpos": None,
+        "wpos": None,
+        "wco": None,
+        "feed": None,
+        "spindle_rpm": None,
+        "buffer": None,
+        "line": None,
+        "pins": [],
+        "overrides": None,
+        "accessories": [],
+    }
+    for field in rest.split("|")[1:]:
+        key, _, value = field.partition(":")
+        if key == "MPos":
+            out["mpos"] = _xyz(value)
+        elif key == "WPos":
+            out["wpos"] = _xyz(value)
+        elif key == "WCO":
+            out["wco"] = _xyz(value)
+        elif key == "FS":
+            f, _, s = value.partition(",")
+            out["feed"], out["spindle_rpm"] = float(f or 0), float(s or 0)
+        elif key == "F":
+            out["feed"] = float(value or 0)
+        elif key == "Bf":
+            planner, _, rx = value.partition(",")
+            out["buffer"] = {"planner": int(planner or 0), "rx": int(rx or 0)}
+        elif key == "Ln":
+            out["line"] = int(value or 0)
+        elif key == "Pn":
+            out["pins"] = list(value)
+        elif key == "Ov":
+            parts = value.split(",")
+            if len(parts) == 3:
+                out["overrides"] = {
+                    "feed": int(parts[0]),
+                    "rapid": int(parts[1]),
+                    "spindle": int(parts[2]),
+                }
+        elif key == "A":
+            out["accessories"] = list(value)
+    if out["mpos"] and out["wco"] and not out["wpos"]:
+        out["wpos"] = {k: round(out["mpos"][k] - out["wco"][k], 3) for k in "xyz"}
+    elif out["wpos"] and out["wco"] and not out["mpos"]:
+        out["mpos"] = {k: round(out["wpos"][k] + out["wco"][k], 3) for k in "xyz"}
+    return out
+
+
+def is_status_line(line: str) -> bool:
+    return bool(STATUS_RE.match(line.strip()))
+
+
+def site_state(machine_state: Optional[str]) -> str:
+    """The site's word for the controller's: ``idle``, ``running``, ``hold``, ``alarm``."""
+    return STATE_WORDS.get(machine_state or "", "idle")
+
+
+def parse_build_info(lines: List[str]) -> dict:
+    """``$I``'s answer: the version, the build, the option letters, and what the
+    controller says of itself in ``[MSG:...]`` lines (Grbl_ESP32 names its machine
+    there, ``[MSG:Using machine:...]``; grbl 1.1 says nothing)."""
+    out: dict = {"version": None, "build": None, "options": "", "messages": [], "machine": None}
+    for raw in lines:
+        line = raw.strip()
+        m = VER_RE.match(line)
+        if m:
+            version, build = m.group(1), m.group(2)
+            if "." in version and version.count(".") >= 2:
+                # 1.3a.20230715: the version, then the build date
+                version, _, build_date = version.rpartition(".")
+                out["build"] = build_date
+            out["version"] = version
+            if build:
+                out["build"] = (out["build"] + " " if out["build"] else "") + build
+            continue
+        m = OPT_RE.match(line)
+        if m:
+            out["options"] = m.group(1)
+            continue
+        m = MSG_RE.match(line)
+        if m:
+            out["messages"].append(m.group(1))
+            lowered = m.group(1).lower()
+            for prefix in ("using machine:", "machine:"):
+                if lowered.startswith(prefix):
+                    out["machine"] = m.group(1)[len(prefix) :].strip()
+    return out
+
+
+def parse_parser_state(lines: List[str]) -> dict:
+    """``$G``'s answer: the modal words, and from them whether the spindle is on,
+    the programmed speed and feed, the work coordinate system and the units."""
+    out: dict = {
+        "modes": [],
+        "spindle_on": False,
+        "spindle_direction": None,
+        "s": 0.0,
+        "f": 0.0,
+        "coordinate_system": None,
+        "units": "mm",
+        "distance": "absolute",
+    }
+    for raw in lines:
+        m = GC_RE.match(raw.strip())
+        if not m:
+            continue
+        words = m.group(1).split()
+        out["modes"] = words
+        for w in words:
+            if w in ("M3", "M4"):
+                out["spindle_on"] = True
+                out["spindle_direction"] = "cw" if w == "M3" else "ccw"
+            elif w == "M5":
+                out["spindle_on"] = False
+            elif w.startswith("S"):
+                out["s"] = float(w[1:] or 0)
+            elif w.startswith("F"):
+                out["f"] = float(w[1:] or 0)
+            elif re.fullmatch(r"G5[4-9](?:\.\d)?", w):
+                out["coordinate_system"] = w
+            elif w == "G20":
+                out["units"] = "inch"
+            elif w == "G21":
+                out["units"] = "mm"
+            elif w == "G91":
+                out["distance"] = "relative"
+            elif w == "G90":
+                out["distance"] = "absolute"
+    return out
+
+
+def parse_settings(lines: List[str]) -> Dict[int, float]:
+    """``$$``'s answer: each setting's number and value."""
+    found: Dict[int, float] = {}
+    for raw in lines:
+        m = SETTING_RE.match(raw.strip())
+        if m:
+            found[int(m.group(1))] = float(m.group(2))
+    return found
+
+
+def parse_alarm(lines: List[str]) -> Optional[int]:
+    """The last ``ALARM:N`` among ``lines``, or None."""
+    found = None
+    for raw in lines:
+        m = ALARM_RE.match(raw.strip())
+        if m:
+            found = int(m.group(1))
+    return found
+
+
+def parse_probe(lines: List[str]) -> Optional[dict]:
+    """``[PRB:x,y,z:1]`` after a probe: where it touched, and whether it did."""
+    for raw in lines:
+        m = PRB_RE.match(raw.strip())
+        if m:
+            x, y, z, ok = m.groups()
+            return {"x": float(x), "y": float(y), "z": float(z), "touched": ok == "1"}
+    return None
+
+
+def router_info_from(lines: List[str], baud: int, boot_lines: List[str] = ()) -> PrinterInfo:
+    """A ``PrinterInfo`` of the GRBL dialect from ``$I``'s answer; ``ToolchainError``
+    when no ``[VER:`` line is in it."""
+    info = parse_build_info(lines)
+    version = info["version"]
+    if not version:
+        banner = next(
+            (BANNER_RE.match(ln.strip()) for ln in boot_lines if BANNER_RE.match(ln.strip())), None
+        )
+        if banner is None:
+            raise ToolchainError("no [VER: line in the $I reply -- not a GRBL controller?")
+        version = banner.group(1)
+    return PrinterInfo(
+        dialect=DIALECT,
+        machine=MACHINE,
+        firmware_name=f"Grbl {version}",
+        machine_type=info["machine"] or ("Grbl_ESP32" if version.startswith("1.3") else None),
+        protocol_version=info["build"],
+        extruder_count=0,
+        capabilities={letter: True for letter in info["options"].split(",")[0] if letter.isalpha()},
+        baud=baud,
+        boot_lines=list(boot_lines)[-40:],
+        identified_at=datetime.now(timezone.utc),
+    )
+
+
+# --- the realtime characters -------------------------------------------------------------
+
+# Named, so a request, a ring cell and a log line can carry one; written as the
+# one byte each is. The controller acts on them as they arrive, outside the line
+# queue: a hold decelerates at once, a reset halts everything and turns the
+# spindle off. The soft reset is this dialect's emergency stop.
+REALTIME: Dict[str, bytes] = {
+    "STATUS": b"?",
+    "HOLD": b"!",
+    "RESUME": b"~",
+    "RESET": b"\x18",
+    "JOG-CANCEL": b"\x85",
+}
+EMERGENCY_STOP = "RESET"
+
+# --- queries: report-only lines a person may type at an idle or busy controller ---
+
+QUERY_CODES: Dict[str, str] = {
+    "$$": "settings",
+    "$#": "work offsets, the probe's last touch",
+    "$G": "parser state: the modal words",
+    "$I": "build info",
+    "$N": "startup lines",
+    "?": "status report",
+}
+
+
+def normalise_query(command: str) -> str:
+    cmd = " ".join(command.strip().upper().split())
+    if cmd not in QUERY_CODES:
+        raise ValueError(f"not a report-only GRBL query: {command!r}")
+    return cmd
+
+
+# --- control: lines that move the machine or run the spindle, only while armed ---------
+
+# Bounded here, for the garage's router: a jog or a move no longer than the
+# longest axis, a feed no faster than the maker's figure for X and Y, a spindle no
+# faster than the trim router turns, a probe no deeper than the Z travel. Operator
+# controls only: no settings writes, no startup lines, no firmware configuration.
+# A job streams a whole file past this list; what it may not carry is checked once,
+# before the first line, by check_gcode below. Extend deliberately.
+JOG_MAX_MM = 600
+FEED_MAX = 4000
+PROBE_MAX_MM = 80
+PROBE_FEED_MAX = 500
+_AXES = r"(?: [XYZ]-?\d{1,3}(?:\.\d{1,3})?)"
+CONTROL_CODES: List[tuple] = [
+    (re.compile(r"^\$H(?:[XYZ])?$"), "home all, or one axis"),
+    (re.compile(r"^\$X$"), "unlock after an alarm"),
+    (re.compile(rf"^\$J=G91 G21{_AXES}{{1,3}} F\d{{1,5}}$"), "jog, relative, in mm"),
+    (re.compile(r"^G90$"), "absolute positioning"),
+    (re.compile(r"^G91$"), "relative positioning"),
+    (re.compile(r"^G21$"), "millimetres"),
+    (re.compile(rf"^G[01]{_AXES}{{1,3}}(?: F\d{{1,5}})?$"), "move"),
+    (re.compile(r"^G53 G0 Z0$"), "the tool to the top of its travel"),
+    (re.compile(r"^M3 S\d{1,5}$"), "spindle on, clockwise, at a speed"),
+    (re.compile(r"^M5$"), "spindle off"),
+    (re.compile(r"^G10 L20 P1(?: [XYZ]0){1,3}$"), "work zero here, for the named axes"),
+    (re.compile(r"^G38\.2 Z-\d{1,3}(?:\.\d{1,2})? F\d{1,4}$"), "probe down to the plate"),
+]
+
+
+def normalise_control(command: str) -> str:
+    """Upper-cased, single-spaced control line or realtime name; ValueError if not
+    allowed or out of bounds."""
+    cmd = " ".join(command.strip().upper().split())
+    if cmd in REALTIME and cmd != "STATUS":
+        return cmd
+    for pattern, _ in CONTROL_CODES:
+        m = pattern.match(cmd)
+        if not m:
+            continue
+        for axis_val in re.findall(r" [XYZ](-?\d+(?:\.\d+)?)", cmd):
+            if abs(float(axis_val)) > JOG_MAX_MM and not cmd.startswith("G38.2"):
+                raise ValueError(f"move beyond {JOG_MAX_MM} mm: {command!r}")
+        feed = re.search(r" F(\d+)", cmd)
+        if cmd.startswith("G38.2"):
+            depth = re.search(r" Z-(\d+(?:\.\d+)?)", cmd)
+            if depth and float(depth.group(1)) > PROBE_MAX_MM:
+                raise ValueError(f"probe deeper than {PROBE_MAX_MM} mm: {command!r}")
+            if feed and int(feed.group(1)) > PROBE_FEED_MAX:
+                raise ValueError(f"probe feed above {PROBE_FEED_MAX}: {command!r}")
+        elif feed and int(feed.group(1)) > FEED_MAX:
+            raise ValueError(f"feedrate above {FEED_MAX}: {command!r}")
+        if cmd.startswith("M3"):
+            rpm = int(cmd.split("S")[1])
+            if rpm > SPINDLE_MAX_RPM:
+                raise ValueError(f"spindle above {SPINDLE_MAX_RPM} rpm: {command!r}")
+        return cmd
+    raise ValueError(f"not an allowed GRBL control: {command!r}")
+
+
+# --- a streamed job: how long a line may take (what a file may carry is gcode.check_gcode) --
+
+# A move is answered when it is queued, and the queue is fifteen moves deep: a
+# roughing pass of long slow moves holds the fifteenth's `ok` for as long as the
+# fourteen before it take. A poll meanwhile goes round the queue (the realtime `?`).
+JOB_MOVE_TIMEOUT_S = 900.0
+JOB_LINE_TIMEOUT_S = 30.0
+MOVE_CODES = {"G0", "G1", "G2", "G3", "G38.2", "G38.3", "G38.4", "G38.5", "G4", "$H"}
+
+
+def line_timeout(cmd: str) -> float:
+    code = cmd.split(" ", 1)[0] if cmd else ""
+    return JOB_MOVE_TIMEOUT_S if code in MOVE_CODES or code.startswith("G1") else JOB_LINE_TIMEOUT_S
+
+
+# --- the simulated controller ---------------------------------------------------------
+
+# Ports the simulated engine answers as a router rather than as a printer.
+SIMULATED_PORTS_ENV = "APOTHECARY_SIMULATED_ROUTER"
+
+
+def simulated_ports() -> List[str]:
+    return [p.strip() for p in os.environ.get(SIMULATED_PORTS_ENV, "").split(",") if p.strip()]
+
+
+class SimulatedRouter:
+    """A pretend Grbl_ESP32 behind the transport slot: no port, no hardware.
+
+    Answers ``$I``, ``?``, ``$G``, ``$$``, ``$#``, homing, unlocking, jogs and
+    moves (each taking the time its distance and feed say, so a job streams and
+    a hold has something to stop), the spindle, work zero and a probe, and the
+    realtime characters. Its machine coordinates are negative from the home
+    corner at the back right and the top of Z, as a Grbl machine homed to its
+    maximum switches has them, so the tool stands in the working area at
+    ``mpos + travel``. It starts idle with the tool over the middle of the
+    table, as the part draws it; ``APOTHECARY_SIMULATED_ROUTER_STATE=alarm``
+    starts it as a real one powers up with homing enabled, in alarm until
+    homed. Any other line gets ``ok``.
+    """
+
+    FIRMWARE = "1.3a"
+    BUILD = "20230715"
+    MACHINE_NAME = "Apothecary simulated router"
+    TRAVEL = {"x": 400.0, "y": 600.0, "z": 80.0}
+    RAPID = 4000.0  # mm/min, the maker's figure for X and Y
+    PULL_OFF = 3.0  # mm back from the switches after homing
+
+    def __init__(self, port: str, baud: int):
+        self.port, self.baud = port, baud
+        self._pending = b""
+        self._lock = threading.Lock()
+        starts = os.environ.get("APOTHECARY_SIMULATED_ROUTER_STATE", "idle").strip().lower()
+        self.state = "Alarm" if starts == "alarm" else "Idle"
+        self.alarm: Optional[int] = None
+        self.homed = starts != "alarm"
+        # Powered up: the banner, and in alarm the hint a real one prints with it.
+        if starts == "alarm":
+            self._pending = (
+                f"Grbl {self.FIRMWARE} ['$' for help]\n[MSG:'$H'|'$X' to unlock]\n".encode()
+            )
+        # Where the tool stands, in machine coordinates: the middle of the table,
+        # 40 mm up, as the part's defaults draw it.
+        self.pos = {"x": -200.0, "y": -300.0, "z": -40.0}
+        self.wco = {"x": 0.0, "y": 0.0, "z": 0.0}
+        self.relative = False
+        self.spindle_on = False
+        self.s = 0.0
+        self.f = 0.0
+        self.feed_override = 100
+        # A move in flight: from where, to where, since when, how long.
+        self._move: Optional[Tuple[dict, dict, float, float, str]] = None
+        self._held_at: Optional[float] = None  # the fraction done when held
+        # Multiplies every move's and dwell's time: 1 is real time, 0 skips them.
+        self.time_scale = float(os.environ.get("APOTHECARY_SIMULATED_SPEED", "1"))
+        self.probe: Optional[dict] = None
+        self.settings = {
+            0: 10,
+            1: 255,
+            2: 0,
+            3: 0,
+            4: 0,
+            5: 0,
+            6: 0,
+            10: 1,
+            11: 0.010,
+            12: 0.002,
+            13: 0,
+            20: 1,
+            21: 0,
+            22: 1,
+            23: 3,
+            24: 200.000,
+            25: 2000.000,
+            26: 250,
+            27: 3.000,
+            30: 24000,
+            31: 0,
+            32: 0,
+            100: 800.000,
+            101: 800.000,
+            102: 800.000,
+            110: 4000.000,
+            111: 4000.000,
+            112: 2000.000,
+            120: 200.000,
+            121: 200.000,
+            122: 100.000,
+            130: 400.000,
+            131: 600.000,
+            132: 80.000,
+        }
+
+    # -- where the tool is, as time passes ----------------------------------------------
+    def _settle(self) -> None:
+        """Finish a move whose time has passed."""
+        if self._move is None:
+            return
+        start, end, since, length, after = self._move
+        if self._held_at is not None:
+            return
+        if time.monotonic() - since >= length:
+            self.pos = dict(end)
+            self._move = None
+            if after == "home":
+                self.homed = True
+                self.alarm = None
+            self.state = "Idle"
+
+    def _where(self) -> dict:
+        if self._move is None:
+            return dict(self.pos)
+        start, end, since, length, _ = self._move
+        done = (
+            self._held_at
+            if self._held_at is not None
+            else (1.0 if length <= 0 else min(1.0, (time.monotonic() - since) / length))
+        )
+        return {k: round(start[k] + (end[k] - start[k]) * done, 3) for k in "xyz"}
+
+    def _begin_move(self, target: dict, feed: float, state: str = "Run", after: str = "") -> None:
+        start = self._where()
+        dist = sum((target[k] - start[k]) ** 2 for k in "xyz") ** 0.5
+        length = (dist / max(feed, 1.0)) * 60.0 * self.time_scale
+        self._move = (start, dict(target), time.monotonic(), length, after)
+        self._held_at = None
+        self.state = state
+
+    def _target(self, args: Dict[str, str], relative: bool) -> dict:
+        here = self._where()
+        target = dict(here)
+        for axis in "xyz":
+            if axis.upper() in args:
+                v = float(args[axis.upper()])
+                target[axis] = (here[axis] + v) if relative else (v + self.wco[axis])
+        return target
+
+    # -- the realtime characters ------------------------------------------------------
+    def _realtime(self, byte: int) -> None:
+        self._settle()
+        if byte == ord("?"):
+            self._pending += (self._status() + "\n").encode()
+        elif byte == ord("!"):
+            if self._move is not None and self._held_at is None:
+                self._held_at = self._where_fraction()
+                self.state = "Hold"
+            elif self.state == "Idle":
+                self.state = "Hold"
+        elif byte == ord("~"):
+            if self.state == "Hold":
+                if self._move is not None and self._held_at is not None:
+                    start, end, _since, length, after = self._move
+                    left = length * (1.0 - self._held_at)
+                    self._move = (self._where(), end, time.monotonic(), left, after)
+                    self._held_at = None
+                    self.state = "Run"
+                else:
+                    self.state = "Idle"
+        elif byte == 0x18:
+            moving = self._move is not None and self._held_at is None
+            self.pos = self._where()
+            self._move, self._held_at = None, None
+            self.spindle_on, self.s = False, 0.0
+            if moving:
+                self.state, self.alarm, self.homed = "Alarm", 3, False
+                self._pending += b"ALARM:3\n"
+            elif self.state != "Alarm":
+                self.state = "Idle"
+            self._pending += f"\r\nGrbl {self.FIRMWARE} ['$' for help]\n".encode()
+            if self.state == "Alarm":
+                self._pending += b"[MSG:'$H'|'$X' to unlock]\n"
+        elif byte == 0x85:
+            if self.state == "Jog":
+                self.pos = self._where()
+                self._move, self.state = None, "Idle"
+
+    def _where_fraction(self) -> float:
+        start, end, since, length, _ = self._move  # type: ignore[misc]
+        return 1.0 if length <= 0 else min(1.0, (time.monotonic() - since) / length)
+
+    def _status(self) -> str:
+        where = self._where()
+        mpos = ",".join(f"{where[k]:.3f}" for k in "xyz")
+        state = self.state
+        if state == "Hold":
+            state = "Hold:1" if (self._move is not None and self._held_at is not None) else "Hold:0"
+        rpm = self.s if self.spindle_on else 0.0
+        fields = [state, f"MPos:{mpos}", f"FS:{self.f:.0f},{rpm:.0f}"]
+        if self._move is not None:
+            fields.append("Bf:14,127")
+        fields.append("WCO:" + ",".join(f"{self.wco[k]:.3f}" for k in "xyz"))
+        fields.append(f"Ov:{self.feed_override},100,100")
+        if self.spindle_on:
+            fields.append("A:S")
+        return "<" + "|".join(fields) + ">"
+
+    # -- lines ----------------------------------------------------------------------------
+    def _reply(self, cmd: str) -> List[str]:
+        self._settle()
+        upper = cmd.upper()
+        if upper == "$I":
+            return [
+                f"[VER:{self.FIRMWARE}.{self.BUILD}:]",
+                "[OPT:VNMPH,35,1024,3]",
+                f"[MSG:Using machine:{self.MACHINE_NAME}]",
+                "ok",
+            ]
+        if upper == "$$":
+            return [f"${k}={v}" for k, v in sorted(self.settings.items())] + ["ok"]
+        if upper == "$#":
+            out = ["[G54:" + ",".join(f"{self.wco[k]:.3f}" for k in "xyz") + "]"]
+            out += [f"[G5{n}:0.000,0.000,0.000]" for n in range(5, 10)]
+            out += ["[G28:0.000,0.000,0.000]", "[G30:0.000,0.000,0.000]", "[G92:0.000,0.000,0.000]"]
+            out += ["[TLO:0.000]"]
+            p = self.probe or {"x": 0.0, "y": 0.0, "z": 0.0, "touched": False}
+            out.append(f"[PRB:{p['x']:.3f},{p['y']:.3f},{p['z']:.3f}:{1 if p['touched'] else 0}]")
+            return out + ["ok"]
+        if upper == "$G":
+            return [
+                f"[GC:G{'1' if self.f else '0'} G54 G17 G21 {'G91' if self.relative else 'G90'} G94 "
+                f"{'M3' if self.spindle_on else 'M5'} M9 T0 F{self.f:.0f} S{self.s:.0f}]",
+                "ok",
+            ]
+        if upper == "$N":
+            return ["$N0=", "$N1=", "ok"]
+        if self.state == "Alarm" and not upper.startswith(("$X", "$H", "$", "G4")):
+            return ["error:9"]
+        if upper.startswith("$H"):
+            home = {"x": -self.PULL_OFF, "y": -self.PULL_OFF, "z": -self.PULL_OFF}
+            self.alarm = None
+            self._begin_move(home, self.RAPID / 2, state="Home", after="home")
+            # Homing answers when it is done.
+            self._wait_out()
+            return ["ok"]
+        if upper == "$X":
+            if self.state == "Alarm":
+                self.state, self.alarm = "Idle", None
+                return ["[MSG:Caution: Unlocked]", "ok"]
+            return ["ok"]
+        if upper.startswith("$J="):
+            if self.state not in ("Idle", "Jog"):
+                return ["error:8"]
+            args = self._args(upper[3:])
+            relative = "G91" in upper
+            target = self._target(args, relative)
+            if any(target[k] > 0 or target[k] < -self.TRAVEL[k] for k in "xyz"):
+                return ["error:15"]
+            self._begin_move(target, float(args.get("F", self.RAPID)), state="Jog")
+            return ["ok"]
+        if upper.startswith("$"):
+            m = SETTING_RE.match(upper)
+            if m:
+                self.settings[int(m.group(1))] = float(m.group(2))
+                return ["ok"]
+            return ["error:3"]
+        parts = upper.split()
+        code = parts[0] if parts else ""
+        args = self._args(upper)
+        if code == "G90":
+            self.relative = False
+        elif code == "G91":
+            self.relative = True
+        elif code in ("G0", "G1", "G00", "G01"):
+            if "F" in args:
+                self.f = float(args["F"])
+            if code in ("G1", "G01") and not self.f:
+                return ["error:22"]
+            # A line that only sets modes (G1 F800) moves nothing.
+            if any(a in args for a in "XYZ"):
+                target = self._target(args, self.relative)
+                if self.settings.get(20) and any(
+                    target[k] > 0.001 or target[k] < -self.TRAVEL[k] - 0.001 for k in "xyz"
+                ):
+                    self.state, self.alarm = "Alarm", 2
+                    return ["error:2", "ALARM:2"]
+                feed = self.RAPID if code in ("G0", "G00") else self.f * self.feed_override / 100
+                self._wait_out()  # one move at a time: the queue is one deep here
+                self._begin_move(target, feed)
+        elif code == "G53":
+            # G53 G0 Z0: the top of Z travel, in machine coordinates
+            self._wait_out()
+            target = self._where()
+            if "Z" in args:
+                target["z"] = float(args["Z"])
+            self._begin_move(target, self.RAPID)
+        elif code == "G4":
+            secs = float(args.get("P", 0)) or 0.0
+            time.sleep(min(2.0, secs) * self.time_scale)
+        elif code in ("M3", "M4"):
+            if "S" in args:
+                self.s = float(args["S"])
+            self.spindle_on = self.s > 0
+        elif code == "M5":
+            self.spindle_on = False
+        elif code == "G10" and args.get("L") == "20":
+            here = self._where()
+            for axis in "xyz":
+                if axis.upper() in args:
+                    self.wco[axis] = round(here[axis] - float(args[axis.upper()]), 3)
+        elif code == "G38.2":
+            # The plate is 20 mm below where the tool stands, or the move ends short.
+            here = self._where()
+            depth = float(args.get("Z", 0))
+            plate = here["z"] - 20.0
+            touched = here["z"] + depth <= plate
+            z = plate if touched else here["z"] + depth
+            self.pos = {**here, "z": z}
+            self._move = None
+            self.probe = {"x": here["x"], "y": here["y"], "z": z, "touched": touched}
+            if not touched:
+                self.state, self.alarm = "Alarm", 5
+                return [f"[PRB:{here['x']:.3f},{here['y']:.3f},{z:.3f}:0]", "ALARM:5"]
+            return [f"[PRB:{here['x']:.3f},{here['y']:.3f},{z:.3f}:1]", "ok"]
+        elif code in ("M2", "M30"):
+            self.spindle_on, self.f = False, 0.0
+        elif code in (
+            "M7",
+            "M8",
+            "M9",
+            "G17",
+            "G20",
+            "G21",
+            "G54",
+            "G94",
+            "G40",
+            "G49",
+            "M0",
+            "M1",
+        ):
+            pass
+        elif code.startswith(("S", "F")):
+            if code.startswith("S"):
+                self.s = float(code[1:] or 0)
+            else:
+                self.f = float(code[1:] or 0)
+        elif code in ("G2", "G3", "G02", "G03"):
+            if "F" in args:
+                self.f = float(args["F"])
+            self._wait_out()
+            self._begin_move(self._target(args, self.relative), self.f or self.RAPID)
+        elif code.startswith("M"):
+            return ["error:20"]  # a tool change, M115, M105: not this dialect's
+        return ["ok"]
+
+    def _wait_out(self) -> None:
+        """Let a move in flight finish before the next, as the planner would."""
+        while self._move is not None and self._held_at is None:
+            self._settle()
+            if self._move is not None:
+                time.sleep(0.005)
+
+    @staticmethod
+    def _args(text: str) -> Dict[str, str]:
+        return {m.group(1): m.group(2) for m in re.finditer(r"([A-Z])(-?\d+\.?\d*)", text)}
+
+    # -- the transport ---------------------------------------------------------------
+    def write(self, data: bytes) -> None:
+        with self._lock:
+            text = b""
+            for byte in data:
+                if byte in (ord("?"), ord("!"), ord("~"), 0x18, 0x85):
+                    self._realtime(byte)
+                else:
+                    text += bytes([byte])
+            for cmd in text.decode("utf-8", "replace").split("\n"):
+                if cmd.strip():
+                    self._pending += "".join(ln + "\n" for ln in self._reply(cmd.strip())).encode()
+
+    def read(self, timeout: float) -> bytes:
+        with self._lock:
+            out, self._pending = self._pending, b""
+        if not out:
+            time.sleep(min(timeout, 0.02))
+        return out
+
+    def pulse_reset(self) -> None:
+        with self._lock:
+            self._realtime(0x18)
+
+    def close(self) -> None:
+        pass
+
+
+# --- over a held link: identify, poll, control, query -------------------------------------
+
+
+def identify_router(link: GcodeLink, reset: bool = False) -> PrinterInfo:
+    """``$I`` over an open link; with ``reset`` the board is rebooted first for its
+    banner. Raises ``ToolchainError`` if nothing GRBL answers."""
+    if reset:
+        link.reset()
+    boot = list(link.unsolicited)
+    lines = link.command("$I", timeout=8.0, origin="identify")
+    return router_info_from(lines, link.baud, boot)
+
+
+def report(
+    link: GcodeLink, wait: Optional[float] = None, timeout: float = 3.0
+) -> Tuple[dict, List[str]]:
+    """One realtime status report, and every line read for it."""
+    lines = link.realtime(REALTIME["STATUS"], until=STATUS_RE, timeout=timeout, wait=wait)
+    status = next((parse_status(ln) for ln in reversed(lines) if is_status_line(ln)), None)
+    if status is None:
+        raise ToolchainError(f"{link.port}: no status report for `?` within {timeout:.0f}s")
+    return status, lines
+
+
+def poll_router(link: GcodeLink, wait: Optional[float] = None) -> PrinterStatus:
+    """The status report and the parser state in one exchange each."""
+    raw: List[str] = []
+    status, lines = report(link, wait=wait)
+    raw += lines
+    gc_lines = link.command("$G", wait=wait, timeout=5.0)
+    raw += gc_lines
+    parser = parse_parser_state(gc_lines)
+    mstate = status["machine_state"]
+    # The report says the controller is in alarm, not which: the link keeps the last
+    # ALARM line it read. Out of alarm, that line is spent.
+    if mstate == "Alarm":
+        alarm = parse_alarm(raw) or parse_alarm([link.alarm] if link.alarm else [])
+    else:
+        alarm = None
+        link.alarm = None
+    return PrinterStatus(
+        port=link.port,
+        polled_at=datetime.now(timezone.utc),
+        dialect=DIALECT,
+        state=site_state(mstate),
+        machine_state=mstate + (f":{status['substate']}" if status["substate"] is not None else ""),
+        position=status["mpos"],
+        work_position=status["wpos"],
+        work_offset=status["wco"],
+        spindle=Spindle(
+            rpm=status["spindle_rpm"] or 0.0,
+            target=parser["s"],
+            on=parser["spindle_on"] or bool(status["spindle_rpm"]),
+        ),
+        feed=status["feed"],
+        pins=list(status["pins"]),
+        alarm=alarm,
+        overrides=status["overrides"],
+        raw=raw,
+    )
+
+
+def control_router(link: GcodeLink, command: str, timeout: float = 60.0) -> List[str]:
+    """Send one allowlisted control line, or a realtime character. The reset is
+    written at once, ahead of the link's queue; a hold and a resume too, since
+    each is for a machine in motion."""
+    cmd = normalise_control(command)
+    if cmd in REALTIME:
+        settle = 1.0 if cmd == EMERGENCY_STOP else 0.3
+        return link.realtime(REALTIME[cmd], until=None, timeout=settle, label=cmd, now=True)
+    return link.command(cmd, timeout=timeout, origin="control")
+
+
+def query_router(link: GcodeLink, command: str, timeout: float = 15.0) -> List[str]:
+    cmd = normalise_query(command)
+    if cmd == "?":
+        _status, lines = report(link, timeout=timeout)
+        return lines
+    return link.command(cmd, timeout=timeout, origin="query")
+
+
+def alarm_text(code: Optional[int]) -> Optional[str]:
+    if code is None:
+        return None
+    return ALARMS.get(code, f"alarm {code}")

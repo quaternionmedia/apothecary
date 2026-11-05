@@ -1,7 +1,9 @@
 # Firmware: programming boards from Apothecary
 
 Parts are not only geometry. A footpedal has an Arduino in it; an RC snowplow
-has an ESP32; the bench has a 3D printer whose mainboard already runs Marlin.
+has an ESP32; the bench has a 3D printer whose mainboard already runs Marlin,
+and the garage a CNC router whose controller runs Grbl_ESP32 ([the
+router](cnc.md), the same seam in GRBL's dialect).
 `apothecary firmware` and, in the viewer, the [Bench](#in-the-viewer-the-bench)
 and each board's [Machine](#in-the-viewer-one-machine-per-board) install the
 toolchains, keep sketches -- Arduino or [Rust](#rust-for-the-esp32) -- next to

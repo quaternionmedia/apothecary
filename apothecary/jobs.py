@@ -184,6 +184,17 @@ PRINT = register(
         busy="printing",
     )
 )
+# A router runs a file a CAM post wrote, streamed the same way (firmware/devices.py's
+# PrintJob, in GRBL's dialect): a cut.
+CUT = register(
+    Operation(
+        kind="cut",
+        machine="router",
+        label="Cut",
+        inputs=(".nc", ".ngc", ".gcode", ".tap"),
+        busy="running",
+    )
+)
 
 
 # --- where a machine stands ------------------------------------------------------------------

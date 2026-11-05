@@ -8,8 +8,8 @@ at `/README.md`, and every page's bar links it. The HTTP API is described at `/o
 ## The walkthrough
 
 `walkthrough/` is the path through this repository. Pages 01 to 06 and 18 are
-written by the browser tests that walk them; page 00 and pages 07 to 17 are
-doctests, run by `pytest walkthrough`. Start there, at page 00.
+written by the browser tests that walk them; page 00, pages 07 to 17 and page
+19 are doctests, run by `pytest walkthrough`. Start there, at page 00.
 
 | Page | |
 |---|---|
@@ -32,6 +32,7 @@ doctests, run by `pytest walkthrough`. Start there, at page 00.
 | [16 — Being depended on](../walkthrough/16-being-depended-on.md) | What a consumer pinning this repository is entitled to |
 | [17 — A part that computes itself](../walkthrough/17-a-part-that-computes-itself.md) | The airgap: a part whose SCAD computes its surfaces from its assignments, the Python mirror that declares its envelope, and the metrics document its panel says |
 | [18 — The working space](../walkthrough/18-the-working-space.md) | A site as its evidence has it and a printer's hour in it, from each of its doors: three cameras added above printer_1, each told its device in its row, a frame set kept with a poll and opened beside it, the budget set; written by the browser suite |
+| [19 — The router](../walkthrough/19-the-router.md) | The garage's CNC router, an AnoleX 4060-Evo Ultra 2: its working area on its table, GRBL's dialect read and bounded, the simulated controller identified, polled, driven and stopped |
 
 ## Guides
 
@@ -52,6 +53,7 @@ doctests, run by `pytest walkthrough`. Start there, at page 00.
 | [The census](census.md) | What `apothecary census` counts of the viewer, how each control and listener is classified, ring-backed and taken back, and the ceiling and floor a change to the page keeps |
 | [Configuration](configuration.md) | Every `APOTHECARY_*` variable, and the tool variables, each with its default and the page that explains it |
 | [Firmware](firmware.md) | Programming boards from sketches kept with their parts, Arduino and Rust for the ESP32, from the Bench or a board's Machine; monitoring a G-code printer from its scene node |
+| [The router](cnc.md) | The garage's CNC router beside the Ender: the AnoleX 4060-Evo Ultra 2 as a part on its stand, its Grbl_ESP32 controller as the node a port is pinned to, GRBL's dialect of the machine seam -- identified, polled, driven within bounds, stopped, a cut streamed -- the simulated controller, and what is not built |
 | [The slicer](slicer.md) | OrcaSlicer installed and pinned, the printer's profile kept with its part, a part or a made piece sliced for the pinned printer and kept for the Print card |
 | [The Airgap](airgap.md) | The `airgap` part -- a rotor/stator pair computed in its SCAD -- and the Airgap panel: the part as a field, torque and dynamics model that follows its text in the editor, its verbs on the ring, its rig and sweep as documents, and the metrics document Python reads back |
 | [The bench checklist](bench-checklist.md) | The Ender 3 and an ESP32 for real: pinning, the link, heat, motion, levelling, printing from here, slicing, the emergency stop, and the Rust and Arduino blinks |

@@ -10,6 +10,8 @@ poll's port answers to. A poll is said of the subjects its pin names:
 | the node the poll drives, the nearest above the pin with a status (``garage:printer_1``) | ``state``, ``progress``, ``position``, ``filament`` |
 | each heater of it (``…#heater:bed``, ``…#heater:hotend0``) | ``temperature``, ``target`` |
 | each endstop of it (``…#endstop:x_min``) | ``endstop`` |
+| a router's node, the same way | ``state``, ``machine_state``, ``position``, ``work_position``, ``pins`` |
+| its spindle (``…#spindle:main``) | ``rpm``, ``target`` |
 
 A port no pin names is a sighting, ``usb:<identity>``, in the ``_sightings``
 space. Every observation is ``measured``, by the poll's commands, and rests on
@@ -36,8 +38,9 @@ from . import log
 from .observation import By, Observation, Origin, Ref
 
 BY = "printer poll: M105, M114, M27, M119, M31"
+BY_GRBL = "router poll: ?, $G"
 # How far a number moves before it is said again.
-TOLERANCE = {"temperature": 1.0, "target": 0.0, "progress": 0.01}
+TOLERANCE = {"temperature": 1.0, "target": 0.0, "progress": 0.01, "rpm": 50.0, "feed": 50.0}
 POSITION_TOLERANCE = {"x": 1.0, "y": 1.0, "z": 0.05, "e": 5.0}
 # ``present`` is said again this often while a port is polled, changed or not,
 # and everything else this often, so a day's files hold every value in force.
@@ -79,7 +82,7 @@ def observations_of(
     evidence = [Ref(kind="poll", id=poll_id(status))]
     if pin is not None:
         evidence.append(Ref(kind="pin", id=f"{pin.site}:{pin.path}"))
-    origin = Origin(kind="measured", by=By(name=BY))
+    origin = Origin(kind="measured", by=By(name=BY_GRBL if status.dialect == "grbl" else BY))
 
     def said(subject: str, prop: str, value: Any, unit: Optional[str] = None) -> Observation:
         return Observation(
@@ -103,6 +106,17 @@ def observations_of(
         out.append(said(printer, "position", dict(status.position), "mm"))
     if status.filament_present is not None:
         out.append(said(printer, "filament", status.filament_present))
+    if status.machine_state is not None:
+        out.append(said(printer, "machine_state", status.machine_state))
+    if status.work_position:
+        out.append(said(printer, "work_position", dict(status.work_position), "mm"))
+    if status.spindle is not None:
+        out.append(said(f"{printer}#spindle:main", "rpm", status.spindle.rpm, "rpm"))
+        out.append(said(f"{printer}#spindle:main", "target", status.spindle.target, "rpm"))
+    if status.feed is not None:
+        out.append(said(printer, "feed", status.feed, "mm/min"))
+    if status.dialect == "grbl":
+        out.append(said(printer, "pins", sorted(status.pins)))
     heaters = [(f"hotend{i}", h) for i, h in enumerate(status.hotends)]
     if status.bed is not None:
         heaters.append(("bed", status.bed))
@@ -117,7 +131,7 @@ def observations_of(
 
 
 def _moved(prop: str, before: Any, now: Any) -> bool:
-    if prop == "position" and isinstance(before, dict) and isinstance(now, dict):
+    if prop in ("position", "work_position") and isinstance(before, dict) and isinstance(now, dict):
         return any(
             abs(float(now.get(axis, 0)) - float(before.get(axis, 0))) >= limit
             for axis, limit in POSITION_TOLERANCE.items()

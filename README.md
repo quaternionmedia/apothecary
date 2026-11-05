@@ -15,7 +15,7 @@ Apothecary builds 3D-printable things from Python and keeps the parts it has bui
   reaches every verb by address. A part's parameters and its SCAD are edited there, applied
   as a variant drawn in its own tab, and saved as a variant kept in git
   ([docs/viewer.md](docs/viewer.md)).
-- **Boards and printers.** Sketches kept with their parts, Arduino and Rust, are compiled and
+- **Boards, printers and a router.** Sketches kept with their parts, Arduino and Rust, are compiled and
   uploaded to Arduinos and ESP32s, from the command line or the viewer; a Marlin printer is
   monitored, and drives its node in the viewer ([docs/firmware.md](docs/firmware.md)). A part
   or a made piece is sliced for the pinned printer with OrcaSlicer, and a print is a job,
