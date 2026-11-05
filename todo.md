@@ -40,6 +40,13 @@ here: run `apothecary problems`.
   controller, which way it homes, and the bounds `apothecary/firmware/grbl.py`
   takes from the maker's figures. No toolpath is made here: a cut is a CAM
   post's file ([docs/cnc.md](docs/cnc.md#not-built)).
+- Following a running job along the previewed path: a job's lines sent map to a
+  segment and the card does not use it yet; and a cut drawn as the tool's width, not
+  its centre ([docs/toolpath-preview.md](docs/toolpath-preview.md#not-built)).
+- Page 06's picture of F5 comes in two forms from run to run: the SCAD editor at its
+  left edge, or scrolled sideways, with the caret in view either way. Which one a run
+  gets does not follow the commit, so a picture of it past the drift tolerance is not
+  a change to the page.
 - A check before a cut that its toolpath fits the travel from the work zero, in the
   Cut card, from the toolpath's recorded bounds and the controller's position: a cut
   zeroed too low or too high stops at its first move past the travel, with the

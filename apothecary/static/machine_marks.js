@@ -22,6 +22,10 @@ import { esc } from "/static/board_text.js";
 export const VOLUME_COLOR = 0x6fb3e8;
 export const NOZZLE_COLOR = 0xff8080;
 export const BED_COLOR = 0x2a302a;
+// What each kind of move is drawn in (apothecary/preview/process.py names them): what
+// makes the part stands out, a move through the air stays back. The page's ok, warn and
+// bad, as colours three.js can take (static/tokens.css).
+const MOVE_COLORS = { extrude: 0x6fdb75, cut: 0xffcc66, plunge: 0xff8080, travel: 0x4a564a, rapid: 0x4a564a };
 const MESH_LOW = [0x6f, 0xb3, 0xe8];   // the bed card's blue, below the mean
 const MESH_HIGH = [0xe8, 0xb0, 0x4a];  // its amber, above
 const MESH_INSET = 10;                 // Marlin's default MESH_INSET, mm from the probeable edge
@@ -29,6 +33,17 @@ const MESH_INSET = 10;                 // Marlin's default MESH_INSET, mm from t
 // apothecary (x, y, z) z-up -> three.js (x, z, -y) y-up: a quarter turn about x, as the
 // viewer's sceneAt turns it.
 export const toScene = (p) => new THREE.Vector3(p.x, p.z, -p.y);
+
+// Where a G-code file's (0, 0, 0) stands in the machine's volume: a printer's file is
+// in the bed's coordinates; a router's counts from the work zero, which the controller
+// reports as an offset from its machine coordinates (mpos = wpos + wco, and the volume
+// at mpos + travel, as below).
+export function fileOrigin(st, volume) {
+    if (!st || st.dialect !== "grbl") return { x: 0, y: 0, z: 0 };
+    const [vx, vy, vz] = volume || [0, 0, 0];
+    const w = st.work_offset || { x: 0, y: 0, z: 0 };
+    return { x: w.x + vx, y: w.y + vy, z: w.z + vz };
+}
 
 // Where a poll puts the tool in the machine's volume: a printer's position as it
 // is; a router's from the machine position its controller reports, since a Grbl
@@ -200,9 +215,57 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
         note(`mesh ${range.toFixed(3)} mm range, drawn ×${exaggeration}`, "mesh");
     }
 
+    // A G-code file's path, from the preview's segments, in the file's coordinates:
+    // one set of lines, of which the first `upto` segments are drawn, placed by where
+    // the file's zero stands in the volume. Never in the way of a click on the machine.
+    let path = null, pathOf = null, pathOrigin = null;
+    function clearPath() {
+        if (!path) return;
+        group.remove(path);
+        path.geometry.dispose();
+        path.material.dispose();
+        path = pathOf = pathOrigin = null;
+    }
+    function setToolpath(preview, { upto = null, origin = null } = {}) {
+        if (!preview) { clearPath(); return; }
+        if (preview !== pathOf) {
+            clearPath();
+            const count = preview.kind_of.length;
+            const positions = new Float32Array(count * 6), colors = new Float32Array(count * 6);
+            const palette = preview.kinds.map((kind) => new THREE.Color(MOVE_COLORS[kind]));
+            for (let i = 0; i < count; i++) {
+                const at = i * 6, color = palette[preview.kind_of[i]];
+                for (const v of [0, 3]) {
+                    const scene = toScene({ x: preview.points[at + v], y: preview.points[at + v + 1], z: preview.points[at + v + 2] });
+                    positions.set([scene.x, scene.y, scene.z], at + v);
+                    colors.set([color.r, color.g, color.b], at + v);
+                }
+            }
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+            path = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true }));
+            path.raycast = () => {};
+            path.renderOrder = 2;
+            group.add(path);
+            pathOf = preview;
+        }
+        if (upto !== null) path.geometry.setDrawRange(0, upto * 2);
+        if (origin) {
+            pathOrigin = { ...origin };
+            path.position.copy(toScene({ x: volumeOrigin.x + origin.x, y: volumeOrigin.y + origin.y, z: volumeOrigin.z + origin.z }));
+        }
+    }
+
     return {
         group,
         volumeOrigin,
+        setToolpath,
+        // What is drawn of a file's path: for the page's status, and its tests.
+        toolpath() {
+            if (!path) return null;
+            return { segments: pathOf.kind_of.length, drawn: path.geometry.drawRange.count / 2, process: pathOf.process, origin: pathOrigin && { ...pathOrigin } };
+        },
         setPosition(p, { immediate = false } = {}) {
             if (!p) return;
             for (const k of ["x", "y", "z"]) if (typeof p[k] === "number") target[k] = p[k];
@@ -233,6 +296,7 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
         },
         destroy() {
             clearMesh();
+            clearPath();
             group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
             if (group.parent) group.parent.remove(group);
         },

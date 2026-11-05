@@ -90,6 +90,11 @@ widened by the tool's radius, inside a window, and gives their extent -- what a
 caliper would find on the piece. The pocket as cut against the pocket as
 designed, a hole as bored: that is the measurement the loop closes on.
 
+## Previewing it
+
+A kept toolpath is drawn in the world before it is cut: the Cut card's preview slider, on
+the core a printer's file is read by too ([docs/toolpath-preview.md](toolpath-preview.md)).
+
 ## Not built
 
 - Tabs on an outline, so a cut-out part is held; a climb or conventional

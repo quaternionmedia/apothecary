@@ -474,6 +474,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a button that slices what makes names for the printer, and chooses its G-code",
     ),
+    "print-preview": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a slider that draws the chosen file's path in the world, through a layer or a pass",
+    ),
     "print-start": (WIDGET, WHAT_IS_THERE, "a button that streams the chosen file to the printer"),
     "print-pause": (WIDGET, WHAT_IS_THERE, "a button that stops feeding the print from here"),
     "print-resume": (WIDGET, WHAT_IS_THERE, "a button that feeds the print from here again"),
@@ -700,6 +705,7 @@ RING_BACKED: Dict[str, str] = {
     # The Print cell's verbs go to whichever print is running, the card's or
     # the one from here; Send file is the one from here alone.
     "print-start": "print:start",
+    "print-preview": "print:preview",
     # Slice slices what makes names, as the Slice cell of a made piece's ring or a
     # part's slices that piece or part, chosen under makes first.
     "print-slice": "slice:piece:printer_1",

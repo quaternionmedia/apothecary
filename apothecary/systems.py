@@ -278,7 +278,8 @@ MACHINE = System(
             "print",
             "Print",
             "a printer's print from here, or a router's cut: the files kept, what it "
-            "makes, Slice (a printer's) or Toolpath (a router's), the job",
+            "makes, Slice (a printer's) or Toolpath (a router's), the file's path drawn in "
+            "the world, the job",
             home="column",
             verbs=("print:", "slice:", "toolpath:"),
             kind=("printer", "router"),

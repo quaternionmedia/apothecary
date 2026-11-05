@@ -1683,6 +1683,7 @@ def control_options(device: Device) -> List[Option]:
                 Option(id="control:sd-pause", label="Pause", action="control:sd-pause"),
                 Option(id="control:sd-abort", label="Abort", action="control:sd-abort"),
                 Option(id="print:start", label="Send file", action="print:start"),
+                Option(id="print:preview", label="Preview", action="print:preview"),
             ],
         ),
         Option(
@@ -1761,6 +1762,7 @@ def router_control_options(device: Device) -> List[Option]:
                 Option(id="control:job-hold", label="Hold", action="control:job-hold"),
                 Option(id="control:job-abort", label="Abort", action="control:job-abort"),
                 Option(id="print:start", label="Send file", action="print:start"),
+                Option(id="print:preview", label="Preview", action="print:preview"),
             ],
         ),
         Option(id="control:estop", label="Stop", action="control:estop", destructive=True),

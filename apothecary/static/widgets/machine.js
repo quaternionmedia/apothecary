@@ -80,7 +80,7 @@
 
 import { mountBoards } from "/static/boards.js";
 import { esc, heaterText, boardLabel, sketchWords, xyz, xyzHtml } from "/static/board_text.js";
-import { toolPosition as toolPositionOf } from "/static/machine_marks.js";
+import { toolPosition as toolPositionOf, fileOrigin } from "/static/machine_marks.js";
 import { KINDS, kindOf as kindOfBoard } from "/static/machine_words.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
@@ -187,6 +187,10 @@ const CARDS = `
             <select id="print-pick" title="The files kept on the host, newest first"><option value="">— no files kept —</option></select>
             <button type="button" id="print-delete" title="Forget the chosen file">✕</button>
             <input type="file" id="print-file" accept=".gcode,.gco,.g,.txt,text/plain">
+        </div>
+        <div class="row"><label for="print-preview">preview</label>
+            <input type="range" id="print-preview" min="0" max="1" step="1" value="0" title="The chosen file's path, drawn in the world on this machine: off at the left, then through each layer or pass, all of it at the right. Nothing is sent. Its ring's Preview turns it on and off">
+            <span class="s" id="print-preview-said"></span>
         </div>
         <div class="row">
             <button type="button" id="print-start" class="warm">▶ Send</button>
@@ -714,6 +718,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
                 if (state.kind === "printer") { pushHistory(d.status); renderChart(); }
                 renderStatus();
                 if (d.status.position) emit("apothecary:position", { position: toolPosition(d.status), source: "poll", port: state.port });
+                tellPreview();  // a work zero set since moves a router's path with it
                 followJob(d.status);
                 if (d.status.control && latchFresh(d.asked)) applyControlState(d.status.control);
                 break;
@@ -1108,6 +1113,70 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // The chosen file's slice, said under makes: what it was sliced from, for which
     // printer, what it used and the estimate. Said again only when another file is
     // chosen, and never over a slice that runs or one that has just failed.
+    // --- the chosen file's path, drawn in the world (docs/toolpath-preview.md) --------
+    // One slider: off at the left, then through each group of moves, all of them at the
+    // right. Nothing is asked of the server until it is moved off the left.
+    const pv = { file: null, data: null, turn: 0, told: null };
+    const previewOn = () => Number($("print-preview").value) > 0;
+    const previewOrigin = () => fileOrigin(state.port ? b().status : null, level.volume);
+    const inMetres = (mm) => (mm >= 1000 ? `${(mm / 1000).toFixed(1)} m` : `${mm.toFixed(0)} mm`);
+    function previewUpto() {
+        const groups = pv.data ? pv.data.groups : [], at = Number($("print-preview").value);
+        if (!at || !groups.length) return 0;
+        const group = groups[Math.min(at, groups.length) - 1];
+        return group.first + group.count;
+    }
+    function tellPreview() {
+        const on = previewOn() && !!pv.data, origin = previewOrigin();
+        const told = `${on ? pv.file : ""}|${on ? previewUpto() : 0}|${JSON.stringify(origin)}`;
+        if (told === pv.told) return;
+        pv.told = told;
+        emit("apothecary:toolpath", { port: state.port, preview: on ? pv.data : null, upto: previewUpto(), origin });
+    }
+    function renderPreview() {
+        const said = $("print-preview-said"), d = pv.data;
+        if (!previewOn() || !d) {
+            said.textContent = previewOn() ? "reading the file…" : "off";
+        } else if (!d.groups.length) {
+            said.textContent = "this file moves nothing";
+        } else {
+            const at = Number($("print-preview").value), n = d.groups.length, group = d.groups[at - 1];
+            const sums = d.kinds.filter((k) => d.length_mm[k]).map((k) => `${k} ${inMetres(d.length_mm[k])}`).join(", ");
+            const where = at >= n ? "all of it" : group.label;
+            said.textContent = `${where} · the file: ${sums}, ${fmtDur(d.time_s)} at its feeds${d.within_mm ? ` · drawn to within ${d.within_mm} mm` : ""}`;
+        }
+        tellPreview();
+    }
+    async function loadPreview() {
+        const id = $("print-pick").value || null, turn = ++pv.turn, slider = $("print-preview");
+        pv.file = id;
+        pv.data = null;
+        renderPreview();
+        if (!id || !state.port || !isGcode()) { slider.value = "0"; slider.max = "1"; renderPreview(); return; }
+        let data;
+        try { data = await api(`/firmware/printers/prints/${encodeURIComponent(id)}/preview?machine=${encodeURIComponent(state.kind)}`); }
+        catch (e) { if (turn === pv.turn) { slider.value = "0"; refuse(`preview: ${e.message}`); renderPreview(); } return; }
+        if (turn !== pv.turn) return;
+        pv.data = data;
+        slider.max = String(Math.max(1, data.groups.length));
+        slider.value = slider.max;
+        renderPreview();
+    }
+    // The chosen file changed: a preview that is on follows it, one that is off forgets it.
+    function followChosenFile() {
+        const id = $("print-pick").value || null;
+        if (id === pv.file) return;
+        if (previewOn()) { loadPreview(); return; }
+        pv.file = id;
+        pv.data = null;
+        $("print-preview").max = "1";
+        renderPreview();
+    }
+    function togglePreview() {
+        const slider = $("print-preview");
+        slider.value = previewOn() ? "0" : slider.max;
+        if (previewOn() && !pv.data) loadPreview(); else renderPreview();
+    }
     function showChosenSlice() {
         const id = $("print-pick").value || null;
         if (slc.running || id === slc.shown) return;
@@ -1142,6 +1211,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-job").textContent = running ? `${job.stage}…` : "";
         $("print-history").innerHTML = prt.jobs.map(jobRow).join("");
         showChosenSlice();
+        followChosenFile();
     }
     // One job of the history: when it started and finished, its kind, the file it ran
     // and the part it makes, how it ended (and why), and how far it got.
@@ -1401,6 +1471,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     }
     $("print-file").addEventListener("change", (ev) => keepPrintFile(ev.target.files[0]));
     $("print-pick").addEventListener("change", renderPrint);
+    $("print-preview").addEventListener("input", () => {
+        if (previewOn() && !pv.data) loadPreview(); else renderPreview();
+    });
     $("print-delete").onclick = async () => {
         const id = $("print-pick").value; if (!id) return;
         try { await api(`/firmware/printers/prints/${encodeURIComponent(id)}`, { method: "DELETE" }); await loadPrintFiles(); }
@@ -1488,6 +1561,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (action === "level:probe") { await startLevel(true); return true; }
         if (action === "level:read") { await startLevel(false); return true; }
         if (action === "print:start") { await startPrint(); return true; }
+        if (action === "print:preview") { togglePreview(); return true; }
         if (prt.job && prt.job.running && action in HOST_VERBS) { await printVerb(HOST_VERBS[action]); return true; }
         const lines = LINES_OF();
         if (action in lines) {
@@ -1531,6 +1605,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         out.push([$("level-read"), "level:read"]);
         for (const btn of $("level-card").querySelectorAll("button[data-corner]")) out.push([btn, `control:corner:${btn.dataset.corner}`]);
         out.push([$("print-start"), "print:start"]);
+        out.push([$("print-preview"), "print:preview"]);
         out.push([$("print-pause"), "control:sd-pause"]);
         out.push([$("print-resume"), "control:sd-resume"]);
         out.push([$("print-cancel"), "control:sd-abort"]);
@@ -1555,6 +1630,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
         print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart, slice: slicePart, slices: () => prt.slices, slicing: () => slc.running },
         destroy() {
+            if (state.port) emit("apothecary:toolpath", { port: state.port, preview: null, upto: 0, origin: null });
             if (state.port) model.unwatch(state.port, who);
             clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer);
             if (flash) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }

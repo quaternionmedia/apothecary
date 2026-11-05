@@ -528,6 +528,7 @@
       "96": "control:sd-pause",
       "92": "control:sd-abort",
       "94": "print:start",
+      "99": "print:preview",
       "38": "control:motors-off",
       "36": "control:quickstop",
       "32": "control:break-wait",
@@ -571,6 +572,7 @@
       "796": "control:sd-pause",
       "792": "control:sd-abort",
       "794": "print:start",
+      "799": "print:preview",
       "738": "control:motors-off",
       "736": "control:quickstop",
       "732": "control:break-wait",
@@ -617,6 +619,7 @@
       "4796": "control:sd-pause",
       "4792": "control:sd-abort",
       "4794": "print:start",
+      "4799": "print:preview",
       "4738": "control:motors-off",
       "4736": "control:quickstop",
       "4732": "control:break-wait",
@@ -981,6 +984,17 @@
               "marked": false,
               "children": null,
               "cell": 4
+            },
+            {
+              "id": "print:preview",
+              "label": "Preview",
+              "action": "print:preview",
+              "enabled": true,
+              "destructive": false,
+              "twice": false,
+              "marked": false,
+              "children": null,
+              "cell": 9
             }
           ],
           "cell": 9
@@ -1530,6 +1544,17 @@
                   "marked": false,
                   "children": null,
                   "cell": 4
+                },
+                {
+                  "id": "print:preview",
+                  "label": "Preview",
+                  "action": "print:preview",
+                  "enabled": true,
+                  "destructive": false,
+                  "twice": false,
+                  "marked": false,
+                  "children": null,
+                  "cell": 9
                 }
               ],
               "cell": 9
@@ -2124,6 +2149,17 @@
                       "marked": false,
                       "children": null,
                       "cell": 4
+                    },
+                    {
+                      "id": "print:preview",
+                      "label": "Preview",
+                      "action": "print:preview",
+                      "enabled": true,
+                      "destructive": false,
+                      "twice": false,
+                      "marked": false,
+                      "children": null,
+                      "cell": 9
                     }
                   ],
                   "cell": 9
