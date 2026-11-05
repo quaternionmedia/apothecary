@@ -23,6 +23,12 @@ here: run `apothecary problems`.
   alfred with otto, datum, ira and ShowRunner reached beside it, every outcome
   kept in the evidence log; nothing built, the owner's questions open:
   [docs/plans/irl-hub-2026-11-02.md](docs/plans/irl-hub-2026-11-02.md).
+- Carlos keeping `family/1`: `/family/identity` and `/family/events` on its
+  `feat/hold-the-rig`, so `hearth check` passes it and the hub's audit names the
+  instance that took a hold ([the review](docs/validation/2026-11-05-family-integrations.md)).
+- The next of the irl hub's pull requests, steps on the blueprint and their GO: the
+  hub stands, and nothing but a hold of carlos's fires yet
+  ([docs/plans/irl-hub-2026-11-02.md](docs/plans/irl-hub-2026-11-02.md#order)).
 - Waiting behind it, the bench as a rig carlos draws, slices 2 and 3 (a picture names a device, IO configuration): [docs/plans/qm-family-carlos-2026-10-29.md](docs/plans/qm-family-carlos-2026-10-29.md).
 - A working space seen from every kind of evidence at once: its cameras, one thing from several angles among them, a printer's polls and a board's port, its sensors, a person's goals, directives and actions, and the image models' guesses, each line of the view opening its evidence. First the Ender's three cameras, on the bed for its timelapse, on the head and across the room, tied to its polls (frames kept with polls, then its lead, its motion and its bed seen two ways), then the rig through a concert, the airgap's test rig and a server room. Its first two steps are built and walked from each door in [walkthrough 18](walkthrough/18-the-working-space.md); the next is the Ender's cameras at the bench: [docs/plans/working-space-view-2026-10-30.md](docs/plans/working-space-view-2026-10-30.md).
 - Pictures lists every frame the Working space keeps with a poll as one of its camera's pictures, so a print fills it: those frames belong to the Working space, and Pictures would count them rather than tile them.
