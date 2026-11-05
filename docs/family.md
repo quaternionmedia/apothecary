@@ -157,10 +157,11 @@ follower, by `POST /sites/{name}/wiring/send` or by a step whose block says `{"c
 A carlos named in the table is carlos to all three, as `serve --carlos` names one. `apothecary rig` runs outside the server, where there is no hub, and
 sends to carlos directly.
 
-Carlos on its `feat/hold-the-rig` answers no `/family/identity` and no
-`/family/events`, so a delivery to it is kept with no instance, and `hearth check`
-says that carlos does not conform. Its side is carlos's to close:
-[the review](validation/2026-11-05-family-integrations.md).
+Carlos on its `feat/hold-the-rig` and joe on its `feat/family-control` answer no
+`/family/identity` and no `/family/events`, so a delivery to either is kept with no
+instance, and `hearth check` says that neither conforms. Each side is its own
+repository's to close: [the review](validation/2026-11-05-family-integrations.md), and
+[the family's first run](validation/2026-11-05-family-started.md).
 
 ## Not built
 

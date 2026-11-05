@@ -24,9 +24,15 @@ here: run `apothecary problems`.
   kept in the evidence log; the hub and its own machine and board members are built,
   the owner's questions open:
   [docs/plans/irl-hub-2026-11-02.md](docs/plans/irl-hub-2026-11-02.md).
-- Carlos keeping `family/1`: `/family/identity` and `/family/events` on its
-  `feat/hold-the-rig`, so `hearth check` passes it and the hub's audit names the
-  instance that took a hold ([the review](docs/validation/2026-11-05-family-integrations.md)).
+- Carlos and joe keeping `family/1`: `/family/identity` and `/family/events` on carlos's
+  `feat/hold-the-rig` and joe's `feat/family-control`, so `hearth check` passes each and
+  the hub's audit names the instance that took a delivery; joe's branch is far behind
+  its main ([the first run](docs/validation/2026-11-05-family-started.md)).
+- A step answered 202 by a member beside the hub reads as fired for good: the hub could
+  read that member's `/family/events`, as it reads a hosted member's state
+  ([the first run](docs/validation/2026-11-05-family-started.md)).
+- hearth's `web.router` declares GET and HEAD on one route, so FastAPI warns of duplicate
+  operation ids at `/openapi.json`; the fix is hearth's.
 - The next of the irl hub's pull requests, the reader as a hosted member and a page
   reading the camera's actions: a procedure's steps fire through the hub
   ([docs/plans/irl-hub-2026-11-02.md](docs/plans/irl-hub-2026-11-02.md#order)).
