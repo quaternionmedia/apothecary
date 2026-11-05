@@ -33,8 +33,9 @@ written by the browser tests that walk them; page 00, pages 07 to 17 and page
 | [17 — A part that computes itself](../walkthrough/17-a-part-that-computes-itself.md) | The airgap: a part whose SCAD computes its surfaces from its assignments, the Python mirror that declares its envelope, and the metrics document its panel says |
 | [18 — The working space](../walkthrough/18-the-working-space.md) | A site as its evidence has it and a printer's hour in it, from each of its doors: three cameras added above printer_1, each told its device in its row, a frame set kept with a poll and opened beside it, the budget set; written by the browser suite |
 | [19 — The router](../walkthrough/19-the-router.md) | The garage's CNC router, an AnoleX 4060-Evo Ultra 2: its working area on its table, GRBL's dialect read and bounded, the simulated controller identified, polled, driven and stopped |
-| [21 — A toolpath, previewed](../walkthrough/21-a-toolpath-previewed.md) | One interpreter and two processes: a print's layers and a cut's passes read through one core, held to the toolpath's own writer, and a design change seen in the moves |
 | [20 — A part through the router](../walkthrough/20-a-part-through-the-router.md) | The subtractive loop on one part: the coupon's declared cuts, its toolpath written and checked, kept and cut from here with the work zeroed, the job naming its operation, the cut measured against the design, and the design changed and cut again |
+| [21 — A toolpath, previewed](../walkthrough/21-a-toolpath-previewed.md) | One interpreter and two processes: a print's layers and a cut's passes read through one core, held to the toolpath's own writer, and a design change seen in the moves |
+| [22 — The irl family's hub](../walkthrough/22-the-irl-hub.md) | apothecary as the family's hub on hearth's contract: what it says it is, its table, a fire and what is kept |
 
 ## Guides
 
@@ -43,6 +44,7 @@ written by the browser tests that walk them; page 00, pages 07 to 17 and page
 | [The dev loop](dev-loop.md) | Change, see, test, commit, integrate: a command for each step, two servers at once on two ports, what others pushed brought into a checkout, and a change brought into main |
 | [The viewer](viewer.md) | The page's own controls: the header and ⚙ View, the world and its faded walls and badges, the ring and its addresses, the windows, the part editor and the SCAD editor, the keys |
 | [Windows and focused systems](windows-and-systems.md) | For an author: a window of the page -- where it opens, what a browser remembers, an empty one -- and a focused system's registry entry, its widget's hook, and the tests that hold each |
+| [The family's hub](family.md) | apothecary as the `irl` family's hub on hearth's contract: its routes, its table, what goes through it and how `hearth check` judges it |
 | [Lighting](lighting.md) | A site's lighting rig -- fixture types, a patch, live levels -- the theatre site that uses it, another console's exports in its place, and a console's levels by sACN or OSC |
 | [OpenSCAD](openscad.md) | Installing a snapshot with Manifold on each platform, which OpenSCAD a render uses, what 2021.01 cannot do, how many run at once |
 | [Scene JSON format](scene-json.md) | Scenes, primitives, booleans and transforms as JSON |

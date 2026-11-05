@@ -21,6 +21,8 @@ dependencies = [
     "pillow>=10.0.0",
     # The byte transport under the G-code printer seam; see docs/firmware.md.
     "pyserial>=3.5",
+    # The family contract and its coordinator; apothecary is the irl family's hub.
+    "qm-hearth",
 ]
 
 [project.scripts]
@@ -58,6 +60,10 @@ preflight = [
     # import time and dies before it lints anything. A Windows box has none.
     "reuse[charset-normalizer]>=3.0",
 ]
+
+[tool.uv.sources]
+# hearth has no tag yet; its first moves this to a version.
+qm-hearth = { git = "https://github.com/quaternionmedia/hearth.git", rev = "c08b48b98b61d4fb697439467adce3cce5efb6b4" }
 
 [tool.uv]
 package = true

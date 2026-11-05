@@ -11,7 +11,9 @@ carlos's ``POST /family/cue`` carries it, beside the hub's ``patch`` and
                          "states": {"modules": {<id>: {level, says}},
                                     "connections": [{source, target, level, says}]}}}}
 
-Carlos answers ``200 {"ok": true, ...}`` or ``422 {"ok": false, "error"}``.
+Carlos answers ``200 {"ok": true, ...}`` or ``422 {"ok": false, "error"}``. The
+server's holds go through the family's hub (``apothecary/family/hub.py``), so each
+is in its audit; a command run outside the server has no hub, and sends directly.
 The devices travel with the rig because carlos's catalogue has no board and
 no computer; carlos holds them for drawing that rig only.
 
@@ -40,6 +42,7 @@ if TYPE_CHECKING:  # pragma: no cover - for readers and type checkers only
 
 log = logging.getLogger(__name__)
 
+CARLOS = "carlos"  # its name in the family's table
 CARLOS_ENV = "APOTHECARY_CARLOS"  # carlos's base URL, as serve --carlos gives it
 SITE_ENV = "APOTHECARY_CARLOS_SITE"  # the site it is sent; the garage when unset
 DEFAULT_SITE = "garage"
@@ -132,18 +135,38 @@ def send(body: Dict[str, object], url: str) -> Dict[str, object]:
         raise CarlosError(f"carlos did not answer at {url}: {exc}") from None
 
 
+def answer_of(outcome: Dict[str, Any], url: str) -> Dict[str, Any]:
+    """What a delivery through the hub came to: carlos's answer, or CarlosError saying why not."""
+    if not outcome.get("done"):
+        raise CarlosError(f"carlos did not answer at {url} in time")
+    error, status = outcome.get("error"), outcome.get("status")
+    if not error:
+        return outcome.get("answer") or {}
+    if status is None:
+        raise CarlosError(f"carlos did not answer at {url}: {error}")
+    raise CarlosError(f"carlos refused the rig ({status}): {error}")
+
+
 class Follower:
     """Sends one site's wiring to carlos at the start and whenever it changes.
 
     ``wiring`` makes the site's wiring afresh each look. What changed is the
     hold without its cue's time, so an unchanged bench is sent once; a send
-    carlos did not take is tried again at the next look.
+    carlos did not take is tried again at the next look. ``deliver`` is how a hold
+    goes, ``send`` to this ``url`` unless it is given.
     """
 
-    def __init__(self, url: str, wiring: Callable[[], "Wiring"], every: float = EVERY_SECONDS):
+    def __init__(
+        self,
+        url: str,
+        wiring: Callable[[], "Wiring"],
+        every: float = EVERY_SECONDS,
+        deliver: Optional[Callable[[Dict[str, object]], Dict[str, object]]] = None,
+    ):
         self.url = loopback_url(url)
         self.wiring = wiring
         self.every = every
+        self.deliver = deliver or (lambda body: send(body, self.url))
         self.last_sent: Optional[str] = None
         self.last_error: Optional[str] = None
         self._stop = threading.Event()
@@ -156,7 +179,7 @@ class Follower:
         if held == self.last_sent:
             return False
         try:
-            send(body, self.url)
+            self.deliver(body)
         except CarlosError as exc:
             if str(exc) != self.last_error:
                 log.warning("wiring: %s", exc)

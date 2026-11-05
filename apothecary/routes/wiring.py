@@ -26,6 +26,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
 
+from ..family import hub
 from ..firmware import devices as firmware_devices
 from ..firmware.bindings import bindings_for_site
 from ..firmware.toolchains import ToolchainError
@@ -35,6 +36,12 @@ from ..wiring.patch import Wiring, wiring_for_site
 router = APIRouter()
 
 _follower: Optional[carlos.Follower] = None
+
+
+def _hold(body: Dict[str, Any]) -> Dict[str, Any]:
+    """A hold, through the family's hub, so it is in the hub's audit."""
+    outcome = hub.deliver(carlos.CARLOS, body["cue"], body["action"])
+    return carlos.answer_of(outcome, carlos.carlos_url() or "")
 
 
 def _wiring(name: str) -> Wiring:
@@ -62,13 +69,13 @@ def site_wiring_patch(name: str) -> Dict[str, Any]:
 
 @router.post("/sites/{name}/wiring/send")
 def send_site_wiring(name: str) -> Dict[str, Any]:
-    """The site's wiring sent to carlos now."""
+    """The site's wiring sent to carlos now, through the family's hub."""
     url = carlos.carlos_url()
     if url is None:
         raise HTTPException(409, detail="no carlos to send to: serve --carlos names one")
     body = carlos.hold_body(_wiring(name))
     try:
-        answer = carlos.send(body, url)
+        answer = _hold(body)
     except carlos.CarlosError as exc:
         raise HTTPException(502, detail=str(exc)) from None
     return {"sent": url, "answer": answer}
@@ -81,7 +88,7 @@ def start_following() -> None:
     if url is None or _follower is not None:
         return
     site = os.environ.get(carlos.SITE_ENV) or carlos.DEFAULT_SITE
-    _follower = carlos.Follower(url, lambda: _wiring(site))
+    _follower = carlos.Follower(url, lambda: _wiring(site), deliver=_hold)
     _follower.start()
 
 

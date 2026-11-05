@@ -52,6 +52,7 @@ from .example_hierarchy import (
     validate_garage_layout,
 )
 from .example_parts_library import create_parts_library_site, validate_parts_library
+from .family import hub as family_hub
 from .firmware import devices as firmware_devices
 from .firmware import gcode as firmware_gcode
 from .firmware import grbl as firmware_grbl
@@ -201,6 +202,7 @@ async def lifespan(app: FastAPI):
     wiring_routes.start_following()
     yield
     wiring_routes.stop_following()
+    family_hub.close()
     lighting_routes.stop_console_feeds()
     # Shutdown: don't leave a render subprocess dangling if we're still generating
     if not stl_task.done():
@@ -220,6 +222,7 @@ app = FastAPI(
         "the router's toolpath; jobs; "
         "the evidence a site's printers and cameras leave, as one view of it; "
         "the airgap part's metrics document, its schema and its check; the ring's menu; "
+        "the irl family's hub, on hearth's contract; "
         "and the documentation and walkthrough it serves."
     ),
     lifespan=lifespan,
@@ -284,6 +287,9 @@ app.include_router(lighting_router)
 app.include_router(airgap_router)
 # The bench as carlos reads a rig: a site's boards and their USB leads as a carlos.patch.
 app.include_router(wiring_router)
+
+# The irl family's hub: hearth's coordinator, at /family/ (docs/family.md).
+app.include_router(family_hub.router())
 # A working space seen from every kind of evidence: the log's document for a site.
 app.include_router(evidence_router)
 # Image models through qmcp, and the plain reader beside them: asked only when a person asks.
