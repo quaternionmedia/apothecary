@@ -50,15 +50,6 @@ here: run `apothecary problems`.
   tested decision), a cut's operation beside each poll in the Working space, and
   the as-cut measure in the Cut card:
   [docs/plans/ui-refresh-2026-11-04.md](docs/plans/ui-refresh-2026-11-04.md).
-- Why a browser other tests have used draws slowly. Sharing the camera browser
-  `tests/e2e/test_camera.py` had used, `tests/e2e/test_docs_bench_walkthrough.py`
-  ran out its cap (`Timeout (0:02:50)`) in 9 runs of 13, on main's tree as on a
-  branch above it, its frame in `viewer_ready.settled`'s wait for the camera at
-  rest each time it was caught, while the test servers answered at once. In a
-  browser of its own, the same files in the same order passed 4 runs of 4 in
-  about the same two minutes, in the same hour as a control that stalled 2 of 3;
-  so it has one now, and the symptom is gone. What a used browser keeps is not
-  known, and other tests sharing that browser may be slower for it.
 - A host-side bound on where the print head ends. Each jog's move is capped
   (`JOG_MAX_MM`), jogs one after another add up, and the firmware's soft
   endstops, after a homing, are what keeps the head on the machine

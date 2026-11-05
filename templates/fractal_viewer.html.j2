@@ -1032,6 +1032,7 @@
         const WALL_OPACITY = 0.25;
         const HANDLE_SIZE = 0.6;      // the move arrows, against TransformControls' own 1
         const HANDLE_LIGHTNESS = 0.55; // and their opacity, against its own
+        const ORBIT_EPS = 0.000001;   // OrbitControls' own measure of the camera having moved
         // A point of the site's frame (z up) in three.js's (y up): a quarter turn about
         // x, the site's y running into the screen along three.js's -z. A turn, not a
         // mirror: what stands on the site's right stands on the scene's right.
@@ -1259,6 +1260,9 @@
                 this.sayInputs();
                 this.reach = null;            // the level's size and framing distance, for the dolly's limits
                 this.glide = null;            // a re-centre under way
+                this.cameraAt = new THREE.Vector3();       // the view before the orbit's update:
+                this.cameraTurn = new THREE.Quaternion();  // animate(), no allocation a frame
+                this.cameraAim = new THREE.Vector3();
 
                 this.tree = null;            // full recursive tree for the loaded site
                 this.siteName = null;
@@ -1861,7 +1865,26 @@
             animate() {
                 requestAnimationFrame(() => this.animate());
                 this.stepGlide();
-                if (this.orbitControls.update()) this.frameWanted = true;
+                // Each update the orbit divides its target by the target's length and multiplies
+                // it back, and for some targets that rounds to two neighbouring numbers in turn,
+                // forever. Its check of the target is exact, so it says something moved, every
+                // frame, and the camera it rebuilds from that target wobbles with it. The measure
+                // here is the orbit's own for the camera, for all three; under it nothing moved,
+                // and all three stay exactly as they were.
+                const c = this.camera, aim = this.orbitControls.target;
+                this.cameraAt.copy(c.position);
+                this.cameraTurn.copy(c.quaternion);
+                this.cameraAim.copy(aim);
+                this.orbitControls.update();
+                if (c.position.distanceToSquared(this.cameraAt) > ORBIT_EPS
+                    || aim.distanceToSquared(this.cameraAim) > ORBIT_EPS
+                    || 8 * (1 - Math.abs(c.quaternion.dot(this.cameraTurn))) > ORBIT_EPS) {
+                    this.frameWanted = true;
+                } else {
+                    c.position.copy(this.cameraAt);
+                    c.quaternion.copy(this.cameraTurn);
+                    aim.copy(this.cameraAim);
+                }
                 for (const m of Object.values(this.marks)) if (m.marks && m.marks.tick()) this.frameWanted = true;
                 this.sizeCameraHandles();
                 if (this.frameWanted || this.sceneChanged()) {
