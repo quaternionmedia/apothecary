@@ -14,6 +14,9 @@ CHROMIUM_MISSING = (
 Launched = TypeVar("Launched")
 
 
+FAKE_CAMERA = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"]
+
+
 def launched(start: Callable[[], Launched]) -> Launched:
     """What ``start()`` launches; with no browser installed, the run stops on one line
     saying how to install it, rather than on Playwright's box of advice under every

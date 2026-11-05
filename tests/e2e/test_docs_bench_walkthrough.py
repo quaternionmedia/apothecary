@@ -20,6 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 import windows
+from browsers import FAKE_CAMERA, launch
 from playwright.sync_api import expect
 from rings import cells as _wedges
 from rings import press as _press
@@ -57,18 +58,22 @@ def _pinned_in_front(page):
 
 
 @pytest.fixture
-def bench(base_url, start_server, _camera_browser, tmp_path_factory):
-    """The page's own server, and a page on it in the fake-camera browser with the
-    camera allowed. Its picture folder starts empty and holds only what the test puts
-    there, so Pictures lists exactly those whatever else ran on this worker; its pins,
-    cameras and views start empty too. ``base_url`` is asked for only so that with no
-    server to run against this is skipped, as every browser test is."""
+def bench(base_url, start_server, browser_type, tmp_path_factory):
+    """The page's own server, and a page on it in a fake-camera browser of its own with
+    the camera allowed: run in the browser test_camera had used, the page ran out its
+    cap more often than not (todo.md). Its picture folder starts
+    empty and holds only what the test puts there, so Pictures lists exactly those
+    whatever else ran on this worker; its pins, cameras and views start empty too.
+    ``base_url`` is asked for only so that with no server to run against this is
+    skipped, as every browser test is."""
     folder = tmp_path_factory.mktemp("bench_pictures")
     url = start_server({"APOTHECARY_PICTURE_ROOT": str(folder)})
-    context = _camera_browser.new_context(viewport={"width": 1280, "height": 800}, base_url=url)
+    browser = launch(browser_type, args=FAKE_CAMERA)
+    context = browser.new_context(viewport={"width": 1280, "height": 800}, base_url=url)
     context.grant_permissions(["camera"], origin=url)
     yield SimpleNamespace(page=context.new_page(), url=url, folder=folder)
     context.close()
+    browser.close()
 
 
 @pytest.mark.e2e
