@@ -174,16 +174,19 @@ Machine, Ctrl + right-click opens the board's own ring (the device ring); from
 ## I. The router: the AnoleX 4060-Evo Ultra 2
 
 The suites hold every path below against the simulated router; this is how
-the same paths are confirmed on the real machine. Its controller has not yet
-answered this seam, so the first section records what it says
-([docs/cnc.md](cnc.md) says what is assumed). Stay at the machine while
+the same paths are confirmed on the real machine. Its controller has answered
+`apothecary firmware printer <port>` at 115200 baud: `Grbl 1.3a · Grbl_ESP32`,
+`Idle`, behind a CH340 bridge (`0x1A86:0x7523`) with no USB serial number, so a
+pin follows its port. The rest of this section has not been walked, so the first
+boxes record what it says ([docs/cnc.md](cnc.md) says what is assumed). Stay at the machine while
 anything turns or moves, with a hand on its own red stop: the page's ⏹ E-STOP
 is the controller's soft reset, and the button is faster. Spindle and motion
 only with the table clear and no tool in the collet until the last box.
 
 - [ ] `uv run apothecary firmware devices` with the router's USB lead in: its
       port, the bridge's vid:pid and whether it has a serial number (a pin
-      follows the board when it has one, the port when it has not). Note them.
+      follows the board when it has one, the port when it has not). Note them;
+      the bridge so far is a CH340 without one.
 - [ ] `uv run apothecary firmware printer <port> --query '$I' --query '$$'`:
       the firmware line (`Grbl 1.3a` is what the maker's listing says), the
       machine name, the build, the settings. Note whether opening the port

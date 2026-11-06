@@ -142,12 +142,13 @@ pin; `tests/e2e/test_router_ui.py` walks the Machine against it.
 
 ## Not built
 
-- The bench: the router has not been plugged into this seam. What the
-  controller really answers to `$I`, which USB bridge it has, whether its
-  DTR resets it, what `$$` holds and which way it homes are confirmed at the
-  bench, the first replies kept as the Ender's are
-  (`docs/validation/2026-09-20-ender-bench.md`), and the checklist gains a
-  section for it.
+- The bench, past the first answer: the real controller identifies itself as
+  `Grbl 1.3a · Grbl_ESP32` at 115200 baud, `Idle`, behind a CH340 bridge
+  (`0x1A86:0x7523`) with no USB serial number, so its pin follows the port.
+  What `$I` and `$$` hold, whether opening the port resets it and which way it
+  homes are confirmed in section I of [the bench checklist](bench-checklist.md#i-the-router-the-anolex-4060-evo-ultra-2),
+  the first replies kept as the Ender's are
+  (`docs/validation/2026-09-20-ender-bench.md`).
 - A toolpath from geometry: the toolpath is written from the cuts a part
   declares ([docs/cam.md](cam.md)), not from a mesh; a file a CAM post wrote
   (Easel, Carbide Create, Fusion) is kept and streamed as it is.
