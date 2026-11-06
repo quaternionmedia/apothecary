@@ -122,6 +122,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Changed
 
+- The header is one view banner: its title, the prototype pill, the site drop-down and the trail's root crumb are one trail, `🧪 Apothecary › garage ▾ › cnc_router`, the first crumb the universe, the site's crumb its own level and under ▾ the other sites. ([doc](docs/viewer.md#the-header))
 - The site `parts_library` is `apothecary`: `/viewer/sites/parts_library` and `/viewer/parts/{name}` go there, and a pin, a camera, a job and a procedure kept under the former name are read under the new one. ([code](apothecary/site_names.py))
 
 - Every scene object says what it is (`type`): `/render` and the CLI refuse one with no type or an unknown one, where 0.1.0 rebuilt it from its shape. ([doc](docs/scene-json.md))

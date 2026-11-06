@@ -389,8 +389,13 @@ def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address
     assert by_name["docs-link"].ring_action == "panel:docs"
     listening = {f.key: f for f in taken.found if f.how == "listening"}
     assert listening["window:popstate:followAddress"].surface == census.AUTOMATIC
-    assert listening["siteSelect:change:chooseSite"].surface == census.WIDGET
-    assert "siteSelect:change:loadSite" not in census.LISTENING
+    # A site chosen under the banner's site crumb is the control that chooses one;
+    # the banner's crumbs are the trail.
+    assert listening["siteMenuBody:click:closest"].surface == census.WIDGET
+    assert by_name["site-item"].surface == census.WIDGET
+    assert listening["universeCrumbEl:click:toUniverse"].surface == census.LIST
+    assert listening["siteLevelEl:click:toSiteLevel"].surface == census.LIST
+    assert "site-select" not in census.CONTROLS
 
 
 def test_no_serial_overlay_or_watch_control_is_counted_and_open_opens_a_machine():

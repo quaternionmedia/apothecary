@@ -73,6 +73,7 @@ AREAS = {
             "test_render_on_demand.py",
             "test_docs_fractal_viewer.py",
             "test_the_universe.py",
+            "test_view_banner.py",
         ),
     },
     "pictures": {

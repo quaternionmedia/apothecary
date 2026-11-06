@@ -471,6 +471,6 @@ def test_pinned_takes_back_another_sites_pins_without_switching(
     # Nothing switched the site.
     assert page.url == url
     assert page.evaluate("() => window.fractalViewer.siteName") == "apothecary"
-    expect(page.locator("#site-select")).to_have_value("apothecary")
+    expect(page.locator("#site-crumb")).to_be_hidden()
     expect(status).not_to_have_class(re.compile(r"\berror\b"))
     assert errors == []

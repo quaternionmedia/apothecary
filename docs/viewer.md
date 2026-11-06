@@ -22,16 +22,28 @@ controls as they are. The loops through them are walkthrough pages
 
 Left to right, one row:
 
-- **The site drop-down** loads another site and puts it in the address,
-  `/viewer/sites/<name>`, so a reload or a link lands on it and Back returns
-  to the one before; the old site's focus, Machine and variants stay with it.
-  The drop-down, Site in the canvas ring, a step into a site's piece in the
-  universe or out of a site's own level, a link and Back are the only ways
-  the site on screen changes: no other verb switches it as a side effect. A
-  picture's view or a take-back in another site names that site and leaves the
-  screen where it is.
-- **The breadcrumb**: the site, then each piece you have stepped into. A crumb
-  steps out to its level; Page Up or Backspace steps out one.
+- **The view banner**: where you are, as one trail,
+  `🧪 Apothecary › garage ▾ › cnc_router › frame_system`.
+  - **The first crumb is the universe**, and the page's heading. From a site
+    it goes to the universe, the site's piece selected there, and Back
+    returns; in the universe it goes up to its own level. Its tooltip says the
+    page is a prototype under an unratified record. At the universe the trail
+    is this crumb alone, then any part stepped into.
+  - **The site's crumb** is the site in view. Its name goes up to the site's
+    own level. Its ▾ lists every site but the universe, ● the one in view;
+    one chosen is loaded and put in the address, `/viewer/sites/<name>`, so a
+    reload or a link lands on it and Back returns to the one before; the old
+    site's focus, Machine and variants stay with it. At the site's own level
+    its name opens the same list.
+  - **Each piece stepped into** follows. A crumb steps out to its level; Page
+    Up or Backspace steps out one. This part alone gives way on a narrow
+    page: its start is cut, and the level in view stays.
+
+  The first two crumbs are links, so a new tab opens from either. The banner,
+  Site in the canvas ring, a step into a site's piece in the universe or out
+  of a site's own level, a link and Back are the only ways the site on screen
+  changes: no other verb switches it as a side effect. A picture's view or a
+  take-back in another site names that site and leaves the screen where it is.
 - **⚙ View**: how the world is drawn ([below](#how-the-world-is-drawn)), and
   Settings ([below](#settings)).
 - **⊞ Windows**: the views, then every window by its group, ● open and ○
@@ -116,8 +128,9 @@ are, from the site as it stands. Nothing is rendered to draw one. It is not to
 scale beside the parts, so Selected says it is a site and how large the site
 really is, and offers "⤵ Step into"; it has no parameters and wears no move
 arrows. A double-click on it, Page Down, or that button opens its site as the
-drop-down would, so Back returns. Page Up or Backspace at a site's own level
-goes to the universe, the site's piece selected there. The wheel steps within
+banner's site crumb would, so Back returns. Page Up or Backspace at a site's
+own level goes to the universe, as the banner's first crumb does, the site's
+piece selected there. The wheel steps within
 a site and never from one to another. A building is left off the grid while a
 site's piece stands for it: the theatre is the theatre site's.
 

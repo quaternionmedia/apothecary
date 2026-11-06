@@ -240,7 +240,7 @@ def pinned(printer_url):
 
 
 def _leave_the_site(page: Page, url: str) -> None:
-    page.locator("#site-select").select_option("apothecary")
+    page.locator("#universe-crumb").click()
 
 
 def _unpin(page: Page, url: str) -> None:

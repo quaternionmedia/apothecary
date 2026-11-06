@@ -519,7 +519,7 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     wedges = _wedges(page)
     assert wedges["8"] == "Pieces" and wedges["6"] == "Site" and wedges["1"] == "Step out"
     # The trail's crumb one level up is Step out, and wears its address.
-    up_crumb = page.locator("#breadcrumb .crumb").nth(-2)
+    up_crumb = page.locator("#view-banner .crumb").nth(-2)
     expect(up_crumb).to_have_attribute("data-address", "1", timeout=5000)
     page.keyboard.press("1")
     assert _intents(page)[-1]["action"] == "zoom-out"

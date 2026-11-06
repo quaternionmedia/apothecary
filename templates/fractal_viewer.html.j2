@@ -21,25 +21,32 @@
         .main-content { flex: 1; min-height: 0; overflow: hidden; position: relative; }
 
         /* The header: one row at any width a laptop has, 1024 px included. Its
-           parts keep their size; only the trail gives way (see #breadcrumb). */
+           parts keep their size; only the banner's trail gives way (see #breadcrumb). */
         .toolbar {
             display: flex; gap: 0.6rem; padding: 0.5rem 0.75rem;
             background: #252525; border-bottom: 1px solid #333;
             align-items: center; flex-wrap: nowrap; white-space: nowrap;
         }
         .toolbar > * { flex: 0 0 auto; }
-        .toolbar h1 { margin: 0; font-size: 1.15rem; font-weight: 600; color: #fff; }
-        .toolbar .badge {
-            font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 3px;
-            background: #664400; color: var(--warn); font-weight: 600; cursor: help;
+        /* The view banner: where you are, as one trail. The universe first (the page's
+           heading, and the way to it), then the site -- its own level, and under ▾ the
+           other sites -- then each piece stepped into (#breadcrumb). */
+        .toolbar .view-banner {
+            display: flex; align-items: center; gap: 0.4rem; flex: 0 1 auto; min-width: 0;
+            font-size: 0.85rem; color: #999;
         }
-        .toolbar select {
-            min-width: 160px; padding: 0.5rem; border-radius: 4px;
-            border: 1px solid #444; background: #333; color: #e0e0e0;
-        }
-        /* As wide as the name of a site can be, not as the longest one there is, so a
-           site made from a picture never shifts the whole toolbar. */
-        #site-select { width: 11rem; }
+        .view-banner > * { flex: 0 0 auto; }
+        .view-banner h1 { margin: 0; font-size: 1.15rem; font-weight: 600; }
+        .view-banner .crumb { cursor: pointer; color: #9cd2ff; text-decoration: none; }
+        .view-banner .crumb:hover { text-decoration: underline; }
+        .view-banner h1 .crumb { color: #fff; }
+        /* The site's crumb: its name, as wide as a name can be and no wider, so a site
+           made from a picture never shifts the whole header; and its ▾. */
+        .site-crumb { display: inline-flex; align-items: center; gap: 0.3rem; }
+        .site-crumb[hidden] { display: none; }
+        .site-crumb #site-level { max-width: 11rem; overflow: hidden; text-overflow: ellipsis; }
+        .view-menu.site-menu > summary { padding: 0 0.3rem; font-size: 0.75rem; line-height: 1.5; }
+        .view-menu.site-menu > .view-menu-body { left: 0; right: auto; align-items: stretch; gap: 0; padding: 0.2rem 0; min-width: 11rem; max-height: 70vh; overflow-y: auto; }
         .toolbar button, .view-menu > summary {
             padding: 0.45rem 0.8rem; border-radius: 4px; cursor: pointer;
             border: none; font-size: 0.9rem; line-height: 1.25; transition: background 0.15s;
@@ -77,16 +84,15 @@
         .validity-indicator.valid { background: #1e4620; color: var(--ok); }
         .validity-indicator.invalid { background: #4a1e1e; color: var(--bad); }
 
-        /* The trail: where you are, a crumb going up to its level. The one part of
-           the header that gives way: too long for its row, its start is cut, so
-           the level being looked at stays in view. */
+        /* The trail below the site: each piece stepped into, a crumb going up to its
+           level. The one part of the header that gives way: too long for its row, its
+           start is cut, so the level being looked at stays in view. */
         #breadcrumb {
             flex: 0 1 auto; min-width: 3rem; overflow: hidden; text-overflow: ellipsis;
-            direction: rtl; text-align: left; font-size: 0.85rem; color: #999;
+            direction: rtl; text-align: left;
         }
+        #breadcrumb:empty { display: none; }
         #breadcrumb .trail { direction: ltr; unicode-bidi: isolate; }
-        #breadcrumb .crumb { cursor: pointer; color: #9cd2ff; }
-        #breadcrumb .crumb:hover { text-decoration: underline; }
         /* An item of the View menu: a tick-box or a drop-down, with its words. */
         .toolbar-toggle {
             display: flex; align-items: center; gap: 0.35rem;
@@ -693,16 +699,19 @@
         <div id="demo-banner" class="demo-banner" role="note" title="apothecary serve --demo: printer_1's mainboard is pinned to a simulated Ender, cnc_router's controller to a simulated GRBL router, an ESP32 devkit is simulated, a simulated lighting console sweeps the theatre's rig, arduino-cli, cargo and espflash are scripted, and no real serial port is opened. Its state is {{ demo }}, kept between runs; your own ~/.apothecary and pins are not touched.">The demo: a simulated printer, router, ESP32 and lighting console, scripted firmware tools, its own state in {{ demo }}. To leave it, stop the server and run <code>apothecary serve</code> without --demo.</div>
         {% endif %}
         <div class="toolbar">
-            <h1>🧪 Apothecary</h1>
-            <span class="badge" title="FRACTAL VIEWER — unratified prototype">prototype</span>
-            <select id="site-select"{% if not site_names %} disabled{% endif %}>
-                {% for name in site_names %}
-                <option value="{{ name }}"{% if name == default_site %} selected{% endif %}>{{ name }}</option>
-                {% else %}
-                <option value="" disabled>No sites found</option>
-                {% endfor %}
-            </select>
-            <span id="breadcrumb" title="Where you are: a crumb steps out to its level (Page Up or Backspace steps out one)"></span>
+            <nav id="view-banner" class="view-banner" aria-label="Where you are">
+                <h1><a id="universe-crumb" class="crumb" href="{{ base_url }}/viewer/sites/{{ universe }}" title="{{ universe_shown }}, the universe: every part, and every other site as one piece. FRACTAL VIEWER — unratified prototype">🧪 {{ universe_shown }}</a></h1>
+                <span id="site-crumb" class="site-crumb"{% if not default_site or default_site == universe %} hidden{% endif %}>
+                    <span aria-hidden="true">›</span>
+                    <a id="site-level" class="crumb" href="{{ base_url }}/viewer/sites/{{ default_site | urlencode }}">{{ default_site }}</a>
+                    <details id="site-menu" class="view-menu site-menu">
+                        <summary title="Choose another site" aria-label="Choose another site">▾</summary>
+                        <div class="view-menu-body site-menu-body"></div>
+                    </details>
+                </span>
+                <span id="breadcrumb" title="Where you are: a crumb steps out to its level (Page Up or Backspace steps out one)"></span>
+                {% if not site_names %}<span id="no-sites">No sites found</span>{% endif %}
+            </nav>
             <div class="spacer"></div>
             <details id="view-menu" class="view-menu">
                 <summary title="How the world is drawn">⚙ View</summary>
@@ -873,6 +882,9 @@
             ],
         };
         const DEFAULT_SITE = {{ default_site | tojson }};
+        // Every site the server knew when it wrote the page: what an address may name,
+        // and what the banner's site crumb offers.
+        const SITE_NAMES = {{ site_names | tojson }};
         const INITIAL_FOCUS = {{ focus_path | tojson }};
         // The universe (apothecary/universe.py): the site every part is a leaf of, and
         // every other site one piece of. A step out of a site's own level goes to it.
@@ -1232,7 +1244,12 @@
         class FractalViewer {
             constructor() {
                 this.canvas = document.getElementById('viewer-canvas');
-                this.siteSelect = document.getElementById('site-select');
+                // The view banner: the universe's crumb, the site's (its name and its
+                // menu of the other sites), and the trail of pieces below it.
+                this.universeCrumbEl = document.getElementById('universe-crumb');
+                this.siteCrumbEl = document.getElementById('site-crumb');
+                this.siteLevelEl = document.getElementById('site-level');
+                this.siteMenuEl = document.getElementById('site-menu');
                 this.viewMenuEl = document.getElementById('view-menu');
                 this.windowsMenuEl = document.getElementById('windows-menu');
                 this.snapToggle = document.getElementById('snap-toggle');
@@ -1371,7 +1388,7 @@
                 this.onResize();
                 this.animate();
 
-                if (this.siteSelect.value) this.loadSite(this.siteSelect.value, INITIAL_FOCUS).then(() => this.followDeepLink());
+                if (DEFAULT_SITE) this.loadSite(DEFAULT_SITE, INITIAL_FOCUS).then(() => this.followDeepLink());
             }
 
             // A link into the world with a panel open: the Bench, or a board's Machine
@@ -1761,9 +1778,27 @@
             }
 
             bindEvents() {
-                // Choosing a site loads it, and the address follows; the trail's crumbs
-                // are the way back out. Back and Forward go between the sites chosen.
-                this.siteSelect.addEventListener('change', () => this.chooseSite(this.siteSelect.value));
+                // The banner. Its first crumb is the universe, from anywhere. The site's
+                // crumb goes to the site's own level, and at that level opens its menu,
+                // as its ▾ does anywhere: the other sites, one chosen loading it, the
+                // address following. Back and Forward go between the sites chosen.
+                this.universeCrumbEl.addEventListener('click', (e) => this.toUniverse('the first crumb', e));
+                this.siteLevelEl.addEventListener('click', (e) => this.toSiteLevel(e));
+                const siteMenuBody = this.siteMenuEl.querySelector('.site-menu-body');
+                this.siteMenuEl.addEventListener('toggle', () => {
+                    if (!this.siteMenuEl.open) return;
+                    this.viewMenuEl.open = false;
+                    this.windowsMenuEl.open = false;
+                    this.fillSiteMenu(siteMenuBody);
+                    (siteMenuBody.querySelector('.open') || siteMenuBody.querySelector('button'))?.focus();
+                });
+                siteMenuBody.addEventListener('click', (e) => {
+                    const item = e.target.closest('.site-item');
+                    if (!item) return;
+                    this.siteMenuEl.open = false;
+                    this.chooseSite(item.dataset.site);
+                });
+                siteMenuBody.addEventListener('keydown', (ev) => this.panels.stepFocus(siteMenuBody, ev));
                 window.addEventListener('popstate', () => this.followAddress());
                 // The View menu folds away when a press lands anywhere else, as a menu does.
                 document.addEventListener('pointerdown', (e) => this.foldViewMenu(e));
@@ -2071,6 +2106,7 @@
                 if (event.key !== 'Escape' || event.defaultPrevented || !mayAct(event)) return;
                 if (this.viewMenuEl.open) { this.viewMenuEl.open = false; event.preventDefault(); return; }
                 if (this.windowsMenuEl.open) { this.windowsMenuEl.open = false; event.preventDefault(); return; }
+                if (this.siteMenuEl.open) { this.siteMenuEl.open = false; event.preventDefault(); return; }
                 if (this.cancelDrag()) { event.preventDefault(); return; }
                 // After every other listener has had it: Pictures' lets go of its picture first.
                 setTimeout(() => {
@@ -2144,7 +2180,8 @@
             // Loading and navigation state
             // ---------------------------------------------------------------
 
-            // A site chosen -- the header's drop-down, or the ring's Sites: the address
+            // A site chosen -- the banner's site crumb, a step into a site's piece, or
+            // the ring's Sites: the address
             // names it (/viewer/sites/<name>), so a reload or a link lands on it and
             // Back returns to the one before. The old site's focus, Machine and
             // variants are its own, and stay behind in its entry of the history.
@@ -2155,7 +2192,6 @@
                 for (const key of ['focus', 'machine', 'variant']) url.searchParams.delete(key);
                 if (url.href !== location.href) history.pushState({ site: name }, '', url);
                 this.forgetVariants();
-                this.siteSelect.value = name;
                 return this.loadSite(name);
             }
 
@@ -2165,10 +2201,9 @@
                 const named = location.pathname.match(/\/viewer\/sites\/([^/]+)\/?$/);
                 if (!named) return;
                 const name = decodeURIComponent(named[1]);
-                if (![...this.siteSelect.options].some((o) => o.value === name)) return;
+                if (!SITE_NAMES.includes(name)) return;
                 const params = new URLSearchParams(location.search);
                 this.forgetVariants();
-                this.siteSelect.value = name;
                 this.variantsRead = this.readVariantsFromAddress(params);
                 const port = params.get('machine');
                 this.loadSite(name, params.get('focus') || '').then(async () => {
@@ -2910,21 +2945,28 @@
             // Breadcrumb + minimap
             // ---------------------------------------------------------------
 
-            // The trail, in the header's one row: in a span of its own, so the row
-            // can cut its start and keep its end (the level in view) when it is long.
+            // The view banner, in the header's one row: the universe; then the site,
+            // unless the universe is the site in view, where the trail is its crumb
+            // alone; then each piece stepped into, in a span of its own, so the row can
+            // cut its start and keep its end (the level in view) when it is long.
             renderBreadcrumb() {
+                const inUniverse = this.siteName === UNIVERSE;
+                this.siteCrumbEl.hidden = inUniverse || !this.siteName;
+                if (!inUniverse && this.siteName) {
+                    this.siteLevelEl.textContent = this.siteName;
+                    this.siteLevelEl.href = `${BASE_URL}/viewer/sites/${encodeURIComponent(this.siteName)}`;
+                    this.siteLevelEl.title = this.focusPath.length
+                        ? `${this.siteName}: up to its own level`
+                        : `${this.siteName}, at its own level: choose another site`;
+                }
+                this.siteMenuEl.open = false;
                 this.breadcrumbEl.innerHTML = '';
+                if (!this.focusPath.length) return;
                 const trail = document.createElement('span');
                 trail.className = 'trail';
                 this.breadcrumbEl.appendChild(trail);
-                const rootCrumb = document.createElement('span');
-                rootCrumb.className = 'crumb';
-                rootCrumb.textContent = this.siteName;
-                rootCrumb.addEventListener('click', () => this.goUpTo(0));
-                trail.appendChild(rootCrumb);
-
                 this.focusPath.forEach((name, i) => {
-                    trail.appendChild(document.createTextNode(' › '));
+                    trail.appendChild(document.createTextNode(i ? ' › ' : '› '));
                     const crumb = document.createElement('span');
                     crumb.className = 'crumb';
                     crumb.textContent = name;
@@ -2933,10 +2975,57 @@
                 });
             }
 
-            // A press outside the View menu, or the Windows menu, folds it away.
+            // Every crumb of the banner, in order: the universe, the site where it is
+            // not the universe, then each piece stepped into.
+            crumbs() {
+                return [
+                    this.universeCrumbEl,
+                    ...(this.siteCrumbEl.hidden ? [] : [this.siteLevelEl]),
+                    ...this.breadcrumbEl.querySelectorAll('.crumb'),
+                ];
+            }
+
+            // A crumb that is a link, pressed: the page's when pressed plainly, and the
+            // browser's with a modifier or another button, as any link is (a new tab).
+            crumbIsOurs(event) {
+                if (!event) return true;
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
+                event.preventDefault();
+                return true;
+            }
+
+            // The banner's first crumb: the universe. From another site, out to it, the
+            // site's piece selected there; in it already, up to its own level.
+            toUniverse(how = '', event = null) {
+                if (!this.crumbIsOurs(event)) return null;
+                if (this.siteName !== UNIVERSE) return this.leaveSite(how);
+                if (this.focusPath.length) this.goUpTo(0);
+                else this.setStatus(`Already at ${UNIVERSE_SHOWN}'s own level`, 'success');
+                return null;
+            }
+
+            // The site's crumb: up to the site's own level. At that level there is
+            // nowhere up to go, and it opens the other sites, as its ▾ does.
+            toSiteLevel(event = null) {
+                if (!this.crumbIsOurs(event)) return;
+                if (this.focusPath.length) this.goUpTo(0);
+                else this.siteMenuEl.open = !this.siteMenuEl.open;
+            }
+
+            // The site crumb's menu: every site but the universe, which is the first
+            // crumb; ● the one in view, ○ the others.
+            fillSiteMenu(body) {
+                body.innerHTML = SITE_NAMES.filter((name) => name !== UNIVERSE).map((name) => {
+                    const here = name === this.siteName;
+                    return `<button type="button" class="site-item window-item${here ? ' open' : ''}" data-site="${esc(name)}" title="${esc(here ? `${name}: the site in view` : `Open ${name}; Back returns here`)}">${here ? '●' : '○'} ${esc(name)}</button>`;
+                }).join('');
+            }
+
+            // A press outside the View menu, the Windows menu or the site crumb's folds it away.
             foldViewMenu(event) {
                 if (this.viewMenuEl.open && !this.viewMenuEl.contains(event.target)) this.viewMenuEl.open = false;
                 if (this.windowsMenuEl.open && !this.windowsMenuEl.contains(event.target)) this.windowsMenuEl.open = false;
+                if (this.siteMenuEl.open && !this.siteCrumbEl.contains(event.target)) this.siteMenuEl.open = false;
             }
 
             // A cell of the canvas ring's View: what its item in the View menu
@@ -8388,7 +8477,7 @@
 
             // Whether the universe is a site this page knows, and not the one in view.
             hasUniverseAbove() {
-                return this.siteName !== UNIVERSE && [...this.siteSelect.options].some((o) => o.value === UNIVERSE);
+                return this.siteName !== UNIVERSE && SITE_NAMES.includes(UNIVERSE);
             }
 
             // One level out, the piece left selected, said. From a site's own level, out
@@ -9167,8 +9256,12 @@
             if (windowsAt) windowsSummary.dataset.address = windowsAt; else delete windowsSummary.dataset.address;
             const pairs = [];
             for (const li of viewer.contentsEl.querySelectorAll('li[data-path]')) pairs.push([li, `select:${li.dataset.path}`]);
-            const crumbs = viewer.breadcrumbEl.querySelectorAll('.crumb');
-            if (crumbs.length > 1) pairs.push([crumbs[crumbs.length - 2], 'zoom-out']);
+            // The crumb a step out goes to wears the ring's Step out, which the ring has
+            // inside a site. The universe's and the site's crumbs stay from level to
+            // level, so one that is no longer the step out is told so ('crumb' is no cell).
+            const crumbs = viewer.crumbs();
+            const up = viewer.focusPath.length ? crumbs[crumbs.length - 2] : null;
+            for (const crumb of crumbs) pairs.push([crumb, crumb === up ? 'zoom-out' : 'crumb']);
             pairs.push([viewer.snapToggle.closest('label'), 'view:snap']);
             pairs.push([viewer.detailModeEl.closest('label'), `view:detail:${viewer.detailModeEl.value}`]);
             pairs.push([viewer.overlayToggle.closest('label'), 'view:outlines']);

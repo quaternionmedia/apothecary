@@ -59,7 +59,7 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
 
     page.keyboard.press("Backspace")
     expect(page.locator("#minimap .minimap-tick.filled")).to_have_count(2)
-    page.locator("#breadcrumb .crumb").first.click()
+    page.locator("#site-level").click()
     expect(page.locator("#contents-list")).to_contain_text("workbench")
     docs.step(
         "Back out to the root -- Backspace goes up a level, and a crumb of the trail in "

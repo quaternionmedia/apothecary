@@ -67,15 +67,20 @@ class TestThePageEscapesWhatItIsGiven:
         name = 'a"<b>&</script>'
         page = render_fractal_viewer_page([name], "http://testserver", name, name)
         assert name not in page
-        assert '<option value="a&#34;&lt;b&gt;&amp;&lt;/script&gt;" selected>' in page
+        assert (
+            '<a id="site-level" class="crumb" '
+            'href="http://testserver/viewer/sites/a%22%3Cb%3E%26%3C/script%3E">'
+            "a&#34;&lt;b&gt;&amp;&lt;/script&gt;</a>"
+        ) in page
         assert r'const DEFAULT_SITE = "a\"\u003cb\u003e\u0026\u003c/script\u003e";' in page
 
-    def test_no_sites_leaves_the_select_disabled(self):
+    def test_no_sites_leaves_the_banner_saying_so(self):
         from apothecary.viewer import render_fractal_viewer_page
 
         page = render_fractal_viewer_page([], "http://testserver")
-        assert '<select id="site-select" disabled>' in page
-        assert "No sites found" in page
+        assert '<span id="site-crumb" class="site-crumb" hidden>' in page
+        assert '<span id="no-sites">No sites found</span>' in page
+        assert "const SITE_NAMES = [];" in page
 
 
 class TestTheLibraryIsCheckedIn:

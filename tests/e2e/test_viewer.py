@@ -4,6 +4,7 @@ any other."""
 
 import pytest
 import windows
+from garage import crumbs
 from playwright.sync_api import Page, expect
 
 
@@ -24,14 +25,18 @@ def test_viewer_page_loads(page: Page, base_url: str):
 
 
 @pytest.mark.e2e
-def test_viewer_has_site_dropdown(page: Page, base_url: str):
-    """Test that the site dropdown lists both registered sites."""
-    page.goto(f"{base_url}/viewer/sites/garage")
+def test_the_site_crumb_lists_the_other_sites(page: Page, base_url: str):
+    """The banner's site crumb names the site in view; under its ▾, every site but the
+    universe, which is the banner's first crumb."""
+    _open(page, f"{base_url}/viewer/sites/garage")
 
-    select = page.locator("#site-select")
-    expect(select).to_be_visible()
-    options = select.locator("option")
-    assert options.count() >= 2, "Expected at least garage and apothecary"
+    expect(page.locator("#site-level")).to_have_text("garage")
+    page.locator("#site-menu > summary").click()
+    listed = page.locator("#site-menu .site-item").evaluate_all(
+        "(items) => items.map((i) => i.dataset.site)"
+    )
+    assert listed == ["datum_core", "garage", "theatre"]
+    expect(page.locator("#site-menu .site-item.open")).to_have_text("● garage")
 
 
 @pytest.mark.e2e
@@ -113,16 +118,16 @@ def test_double_click_zooms_in_and_a_crumb_returns(page: Page, base_url: str):
     page.locator("#contents-list .contents-item", has_text="printer_1").dblclick()
 
     # Zoomed into printer_1: its substructures now populate Contents, and the
-    # breadcrumb reflects the new depth.
-    expect(page.locator("#breadcrumb")).to_contain_text("printer_1")
+    # banner's trail reflects the new depth.
+    assert crumbs(page) == ["🧪 Apothecary", "garage", "printer_1"]
     expect(page.locator("#contents-list")).to_contain_text("gantry_system")
 
-    page.locator("#breadcrumb .crumb").first.click()
+    page.locator("#site-level").click()
 
     expect(page.locator("#contents-list")).to_contain_text("workbench")
     # Up one level, as Backspace goes: the piece just left is the one selected.
     assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
-    expect(page.locator("#breadcrumb .crumb")).to_have_count(1)
+    assert crumbs(page) == ["🧪 Apothecary", "garage"]
 
 
 def _depth(node: dict) -> int:

@@ -123,7 +123,11 @@ class NothingFound(Exception):  # timeless: allow a search's result, in the pres
 # Every control written into the page, by the name it carries there. The name is
 # its id where it has one and its class where it does not.
 CONTROLS: Dict[str, Tuple[str, str, str]] = {
-    "site-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of arrangements, loading the one chosen"),
+    # The view banner: its first crumb and the site's are the trail; a site under the
+    # site crumb's ▾ is the control that chooses one.
+    "universe-crumb": (LIST, WHAT_YOU_SEE, "the trail's first crumb: the universe, from anywhere"),
+    "site-level": (LIST, WHAT_YOU_SEE, "the trail's crumb for the site: up to its own level"),
+    "site-item": (WIDGET, WHAT_YOU_SEE, "a site under the site crumb's ▾, loading the one chosen"),
     # The header's View menu (a fold, like Site's): how the world is drawn.
     "snap-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box for snapping to a grid"),
     "walls-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that lets a click in the world pick a wall"),
@@ -885,10 +889,22 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "canvas:pointerup:onCameraDragEnd": (DRAG, WHAT_IS_THERE, "letting go keeps the camera's aim"),
     # controls of its own
-    "siteSelect:change:chooseSite": (
+    "siteMenuBody:click:closest": (
         WIDGET,
         WHAT_YOU_SEE,
-        "choosing from the drop-down, which loads it and puts it in the address",
+        "choosing a site under the site crumb's ▾, which loads it and puts it in the address",
+    ),
+    # The site crumb's ▾: listed afresh as it opens, the site in view focused; the
+    # arrows move along the sites.
+    "siteMenuEl:toggle:fillSiteMenu": (
+        AUTOMATIC,
+        NOTHING,
+        "the site crumb's ▾ opened: the sites listed afresh, the one in view focused",
+    ),
+    "siteMenuBody:keydown:stepFocus": (
+        GESTURE,
+        NOTHING,
+        "the arrows, Home and End moving along the sites under the site crumb's ▾",
     ),
     "snapToggle:change:setTranslationSnap": (WIDGET, WHAT_YOU_SEE, "the snapping tick-box"),
     "wallsToggle:change:setWallsSelectable": (
@@ -1132,7 +1148,16 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "the header's count of problems, bringing Problems in front",
     ),
     "li:dblclick:stepIn": (LIST, WHAT_YOU_SEE, "stepping into a piece from the list"),
-    "rootCrumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
+    "universeCrumbEl:click:toUniverse": (
+        LIST,
+        WHAT_YOU_SEE,
+        "the trail's first crumb: out to the universe, or up to its own level",
+    ),
+    "siteLevelEl:click:toSiteLevel": (
+        LIST,
+        WHAT_YOU_SEE,
+        "the trail's crumb for the site: up to its own level, and there the other sites",
+    ),
     "crumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
     # how much to draw
     "detailModeEl:change:clear": (WIDGET, WHAT_YOU_SEE, "choosing how much to draw"),

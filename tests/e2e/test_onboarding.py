@@ -2,7 +2,7 @@
 where its Device, its Machine and Slice find it, and Slice's refusals saying which
 of "not pinned" and "pinned, not connected" it is; no Slice on a devkit's ring; the
 header's Docs and Panels › Docs opening the documentation and the walkthrough's
-index; and the site drop-down keeping the address, so a reload, Back and Forward
+index; and the banner's site crumb keeping the address, so a reload, Back and Forward
 land where they should.
 
 The server is this module's own: the scripted arduino-cli (an Uno on
@@ -230,40 +230,57 @@ def test_the_headers_docs_and_panels_docs_open_the_docs_and_the_walkthrough(page
 
 
 # --------------------------------------------------------------------------------
-# The site drop-down and the address
+# The banner's sites and the address
 # --------------------------------------------------------------------------------
 
 
 @pytest.mark.e2e
-def test_the_site_drop_down_keeps_the_address_for_a_reload_and_back(page: Page, url: str):
-    """The site drop-down puts the site it chooses in the address, leaving the old
-    site's focus, Machine and variants behind: a reload stays on that site, and Back
-    and Forward go between the two. The ring's Site chooses the same way."""
+def test_a_site_chosen_from_the_banner_keeps_the_address_for_a_reload_and_back(
+    page: Page, url: str
+):
+    """A site chosen from the banner -- the universe by its first crumb, another site
+    under the site crumb's ▾ -- is put in the address, leaving the old site's focus,
+    Machine and variants behind: a reload stays on that site, and Back and Forward go
+    between the two. The ring's Site chooses the same way."""
     _open(page, url, query="?focus=workbench&variant=calibration_cube:0000000000000000")
     expect(page.locator("#breadcrumb")).to_contain_text("workbench")
-    page.locator("#site-select").select_option("apothecary")
+    page.locator("#universe-crumb").click()
     page.wait_for_url(f"{url}/viewer/sites/apothecary", timeout=10000)
-    _said(page, "Loaded")
+    _said(page, "Stepped out of the site garage")
     expect(_row(page, "calibration_cube")).to_be_visible(timeout=20000)
     page.reload()
     expect(_row(page, "calibration_cube")).to_be_visible(timeout=20000)
-    expect(page.locator("#site-select")).to_have_value("apothecary")
+    expect(page.locator("#site-crumb")).to_be_hidden()
 
     page.go_back()
     page.wait_for_url(re.compile(r"/viewer/sites/garage\?focus=workbench"), timeout=10000)
-    expect(page.locator("#site-select")).to_have_value("garage")
+    expect(page.locator("#site-level")).to_have_text("garage")
     expect(page.locator("#breadcrumb")).to_contain_text("workbench", timeout=20000)
     expect(_row(page, "calibration_cube")).to_have_count(0)
     page.go_forward()
     page.wait_for_url(f"{url}/viewer/sites/apothecary", timeout=10000)
-    expect(page.locator("#site-select")).to_have_value("apothecary")
+    expect(page.locator("#site-crumb")).to_be_hidden()
     expect(_row(page, "calibration_cube")).to_be_visible(timeout=20000)
+
+    # Another site, under the site crumb's ▾: the address names it, and Back returns.
+    page.go_back()
+    expect(page.locator("#site-level")).to_have_text("garage")
+    page.locator("#site-menu > summary").click()
+    page.locator("#site-menu .site-item[data-site='datum_core']").click()
+    page.wait_for_url(f"{url}/viewer/sites/datum_core", timeout=10000)
+    expect(page.locator("#site-level")).to_have_text("datum_core")
+    page.go_back()
+    page.wait_for_url(re.compile(r"/viewer/sites/garage\?focus=workbench"), timeout=10000)
+    page.go_forward()
+    page.wait_for_url(f"{url}/viewer/sites/datum_core", timeout=10000)
+    page.locator("#universe-crumb").click()
+    page.wait_for_url(f"{url}/viewer/sites/apothecary", timeout=10000)
 
     # The ring's Site chooses the same way.
     _canvas_ring(page)
     _press(page, "Site", "garage")
     page.wait_for_url(f"{url}/viewer/sites/garage", timeout=10000)
-    expect(page.locator("#site-select")).to_have_value("garage")
+    expect(page.locator("#site-level")).to_have_text("garage")
 
 
 @pytest.mark.e2e

@@ -40,6 +40,26 @@ def open_garage(page: Page, url: str, *, settle: bool = True) -> None:
         settled(page)
 
 
+def to_site(page: Page, name: str) -> None:
+    """Another site, chosen from the view banner as a person chooses one: the universe
+    by the banner's first crumb; from the universe, a site by a double-click on its
+    piece's row; from a site, another under its crumb's ▾. The page holds it after."""
+    if name == "apothecary":
+        page.locator("#universe-crumb").click()
+    elif page.evaluate("() => window.fractalViewer.siteName") == "apothecary":
+        row(page, f"site-{name}").dblclick()
+    else:
+        page.locator("#site-menu > summary").click()
+        page.locator(f"#site-menu .site-item[data-site='{name}']").click()
+    page.wait_for_function("(s) => window.fractalViewer.siteName === s", arg=name)
+
+
+def crumbs(page: Page) -> list:
+    """The view banner's crumbs as they read, in order: the universe, the site where
+    it is not the universe, then each piece stepped into."""
+    return page.evaluate("() => window.fractalViewer.crumbs().map((c) => c.textContent.trim())")
+
+
 def row(page: Page, path: str):
     """A piece's row in Site's tree."""
     return page.locator(f"#contents-list .contents-item[data-path='{path}']")
