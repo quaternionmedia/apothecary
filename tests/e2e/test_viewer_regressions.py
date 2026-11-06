@@ -56,17 +56,18 @@ def _open(page: Page, url: str) -> None:
 @pytest.mark.e2e
 def test_double_clicking_a_piece_below_the_root_zooms_into_it(page: Page, base_url: str):
     _open(page, f"{base_url}/viewer/sites/garage")
-    page.locator("#contents-list .contents-item", has_text="printer_1").dblclick()
-    page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'printer_1'")
+    # The workbench: a machine stepped into is drawn as its part, alone.
+    page.locator("#contents-list .contents-item", has_text="workbench").dblclick()
+    page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'workbench'")
     page.evaluate("() => window.fractalViewer.waveDone")
 
     point = page.evaluate(POINT_ON_A_PIECE_WITH_PIECES)
-    assert point, "no piece of printer_1 with pieces inside it is on the canvas"
+    assert point, "no piece of the workbench with pieces inside it is on the canvas"
     page.mouse.dblclick(point["x"], point["y"])
 
     page.wait_for_function(
         "(path) => window.fractalViewer.focusPath.join('.') === path",
-        arg=f"printer_1.{point['name']}",
+        arg=f"workbench.{point['name']}",
         timeout=5000,
     )
     expect(page.locator("#breadcrumb")).to_contain_text(point["name"])

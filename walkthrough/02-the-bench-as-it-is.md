@@ -66,7 +66,7 @@ Selecting printer_1 shows its rows and, below them, the part its body is; the vi
 
 ## 7. Inside it, the mainboard is the Creality V4.2.2
 
-Stepped into the printer, then its frame, by a double-click on their rows in Site: its children are drawn and the printer's body is not -- the board in its box, with the pins that would be pinned to a port. Its outline, holes, headers and jacks are from the maker's drawing.
+Stepped into the printer, then its frame, by a double-click on their rows in Site: what the frame holds is drawn and the printer is not -- the board in its box, with the pins that would be pinned to a port. Its outline, holes, headers and jacks are from the maker's drawing.
 
 ![Inside it, the mainboard is the Creality V4.2.2](screenshots/02-07-inside-it-the-mainboard-is-the-creality-v4-2-2.png)
 
@@ -84,7 +84,7 @@ Added from the bench's own ring -- Camera, Add here -- a camera part stands abov
 
 ## 10. Looking into a printer, the camera stays in the garage
 
-A camera is a piece of the site, drawn at the level its site is. Stepped into the printer, neither its badge nor its pyramid follows; stepping back out brings them back.
+A camera is a piece of the site, drawn at the level its site is. Stepped into the printer, the printer is its part, alone and whole, with its frame and its gantry as Site's rows; neither the camera's badge nor its pyramid follows, and stepping back out brings them back.
 
 ![Looking into a printer, the camera stays in the garage](screenshots/02-10-looking-into-a-printer-the-camera-stays-in-the-gar.png)
 

@@ -89,9 +89,20 @@ before the view so it never turns it.
 ring's -- else the selection, else what the middle of the view shows, walls
 passed through as a click passes them; as deep as it is drawn. The status line
 says which, and why. Stepping out lands on the piece left, selected. Inside a
-piece the world draws what it holds, not the piece: stepped into a printer, its
-board and its posts are drawn, and its body is the picture at the level above.
-A piece that holds nothing is drawn itself.
+piece the world draws what it holds, not the piece: stepped into the workbench,
+its frame is drawn. A piece that holds nothing is drawn itself.
+
+**A machine is its part.** A piece drawn as a part it names, with pieces of
+its own inside it -- the router, a printer -- is drawn itself too: stepped
+into, its part stands alone and whole, with its working volume and its board's
+badge and nothing else of the site. What it holds is Site's rows there, each
+stepped into from its row (a double-click, or Selected's "⤵ Step into"), where
+the piece's own contents are drawn and the machine is not. A click on the part
+selects the machine: its part, its Device line with the pin and what the board
+last said, and the pieces inside it by name. There it has no Detail and no
+"⤵ Step into", wears no move arrows, which are a piece's at the site's own
+level, and a double-click on it says it is already the level in view.
+`?focus=<machine>` arrives there with it selected.
 
 **Automatic zoom** is the wheel's step: once the camera is as near the level's
 pieces as it may come, or as far out, more scrolling the same way adds up, and
@@ -145,8 +156,8 @@ ring's View is, which adds **Fit**: frame the pieces at this level (Shift+F;
 | ⚙ View, and the ring's View | Does |
 |---|---|
 | Snap to grid | Snaps a dragged piece to a 50 mm grid (on at first) |
-| Detail: Full, Black box, Dot | How much of each compound piece to draw: its real geometry, its bounding box, or a marker. Leaves are always drawn in full; Selected's Detail overrides it for one piece |
-| Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first) |
+| Detail: Full, Black box, Dot | How much of each compound piece to draw: its real geometry, its bounding box, or a marker. Leaves are always drawn in full, and so is a machine stepped into; Selected's Detail overrides it for one piece |
+| Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first); a machine stepped into, the whole level, has none |
 | Select walls | A click in the world picks a wall again, until the page is left (off at first) |
 | Settings | Opens the Settings panel, its tab in front ([below](#settings)) |
 

@@ -2264,13 +2264,14 @@
             // A part usually appears twice on the way down: once as the
             // structure the focus path names, and once as the leaf inside it
             // carrying the geometry. Focusing lands on the former; the
-            // parameters live on the latter.
+            // parameters live on the latter. A machine is both at once: the
+            // piece the path names is drawn as its part, and is what is selected.
             selectFocusedPart() {
                 if (!this.focusPath.length) return;
                 const focus = this.currentFocusNode();
                 const prefix = this.focusPath.join('.');
-                if (!focus.children.length) {
-                    this.selectChild(prefix);  // focus is itself the leaf
+                if (this.drawsItself(focus)) {
+                    this.selectChild(prefix);  // focus is itself the leaf, or a machine drawn as its part
                     return;
                 }
                 const wanted = this.focusPath[this.focusPath.length - 1];
@@ -2369,8 +2370,11 @@
                 // A leaf has nothing beneath it, so rendering "the focus node's
                 // children" would draw an empty scene for the one thing a reader
                 // asked to look at: a focused leaf renders itself. Zooming into a
-                // part shows the part.
-                if (!focus.children.length) {
+                // part shows the part. A machine -- a piece drawn as a part, with
+                // pieces of its own inside it -- is its part too: stepped into, the
+                // part stands alone and whole, and its pieces are Site's rows, each a
+                // step further in.
+                if (this.drawsItself(focus)) {
                     return [{ ...focus, _path: focusPrefix }];
                 }
                 for (const child of focus.children) {
@@ -2404,9 +2408,22 @@
                     for (const child of node.children) addAll(child, pathForChild(path, child.name));
                 };
                 for (const child of focus.children) addAll(child, pathForChild(focusPrefix, child.name));
-                // Same reason as currentRenderNodes: a focused leaf is its own
-                // render node, so it needs a key or selecting it finds nothing.
-                if (!focus.children.length) addAll(focus, focusPrefix);
+                // Same reason as currentRenderNodes: a focused leaf, or a machine
+                // drawn as its part, is its own render node, so it needs a key or
+                // selecting it finds nothing.
+                if (this.drawsItself(focus)) this.renderNodeByKey[focusPrefix] = { ...focus, _path: focusPrefix };
+            }
+
+            // Whether a level draws its own piece and not what the piece holds: a
+            // leaf, which holds nothing, and a piece drawn as a part, whatever it holds.
+            drawsItself(focus) {
+                return !focus.children.length || !!focus.part_ref;
+            }
+
+            // Whether `key` is the piece the level in view was stepped into. It is
+            // drawn only where the level draws itself (drawsItself).
+            isLevelsOwn(key) {
+                return this.focusPath.length > 0 && key === this.focusPath.join('.');
             }
 
             renderFocus() {
@@ -2508,9 +2525,10 @@
             // A leaf is always drawn in full -- "black box" and "dot" exist to
             // stand in for a subassembly, and a leaf has no inside to hide. So
             // the detail level only ever applies to a node with children, and
-            // a per-node override beats the View menu's Detail.
+            // a per-node override beats the View menu's Detail. The piece a level was
+            // stepped into is drawn in full too: it is what the level is for.
             effectiveDetailFor(node, key) {
-                if (!node.children || !node.children.length) return DETAIL_FULL;
+                if (!node.children || !node.children.length || this.isLevelsOwn(key)) return DETAIL_FULL;
                 return this.detailOverrides.get(key) || this.detailMode;
             }
 
@@ -2563,7 +2581,8 @@
                     const detail = this.effectiveDetailFor(child, key);
                     const isCompound = !!(child.children && child.children.length);
 
-                    if (isCompound && this.showCompoundOverlays) {
+                    // A machine stepped into is the whole level: nothing to set it apart from.
+                    if (isCompound && this.showCompoundOverlays && !this.isLevelsOwn(key)) {
                         this.addCompoundOverlay(key, size, center);
                     }
 
@@ -3136,18 +3155,24 @@
                 return this.focusPath.length === 0 && focus.children.some((c) => c.name === node.name);
             }
 
+            // Whether a piece wears the move arrows while it is the selection. A
+            // catalog leaf is not moved by hand (the library lays itself out); a
+            // machine that is a part with things inside it, and a camera, move like
+            // any other structure -- from the site's own level, never from inside.
+            movedByHand(key) {
+                const node = this.renderNodeByKey[key];
+                return !!node && this.isEditableSelection(this.currentFocusNode(), node)
+                    && (this.isCameraNode(node) || !(node.part_ref && node.children.length === 0));
+            }
+
             selectChild(key) {
                 this.pictureMarks.unchoose();
                 if (key !== this.selectedName) this.pictureMarks.untrace();
                 this.selectedName = key;
                 const focus = this.currentFocusNode();
-                const node = this.renderNodeByKey[key];
                 const mesh = this.meshByName[key];
 
-                // A catalog leaf is not moved by hand (the library lays itself
-                // out); a machine that is a part with things inside it, and a
-                // camera, move like any other structure.
-                if (mesh && node && this.isEditableSelection(focus, node) && (this.isCameraNode(node) || !(node.part_ref && node.children.length === 0))) {
+                if (mesh && this.movedByHand(key)) {
                     this.showHandles(mesh);
                 } else {
                     this.hideHandles();
@@ -3655,6 +3680,10 @@
 
             zoomInAffordanceHtml(node) {
                 if (!node.children.length) return '';
+                // The machine the level was stepped into: its pieces are Site's rows.
+                if (this.isLevelsOwn(this.selectedName)) {
+                    return `<div class="prop-readonly" data-facts="inside">Inside it: ${node.children.map((c) => esc(c.name)).join(', ')}. Each is a row in Site; a double-click on one steps into it.</div>`;
+                }
                 return `<button type="button" class="zoom-in-btn" title="Step into ${esc(node.name)}: its pieces become the level (Page Down, or a double-click)">⤵ Step into ${esc(node.name)} (${node.children.length})</button>`;
             }
 
@@ -3668,7 +3697,7 @@
             // has no subassembly to collapse, so it gets no control rather
             // than a control that does nothing.
             detailAffordanceHtml(node) {
-                if (!node.children.length) return '';
+                if (!node.children.length || this.isLevelsOwn(this.selectedName)) return '';
                 const current = this.effectiveDetailFor(node, this.selectedName);
                 const options = Object.entries(DETAIL_LABELS)
                     .map(([value, label]) =>
@@ -8173,6 +8202,15 @@
                 }
                 if (!path) { this.setStatus('Nothing to step into: select a piece, or bring one to the middle of the view', 'error'); return false; }
                 const focus = this.focusPath.join('.');
+                // The piece already stepped into, drawn as itself: its pieces, if it
+                // holds any, are a step further in from Site.
+                if (focus && path === focus) {
+                    const inside = this.currentFocusNode().children.map((c) => c.name);
+                    this.setStatus(inside.length
+                        ? `Already inside ${path}: it is drawn whole, and ${inside.join(', ')} ${inside.length > 1 ? 'are rows' : 'is a row'} in Site, where a double-click steps in`
+                        : `Already inside ${path}: it holds nothing to step into`, 'error');
+                    return false;
+                }
                 if ((focus && !path.startsWith(`${focus}.`)) || !this.nodeByPath(path)) {
                     this.setStatus(`${path} is not inside ${focus || this.siteName}: nothing to step into`, 'error');
                     return false;
@@ -8348,7 +8386,8 @@
                 this.scene.add(realMesh);
                 this.meshByName[key] = realMesh;
                 this.colorMesh(key, node);
-                if (this.selectedName === key) this.showHandles(realMesh);
+                // The selection's arrows follow it onto its real mesh, where it wears any.
+                if (this.selectedName === key && this.movedByHand(key)) this.showHandles(realMesh);
             }
 
             // Every load of a node takes a token; only the newest may land.

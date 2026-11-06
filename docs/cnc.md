@@ -29,7 +29,8 @@ the workbench. Its working area is its `build_volume` and the tool's
 `build_origin`. Inside it, `cnc_router.frame_system` is the control box and
 `cnc_router.frame_system.controller` the board the port is pinned to: the
 maker publishes no drawing of that board, so it is a box and no part draws
-it. `ROUTER_STATUSES` are the words the router's node takes: `idle`,
+it. Stepped into, the router is its part, alone and whole, and the control
+box is Site's row there ([viewer.md](viewer.md#the-world)). `ROUTER_STATUSES` are the words the router's node takes: `idle`,
 `running`, `hold`, `alarm`, `offline` from its polls, and `maintenance` by
 hand.
 
