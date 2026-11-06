@@ -201,6 +201,8 @@
         .window-item:hover, .window-item:focus-visible { background: #2a2f38; color: #fff; outline: none; }
         .window-item.open { color: #e8e8e8; }
         .window-item.view-item { color: #9cd2ff; }
+        /* A view that cannot be laid out now is greyed, under the pointer too. */
+        .window-item.missing, .window-item.missing:hover { color: #6b7078; background: none; cursor: default; }
         /* A stack maximised -- the world alone, or a panel's ☐ -- is all there is: the
            windows under it are hidden, not only covered, so nothing of them is reached. */
         .lm_root:has(> .lm_maximised) > :not(.lm_maximised) { visibility: hidden; }
@@ -1494,6 +1496,8 @@
                 this.boards = mountBoards({ base: BASE_URL, site: () => this.siteName });
                 window.apothecaryBoards = this.boards;
                 this.machine = null;
+                // The last view asked for (openView), settled once it is laid out and said.
+                this.viewDone = Promise.resolve(true);
                 // What pictures and cameras wear in the world (picture_marks.js): each
                 // view as a mat laid through its projection on its host's top or the
                 // floor, its shapes as outlines, one ▣ badge per place; and each
@@ -1731,7 +1735,11 @@
                 this.windowsMenuEl.addEventListener('toggle', () => {
                     if (!this.windowsMenuEl.open) return;
                     this.viewMenuEl.open = false;
-                    this.panels.fillMenu(windowsBody, { done: () => { this.windowsMenuEl.open = false; } });
+                    this.panels.fillMenu(windowsBody, {
+                        done: () => { this.windowsMenuEl.open = false; },
+                        // A view pressed here is the ring's Panels › Windows cell pressed.
+                        views: { offer: (id) => this.viewOffer(id), press: (id) => this.openView(id) },
+                    });
                     windowsBody.querySelector('button')?.focus();
                 });
                 windowsBody.addEventListener('keydown', (ev) => this.panels.stepFocus(windowsBody, ev));
@@ -7240,6 +7248,79 @@
                 this.setStatus(`Opened ${anchor || port}'s Machine: ⌗ Panels › Windows › Machine view lays out its sections`, 'success');
                 return true;
             }
+            // Why a view cannot be laid out now, or null. The Machine view needs a
+            // Machine: the one open, else the selected machine's, which it opens.
+            viewRefusal(id) {
+                const missing = this.panels.viewMissing(id);
+                if (!missing) return null;
+                if (id !== 'machine') return `it lays out ${missing.title}'s windows: open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ''}`;
+                const path = this.selectedName && this.selectedName !== FLOOR_KEY ? this.selectedName : null;
+                // How its subject is opened, in the registry's words (systems.py).
+                const how = `select a machine with a board pinned to it, or open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ''}`;
+                if (!path) return `no Machine is open and nothing is selected: ${how}`;
+                const { row } = this.bindingFor(path);
+                if (row && row.device && row.device.port) return null;
+                return row ? this.noMachine(path) : `no Machine is open, and ${path} has no board pinned: ${how}`;
+            }
+            // What ⊞ Windows says of a view: why it is greyed, else what a press does.
+            viewOffer(id) {
+                const refused = this.viewRefusal(id);
+                if (refused) return { refused: `Not now: ${refused}`, title: null };
+                if (id !== 'machine') return { refused: null, title: null };
+                const lands = 'its windows laid out together, and its chosen file\'s path drawn in the world';
+                return { refused: null, title: this.machine ? `The Machine: ${lands}` : `Opens ${this.selectedName}'s Machine: ${lands}` };
+            }
+            // A view asked for, from ⊞ Windows or the ring's Panels › Windows: its windows
+            // laid out together, and what came of it said. The Machine view opens the
+            // selected machine's Machine first when none is open, and lands on the
+            // file it would run (landOnPath). `label` is what was pressed, `tail` its
+            // ring address. `viewDone` is the last one asked for, settled once it is said.
+            openView(id, { label = null, tail = '' } = {}) {
+                this.viewDone = this.layOutView(id, label, tail);
+                return this.viewDone;
+            }
+            async layOutView(id, label, tail) {
+                const view = this.panels.views().find((v) => v.id === id);
+                const asked = label || (view ? `${view.title} view` : id);
+                const refused = view ? this.viewRefusal(id) : 'no such view';
+                if (refused) { this.setStatus(`${asked}: ${refused}${tail}`, 'error'); return false; }
+                if (id === 'machine' && !this.machine) this.openMachine(this.selectedName);
+                const registered = () => this.panels.list().filter((w) => w.registered).length;
+                const had = registered();
+                let done = this.panels.applyView(id);
+                // A Machine first put in front by its view says its kind there: that
+                // kind's sections are laid out with it.
+                if (done && registered() !== had) done = this.panels.applyView(id);
+                if (!done) { this.setStatus(`${asked}: its windows could not be laid out${tail}`, 'error'); return false; }
+                if (id === 'default') { this.setStatus(`The page's own layout again: the world, Site and Selected beside it, the tabs below them${tail}`, 'success'); return true; }
+                const laid = `The ${view.title} view: its windows laid out together`;
+                const landed = id === 'machine' ? await this.landOnPath() : null;
+                if (landed) this.setStatus(`${laid}. ${landed.said}${tail}`, landed.refused ? 'error' : 'success');
+                else this.setStatus(`${laid}; Panels › Windows › Reset layout puts the page's own back${tail}`, 'success');
+                return true;
+            }
+            // The Machine view's landing: the file the open Machine has chosen, its path
+            // drawn in the world and framed there, the slider that goes through it in the
+            // Print or Cut window beside it -- or, with no file kept, how one comes to be.
+            // What to say of it ({ said, refused }); null for a devkit, which runs no
+            // file and is left as its view laid it out.
+            async landOnPath() {
+                const machine = this.machine, handle = machine && machine.handle;
+                const found = handle ? await handle.print.show() : null;
+                if (!found || this.machine !== machine) return null;
+                const who = machine.path || machine.port;
+                if (!found.file) return { said: `No path is drawn: ${found.none}. In ${who}'s ${found.card}, ${found.how}` };
+                if (!found.drawn) return { said: `${found.file}'s path is not drawn: ${found.refused}`, refused: true };
+                // Drawn where the machine's marks stand: one with no volume in this site
+                // has none, and its file's path nowhere to be.
+                const marks = Object.values(this.marks).find((m) => m.marks && m.port === machine.port);
+                const box = marks ? marks.marks.toolpathBox() : null;
+                if (!box || box.isEmpty()) return { said: `${found.file} is chosen in ${who}'s ${found.card}, but its path has nowhere to be drawn: ${who} stands in ${this.siteName} with no volume of its own`, refused: true };
+                // The world has the room its view left it: framed at that size.
+                this.onResize();
+                this.frameBox(siteBox(box));
+                return { said: `${found.file}'s path is drawn on ${who} and framed, ${found.where}: the preview slider in its ${found.card} goes through each ${found.word}` };
+            }
             // The Machine's panel, its body mounted when it is first in front of a
             // person. A board pinned inside a printer is the printer's, whatever it has
             // been identified as so far: its Machine has no Flashing.
@@ -8722,12 +8803,7 @@
                 }
                 // Panels › Windows › a view: its windows laid out together.
                 if (action.startsWith('panel:view:')) {
-                    const id = action.slice('panel:view:'.length);
-                    const view = viewer.panels.views().find((v) => v.id === id);
-                    const missing = view && viewer.panels.viewMissing(id);
-                    const done = view && !missing && viewer.panels.applyView(id);
-                    const why = !view ? 'no such view' : missing ? `it lays out ${missing.title}'s windows: open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ''}` : 'its windows could not be laid out';
-                    viewer.setStatus(done ? `The ${view.title} view: its windows laid out together; Panels › Windows › Reset layout puts the page's own back${tail}` : `${intent.label}: ${why}${tail}`, done ? 'success' : 'error');
+                    await viewer.openView(action.slice('panel:view:'.length), { label: intent.label, tail });
                     return;
                 }
                 if (action === 'panel:layout:reset') {

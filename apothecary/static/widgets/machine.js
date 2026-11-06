@@ -43,7 +43,8 @@
  * the ring drives (carry, pairs,
  * device), the world asks to list its site's parts again when a piece is made,
  * rebuilt or dropped (print.loadChoices), to choose the piece a made piece's
- * Print names (print.choose) and to slice what is chosen (print.slice), and the
+ * Print names (print.choose), to slice what is chosen (print.slice) and to draw
+ * the chosen file's path for the Machine view (print.show), and the
  * tests read (state, ctl, level, print).
  *
  * A printer's Print from here slices too (docs/slicer.md): its
@@ -1177,6 +1178,40 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         slider.value = previewOn() ? "0" : slider.max;
         if (previewOn() && !pv.data) loadPreview(); else renderPreview();
     }
+    // The Machine view's: the chosen file's path drawn where it is not drawn already,
+    // all of it -- a slider a person left part way stays there. What it found, for the
+    // host to say: the card's name and what a group is called, the file and whether
+    // its path is drawn and how far (`where`), why not (`refused`), or with no file
+    // of this machine's kept why there is none (`none`) and how one comes to be
+    // (`how`). Null on a devkit, which has no file.
+    async function showPreview() {
+        if (!state.port || !isGcode()) return null;
+        const w = words(), found = { card: w.verb, word: w.slice ? "layer" : "pass", file: null, drawn: false, where: null, refused: null, none: null, how: null };
+        await loadPrintFiles();
+        const id = $("print-pick").value || null;
+        const name = id ? (prt.files.find((f) => f.id === id) || { name: id }).name : null;
+        // Another kind of machine's file is drawn only where a person asked for it.
+        if (!id || (madeForAnother(id) && !previewOn())) {
+            found.none = id ? `the file chosen, ${name}, was made for a ${w.slice ? "router" : "printer"}, and none is kept for this ${state.kind} yet` : "no file is kept yet";
+            found.how = `choose a part under makes and ${w.prepare}, or Choose File for ${w.slice ? "a sliced file" : "a CAM post's"}`;
+            return found;
+        }
+        found.file = name;
+        // A router's file stands at its work zero: its working area and a poll are
+        // waited for, so the path is drawn where it will stay.
+        if (w.dialect === "grbl") {
+            await loadWhere();
+            if (!b().status) await model.poll(state.port).catch(() => {});
+        }
+        const before = refusals, slider = $("print-preview");
+        if (!previewOn()) slider.value = slider.max;
+        if (!pv.data || pv.file !== id) await loadPreview(); else renderPreview();
+        const d = pv.data, at = Number(slider.value);
+        found.drawn = previewOn() && !!d && d.groups.length > 0;
+        if (found.drawn) { found.word = d.word; found.where = at >= d.groups.length ? "all of it" : d.groups[at - 1].label; }
+        else found.refused = refusals > before ? lastRefusal : d ? "this file moves nothing" : "its path could not be read";
+        return found;
+    }
     function showChosenSlice() {
         const id = $("print-pick").value || null;
         if (slc.running || id === slc.shown) return;
@@ -1239,8 +1274,20 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         sel.innerHTML = prt.files.length
             ? prt.files.map((f) => `<option value="${esc(f.id)}" ${f.problems.length ? 'class="bad"' : ""}>${esc(f.name)} · ${f.lines} lines${slicedFrom(f)}${f.problems.length ? " · refused: " + esc(f.problems[0]) : ""}</option>`).join("")
             : '<option value="">— no files kept —</option>';
-        if (had && prt.files.some((f) => f.id === had)) sel.value = had;
+        // The files kept are every machine's. What was chosen stays chosen, but the
+        // other kind of machine's file gives way to the newest that is not; with
+        // nothing chosen that one is, before the newest of any.
+        const own = prt.files.find((f) => !madeForAnother(f.id));
+        if (had && prt.files.some((f) => f.id === had) && !(own && madeForAnother(had))) sel.value = had;
+        else if (own) sel.value = own.id;
         renderPrint();
+    }
+    // A kept file whose record says it is the other kind of machine's: a router's
+    // toolpath on a printer, a printer's slice on a router. One kept by hand has no
+    // record, and may be either's.
+    function madeForAnother(id) {
+        const r = prt.slices[id];
+        return !!r && !!r.toolpath !== (state.kind === "router");
     }
     async function loadPrintJobs() {
         if (!state.port || !isGcode()) { prt.jobs = []; renderPrint(); return; }
@@ -1628,7 +1675,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         kind: () => state.kind,
         device, carry, pairs, pad: togglePad, padBack,
         level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
-        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart, slice: slicePart, slices: () => prt.slices, slicing: () => slc.running },
+        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart, slice: slicePart, slices: () => prt.slices, slicing: () => slc.running, show: showPreview },
         destroy() {
             if (state.port) emit("apothecary:toolpath", { port: state.port, preview: null, upto: 0, origin: null });
             if (state.port) model.unwatch(state.port, who);

@@ -266,6 +266,13 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
             if (!path) return null;
             return { segments: pathOf.kind_of.length, drawn: path.geometry.drawRange.count / 2, process: pathOf.process, origin: pathOrigin && { ...pathOrigin } };
         },
+        // The whole path's box in the world, where it stands now, for the page to
+        // frame; null with no path, or one that moves nothing.
+        toolpathBox() {
+            if (!path || !pathOf.kind_of.length) return null;
+            path.updateWorldMatrix(true, false);
+            return new THREE.Box3().setFromObject(path);
+        },
         setPosition(p, { immediate = false } = {}) {
             if (!p) return;
             for (const k of ["x", "y", "z"]) if (typeof p[k] === "number") target[k] = p[k];
