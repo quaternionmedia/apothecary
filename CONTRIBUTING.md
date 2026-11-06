@@ -70,7 +70,7 @@ test. In CI a browser test's cap is also twice the time recorded for it, so a hu
 fails that test and names it, and a job's is twice its recorded median.
 
 `walkthrough/` is executable: its pages are doctests. Pages 01 and 02 are written by their
-browser tests, and a loop's page (03, 04, 05, 06) by the browser suite alone; commit what a
+browser tests, and a loop's page (03, 04, 05, 06) and the working space's (18) by the browser suite alone; commit what a
 run rewrites, and change their words in the test that writes them, not in the page.
 [tests/e2e/README.md](tests/e2e/README.md) has the browser suite's flags and recorders, and
 [walkthrough/15-preflight.md](walkthrough/15-preflight.md) says what `preflight` reproduces
@@ -89,13 +89,14 @@ is not a member: it is its own Cargo project, built by its own toolchain
 
 | Workflow | Fails on |
 |---|---|
+| `lint.yml` | On every pull request and a push to `main`: a finding from `ruff check`, at the version `uv.lock` pins, with nothing else installed |
 | `pytest.yml` | At a `v*` tag and on demand. On Python 3.11: a finding from `ruff check apothecary tests`; the walkthrough; the unit tests with `--slow`, rendering with a pinned OpenSCAD snapshot so the tests that need one run, their coverage measured and kept as the run's artifact (no threshold); the walkthrough and the unit tests again on the newest Python (3.14); the wheel failing to install and render a scene. In three more jobs, in parallel: the browser tests, a third each by recorded time (`--shard K/3`), and a walkthrough page they rewrote |
 | `reuse-lint.yml` | A file with no copyright or licence information (`reuse lint`) |
 | `license-check.yml` | A third-party dependency whose licence is not on the OSI/FSF allowlist, or that has a known vulnerability (`pip-audit`) |
 | `adr-lint.yml` | A record in `governance/qm/adr/`: a draft that narrates its own revisions, a numbered one not ratified, a ratified body edited outside its Amendments, or an index that disagrees with the directory |
 | `signature-check.yml` | A pull request carrying a commit of its own the host does not verify as signed, from 2026-08-15 (the corpus's seed check, run out of `governance/qm/project-seed/ci/`): re-sign it, or say in the description why not |
 | `submodule-check.yml` | A submodule pin its own remote does not have |
-| `leak-check.yml` | On a pull request into `main` and a push to it: a tracked file naming an account's home folder, a path through one person's home layout or a session's scratch space, a shared-conversation link, or a conversation archive's path (the corpus's seed check, copied to `.github/qm-seed/`) |
+| `leak-check.yml` | On a pull request into `main` and a push to it: a tracked file naming an account's home folder, a path through one person's home layout or a session's scratch space, a shared-conversation link, or a conversation archive's path (the corpus's seed check, run out of `governance/qm/project-seed/ci/`) |
 | `one-pr-check.yml` | A pull request that is ready while its base is another open pull request's branch, and a pull request body that addresses its own contributor (the corpus's seed checks, run out of `governance/qm/project-seed/ci/`) |
 | `integrates.yml` | A pull request whose head conflicts with the open pull requests merged before it, depth first from their base and oldest first on each, and every pull request stacked on it (`.github/ci/check_integrates.py`): it is fixed in its own branch before it merges |
 | `walkthrough.yml` | On every pull request and a push to `main`: a hermetic walkthrough page failing (`pytest walkthrough`, the locked packages and nothing else installed). The pages with examples are the pages that say they are hermetic |
@@ -132,7 +133,7 @@ The rules are in [AGENTS.md](AGENTS.md). In short:
 Prose never states a number a command computes; it names the command. The viewer's
 controls: `apothecary census` ([docs/census.md](docs/census.md) says what it counts, and
 what a change to the page keeps). What is open: `apothecary problems`. The tests:
-`uv run pytest --co -q`. Only pages a run writes (walkthrough pages 01 to 06, and
+`uv run pytest --co -q`. Only pages a run writes (walkthrough pages 01 to 06 and 18, and
 `docs/generated/`) print such numbers.
 
 ## Words on the page

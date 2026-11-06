@@ -21,7 +21,8 @@ here: run `apothecary problems`.
   procedure of steps on the blueprint in place of a cue list on a script, the
   machines, the boards and the cameras hosted in it and carlos, joe with vox,
   alfred with otto, datum, ira and ShowRunner reached beside it, every outcome
-  kept in the evidence log; the hub and its own machine and board members are built,
+  kept in the evidence log; the hub, its machine and board members, the procedure
+  fired step by step through it and the members it starts beside itself are built,
   the owner's questions open:
   [docs/plans/irl-hub-2026-11-02.md](docs/plans/irl-hub-2026-11-02.md).
 - Carlos and joe keeping `family/1`: `/family/identity` and `/family/events` on carlos's
@@ -33,8 +34,7 @@ here: run `apothecary problems`.
   ([the first run](docs/validation/2026-11-05-family-started.md)).
 - hearth's `web.router` declares GET and HEAD on one route, so FastAPI warns of duplicate
   operation ids at `/openapi.json`; the fix is hearth's.
-- The next of the irl hub's pull requests, the reader as a hosted member and a page
-  reading the camera's actions: a procedure's steps fire through the hub
+- The reader as a hosted member of the irl hub, and a page reading the camera's actions
   ([docs/plans/irl-hub-2026-11-02.md](docs/plans/irl-hub-2026-11-02.md#order)).
 - Waiting behind it, the bench as a rig carlos draws, slices 2 and 3 (a picture names a device, IO configuration): [docs/plans/qm-family-carlos-2026-10-29.md](docs/plans/qm-family-carlos-2026-10-29.md).
 - A working space seen from every kind of evidence at once: its cameras, one thing from several angles among them, a printer's polls and a board's port, its sensors, a person's goals, directives and actions, and the image models' guesses, each line of the view opening its evidence. First the Ender's three cameras, on the bed for its timelapse, on the head and across the room, tied to its polls (frames kept with polls, then its lead, its motion and its bed seen two ways), then the rig through a concert, the airgap's test rig and a server room. Its first two steps are built and walked from each door in [walkthrough 18](walkthrough/18-the-working-space.md); the next is the Ender's cameras at the bench: [docs/plans/working-space-view-2026-10-30.md](docs/plans/working-space-view-2026-10-30.md).
