@@ -77,6 +77,17 @@ pins as observations of `garage:cnc_router` and its `#spindle:main`, by
 and polls it once, saying the controller's word, the spindle and the work
 position; `--query '$G'` and the other GRBL queries work there.
 
+Which dialect a port is driven in is what the board on it answered as, and a
+port's name moves between boards: the router can come up on the port the
+printer held yesterday. The printer's record does not count for it
+([docs/firmware.md](firmware.md#a-record-is-one-boards-not-its-ports)), so the
+router is a board nothing has identified -- a line either dialect has is taken,
+`--query '$I'` reaches it, and it is asked what it is before a control line or
+a stop goes. Its stop is then its own: `RESET` goes, and a printer's `M112`,
+which a GRBL controller answers `error:20` and goes on cutting, is refused
+and not sent. The same holds the other way round, for a printer on a port
+the router held.
+
 ## Simulated
 
 `APOTHECARY_SERIAL_ENGINE=simulated` answers every port as the simulated

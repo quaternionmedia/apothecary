@@ -2580,7 +2580,9 @@ def attach_device(name: str, path: str, body: DeviceAttachRequest):
 
     A port given for a device that is detected right now is stored as that
     device's own identity (its MAC or USB serial number) when it has one:
-    the pin follows the board, not the socket it happens to be in today.
+    the pin follows the board, not the socket it happens to be in today. A
+    board with neither is stored as its port, never as what another board
+    left under that port's name. The row answered says what was stored.
     """
     site = _get_site_or_404(name)
     if _find_node_by_path(site, path) is None:

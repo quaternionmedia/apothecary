@@ -102,7 +102,8 @@ def test_a_printers_pin_pins_its_mainboard_where_device_machine_and_slice_find_i
     section.locator(".dev-pin").click()
     _said(
         page,
-        f"printer_1's board {BOARD} ← {PRINTER}: printer_1's Device, its Machine and Slice "
+        f"printer_1's board {BOARD} ← FAKESERIAL1, the board on {PRINTER}: printer_1's Device, "
+        "its Machine and Slice "
         "find it there",
     )
     assert list(_pins(page, url)) == [BOARD]
@@ -363,7 +364,8 @@ def test_a_printers_pin_asks_an_idle_board_once_what_it_is(page: Page, url: str)
     _pin_printer_1(page)
     _said(
         page,
-        f"printer_1's board {BOARD} ← {PRINTER}: printer_1's Device, its Machine and Slice "
+        f"printer_1's board {BOARD} ← FAKESERIAL1, the board on {PRINTER}: printer_1's Device, "
+        "its Machine and Slice "
         "find it there; asked it once what it is (M115): Marlin Apothecary Simulator 1.0 "
         "(simulated) · Simulated Ender",
     )

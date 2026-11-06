@@ -149,9 +149,14 @@ def test_make_flash_record_uses_cached_mac(fake_arduino_cli):
 
 def test_detected_devices_merge_cached_probe(fake_arduino_cli):
     state = devices.get_state()
+    # As a probe writes it: with what the scan says of the port's bridge.
     state.remember_device(
         DeviceInfo(
-            port="/dev/ttyFAKE1", vid=None, pid=None, mac="aa:bb", chip="ESP32", flash_size="4MB"
+            port="/dev/ttyFAKE1",
+            serial_number="FAKESERIAL1",
+            mac="aa:bb",
+            chip="ESP32",
+            flash_size="4MB",
         )
     )
     found = {d.port: d for d in devices.detected_devices()}

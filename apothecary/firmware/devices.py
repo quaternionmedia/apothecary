@@ -22,6 +22,12 @@ Views of one board, kept separate so the GUI can show where they disagree:
 Records live in ``~/.apothecary/firmware-state.json`` (``APOTHECARY_STATE_DIR``
 overrides): machine state, not repository state, so it is never committed. A
 print streamed from here is a job (``apothecary/jobs.py``), kept beside them.
+
+A probe's or an identification's record is kept under its port's name, and a
+port's name moves: the kernel numbers ports in the order it meets them. So the
+record is read in one place, ``FirmwareState.cached_device``, and counts only
+for the board the port list finds on that port now; any other board there is
+one nothing has probed or identified.
 """
 
 from __future__ import annotations
@@ -56,7 +62,7 @@ from ..preview.process import OPERATION_COMMENT
 from ..projects.parts.skeleton import ROOT
 from ..stamped import claim, stamp
 from ..stays_local import subprocess_env
-from . import dialects, gcode, grbl
+from . import dialects, gcode, grbl, serial_monitor
 from .models import (
     PRINT_FILE_ID,
     BoardInfo,
@@ -87,6 +93,70 @@ ESP_VENDORS = ("esp32", "esp8266")  # arduino-cli vendor prefixes esptool can ta
 
 def is_espressif_fqbn(fqbn: str) -> bool:
     return fqbn.split(":", 1)[0] in ESP_VENDORS
+
+
+# --- which board holds a port now ----------------------------------------------------
+
+# The serial engine's own port list (pyserial's, read in this process: nothing is
+# opened and no process is started) is cheap enough for a poll to ask. It is kept
+# this long, so the several questions one poll asks are one reading, gone before
+# the next poll and long before a hand can swap two boards.
+PORTS_TTL = 0.5
+_PORTS: Optional[tuple] = None  # (monotonic time, {port: BoardInfo})
+
+
+def ports_now() -> Dict[str, BoardInfo]:
+    """What the serial engine's port list finds on each port right now."""
+    global _PORTS
+    now = time.monotonic()
+    if _PORTS and now - _PORTS[0] < PORTS_TTL:
+        return _PORTS[1]
+    try:
+        listed = {b.port: b for b in serial_monitor.list_ports()}
+    except (ToolchainError, OSError):
+        listed = {}  # a list that cannot be read finds nothing: records are kept
+    _PORTS = (now, listed)
+    return listed
+
+
+def board_on(port: str) -> Optional[BoardInfo]:
+    """The board the port list finds on ``port`` right now, under that name or
+    another name of the same device node (a udev name, ``/dev/serial/by-id/...``);
+    None when it finds nothing there."""
+    listed = ports_now()
+    if port in listed or not port.startswith("/"):
+        return listed.get(port)
+    real = os.path.realpath(port)
+    return next((b for name, b in listed.items() if os.path.realpath(name) == real), None)
+
+
+def _usb_id(value: Optional[str]):
+    """A USB vendor or product id as a number: arduino-cli writes ``0x1A86`` where
+    pyserial writes ``0x1a86``. One that is no number is compared as written."""
+    text = (value or "").strip().lower()
+    try:
+        return int(text, 16) if text else None
+    except ValueError:
+        return text
+
+
+def usb_identity(board) -> tuple:
+    """What tells one USB bridge from another, whichever module read it: vendor,
+    product and serial number. Two of one model with no serial number, or with the
+    generic one, are the same here; the port list's own word, which names the
+    socket too, tells those apart (``FirmwareState.cached_device``)."""
+    serial_number = (board.serial_number or "").strip().lower()
+    return (_usb_id(board.vid), _usb_id(board.pid), serial_number)
+
+
+def _sighting(board: BoardInfo) -> dict:
+    """What the port list says of a port, as it is kept beside the port's record."""
+    return {
+        "vid": board.vid,
+        "pid": board.pid,
+        "serial_number": board.serial_number,
+        "location": board.location,
+    }
 
 
 # --- persistent state -------------------------------------------------------------
@@ -177,6 +247,7 @@ class FirmwareState:
             data = {}
         data.setdefault("flashes", [])
         data.setdefault("devices", {})
+        data.setdefault("seen", {})
         data.setdefault("bindings", [])
         return data
 
@@ -207,14 +278,44 @@ class FirmwareState:
         return newest
 
     def remember_device(self, device: DeviceInfo) -> None:
+        """Keep ``device`` as the record of the board on its port, beside what the
+        port list says holds the port at this moment (``board_on``): the record is
+        that board's, and counts for no other (``cached_device``)."""
+        seen = board_on(device.port)
         with self._lock:
             data = self._load()
             data["devices"][device.port] = device.model_dump(mode="json")
+            if seen is not None:
+                data["seen"][device.port] = _sighting(seen)
+            else:
+                data["seen"].pop(device.port, None)
             self._save(data)
 
     def cached_device(self, port: str) -> Optional[DeviceInfo]:
-        raw = self._load()["devices"].get(port)
-        return DeviceInfo(**raw) if raw else None
+        """The record of the board on ``port``; None when there is none, or when the
+        port list finds another board on the port now.
+
+        A record is kept under a port's name, and the name is the socket's turn in
+        a queue, not the board: so it is read only here, and counts while the port
+        list says of the port what it said when the record was written. A record
+        written without that (before it was kept, or for a port the list did not
+        hold) is compared by its own vendor, product and serial number. A port the
+        list finds nothing on keeps its record: it says what board was last there,
+        which is what marks an unplugged printer's node offline, and nothing can be
+        sent to a board that is not there.
+        """
+        data = self._load()
+        raw = data["devices"].get(port)
+        if not raw:
+            return None
+        device = DeviceInfo(**raw)
+        now = board_on(port)
+        if now is None:
+            return device
+        seen = data["seen"].get(port)
+        if seen is not None:
+            return device if seen == _sighting(now) else None
+        return device if usb_identity(device) == usb_identity(now) else None
 
     # -- node bindings: a device the user pinned to a (site, node path) ----------
 
@@ -412,7 +513,9 @@ def found_by(port: str) -> Optional[str]:
 def detected_devices(
     cli: Optional[ArduinoCli] = None, state: Optional[FirmwareState] = None, fresh: bool = False
 ) -> List[DeviceInfo]:
-    """Every serial port the toolchain modules find, merged with any cached probe for it.
+    """Every serial port the toolchain modules find, merged with the record of the
+    board on it: a record of another board (``FirmwareState.cached_device``, and
+    here the scan's own vendor, product and serial number) is left out.
 
     ``fresh`` bypasses the short scan cache (an explicit rescan button); ``cli``
     asks that arduino-cli alone.
@@ -431,7 +534,7 @@ def detected_devices(
             found_by=b.found_by,
         )
         cached = state.cached_device(b.port)
-        if cached and (cached.vid, cached.pid) == (b.vid, b.pid):
+        if cached and usb_identity(cached) == usb_identity(b):
             info = info.model_copy(
                 update={
                     k: getattr(cached, k)
@@ -574,7 +677,7 @@ def _annotated(link: gcode.GcodeLink, dialect: Optional[str]) -> gcode.GcodeLink
 
 def dialect_of(port: str, state: Optional[FirmwareState] = None) -> Optional[str]:
     """The G-code dialect the board on ``port`` was identified as speaking, or None
-    for a port nothing has identified."""
+    for a port nothing has identified: a port another board holds now is one."""
     cached = (state or get_state()).cached_device(port)
     return cached.printer.dialect if cached is not None and cached.printer is not None else None
 
@@ -628,12 +731,13 @@ def _poll(
 
 
 def known_device(port: str, state: Optional[FirmwareState] = None) -> Optional[DeviceInfo]:
-    """What is known about the board on ``port``: the remembered record (an
+    """What is known about the board on ``port``: its remembered record (an
     identified printer, a probed chip), else the current scan's entry.
 
     The remembered record first, because a poll asks every couple of
     seconds and a port scan is a process; the scan only for a port nothing
-    has talked to yet.
+    has talked to yet, or one another board holds now -- whose record is not
+    this board's (``FirmwareState.cached_device``).
     """
     state = state or get_state()
     cached = state.cached_device(port)
@@ -653,10 +757,13 @@ def machine_kind(device: Optional[DeviceInfo]) -> Optional[str]:
 
 
 def stable_identity(identity: str, state: Optional[FirmwareState] = None) -> str:
-    """The board's own identity for a port that is detected right now, else ``identity``.
+    """The identity of the board on a port -- the one there now, or the one last
+    there when the port is empty -- else ``identity``.
 
     A pin made by port would break the next time the kernel numbered the
-    port differently; the MAC or the USB bridge's serial number does not.
+    port differently; the MAC or the USB bridge's serial number does not. A
+    board with neither (a CH340 bridge has no serial number) is pinned by its
+    port: never by what another board left under that port's name.
     """
     if not identity.startswith("/") and not identity.upper().startswith("COM"):
         return identity  # already a MAC or a serial number

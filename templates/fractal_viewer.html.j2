@@ -7849,10 +7849,15 @@
                     const polled = this.boards.setRow(path, row);
                     this.renderDeviceViews();
                     this.syncWorldMarks();
+                    // What the pin holds is the server's to say: a port is kept as the
+                    // serial number or MAC of the board on it, when that board has one.
+                    const kept = row.identity && row.identity !== identity
+                        ? `${row.identity}, the board on ${identity}`
+                        : identity;
                     const said = path === asked
-                        ? (identity ? `${path} ← ${identity}` : `${path}: device unpinned`)
+                        ? (identity ? `${path} ← ${kept}` : `${path}: device unpinned`)
                         : (identity
-                            ? `${asked}'s board ${path} ← ${identity}: ${asked}'s Device, its Machine and Slice find it there`
+                            ? `${asked}'s board ${path} ← ${kept}: ${asked}'s Device, its Machine and Slice find it there`
                             : `${asked}'s board ${path}: device unpinned`);
                     this.setStatus(said, 'success');
                     await polled;
