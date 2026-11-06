@@ -161,7 +161,7 @@ def test_a_listed_part_and_its_detail_carry_what_a_client_reads():
 def test_viewer_home_redirects_to_the_named_default_site():
     """/viewer redirects to the fractal viewer for api.py's DEFAULT_VIEWER_SITE, a
     site named, so registering another site never moves the front door (parts are
-    reached by navigating into "parts_library"; datum_core is its own site).
+    reached by navigating into "apothecary", the universe; datum_core is its own site).
     """
     client = TestClient(app)
     r = client.get("/viewer", follow_redirects=False)

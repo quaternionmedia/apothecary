@@ -63,7 +63,7 @@ def cube_as_it_was():
 
 def _open(page: Page, url: str) -> None:
     page.set_viewport_size({"width": 1280, "height": 800})
-    page.goto(f"{url}/viewer/sites/parts_library")
+    page.goto(f"{url}/viewer/sites/apothecary")
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
     page.evaluate("() => localStorage.removeItem('apothecary.panels')")
     page.wait_for_function(
@@ -322,7 +322,7 @@ def test_openscad_s_keys_work_in_the_editor_and_the_browser_s_outside(
     # Ctrl+S saves it, under the name greyed in the box.
     page.keyboard.press("Control+s")
     expect(_status(page)).to_contain_text("saved as the variant variant-1", timeout=20000)
-    assert "/viewer/sites/parts_library" in page.url
+    assert "/viewer/sites/apothecary" in page.url
 
 
 # --- where a variant stands, what was before, and framing ------------------------------

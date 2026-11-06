@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- Apothecary is the universe: the site `apothecary` holds every registered part as a leaf and every other site as one piece, drawn in miniature from its top-level pieces' extents; a step into a site's piece opens the site, and Page Up or Backspace at a site's own level goes to the universe. ([doc](docs/viewer.md#the-world))
 - A machine stepped into is its part, alone and whole: the router or a printer drawn as the part it names with its working volume, its pieces Site's rows there, each a step further in. ([doc](docs/viewer.md#the-world))
 - A toolpath preview, one core for a print and a cut: `apothecary/preview` reads any G-code file into what the page draws, instantiated for a printer (layers, extruding and travel) and for a router (passes, cuts, plunges and rapids); the Print and Cut card's slider draws the chosen file's path in the world, a router's at its work zero; ⊞ Windows › Machine and the ring's Machine view open the selected machine's Machine and land on that path, framed; the slicer's bounds now read through it (`docs/toolpath-preview.md`, walkthrough 21).
 - One page for two machines: the kinds' words in one module (`apothecary/static/machine_words.js`), one badge grammar for every board, a Machine section titled by the board's kind (a router's Cut), the Print and Cut card in the loop's order, a shorter Selected, the Machine's head in clusters, the Working space open on any machine with a board pinned and its hour in that machine's words and readings, and the page's palette in one sheet (`docs/plans/ui-refresh-2026-11-04.md`).
@@ -120,6 +121,8 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 - CI on Python 3.11: ruff, the walkthrough, the unit tests and the browser tests in parallel shards, and the REUSE, licence, ADR and submodule gates. ([doc](CONTRIBUTING.md))
 
 ### Changed
+
+- The site `parts_library` is `apothecary`: `/viewer/sites/parts_library` and `/viewer/parts/{name}` go there, and a pin, a camera, a job and a procedure kept under the former name are read under the new one. ([code](apothecary/site_names.py))
 
 - Every scene object says what it is (`type`): `/render` and the CLI refuse one with no type or an unknown one, where 0.1.0 rebuilt it from its shape. ([doc](docs/scene-json.md))
 - Every part is a folder named with underscores, `parts/<name>/<name>.scad`, in category folders where it has kin (`parts/boards/`). ([doc](docs/parts-authoring.md))

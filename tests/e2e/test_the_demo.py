@@ -336,7 +336,7 @@ def test_the_demo_goes_round_a_picture_to_a_print(page: Page, demo, shots):
 
 @pytest.mark.e2e
 def test_the_demo_goes_round_designing_a_part_and_editing_its_scad(page: Page, demo, shots):
-    """calibration_cube in the parts library: its size moved and applied, drawn as a
+    """calibration_cube in the universe: its size moved and applied, drawn as a
     variant; its SCAD edited and rendered; saved as a variant into the demo's own
     clone; then Part › Defaults and Apply draw the saved part again."""
     if not get_renderer().is_available:
@@ -348,7 +348,7 @@ def test_the_demo_goes_round_designing_a_part_and_editing_its_scad(page: Page, d
         capture_output=True,
         text=True,
     ).stdout
-    page.goto(f"{url}/viewer/sites/parts_library")
+    page.goto(f"{url}/viewer/sites/apothecary")
     _said(page, "Loaded")
     page.wait_for_function(
         "() => { const m = window.fractalViewer.meshByName['calibration_cube'];"

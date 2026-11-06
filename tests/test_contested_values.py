@@ -124,9 +124,7 @@ class TestOneEntryPoint:
     def test_the_part_link_lands_in_the_viewer(self):
         response = client.get("/viewer/parts/datum_core", follow_redirects=False)
         assert response.status_code == 307
-        assert response.headers["location"] == (
-            "/viewer/sites/parts_library?focus=datum_core"
-        )
+        assert response.headers["location"] == "/viewer/sites/apothecary?focus=datum_core"
 
     def test_an_unknown_part_is_404_before_the_redirect(self):
         """Better a 404 here than a redirect onto a view that cannot explain
@@ -140,7 +138,7 @@ class TestOneEntryPoint:
         assert not (ROOT / "templates" / "part_dashboard.html.j2").exists()
 
     def test_the_controls_live_in_the_one_viewer(self):
-        page = client.get("/viewer/sites/parts_library").text
+        page = client.get("/viewer/sites/apothecary").text
         assert "loadPartParams" in page
         assert "badge-contested" in page
         assert "jsdelivr" not in page

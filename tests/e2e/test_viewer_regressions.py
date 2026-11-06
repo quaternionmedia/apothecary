@@ -90,10 +90,10 @@ ON_THE_GRID = """(key) => {
 
 @pytest.mark.e2e
 def test_a_part_stepped_into_stands_on_the_grid_and_fills_the_view(page: Page, base_url: str):
-    """calibration_cube stands in the parts library far from the site's origin. Stepped
+    """calibration_cube stands in the universe far from the site's origin. Stepped
     into, it stands on the floor grid, which lies under the level in view, and is framed
     near enough to take a good share of the view, as View › Fit frames it."""
-    _open(page, f"{base_url}/viewer/sites/parts_library")
+    _open(page, f"{base_url}/viewer/sites/apothecary")
     page.locator("#contents-list .contents-item[data-path='calibration_cube']").dblclick()
     page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'calibration_cube'")
     page.evaluate("() => window.fractalViewer.waveDone")
@@ -138,7 +138,7 @@ def test_the_site_is_drawn_as_openscad_draws_it_not_mirrored(page: Page, base_ur
     its -x, its -y side, its top. Seen from the site's front, the notch is at the top left,
     as OpenSCAD draws it -- a ray through it meets the mesh 1.5 mm in, one through the
     top right meets the front face -- and the axes are the site's: red x, green y, blue z."""
-    _open(page, f"{base_url}/viewer/sites/parts_library")
+    _open(page, f"{base_url}/viewer/sites/apothecary")
     page.locator("#contents-list .contents-item[data-path='calibration_cube']").dblclick()
     page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'calibration_cube'")
     page.wait_for_function(
@@ -186,7 +186,7 @@ def v_slot_as_it_was():
 def test_apply_draws_what_it_rendered(page: Page, base_url: str, v_slot_as_it_was):
     """A staged length survives re-selecting the part from the ring; Apply renders it,
     the mesh on screen is the new one, and nothing is left staged."""
-    _open(page, f"{base_url}/viewer/sites/parts_library")
+    _open(page, f"{base_url}/viewer/sites/apothecary")
     row = page.locator("#contents-list .contents-item[data-path='v_slot']")
     row.click()
     windows.open_window(page, "part-parameters")
@@ -240,7 +240,7 @@ def pinned(printer_url):
 
 
 def _leave_the_site(page: Page, url: str) -> None:
-    page.locator("#site-select").select_option("parts_library")
+    page.locator("#site-select").select_option("apothecary")
 
 
 def _unpin(page: Page, url: str) -> None:

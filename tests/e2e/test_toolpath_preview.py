@@ -361,6 +361,34 @@ def test_windows_machine_opens_the_selected_machine_and_lands_on_its_file_s_path
 
 
 @pytest.mark.e2e
+def test_windows_machine_lands_on_the_path_in_a_site_reached_through_the_universe(
+    page: Page, url: str
+):
+    """The garage stepped into from its piece in the universe is the garage: its
+    router selected, ⊞ Windows › Machine opens the Machine and draws and frames the
+    file's path, as it does in the garage opened by its address."""
+    machine = MACHINES["router"]
+    _keep_only(url, machine)
+    page.goto(f"{url}/viewer/sites/apothecary")
+    piece = page.locator("#contents-list .contents-item[data-path='site-garage']")
+    piece.dblclick(timeout=20000)
+    page.wait_for_function("() => window.fractalViewer.siteName === 'garage'")
+    wears(page, machine.node)
+    _select(page, machine.node)
+    assert page.evaluate("() => window.fractalViewer.machine") is None
+    _from_windows(page)
+    expect(page.locator(f"{windows.MACHINE} > .machine.kind-router")).to_be_attached(timeout=20000)
+    body = windows.machine(page)
+    expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
+    assert _drawn(page, machine.node)["drawn"] == len(machine.expected.kind_of)
+    expect(status(page)).to_contain_text(
+        f"{machine.file}'s path is drawn on {machine.node} and framed"
+    )
+    framed = _framed(page, machine.node)
+    assert framed["target"] == pytest.approx(framed["mid"], abs=1.0)
+
+
+@pytest.mark.e2e
 @pytest.mark.parametrize("kind", list(MACHINES))
 def test_the_ring_s_machine_view_draws_the_open_machine_s_file_and_keeps_a_slider_left_part_way(
     page: Page, url: str, kind: str

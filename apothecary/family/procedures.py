@@ -33,6 +33,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..evidence import log
 from ..firmware.devices import private_folder, state_dir
+from ..site_names import former
 from ..wiring.carlos import CARLOS
 from . import hub, members
 
@@ -99,8 +100,23 @@ def _file(site: str, name: str) -> Path:
     return state_dir() / "procedures" / site / f"{name}.json"
 
 
+def _kept(site: str, name: str) -> Path:
+    """Where the procedure is read from: its site's folder, else the folder of a name
+    the site had before (``apothecary/site_names.py``). It is written to its site's."""
+    here = _file(site, name)
+    if here.is_file():
+        return here
+    return next((was for was in (_file(f, name) for f in former(site)) if was.is_file()), here)
+
+
 def names(site: str) -> List[str]:
-    return sorted(path.stem for path in _file(site, "any").parent.glob("*.json"))
+    return sorted(
+        {
+            path.stem
+            for folder in (site, *former(site))
+            for path in _file(folder, "any").parent.glob("*.json")
+        }
+    )
 
 
 def save(site: str, name: str, procedure: Procedure) -> None:
@@ -115,7 +131,7 @@ def save(site: str, name: str, procedure: Procedure) -> None:
 def load(site: str, name: str) -> Optional[Procedure]:
     """The procedure, None when there is none, ``Unreadable`` when its file will not read."""
     try:
-        return Procedure.model_validate(json.loads(_file(site, name).read_text(encoding="utf-8")))
+        return Procedure.model_validate(json.loads(_kept(site, name).read_text(encoding="utf-8")))
     except FileNotFoundError:
         return None
     except ValueError as exc:  # a hand's edit: not JSON, or not a procedure

@@ -16,7 +16,7 @@ an actual persistence layer without changing the call sites below.
 
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from .hierarchy import Assembly, LayoutReport, check_no_overlaps
 
@@ -29,11 +29,21 @@ class UnknownSiteError(KeyError):
 
 
 class SiteStore:
-    """Holds one live Site per registered name, built lazily on first access."""
+    """Holds one live Site per registered name, built lazily on first access.
 
-    def __init__(self, registry: Dict[str, Tuple[SiteFactory, SiteValidator]]):
+    ``universe`` names the one site that holds a piece for each of the others
+    (``apothecary/universe.py``). Its pieces are drawn again from the register
+    each time it is fetched, so a site added to the register has its piece, one
+    taken off it has none, and a piece follows a site whose own pieces moved."""
+
+    def __init__(
+        self,
+        registry: Dict[str, Tuple[SiteFactory, SiteValidator]],
+        universe: Optional[str] = None,
+    ):
         self._registry = registry
         self._sites: Dict[str, Assembly] = {}
+        self._universe = universe
 
     def _entry(self, name: str) -> Tuple[SiteFactory, SiteValidator]:
         entry = self._registry.get(name)
@@ -57,7 +67,26 @@ class SiteStore:
             site = factory()
             stand(name, site)
             self._sites[name] = site
-        return self._sites[name]
+        site = self._sites[name]
+        if name == self._universe:
+            from .universe import represent
+
+            represent(site, self.others())
+        return site
+
+    def others(self) -> Dict[str, Assembly]:
+        """Every registered site but the universe, built, by its name: what the
+        universe holds a piece for. One that cannot be built now -- forgotten, or
+        its picture left the shelf, since ``names`` -- is left out."""
+        found: Dict[str, Assembly] = {}
+        for name in self.names():
+            if name == self._universe:
+                continue
+            try:
+                found[name] = self.get(name)
+            except KeyError:
+                continue
+        return found
 
     def loaded(self) -> List[str]:
         """Sites built so far -- the only ones whose in-memory state anyone has edited."""

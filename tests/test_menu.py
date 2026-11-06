@@ -113,7 +113,7 @@ def test_a_label_that_is_too_long_is_refused_at_the_source():
         "printer_1.gantry_system",
         "enclosure.mounting_system.m3_boss_fl",
         "a_very_long_compound_name_indeed",
-        "parts_library",
+        "site-datum_core",
         "supercalifragilistic",
         "the quick brown fox jumps",
     ],
@@ -987,7 +987,7 @@ def test_the_canvas_ring_lists_the_pieces_at_this_level_and_the_way_out():
     labels = [o.label for o in zoomed.options]
     assert labels[0] == "Pieces"
     # As the page asks for it, with the sites and the site's groups.
-    asked = {"site_names": ["garage", "parts_library"], "groups": ["wall"]}
+    asked = {"site_names": ["apothecary", "garage"], "groups": ["wall"]}
     top = resolve(Context(pointing=Pointing.CANVAS), _garage(), **asked)
     nested = resolve(Context(pointing=Pointing.CANVAS, targets=["printer_1"]), _garage(), **asked)
     out = next(o for o in nested.options if o.label == "Step out")
@@ -1082,7 +1082,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     root = resolve(
         Context(pointing=Pointing.CANVAS),
         _garage(),
-        site_names=["garage", "parts_library"],
+        site_names=["apothecary", "garage"],
         groups=["wall", "furniture"],
     )
     panels = next(o for o in root.options if o.label == "Panels")
@@ -1295,7 +1295,7 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
         root = resolve(
             Context(pointing=Pointing.CANVAS, targets=targets),
             _garage(),
-            site_names=["garage", "parts_library"],
+            site_names=["apothecary", "garage"],
             groups=["wall", "furniture"],
         )
         assert len(root.options) <= 8
@@ -1644,7 +1644,7 @@ def test_the_server_tells_the_ring_what_a_part_s_scad_is(monkeypatch):
     def part_cells(target):
         ring = client.post(
             "/menu/resolve",
-            json={"context": {"pointing": "node", "targets": [target]}, "site": "parts_library"},
+            json={"context": {"pointing": "node", "targets": [target]}, "site": "apothecary"},
         ).json()
         part = next(o for o in ring["options"] if o["label"] == "Part")
         return [c.get("action") or c["id"] for c in part["children"]]
@@ -2166,7 +2166,7 @@ def test_the_fullest_context_holds_every_ring_to_eight_and_says_how_deep_it_goes
     canvas = resolve(
         Context(pointing=Pointing.CANVAS),
         _garage(),
-        site_names=["garage", "parts_library", "datum_core"],
+        site_names=["apothecary", "garage", "datum_core"],
         groups=["wall", "furniture"],
         picture=told,
     )

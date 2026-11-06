@@ -69,7 +69,7 @@ class TestStagingReachesTheViewer:
     and what Apply does; the staging is the same code for both."""
 
     def test_the_panel_stages_rather_than_applying(self):
-        page = client.get("/viewer/sites/parts_library").text
+        page = client.get("/viewer/sites/apothecary").text
         for marker in ("stagedDiff", "refreshStage", "committedParams", "apply-btn"):
             assert marker in page, marker
 
@@ -79,7 +79,7 @@ class TestStagingReachesTheViewer:
         a part target's apply reaches stl/generate; a made piece's PUTs the
         made route, and a camera's its own.
         """
-        page = client.get("/viewer/sites/parts_library").text
+        page = client.get("/viewer/sites/apothecary").text
         stage = page[page.index("async refreshStage()") : page.index("bindStageActions")]
         assert "target.validateUrl" in stage
         assert "stl/generate" not in stage
@@ -97,7 +97,7 @@ class TestStagingReachesTheViewer:
         """Otherwise the next diff is measured against the wrong baseline and
         the panel shows changes that are already in the geometry.
         """
-        page = client.get("/viewer/sites/parts_library").text
+        page = client.get("/viewer/sites/apothecary").text
         bind = page[page.index("bindStageActions(target)") :]
         bind = bind[: bind.index("// The part's parameters")]
         assert "applyEditor" in bind
@@ -110,13 +110,13 @@ class TestStagingReachesTheViewer:
         """The variant cache answers what it holds (apothecary/projects/parts/variants.py);
         force=true would render every Apply again. The page's id lets a newer Apply
         stop an older one's render."""
-        page = client.get("/viewer/sites/parts_library").text
+        page = client.get("/viewer/sites/apothecary").text
         target = page[page.index("partTarget(ref) {") : page.index("pieceTarget(name")]
         assert "stl/generate?page=${encodeURIComponent(PAGE_ID)}" in target
         assert "force" not in target
 
     def test_the_check_waits_for_the_controls_to_rest(self):
-        page = client.get("/viewer/sites/parts_library").text
+        page = client.get("/viewer/sites/apothecary").text
         stage = page[page.index("async refreshStage()") : page.index("async validateStaged(")]
         assert "setTimeout(() => this.validateStaged(" in stage and "fetch(" not in stage
 

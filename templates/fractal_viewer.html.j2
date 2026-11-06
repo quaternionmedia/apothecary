@@ -874,6 +874,10 @@
         };
         const DEFAULT_SITE = {{ default_site | tojson }};
         const INITIAL_FOCUS = {{ focus_path | tojson }};
+        // The universe (apothecary/universe.py): the site every part is a leaf of, and
+        // every other site one piece of. A step out of a site's own level goes to it.
+        const UNIVERSE = {{ universe | tojson }};
+        const UNIVERSE_SHOWN = {{ universe_shown | tojson }};
         // What a link into the world asks to have open: ?panel=bench (where /firmware
         // leads) and ?machine=<port> (where /firmware/monitor?port= leads). Read once,
         // before the first load closes any Machine and the address follows it.
@@ -1034,6 +1038,9 @@
         // in the world passes through them, unless the View menu says otherwise.
         const WALL_CATEGORY = 'wall';
         const WALL_OPACITY = 0.25;
+        // The clear box round a site's miniature in the universe: there to be clicked
+        // and to wear the selection's edges, and seen through to the boxes inside.
+        const MINIATURE_CASE_OPACITY = 0.08;
         const HANDLE_SIZE = 0.6;      // the move arrows, against TransformControls' own 1
         const HANDLE_LIGHTNESS = 0.55; // and their opacity, against its own
         const ORBIT_EPS = 0.000001;   // OrbitControls' own measure of the camera having moved
@@ -1221,7 +1228,7 @@
         // Standardized navigation over Assembly's fractal tree: the same
         // click, double-click, wheel and step-out controls apply at any depth,
         // because every node -- Site, Structure, Substructure, Feature, or a
-        // parts-library leaf -- is the same shape.
+        // part's leaf in the universe -- is the same shape.
         class FractalViewer {
             constructor() {
                 this.canvas = document.getElementById('viewer-canvas');
@@ -2298,7 +2305,8 @@
                 const resolved = [];
                 for (const name of segments) {
                     const child = findChild(node, name);
-                    if (!child) break;
+                    // A site's piece is not a level: its site is.
+                    if (!child || child.site_ref) break;
                     resolved.push(name);
                     node = child;
                 }
@@ -2323,8 +2331,8 @@
                 const focus = this.currentFocusNode();
                 const child = findChild(focus, name);
                 // A leaf is a destination too: it renders as itself, which is
-                // how a part in the parts library is reached.
-                if (!child) return;
+                // how a part in the universe is reached. A site's piece is no level.
+                if (!child || child.site_ref) return;
                 this.focusPath = [...this.focusPath, name];
                 this.selectedName = null;
                 this.renderFocus();
@@ -2868,7 +2876,7 @@
             // is actually in view, and under it: the grid lies on the floor
             // beneath the level's middle (three.js x, z), its lines on whole
             // cells of the site's frame, where snapping puts things. A level
-            // far from the origin -- a part in the parts library -- stands on it.
+            // far from the origin -- a part in the universe -- stands on it.
             updateHelpersForSpan(span, middle = { x: 0, z: 0 }) {
                 // Six times the span, so the ground plane does not end mid-view
                 // when the camera dollies out to its clamp; divisions are capped
@@ -3115,7 +3123,8 @@
                 const inside = hasChildren ? ` — ${node.children.length} inside` : '';
                 // Its role only where it is not what a piece at this level usually is.
                 const role = ['structure', 'substructure'].includes(node.role) ? '' : ` (${node.role})`;
-                label.textContent = `${node.name}${role}${inside}`;
+                // A site's piece reads as its site's name: "garage (site)".
+                label.textContent = `${node.site_ref || node.name}${role}${inside}`;
                 li.appendChild(label);
                 // A piece a problem names is red, saying what is wrong on hover; a
                 // piece with one somewhere inside it says so.
@@ -3164,12 +3173,13 @@
             }
 
             // Whether a piece wears the move arrows while it is the selection. A
-            // catalog leaf is not moved by hand (the library lays itself out); a
+            // catalog leaf is not moved by hand (the universe lays itself out), nor is a
+            // site's piece there; a
             // machine that is a part with things inside it, and a camera, move like
             // any other structure -- from the site's own level, never from inside.
             movedByHand(key) {
                 const node = this.renderNodeByKey[key];
-                return !!node && this.isEditableSelection(this.currentFocusNode(), node)
+                return !!node && !node.site_ref && this.isEditableSelection(this.currentFocusNode(), node)
                     && (this.isCameraNode(node) || !(node.part_ref && node.children.length === 0));
             }
 
@@ -3416,7 +3426,7 @@
             }
 
             // The one place the three possible "Selected" panels are chosen:
-            // a parts-library leaf always gets the absorbed part view
+            // a part's leaf in the universe always gets the absorbed part view
             // (regardless of depth); otherwise, position/status editing only
             // works for a direct child of the root (see isEditableSelection),
             // so anything deeper -- or any leaf of an expanded category that
@@ -3492,6 +3502,12 @@
                 const selected = this.renderNodeByKey[this.selectedName];
                 if (!selected) {
                     this.selectedBodyEl.innerHTML = '<div class="no-selection">Click a piece to select it</div>';
+                    return;
+                }
+                // A site's piece in the universe: that it is a site, how large the
+                // site really is, and the way in. Nothing of it is edited from here.
+                if (selected.site_ref) {
+                    this.renderSitePiecePanel(selected);
                     return;
                 }
                 // A node is a node first (its name, its place, its status); a
@@ -3687,12 +3703,16 @@
             }
 
             zoomInAffordanceHtml(node) {
-                if (!node.children.length) return '';
+                if (!node.children.length && !node.site_ref) return '';
                 // The machine the level was stepped into: its pieces are Site's rows.
                 if (this.isLevelsOwn(this.selectedName)) {
                     return `<div class="prop-readonly" data-facts="inside">Inside it: ${node.children.map((c) => esc(c.name)).join(', ')}. Each is a row in Site; a double-click on one steps into it.</div>`;
                 }
-                return `<button type="button" class="zoom-in-btn" title="Step into ${esc(node.name)}: its pieces become the level (Page Down, or a double-click)">⤵ Step into ${esc(node.name)} (${node.children.length})</button>`;
+                // A site's piece is stepped into as its site; any other piece, as a level.
+                const into = node.site_ref || node.name;
+                const does = node.site_ref ? 'the site opens at its own level, and Back returns here' : 'its pieces become the level';
+                const holds = node.site_ref ? '' : ` (${node.children.length})`;
+                return `<button type="button" class="zoom-in-btn" title="Step into ${esc(into)}: ${does} (Page Down, or a double-click)">⤵ Step into ${esc(into)}${holds}</button>`;
             }
 
             bindZoomInAffordance(node) {
@@ -3757,6 +3777,36 @@
                 if (this.effectiveDetailFor(node, key) === DETAIL_FULL) this.addToWave(this.loadAndUpgrade(node, this.loadGeneration));
                 else this.nextLoadToken(key);  // a load already under way for it is stale
                 this.renderSelectedPanel();
+            }
+
+            // A site's piece: its site's name, that it is a site, the site's real size
+            // (the piece is a miniature, not to scale beside the parts), and the step in.
+            renderSitePiecePanel(node) {
+                const mm = (v) => Number(v).toFixed(0);
+                const real = node.site_size ? `${node.site_size.map(mm).join(' × ')} mm` : 'nothing in it has a size';
+                const scale = this.miniatureScale(node);
+                const drawn = !node.site_size ? ''
+                    : scale >= 1 ? 'Drawn here the size it is.'
+                    : `Drawn here in miniature, 1:${(1 / scale).toFixed(scale > 0.1 ? 1 : 0)}: not to scale beside the parts.`;
+                this.selectedBodyEl.innerHTML = `
+                    <div class="prop-row"><label>Name</label><span>${esc(node.site_ref)}</span></div>
+                    <div class="prop-readonly" data-facts="site">
+                        A site, stood here as one piece: a step into it opens the site.<br>
+                        Real size: <span data-facts="site-size">${esc(real)}</span><br>
+                        ${esc(drawn)}
+                    </div>
+                    ${this.zoomInAffordanceHtml(node)}
+                `;
+                this.bindZoomInAffordance(node);
+            }
+
+            // How much smaller than its site a site's piece is drawn: 1 for one drawn
+            // the size it is.
+            miniatureScale(node) {
+                if (!node.site_size || !node.footprint) return 1;
+                const real = Math.max(node.site_size[0], node.site_size[1]);
+                const here = Math.max(node.footprint.max[0] - node.footprint.min[0], node.footprint.max[1] - node.footprint.min[1]);
+                return real > 0 ? Math.min(1, here / real) : 1;
             }
 
             renderGenericPanel(node) {
@@ -7470,7 +7520,7 @@
                     write: (values) => this.writeTied(target, values),
                     edit: async () => {
                         const found = Object.entries(this.renderNodeByKey).find(([, n]) => n.part_ref === 'airgap');
-                        if (!found) { this.setStatus(`The airgap part is not in ${this.siteName}: ${BASE_URL}/viewer/parts/airgap opens the library on it`, 'error'); return false; }
+                        if (!found) { this.setStatus(`The airgap part is not in ${this.siteName}: ${BASE_URL}/viewer/parts/airgap opens the universe on it`, 'error'); return false; }
                         if (!this.openEditor(found[0])) return false;
                         await new Promise((resolve) => setTimeout(resolve, 0));
                         return true;
@@ -8225,8 +8275,9 @@
                     if (this.wheelPastLimit > wheelResistance) {
                         this.wheelPastLimit = 0;
                         this.stepQuietUntil = now + STEP_QUIET_MS;
-                        if (zoomingIn) this.stepIn(null, 'the wheel');
-                        else this.stepOut('the wheel');
+                        // The wheel steps within a site: it never leaves one for another.
+                        if (zoomingIn) this.stepIn(null, 'the wheel', { acrossSites: false });
+                        else this.stepOut('the wheel', { acrossSites: false });
                     }
                 } else {
                     this.wheelPastLimit = 0;
@@ -8273,7 +8324,8 @@
             // the piece named (double-clicked, or the ring's), else the selection, else what
             // the middle of the view shows -- walls passed through, as a click passes them
             // -- as deep as it is drawn. The status line says what it did, and why that one.
-            stepIn(target = null, how = '') {
+            // A site's piece in the universe is stepped into as its site (enterSite).
+            stepIn(target = null, how = '', { acrossSites = true } = {}) {
                 let path = target, why = how;
                 if (!path && this.selectedName && this.selectedName !== FLOOR_KEY) { path = this.selectedName; why = `${how ? `${how}, ` : ''}the selection`; }
                 if (!path) {
@@ -8296,6 +8348,12 @@
                     this.setStatus(`${path} is not inside ${focus || this.siteName}: nothing to step into`, 'error');
                     return false;
                 }
+                const site = this.nodeByPath(path).site_ref;
+                if (site) {
+                    if (!acrossSites) { this.setStatus(`${site} is a site: a double-click, ${keyLabel(this.settings.values().zoomInKey)} or Selected's Step into opens it`, 'error'); return false; }
+                    this.enterSite(site, why);
+                    return true;
+                }
                 this.focusPath = path.split('.');
                 this.selectedName = null;
                 this.renderFocus();
@@ -8304,8 +8362,39 @@
                 return true;
             }
 
-            // One level out, the piece left selected, said.
-            stepOut(how = '') {
+            // A site's piece stepped into: its site, chosen as the header chooses one, so
+            // Back returns to the universe.
+            enterSite(name, why = '') {
+                const loaded = this.chooseSite(name);
+                if (!loaded) return null;
+                return loaded.then(() => {
+                    if (this.siteName === name) this.setStatus(`Stepped into the site ${name}${why ? ` (${why})` : ''}; Back returns to ${UNIVERSE_SHOWN}`, 'success');
+                });
+            }
+
+            // Out of a site's own level: the universe, the site's piece selected there, so
+            // a step out lands on what was left as it does at any level.
+            leaveSite(how = '') {
+                const left = this.siteName;
+                const loaded = this.chooseSite(UNIVERSE);
+                if (!loaded) return null;
+                return loaded.then(() => {
+                    if (this.siteName !== UNIVERSE) return;
+                    const piece = this.tree.children.find((c) => c.site_ref === left);
+                    if (piece) this.selectChild(piece.name);
+                    this.setStatus(`Stepped out of the site ${left} to ${UNIVERSE_SHOWN}${how ? ` (${how})` : ''}`, 'success');
+                });
+            }
+
+            // Whether the universe is a site this page knows, and not the one in view.
+            hasUniverseAbove() {
+                return this.siteName !== UNIVERSE && [...this.siteSelect.options].some((o) => o.value === UNIVERSE);
+            }
+
+            // One level out, the piece left selected, said. From a site's own level, out
+            // is the universe; the universe has nothing above it.
+            stepOut(how = '', { acrossSites = true } = {}) {
+                if (!this.focusPath.length && acrossSites && this.hasUniverseAbove()) { this.leaveSite(how); return true; }
                 if (!this.focusPath.length) { this.setStatus(`Already at the top of ${this.siteName}: nothing to step out of`, 'error'); return false; }
                 const left = this.focusPath.join('.');
                 this.zoomOut();
@@ -8339,6 +8428,8 @@
                 // A camera is drawn aimed, from the pictures' answer; until that is in,
                 // its box stands for it, and refreshCameraMeshes draws it after.
                 if (this.isCameraNode(node)) return this.buildCameraMesh(node);
+                // A site's piece: its miniature, built here from the boxes the tree carries.
+                if (node.site_ref) return this.buildMiniatureMesh(node);
                 if (node.part_ref) return this.loadPartMesh(node);
                 if (node.children.length === 0 && node.primitive) return this.buildPrimitiveMesh(node);
                 return this.loadCompositeMesh(node);
@@ -8356,6 +8447,36 @@
                     console.warn(`Could not load real geometry for ${node.name}:`, error);
                     return null;
                 }
+            }
+
+            // A site's piece in the universe (apothecary/universe.py): its site's top-level
+            // pieces as boxes, scaled into its cell by the server and coloured as the site
+            // colours them, a wall faded as a wall is. They stand inside one clear box of
+            // the piece's whole extent, which is what a click lands on and what wears the
+            // selection's edges. Nothing is fetched: the tree carries the boxes.
+            buildMiniatureMesh(node) {
+                const bounds = node.world_bounds;
+                if (!bounds || !(node.miniature || []).length) return null;  // its plain box stands for it
+                const { size, center } = this.boxFromBounds(bounds);
+                const geometry = new THREE.BoxGeometry(size[0] || 1, size[1] || 1, size[2] || 1);
+                const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ transparent: true, opacity: MINIATURE_CASE_OPACITY, depthWrite: false }));
+                mesh.position.set(center[0], center[1], center[2]);
+                const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: 0x000000 }));
+                outline.name = 'edges';
+                mesh.add(outline);
+                for (const box of node.miniature) {
+                    const inner = this.boxFromBounds(box.bounds);
+                    const shape = new THREE.BoxGeometry(inner.size[0] || 0.1, inner.size[1] || 0.1, inner.size[2] || 0.1);
+                    const wall = box.category === WALL_CATEGORY;
+                    const piece = new THREE.Mesh(shape, new THREE.MeshPhongMaterial({
+                        ...FACE_BEHIND_ITS_EDGES, color: baseColorFor(box),
+                        transparent: wall, opacity: wall ? WALL_OPACITY : 1, depthWrite: !wall,
+                    }));
+                    piece.position.set(inner.center[0] - center[0], inner.center[1] - center[1], inner.center[2] - center[2]);
+                    piece.add(new THREE.LineSegments(new THREE.EdgesGeometry(shape), new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.3, transparent: true })));
+                    mesh.add(piece);
+                }
+                return mesh;
             }
 
             buildPrimitiveMesh(node) {

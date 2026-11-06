@@ -1,7 +1,7 @@
 """A piece made from a picture is edited in the one editor, from its ring: Part › Edit
 opens it in Selected with the cursor in its first control, a slider stages a change
 the stage bar validates, Apply rebuilds the piece where it stands -- its outline and
-its thread stay -- and the found candidate returns it. A part in the parts library
+its thread stay -- and the found candidate returns it. A part in the universe
 gets the same editor from the same cell.
 
 The picture is the stated one (tests/views_helpers.py; conftest's fixture_picture),
@@ -190,7 +190,7 @@ def test_a_made_piece_is_edited_from_its_ring_and_the_found_candidate_returns_it
 def test_a_part_in_the_library_gets_the_same_editor_from_the_same_cell(page, base_url: str):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(f"{base_url}/viewer/sites/parts_library")
+    page.goto(f"{base_url}/viewer/sites/apothecary")
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
     _ring_on(page, "v_slot")
     assert _labels(page)[-1] == "Part"

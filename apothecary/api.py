@@ -51,7 +51,6 @@ from .example_hierarchy import (
     create_example_site,
     validate_garage_layout,
 )
-from .example_parts_library import create_parts_library_site, validate_parts_library
 from .family import hub as family_hub
 from .family import members as family_members
 from .firmware import devices as firmware_devices
@@ -124,6 +123,7 @@ from .routes.views import router as views_router
 from .routes.vision import router as vision_router
 from .routes.wiring import router as wiring_router
 from .scene import Scene
+from .site_names import FORMER, UNIVERSE
 from .site_store import SiteStore, UnknownSiteError
 from .slicer import service as slicing
 from .slicer.api import router as slicer_router
@@ -135,6 +135,7 @@ from .stays_local import LocalOnly
 from .templates import TemplateRenderer
 from .theatre_site import create_theatre_site, load_theatre_rig, validate_theatre
 from .transforms import Translate
+from .universe import create_universe_site, real_size, validate_universe
 from .viewer import render_fractal_viewer_page
 from .vocabulary.word import WORD_PRINT_SETTINGS_STUB
 
@@ -1243,12 +1244,14 @@ def validate_without_model(
 
 _site_store = SiteStore(
     {
+        # The universe: every registered part a leaf, every other site here one piece.
+        UNIVERSE: (lambda: create_universe_site(_site_store.others()), validate_universe),
         "garage": (create_example_site, validate_garage_layout),
-        "parts_library": (create_parts_library_site, validate_parts_library),
         "datum_core": (create_datum_core_site, validate_datum_core),
         # A theatre's shell with sliders, and its lighting rig: theatre_site.py.
         "theatre": (create_theatre_site, validate_theatre),
-    }
+    },
+    universe=UNIVERSE,
 )
 lighting_routes.RIG_LOADERS["theatre"] = load_theatre_rig
 # The site /viewer opens on. Named rather than "whichever sorts first", so that
@@ -1550,10 +1553,15 @@ def _assembly_tree(
         else None
     )
 
+    # A site's piece is one piece: what it holds is how it is drawn, not a level.
     composed = (
-        [(c, "child") for c in node.children]
-        + [(c, "addition") for c in node.additions]
-        + [(c, "subtraction") for c in node.subtractions]
+        []
+        if node.site_ref is not None
+        else (
+            [(c, "child") for c in node.children]
+            + [(c, "addition") for c in node.additions]
+            + [(c, "subtraction") for c in node.subtractions]
+        )
     )
     return {
         "name": node.name,
@@ -1562,7 +1570,9 @@ def _assembly_tree(
         "status": node.status,
         "comment": node.comment,
         "part_ref": node.part_ref,
+        "site_ref": node.site_ref,
         "sketch_ref": node.sketch_ref,
+        **(_site_piece(node, world_position) if node.site_ref is not None else {}),
         # A board (a printer's mainboard, a devkit): where a machine's Pin puts its port.
         # Inside a machine, an electrical leaf no part draws is its board too: the
         # router's controller, which the maker publishes no drawing of.
@@ -1598,6 +1608,35 @@ def _assembly_tree(
                 "composition": composition,
             }
             for child, composition in composed
+        ],
+    }
+
+
+def _site_piece(node: Assembly, world_position: Vector3D) -> Dict[str, object]:
+    """What the tree says of a site's piece in the universe beside what it says of
+    any node: how large its site really is (None for one that holds nothing with a
+    size, or is gone), and the boxes it is drawn as --
+    its site's top-level pieces, scaled into its cell, each where it stands in the
+    universe's frame. The viewer builds the boxes itself: nothing is rendered."""
+    try:
+        size = real_size(_site_store.get(node.site_ref))
+    except KeyError:
+        size = None
+    return {
+        "site_size": [size.x, size.y, size.z] if size is not None else None,
+        "miniature": [
+            {
+                "name": box.name,
+                "category": box.category,
+                "bounds": _bounds_dict(
+                    BoundingBox3D(
+                        min_point=box.footprint.min_point + world_position + box.position,
+                        max_point=box.footprint.max_point + world_position + box.position,
+                    )
+                ),
+            }
+            for box in node.children
+            if box.footprint is not None
         ],
     }
 
@@ -1647,6 +1686,8 @@ SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 # because its address is theirs -- and forgetting it would forget the kept
 # pictures instead.
 RESERVED_NAMES = frozenset({"pictures", "gather"})
+# A name a site had before (apothecary/site_names.py) is that site's still: its
+# address goes to the site, and what was kept under it is read as the site's.
 
 
 def _check_name(name: str) -> str:
@@ -1672,6 +1713,14 @@ def _check_name(name: str) -> str:
             detail=(
                 f"{name!r} is the address of a route under /photos/; "
                 "name the arrangement something else."
+            ),
+        )
+    if name in FORMER:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{name!r} is the name the site {FORMER[name]} had, and what was kept "
+                "under it is read as that site's; name the arrangement something else."
             ),
         )
     return name
@@ -2653,11 +2702,18 @@ def site_viewer(name: str, request: Request, focus: str = Query(default="")):
     """Fractal zoom viewer: navigates any registered site's Assembly tree at
     any depth with standardized controls (prototype).
 
-    The registered ``parts/`` library is the ``parts_library`` site, each part
-    a leaf of it (``part_ref`` set), reached by zooming down. ``focus`` is an
-    optional dotted path (e.g. ``workbench.frame_system``) that opens the
-    viewer at that node instead of at the root.
+    The universe is the ``apothecary`` site: each registered ``parts/`` entry a
+    leaf of it (``part_ref`` set), reached by zooming down, and each other site
+    a piece of it (``site_ref`` set), whose site a step into it opens. ``focus``
+    is an optional dotted path (e.g. ``workbench.frame_system``) that opens the
+    viewer at that node instead of at the root. A name a site had before
+    (``parts_library``) goes to the site under the name it has now, its query kept.
     """
+    if name in FORMER and name not in _site_store.names():
+        query = f"?{request.url.query}" if request.url.query else ""
+        return RedirectResponse(
+            f"/viewer/sites/{quote(FORMER[name], safe='')}{query}", status_code=307
+        )
     if name not in _site_store.names():
         raise HTTPException(status_code=404, detail=f"Site '{name}' not found")
     base_url = str(request.base_url).rstrip("/")
@@ -2695,7 +2751,7 @@ def part_view(name: str):
     # viewer lands on the part rather than on a focus string matching nothing.
     canonical = part.name or name
     return RedirectResponse(
-        f"/viewer/sites/parts_library?focus={quote(canonical, safe='')}", status_code=307
+        f"/viewer/sites/{UNIVERSE}?focus={quote(canonical, safe='')}", status_code=307
     )
 
 

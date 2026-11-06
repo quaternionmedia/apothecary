@@ -11,7 +11,7 @@ from apothecary.api import THREE_IS_VENDORED, app
 
 client = TestClient(app)
 
-VIEWER_URL = "/viewer/sites/parts_library"
+VIEWER_URL = "/viewer/sites/apothecary"
 
 
 class TestVendoredLibraryIsServed:
@@ -47,7 +47,7 @@ class TestMissingLibraryIsAnnounced:
         from apothecary.viewer import render_fractal_viewer_page
 
         page = render_fractal_viewer_page(
-            ["parts_library"], "http://testserver", "parts_library", "", three_is_vendored=False
+            ["apothecary"], "http://testserver", "apothecary", "", three_is_vendored=False
         )
         assert "The 3D library is missing" in page
 
@@ -55,7 +55,7 @@ class TestMissingLibraryIsAnnounced:
         from apothecary.viewer import render_fractal_viewer_page
 
         page = render_fractal_viewer_page(
-            ["parts_library"], "http://testserver", "parts_library", "", three_is_vendored=True
+            ["apothecary"], "http://testserver", "apothecary", "", three_is_vendored=True
         )
         assert "The 3D library is missing" not in page
 

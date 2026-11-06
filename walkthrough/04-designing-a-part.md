@@ -19,7 +19,7 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ## 1. Part › Edit opens the part's editor at what is drawn
 
-The parts library, /viewer/sites/parts_library (the site drop-down's parts_library): calibration_cube's row in Site, its ring, Part › Edit, then Panels › Windows › Part view: its parameters in Parameters, under Selected. They start from what is drawn, the part's own STL as its params sidecar records it, and beside the envelope the part declares is what that STL measures. Nothing marks it: it is the saved part. The view is brought to it by hand, Shift+drag and the wheel, as the library frames a whole shelf of parts. A slider is the next step.
+The universe, /viewer/sites/apothecary, where every part is a leaf: calibration_cube's row in Site, its ring, Part › Edit, then Panels › Windows › Part view: its parameters in Parameters, under Selected. They start from what is drawn, the part's own STL as its params sidecar records it, and beside the envelope the part declares is what that STL measures. Nothing marks it: it is the saved part. The view is brought to it by hand, Shift+drag and the wheel, as the universe frames a whole shelf of parts. A slider is the next step.
 
 ![Part › Edit opens the part's editor at what is drawn](screenshots/04-01-part-edit-opens-the-part-s-editor-at-what-is-drawn.png)
 
@@ -51,7 +51,7 @@ envelope 30.00 × 30.00 × 30.00 mm · measured 30.00 × 30.00 × 30.00 mm
 
 ## 4. A reload draws what the tab applied, marked at a glance
 
-The tab's address keeps the variant, so a reload, a bookmark or a link draws it again, and no other tab is touched. At the library's own framing, with nothing selected, the amber dot over calibration_cube says it is drawn from a variant and not the saved part; its words, on hover, say so.
+The tab's address keeps the variant, so a reload, a bookmark or a link draws it again, and no other tab is touched. At the universe's own framing, with nothing selected, the amber dot over calibration_cube says it is drawn from a variant and not the saved part; its words, on hover, say so.
 
 ![A reload draws what the tab applied, marked at a glance](screenshots/04-04-a-reload-draws-what-the-tab-applied-marked-at-a-gl.png)
 

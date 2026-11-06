@@ -45,7 +45,7 @@ def url(start_server):
 
 
 def _open(page: Page, url: str) -> None:
-    page.goto(f"{url}/viewer/sites/parts_library")
+    page.goto(f"{url}/viewer/sites/apothecary")
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
     page.evaluate("() => localStorage.removeItem('apothecary.layout')")
     page.wait_for_function(

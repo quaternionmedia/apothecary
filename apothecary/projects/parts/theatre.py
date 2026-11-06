@@ -110,7 +110,7 @@ def create(metadata_root: Path) -> TheatrePart:
         source_file=scad,
         description="A proscenium theatre's shell, its stage, walls, opening and pit sized by sliders",
         params_model=Params,
-        # A building: a site's, not one of the bench's parts (example_parts_library.py).
+        # A building: the site's that holds it, not one of the bench's parts (universe.py).
         category="building",
         tags=["theatre", "stage", "lighting", "building"],
         readme_path=metadata_root / "parts" / "README.md",

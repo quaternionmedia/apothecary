@@ -34,6 +34,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .hierarchy import Assembly
+from .site_names import UNIVERSE, UNIVERSE_SHOWN
 from .systems import SYSTEMS
 
 MOST_OPTIONS = 8
@@ -528,23 +529,29 @@ def resolve(
 
 
 def _grouped(
-    prefix: str, names: Sequence[str], action_of: Callable[[str], str]
+    prefix: str,
+    names: Sequence[str],
+    action_of: Callable[[str], str],
+    shown: Optional[Dict[str, str]] = None,
 ) -> Optional[Option]:
     """One option that opens a ring of names, or nothing when there are none.
 
     Each name is a leaf whose id and action are ``action_of(name)``, labelled
-    so that no two read the same. A list of things is not a list of verbs, so
+    so that no two read the same -- by what ``shown`` says of it, where it says
+    anything. A list of things is not a list of verbs, so
     more than eight are split into groups of at most eight -- one more press,
     nothing hidden -- and more than two levels of eight can hold is refused.
     """
     ordered = list(names)
     if not ordered:
         return None
+    shown = shown or {}
 
     def leaves(members: Sequence[str]) -> List[Option]:
+        said = distinct([shown.get(name, name) for name in members])
         return [
             Option(id=action_of(name), label=label, action=action_of(name))
-            for name, label in zip(members, distinct(members), strict=True)
+            for name, label in zip(members, said, strict=True)
         ]
 
     if len(ordered) <= MOST_OPTIONS:
@@ -1409,7 +1416,13 @@ def _canvas_ring(
         option
         for option in (
             _canvas_pieces("Pieces", focus_path, focus, picture.made),
-            _grouped("Site", site_names, lambda name: f"site:{name}"),
+            # The universe is listed with the sites, by the name the page gives it.
+            _grouped(
+                "Site",
+                site_names,
+                lambda name: f"site:{name}",
+                shown={UNIVERSE: UNIVERSE_SHOWN},
+            ),
             _view(),
             _panels(),
             _pictures(picture),

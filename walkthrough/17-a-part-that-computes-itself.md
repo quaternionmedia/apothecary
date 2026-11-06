@@ -132,7 +132,7 @@ is never surprised.
 | Render it | `apothecary parts generate-stl airgap` |
 | Render it rewound | `apothecary parts generate-stl airgap -p topology=lap -p pitch=3` |
 | Check the envelope is true | `apothecary parts verify airgap` |
-| Edit it as text | the parts library site, its ring, Part › Edit ([page 06](06-editing-a-parts-scad.md)) |
+| Edit it as text | the universe, `/viewer/sites/apothecary`, its ring, Part › Edit ([page 06](06-editing-a-parts-scad.md)) |
 | Analyse it | the viewer's Airgap tab, or the canvas ring's Panels › Airgap ([docs/airgap.md](../docs/airgap.md)) |
 | Read a copied metrics document back | `apothecary airgap metrics validate metrics.json --format md` |
 | The document's contract | `apothecary airgap metrics schema` |

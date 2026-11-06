@@ -57,6 +57,7 @@ AREAS = {
             "apothecary/menu.py",
             "apothecary/routes/menu.py",
             "apothecary/docs_site.py",
+            "apothecary/universe.py",
         ),
         "tests": (
             "test_window_manager.py",
@@ -71,6 +72,7 @@ AREAS = {
             "test_world_resize.py",
             "test_render_on_demand.py",
             "test_docs_fractal_viewer.py",
+            "test_the_universe.py",
         ),
     },
     "pictures": {

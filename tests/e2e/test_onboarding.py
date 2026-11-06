@@ -241,13 +241,13 @@ def test_the_site_drop_down_keeps_the_address_for_a_reload_and_back(page: Page, 
     and Forward go between the two. The ring's Site chooses the same way."""
     _open(page, url, query="?focus=workbench&variant=calibration_cube:0000000000000000")
     expect(page.locator("#breadcrumb")).to_contain_text("workbench")
-    page.locator("#site-select").select_option("parts_library")
-    page.wait_for_url(f"{url}/viewer/sites/parts_library", timeout=10000)
+    page.locator("#site-select").select_option("apothecary")
+    page.wait_for_url(f"{url}/viewer/sites/apothecary", timeout=10000)
     _said(page, "Loaded")
     expect(_row(page, "calibration_cube")).to_be_visible(timeout=20000)
     page.reload()
     expect(_row(page, "calibration_cube")).to_be_visible(timeout=20000)
-    expect(page.locator("#site-select")).to_have_value("parts_library")
+    expect(page.locator("#site-select")).to_have_value("apothecary")
 
     page.go_back()
     page.wait_for_url(re.compile(r"/viewer/sites/garage\?focus=workbench"), timeout=10000)
@@ -255,8 +255,8 @@ def test_the_site_drop_down_keeps_the_address_for_a_reload_and_back(page: Page, 
     expect(page.locator("#breadcrumb")).to_contain_text("workbench", timeout=20000)
     expect(_row(page, "calibration_cube")).to_have_count(0)
     page.go_forward()
-    page.wait_for_url(f"{url}/viewer/sites/parts_library", timeout=10000)
-    expect(page.locator("#site-select")).to_have_value("parts_library")
+    page.wait_for_url(f"{url}/viewer/sites/apothecary", timeout=10000)
+    expect(page.locator("#site-select")).to_have_value("apothecary")
     expect(_row(page, "calibration_cube")).to_be_visible(timeout=20000)
 
     # The ring's Site chooses the same way.

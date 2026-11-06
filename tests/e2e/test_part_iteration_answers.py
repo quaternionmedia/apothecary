@@ -75,7 +75,7 @@ def cube_as_it_was():
             path.unlink(missing_ok=True)
 
 
-def _open(page: Page, url: str, site: str = "parts_library", part: str = PART) -> None:
+def _open(page: Page, url: str, site: str = "apothecary", part: str = PART) -> None:
     page.set_viewport_size({"width": 1280, "height": 800})
     page.goto(f"{url}/viewer/sites/{site}")
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
@@ -510,7 +510,7 @@ def test_the_device_section_stands_only_where_a_board_belongs(page: Page, url):
 
     # A plain part with a board pinned to it anyway keeps its Device section, its Unpin.
     pinned = page.request.put(
-        f"{url}/sites/parts_library/nodes/{PART}/device", data={"identity": "NOTHERE456"}
+        f"{url}/sites/apothecary/nodes/{PART}/device", data={"identity": "NOTHERE456"}
     )
     assert pinned.ok, pinned.text()
     try:
@@ -521,4 +521,4 @@ def test_the_device_section_stands_only_where_a_board_belongs(page: Page, url):
         expect(section).to_be_visible()
         expect(section.locator(".dev-unpin")).to_be_visible()
     finally:
-        page.request.delete(f"{url}/sites/parts_library/nodes/{PART}/device")
+        page.request.delete(f"{url}/sites/apothecary/nodes/{PART}/device")

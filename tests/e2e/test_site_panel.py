@@ -8,7 +8,7 @@ beside its name -- is red in the tree and its ancestors say something inside is
 invalid; each problem is a row that selects its piece, at its level; the
 toolbar's count opens them. Pinned lists every site's pins: a camera and a view
 pinned in ``garage`` are taken back from their rows while the page shows
-``parts_library``, and the site on screen and the URL never change.
+``apothecary``, and the site on screen and the URL never change.
 """
 
 from __future__ import annotations
@@ -432,7 +432,7 @@ def test_pinned_takes_back_another_sites_pins_without_switching(
 
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    _open(page, base_url, "parts_library")
+    _open(page, base_url, "apothecary")
     url = page.url
     status = page.locator("#status")
 
@@ -470,7 +470,7 @@ def test_pinned_takes_back_another_sites_pins_without_switching(
 
     # Nothing switched the site.
     assert page.url == url
-    assert page.evaluate("() => window.fractalViewer.siteName") == "parts_library"
-    expect(page.locator("#site-select")).to_have_value("parts_library")
+    assert page.evaluate("() => window.fractalViewer.siteName") == "apothecary"
+    expect(page.locator("#site-select")).to_have_value("apothecary")
     expect(status).not_to_have_class(re.compile(r"\berror\b"))
     assert errors == []

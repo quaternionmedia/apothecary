@@ -116,7 +116,7 @@ def test_a_view_left_alone_draws_nothing_whatever_its_numbers_round_to(
 @pytest.mark.e2e
 def test_typing_in_the_scad_editor_draws_nothing_until_it_renders(page: Page, base_url: str):
     page.set_viewport_size({"width": 1280, "height": 800})
-    _open(page, f"{base_url}/viewer/sites/parts_library")
+    _open(page, f"{base_url}/viewer/sites/apothecary")
     rings.on_row(page, "calibration_cube", "Part", "Edit")
     windows.open_window(page, "part-scad")  # the part's SCAD, in its window
     code = page.locator(".scad-editor .cm-content")

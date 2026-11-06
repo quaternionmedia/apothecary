@@ -32,7 +32,7 @@ def reset_garage_site():
 def test_list_sites():
     response = client.get("/sites")
     assert response.status_code == 200
-    assert response.json() == ["datum_core", "garage", "parts_library", "theatre"]
+    assert response.json() == ["apothecary", "datum_core", "garage", "theatre"]
 
 
 def test_get_unknown_site_is_404():
@@ -123,14 +123,15 @@ def test_tree_category_is_set_on_top_level_structures_and_inherited_below():
     assert belt_tensioner_system["category"] == "mechanical"
 
 
-def test_get_parts_library_site():
-    response = client.get("/sites/parts_library")
+def test_get_the_universe():
+    """Every piece of the universe is a part's leaf or another site's piece."""
+    response = client.get("/sites/apothecary")
     assert response.status_code == 200
     data = response.json()
-    assert data["name"] == "Parts Library"
+    assert data["name"] == "Apothecary"
     assert data["is_valid"] is True
     assert len(data["tree"]["children"]) > 0
-    assert all(child["part_ref"] for child in data["tree"]["children"])
+    assert all(child["part_ref"] or child["site_ref"] for child in data["tree"]["children"])
 
 
 def test_workbench_has_no_status_or_build_volume():

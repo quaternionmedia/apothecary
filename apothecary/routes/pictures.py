@@ -46,6 +46,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
 
 from ..gathering.looking import PICTURE_SUFFIXES
+from ..site_names import FORMER
 from ..stamped import claim, stamp
 
 router = APIRouter(tags=["photos"])
@@ -582,11 +583,18 @@ def gather_pictures(body: GatherRequest):
         stock = shelf()
         if body.name in _site_store.names() and body.name not in stock:
             # The same rule as POST /photos: a gathering never covers over a
-            # site that did not come from pictures (the garage, the library).
+            # site that did not come from pictures (the garage, the universe).
             raise HTTPException(
                 status_code=409,
                 detail=f"{body.name!r} is already the name of an arrangement that did not "
                 "come from a picture. Choose another name rather than covering it over.",
+            )
+        if body.name in FORMER:
+            # Nor takes a name a site had before: what was kept under it is that site's.
+            raise HTTPException(
+                status_code=400,
+                detail=f"{body.name!r} is the name the site {FORMER[body.name]} had, and what "
+                "was kept under it is read as that site's; name the gathering something else.",
             )
         together = whole_gathering(result, built, name=body.name)
         stock.put(together)

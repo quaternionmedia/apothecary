@@ -51,7 +51,7 @@ CONTROLLER = "cnc_router.frame_system.controller"
 # Each subject a test opens, by case: a system with subjects of more than one kind has a
 # case for each.
 OPENING = {
-    # A part from the library, selected by its address: Selected, its main window,
+    # A part of the universe, selected by its address: Selected, its main window,
     # shows it. (Part › Edit asks for the editor, so it opens Parameters too.)
     "part": Opening(
         "part",
@@ -146,9 +146,9 @@ LINK = {
 # How a case's sections come to have nothing to show, on the page given: a system
 # whose sections can be empty has a line here.
 EMPTY = {
-    # The parts library, nothing selected: no part is being edited.
+    # The universe, nothing selected: no part is being edited.
     "part": (
-        "/viewer/sites/parts_library",
+        "/viewer/sites/apothecary",
         lambda page: page.evaluate("() => window.fractalViewer.deselect()"),
     ),
 }

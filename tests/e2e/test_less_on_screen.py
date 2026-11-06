@@ -486,7 +486,7 @@ def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
     expect(page.locator("#breadcrumb .crumb")).to_have_count(1)
 
     # Choosing a site loads it.
-    page.locator("#site-select").select_option("parts_library")
+    page.locator("#site-select").select_option("apothecary")
     expect(page.locator("#contents-list")).not_to_contain_text("workbench", timeout=15000)
     expect(page.locator("#breadcrumb .crumb").first).not_to_have_text("garage")
     page.locator("#site-select").select_option("garage")
