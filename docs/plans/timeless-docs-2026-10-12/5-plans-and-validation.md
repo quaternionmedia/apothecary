@@ -245,7 +245,7 @@ person to do* heading:
 so it needs no line. The bench-checklist re-run is already `todo.md:17`.
 
 **History line:**
-`- 2026-10-08 — [Cleanup, triaged](../cleanup-triage-2026-10-08.md): the open cleanup items sorted by kind and given an order, while the review branch was split into a stack.`
+`- 2026-10-08 — Cleanup, triaged: the open cleanup items sorted by kind and given an order, while the review branch was split into a stack.`
 
 | Decision still true | Home |
 |---|---|
@@ -385,7 +385,7 @@ Its three *Open until built* items are settled:
 - `tests/e2e/test_onboarding.py` exists.
 
 **History line:**
-`- 2026-10-11 — [Onboarding at the top of the stack](../onboarding-2026-10-11.md): a newcomer's path, the docs, the suites and the pictures reviewed; serve --demo, a Getting started page, one ordinary test command, pictures held to their captions.`
+`- 2026-10-11 — Onboarding at the top of the stack: a newcomer's path, the docs, the suites and the pictures reviewed; serve --demo, a Getting started page, one ordinary test command, pictures held to their captions.`
 
 | Decision still true | Home |
 |---|---|
@@ -991,12 +991,12 @@ Plans and research that are finished, by date. Each is a dated record of what
 was decided and why; what is still true of it is stated in the guides above,
 the governance records, or the code it describes.
 
-- 2026-10-11 — [Onboarding at the top of the stack](../onboarding-2026-10-11.md): a newcomer's path, the docs, the suites and the pictures reviewed; serve --demo, a Getting started page, one ordinary test command, pictures held to their captions.
+- 2026-10-11 — Onboarding at the top of the stack: a newcomer's path, the docs, the suites and the pictures reviewed; serve --demo, a Getting started page, one ordinary test command, pictures held to their captions.
 - 2026-10-10 — [A managed slicer](../slicer-2026-10-10.md): OrcaSlicer behind a slicer interface, installed like OpenSCAD, the printer's profile kept with its part, print settings from what each part declares.
 - 2026-10-09 — [A Rust geometry kernel](../rust-geometry-kernels-2026-10-09.md): a spike surveying which Rust kernel could render scenes to STL without OpenSCAD, by licence, build, coverage and maturity; Manifold's bindings first.
 - 2026-10-08 — [The loops through the page](../ui-flows-2026-10-08.md): designing a part, editing its SCAD, firmware, and a picture to a print, each built out and held end to end by a browser test.
 - 2026-10-08 — [Rust](../rust-2026-10-08.md): firmware in Rust for the ESP32 behind modular toolchains, a Rust geometry kernel researched and compared by numbers, a Rust service and core stubbed.
-- 2026-10-08 — [Cleanup, triaged](../cleanup-triage-2026-10-08.md): the open cleanup items sorted by kind and given an order, while the review branch was split into a stack.
+- 2026-10-08 — Cleanup, triaged: the open cleanup items sorted by kind and given an order, while the review branch was split into a stack.
 - 2026-10-04 — [Cameras and clutter](../cameras-and-clutter-2026-10-04.md): a camera as a part of the site, pictures sized and taken from it, and less on the screen.
 - 2026-10-03 — [Consolidation](../consolidation-2026-10-03.md): one page and one place per thing; Site and Selected over a strip of tabs, one Machine per board, the Bench, one Pictures panel, jobs over machine kinds.
 - 2026-09-27 — [Designing a part from the browser](../part-editing-in-the-browser-2026-09-27.md): a spike measuring the part loop and what other tools do; fast renders, parameters from the SCAD, then an editor in the page.
