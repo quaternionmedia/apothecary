@@ -1513,7 +1513,6 @@ def _assembly_tree(
     node: Assembly,
     parent_world_position: Vector3D | None = None,
     parent_category: str | None = None,
-    inside_machine: bool = False,
 ) -> Dict[str, object]:
     """Recursive serialization of an Assembly node and everything beneath it.
 
@@ -1576,16 +1575,9 @@ def _assembly_tree(
         "site_ref": node.site_ref,
         "sketch_ref": node.sketch_ref,
         **(_site_piece(node, world_position) if node.site_ref is not None else {}),
-        # A board (a printer's mainboard, a devkit): where a machine's Pin puts its port.
-        # Inside a machine, an electrical leaf no part draws is its board too: the
-        # router's controller, which the maker publishes no drawing of.
-        "board": is_board(node.part_ref)
-        or (
-            inside_machine
-            and node.part_ref is None
-            and node.category == "electrical"
-            and not node.children
-        ),
+        # A board (a printer's mainboard, a router's controller, a devkit): a node whose
+        # part the boards library tags one, where a machine's Pin puts its port.
+        "board": is_board(node.part_ref),
         "category": category,
         "position": {"x": world_position.x, "y": world_position.y, "z": world_position.z},
         "footprint": _bounds_dict(node.footprint),
@@ -1605,9 +1597,7 @@ def _assembly_tree(
         ),
         "children": [
             {
-                **_assembly_tree(
-                    child, world_position, category, inside_machine or node.status is not None
-                ),
+                **_assembly_tree(child, world_position, category),
                 "composition": composition,
             }
             for child, composition in composed
