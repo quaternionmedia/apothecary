@@ -639,14 +639,16 @@ def _build_cnc_stand() -> Assembly:
 
 
 # The router's controller, in the control box at the back of the base: the
-# Grbl_ESP32 board the machine's USB lead reaches. This is the node a real
-# router's serial port is pinned to (firmware/bindings.py), as printer_1's
-# mainboard is: the controller is what Apothecary talks to, and the router
-# Structure above it takes its status from the controller's polls. The maker
-# publishes no drawing of the board, so it is a box of the size a board of
-# its kind has, and no part draws it.
-CONTROLLER_SIZE = Vector3D(x=100.0, y=80.0, z=20.0)
-CONTROLLER_POSITION = Vector3D(x=50.0, y=10.0, z=10.0)  # in the control box's frame
+# Grbl_ESP32 board the machine's USB lead reaches, drawn as the board it is
+# assumed to be (parts/boards/anolex_grbl_esp32: the maker publishes no
+# drawing, and the part's README says what is assumed). This is the node a
+# real router's serial port is pinned to (firmware/bindings.py), as
+# printer_1's mainboard is: the controller is what Apothecary talks to, and
+# the router Structure above it takes its status from the controller's polls.
+CONTROLLER_SIZE = Vector3D(x=100.0, y=80.0, z=12.6)  # the board's declared bounds
+# In the control box's frame: standing on posts, its USB jack at the box's back
+# face, where the part draws the socket.
+CONTROLLER_POSITION = Vector3D(x=50.0, y=10.0, z=10.0)
 CONTROL_BOX = anolex.CONTROL_BOX  # the box, in the router's frame
 
 
@@ -654,20 +656,140 @@ def _build_controller() -> Assembly:
     board = Substructure(
         name="controller",
         position=CONTROLLER_POSITION,
-        base=Cube(size=CONTROLLER_SIZE, comment="controller board envelope (no published drawing)"),
         footprint=BoundingBox3D(min_point=Vector3D(), max_point=CONTROLLER_SIZE),
+        part_ref="anolex_grbl_esp32",
         comment="Controller (Grbl_ESP32) -- pin the router's port here",
     )
     board.category = "electrical"
     return board
 
 
-def _build_cnc_router() -> Assembly:
-    """The router: the AnoleX 4060-Evo Ultra 2 part, with its controller in the
-    control box at the back of the base. Its working area is its build volume,
-    starting where the part says the tool's (0, 0, 0) is: on the table, at the
-    working area's front-left corner.
+def _build_gantry() -> Assembly:
+    """The gantry riding the Y rails, with the axes where the part's defaults put
+    them: a leg on each side beam, the cross beam between their tops, and on the
+    beam's front the Z carriage holding the trim router in its 65 mm clamp. The
+    same plates, beam and cylinder the router model draws, in the same places,
+    so the site's own render and the viewer's picture of the machine agree.
     """
+    # The Z carriage: the X carriage plate on the beam's front face, the Z plate
+    # riding it, the clamp on the plate's front, and the spindle in the clamp's
+    # bore, its tip at the tool. A Substructure nested inside a Substructure,
+    # holding a Feature with its own child Feature, as printer_1's belt
+    # tensioner is: the spindle is a Feature of the clamp that holds it.
+    tool = anolex.TOOL
+    carriage_y = anolex.GANTRY_Y - anolex.CROSS_BEAM.y / 2 - anolex.BLOCK_HEIGHT - anolex.CARRIAGE.y
+    z_plate_y = carriage_y - anolex.Z_PLATE.y
+    clamp_y = z_plate_y - anolex.CLAMP.y
+    clamp = Feature(
+        name="clamp",
+        geometry=Translate(
+            v=Vector3D(x=tool.x - anolex.CLAMP.x / 2, y=clamp_y, z=tool.z + anolex.COLLET),
+            children=[Cube(size=anolex.CLAMP)],
+        ),
+    )
+    clamp.children = [
+        Feature(
+            name="spindle",
+            geometry=Translate(
+                v=Vector3D(
+                    x=tool.x,
+                    y=z_plate_y - anolex.CLAMP.y / 2 - anolex.CLAMP_BORE,
+                    z=tool.z + anolex.COLLET,
+                ),
+                children=[
+                    Cylinder(
+                        h=anolex.SPINDLE_LENGTH,
+                        r=anolex.SPINDLE_DIAMETER / 2,
+                        center=False,
+                        comment="The 800 W trim router's body; its collet and tool are under it",
+                    )
+                ],
+            ),
+        )
+    ]
+    z_carriage_system = Substructure(
+        name="z_carriage_system",
+        footprint=BoundingBox3D(
+            min_point=Vector3D(
+                x=tool.x - anolex.CARRIAGE.x / 2, y=tool.y - anolex.SPINDLE_DIAMETER / 2, z=tool.z
+            ),
+            max_point=Vector3D(
+                x=tool.x + anolex.CARRIAGE.x / 2,
+                y=carriage_y + anolex.CARRIAGE.y,
+                z=anolex.GANTRY_Z - anolex.CARRIAGE_DROP + anolex.CARRIAGE.z,
+            ),
+        ),
+        additions=[
+            Feature(
+                name="x_carriage",
+                geometry=Translate(
+                    v=Vector3D(
+                        x=tool.x - anolex.CARRIAGE.x / 2,
+                        y=carriage_y,
+                        z=anolex.GANTRY_Z - anolex.CARRIAGE_DROP,
+                    ),
+                    children=[Cube(size=anolex.CARRIAGE)],
+                ),
+            ),
+            Feature(
+                name="z_plate",
+                geometry=Translate(
+                    v=Vector3D(
+                        x=tool.x - anolex.Z_PLATE.x / 2,
+                        y=z_plate_y,
+                        z=tool.z + anolex.COLLET + anolex.CLAMP.z + 10,
+                    ),
+                    children=[Cube(size=anolex.Z_PLATE)],
+                ),
+            ),
+            clamp,
+        ],
+    )
+
+    # The legs stand centred on the side beams, each on its Y block; the cross
+    # beam spans the frame between their tops.
+    leg_inset = (anolex.BEAM.x - anolex.LEG.x) / 2
+    leg_y = anolex.GANTRY_Y - anolex.LEG.y / 2
+    return Substructure(
+        name="gantry_system",
+        children=[z_carriage_system],
+        additions=[
+            Feature(
+                name="left_leg",
+                geometry=Translate(
+                    v=Vector3D(x=leg_inset, y=leg_y, z=anolex.LEG_Z),
+                    children=[Cube(size=anolex.LEG)],
+                ),
+            ),
+            Feature(
+                name="right_leg",
+                geometry=Translate(
+                    v=Vector3D(
+                        x=anolex.FRAME.x - anolex.BEAM.x + leg_inset, y=leg_y, z=anolex.LEG_Z
+                    ),
+                    children=[Cube(size=anolex.LEG)],
+                ),
+            ),
+            Feature(
+                name="cross_beam",
+                geometry=Translate(
+                    v=Vector3D(x=0, y=anolex.GANTRY_Y - anolex.CROSS_BEAM.y / 2, z=anolex.GANTRY_Z),
+                    children=[Cube(size=anolex.CROSS_BEAM)],
+                ),
+            ),
+        ],
+    )
+
+
+def _build_cnc_router() -> Assembly:
+    """The router: the AnoleX 4060-Evo Ultra 2 part, built as printer_1 is. The
+    control box at the back of the base holds the controller, and the gantry
+    carries the Z carriage and the spindle. Its working area is its build
+    volume, starting where the part says the tool's (0, 0, 0) is: on the table,
+    at the working area's front-left corner.
+    """
+    # The control box, holding the controller. The box's walls are the router
+    # model's; this node is where the board lives.
     frame_system = Substructure(
         name="frame_system",
         position=CONTROL_BOX.min_point,
@@ -686,7 +808,7 @@ def _build_cnc_router() -> Assembly:
         status="idle",
         category="mechanical",
         part_ref="anolex_4060_evo_ultra_2",
-        substructures=[frame_system],
+        substructures=[frame_system, _build_gantry()],
     )
 
 

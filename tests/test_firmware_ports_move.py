@@ -457,7 +457,9 @@ def test_pin_stores_the_board_on_the_port_and_says_what_it_stored(bench, garage)
     # The router, by its port: not the printer whose record that port's name still holds.
     assert row["identity"] == PORT
     assert row["device"]["port"] == PORT and row["device"]["printer"] is None
-    assert row["note"] is None
+    # The controller is a board model whose folder holds no sketch, as the printer's
+    # mainboard is: each runs a firmware of its own, and the row says so.
+    assert row["note"] == "no sketch for 'anolex_grbl_esp32'"
     pins = [b for b in devices.get_state().bindings("garage") if b.path == CONTROLLER]
     assert [b.identity for b in pins] == [PORT]
     # The printer plugged in again elsewhere is not what the router's node holds.

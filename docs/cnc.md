@@ -26,13 +26,19 @@ In the garage (`apothecary/example_hierarchy.py`) the router stands on a
 steel stand of its own, `cnc_stand`, beside storage, as printer_1 stands on
 the workbench. Its working area is its `build_volume` and the tool's
 (0, 0, 0) on the table, at the working area's front-left corner, its
-`build_origin`. Inside it, `cnc_router.frame_system` is the control box and
-`cnc_router.frame_system.controller` the board the port is pinned to: the
-maker publishes no drawing of that board, so it is a box and no part draws
-it. Stepped into, the router is its part, alone and whole, and the control
-box is Site's row there ([viewer.md](viewer.md#the-world)). `ROUTER_STATUSES` are the words the router's node takes: `idle`,
-`running`, `hold`, `alarm`, `offline` from its polls, and `maintenance` by
-hand.
+`build_origin`. Inside, it is built as printer_1 is: `cnc_router.frame_system`
+is the control box and `cnc_router.frame_system.controller` the board the
+port is pinned to, drawn as the board it is assumed to be
+([`parts/boards/anolex_grbl_esp32`](../parts/boards/anolex_grbl_esp32/README.md):
+the maker publishes no drawing of it, and the board's README says what is
+assumed); `cnc_router.gantry_system` is the gantry on the Y rails, its legs
+and cross beam, with `z_carriage_system` inside it, the X carriage plate, the
+Z plate, the clamp and the spindle in it, each placed from the part's own
+constants where the part draws them at its default axes. Stepped into, the
+router is its part, alone and whole, and the control box and the gantry are
+Site's rows there ([viewer.md](viewer.md#the-world)). `ROUTER_STATUSES` are
+the words the router's node takes: `idle`, `running`, `hold`, `alarm`,
+`offline` from its polls, and `maintenance` by hand.
 
 ## The controller and its dialect
 

@@ -243,7 +243,7 @@ ON_PIECE = """(key) => {
 }"""
 
 MACHINES = [
-    ("cnc_router", "anolex_4060_evo_ultra_2", ["frame_system"]),
+    ("cnc_router", "anolex_4060_evo_ultra_2", ["frame_system", "gantry_system"]),
     ("printer_1", "ender3", ["frame_system", "gantry_system"]),
 ]
 

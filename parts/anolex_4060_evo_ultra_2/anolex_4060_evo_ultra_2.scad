@@ -54,6 +54,8 @@ beam_x = [40, 120];            // the cross beam: 40 deep, 120 tall
 carriage = [150, 20, 200];     // the X carriage plate on the beam's front face
 z_plate = [120, 16, 180];      // the Z plate riding the carriage's Z rails
 clamp = [100, 60, 40];         // the router clamp on the Z plate's front
+clamp_bore = 8;                // the clamp's bore stands this far behind the clamp's centre line
+collet = 8;                    // the collet nut and the tool's stick-out under the router's body
 control_box = [200, 100, 90];  // the controller's enclosure at the back, between the beams
 
 // where the working area starts, in the frame: centred on the table
@@ -64,9 +66,11 @@ function work_y0() = table_y0() + (table[1] - work_y) / 2;
 function tool_x() = work_x0() + x_axis;
 function tool_y() = work_y0() + y_axis;
 function tool_z() = table_top_z + z_axis;
-// the gantry's legs and beam stand behind the tool: the Z plate and the X
-// carriage are in front of the beam
-function beam_y() = tool_y() + clamp[1] / 2 + z_plate[1] + carriage[1];
+// the gantry's legs and beam stand behind the tool: from the tool back, the
+// clamp's bore to its centre, the clamp's back half, the Z plate, the X
+// carriage, the X blocks on the beam's front face, and the beam's half depth
+// to its centre line
+function beam_y() = tool_y() + clamp_bore + clamp[1] / 2 + z_plate[1] + carriage[1] + block[2] + beam_x[0] / 2;
 
 module hgh15_rail(len, along_y = true) {
     // a rail with its row of bolt holes left out: at bench scale a bar
@@ -149,19 +153,19 @@ module anolex_z_axis() {
     // the Z plate rides two short rails on the carriage's front face; it is
     // z_axis up its travel, so the tool tip stands at tool_z()
     zy = cy - z_plate[1] + eps;
-    zz = tool_z() + clamp[2] + 10;   // the plate's bottom: above the clamp's top
+    zz = tool_z() + collet + clamp[2] + 10;   // the plate's bottom: above the clamp's top
     color("silver") translate([tool_x() - z_plate[0] / 2, zy, zz]) cube(z_plate);
     // the Z motor on top of the carriage, its screw down behind the plate
     translate([tool_x() - nema / 2, cy - nema + 4, bz - 20 + carriage[2] - eps]) nema23(60);
-    // the clamp on the plate's front, holding the router
-    color("dimgray") translate([tool_x() - clamp[0] / 2, zy - clamp[1] + eps, tool_z()]) difference() {
+    // the clamp on the plate's front, holding the router's body above its collet
+    color("dimgray") translate([tool_x() - clamp[0] / 2, zy - clamp[1] + eps, tool_z() + collet]) difference() {
         cube(clamp);
-        translate([clamp[0] / 2, clamp[1] / 2 - 8, -1]) cylinder(d = router_d + 1, h = clamp[2] + 2);
+        translate([clamp[0] / 2, clamp[1] / 2 - clamp_bore, -1]) cylinder(d = router_d + 1, h = clamp[2] + 2);
     }
-    if (with_router) translate([tool_x(), zy - clamp[1] / 2 - 8 + eps, tool_z() - 8]) {
-        color("darkslateblue") translate([0, 0, 8 + eps]) cylinder(d = router_d, h = router_len);
-        color("silver") translate([0, 0, 2]) cylinder(d = 18, h = 6 + 2 * eps);   // the collet nut
-        color("gainsboro") cylinder(d = 3.175, h = 8 + eps);                    // a 1/8 in tool, its tip at the table + z_axis
+    if (with_router) translate([tool_x(), zy - clamp[1] / 2 - clamp_bore + eps, tool_z()]) {
+        color("darkslateblue") translate([0, 0, collet + eps]) cylinder(d = router_d, h = router_len);
+        color("silver") translate([0, 0, 2]) cylinder(d = 18, h = collet - 2 + 2 * eps);   // the collet nut
+        color("gainsboro") cylinder(d = 3.175, h = collet + eps);                    // a 1/8 in tool, its tip at the table + z_axis
     }
 }
 

@@ -16,5 +16,11 @@ else's mesh: the model is this repository's own, MIT.
 
 The machine's controller runs Grbl_ESP32 (it reports as GRBL 1.3a) and
 speaks GRBL's G-code over USB; the garage pins its port to the controller
-inside the control box, `cnc_router.frame_system.controller`.
+inside the control box, `cnc_router.frame_system.controller`, drawn as the
+board it is assumed to be
+([parts/boards/anolex_grbl_esp32](../boards/anolex_grbl_esp32/README.md)).
+The garage's `cnc_router.gantry_system` is the gantry, the Z carriage and
+the trim router in its clamp, modelled from the Python wrapper's constants
+(`apothecary/projects/parts/anolex_4060_evo_ultra_2.py`) where
+`anolex_4060_evo_ultra_2.scad` draws them with its axes at their defaults.
 [docs/cnc.md](../../docs/cnc.md) says what Apothecary does with it.

@@ -15,17 +15,35 @@ the floor of its footprint.
     >>> router.part_ref, router.build_volume.to_list(), router.build_origin.to_list()
     ('anolex_4060_evo_ultra_2', [400.0, 600.0, 80.0], [115.0, 165.0, 100.0])
 
+It is built as printer_1 is: a `frame_system`, the control box at the back
+of the base holding the controller, and a `gantry_system`, the gantry riding
+the Y rails with the Z carriage on its cross beam and the trim router in the
+carriage's 65 mm clamp. The gantry's pieces stand where the part draws them
+with its axes at their defaults, placed from the part's own constants.
+
+    >>> [c.name for c in router.children]
+    ['frame_system', 'gantry_system']
+    >>> gantry = router.children[1]
+    >>> [a.name for a in gantry.additions], [c.name for c in gantry.children]
+    (['left_leg', 'right_leg', 'cross_beam'], ['z_carriage_system'])
+    >>> clamp = next(a for a in gantry.children[0].additions if a.name == "clamp")
+    >>> spindle = clamp.children[0]
+    >>> spindle.name, spindle.base.v.to_list(), spindle.base.children[0].r
+    ('spindle', [315.0, 465.0, 148.0], 32.5)
+
 Its controller runs Grbl_ESP32 and speaks GRBL's dialect of G-code, which
 differs from Marlin's in the places this seam cares about: a board is
 identified by `$I`, there being no `M115`; a poll is the realtime `?` and
 `$G`; what may be typed at it is another short list; and the stop is a soft
 reset. The port is pinned to the controller inside the control box, as
 printer_1's is to its mainboard, and the router above it takes the
-controller's state.
+controller's state. The controller is drawn as the board it is assumed to be
+([the board](../parts/boards/anolex_grbl_esp32/README.md): the maker
+publishes no drawing of it).
 
-    >>> box = next(c for c in router.children if c.name == "frame_system")
-    >>> [c.name for c in box.children], box.children[0].comment
-    (['controller'], "Controller (Grbl_ESP32) -- pin the router's port here")
+    >>> box = router.children[0]
+    >>> [c.name for c in box.children], box.children[0].part_ref, box.children[0].comment
+    (['controller'], 'anolex_grbl_esp32', "Controller (Grbl_ESP32) -- pin the router's port here")
 
 ## The dialect
 
