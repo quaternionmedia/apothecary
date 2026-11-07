@@ -192,9 +192,9 @@ above:
     <BLANKLINE>
     The dev loop, once it runs:
       apothecary serve --reload        a saved .py file restarts the server
-      apothecary test changed          while working: the tests the change reaches
-      apothecary test run              before each commit
-      apothecary test all              before a merge, on the branch merged onto main
+      apothecary test changed          the loop, before each commit: the tests the change reaches
+      apothecary test run              the ordinary command: the unit tests and the walkthrough
+      apothecary test all              before a merge, once, on the stack's head merged onto main
       git pull && uv sync && git submodule update --init
                                        others' commits in, with their packages and pin
     docs/dev-loop.md says each step, and how a change is integrated.

@@ -91,15 +91,17 @@ up to date.
 
 The suite is in areas -- windows, pictures, machine, parts, lighting, the demo --
 each with the sources a change to which reaches it and the files that hold it
-(`tests/e2e/areas.py`). `apothecary test changed` runs the unit tests and the
-walkthrough, then the files of the areas a change touches: every file when it
+(`tests/e2e/areas.py`), as the unit suite is in groups (`tests/groups.py`).
+`apothecary test changed` runs the walkthrough and the unit files of the groups a
+change reaches, then the browser files of the areas it touches: every file when it
 touches shared ground (the page, the app, this suite's helpers and conftest, the
 dependencies), a browser file itself when it changes, none when it reaches no area.
 The change is what the checkout holds against `--since`, the branch's upstream
 when it is not given; `--list` names the files and runs nothing. A new browser file
 goes in one area, and `tests/test_areas.py` fails until it is in one. It is for
 while working and is never the gate: the whole suite, `apothecary test all`, runs
-before every merge, on the tree that lands (`CONTRIBUTING.md`, "The loop").
+before a merge, once, on the head of the stack being pulled, the tree that lands
+(`CONTRIBUTING.md`, "The loop").
 
     uv run apothecary test changed --list --since origin/main
 

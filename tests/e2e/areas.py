@@ -1,11 +1,12 @@
 """Which browser tests a change reaches: the suite in areas, each named for what a
 person does with the page, with the sources it stands on and the files that hold it.
 
-`apothecary test changed` runs the unit tests and the walkthrough, then the browser
-files of the areas a change touches: every file when it touches shared ground -- the
+`apothecary test changed` runs the walkthrough and the unit files of the groups a change
+reaches (tests/groups.py), then the browser files of the areas it touches: every file when it touches shared ground -- the
 page itself, the server's app, this suite's own helpers and conftest, the
 dependencies -- a browser file itself when it changes, none when it reaches no area.
-The whole suite (`apothecary test all`) runs before a pull request is ready.
+The whole suite (`apothecary test all`) runs once, on the head of a stack, before it is
+pulled.
 
     python tests/e2e/areas.py FILE...   # the browser files a change to FILE... reaches, or ALL
 

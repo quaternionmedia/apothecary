@@ -56,13 +56,16 @@ Each worktree has its own `.venv`; run `uv sync` in it once.
 ## Testing
 
 ```bash
-uv run apothecary test changed       # while working: the unit tests and the walkthrough, then the browser files the change reaches
-uv run apothecary test run           # before each commit: the unit tests and the walkthrough
-uv run apothecary test all           # before a merge: every browser test too
+uv run apothecary test changed       # the loop, before each commit: the walkthrough, the unit groups and browser areas the change reaches
+uv run apothecary test group NAME    # one unit group (tests/groups.py); no name lists them
+uv run apothecary test run           # the ordinary command: the unit tests and the walkthrough
+uv run apothecary test all           # before a merge, once, on the stack's head: every browser test too
 uv run ruff check apothecary tests   # kept clean; format only the files the change touches
 ```
 
-`test changed` is for while working and is never the gate. Every test has a time
+`test changed` is the loop and is never the gate; `--workers N` runs it in parallel.
+The gate is `test all` on the head of the stack being pulled, which carries every
+level beneath it ([CONTRIBUTING.md](../CONTRIBUTING.md#the-loop)). Every test has a time
 bound, here as in CI, so a hang ends with its stack written.
 
 ## Committing

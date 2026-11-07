@@ -200,10 +200,11 @@ this file's summary of the corpus instead of the corpus.
 
 ```bash
 uv sync                        # install dependencies
+uv run apothecary test changed # the loop, before each commit: the walkthrough, the unit groups and browser areas what is not pushed yet reaches
+uv run apothecary test group   # the unit suite's groups; with names, their files and the walkthrough
 uv run apothecary test run     # the ordinary test command: unit tests and the walkthrough
-uv run pytest                  # the quick inner loop: unit tests, the walkthrough and the window manager's page; other browser tests skip
-uv run apothecary test all     # unit tests and the walkthrough, then every browser test
-uv run apothecary test changed # the same, but only the browser files what is not pushed yet reaches
+uv run pytest                  # unit tests, the walkthrough and the window manager's page; other browser tests skip
+uv run apothecary test all     # every test: once on a stack's head, before it is pulled (CONTRIBUTING.md, The loop)
 uv run apothecary serve        # the viewer at :6283/viewer (--port or $APOTHECARY_PORT for another); docs at /docs, the API at /openapi.json
 uv run apothecary serve --demo # the same on a state folder of its own, a simulated printer and devkit
 uv run apothecary check        # what is installed: packages, three.js, OpenSCAD and each part's, the slicer, the firmware toolchains

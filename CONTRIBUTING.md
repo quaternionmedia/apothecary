@@ -23,10 +23,11 @@ trying it, and names the optional installs: the slicer and each firmware toolcha
 ## The loop
 
 ```bash
+uv run apothecary test changed --workers 4      # while working, and before each commit: the walkthrough, the unit groups and the browser areas the change reaches
+uv run apothecary test group machines making    # one part of the package at a time: its unit files and the walkthrough (no name: the groups)
 uv run apothecary test run                      # the ordinary command: unit tests and the walkthrough, whose demonstration drives Chromium
-uv run apothecary test all                      # the same, then every browser test
-uv run apothecary test changed                  # while working: the unit tests and the walkthrough, then the browser files the change reaches
-uv run apothecary test all --workers 2 -k part  # the browser part on two workers; further arguments narrow both parts
+uv run apothecary test all                      # the same, then every browser test: the run on a stack's head before it is pulled
+uv run apothecary test all --workers 2 -k part  # both parts on two workers; further arguments narrow both parts
 uv run apothecary test all --record-durations   # the same, the browser tests' times written into tests/e2e/durations.json
 uv run apothecary test all --coverage           # the same, measured: what of the package ran, and of what the change adds or changes
 uv run apothecary test coverage --markdown      # the last measured run's coverage, as a line for a pull request's body
@@ -41,7 +42,12 @@ uv run ruff check apothecary tests              # kept clean; format only the fi
 uv run --group preflight apothecary preflight   # the CI workflows, run here, before a push
 ```
 
-`apothecary test run` is the one to run before a commit; it runs the window manager's
+`apothecary test changed` is the loop while working and before each commit: the
+walkthrough's pages, the unit files of the groups the change reaches
+([tests/groups.py](tests/groups.py)) and the browser files of the areas it reaches
+([tests/e2e/areas.py](tests/e2e/areas.py)), every file of a part when the change touches
+its shared ground; `--list` names them and runs nothing. `apothecary test group NAME` runs
+one group. `apothecary test run` is the ordinary command, and runs the window manager's
 browser tests too. Those need no server, only Chromium, so `uv run pytest` runs them as well
 wherever Playwright has installed it. A pull request's CI runs the governance checks, lint
 and the walkthrough's hermetic pages, and the rest of the tests run in CI at a version tag,
