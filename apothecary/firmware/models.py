@@ -337,6 +337,9 @@ class FlashRecord(BaseModel):
     identity: str  # DeviceInfo.identity at flash time
     port: str
     mac: Optional[str] = None
+    # The board's key (occupants.key_of) at flash time: a record kept by its port, for a
+    # board never probed, counts for that board alone. None on a record kept before.
+    board: Optional[str] = None
     sketch: Optional[str] = None  # its name, what it announces; None for a raw esptool flash
     sketch_id: Optional[str] = None  # which implementation of it (SketchInfo.id)
     toolchain: Optional[str] = None  # the module that built and flashed it
@@ -612,6 +615,9 @@ class ManualBinding(BaseModel):
     path: str  # dotted node path, as GET /sites/{name}/nodes/{path}/stl addresses it
     identity: str  # DeviceInfo.identity: MAC, USB bridge serial number, or port
     bound_at: datetime
+    # The kind of machine its board answered as ("printer", "router"), once it has:
+    # a board on the pin's port that answers as another kind is another board.
+    kind: Optional[str] = None
 
 
 class NodeBinding(BaseModel):

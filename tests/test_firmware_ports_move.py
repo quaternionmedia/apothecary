@@ -24,7 +24,13 @@ from firmware_helpers import fake_cli_calls
 from apothecary.api import app
 from apothecary.cli import cli
 from apothecary.firmware import devices, gcode, grbl, occupants, serial_monitor
-from apothecary.firmware.models import BoardInfo, DeviceInfo, LevelingRecord, PrinterInfo
+from apothecary.firmware.models import (
+    BoardInfo,
+    DeviceInfo,
+    FlashRecord,
+    LevelingRecord,
+    PrinterInfo,
+)
 
 PORT = "/dev/ttyMOVES0"
 OTHER = "/dev/ttyMOVES1"
@@ -36,6 +42,8 @@ ENDER = {"vid": "0x0403", "pid": "0x6001", "serial_number": "MADEUPENDER1", "loc
 ENDER_TWIN = {**ENDER, "serial_number": "MADEUPENDER2", "location": "1-5"}
 ROUTER = {"vid": "0x1a86", "pid": "0x7523", "serial_number": None, "location": "1-3"}
 ROUTER_TWIN = {**ROUTER, "location": "1-4"}
+# An ESP32 devkit behind a CP2102, which carries a serial number of its own.
+DEVKIT = {"vid": "0x10c4", "pid": "0xea60", "serial_number": "MADEUPDEVKIT", "location": "1-6"}
 
 
 def _as_pyserial_lists_it(port, usb):
@@ -670,6 +678,100 @@ def test_two_bridges_of_one_make_share_a_key_and_own_nothing_under_it(bench):
     assert not one.owns("usb:1a86:7523")
     bench.unplug(OTHER)
     assert occupants.on_port(PORT).owns("usb:1a86:7523")
+
+
+# --- a pin by port name, and a flash kept by port --------------------------------------
+
+
+def _the_router_pinned_by_its_port(bench, c):
+    """The router pinned from the port list: a CH340 has no serial number, so the pin
+    is its port, and it learns the router's kind."""
+    _a_router_was_identified(bench)
+    row = c.put(f"/sites/garage/nodes/{CONTROLLER}/device", json={"identity": PORT}).json()
+    assert row["identity"] == PORT
+    (pin,) = [b for b in devices.get_state().bindings("garage") if b.path == CONTROLLER]
+    assert pin.kind == "router"
+
+
+def _the_controller_s_board(c):
+    rows = c.get("/sites/garage/devices").json()["bindings"]
+    return next(r for r in rows if r["path"] == CONTROLLER)["device"]
+
+
+def test_the_printer_on_the_router_s_port_is_not_the_router_s(bench, garage):
+    """The Ender on the port name the router's pin holds: it has a serial number, so a
+    pin of its own would have named it, and the router's node does not take it."""
+    c = TestClient(app)
+    _the_router_pinned_by_its_port(bench, c)
+    cnc_router = next(s for s in garage.children if s.name == "cnc_router")
+    _a_printer_was_identified(bench)
+    assert _the_controller_s_board(c) is None
+    polled = gcode.PrinterStatus(port=PORT, polled_at=datetime.now(timezone.utc), state="printing")
+    assert devices.notify_status(polled).synced == []
+    assert cnc_router.status != "printing"
+    c.delete(f"/sites/garage/nodes/{CONTROLLER}/device")
+
+
+def test_a_board_of_another_kind_on_the_pin_s_port_is_not_its_board(bench, garage):
+    """Two bridges of one make, neither with a serial number: the kind the pin learnt
+    tells them apart once the other has answered."""
+    c = TestClient(app)
+    _the_router_pinned_by_its_port(bench, c)
+    bench.plug(PORT, ROUTER_TWIN)
+    scanned = next(d for d in devices.detected_devices() if d.port == PORT)
+    printer = _answered("marlin", "printer", "Marlin on a CH340")
+    devices.get_state().remember_device(scanned.model_copy(update={"printer": printer}))
+    assert _the_controller_s_board(c) is None
+    _a_router_was_identified(bench)
+    assert _the_controller_s_board(c)["port"] == PORT
+    c.delete(f"/sites/garage/nodes/{CONTROLLER}/device")
+
+
+def test_a_pin_by_port_learns_its_board_s_kind_the_first_time_it_answers(bench, garage):
+    bench.plug(PORT, ROUTER)
+    c = TestClient(app)
+    c.put(f"/sites/garage/nodes/{CONTROLLER}/device", json={"identity": PORT})
+    (pin,) = [b for b in devices.get_state().bindings("garage") if b.path == CONTROLLER]
+    assert pin.kind is None  # pinned before it was asked what it is
+    _a_router_was_identified(bench)
+    (pin,) = [b for b in devices.get_state().bindings("garage") if b.path == CONTROLLER]
+    assert pin.kind == "router"
+    c.delete(f"/sites/garage/nodes/{CONTROLLER}/device")
+
+
+def _flashed_by_port(board=None):
+    record = FlashRecord(
+        identity=PORT,
+        port=PORT,
+        sketch="esp32_blink",
+        flashed_at=datetime.now(timezone.utc),
+        board=board,
+    )
+    devices.get_state().record_flash(record)
+
+
+def test_a_printer_never_should_run_what_a_devkit_on_its_port_was_flashed_with(bench, tmp_path):
+    """A devkit flashed before it was probed is kept by its port; the Ender later on that
+    port name runs its own firmware, which nothing here flashes."""
+    bench.plug(PORT, DEVKIT)
+    _flashed_by_port()
+    devkit = next(d for d in devices.detected_devices() if d.port == PORT)
+    assert devices.expected_firmware(devkit, tmp_path).record.sketch == "esp32_blink"
+    _a_printer_was_identified(bench)
+    ender = next(d for d in devices.detected_devices() if d.port == PORT)
+    assert ender.printer is not None
+    assert devices.expected_firmware(ender, tmp_path).record is None
+
+
+def test_a_flash_kept_by_port_counts_for_the_board_it_was_made_on(bench, tmp_path):
+    bench.plug(PORT, DEVKIT)
+    _flashed_by_port(board="MADEUPDEVKIT")
+    bench.plug(PORT, {**DEVKIT, "serial_number": "MADEUPDEVKIT2", "location": "1-7"})
+    other = next(d for d in devices.detected_devices() if d.port == PORT)
+    assert devices.expected_firmware(other, tmp_path).record is None
+    bench.plug(PORT, DEVKIT)
+    again = next(d for d in devices.detected_devices() if d.port == PORT)
+    assert devices.expected_firmware(again, tmp_path).record.sketch == "esp32_blink"
 
 
 # --- the simulated boards --------------------------------------------------------------

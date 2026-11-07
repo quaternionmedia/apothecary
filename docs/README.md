@@ -89,7 +89,7 @@ Open plans: each says what is decided and what is not built.
 
 | Page | |
 |---|---|
-| [Each machine keeps its own](plans/machine-identity-2026-11-07.md) | One answer to which board is on a port and what kind of machine it is; every record and cache keyed by it, a port that changes hands forgetting its board, one kind's work refused on another at the server, and the stop always sent; in slices: the stop, the port's forgetting and readings by board built |
+| [Each machine keeps its own](plans/machine-identity-2026-11-07.md) | One answer to which board is on a port and what kind of machine it is; every record and cache keyed by it, a port that changes hands forgetting its board, one kind's work refused on another at the server, and the stop always sent; in slices: the stop, the port's forgetting, readings by board and pins by board built |
 | [A part through the subtractive loop](plans/subtractive-loop-2026-11-04.md) | The loop the app is built around from here, on the router beside the Ender: a part's declared cuts, the app's own toolpath, Cut from here, the cut's operation named, the simulated router's footprint measured and one iteration executed (built); then the bench, then the cut watched |
 | [Pictures in the world: what is open](plans/pictures-the-rest-2026-10-13.md) | Gathering out of core as an extra, and the old photo routes closed: the two phases of the pictures plan not built |
 | [The shape finder, with a model behind it](plans/photo-finders-local-models-2026-09-21.md) | Optional local models behind the photo finder: the seam, the plugin shape, what reach is lawful, the phases |

@@ -38,8 +38,8 @@ here: run `apothecary problems`.
 - A step answered 202 by a member beside the hub reads as fired for good: the hub could
   read that member's `/family/events`, as it reads a hosted member's state
   ([the first run](docs/validation/2026-11-05-family-started.md)).
-- What a port's record leaves open: a flash record of a board never probed is still found
-  by its port's name; a family home step on a port another board's record names is refused
+- What a port's record leaves open: a flash record kept before records named their board is
+  still found by its port's name; a family home step on a port another board's record names is refused
   once, with nothing sent, and works on the next try; two identical converters swapped in
   one socket read as one board. None of it has met the real router or the real state file.
 - A machine stepped into is its part alone: its pieces are reached from Site and not drawn

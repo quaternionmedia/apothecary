@@ -1,9 +1,10 @@
 # Each machine keeps its own: a plan
 
-*Slices 1 to 3 are built: the stop goes to whatever is on a port, a port that
-changes hands forgets what was held in memory for its last board, and a bed
-reading is the board's that took it. The rest is not built. Each slice is one
-pull request, in the order below.*
+*Slices 1, 2, 3 and 5 are built: the stop goes to whatever is on a port, a port
+that changes hands forgets what was held in memory for its last board, a bed
+reading is the board's that took it, and a pin or a flash kept by port is
+careful of the board that takes the port. The rest is not built. Each slice is
+one pull request.*
 
 ## What this plans
 
@@ -111,16 +112,20 @@ Each is a pull request; a slice that needs another's work stacks on it.
    over a printer's bed alone. Held by tests that take a reading on the
    simulated printer and put the router on its port, and by a browser test that
    starts with a printer's reading kept under the router's port name.
-4. **A kept file says which kind of machine it is for.** A file records
+4. **A kept file says which kind of machine it is for** (`build/files-by-kind`).
+   A file records
    `printer` or `router`: Choose File records the Machine's kind, a slice
    records `printer`, a toolpath `router`. A stream refuses a file of the other
    kind, and one that records none, saying how to keep it for this machine. The
    check is per dialect: a router's file is refused for a code GRBL does not
    take, and a dwell over a minute is named with its unit.
-5. **A pin, a flash record and a job by port name check the bridge** (on 3). A
-   board with no serial number is pinned with its bridge's `vid:pid` as well,
-   and matches a board on that port only when the bridge is the same; a flash
-   record and a job of such a board record the occupant's key.
+5. **A pin and a flash kept by port name are careful of the board on the port**
+   (`build/pins-by-board`, on 3; built). A pin by port never matches a board
+   with a MAC or a serial number, which its own pin would have named; it keeps
+   the kind of machine its board answered as, learnt the first time it answers,
+   and never matches a board that answers as another. A flash kept by the port
+   of an unprobed devkit records the devkit's key and counts for it alone, and a
+   board that answers as a printer or a router is never said to run a sketch.
 6. **The page keeps a machine's marks by board** (on 3). Marks, where a machine
    stands and a drawn toolpath are rebuilt when the board on a node's port
    changes; one function says a board's kind, and a board not yet identified is
@@ -141,3 +146,7 @@ sees at the bench changes its box.
   unique.
 - Evidence, the jobs' history and kept print records from before a slice keep
   what they recorded; they are read by the new key where they have one.
+- A job's history is matched by identity, which for a board with no serial number
+  is its port: a serial-less board on the router's port name would be shown the
+  router's jobs as its own. A job recording the occupant's key and kind would
+  close it; it shows history, and sends nothing.

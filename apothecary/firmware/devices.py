@@ -315,11 +315,17 @@ class FirmwareState:
     def flashes(self) -> List[FlashRecord]:
         return [FlashRecord(**f) for f in self._load()["flashes"]]
 
-    def last_flash(self, identity: str, port: Optional[str] = None) -> Optional[FlashRecord]:
-        """Newest record for a MAC; falls back to the port for never-probed boards."""
+    def last_flash(
+        self, identity: str, port: Optional[str] = None, board: Optional[str] = None
+    ) -> Optional[FlashRecord]:
+        """Newest record for a MAC; falls back to the port for never-probed boards,
+        a record that names its board (``board``, a key) counting for that one alone."""
         newest: Optional[FlashRecord] = None
         for rec in self.flashes():
-            if rec.identity == identity or (port and rec.mac is None and rec.port == port):
+            by_port = port and rec.mac is None and rec.port == port
+            if by_port and rec.board is not None and board is not None and rec.board != board:
+                by_port = False
+            if rec.identity == identity or by_port:
                 if newest is None or rec.flashed_at >= newest.flashed_at:
                     newest = rec
         return newest
@@ -329,6 +335,7 @@ class FirmwareState:
         port list says holds the port at this moment (``board_on``): the record is
         that board's, and counts for no other (``cached_device``)."""
         seen = board_on(device.port)
+        kind = machine_kind(device)
         with self._lock:
             data = self._load()
             data["devices"][device.port] = device.model_dump(mode="json")
@@ -336,6 +343,15 @@ class FirmwareState:
                 data["seen"][device.port] = _sighting(seen)
             else:
                 data["seen"].pop(device.port, None)
+            # A pin by this port learns the kind of machine its board answered as, the
+            # first time it answers: a board answering as another kind later is another.
+            if kind is not None:
+                from .bindings import same_device
+
+                for pin in data["bindings"]:
+                    if pin.get("kind") is None and pin.get("identity") in (device.port,):
+                        if same_device(pin["identity"], device.port, device):
+                            pin["kind"] = kind
             self._save(data)
 
     def cached_device(self, port: str) -> Optional[DeviceInfo]:
@@ -366,10 +382,17 @@ class FirmwareState:
 
     # -- node bindings: a device the user pinned to a (site, node path) ----------
 
-    def set_binding(self, site: str, path: str, identity: str) -> ManualBinding:
-        """Pin ``identity`` to the node; replaces any earlier pin for that node."""
+    def set_binding(
+        self, site: str, path: str, identity: str, kind: Optional[str] = None
+    ) -> ManualBinding:
+        """Pin ``identity`` to the node, its board of ``kind`` when that is known;
+        replaces any earlier pin for that node."""
         binding = ManualBinding(
-            site=site, path=path, identity=identity, bound_at=datetime.now(timezone.utc)
+            site=site,
+            path=path,
+            identity=identity,
+            bound_at=datetime.now(timezone.utc),
+            kind=kind,
         )
         with self._lock:
             data = self._load()
@@ -450,10 +473,12 @@ def make_flash_record(
     state = state or get_state()
     cached = state.cached_device(port)
     mac = cached.mac if cached else None
+    on_port = occupants.on_port(port, state)
     return FlashRecord(
         identity=mac or port,
         port=port,
         mac=mac,
+        board=on_port.key if on_port is not None else None,
         sketch=sketch.name if sketch else None,
         sketch_id=sketch.id if sketch else None,
         toolchain=sketch.toolchain if sketch else None,
@@ -471,7 +496,12 @@ def expected_firmware(
     device: DeviceInfo, build_root: Path, state: Optional[FirmwareState] = None
 ) -> ExpectedFirmware:
     state = state or get_state()
-    record = state.last_flash(device.identity, device.port)
+    if device.printer is not None:
+        # A board that answers as a printer or a router runs its own G-code firmware,
+        # which nothing here flashes: whatever a devkit on its port was last flashed
+        # with is not what it should run.
+        return ExpectedFirmware()
+    record = state.last_flash(device.identity, device.port, occupants.key_of(device))
     if record is None:
         return ExpectedFirmware()
     out = ExpectedFirmware(record=record)

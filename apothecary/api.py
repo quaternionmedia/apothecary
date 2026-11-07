@@ -2226,7 +2226,7 @@ def _pinned_at(port: str) -> Optional[tuple[str, Assembly, str]]:
     state = firmware_devices.get_state()
     known = firmware_devices.known_device(port, state)
     for binding in state.bindings():
-        if not same_device(binding.identity, port, known):
+        if not same_device(binding.identity, port, known, binding.kind):
             continue
         if binding.site not in _site_store.names():
             continue
@@ -2415,7 +2415,7 @@ def _machines_in(site_name: str, statuses, router: bool) -> List[str]:
         node = _find_node_by_path(site, bearer) if bearer else None
         if node is None or node.status not in statuses:
             continue
-        on_port = device_for_identity(binding.identity, plugged)
+        on_port = device_for_identity(binding.identity, plugged, binding.kind)
         known = firmware_devices.known_device(on_port.port, state) if on_port else None
         # A router cuts and a printer prints; a board that answered as neither is nothing's.
         if (firmware_devices.machine_kind(known) == firmware_grbl.MACHINE) != router:
@@ -2452,7 +2452,7 @@ def every_pin(fresh: bool = False):
             except KeyError:  # forgotten, or its picture left the shelf, since names()
                 node = None
             node_found = node is not None
-        device = device_for_identity(binding.identity, found)
+        device = device_for_identity(binding.identity, found, binding.kind)
         rows.append(
             {
                 **binding.model_dump(mode="json"),
@@ -2489,7 +2489,7 @@ def _sync_printer_status(status) -> List[Dict[str, object]]:
     for site_name in _site_store.loaded():
         site = _site_store.get(site_name)
         for binding in state.bindings(site_name):
-            if not same_device(binding.identity, status.port, known):
+            if not same_device(binding.identity, status.port, known, binding.kind):
                 continue
             target = status_bearer_for(site, binding.path)
             if target is None:
@@ -2523,7 +2523,7 @@ def _record_printer_poll(status) -> List[Dict[str, object]]:
     for site_name in _site_store.loaded():
         site = _site_store.get(site_name)
         for binding in state.bindings(site_name):
-            if same_device(binding.identity, status.port, known):
+            if same_device(binding.identity, status.port, known, binding.kind):
                 bearer = status_bearer_for(site, binding.path)
                 pins.append(
                     evidence_printers.Pin(site_name, binding.path, bearer, binding.identity)
@@ -2637,7 +2637,10 @@ def attach_device(name: str, path: str, body: DeviceAttachRequest):
     if _find_node_by_path(site, path) is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
     identity = firmware_devices.stable_identity(body.identity)
-    firmware_devices.get_state().set_binding(name, path, identity)
+    known = firmware_devices.known_device(body.identity)
+    firmware_devices.get_state().set_binding(
+        name, path, identity, firmware_devices.machine_kind(known)
+    )
     return _binding_row(name, site, path)
 
 

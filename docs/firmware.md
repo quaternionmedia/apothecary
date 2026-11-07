@@ -436,6 +436,17 @@ serial number (a CH340) is pinned by its port. The row the pin answers with
 carries what was stored, and the page's status line says it -- the serial
 number or MAC and the port it was found on, or the port alone.
 
+A pin by its port names no board of its own. A board on the port with a MAC or a
+serial number is another board, which a pin of its own would have named by it:
+the Ender on the port name the router's pin holds is not the router's, its polls
+drive no router node and the family's steps for the router do not reach it. The
+pin keeps the kind of machine its board answered as (`printer`, `router`),
+learning it the first time the board answers if it was pinned before, and a
+board on the port that answers as another kind is another board too. Likewise a
+flash kept by the port of a devkit nothing has probed counts for that devkit
+alone, and no sketch is expected of a board that answers as a printer or a
+router: nothing here flashes it.
+
 ### In the viewer: one Machine per board
 
 A pinned board has one surface in the viewer, its **Machine**
