@@ -13,6 +13,8 @@ parts/
 ├── cameras/                a category: the library's webcam, and mounts for it
 │   ├── webcam/             webcam.scad and part.json
 │   └── webcam_desk_stand/  part.json tags it a stub, as it does the clamp arm and the ceiling mount
+├── stream_deck_plus/
+│   └── stream_deck_plus.scad   the Stream Deck + at the bench, from the maker's published size
 ├── anolex_4060_evo_ultra_2/
 │   └── anolex_4060_evo_ultra_2.scad   the router, drawn as it is
 ├── router_coupon/

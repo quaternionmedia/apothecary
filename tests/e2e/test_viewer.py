@@ -85,7 +85,7 @@ def test_viewer_shows_contents_for_the_loaded_site(page: Page, base_url: str):
     """
     _open(page, f"{base_url}/viewer/sites/garage")
 
-    expect(page.locator("#contents-list .contents-item")).to_have_count(16)
+    expect(page.locator("#contents-list .contents-item")).to_have_count(17)
     contents = page.locator("#contents-list")
     for name in (
         "workbench",
@@ -104,6 +104,7 @@ def test_viewer_shows_contents_for_the_loaded_site(page: Page, base_url: str):
         "arduino_uno",
         "raspberry_pi_4",
         "teensy_40",
+        "stream_deck",
     ):
         expect(contents).to_contain_text(name)
 
