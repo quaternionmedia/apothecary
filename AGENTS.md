@@ -221,6 +221,8 @@ and `apothecary test run`'s walkthrough demonstration, additionally require
 `uv run playwright install chromium`. `walkthrough/00-getting-started.md` is
 the path a person takes from a fresh clone. `uv run apothecary --help` is the
 command reference; `CONTRIBUTING.md` has the test loop and what CI gates.
+Before a stack is pulled, its head goes through `docs/integration-checklist.md`,
+box by box; what only the real machines show is `docs/bench-checklist.md`.
 
 A commit subject is one plain sentence saying what is now true (`git log
 --oneline` shows the style); the body says why, with evidence, and ends with

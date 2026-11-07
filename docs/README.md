@@ -38,6 +38,17 @@ written by the browser tests that walk them; page 00, pages 07 to 17 and pages
 | [22 — The irl family's hub](../walkthrough/22-the-irl-hub.md) | apothecary as the family's hub on hearth's contract: what it says it is, its table, a fire and what is kept |
 | [23 — A procedure](../walkthrough/23-a-procedure.md) | What the family fires: the steps that bring a site's blueprint into working order, each waiting for GO and the evidence it names, a person's own, a member's refusal, a page's read and a member that is not there, and what the log keeps |
 
+## The checklists
+
+What is ticked by a person before a stack is pulled and before a tag is cut. The
+suites hold everything else.
+
+| Checklist | |
+|---|---|
+| [The integration checklist](integration-checklist.md) | A stack, before it is pulled: the tree that will land, the suite once on its head, the pictures judged, the docs read together, preflight, the rows only a person sees, the pull requests and the landing |
+| [The bench checklist](bench-checklist.md) | The Ender 3, an ESP32 and the router for real: pinning, the link, heat, motion, levelling, printing from here, slicing, the emergency stop, the Rust and Arduino blinks, and the router's homing, jogs, spindle, zero, probe and a cut |
+| [The models checklist](models-checklist.md) | Image models through qmcp by hand, against the simulated qmcp: the Models window, asking about a shape, a person's word, switching an origin off, and each way qmcp can be missing |
+
 ## Guides
 
 | Page | |
@@ -63,8 +74,6 @@ written by the browser tests that walk them; page 00, pages 07 to 17 and pages
 | [The toolpath](cam.md) | The router's toolpath, written from the cuts a part declares: what a part says, what the toolpath does, how it is kept, recorded and offered, and the cut measured as cut |
 | [The slicer](slicer.md) | OrcaSlicer installed and pinned, the printer's profile kept with its part, a part or a made piece sliced for the pinned printer and kept for the Print card |
 | [The Airgap](airgap.md) | The `airgap` part -- a rotor/stator pair computed in its SCAD -- and the Airgap panel: the part as a field, torque and dynamics model that follows its text in the editor, its verbs on the ring, its rig and sweep as documents, and the metrics document Python reads back |
-| [The bench checklist](bench-checklist.md) | The Ender 3, an ESP32 and the router for real: pinning, the link, heat, motion, levelling, printing from here, slicing, the emergency stop, the Rust and Arduino blinks, and the router's homing, jogs, spindle, zero, probe and a cut |
-| [The models checklist](models-checklist.md) | Image models through qmcp by hand, against the simulated qmcp: the Models window, asking about a shape, a person's word, switching an origin off, and each way qmcp can be missing |
 
 ## The Rust workspace
 

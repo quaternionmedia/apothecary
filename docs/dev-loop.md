@@ -65,7 +65,8 @@ uv run ruff check apothecary tests   # kept clean; format only the files the cha
 
 `test changed` is the loop and is never the gate; `--workers N` runs it in parallel.
 The gate is `test all` on the head of the stack being pulled, which carries every
-level beneath it ([CONTRIBUTING.md](../CONTRIBUTING.md#the-loop)). Every test has a time
+level beneath it ([CONTRIBUTING.md](../CONTRIBUTING.md#the-loop),
+[the integration checklist](integration-checklist.md)). Every test has a time
 bound, here as in CI, so a hang ends with its stack written.
 
 ## Committing
@@ -91,17 +92,7 @@ Then start `serve` again: a new package or a moved pin is read only as it starts
 
 ### A change, into main
 
-1. Push the branch and open a pull request into `main`. A pull request on another
-   pull request's branch stays a draft until the one beneath it merges; the bottom
-   one alone is ready.
-2. A pull request's CI runs the governance checks, lint and the walkthrough's
-   hermetic pages. Its runner time is spend: a push is priced, its jobs and their
-   recorded minutes, and made once a person has authorised that number.
-   `uv run --group preflight apothecary preflight` runs the workflows here first
-   ([page 15](../walkthrough/15-preflight.md)).
-3. Before it is marked ready, and again before it merges when `main` has moved, the
-   whole suite runs on the tree `main` will have: the branch with `origin/main`
-   merged in, then `uv run apothecary test all`. The pull request's body says what
-   ran and what it said.
-4. It merges with a merge commit that says the same for the tree that landed. The
-   push to `main` runs CI again: a merge skips none.
+A change reaches `main` as a pull request, or as a stack of them pulled from its
+head. [The integration checklist](integration-checklist.md) is the path, box by
+box: the tree that will land, the suite once on it, the pictures and the docs,
+preflight, the pull requests and the landing.

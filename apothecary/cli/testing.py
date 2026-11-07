@@ -215,7 +215,8 @@ def test_all(slow: bool, workers: int, coverage: bool, since: str, pytest_args: 
     through, writes the browser tests' times into tests/e2e/durations.json, which
     the shards are balanced by; --steps runs the step-through tests too, which skip
     otherwise. --coverage measures both parts, the server the browser tests drive
-    included, and says what they covered, as `test coverage` does."""
+    included, and says what they covered, as `test coverage` does. Before a stack is
+    pulled it runs once on its head: docs/integration-checklist.md, box by box."""
     env = coverage_env() if coverage else None
     codes = [
         _pytest(argv + list(pytest_args), env=env)

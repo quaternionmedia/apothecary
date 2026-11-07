@@ -55,10 +55,10 @@ wherever Playwright has installed it.
 head of the stack being pulled merged onto its target's tip: `apothecary test all`, then
 `apothecary preflight`. The head carries every level beneath it, so no level is tested
 alone ([the integrated-whole record](governance/qm/adr/DRAFT-review-the-integrated-whole.md),
-its second decision); a pull request on its own is its own head. It runs again before the
-merge if that tree has changed. The head's body says what ran and what it said, and the
-merge commit says it for the tree that landed. CI follows the same rule. A pull request
-into `main` -- a stack's bottom when it opens, its head when it is retargeted there and
+its second decision); a pull request on its own is its own head.
+[The integration checklist](docs/integration-checklist.md) is that run box by box, with
+what it leaves for a person and how the stack lands. CI follows the same rule. A pull
+request into `main` -- a stack's bottom when it opens, its head when it is retargeted there and
 marked ready -- runs the governance checks, lint and the walkthrough's hermetic pages. A
 level stacked on another runs only the stack's own checks (`one-pr-check.yml`,
 `integrates.yml`) and the walkthrough, which the corpus's walkthrough record runs on every
@@ -88,20 +88,11 @@ browser tests, and a loop's page (03, 04, 05, 06) and the working space's (18) b
 suite alone; change their words in the test that writes them, not in the page, and commit
 the words a run rewrites.
 
-**A picture is committed with the page change it shows.** After the run on a stack's head,
-`uv run python tests/e2e/picture_drift.py --sheets .cache/picture-drift` names each
-walkthrough picture the run rewrote past its tolerance, with the box that changed, and
-draws it beside the committed one, its changed pixels marked. Look at every sheet: a
-picture whose marked change is a page's -- a row, a word, a control a level of the stack
-adds or moves -- is committed in the level that changed the page; the rest, a run's noise
-(a log's scroll, a focus ring, a line of text drawn a pixel over) and every picture under
-the tolerance, is put back (`git checkout -- walkthrough/screenshots`). A change and noise
-often share one picture, which is then the page's.
-
-**Docs a stack's levels each touched are read together on its head.** Levels written apart
-can each be true alone and contradict one another, or the code beneath, once stacked: before
-the stack is pulled, the docs its levels change are read against each other and the code
-on the head's tree, and a line found wrong is fixed in the level that wrote it.
+**A picture is committed with the page change it shows**, and a run's noise is put back;
+**the docs a stack's levels each touch are read together on its head**, since levels
+written apart can each be true alone and contradict one another once stacked. Both are
+boxes of the integration checklist, which says how: `tests/e2e/picture_drift.py --sheets`
+draws each rewritten picture beside its commit, its change marked.
 [tests/e2e/README.md](tests/e2e/README.md) has the browser suite's flags and recorders, and
 [walkthrough/15-preflight.md](walkthrough/15-preflight.md) says what `preflight` reproduces
 and what it cannot.

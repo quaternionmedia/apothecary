@@ -147,6 +147,9 @@ in the background when OpenSCAD is present (`APOTHECARY_SKIP_STL_GENERATION=1` s
 - `/openapi.json` on a running server: the HTTP API. `/docs` serves `docs/` and
   `/walkthrough` serves `walkthrough/`, rendered.
 - [docs/dev-loop.md](docs/dev-loop.md): the dev loop -- change, see, test, commit, integrate.
+- [docs/integration-checklist.md](docs/integration-checklist.md): a stack, box by box,
+  before it is pulled; [docs/bench-checklist.md](docs/bench-checklist.md): the real
+  machines, before a tag.
 - [CONTRIBUTING.md](CONTRIBUTING.md): the test loop -- `uv run apothecary test run` is the
   ordinary test command -- what CI gates, and how commits are written.
   [CHANGELOG.md](CHANGELOG.md): what changed.

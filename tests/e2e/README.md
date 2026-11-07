@@ -163,7 +163,7 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   nothing that changes from run to run -- a temporary folder, a time, a count
   that varies -- and a step that would show one names it instead. A screenshot
   is rewritten only when its pixels change; commit the page's words when they
-  do, and its pictures as [CONTRIBUTING.md](../../CONTRIBUTING.md#the-loop)
+  do, and its pictures as [the integration checklist](../../docs/integration-checklist.md#pictures-and-words)
   says: those whose change is the page's. What changes on every run whatever the page does -- a time, a
   picture's name made of one -- is blanked (`shows`'s `blank`), and the picture
   is taken once the page has drawn under its blanks, at the size they leave it
