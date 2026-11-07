@@ -362,13 +362,11 @@ def test_a_router_on_a_printer_s_old_port_is_stopped_as_a_router(bench, monkeypa
     assert devices.dialect_of(PORT) == "grbl" and devices.emergency_stop_for(PORT) == "RESET"
     assert devices.printer_status(PORT).spindle.on
     links.control.disarm(PORT)
-    # A printer's stop is refused, said, and not sent: GRBL would answer it error:20
-    # and go on cutting.
-    with pytest.raises(ValueError, match="not an allowed GRBL control"):
-        devices.printer_control(PORT, "M112")
+    # A printer's stop goes as the router's own: GRBL would answer M112 with error:20
+    # and go on cutting, so its soft reset is what is sent.
+    said = devices.printer_control(PORT, "M112")
+    assert said.command == "RESET" and any(ln.startswith("Grbl") for ln in said.lines)
     assert "M112" not in _sent(links)
-    said = devices.printer_control(PORT, "RESET").lines
-    assert any(ln.startswith("Grbl") for ln in said)
     assert not devices.printer_status(PORT).spindle.on
     links.stop_all()
 
@@ -383,13 +381,15 @@ def test_the_stop_of_a_router_nothing_has_asked_yet_goes_too(bench, monkeypatch)
     links.stop_all()
 
 
-def test_a_printer_s_stop_is_never_sent_to_a_router_nothing_has_asked_yet(bench, monkeypatch):
+def test_a_printer_s_stop_reaches_a_router_nothing_has_asked_yet_as_its_reset(
+    bench, monkeypatch
+):
     links = _links(monkeypatch, grbl.SimulatedRouter)
     _a_printer_was_identified(bench)
     bench.plug(PORT, ROUTER)
-    # It is asked what it is first, answers as a router, and the line is refused.
-    with pytest.raises(ValueError, match="not an allowed GRBL control"):
-        devices.printer_control(PORT, "M112")
+    # It is asked what it is first, answers as a router, and is sent its own stop.
+    said = devices.printer_control(PORT, "M112")
+    assert said.command == "RESET" and any(ln.startswith("Grbl") for ln in said.lines)
     assert "$I" in _sent(links) and "M112" not in _sent(links)
     links.stop_all()
 
@@ -421,9 +421,8 @@ def test_a_printer_on_a_router_s_old_port_is_stopped_as_a_printer(bench, monkeyp
     assert devices.printer_control(PORT, "M112").command == "M112"
     assert "M112" in _sent(links)
     assert devices.dialect_of(PORT) == "marlin" and devices.emergency_stop_for(PORT) == "M112"
-    # And a router's stop is refused on it, not sent.
-    with pytest.raises(ValueError, match="not an allowed control code"):
-        devices.printer_control(PORT, "RESET")
+    # And a router's word for the stop is its own, M112.
+    assert devices.printer_control(PORT, "RESET").command == "M112"
     links.stop_all()
 
 

@@ -84,10 +84,10 @@ printer held yesterday. The printer's record does not count for it
 ([docs/firmware.md](firmware.md#a-record-is-one-boards-not-its-ports)), so the
 router is a board nothing has identified -- a line either dialect has is taken,
 `--query '$I'` reaches it, and it is asked what it is before a control line or
-a stop goes. Its stop is then its own: `RESET` goes, and a printer's `M112`,
-which a GRBL controller answers `error:20` and goes on cutting, is refused
-and not sent. The same holds the other way round, for a printer on a port
-the router held.
+a stop goes. Its stop is then its own: a stop asked in either word goes as
+`RESET`, so a printer's `M112`, which a GRBL controller answers `error:20` and
+goes on cutting, is never what reaches it. The same holds the other way round:
+a printer on a port the router held is sent `M112` for a `RESET`.
 
 ## Simulated
 

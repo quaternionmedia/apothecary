@@ -924,17 +924,25 @@ def printer_control(
     state: Optional[FirmwareState] = None,
     links: Optional[gcode.PrinterLinks] = None,
 ) -> PrinterQueryResult:
-    """One allowlisted control line, only while the port's latch is armed (M112 always).
+    """One allowlisted control line, only while the port's latch is armed; the stop
+    always, as the stop of whatever is on the port.
 
     Renews the latch on success. The link is opened (and the port
     identified) on first use like a poll would.
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
+    # A stop, in either dialect's word, is the one line that always goes, and goes as
+    # the stop of whatever is on the port: a printer's M112 asked of a router is its
+    # soft reset, a router's RESET asked of a printer is M112. Anything else is a
     # ValueError when not allowed or out of bounds, in the port's dialect when it is
     # known; a port identified below (its first use) is asked again in its own.
-    cmd = normalise_control(port, command, state)
-    stop = is_emergency_stop(cmd)
+    stop = is_emergency_stop(command)
+    cmd = (
+        " ".join(command.strip().upper().split())
+        if stop
+        else normalise_control(port, command, state)
+    )
     if not stop and not links.control.armed(port):
         raise gcode.ControlNotArmed(f"{port}: control is not armed -- arm it first")
     held = links.get(port)
@@ -946,9 +954,7 @@ def printer_control(
     if link is None:
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
     dialect = dialect_for(port, state)
-    cmd = normalise_control(port, command, state)
-    if stop and cmd != dialect.stop:
-        raise ValueError(f"not an allowed control code for this machine: {command!r}")
+    cmd = dialect.stop if stop else normalise_control(port, command, state)
     if stop:
         running = _PRINTS.get(port)
         if running and running.finished is None:

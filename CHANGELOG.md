@@ -152,6 +152,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Fixed
 
+- The stop goes to whatever board is on the port, as that board's own stop: a printer's `M112` asked of a router is its soft reset, and a router's `RESET` asked of a printer is `M112`, where the other dialect's word was refused and nothing was sent. ([doc](docs/firmware.md#control-behind-a-latch))
 - A turn of the wheel or a trackpad over the world dollies by its size at any pixel ratio: on a page zoomed below 100% one turn threw the view to its nearest. ([code](templates/fractal_viewer.html.j2))
 - The Lighting panel says when the server is not answering, where its poll threw an error five times a second. ([code](apothecary/static/lighting.js))
 - A kept print file's id that starts with a dot or holds a separator names no file, to read, delete or print. ([code](apothecary/firmware/devices.py))

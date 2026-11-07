@@ -517,9 +517,12 @@ Disarmed, the default, nothing can heat or move the machine: the API refuses
 control lines with `409`. A printer's Machine's **⚙ Control** arms a per-port latch
 held on the server; it lapses after five minutes without a command (each
 accepted command renews it) and is dropped by a **Release** or a lost link.
-**E-STOP** (`M112`) is always accepted, latch or not, and is written at once,
+**E-STOP** (`M112`; a router's `RESET`) is always accepted, latch or not, and
+goes as the stop of whatever board is on the port, whichever word was sent. It
+is written at once,
 ahead of any exchange in flight (a homing, a bed probe), waiting for no `ok`:
-the board's "Printer halted" is its answer. The board halts until it is
+a printer's "Printer halted" or a router's banner is its answer. A router's
+reset is a realtime byte it acts on at once; a printer halts until it is
 reset -- as soon as it reads the line when its firmware parses M112 early
 (Marlin's `EMERGENCY_PARSER`), else after the moves it has queued.
 

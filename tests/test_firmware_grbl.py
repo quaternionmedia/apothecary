@@ -321,11 +321,10 @@ def test_control_needs_the_latch_and_the_reset_does_not(fake_arduino_cli, router
     # A printer's line is refused on a router once the port is known to be one.
     with pytest.raises(ValueError, match="not an allowed GRBL control"):
         devices.printer_control(PORT, "M104 S200")
-    with pytest.raises(ValueError, match="not an allowed GRBL control"):
-        devices.printer_control(PORT, "M112")
     router_links.control.disarm(PORT)
-    said = devices.printer_control(PORT, "RESET").lines
-    assert any(ln.startswith("Grbl") for ln in said)
+    # The stop needs no latch, and a printer's word for it is the router's soft reset.
+    said = devices.printer_control(PORT, "M112")
+    assert said.command == "RESET" and any(ln.startswith("Grbl") for ln in said.lines)
     assert not devices.printer_status(PORT).spindle.on
 
 

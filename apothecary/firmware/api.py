@@ -367,7 +367,7 @@ def firmware_printer_command(body: PrinterControlRequest):
     """Send one allowlisted control line -- a printer's heaters, fan, homing, bounded
     jogs and SD pause/resume/abort; a router's homing, unlock, jogs, spindle, work zero,
     probe, hold and resume -- while the latch is armed. The stop (``M112``; a router's
-    ``RESET``) always goes."""
+    ``RESET``) always goes, as the stop of whatever is on the port."""
     if not devices.is_emergency_stop(body.command):
         _busy_guard(body.port)
     data = devices.printer_control(body.port, body.command).model_dump(mode="json")
