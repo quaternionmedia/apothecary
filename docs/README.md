@@ -8,8 +8,8 @@ at `/README.md`, and every page's bar links it. The HTTP API is described at `/o
 ## The walkthrough
 
 `walkthrough/` is the path through this repository. Pages 01 to 06 and 18 are
-written by the browser tests that walk them; page 00, pages 07 to 17 and page
-19 are doctests, run by `pytest walkthrough`. Start there, at page 00.
+written by the browser tests that walk them; page 00, pages 07 to 17 and pages
+19 to 23 are doctests, run by `pytest walkthrough`. Start there, at page 00.
 
 | Page | |
 |---|---|
@@ -36,6 +36,7 @@ written by the browser tests that walk them; page 00, pages 07 to 17 and page
 | [20 — A part through the router](../walkthrough/20-a-part-through-the-router.md) | The subtractive loop on one part: the coupon's declared cuts, its toolpath written and checked, kept and cut from here with the work zeroed, the job naming its operation, the cut measured against the design, and the design changed and cut again |
 | [21 — A toolpath, previewed](../walkthrough/21-a-toolpath-previewed.md) | One interpreter and two processes: a print's layers and a cut's passes read through one core, held to the toolpath's own writer, and a design change seen in the moves |
 | [22 — The irl family's hub](../walkthrough/22-the-irl-hub.md) | apothecary as the family's hub on hearth's contract: what it says it is, its table, a fire and what is kept |
+| [23 — A procedure](../walkthrough/23-a-procedure.md) | What the family fires: the steps that bring a site's blueprint into working order, each waiting for GO and the evidence it names, a person's own, a member's refusal, a page's read and a member that is not there, and what the log keeps |
 
 ## Guides
 
@@ -101,9 +102,8 @@ Open plans: each says what is decided and what is not built.
 | [The bench as a rig carlos can draw](plans/qm-family-carlos-2026-10-29.md) | Carlos, in the instruments family, holding and drawing the bench as apothecary sees it: the bench written as a `carlos.patch` with each board's and lead's state and sent whenever it changes (built, with a demo), a picture naming a device, IO configuration, and carlos's one action |
 | [A synth rig photographed through a concert, held in carlos](plans/carlos-concert-rig-2026-10-29.md) | Carlos's rigs, bolstered from apothecary: each knob, fader, switch and socket read off a camera's picture against carlos's own panels and held in carlos frame by frame through a concert, turned in place, with a test of both apps end to end (built, on drawn pictures); the first real photographs, power and USB into an Uno; then the airgap's test rig and a server room |
 | [A working space, seen from every kind of evidence at once](plans/working-space-view-2026-10-30.md) | One view of a place (what is here, what state it is in, how it is known, what changed) from its cameras (one thing from several angles among them), ports and polls, sensors, a person's goals, directives and actions, and optional image models, every line opening its evidence and every disagreement kept; first the Ender's three cameras (on the bed for its timelapse, on the head, across the room) tied to its polls; not built |
-| [One page for two machines](plans/ui-refresh-2026-11-04.md) | A round of unification and polish from a walk of the demo with the router beside the printer: the kinds' words in one module, one badge grammar, a section's title by kind, the card in the loop's order, Selected's shape, the Working space on any machine, the palette in one sheet (built); what it left, and why |
 | [One page for every effort](plans/ui-coordination-2026-10-31.md) | The viewer's windows, doors and words across the efforts in flight (the Working space, the image models, the rig's faces, the bench in carlos, lighting, pictures): where they collide, one observation module, and the order the collisions are settled in. |
-| [An irl hub of ShowRunner's class](plans/irl-hub-2026-11-02.md) | Apothecary as hearth's second exemplar: a procedure of steps on a blueprint in place of a cue list on a script, each step's family block delivered over `family/1` to the printer, the boards and the cameras hosted in the hub and to carlos, joe with vox, alfred with otto, datum, ira and ShowRunner beside it, every outcome kept in the evidence log; each member's verbs, what it has and what it needs, the order of the work and the owner's questions; not built |
+| [An irl hub of ShowRunner's class](plans/irl-hub-2026-11-02.md) | Apothecary as hearth's second exemplar: a procedure of steps on a blueprint in place of a cue list on a script, each step's family block delivered over `family/1` to the printer, the boards and the cameras hosted in the hub and to carlos, joe with vox, alfred with otto, datum, ira and ShowRunner beside it, every outcome kept in the evidence log; each member's verbs, what it has and what it needs, the order of the work and the owner's questions; the hub, its machine and board members and the procedure are built ([the family's hub](family.md)), the rest is not |
 
 ## History
 
@@ -112,14 +112,12 @@ of what was decided and why; what is still true of it is stated in the
 guides above, the governance records, or the code it describes. A plan
 whose work is done leaves the table above for this list.
 
+- 2026-11-04 — [One page for two machines](plans/ui-refresh-2026-11-04.md): the kinds' words in one module, one badge grammar, a section's title by kind, the card in the loop's order, the Working space on any machine, the palette in one sheet; what it left is in [todo.md](../todo.md).
 - 2026-10-20 — [Landing the stack on main](plans/landing-the-stack-2026-10-20.md): every open pull request and the governance records it pins, reviewed once as a whole and merged into `main` bottom first, the order checked by merging each branch in turn; what is still open of its *After* is in [todo.md](../todo.md).
-- 2026-10-12 — [The pointer, the keys and the ring](plans/input-2026-10-12.md): right-click the camera's and Ctrl+right-click the ring's, Page Down and Page Up stepping levels, automatic zoom's settings, one Settings panel, and every input of the page mapped and made to agree.
-- 2026-10-11 — [Onboarding at the top of the stack](plans/onboarding-2026-10-11.md): a newcomer's path, the docs, the suites and the pictures reviewed; `serve --demo`, a Getting started page, one ordinary test command, pictures held to their captions.
 - 2026-10-10 — [A managed slicer](plans/slicer-2026-10-10.md): OrcaSlicer behind a slicer interface, installed like OpenSCAD, the printer's profile kept with its part, print settings from what each part declares.
 - 2026-10-09 — [A Rust geometry kernel](plans/rust-geometry-kernels-2026-10-09.md): a survey of which Rust kernel could render scenes to STL without OpenSCAD -- Manifold bindings, csgrs, boolmesh, truck, Fornjot, OCCT -- by licence, build, coverage and maturity; Manifold's bindings first.
 - 2026-10-08 — [The loops through the page](plans/ui-flows-2026-10-08.md): designing a part, editing its SCAD, firmware, and a picture to a print, each built out and held end to end by a browser test.
 - 2026-10-08 — [Rust](plans/rust-2026-10-08.md): firmware in Rust for the ESP32 behind modular toolchains, a Rust geometry kernel researched and compared by numbers, a Rust service and core stubbed.
-- 2026-10-08 — [Cleanup, triaged](plans/cleanup-triage-2026-10-08.md): the open cleanup items sorted by kind and given an order, while the review branch was split into a stack.
 - 2026-10-04 — [Cameras and clutter](plans/cameras-and-clutter-2026-10-04.md): a camera as a part of the site, pictures sized and taken from it, and less on the screen (icon badges, the Machine in the rail, one header row, faded walls).
 - 2026-10-03 — [Consolidation](plans/consolidation-2026-10-03.md): one page and one place per thing; Site and Selected over a strip of tabs, one Machine per board, the Bench, one Pictures panel, jobs over machine kinds.
 - 2026-09-27 — [Designing a part from the browser](plans/part-editing-in-the-browser-2026-09-27.md): a spike measuring the part loop, OpenSCAD 2021.01 against a Manifold snapshot, and what other tools do; fast renders, parameters from the SCAD, then an editor in the page.
@@ -128,8 +126,9 @@ whose work is done leaves the table above for this list.
 
 ### Records from the bench
 
-- 2026-11-03 — [The router walked in the demo](validation/2026-11-03-router-walk.md): the AnoleX 4060-Evo Ultra 2's Machine, pad, cut and stop against the simulated controller, step by step with the owner, and what the walk changed.
+- 2026-11-05 — [The family started through the hub](validation/2026-11-05-family-started.md): one procedure with a step for every member, carlos and joe real and started by the hub, what each did and what running it found.
 - 2026-11-05 — [Family integrations](validation/2026-11-05-family-integrations.md): how each family member's seam with apothecary stands, each checked against the member itself.
+- 2026-11-03 — [The router walked in the demo](validation/2026-11-03-router-walk.md): the AnoleX 4060-Evo Ultra 2's Machine, pad, cut and stop against the simulated controller, step by step with the owner, and what the walk changed.
 - 2026-10-12 — [OpenSCAD runs at once](validation/2026-10-12-openscad-runs-at-once.md): the timing behind the queue's default of two.
 - 2026-10-11 — [Walkthrough picture drift](validation/2026-10-11-walkthrough-picture-drift.md): how far two runs' pictures differ, behind CI's tolerance.
 - 2026-10-10 — [What the installs reach](validation/2026-10-10-what-the-installs-reach.md): the hosts the Rust and slicer installs reached under strace, and that a build and a slice reach none.

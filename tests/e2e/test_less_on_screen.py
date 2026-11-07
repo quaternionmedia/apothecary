@@ -25,6 +25,7 @@ import httpx
 import pytest
 import windows
 from boards import BOARD, PRINTER
+from garage import crumbs, to_site
 from garage import select as _select
 from PIL import Image, ImageDraw
 from playwright.sync_api import Page, expect
@@ -455,15 +456,18 @@ ONE_ROW = """() => {
 @pytest.mark.e2e
 def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
     """At 1024 px wide the header is one row, at the top of the site and deep in it: the
-    site's drop-down (choosing loads), the trail, ⚙ View, ⊞ (Windows, its sign alone),
-    the ring and the problems' count, and a short pill whose tooltip is the whole of it."""
+    view banner (the universe, the site and its ▾, the trail), ⚙ View, ⊞ (Windows, its
+    sign alone), the ring and the problems' count. No pill says prototype: the banner's
+    first crumb says it in its tooltip."""
     page.set_viewport_size({"width": 1024, "height": 700})
     _open(page, bench)
     for gone in ("#load-btn", "#zoom-out-btn"):
         expect(page.locator(gone)).to_have_count(0)
-    pill = page.locator(".toolbar .badge")
-    expect(pill).to_have_text("prototype")
-    expect(pill).to_have_attribute("title", "FRACTAL VIEWER — unratified prototype")
+    for gone in (".toolbar .badge", "#site-select"):
+        expect(page.locator(gone)).to_have_count(0)
+    expect(page.locator("#universe-crumb")).to_have_attribute(
+        "title", re.compile("FRACTAL VIEWER — unratified prototype$")
+    )
     row = page.evaluate(ONE_ROW)
     assert row["spread"] < 4 and row["height"] < 60, row
     # ⊞ Windows is its sign alone, its name its label, so the trail has the room.
@@ -473,23 +477,27 @@ def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
 
     # Deep in the site the trail is longest; still one row, the level in view.
     page.evaluate("() => window.fractalViewer.selectAtItsLevel('printer_1.frame_system.mainboard')")
-    expect(page.locator("#breadcrumb .crumb")).to_have_count(3)
+    assert crumbs(page) == ["🧪 Apothecary", "garage", "printer_1", "frame_system"]
     row = page.evaluate(ONE_ROW)
     assert row["spread"] < 4 and row["height"] < 60, row
     trail, last = _rect(page, "#breadcrumb"), _rect(page, "#breadcrumb .crumb >> nth=-1")
     assert last["r"] <= trail["r"] + 1 and last["l"] >= trail["l"] - 1, (trail, last)
+    # The universe and the site keep their room: only the trail below them gives way.
+    for kept in ("#universe-crumb", "#site-level", "#site-menu > summary"):
+        box = _rect(page, kept)
+        assert box["r"] - box["l"] > 8, (kept, box)
     # A crumb goes up to its level; Backspace goes up one.
-    page.locator("#breadcrumb .crumb").nth(1).click()
-    expect(page.locator("#breadcrumb .crumb")).to_have_count(2)
+    page.locator("#breadcrumb .crumb").first.click()
+    assert crumbs(page) == ["🧪 Apothecary", "garage", "printer_1"]
     assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1.frame_system"
     page.keyboard.press("Backspace")
-    expect(page.locator("#breadcrumb .crumb")).to_have_count(1)
+    assert crumbs(page) == ["🧪 Apothecary", "garage"]
 
     # Choosing a site loads it.
-    page.locator("#site-select").select_option("parts_library")
+    to_site(page, "apothecary")
     expect(page.locator("#contents-list")).not_to_contain_text("workbench", timeout=15000)
-    expect(page.locator("#breadcrumb .crumb").first).not_to_have_text("garage")
-    page.locator("#site-select").select_option("garage")
+    assert crumbs(page) == ["🧪 Apothecary"]
+    to_site(page, "garage")
     expect(page.locator("#contents-list")).to_contain_text("workbench", timeout=15000)
 
     # The View menu, opened, stays inside the page.

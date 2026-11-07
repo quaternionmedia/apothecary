@@ -57,6 +57,7 @@ AREAS = {
             "apothecary/menu.py",
             "apothecary/routes/menu.py",
             "apothecary/docs_site.py",
+            "apothecary/universe.py",
         ),
         "tests": (
             "test_window_manager.py",
@@ -71,6 +72,8 @@ AREAS = {
             "test_world_resize.py",
             "test_render_on_demand.py",
             "test_docs_fractal_viewer.py",
+            "test_the_universe.py",
+            "test_view_banner.py",
         ),
     },
     "pictures": {
@@ -205,6 +208,14 @@ AREAS = {
             "apothecary/static/widgets/working_space.*",
         ),
         "tests": ("test_working_space.py",),
+    },
+    "procedure": {
+        "sources": (
+            "apothecary/family/*",
+            "apothecary/routes/procedures.py",
+            "apothecary/static/widgets/procedure.*",
+        ),
+        "tests": ("test_procedure_window.py",),
     },
     "models": {
         "sources": (

@@ -22,7 +22,7 @@ as it was found.
 
 A part drawn from a variant the tab applied wears a quiet amber mark -- a dot
 over it from the badge layer, an amber edge and a faint glow, an amber edge on
-its editor -- and the saved part does not. Pictures of the library at its own
+its editor -- and the saved part does not. Pictures of the universe at its own
 framing, at both widths, and of the part beside its saved neighbours, are
 written under pytest's temp folder (``part-loop-shots``) too.
 """
@@ -725,7 +725,7 @@ def test_designing_a_part_twice_round(
         ],
     )
     page.set_viewport_size({"width": 1280, "height": 800})
-    site = f"{loop_url}/viewer/sites/parts_library"
+    site = f"{loop_url}/viewer/sites/apothecary"
     # The part's own STL is current, as the server keeps it: the defaults are saved.
     assert page.request.post(f"{loop_url}/parts/{PART}/stl/generate").ok
     _open(page, site)
@@ -739,13 +739,13 @@ def test_designing_a_part_twice_round(
         page,
         lambda: story.shows(
             "Part › Edit opens the part's editor at what is drawn",
-            "The parts library, /viewer/sites/parts_library (the site drop-down's "
-            f"parts_library): {PART}'s row in Site, its ring, Part › Edit, then Panels › "
+            "The universe, /viewer/sites/apothecary, where every part is a leaf: "
+            f"{PART}'s row in Site, its ring, Part › Edit, then Panels › "
             "Windows › Part view: its parameters in Parameters, under Selected. They "
             "start from what is drawn, the part's own STL as its params sidecar records it, "
             "and beside the envelope the part declares is what that STL measures. Nothing "
             "marks it: it is the saved part. The view is brought to it by hand, Shift+drag "
-            "and the wheel, as the library frames a whole shelf of parts. A slider is the "
+            "and the wheel, as the universe frames a whole shelf of parts. A slider is the "
             "next step.",
             shown=_envelope(page),
         ),
@@ -768,7 +768,7 @@ def test_designing_a_part_twice_round(
         assert page.evaluate(MESH, name)["glow"] == 0
     page.screenshot(path=str(shots / "variant-beside-saved.png"))
 
-    # A reload draws what the tab had applied: at the library's own framing, nothing
+    # A reload draws what the tab had applied: at the universe's own framing, nothing
     # selected, at either width the page is laid out for.
     variant = _variant_in_address(page)
     for width, height in WIDTHS:
@@ -782,7 +782,7 @@ def test_designing_a_part_twice_round(
     story.shows(
         "A reload draws what the tab applied, marked at a glance",
         "The tab's address keeps the variant, so a reload, a bookmark or a link draws it "
-        "again, and no other tab is touched. At the library's own framing, with nothing "
+        "again, and no other tab is touched. At the universe's own framing, with nothing "
         f"selected, the amber dot over {PART} says it is drawn from a variant and not the "
         "saved part; its words, on hover, say so.",
     )

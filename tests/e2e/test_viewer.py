@@ -1,8 +1,10 @@
 """Browser tests for the fractal zoom viewer (templates/fractal_viewer.html.j2),
-which is also the parts browser: the parts library is a site like any other."""
+which is also the parts browser: every part is a leaf of the universe, a site like
+any other."""
 
 import pytest
 import windows
+from garage import crumbs
 from playwright.sync_api import Page, expect
 
 
@@ -23,14 +25,18 @@ def test_viewer_page_loads(page: Page, base_url: str):
 
 
 @pytest.mark.e2e
-def test_viewer_has_site_dropdown(page: Page, base_url: str):
-    """Test that the site dropdown lists both registered sites."""
-    page.goto(f"{base_url}/viewer/sites/garage")
+def test_the_site_crumb_lists_the_other_sites(page: Page, base_url: str):
+    """The banner's site crumb names the site in view; under its ▾, every site but the
+    universe, which is the banner's first crumb."""
+    _open(page, f"{base_url}/viewer/sites/garage")
 
-    select = page.locator("#site-select")
-    expect(select).to_be_visible()
-    options = select.locator("option")
-    assert options.count() >= 2, "Expected at least garage and parts_library"
+    expect(page.locator("#site-level")).to_have_text("garage")
+    page.locator("#site-menu > summary").click()
+    listed = page.locator("#site-menu .site-item").evaluate_all(
+        "(items) => items.map((i) => i.dataset.site)"
+    )
+    assert listed == ["datum_core", "garage", "theatre"]
+    expect(page.locator("#site-menu .site-item.open")).to_have_text("● garage")
 
 
 @pytest.mark.e2e
@@ -112,16 +118,16 @@ def test_double_click_zooms_in_and_a_crumb_returns(page: Page, base_url: str):
     page.locator("#contents-list .contents-item", has_text="printer_1").dblclick()
 
     # Zoomed into printer_1: its substructures now populate Contents, and the
-    # breadcrumb reflects the new depth.
-    expect(page.locator("#breadcrumb")).to_contain_text("printer_1")
+    # banner's trail reflects the new depth.
+    assert crumbs(page) == ["🧪 Apothecary", "garage", "printer_1"]
     expect(page.locator("#contents-list")).to_contain_text("gantry_system")
 
-    page.locator("#breadcrumb .crumb").first.click()
+    page.locator("#site-level").click()
 
     expect(page.locator("#contents-list")).to_contain_text("workbench")
     # Up one level, as Backspace goes: the piece just left is the one selected.
     assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
-    expect(page.locator("#breadcrumb .crumb")).to_have_count(1)
+    assert crumbs(page) == ["🧪 Apothecary", "garage"]
 
 
 def _depth(node: dict) -> int:
@@ -144,12 +150,13 @@ def test_minimap_advances_with_zoom_depth(page: Page, base_url: str):
 
 
 @pytest.mark.e2e
-def test_selecting_a_parts_library_leaf_shows_the_absorbed_part_view(page: Page, base_url: str):
-    """Selecting a part in the parts library shows its SCAD source and a link to
+def test_selecting_a_part_leaf_shows_the_absorbed_part_view(page: Page, base_url: str):
+    """Selecting a part in the universe shows its SCAD source and a link to
     download it."""
-    _open(page, f"{base_url}/viewer/sites/parts_library")
+    _open(page, f"{base_url}/viewer/sites/apothecary")
 
-    page.locator("#contents-list .contents-item").first.click()
+    # The first part's row: the sites' pieces come before the parts.
+    page.locator("#contents-list .contents-item[data-path='airgap']").click()
     windows.open_window(page, "part-scad")  # the part's SCAD, in its window
 
     scad_content = page.locator("#part-scad .cm-content")
@@ -197,15 +204,126 @@ def test_focusing_a_leaf_renders_that_leaf(page: Page, base_url: str):
     """A focused leaf is its own render node: listed in Contents and drawn from
     its STL, not an empty scene."""
     with page.expect_request(lambda r: "/parts/datum_core/stl" in r.url, timeout=20000):
-        page.goto(f"{base_url}/viewer/sites/parts_library?focus=datum_core")
+        page.goto(f"{base_url}/viewer/sites/apothecary?focus=datum_core")
 
     expect(page.locator("#contents-list")).to_contain_text("datum_core")
+
+
+# What a level draws, from the scene itself once its geometry is in: each piece with a
+# mesh (how many vertices, and whether it is still its placeholder box), the outlines,
+# what wears the move arrows, and Site's rows.
+LEVEL = """async () => {
+    const v = window.fractalViewer;
+    await v.waveDone;
+    const arrows = v.transformControls.object;
+    return {
+        focus: v.focusPath.join('.'),
+        selected: v.selectedName,
+        drawn: Object.fromEntries(Object.entries(v.meshByName).map(([key, mesh]) => [key, {
+            vertices: mesh.geometry.attributes.position.count,
+            placeholder: !!mesh.userData.isPlaceholder,
+        }])),
+        outlines: Object.keys(v.compoundOverlayByKey),
+        volumes: Object.keys(v.buildVolumeMeshByName),
+        arrows: arrows ? arrows.userData.key : null,
+        rows: [...document.querySelectorAll('#contents-list .contents-item')].map((li) => li.dataset.path),
+    };
+}"""
+
+# Where on the page a click in the world lands on `key`: the first point of a coarse
+# grid over the canvas that the viewer's own pick answers with it, nothing in front.
+ON_PIECE = """(key) => {
+    const v = window.fractalViewer, r = v.canvas.getBoundingClientRect();
+    for (let i = 1; i < 16; i++) for (let j = 1; j < 16; j++) {
+        const at = { clientX: r.left + (r.width * i) / 16, clientY: r.top + (r.height * j) / 16 };
+        if (document.elementFromPoint(at.clientX, at.clientY) !== v.canvas) continue;
+        if (v.raycastChild(at) === key) return { x: at.clientX, y: at.clientY };
+    }
+    return null;
+}"""
+
+MACHINES = [
+    ("cnc_router", "anolex_4060_evo_ultra_2", ["frame_system"]),
+    ("printer_1", "ender3", ["frame_system", "gantry_system"]),
+]
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("machine, part, pieces", MACHINES)
+def test_stepping_into_a_machine_draws_its_part_alone_and_whole(
+    page: Page, base_url: str, machine: str, part: str, pieces: list
+):
+    """A machine in a site is drawn as the part it names. Stepped into, that part is the
+    level: alone, with nothing else of the site and none of its pieces beside it, and
+    whole, the mesh the level above drew. Its pieces are Site's rows, each a step
+    further in, where what the piece holds is drawn and the machine is not."""
+    _open(page, f"{base_url}/viewer/sites/garage")
+    body = page.evaluate(LEVEL)["drawn"][machine]
+    assert not body["placeholder"], f"{machine} is drawn from {part}'s STL in the garage"
+
+    page.locator(f"#contents-list .contents-item[data-path='{machine}']").click()
+    page.locator("#selected-body .zoom-in-btn").click()
+    expect(page.locator("#status")).to_contain_text(f"Stepped into {machine}")
+    inside = page.evaluate(LEVEL)
+    assert inside["focus"] == machine
+    assert inside["drawn"] == {machine: body}, "the part alone, and the whole of it"
+    assert inside["outlines"] == [], "the level's own piece is set apart from nothing"
+    assert inside["volumes"] == [machine], "its working volume is drawn in it"
+    assert inside["rows"] == [f"{machine}.{piece}" for piece in pieces]
+
+    # The part is the piece in Selected once it is clicked, by the name of its part,
+    # with no way offered into the level it already is and no arrows to move it by.
+    on_it = page.evaluate(ON_PIECE, machine)
+    assert on_it, f"{machine} is under the pointer somewhere in the view"
+    page.mouse.click(on_it["x"], on_it["y"])
+    assert page.evaluate(LEVEL)["selected"] == machine, "a click on the part selects it"
+    selected = page.locator("#selected-body")
+    expect(selected.locator("span[title='The part this machine is drawn as']")).to_have_text(part)
+    expect(selected.locator("[data-facts='inside']")).to_contain_text(", ".join(pieces))
+    expect(selected.locator(".zoom-in-btn")).to_have_count(0)
+    expect(selected.locator(".detail-select")).to_have_count(0)
+    assert page.evaluate(LEVEL)["arrows"] is None
+
+    # Stepping into it again goes nowhere, and says where its pieces are.
+    page.mouse.dblclick(on_it["x"], on_it["y"])
+    expect(page.locator("#status")).to_contain_text(f"Already inside {machine}")
+    assert page.evaluate(LEVEL)["focus"] == machine
+
+    # A piece, from its row: what it holds is the level, and the machine is not drawn.
+    piece = f"{machine}.{pieces[0]}"
+    page.locator(f"#contents-list .contents-item[data-path='{piece}']").dblclick()
+    expect(page.locator("#status")).to_contain_text(f"Stepped into {piece}")
+    deeper = page.evaluate(LEVEL)
+    assert deeper["focus"] == piece
+    assert deeper["drawn"] and all(key.startswith(f"{piece}.") for key in deeper["drawn"]), deeper
+
+
+@pytest.mark.e2e
+def test_a_link_into_a_machine_lands_on_its_part_selected(page: Page, base_url: str):
+    """`?focus=` on a machine arrives at its part, drawn whole and selected, so its rows
+    are in Selected without another click; it wears no move arrows, which belong to a
+    piece at the site's own level; and View's Detail, which stands a box or a dot in for
+    a piece with pieces inside, leaves the piece the level is for drawn in full."""
+    _open(page, f"{base_url}/viewer/sites/garage?focus=cnc_router")
+    arrived = page.evaluate(LEVEL)
+    assert arrived["selected"] == "cnc_router"
+    assert list(arrived["drawn"]) == ["cnc_router"]
+    assert not arrived["drawn"]["cnc_router"]["placeholder"]
+    assert arrived["arrows"] is None
+    part_row = page.locator("#selected-body span[title='The part this machine is drawn as']")
+    expect(part_row).to_have_text("anolex_4060_evo_ultra_2")
+
+    page.locator("#view-menu > summary").click()
+    page.locator("#detail-mode").select_option("dot")
+    dotted = page.evaluate(LEVEL)
+    assert dotted["drawn"] == arrived["drawn"], "the level's own piece is never a dot"
+    assert _viewer_state(page)["dots"] == 0
 
 
 @pytest.mark.e2e
 def test_code_panel_populates_without_an_edit(page: Page, base_url: str):
     """Loading a site fills the generated OpenSCAD panel; no layout edit needed."""
-    _open(page, f"{base_url}/viewer/sites/parts_library")
+    _open(page, f"{base_url}/viewer/sites/apothecary")
 
     code = page.locator("#code-content")
     expect(code).to_contain_text("Generated by Apothecary")
@@ -214,8 +332,8 @@ def test_code_panel_populates_without_an_edit(page: Page, base_url: str):
 
 @pytest.mark.e2e
 def test_double_click_navigates_into_a_leaf(page: Page, base_url: str):
-    """A leaf (every entry in the parts library) can be zoomed into like any node."""
-    _open(page, f"{base_url}/viewer/sites/parts_library")
+    """A leaf (every part in the universe) can be zoomed into like any node."""
+    _open(page, f"{base_url}/viewer/sites/apothecary")
     expect(page.locator("#breadcrumb")).not_to_contain_text("datum_core")
 
     page.dblclick("text=datum_core (part)")
@@ -231,7 +349,7 @@ def test_viewer_runs_with_no_access_to_any_cdn(page: Page, base_url: str):
     page.route("**cdn.jsdelivr.net/**", lambda route, request: route.abort())
     page.route("**unpkg.com/**", lambda route, request: route.abort())
 
-    _open(page, f"{base_url}/viewer/sites/parts_library")
+    _open(page, f"{base_url}/viewer/sites/apothecary")
 
     expect(page.locator("#contents-list")).to_contain_text("datum_core")
     expect(page.locator("#code-content")).to_contain_text("Generated by Apothecary")

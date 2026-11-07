@@ -10,13 +10,13 @@ scan does not already:
   device to be.
 - ``GET /sites/{s}/wiring/patch``: the document alone, as carlos's Import
   reads a file.
-- ``POST /sites/{s}/wiring/send``: the wiring sent to carlos now, at
-  ``serve --carlos``'s address; ``{sent, answer}``, a 409 when no carlos is
-  named and a 502 when carlos refused it or did not answer.
+- ``POST /sites/{s}/wiring/send``: the wiring sent to carlos now, at the address
+  ``serve --carlos`` or the family's table gives it; ``{sent, answer}``, a 409 when no
+  carlos is named and a 502 when carlos refused it or did not answer.
 
-With ``serve --carlos``, a follower sends ``APOTHECARY_CARLOS_SITE``'s wiring
-(the garage's when unset) at the start and whenever it changes:
-``start_following`` and ``stop_following``, from the app's lifespan.
+With a carlos named, a follower sends ``APOTHECARY_CARLOS_SITE``'s wiring (the
+garage's when unset) at the start and whenever it changes: ``start_following`` and
+``stop_following``, from the app's lifespan.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ _follower: Optional[carlos.Follower] = None
 def _hold(body: Dict[str, Any]) -> Dict[str, Any]:
     """A hold, through the family's hub, so it is in the hub's audit."""
     outcome = hub.deliver(carlos.CARLOS, body["cue"], body["action"])
-    return carlos.answer_of(outcome, carlos.carlos_url() or "")
+    return carlos.answer_of(outcome, hub.carlos_at() or "")
 
 
 def _wiring(name: str) -> Wiring:
@@ -53,6 +53,11 @@ def _wiring(name: str) -> Wiring:
     except ToolchainError:
         found = []
     return wiring_for_site(name, site, bindings_for_site(name, site, devices=found), found)
+
+
+def hold_action(name: str) -> Dict[str, Any]:
+    """What carlos is handed to hold the site's wiring as it is now."""
+    return carlos.hold_body(_wiring(name))["action"]
 
 
 @router.get("/sites/{name}/wiring")
@@ -70,7 +75,7 @@ def site_wiring_patch(name: str) -> Dict[str, Any]:
 @router.post("/sites/{name}/wiring/send")
 def send_site_wiring(name: str) -> Dict[str, Any]:
     """The site's wiring sent to carlos now, through the family's hub."""
-    url = carlos.carlos_url()
+    url = hub.carlos_at()
     if url is None:
         raise HTTPException(409, detail="no carlos to send to: serve --carlos names one")
     body = carlos.hold_body(_wiring(name))
@@ -82,9 +87,9 @@ def send_site_wiring(name: str) -> Dict[str, Any]:
 
 
 def start_following() -> None:
-    """Follow the bench to carlos, when ``serve --carlos`` named one."""
+    """Follow the bench to carlos, when one is named."""
     global _follower
-    url = carlos.carlos_url()
+    url = hub.carlos_at()
     if url is None or _follower is not None:
         return
     site = os.environ.get(carlos.SITE_ENV) or carlos.DEFAULT_SITE

@@ -55,6 +55,7 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
+from .site_names import current as current_site
 from .stamped import claim, stamp
 
 OUTCOMES: Tuple[str, ...] = ("running", "done", "cancelled", "failed")
@@ -328,9 +329,13 @@ def _as_read(job: Job) -> Job:
 
 def _read(path: Path) -> Optional[Job]:
     try:
-        return Job(**json.loads(path.read_text(encoding="utf-8")))
+        job = Job(**json.loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError, TypeError):
         return None
+    # A job kept under a name its site had before is that site's job.
+    if job.site is not None:
+        job.site = current_site(job.site)
+    return job
 
 
 def get(job_id: str) -> Optional[Job]:

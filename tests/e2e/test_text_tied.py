@@ -59,7 +59,7 @@ def cube_as_it_was():
 
 def _open(page: Page, url: str) -> None:
     page.set_viewport_size({"width": 1280, "height": 800})
-    page.goto(f"{url}/viewer/sites/parts_library")
+    page.goto(f"{url}/viewer/sites/apothecary")
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
     page.evaluate("() => localStorage.removeItem('apothecary.panels')")
     settled(page)

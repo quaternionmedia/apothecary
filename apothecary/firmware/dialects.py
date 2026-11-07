@@ -26,6 +26,7 @@ class Dialect:
     normalise_control: Callable[[str], str]
     normalise_query: Callable[[str], str]
     stop: str  # the emergency stop's line, the one that goes whatever holds the port
+    home: str  # the line that homes every axis
     query_codes: Dict[str, str]  # the report-only queries, each with what it reports
     line_timeout: Callable[[str], float]  # how long a streamed line may take
     job_allows: Pattern[str]  # what a person may send while a streamed job holds the port
@@ -41,6 +42,7 @@ MARLIN = Dialect(
     normalise_control=gcode.normalise_control,
     normalise_query=gcode.normalise_query,
     stop=gcode.EMERGENCY_STOP,
+    home="G28",
     query_codes=gcode.QUERY_CODES,
     line_timeout=gcode.line_timeout,
     job_allows=gcode.JOB_ALLOWS,
@@ -55,6 +57,7 @@ GRBL = Dialect(
     normalise_control=grbl.normalise_control,
     normalise_query=grbl.normalise_query,
     stop=grbl.EMERGENCY_STOP,
+    home="$H",
     query_codes=grbl.QUERY_CODES,
     line_timeout=grbl.line_timeout,
     job_allows=grbl.JOB_ALLOWS,

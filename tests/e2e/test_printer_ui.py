@@ -184,7 +184,9 @@ def test_pin_identify_open_poll_and_sync(page: Page, fresh_url: str):
     page.locator("#selected-body .dev-pin").click()
     expect(section.locator(".dev-unpin")).to_be_visible(timeout=5000)
     expect(section.locator(".device-line")).to_contain_text("/dev/ttyFAKE1")
-    expect(page.locator("#status")).to_contain_text(f"{BOARD} ← /dev/ttyFAKE1")
+    expect(page.locator("#status")).to_contain_text(
+        f"{BOARD} ← FAKESERIAL1, the board on /dev/ttyFAKE1"
+    )
     expect(page.locator("#status")).not_to_contain_text("M115")  # the board's own Pin asks nothing
     expect(
         page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")

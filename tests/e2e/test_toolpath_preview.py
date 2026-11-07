@@ -5,10 +5,15 @@ a file on its machine, moves the Print or Cut card's slider off the left, and re
 the machine's marks draw in the world: every segment, then through one layer or pass,
 then none. Then what differs: a router's file counts from its work zero, so its path
 stands where the controller's zero says, and on the coupon once it is set there.
+
+The Machine view lands on that path, from ⊞ Windows and from the ring: the selected
+machine's Machine opened when none is, the file its card has chosen drawn and framed,
+or how a file comes to be kept; and with no machine to open, why not.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 import httpx
@@ -16,7 +21,7 @@ import pytest
 import rings
 import windows
 from boards import PRINTER, wears
-from garage import open_garage
+from garage import open_garage, status
 from garage import select as _select
 from playwright.sync_api import Page, expect
 
@@ -247,3 +252,280 @@ def test_a_router_s_file_stands_at_its_work_zero_and_on_the_coupon_once_zeroed_t
         assert zero == pytest.approx(getattr(ROUTER_COUPON_POSITION, axis) - ROUTER_COUPON_MARGIN)
     top = placed["machine"]["z"] + placed["volume"]["z"] + placed["origin"]["z"]
     assert top == pytest.approx(ROUTER_COUPON_POSITION.z + COUPON.cuts().stock.thickness)
+
+
+# --- the Machine view lands on the path ---------------------------------------------------
+
+MACHINE_VIEW = ".windows-menu-body .view-item[data-view='machine']"
+
+
+def _keep_only(url: str, *machines: Machine, cut: bool = False) -> None:
+    """The files kept on the host: these machines' alone, in this order, each as a
+    person keeps one with Choose File; then, with ``cut``, the coupon's toolpath written
+    for the router as its Cut card's Toolpath writes it, recorded as the router's."""
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        for kept in http.get("/firmware/printers/prints").json():
+            http.delete(f"/firmware/printers/prints/{kept['id']}").raise_for_status()
+        for machine in machines:
+            http.post(
+                "/firmware/printers/prints", params={"name": machine.file}, content=machine.text
+            ).raise_for_status()
+        if cut:
+            http.post(
+                "/cam/cut",
+                json={
+                    "part": "router_coupon",
+                    "site": "garage",
+                    "router": CONTROLLER,
+                    "port": ROUTER,
+                },
+            ).raise_for_status()
+
+
+def _selected(page: Page, url: str, node: str | None) -> None:
+    """The garage with no Machine open, and ``node`` selected (or nothing)."""
+    open_garage(page, url, settle=False)
+    wears(page, MACHINES["printer"].node)
+    wears(page, MACHINES["router"].node)
+    if node:
+        _select(page, node)
+    assert page.evaluate("() => window.fractalViewer.machine") is None
+
+
+def _from_windows(page: Page) -> None:
+    """⊞ Windows › Machine, as a person presses it."""
+    page.locator("#windows-menu > summary").click()
+    page.locator(MACHINE_VIEW).click(timeout=5000)
+    expect(page.locator(".windows-menu-body")).to_be_hidden()
+
+
+def _from_the_ring(page: Page) -> None:
+    """The canvas ring's Panels › Windows › Machine view, the ring opened from its key:
+    a world framed on a machine has a piece under any point of it."""
+    rings.open_from_key(page)
+    rings.press(page, "Panels", "Windows", "Machine view")
+
+
+def _framed(page: Page, node: str) -> dict:
+    """The middle of the drawn path's box and what the world's view turns about, in the
+    world's own coordinates, and how far the eye stands from it."""
+    return page.evaluate(
+        """(path) => { const v = window.fractalViewer, box = v.marks[path].marks.toolpathBox();
+            const mid = ["x", "y", "z"].map((k) => (box.min[k] + box.max[k]) / 2);
+            const t = v.orbitControls.target;
+            return { mid, target: [t.x, t.y, t.z], eye: v.camera.position.distanceTo(t),
+                     across: box.min.distanceTo(box.max) }; }""",
+        node,
+    )
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("kind", list(MACHINES))
+def test_windows_machine_opens_the_selected_machine_and_lands_on_its_file_s_path(
+    page: Page, url: str, kind: str
+):
+    """A machine selected, its Machine not open, its file kept: ⊞ Windows › Machine opens
+    the Machine, lays its windows out, draws the whole of the file's path in the world
+    and frames it, the slider that goes through it beside it."""
+    machine = MACHINES[kind]
+    expected = machine.expected
+    _keep_only(url, machine)
+    _selected(page, url, machine.node)
+    page.locator("#windows-menu > summary").click()
+    entry = page.locator(MACHINE_VIEW)
+    expect(entry).not_to_have_class(re.compile(r"\bmissing\b"))
+    expect(entry).to_have_attribute("title", re.compile(f"Opens {machine.node}'s Machine"))
+    entry.click(timeout=5000)
+    expect(page.locator(".windows-menu-body")).to_be_hidden()
+
+    expect(page.locator(f"{windows.MACHINE} > .machine.kind-{kind}")).to_be_attached(timeout=20000)
+    body = windows.machine(page)
+    expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
+    assert windows.state(page, "machine-print")["shown"] is True
+    slider = body.locator("#print-preview")
+    expect(slider).to_have_attribute("max", str(len(expected.groups)))
+    assert slider.input_value() == str(len(expected.groups))
+    drawn = _drawn(page, machine.node)
+    assert drawn["process"] == expected.process
+    assert drawn["segments"] == drawn["drawn"] == len(expected.kind_of)
+
+    said = status(page)
+    expect(said).to_contain_text(f"{machine.file}'s path is drawn on {machine.node} and framed")
+    expect(said).to_contain_text(f"the preview slider in its {machine.ring} goes through each")
+    expect(said).to_contain_text(machine.word)
+    expect(said).not_to_have_class(re.compile(r"\berror\b"))
+    # Framed: the view turns about the path's middle, from near enough to read it.
+    framed = _framed(page, machine.node)
+    assert framed["target"] == pytest.approx(framed["mid"], abs=1.0)
+    assert framed["eye"] < 6 * max(framed["across"], 30)
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("kind", list(MACHINES))
+def test_windows_machine_lands_on_the_path_of_the_machine_stepped_into(
+    page: Page, url: str, kind: str
+):
+    """Double-clicked into, nothing selected: the machine stepped into is the one its
+    view opens, and its file's path is drawn and framed, still stepped in."""
+    machine = MACHINES[kind]
+    _keep_only(url, machine)
+    _selected(page, url, None)
+    page.locator(f"#contents-list .contents-item[data-path='{machine.node}']").dblclick()
+    expect(status(page)).to_contain_text(f"Stepped into {machine.node}")
+    assert not page.evaluate("() => window.fractalViewer.selectedName")
+    _from_windows(page)
+    expect(page.locator(f"{windows.MACHINE} > .machine.kind-{kind}")).to_be_attached(timeout=20000)
+    body = windows.machine(page)
+    expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
+    assert _drawn(page, machine.node)["drawn"] == len(machine.expected.kind_of)
+    expect(status(page)).to_contain_text(
+        f"{machine.file}'s path is drawn on {machine.node} and framed"
+    )
+    assert page.evaluate("() => window.fractalViewer.focusPath.join('.')") == machine.node
+
+
+@pytest.mark.e2e
+def test_stepped_into_a_piece_with_no_board_the_machine_view_says_which(page: Page, url: str):
+    """The piece stepped into is what the view is asked of, and it has no board to open."""
+    _selected(page, url, None)
+    page.locator("#contents-list .contents-item[data-path='workbench']").dblclick()
+    expect(status(page)).to_contain_text("Stepped into workbench")
+    _from_windows(page)
+    expect(status(page)).to_contain_text("no Machine is open, and workbench has no board pinned")
+    assert page.evaluate("() => window.fractalViewer.machine") is None
+
+
+@pytest.mark.e2e
+def test_windows_machine_lands_on_the_path_in_a_site_reached_through_the_universe(
+    page: Page, url: str
+):
+    """The garage stepped into from its piece in the universe is the garage: its
+    router selected, ⊞ Windows › Machine opens the Machine and draws and frames the
+    file's path, as it does in the garage opened by its address."""
+    machine = MACHINES["router"]
+    _keep_only(url, machine)
+    page.goto(f"{url}/viewer/sites/apothecary")
+    piece = page.locator("#contents-list .contents-item[data-path='site-garage']")
+    piece.dblclick(timeout=20000)
+    page.wait_for_function("() => window.fractalViewer.siteName === 'garage'")
+    wears(page, machine.node)
+    _select(page, machine.node)
+    assert page.evaluate("() => window.fractalViewer.machine") is None
+    _from_windows(page)
+    expect(page.locator(f"{windows.MACHINE} > .machine.kind-router")).to_be_attached(timeout=20000)
+    body = windows.machine(page)
+    expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
+    assert _drawn(page, machine.node)["drawn"] == len(machine.expected.kind_of)
+    expect(status(page)).to_contain_text(
+        f"{machine.file}'s path is drawn on {machine.node} and framed"
+    )
+    framed = _framed(page, machine.node)
+    assert framed["target"] == pytest.approx(framed["mid"], abs=1.0)
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("kind", list(MACHINES))
+def test_the_ring_s_machine_view_draws_the_open_machine_s_file_and_keeps_a_slider_left_part_way(
+    page: Page, url: str, kind: str
+):
+    """The ring's Panels › Windows › Machine view on an open Machine whose preview is
+    off: the chosen file's path drawn, all of it. Asked for again with the slider left
+    on one layer or pass, it stays there."""
+    machine = MACHINES[kind]
+    expected = machine.expected
+    body = _open(page, url, machine)
+    said = body.locator("#print-preview-said")
+    expect(said).to_have_text("off")
+    _from_the_ring(page)
+    expect(said).to_contain_text("all of it", timeout=10000)
+    assert _drawn(page, machine.node)["drawn"] == len(expected.kind_of)
+    expect(status(page)).to_contain_text(f"{machine.file}'s path is drawn on {machine.node}")
+
+    _slide(page, body, 1)
+    first = expected.groups[0]
+    expect(said).to_contain_text(first.label)
+    _from_the_ring(page)
+    expect(status(page)).to_contain_text(f"and framed, {first.label}")
+    assert body.locator("#print-preview").input_value() == "1"
+    assert _drawn(page, machine.node)["drawn"] == first.count
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("kind", list(MACHINES))
+def test_with_no_file_kept_the_machine_view_says_how_one_comes_to_be(
+    page: Page, url: str, kind: str
+):
+    """Nothing kept: the Machine opens and is laid out, nothing is drawn, and the status
+    line names the card and the two ways a file comes to be kept in it."""
+    machine = MACHINES[kind]
+    _keep_only(url)
+    _selected(page, url, machine.node)
+    _from_windows(page)
+    expect(page.locator(f"{windows.MACHINE} > .machine.kind-{kind}")).to_be_attached(timeout=20000)
+    said = status(page)
+    expect(said).to_contain_text("No path is drawn: no file is kept yet", timeout=10000)
+    makes = "Toolpath" if kind == "router" else "Slice"
+    expect(said).to_contain_text(
+        f"In {machine.node}'s {machine.ring}, choose a part under makes and {makes}, or Choose File"
+    )
+    expect(said).not_to_have_class(re.compile(r"\berror\b"))
+    assert windows.state(page, "machine-print")["shown"] is True
+    assert windows.machine(page).locator("#print-preview").input_value() == "0"
+    assert _drawn(page, machine.node) is None
+
+
+@pytest.mark.e2e
+def test_with_no_machine_to_open_the_entry_is_greyed_and_a_press_says_why(page: Page, url: str):
+    """No Machine open, and nothing selected or a piece with no board: the entry is
+    greyed, and pressed it says what to select and leaves the layout as it was."""
+    _selected(page, url, None)
+    before = page.evaluate(
+        "() => window.apothecaryPanels.list().filter((w) => w.open).map((w) => w.id)"
+    )
+    page.locator("#windows-menu > summary").click()
+    entry = page.locator(MACHINE_VIEW)
+    expect(entry).to_have_class(re.compile(r"\bmissing\b"))
+    other = page.locator(".windows-menu-body .view-item[data-view='part']")
+    grey = "(el) => getComputedStyle(el).color"
+    assert entry.evaluate(grey) != other.evaluate(grey)
+    entry.click(timeout=5000)
+    expect(page.locator(".windows-menu-body")).to_be_hidden()
+    said = status(page)
+    expect(said).to_contain_text("Machine view: no Machine is open and nothing is selected")
+    expect(said).to_contain_text("select a machine with a board pinned to it")
+    expect(said).to_have_class(re.compile(r"\berror\b"))
+
+    _select(page, "workbench")
+    rings.on_world(page, "Panels", "Windows", "Machine view")
+    expect(said).to_contain_text("no Machine is open, and workbench has no board pinned")
+    assert page.evaluate("() => window.fractalViewer.machine") is None
+    after = page.evaluate(
+        "() => window.apothecaryPanels.list().filter((w) => w.open).map((w) => w.id)"
+    )
+    assert after == before
+
+
+@pytest.mark.e2e
+def test_a_printer_draws_its_own_file_not_the_router_s_newer_toolpath(page: Page, url: str):
+    """The files kept are every machine's. A router's toolpath, the newest kept, is not
+    what a printer's card chooses or its Machine view draws while a file of its own is
+    kept; with the toolpath alone kept, nothing is drawn and the status line says whose
+    it is."""
+    printer = MACHINES["printer"]
+    _keep_only(url, printer, cut=True)
+    _selected(page, url, printer.node)
+    _from_windows(page)
+    body = windows.machine(page)
+    expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
+    expect(body.locator("#print-pick option:checked")).to_contain_text(printer.file)
+    assert _drawn(page, printer.node)["process"] == printer.expected.process
+
+    _keep_only(url, cut=True)
+    _selected(page, url, printer.node)
+    _from_windows(page)
+    said = status(page)
+    expect(said).to_contain_text(
+        "No path is drawn: the file chosen, router_coupon-cnc_router.nc", timeout=10000
+    )
+    expect(said).to_contain_text("was made for a router, and none is kept for this printer yet")
+    assert _drawn(page, printer.node) is None

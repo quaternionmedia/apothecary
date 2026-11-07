@@ -4,10 +4,10 @@ A prototype under a draft record,
 ``governance/qm/adr/DRAFT-site-structure-substructure-feature-hierarchy.md``:
 this module lets that design be evaluated against real geometry before the
 record is ratified. ``Scene`` and the primitives, booleans and transforms do
-not depend on it. The API (``apothecary/api.py``) and the ``parts/``
-registry's site (``apothecary/example_parts_library.py``) build on it, feeding
-the fractal zoom viewer, and are prototypes too, evaluating this shape rather
-than treating it as ratified.
+not depend on it. The API (``apothecary/api.py``) and the universe, the site
+of the ``parts/`` registry and of every other site (``apothecary/universe.py``),
+build on it, feeding the fractal zoom viewer, and are prototypes too, evaluating
+this shape rather than treating it as ratified.
 
 The model is one generic, self-similar recursive node, :class:`Assembly` —
 not four separate classes. A build is a tree of ``Assembly`` nodes of
@@ -81,7 +81,11 @@ class Assembly(BaseModel):
     mirrors, letting a viewer fetch real geometry on demand (e.g. ``GET
     /parts/{part_ref}/stl``) instead of only this node's ``footprint``
     bounding box — None everywhere except leaves built from the parts
-    registry (see ``example_parts_library.py``).
+    registry (see ``universe.py``).
+
+    ``site_ref``, when set, names a registered site this node stands for: the
+    site's piece in the universe (``universe.py``), drawn in miniature. It is
+    not a level of its own; a viewer that steps into it goes to the site.
 
     ``category``, when set, names the subsystem this node belongs to (a
     viewer's domain, e.g. "wall"/"furniture"/"mechanical"/"fluid"/
@@ -119,6 +123,7 @@ class Assembly(BaseModel):
     children: List["Assembly"] = Field(default_factory=list)
     comment: Optional[str] = None
     part_ref: Optional[str] = None
+    site_ref: Optional[str] = None
     category: Optional[str] = None
     sketch_ref: Optional[str] = None
 
@@ -157,7 +162,7 @@ class Assembly(BaseModel):
         # its own is that part: its geometry is imported rather than
         # constructed, and whatever it holds (a board inside a printer) is
         # drawn inside it. Without this a whole site of them -- which is
-        # what the parts library is -- cannot render at all, and the viewer's
+        # what the universe's grid of parts is -- cannot render at all, and the viewer's
         # canvas, the Site panel's tree and its generated OpenSCAD all come up empty
         # together. A node with a ``base`` keeps it: the part is then the
         # viewer's picture of it and the base is the site render's envelope.

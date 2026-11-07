@@ -577,7 +577,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     spawnButtons();
     layout.on("stateChanged", spawnButtons);
 
-    function fillMenu(into, done) {
+    function fillMenu(into, done, own) {
         into.replaceChildren();
         const viewsHead = document.createElement("div");
         viewsHead.className = "spawn-group";
@@ -590,9 +590,13 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             b.dataset.view = id;
             b.textContent = v.title;
             const missing = api.viewMissing(id);
-            b.disabled = !!missing;
-            b.title = missing ? `${v.title} lays out ${missing.title}'s windows: open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ""}` : `The windows laid out as ${v.title}`;
-            b.addEventListener("click", () => { api.applyView(id); if (done) done(); });
+            const offer = own ? own.offer(id) : { refused: missing ? `${v.title} lays out ${missing.title}'s windows: open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ""}` : null };
+            // Greyed where it cannot be laid out now. The page's own press says why,
+            // so its entry is pressed all the same; without one it is disabled.
+            b.classList.toggle("missing", !!offer.refused);
+            b.disabled = !own && !!offer.refused;
+            b.title = offer.refused || offer.title || `The windows laid out as ${v.title}`;
+            b.addEventListener("click", () => { if (own) own.press(id); else api.applyView(id); if (done) done(); });
             into.append(b);
         }
         for (const [group, rs] of windowsByGroup()) {
@@ -798,8 +802,13 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             return true;
         },
         /* The header's Windows menu, drawn into `into` each time it opens: the views,
-         * then every window by its group, each opened (or brought in front) by a press. */
-        fillMenu(into, { done = null } = {}) { fillMenu(into, done); },
+         * then every window by its group, each opened (or brought in front) by a press.
+         * `views` is the page's own way with a view, where it has one: { offer(id) ->
+         * { refused, title }, press(id) } -- why the view cannot be laid out now (else
+         * null) and what its entry says, and the press itself, which may open the window
+         * the view needs and says what came of it. Without it a view is laid out by
+         * applyView, and one whose window the page has not got is disabled. */
+        fillMenu(into, { done = null, views: own = null } = {}) { fillMenu(into, done, own); },
         /* Up, down, Home and End along a list's buttons: the Windows menu's keys. */
         stepFocus,
         destroy() {

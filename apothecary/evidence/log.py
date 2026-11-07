@@ -7,7 +7,9 @@ named for the day its records held (UTC), appended to and never rewritten:
 - ``polls/2026-10-31.jsonl``, the polls observations rest on, each with its id
   and every line the printer sent;
 - ``frames/2026-10-31.jsonl``, the frames kept with polls, and those forgotten
-  since (``frames``).
+  since (``frames``);
+- ``actions/2026-10-31.jsonl``, what a procedure's steps fired, each delivery's
+  outcome (``family/procedures.py``).
 
 A space is a site, by its name; what no pin attributes to a site goes to
 ``_sightings``, a name no site can have. The folder is private, as the firmware
@@ -30,7 +32,8 @@ SIGHTINGS = "_sightings"
 OBSERVATIONS = "observations"
 POLLS = "polls"
 FRAMES = "frames"
-KINDS = (OBSERVATIONS, POLLS, FRAMES)
+ACTIONS = "actions"
+KINDS = (OBSERVATIONS, POLLS, FRAMES, ACTIONS)
 
 # One writer at a time in this process; the server is the one process that writes.
 _WRITING = threading.Lock()

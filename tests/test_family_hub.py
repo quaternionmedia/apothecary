@@ -3,13 +3,8 @@
 from __future__ import annotations
 
 import json
-import socket
-import threading
-import time
 
-import httpx
 import pytest
-import uvicorn
 from fastapi.testclient import TestClient
 from hearth import conformance, coordinator
 
@@ -27,6 +22,9 @@ MEMBER_CASES = 14
 
 PAGE = "a-page"
 
+# The members the hub has with no table: those it hosts, and the one a page reads.
+OWN = ["board", "camera", "machine"]
+
 
 @pytest.fixture(autouse=True)
 def a_state_folder(tmp_path, monkeypatch):
@@ -39,29 +37,6 @@ def a_state_folder(tmp_path, monkeypatch):
 
 def _table(folder, **table) -> None:
     (folder / hub.TABLE).write_text(json.dumps(table), encoding="utf-8")
-
-
-@pytest.fixture
-def served():
-    """The application on a port of its own, its startup's work left out."""
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
-    server = uvicorn.Server(
-        uvicorn.Config(app, host="127.0.0.1", port=port, lifespan="off", log_level="warning")
-    )
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    url = f"http://127.0.0.1:{port}"
-    for _ in range(100):
-        try:
-            httpx.get(f"{url}/family/identity", timeout=1.0).raise_for_status()
-            break
-        except httpx.HTTPError:
-            time.sleep(0.1)
-    yield url
-    server.should_exit = True
-    thread.join(timeout=5)
 
 
 def test_the_hub_says_what_it_is():
@@ -85,16 +60,16 @@ def test_hearths_check_finds_a_hub_that_conforms(a_state_folder, served, capsys)
 
 
 def test_the_table_is_read_from_the_state_folder_and_says_nothing_of_a_missing_one(a_state_folder):
-    assert hub.members() == []
+    assert hub.members() == OWN
     _table(a_state_folder, members={"carlos": "http://127.0.0.1:4186"}, pull=[PAGE])
-    assert hub.members() == ["a-page", "carlos"]
+    assert hub.members() == sorted([*OWN, "a-page", "carlos"])
     (a_state_folder / hub.TABLE).write_text("not json", encoding="utf-8")
-    assert hub.members() == []
+    assert hub.members() == OWN
 
 
 def test_a_member_elsewhere_is_left_out_and_said(a_state_folder, caplog):
     _table(a_state_folder, members={"far": "http://192.168.1.4:9", "near": "http://localhost:9/"})
-    assert hub.members() == ["near"]
+    assert hub.members() == sorted([*OWN, "near"])
     assert hub.running().members == {"near": "http://localhost:9"}
     assert "far" in caplog.text and "not on this machine" in caplog.text
 

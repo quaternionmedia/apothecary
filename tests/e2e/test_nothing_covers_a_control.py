@@ -95,7 +95,7 @@ def test_nothing_covers_a_control_of_the_part_editor(
     page: Page, base_url: str, width: int, height: int
 ):
     page.set_viewport_size({"width": width, "height": height})
-    page.goto(f"{base_url}/viewer/sites/parts_library")
+    page.goto(f"{base_url}/viewer/sites/apothecary")
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
     page.evaluate("() => localStorage.removeItem('apothecary.layout')")
     settled(page)

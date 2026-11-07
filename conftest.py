@@ -62,6 +62,21 @@ def _state_folder_of_the_runs_own(tmp_path_factory):
         os.environ["APOTHECARY_STATE_DIR"] = previous
 
 
+@pytest.fixture(autouse=True)
+def _no_port_of_this_machine_is_listed(monkeypatch):
+    """A remembered board counts for the board the port list finds on its port
+    (``FirmwareState.cached_device``), so a board plugged in here would decide what
+    a test's made-up port holds. No test reads this machine's list: pyserial's is
+    empty unless a test puts its own boards on it, and no reading is kept from the
+    test before."""
+    import serial.tools.list_ports
+
+    from apothecary.firmware import devices
+
+    monkeypatch.setattr(serial.tools.list_ports, "comports", lambda *args, **kwargs: [])
+    monkeypatch.setattr(devices, "_PORTS", None)
+
+
 def ceiling(known: dict) -> int | None:
     """Every phase's bound: twice the longest test the suite records."""
     return math.ceil(2 * max(known.values())) if known else None

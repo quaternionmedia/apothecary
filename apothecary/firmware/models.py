@@ -52,6 +52,7 @@ class BoardInfo(BaseModel):
     vid: Optional[str] = None
     pid: Optional[str] = None
     serial_number: Optional[str] = None  # USB iSerial; generic on some bridges (CP2102: "0001")
+    location: Optional[str] = None  # the USB socket it is in, where the finder says (pyserial does)
     found_by: Optional[str] = None  # the toolchain module that found the port, and listens to it
 
 

@@ -21,25 +21,32 @@
         .main-content { flex: 1; min-height: 0; overflow: hidden; position: relative; }
 
         /* The header: one row at any width a laptop has, 1024 px included. Its
-           parts keep their size; only the trail gives way (see #breadcrumb). */
+           parts keep their size; only the banner's trail gives way (see #breadcrumb). */
         .toolbar {
             display: flex; gap: 0.6rem; padding: 0.5rem 0.75rem;
             background: #252525; border-bottom: 1px solid #333;
             align-items: center; flex-wrap: nowrap; white-space: nowrap;
         }
         .toolbar > * { flex: 0 0 auto; }
-        .toolbar h1 { margin: 0; font-size: 1.15rem; font-weight: 600; color: #fff; }
-        .toolbar .badge {
-            font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 3px;
-            background: #664400; color: var(--warn); font-weight: 600; cursor: help;
+        /* The view banner: where you are, as one trail. The universe first (the page's
+           heading, and the way to it), then the site -- its own level, and under ▾ the
+           other sites -- then each piece stepped into (#breadcrumb). */
+        .toolbar .view-banner {
+            display: flex; align-items: center; gap: 0.4rem; flex: 0 1 auto; min-width: 0;
+            font-size: 0.85rem; color: #999;
         }
-        .toolbar select {
-            min-width: 160px; padding: 0.5rem; border-radius: 4px;
-            border: 1px solid #444; background: #333; color: #e0e0e0;
-        }
-        /* As wide as the name of a site can be, not as the longest one there is, so a
-           site made from a picture never shifts the whole toolbar. */
-        #site-select { width: 11rem; }
+        .view-banner > * { flex: 0 0 auto; }
+        .view-banner h1 { margin: 0; font-size: 1.15rem; font-weight: 600; }
+        .view-banner .crumb { cursor: pointer; color: #9cd2ff; text-decoration: none; }
+        .view-banner .crumb:hover { text-decoration: underline; }
+        .view-banner h1 .crumb { color: #fff; }
+        /* The site's crumb: its name, as wide as a name can be and no wider, so a site
+           made from a picture never shifts the whole header; and its ▾. */
+        .site-crumb { display: inline-flex; align-items: center; gap: 0.3rem; }
+        .site-crumb[hidden] { display: none; }
+        .site-crumb #site-level { max-width: 11rem; overflow: hidden; text-overflow: ellipsis; }
+        .view-menu.site-menu > summary { padding: 0 0.3rem; font-size: 0.75rem; line-height: 1.5; }
+        .view-menu.site-menu > .view-menu-body { left: 0; right: auto; align-items: stretch; gap: 0; padding: 0.2rem 0; min-width: 11rem; max-height: 70vh; overflow-y: auto; }
         .toolbar button, .view-menu > summary {
             padding: 0.45rem 0.8rem; border-radius: 4px; cursor: pointer;
             border: none; font-size: 0.9rem; line-height: 1.25; transition: background 0.15s;
@@ -77,16 +84,15 @@
         .validity-indicator.valid { background: #1e4620; color: var(--ok); }
         .validity-indicator.invalid { background: #4a1e1e; color: var(--bad); }
 
-        /* The trail: where you are, a crumb going up to its level. The one part of
-           the header that gives way: too long for its row, its start is cut, so
-           the level being looked at stays in view. */
+        /* The trail below the site: each piece stepped into, a crumb going up to its
+           level. The one part of the header that gives way: too long for its row, its
+           start is cut, so the level being looked at stays in view. */
         #breadcrumb {
             flex: 0 1 auto; min-width: 3rem; overflow: hidden; text-overflow: ellipsis;
-            direction: rtl; text-align: left; font-size: 0.85rem; color: #999;
+            direction: rtl; text-align: left;
         }
+        #breadcrumb:empty { display: none; }
         #breadcrumb .trail { direction: ltr; unicode-bidi: isolate; }
-        #breadcrumb .crumb { cursor: pointer; color: #9cd2ff; }
-        #breadcrumb .crumb:hover { text-decoration: underline; }
         /* An item of the View menu: a tick-box or a drop-down, with its words. */
         .toolbar-toggle {
             display: flex; align-items: center; gap: 0.35rem;
@@ -201,6 +207,8 @@
         .window-item:hover, .window-item:focus-visible { background: #2a2f38; color: #fff; outline: none; }
         .window-item.open { color: #e8e8e8; }
         .window-item.view-item { color: #9cd2ff; }
+        /* A view that cannot be laid out now is greyed, under the pointer too. */
+        .window-item.missing, .window-item.missing:hover { color: #6b7078; background: none; cursor: default; }
         /* A stack maximised -- the world alone, or a panel's ☐ -- is all there is: the
            windows under it are hidden, not only covered, so nothing of them is reached. */
         .lm_root:has(> .lm_maximised) > :not(.lm_maximised) { visibility: hidden; }
@@ -691,16 +699,19 @@
         <div id="demo-banner" class="demo-banner" role="note" title="apothecary serve --demo: printer_1's mainboard is pinned to a simulated Ender, cnc_router's controller to a simulated GRBL router, an ESP32 devkit is simulated, a simulated lighting console sweeps the theatre's rig, arduino-cli, cargo and espflash are scripted, and no real serial port is opened. Its state is {{ demo }}, kept between runs; your own ~/.apothecary and pins are not touched.">The demo: a simulated printer, router, ESP32 and lighting console, scripted firmware tools, its own state in {{ demo }}. To leave it, stop the server and run <code>apothecary serve</code> without --demo.</div>
         {% endif %}
         <div class="toolbar">
-            <h1>🧪 Apothecary</h1>
-            <span class="badge" title="FRACTAL VIEWER — unratified prototype">prototype</span>
-            <select id="site-select"{% if not site_names %} disabled{% endif %}>
-                {% for name in site_names %}
-                <option value="{{ name }}"{% if name == default_site %} selected{% endif %}>{{ name }}</option>
-                {% else %}
-                <option value="" disabled>No sites found</option>
-                {% endfor %}
-            </select>
-            <span id="breadcrumb" title="Where you are: a crumb steps out to its level (Page Up or Backspace steps out one)"></span>
+            <nav id="view-banner" class="view-banner" aria-label="Where you are">
+                <h1><a id="universe-crumb" class="crumb" href="{{ base_url }}/viewer/sites/{{ universe }}" title="{{ universe_shown }}, the universe: every part, and every other site as one piece. FRACTAL VIEWER — unratified prototype">🧪 {{ universe_shown }}</a></h1>
+                <span id="site-crumb" class="site-crumb"{% if not default_site or default_site == universe %} hidden{% endif %}>
+                    <span aria-hidden="true">›</span>
+                    <a id="site-level" class="crumb" href="{{ base_url }}/viewer/sites/{{ default_site | urlencode }}">{{ default_site }}</a>
+                    <details id="site-menu" class="view-menu site-menu">
+                        <summary title="Choose another site" aria-label="Choose another site">▾</summary>
+                        <div class="view-menu-body site-menu-body"></div>
+                    </details>
+                </span>
+                <span id="breadcrumb" title="Where you are: a crumb steps out to its level (Page Up or Backspace steps out one)"></span>
+                {% if not site_names %}<span id="no-sites">No sites found</span>{% endif %}
+            </nav>
             <div class="spacer"></div>
             <details id="view-menu" class="view-menu">
                 <summary title="How the world is drawn">⚙ View</summary>
@@ -791,6 +802,7 @@
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/machine.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/bench.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/working_space.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/procedure.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/airgap.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/models.css">
     <script type="importmap">
@@ -829,6 +841,7 @@
         import { KINDS as MACHINE_WORDS, GCODE_KINDS, kindOf as boardKindOf } from '/static/machine_words.js';
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
+        import { mountProcedure } from '/static/widgets/procedure.js';
         import { mountPictureList } from '/static/widgets/picture_list.js';
         import { mountModels } from '/static/widgets/models.js';
         import { mountToolchain } from '/static/widgets/toolchain.js';
@@ -869,7 +882,14 @@
             ],
         };
         const DEFAULT_SITE = {{ default_site | tojson }};
+        // Every site the server knew when it wrote the page: what an address may name,
+        // and what the banner's site crumb offers.
+        const SITE_NAMES = {{ site_names | tojson }};
         const INITIAL_FOCUS = {{ focus_path | tojson }};
+        // The universe (apothecary/universe.py): the site every part is a leaf of, and
+        // every other site one piece of. A step out of a site's own level goes to it.
+        const UNIVERSE = {{ universe | tojson }};
+        const UNIVERSE_SHOWN = {{ universe_shown | tojson }};
         // What a link into the world asks to have open: ?panel=bench (where /firmware
         // leads) and ?machine=<port> (where /firmware/monitor?port= leads). Read once,
         // before the first load closes any Machine and the address follows it.
@@ -1030,6 +1050,9 @@
         // in the world passes through them, unless the View menu says otherwise.
         const WALL_CATEGORY = 'wall';
         const WALL_OPACITY = 0.25;
+        // The clear box round a site's miniature in the universe: there to be clicked
+        // and to wear the selection's edges, and seen through to the boxes inside.
+        const MINIATURE_CASE_OPACITY = 0.08;
         const HANDLE_SIZE = 0.6;      // the move arrows, against TransformControls' own 1
         const HANDLE_LIGHTNESS = 0.55; // and their opacity, against its own
         const ORBIT_EPS = 0.000001;   // OrbitControls' own measure of the camera having moved
@@ -1217,11 +1240,16 @@
         // Standardized navigation over Assembly's fractal tree: the same
         // click, double-click, wheel and step-out controls apply at any depth,
         // because every node -- Site, Structure, Substructure, Feature, or a
-        // parts-library leaf -- is the same shape.
+        // part's leaf in the universe -- is the same shape.
         class FractalViewer {
             constructor() {
                 this.canvas = document.getElementById('viewer-canvas');
-                this.siteSelect = document.getElementById('site-select');
+                // The view banner: the universe's crumb, the site's (its name and its
+                // menu of the other sites), and the trail of pieces below it.
+                this.universeCrumbEl = document.getElementById('universe-crumb');
+                this.siteCrumbEl = document.getElementById('site-crumb');
+                this.siteLevelEl = document.getElementById('site-level');
+                this.siteMenuEl = document.getElementById('site-menu');
                 this.viewMenuEl = document.getElementById('view-menu');
                 this.windowsMenuEl = document.getElementById('windows-menu');
                 this.snapToggle = document.getElementById('snap-toggle');
@@ -1360,7 +1388,7 @@
                 this.onResize();
                 this.animate();
 
-                if (this.siteSelect.value) this.loadSite(this.siteSelect.value, INITIAL_FOCUS).then(() => this.followDeepLink());
+                if (DEFAULT_SITE) this.loadSite(DEFAULT_SITE, INITIAL_FOCUS).then(() => this.followDeepLink());
             }
 
             // A link into the world with a panel open: the Bench, or a board's Machine
@@ -1492,6 +1520,8 @@
                 this.boards = mountBoards({ base: BASE_URL, site: () => this.siteName });
                 window.apothecaryBoards = this.boards;
                 this.machine = null;
+                // The last view asked for (openView), settled once it is laid out and said.
+                this.viewDone = Promise.resolve(true);
                 // What pictures and cameras wear in the world (picture_marks.js): each
                 // view as a mat laid through its projection on its host's top or the
                 // floor, its shapes as outlines, one ▣ badge per place; and each
@@ -1706,12 +1736,34 @@
                     onOpen: () => this.workingSpace?.shown(),
                     onClose: () => this.workingSpace?.close(),
                 });
+                // Procedure: the site's procedures, each step fired through the family's
+                // hub on GO (widgets/procedure.js) -- a stack of its own beside the world,
+                // for the height its steps take. Closed, it stops asking.
+                this.procedure = null;
+                this.panels.register('procedure', {
+                    title: 'Procedure', group: 'Site', home: 'beside', open: false,
+                    hint: 'The steps that bring this site into working order, each fired through the family\'s hub on GO',
+                    body: (slot) => {
+                        this.procedure = mountProcedure(slot, {
+                            base: BASE_URL, siteName: () => this.siteName,
+                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                        });
+                        window.apothecaryProcedure = this.procedure;
+                        this.procedure.shown();
+                    },
+                    onOpen: () => this.procedure?.shown(),
+                    onClose: () => this.procedure?.close(),
+                });
                 // ⊞ Windows: drawn afresh each time it opens, so it says which are open.
                 const windowsBody = this.windowsMenuEl.querySelector('.windows-menu-body');
                 this.windowsMenuEl.addEventListener('toggle', () => {
                     if (!this.windowsMenuEl.open) return;
                     this.viewMenuEl.open = false;
-                    this.panels.fillMenu(windowsBody, { done: () => { this.windowsMenuEl.open = false; } });
+                    this.panels.fillMenu(windowsBody, {
+                        done: () => { this.windowsMenuEl.open = false; },
+                        // A view pressed here is the ring's Panels › Windows cell pressed.
+                        views: { offer: (id) => this.viewOffer(id), press: (id) => this.openView(id) },
+                    });
                     windowsBody.querySelector('button')?.focus();
                 });
                 windowsBody.addEventListener('keydown', (ev) => this.panels.stepFocus(windowsBody, ev));
@@ -1726,9 +1778,27 @@
             }
 
             bindEvents() {
-                // Choosing a site loads it, and the address follows; the trail's crumbs
-                // are the way back out. Back and Forward go between the sites chosen.
-                this.siteSelect.addEventListener('change', () => this.chooseSite(this.siteSelect.value));
+                // The banner. Its first crumb is the universe, from anywhere. The site's
+                // crumb goes to the site's own level, and at that level opens its menu,
+                // as its ▾ does anywhere: the other sites, one chosen loading it, the
+                // address following. Back and Forward go between the sites chosen.
+                this.universeCrumbEl.addEventListener('click', (e) => this.toUniverse('the first crumb', e));
+                this.siteLevelEl.addEventListener('click', (e) => this.toSiteLevel(e));
+                const siteMenuBody = this.siteMenuEl.querySelector('.site-menu-body');
+                this.siteMenuEl.addEventListener('toggle', () => {
+                    if (!this.siteMenuEl.open) return;
+                    this.viewMenuEl.open = false;
+                    this.windowsMenuEl.open = false;
+                    this.fillSiteMenu(siteMenuBody);
+                    (siteMenuBody.querySelector('.open') || siteMenuBody.querySelector('button'))?.focus();
+                });
+                siteMenuBody.addEventListener('click', (e) => {
+                    const item = e.target.closest('.site-item');
+                    if (!item) return;
+                    this.siteMenuEl.open = false;
+                    this.chooseSite(item.dataset.site);
+                });
+                siteMenuBody.addEventListener('keydown', (ev) => this.panels.stepFocus(siteMenuBody, ev));
                 window.addEventListener('popstate', () => this.followAddress());
                 // The View menu folds away when a press lands anywhere else, as a menu does.
                 document.addEventListener('pointerdown', (e) => this.foldViewMenu(e));
@@ -2036,6 +2106,7 @@
                 if (event.key !== 'Escape' || event.defaultPrevented || !mayAct(event)) return;
                 if (this.viewMenuEl.open) { this.viewMenuEl.open = false; event.preventDefault(); return; }
                 if (this.windowsMenuEl.open) { this.windowsMenuEl.open = false; event.preventDefault(); return; }
+                if (this.siteMenuEl.open) { this.siteMenuEl.open = false; event.preventDefault(); return; }
                 if (this.cancelDrag()) { event.preventDefault(); return; }
                 // After every other listener has had it: Pictures' lets go of its picture first.
                 setTimeout(() => {
@@ -2109,7 +2180,8 @@
             // Loading and navigation state
             // ---------------------------------------------------------------
 
-            // A site chosen -- the header's drop-down, or the ring's Sites: the address
+            // A site chosen -- the banner's site crumb, a step into a site's piece, or
+            // the ring's Sites: the address
             // names it (/viewer/sites/<name>), so a reload or a link lands on it and
             // Back returns to the one before. The old site's focus, Machine and
             // variants are its own, and stay behind in its entry of the history.
@@ -2120,7 +2192,6 @@
                 for (const key of ['focus', 'machine', 'variant']) url.searchParams.delete(key);
                 if (url.href !== location.href) history.pushState({ site: name }, '', url);
                 this.forgetVariants();
-                this.siteSelect.value = name;
                 return this.loadSite(name);
             }
 
@@ -2130,10 +2201,9 @@
                 const named = location.pathname.match(/\/viewer\/sites\/([^/]+)\/?$/);
                 if (!named) return;
                 const name = decodeURIComponent(named[1]);
-                if (![...this.siteSelect.options].some((o) => o.value === name)) return;
+                if (!SITE_NAMES.includes(name)) return;
                 const params = new URLSearchParams(location.search);
                 this.forgetVariants();
-                this.siteSelect.value = name;
                 this.variantsRead = this.readVariantsFromAddress(params);
                 const port = params.get('machine');
                 this.loadSite(name, params.get('focus') || '').then(async () => {
@@ -2195,6 +2265,7 @@
                     this.pictureMarks.load(name);
                     // A Working space in front shows this site; behind, it does once shown.
                     if (this.panels.isShown('working')) this.workingSpace?.open(null);
+                    if (this.panels.isShown('procedure')) this.procedure?.load();
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
                     console.error(err);
@@ -2243,13 +2314,14 @@
             // A part usually appears twice on the way down: once as the
             // structure the focus path names, and once as the leaf inside it
             // carrying the geometry. Focusing lands on the former; the
-            // parameters live on the latter.
+            // parameters live on the latter. A machine is both at once: the
+            // piece the path names is drawn as its part, and is what is selected.
             selectFocusedPart() {
                 if (!this.focusPath.length) return;
                 const focus = this.currentFocusNode();
                 const prefix = this.focusPath.join('.');
-                if (!focus.children.length) {
-                    this.selectChild(prefix);  // focus is itself the leaf
+                if (this.drawsItself(focus)) {
+                    this.selectChild(prefix);  // focus is itself the leaf, or a machine drawn as its part
                     return;
                 }
                 const wanted = this.focusPath[this.focusPath.length - 1];
@@ -2268,7 +2340,8 @@
                 const resolved = [];
                 for (const name of segments) {
                     const child = findChild(node, name);
-                    if (!child) break;
+                    // A site's piece is not a level: its site is.
+                    if (!child || child.site_ref) break;
                     resolved.push(name);
                     node = child;
                 }
@@ -2293,8 +2366,8 @@
                 const focus = this.currentFocusNode();
                 const child = findChild(focus, name);
                 // A leaf is a destination too: it renders as itself, which is
-                // how a part in the parts library is reached.
-                if (!child) return;
+                // how a part in the universe is reached. A site's piece is no level.
+                if (!child || child.site_ref) return;
                 this.focusPath = [...this.focusPath, name];
                 this.selectedName = null;
                 this.renderFocus();
@@ -2348,8 +2421,11 @@
                 // A leaf has nothing beneath it, so rendering "the focus node's
                 // children" would draw an empty scene for the one thing a reader
                 // asked to look at: a focused leaf renders itself. Zooming into a
-                // part shows the part.
-                if (!focus.children.length) {
+                // part shows the part. A machine -- a piece drawn as a part, with
+                // pieces of its own inside it -- is its part too: stepped into, the
+                // part stands alone and whole, and its pieces are Site's rows, each a
+                // step further in.
+                if (this.drawsItself(focus)) {
                     return [{ ...focus, _path: focusPrefix }];
                 }
                 for (const child of focus.children) {
@@ -2383,9 +2459,22 @@
                     for (const child of node.children) addAll(child, pathForChild(path, child.name));
                 };
                 for (const child of focus.children) addAll(child, pathForChild(focusPrefix, child.name));
-                // Same reason as currentRenderNodes: a focused leaf is its own
-                // render node, so it needs a key or selecting it finds nothing.
-                if (!focus.children.length) addAll(focus, focusPrefix);
+                // Same reason as currentRenderNodes: a focused leaf, or a machine
+                // drawn as its part, is its own render node, so it needs a key or
+                // selecting it finds nothing.
+                if (this.drawsItself(focus)) this.renderNodeByKey[focusPrefix] = { ...focus, _path: focusPrefix };
+            }
+
+            // Whether a level draws its own piece and not what the piece holds: a
+            // leaf, which holds nothing, and a piece drawn as a part, whatever it holds.
+            drawsItself(focus) {
+                return !focus.children.length || !!focus.part_ref;
+            }
+
+            // Whether `key` is the piece the level in view was stepped into. It is
+            // drawn only where the level draws itself (drawsItself).
+            isLevelsOwn(key) {
+                return this.focusPath.length > 0 && key === this.focusPath.join('.');
             }
 
             renderFocus() {
@@ -2487,9 +2576,10 @@
             // A leaf is always drawn in full -- "black box" and "dot" exist to
             // stand in for a subassembly, and a leaf has no inside to hide. So
             // the detail level only ever applies to a node with children, and
-            // a per-node override beats the View menu's Detail.
+            // a per-node override beats the View menu's Detail. The piece a level was
+            // stepped into is drawn in full too: it is what the level is for.
             effectiveDetailFor(node, key) {
-                if (!node.children || !node.children.length) return DETAIL_FULL;
+                if (!node.children || !node.children.length || this.isLevelsOwn(key)) return DETAIL_FULL;
                 return this.detailOverrides.get(key) || this.detailMode;
             }
 
@@ -2542,7 +2632,8 @@
                     const detail = this.effectiveDetailFor(child, key);
                     const isCompound = !!(child.children && child.children.length);
 
-                    if (isCompound && this.showCompoundOverlays) {
+                    // A machine stepped into is the whole level: nothing to set it apart from.
+                    if (isCompound && this.showCompoundOverlays && !this.isLevelsOwn(key)) {
                         this.addCompoundOverlay(key, size, center);
                     }
 
@@ -2820,7 +2911,7 @@
             // is actually in view, and under it: the grid lies on the floor
             // beneath the level's middle (three.js x, z), its lines on whole
             // cells of the site's frame, where snapping puts things. A level
-            // far from the origin -- a part in the parts library -- stands on it.
+            // far from the origin -- a part in the universe -- stands on it.
             updateHelpersForSpan(span, middle = { x: 0, z: 0 }) {
                 // Six times the span, so the ground plane does not end mid-view
                 // when the camera dollies out to its clamp; divisions are capped
@@ -2854,21 +2945,28 @@
             // Breadcrumb + minimap
             // ---------------------------------------------------------------
 
-            // The trail, in the header's one row: in a span of its own, so the row
-            // can cut its start and keep its end (the level in view) when it is long.
+            // The view banner, in the header's one row: the universe; then the site,
+            // unless the universe is the site in view, where the trail is its crumb
+            // alone; then each piece stepped into, in a span of its own, so the row can
+            // cut its start and keep its end (the level in view) when it is long.
             renderBreadcrumb() {
+                const inUniverse = this.siteName === UNIVERSE;
+                this.siteCrumbEl.hidden = inUniverse || !this.siteName;
+                if (!inUniverse && this.siteName) {
+                    this.siteLevelEl.textContent = this.siteName;
+                    this.siteLevelEl.href = `${BASE_URL}/viewer/sites/${encodeURIComponent(this.siteName)}`;
+                    this.siteLevelEl.title = this.focusPath.length
+                        ? `${this.siteName}: up to its own level`
+                        : `${this.siteName}, at its own level: choose another site`;
+                }
+                this.siteMenuEl.open = false;
                 this.breadcrumbEl.innerHTML = '';
+                if (!this.focusPath.length) return;
                 const trail = document.createElement('span');
                 trail.className = 'trail';
                 this.breadcrumbEl.appendChild(trail);
-                const rootCrumb = document.createElement('span');
-                rootCrumb.className = 'crumb';
-                rootCrumb.textContent = this.siteName;
-                rootCrumb.addEventListener('click', () => this.goUpTo(0));
-                trail.appendChild(rootCrumb);
-
                 this.focusPath.forEach((name, i) => {
-                    trail.appendChild(document.createTextNode(' › '));
+                    trail.appendChild(document.createTextNode(i ? ' › ' : '› '));
                     const crumb = document.createElement('span');
                     crumb.className = 'crumb';
                     crumb.textContent = name;
@@ -2877,10 +2975,57 @@
                 });
             }
 
-            // A press outside the View menu, or the Windows menu, folds it away.
+            // Every crumb of the banner, in order: the universe, the site where it is
+            // not the universe, then each piece stepped into.
+            crumbs() {
+                return [
+                    this.universeCrumbEl,
+                    ...(this.siteCrumbEl.hidden ? [] : [this.siteLevelEl]),
+                    ...this.breadcrumbEl.querySelectorAll('.crumb'),
+                ];
+            }
+
+            // A crumb that is a link, pressed: the page's when pressed plainly, and the
+            // browser's with a modifier or another button, as any link is (a new tab).
+            crumbIsOurs(event) {
+                if (!event) return true;
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
+                event.preventDefault();
+                return true;
+            }
+
+            // The banner's first crumb: the universe. From another site, out to it, the
+            // site's piece selected there; in it already, up to its own level.
+            toUniverse(how = '', event = null) {
+                if (!this.crumbIsOurs(event)) return null;
+                if (this.siteName !== UNIVERSE) return this.leaveSite(how);
+                if (this.focusPath.length) this.goUpTo(0);
+                else this.setStatus(`Already at ${UNIVERSE_SHOWN}'s own level`, 'success');
+                return null;
+            }
+
+            // The site's crumb: up to the site's own level. At that level there is
+            // nowhere up to go, and it opens the other sites, as its ▾ does.
+            toSiteLevel(event = null) {
+                if (!this.crumbIsOurs(event)) return;
+                if (this.focusPath.length) this.goUpTo(0);
+                else this.siteMenuEl.open = !this.siteMenuEl.open;
+            }
+
+            // The site crumb's menu: every site but the universe, which is the first
+            // crumb; ● the one in view, ○ the others.
+            fillSiteMenu(body) {
+                body.innerHTML = SITE_NAMES.filter((name) => name !== UNIVERSE).map((name) => {
+                    const here = name === this.siteName;
+                    return `<button type="button" class="site-item window-item${here ? ' open' : ''}" data-site="${esc(name)}" title="${esc(here ? `${name}: the site in view` : `Open ${name}; Back returns here`)}">${here ? '●' : '○'} ${esc(name)}</button>`;
+                }).join('');
+            }
+
+            // A press outside the View menu, the Windows menu or the site crumb's folds it away.
             foldViewMenu(event) {
                 if (this.viewMenuEl.open && !this.viewMenuEl.contains(event.target)) this.viewMenuEl.open = false;
                 if (this.windowsMenuEl.open && !this.windowsMenuEl.contains(event.target)) this.windowsMenuEl.open = false;
+                if (this.siteMenuEl.open && !this.siteCrumbEl.contains(event.target)) this.siteMenuEl.open = false;
             }
 
             // A cell of the canvas ring's View: what its item in the View menu
@@ -3067,7 +3212,8 @@
                 const inside = hasChildren ? ` — ${node.children.length} inside` : '';
                 // Its role only where it is not what a piece at this level usually is.
                 const role = ['structure', 'substructure'].includes(node.role) ? '' : ` (${node.role})`;
-                label.textContent = `${node.name}${role}${inside}`;
+                // A site's piece reads as its site's name: "garage (site)".
+                label.textContent = `${node.site_ref || node.name}${role}${inside}`;
                 li.appendChild(label);
                 // A piece a problem names is red, saying what is wrong on hover; a
                 // piece with one somewhere inside it says so.
@@ -3115,18 +3261,25 @@
                 return this.focusPath.length === 0 && focus.children.some((c) => c.name === node.name);
             }
 
+            // Whether a piece wears the move arrows while it is the selection. A
+            // catalog leaf is not moved by hand (the universe lays itself out), nor is a
+            // site's piece there; a
+            // machine that is a part with things inside it, and a camera, move like
+            // any other structure -- from the site's own level, never from inside.
+            movedByHand(key) {
+                const node = this.renderNodeByKey[key];
+                return !!node && !node.site_ref && this.isEditableSelection(this.currentFocusNode(), node)
+                    && (this.isCameraNode(node) || !(node.part_ref && node.children.length === 0));
+            }
+
             selectChild(key) {
                 this.pictureMarks.unchoose();
                 if (key !== this.selectedName) this.pictureMarks.untrace();
                 this.selectedName = key;
                 const focus = this.currentFocusNode();
-                const node = this.renderNodeByKey[key];
                 const mesh = this.meshByName[key];
 
-                // A catalog leaf is not moved by hand (the library lays itself
-                // out); a machine that is a part with things inside it, and a
-                // camera, move like any other structure.
-                if (mesh && node && this.isEditableSelection(focus, node) && (this.isCameraNode(node) || !(node.part_ref && node.children.length === 0))) {
+                if (mesh && this.movedByHand(key)) {
                     this.showHandles(mesh);
                 } else {
                     this.hideHandles();
@@ -3362,7 +3515,7 @@
             }
 
             // The one place the three possible "Selected" panels are chosen:
-            // a parts-library leaf always gets the absorbed part view
+            // a part's leaf in the universe always gets the absorbed part view
             // (regardless of depth); otherwise, position/status editing only
             // works for a direct child of the root (see isEditableSelection),
             // so anything deeper -- or any leaf of an expanded category that
@@ -3438,6 +3591,12 @@
                 const selected = this.renderNodeByKey[this.selectedName];
                 if (!selected) {
                     this.selectedBodyEl.innerHTML = '<div class="no-selection">Click a piece to select it</div>';
+                    return;
+                }
+                // A site's piece in the universe: that it is a site, how large the
+                // site really is, and the way in. Nothing of it is edited from here.
+                if (selected.site_ref) {
+                    this.renderSitePiecePanel(selected);
                     return;
                 }
                 // A node is a node first (its name, its place, its status); a
@@ -3633,8 +3792,16 @@
             }
 
             zoomInAffordanceHtml(node) {
-                if (!node.children.length) return '';
-                return `<button type="button" class="zoom-in-btn" title="Step into ${esc(node.name)}: its pieces become the level (Page Down, or a double-click)">⤵ Step into ${esc(node.name)} (${node.children.length})</button>`;
+                if (!node.children.length && !node.site_ref) return '';
+                // The machine the level was stepped into: its pieces are Site's rows.
+                if (this.isLevelsOwn(this.selectedName)) {
+                    return `<div class="prop-readonly" data-facts="inside">Inside it: ${node.children.map((c) => esc(c.name)).join(', ')}. Each is a row in Site; a double-click on one steps into it.</div>`;
+                }
+                // A site's piece is stepped into as its site; any other piece, as a level.
+                const into = node.site_ref || node.name;
+                const does = node.site_ref ? 'the site opens at its own level, and Back returns here' : 'its pieces become the level';
+                const holds = node.site_ref ? '' : ` (${node.children.length})`;
+                return `<button type="button" class="zoom-in-btn" title="Step into ${esc(into)}: ${does} (Page Down, or a double-click)">⤵ Step into ${esc(into)}${holds}</button>`;
             }
 
             bindZoomInAffordance(node) {
@@ -3647,7 +3814,7 @@
             // has no subassembly to collapse, so it gets no control rather
             // than a control that does nothing.
             detailAffordanceHtml(node) {
-                if (!node.children.length) return '';
+                if (!node.children.length || this.isLevelsOwn(this.selectedName)) return '';
                 const current = this.effectiveDetailFor(node, this.selectedName);
                 const options = Object.entries(DETAIL_LABELS)
                     .map(([value, label]) =>
@@ -3699,6 +3866,36 @@
                 if (this.effectiveDetailFor(node, key) === DETAIL_FULL) this.addToWave(this.loadAndUpgrade(node, this.loadGeneration));
                 else this.nextLoadToken(key);  // a load already under way for it is stale
                 this.renderSelectedPanel();
+            }
+
+            // A site's piece: its site's name, that it is a site, the site's real size
+            // (the piece is a miniature, not to scale beside the parts), and the step in.
+            renderSitePiecePanel(node) {
+                const mm = (v) => Number(v).toFixed(0);
+                const real = node.site_size ? `${node.site_size.map(mm).join(' × ')} mm` : 'nothing in it has a size';
+                const scale = this.miniatureScale(node);
+                const drawn = !node.site_size ? ''
+                    : scale >= 1 ? 'Drawn here the size it is.'
+                    : `Drawn here in miniature, 1:${(1 / scale).toFixed(scale > 0.1 ? 1 : 0)}: not to scale beside the parts.`;
+                this.selectedBodyEl.innerHTML = `
+                    <div class="prop-row"><label>Name</label><span>${esc(node.site_ref)}</span></div>
+                    <div class="prop-readonly" data-facts="site">
+                        A site, stood here as one piece: a step into it opens the site.<br>
+                        Real size: <span data-facts="site-size">${esc(real)}</span><br>
+                        ${esc(drawn)}
+                    </div>
+                    ${this.zoomInAffordanceHtml(node)}
+                `;
+                this.bindZoomInAffordance(node);
+            }
+
+            // How much smaller than its site a site's piece is drawn: 1 for one drawn
+            // the size it is.
+            miniatureScale(node) {
+                if (!node.site_size || !node.footprint) return 1;
+                const real = Math.max(node.site_size[0], node.site_size[1]);
+                const here = Math.max(node.footprint.max[0] - node.footprint.min[0], node.footprint.max[1] - node.footprint.min[1]);
+                return real > 0 ? Math.min(1, here / real) : 1;
             }
 
             renderGenericPanel(node) {
@@ -7190,6 +7387,85 @@
                 this.setStatus(`Opened ${anchor || port}'s Machine: ⌗ Panels › Windows › Machine view lays out its sections`, 'success');
                 return true;
             }
+            // The piece the Machine view is asked of: the one selected, else the one
+            // stepped into, which is what the world is showing.
+            viewSubject() {
+                if (this.selectedName && this.selectedName !== FLOOR_KEY) return this.selectedName;
+                return this.focusPath.join('.') || null;
+            }
+            // Why a view cannot be laid out now, or null. The Machine view needs a
+            // Machine: the one open, else that of the piece it is asked of, which it opens.
+            viewRefusal(id) {
+                const missing = this.panels.viewMissing(id);
+                if (!missing) return null;
+                if (id !== 'machine') return `it lays out ${missing.title}'s windows: open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ''}`;
+                const path = this.viewSubject();
+                // How its subject is opened, in the registry's words (systems.py).
+                const how = `select a machine with a board pinned to it, or open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ''}`;
+                if (!path) return `no Machine is open and nothing is selected: ${how}`;
+                const { row } = this.bindingFor(path);
+                if (row && row.device && row.device.port) return null;
+                return row ? this.noMachine(path) : `no Machine is open, and ${path} has no board pinned: ${how}`;
+            }
+            // What ⊞ Windows says of a view: why it is greyed, else what a press does.
+            viewOffer(id) {
+                const refused = this.viewRefusal(id);
+                if (refused) return { refused: `Not now: ${refused}`, title: null };
+                if (id !== 'machine') return { refused: null, title: null };
+                const lands = 'its windows laid out together, and its chosen file\'s path drawn in the world';
+                return { refused: null, title: this.machine ? `The Machine: ${lands}` : `Opens ${this.viewSubject()}'s Machine: ${lands}` };
+            }
+            // A view asked for, from ⊞ Windows or the ring's Panels › Windows: its windows
+            // laid out together, and what came of it said. The Machine view opens the
+            // Machine of the piece it is asked of first when none is open, and lands on the
+            // file it would run (landOnPath). `label` is what was pressed, `tail` its
+            // ring address. `viewDone` is the last one asked for, settled once it is said.
+            openView(id, { label = null, tail = '' } = {}) {
+                this.viewDone = this.layOutView(id, label, tail);
+                return this.viewDone;
+            }
+            async layOutView(id, label, tail) {
+                const view = this.panels.views().find((v) => v.id === id);
+                const asked = label || (view ? `${view.title} view` : id);
+                const refused = view ? this.viewRefusal(id) : 'no such view';
+                if (refused) { this.setStatus(`${asked}: ${refused}${tail}`, 'error'); return false; }
+                if (id === 'machine' && !this.machine) this.openMachine(this.viewSubject());
+                const registered = () => this.panels.list().filter((w) => w.registered).length;
+                const had = registered();
+                let done = this.panels.applyView(id);
+                // A Machine first put in front by its view says its kind there: that
+                // kind's sections are laid out with it.
+                if (done && registered() !== had) done = this.panels.applyView(id);
+                if (!done) { this.setStatus(`${asked}: its windows could not be laid out${tail}`, 'error'); return false; }
+                if (id === 'default') { this.setStatus(`The page's own layout again: the world, Site and Selected beside it, the tabs below them${tail}`, 'success'); return true; }
+                const laid = `The ${view.title} view: its windows laid out together`;
+                const landed = id === 'machine' ? await this.landOnPath() : null;
+                if (landed) this.setStatus(`${laid}. ${landed.said}${tail}`, landed.refused ? 'error' : 'success');
+                else this.setStatus(`${laid}; Panels › Windows › Reset layout puts the page's own back${tail}`, 'success');
+                return true;
+            }
+            // The Machine view's landing: the file the open Machine has chosen, its path
+            // drawn in the world and framed there, the slider that goes through it in the
+            // Print or Cut window beside it -- or, with no file kept, how one comes to be.
+            // What to say of it ({ said, refused }); null for a devkit, which runs no
+            // file and is left as its view laid it out.
+            async landOnPath() {
+                const machine = this.machine, handle = machine && machine.handle;
+                const found = handle ? await handle.print.show() : null;
+                if (!found || this.machine !== machine) return null;
+                const who = machine.path || machine.port;
+                if (!found.file) return { said: `No path is drawn: ${found.none}. In ${who}'s ${found.card}, ${found.how}` };
+                if (!found.drawn) return { said: `${found.file}'s path is not drawn: ${found.refused}`, refused: true };
+                // Drawn where the machine's marks stand: one with no volume in this site
+                // has none, and its file's path nowhere to be.
+                const marks = Object.values(this.marks).find((m) => m.marks && m.port === machine.port);
+                const box = marks ? marks.marks.toolpathBox() : null;
+                if (!box || box.isEmpty()) return { said: `${found.file} is chosen in ${who}'s ${found.card}, but its path has nowhere to be drawn: ${who} stands in ${this.siteName} with no volume of its own`, refused: true };
+                // The world has the room its view left it: framed at that size.
+                this.onResize();
+                this.frameBox(siteBox(box));
+                return { said: `${found.file}'s path is drawn on ${who} and framed, ${found.where}: the preview slider in its ${found.card} goes through each ${found.word}` };
+            }
             // The Machine's panel, its body mounted when it is first in front of a
             // person. A board pinned inside a printer is the printer's, whatever it has
             // been identified as so far: its Machine has no Flashing.
@@ -7339,7 +7615,7 @@
                     write: (values) => this.writeTied(target, values),
                     edit: async () => {
                         const found = Object.entries(this.renderNodeByKey).find(([, n]) => n.part_ref === 'airgap');
-                        if (!found) { this.setStatus(`The airgap part is not in ${this.siteName}: ${BASE_URL}/viewer/parts/airgap opens the library on it`, 'error'); return false; }
+                        if (!found) { this.setStatus(`The airgap part is not in ${this.siteName}: ${BASE_URL}/viewer/parts/airgap opens the universe on it`, 'error'); return false; }
                         if (!this.openEditor(found[0])) return false;
                         await new Promise((resolve) => setTimeout(resolve, 0));
                         return true;
@@ -7828,10 +8104,15 @@
                     const polled = this.boards.setRow(path, row);
                     this.renderDeviceViews();
                     this.syncWorldMarks();
+                    // What the pin holds is the server's to say: a port is kept as the
+                    // serial number or MAC of the board on it, when that board has one.
+                    const kept = row.identity && row.identity !== identity
+                        ? `${row.identity}, the board on ${identity}`
+                        : identity;
                     const said = path === asked
-                        ? (identity ? `${path} ← ${identity}` : `${path}: device unpinned`)
+                        ? (identity ? `${path} ← ${kept}` : `${path}: device unpinned`)
                         : (identity
-                            ? `${asked}'s board ${path} ← ${identity}: ${asked}'s Device, its Machine and Slice find it there`
+                            ? `${asked}'s board ${path} ← ${kept}: ${asked}'s Device, its Machine and Slice find it there`
                             : `${asked}'s board ${path}: device unpinned`);
                     this.setStatus(said, 'success');
                     await polled;
@@ -8089,8 +8370,9 @@
                     if (this.wheelPastLimit > wheelResistance) {
                         this.wheelPastLimit = 0;
                         this.stepQuietUntil = now + STEP_QUIET_MS;
-                        if (zoomingIn) this.stepIn(null, 'the wheel');
-                        else this.stepOut('the wheel');
+                        // The wheel steps within a site: it never leaves one for another.
+                        if (zoomingIn) this.stepIn(null, 'the wheel', { acrossSites: false });
+                        else this.stepOut('the wheel', { acrossSites: false });
                     }
                 } else {
                     this.wheelPastLimit = 0;
@@ -8137,7 +8419,8 @@
             // the piece named (double-clicked, or the ring's), else the selection, else what
             // the middle of the view shows -- walls passed through, as a click passes them
             // -- as deep as it is drawn. The status line says what it did, and why that one.
-            stepIn(target = null, how = '') {
+            // A site's piece in the universe is stepped into as its site (enterSite).
+            stepIn(target = null, how = '', { acrossSites = true } = {}) {
                 let path = target, why = how;
                 if (!path && this.selectedName && this.selectedName !== FLOOR_KEY) { path = this.selectedName; why = `${how ? `${how}, ` : ''}the selection`; }
                 if (!path) {
@@ -8147,9 +8430,24 @@
                 }
                 if (!path) { this.setStatus('Nothing to step into: select a piece, or bring one to the middle of the view', 'error'); return false; }
                 const focus = this.focusPath.join('.');
+                // The piece already stepped into, drawn as itself: its pieces, if it
+                // holds any, are a step further in from Site.
+                if (focus && path === focus) {
+                    const inside = this.currentFocusNode().children.map((c) => c.name);
+                    this.setStatus(inside.length
+                        ? `Already inside ${path}: it is drawn whole, and ${inside.join(', ')} ${inside.length > 1 ? 'are rows' : 'is a row'} in Site, where a double-click steps in`
+                        : `Already inside ${path}: it holds nothing to step into`, 'error');
+                    return false;
+                }
                 if ((focus && !path.startsWith(`${focus}.`)) || !this.nodeByPath(path)) {
                     this.setStatus(`${path} is not inside ${focus || this.siteName}: nothing to step into`, 'error');
                     return false;
+                }
+                const site = this.nodeByPath(path).site_ref;
+                if (site) {
+                    if (!acrossSites) { this.setStatus(`${site} is a site: a double-click, ${keyLabel(this.settings.values().zoomInKey)} or Selected's Step into opens it`, 'error'); return false; }
+                    this.enterSite(site, why);
+                    return true;
                 }
                 this.focusPath = path.split('.');
                 this.selectedName = null;
@@ -8159,8 +8457,39 @@
                 return true;
             }
 
-            // One level out, the piece left selected, said.
-            stepOut(how = '') {
+            // A site's piece stepped into: its site, chosen as the header chooses one, so
+            // Back returns to the universe.
+            enterSite(name, why = '') {
+                const loaded = this.chooseSite(name);
+                if (!loaded) return null;
+                return loaded.then(() => {
+                    if (this.siteName === name) this.setStatus(`Stepped into the site ${name}${why ? ` (${why})` : ''}; Back returns to ${UNIVERSE_SHOWN}`, 'success');
+                });
+            }
+
+            // Out of a site's own level: the universe, the site's piece selected there, so
+            // a step out lands on what was left as it does at any level.
+            leaveSite(how = '') {
+                const left = this.siteName;
+                const loaded = this.chooseSite(UNIVERSE);
+                if (!loaded) return null;
+                return loaded.then(() => {
+                    if (this.siteName !== UNIVERSE) return;
+                    const piece = this.tree.children.find((c) => c.site_ref === left);
+                    if (piece) this.selectChild(piece.name);
+                    this.setStatus(`Stepped out of the site ${left} to ${UNIVERSE_SHOWN}${how ? ` (${how})` : ''}`, 'success');
+                });
+            }
+
+            // Whether the universe is a site this page knows, and not the one in view.
+            hasUniverseAbove() {
+                return this.siteName !== UNIVERSE && SITE_NAMES.includes(UNIVERSE);
+            }
+
+            // One level out, the piece left selected, said. From a site's own level, out
+            // is the universe; the universe has nothing above it.
+            stepOut(how = '', { acrossSites = true } = {}) {
+                if (!this.focusPath.length && acrossSites && this.hasUniverseAbove()) { this.leaveSite(how); return true; }
                 if (!this.focusPath.length) { this.setStatus(`Already at the top of ${this.siteName}: nothing to step out of`, 'error'); return false; }
                 const left = this.focusPath.join('.');
                 this.zoomOut();
@@ -8194,6 +8523,8 @@
                 // A camera is drawn aimed, from the pictures' answer; until that is in,
                 // its box stands for it, and refreshCameraMeshes draws it after.
                 if (this.isCameraNode(node)) return this.buildCameraMesh(node);
+                // A site's piece: its miniature, built here from the boxes the tree carries.
+                if (node.site_ref) return this.buildMiniatureMesh(node);
                 if (node.part_ref) return this.loadPartMesh(node);
                 if (node.children.length === 0 && node.primitive) return this.buildPrimitiveMesh(node);
                 return this.loadCompositeMesh(node);
@@ -8211,6 +8542,36 @@
                     console.warn(`Could not load real geometry for ${node.name}:`, error);
                     return null;
                 }
+            }
+
+            // A site's piece in the universe (apothecary/universe.py): its site's top-level
+            // pieces as boxes, scaled into its cell by the server and coloured as the site
+            // colours them, a wall faded as a wall is. They stand inside one clear box of
+            // the piece's whole extent, which is what a click lands on and what wears the
+            // selection's edges. Nothing is fetched: the tree carries the boxes.
+            buildMiniatureMesh(node) {
+                const bounds = node.world_bounds;
+                if (!bounds || !(node.miniature || []).length) return null;  // its plain box stands for it
+                const { size, center } = this.boxFromBounds(bounds);
+                const geometry = new THREE.BoxGeometry(size[0] || 1, size[1] || 1, size[2] || 1);
+                const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ transparent: true, opacity: MINIATURE_CASE_OPACITY, depthWrite: false }));
+                mesh.position.set(center[0], center[1], center[2]);
+                const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: 0x000000 }));
+                outline.name = 'edges';
+                mesh.add(outline);
+                for (const box of node.miniature) {
+                    const inner = this.boxFromBounds(box.bounds);
+                    const shape = new THREE.BoxGeometry(inner.size[0] || 0.1, inner.size[1] || 0.1, inner.size[2] || 0.1);
+                    const wall = box.category === WALL_CATEGORY;
+                    const piece = new THREE.Mesh(shape, new THREE.MeshPhongMaterial({
+                        ...FACE_BEHIND_ITS_EDGES, color: baseColorFor(box),
+                        transparent: wall, opacity: wall ? WALL_OPACITY : 1, depthWrite: !wall,
+                    }));
+                    piece.position.set(inner.center[0] - center[0], inner.center[1] - center[1], inner.center[2] - center[2]);
+                    piece.add(new THREE.LineSegments(new THREE.EdgesGeometry(shape), new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.3, transparent: true })));
+                    mesh.add(piece);
+                }
+                return mesh;
             }
 
             buildPrimitiveMesh(node) {
@@ -8322,7 +8683,8 @@
                 this.scene.add(realMesh);
                 this.meshByName[key] = realMesh;
                 this.colorMesh(key, node);
-                if (this.selectedName === key) this.showHandles(realMesh);
+                // The selection's arrows follow it onto its real mesh, where it wears any.
+                if (this.selectedName === key && this.movedByHand(key)) this.showHandles(realMesh);
             }
 
             // Every load of a node takes a token; only the newest may land.
@@ -8616,6 +8978,14 @@
                     if (viewer.modelsWidget) { viewer.modelsWidget.follow(); viewer.modelsWidget.act(action.slice('models:'.length)); }
                     return;
                 }
+                // A Procedure verb: the window shown, and GO or Start over done; what came
+                // of it is the window's own last word.
+                if (action.startsWith('procedure:')) {
+                    viewer.panels.open('procedure');
+                    viewer.setStatus(`${intent.label}${tail}`, 'success');
+                    if (viewer.procedure) viewer.procedure.act(action.slice('procedure:'.length));
+                    return;
+                }
                 // An Airgap verb: the panel shown, and the verb done; what it did, or
                 // refused, is the panel's own last word.
                 if (action.startsWith('airgap:')) {
@@ -8649,12 +9019,7 @@
                 }
                 // Panels › Windows › a view: its windows laid out together.
                 if (action.startsWith('panel:view:')) {
-                    const id = action.slice('panel:view:'.length);
-                    const view = viewer.panels.views().find((v) => v.id === id);
-                    const missing = view && viewer.panels.viewMissing(id);
-                    const done = view && !missing && viewer.panels.applyView(id);
-                    const why = !view ? 'no such view' : missing ? `it lays out ${missing.title}'s windows: open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ''}` : 'its windows could not be laid out';
-                    viewer.setStatus(done ? `The ${view.title} view: its windows laid out together; Panels › Windows › Reset layout puts the page's own back${tail}` : `${intent.label}: ${why}${tail}`, done ? 'success' : 'error');
+                    await viewer.openView(action.slice('panel:view:'.length), { label: intent.label, tail });
                     return;
                 }
                 if (action === 'panel:layout:reset') {
@@ -8897,8 +9262,12 @@
             if (windowsAt) windowsSummary.dataset.address = windowsAt; else delete windowsSummary.dataset.address;
             const pairs = [];
             for (const li of viewer.contentsEl.querySelectorAll('li[data-path]')) pairs.push([li, `select:${li.dataset.path}`]);
-            const crumbs = viewer.breadcrumbEl.querySelectorAll('.crumb');
-            if (crumbs.length > 1) pairs.push([crumbs[crumbs.length - 2], 'zoom-out']);
+            // The crumb a step out goes to wears the ring's Step out, which the ring has
+            // inside a site. The universe's and the site's crumbs stay from level to
+            // level, so one that is no longer the step out is told so ('crumb' is no cell).
+            const crumbs = viewer.crumbs();
+            const up = viewer.focusPath.length ? crumbs[crumbs.length - 2] : null;
+            for (const crumb of crumbs) pairs.push([crumb, crumb === up ? 'zoom-out' : 'crumb']);
             pairs.push([viewer.snapToggle.closest('label'), 'view:snap']);
             pairs.push([viewer.detailModeEl.closest('label'), `view:detail:${viewer.detailModeEl.value}`]);
             pairs.push([viewer.overlayToggle.closest('label'), 'view:outlines']);

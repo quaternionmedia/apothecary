@@ -29,7 +29,8 @@ the workbench. Its working area is its `build_volume` and the tool's
 `build_origin`. Inside it, `cnc_router.frame_system` is the control box and
 `cnc_router.frame_system.controller` the board the port is pinned to: the
 maker publishes no drawing of that board, so it is a box and no part draws
-it. `ROUTER_STATUSES` are the words the router's node takes: `idle`,
+it. Stepped into, the router is its part, alone and whole, and the control
+box is Site's row there ([viewer.md](viewer.md#the-world)). `ROUTER_STATUSES` are the words the router's node takes: `idle`,
 `running`, `hold`, `alarm`, `offline` from its polls, and `maintenance` by
 hand.
 
@@ -76,6 +77,17 @@ pins as observations of `garage:cnc_router` and its `#spindle:main`, by
 `router poll: ?, $G`. `apothecary firmware printer PORT` identifies a router
 and polls it once, saying the controller's word, the spindle and the work
 position; `--query '$G'` and the other GRBL queries work there.
+
+Which dialect a port is driven in is what the board on it answered as, and a
+port's name moves between boards: the router can come up on the port the
+printer held yesterday. The printer's record does not count for it
+([docs/firmware.md](firmware.md#a-record-is-one-boards-not-its-ports)), so the
+router is a board nothing has identified -- a line either dialect has is taken,
+`--query '$I'` reaches it, and it is asked what it is before a control line or
+a stop goes. Its stop is then its own: `RESET` goes, and a printer's `M112`,
+which a GRBL controller answers `error:20` and goes on cutting, is refused
+and not sent. The same holds the other way round, for a printer on a port
+the router held.
 
 ## Simulated
 
@@ -130,12 +142,13 @@ pin; `tests/e2e/test_router_ui.py` walks the Machine against it.
 
 ## Not built
 
-- The bench: the router has not been plugged into this seam. What the
-  controller really answers to `$I`, which USB bridge it has, whether its
-  DTR resets it, what `$$` holds and which way it homes are confirmed at the
-  bench, the first replies kept as the Ender's are
-  (`docs/validation/2026-09-20-ender-bench.md`), and the checklist gains a
-  section for it.
+- The bench, past the first answer: the real controller identifies itself as
+  `Grbl 1.3a · Grbl_ESP32` at 115200 baud, `Idle`, behind a CH340 bridge
+  (`0x1A86:0x7523`) with no USB serial number, so its pin follows the port.
+  What `$I` and `$$` hold, whether opening the port resets it and which way it
+  homes are confirmed in section I of [the bench checklist](bench-checklist.md#i-the-router-the-anolex-4060-evo-ultra-2),
+  the first replies kept as the Ender's are
+  (`docs/validation/2026-09-20-ender-bench.md`).
 - A toolpath from geometry: the toolpath is written from the cuts a part
   declares ([docs/cam.md](cam.md)), not from a mesh; a file a CAM post wrote
   (Easel, Carbide Create, Fusion) is kept and streamed as it is.

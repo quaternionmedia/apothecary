@@ -56,17 +56,18 @@ def _open(page: Page, url: str) -> None:
 @pytest.mark.e2e
 def test_double_clicking_a_piece_below_the_root_zooms_into_it(page: Page, base_url: str):
     _open(page, f"{base_url}/viewer/sites/garage")
-    page.locator("#contents-list .contents-item", has_text="printer_1").dblclick()
-    page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'printer_1'")
+    # The workbench: a machine stepped into is drawn as its part, alone.
+    page.locator("#contents-list .contents-item", has_text="workbench").dblclick()
+    page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'workbench'")
     page.evaluate("() => window.fractalViewer.waveDone")
 
     point = page.evaluate(POINT_ON_A_PIECE_WITH_PIECES)
-    assert point, "no piece of printer_1 with pieces inside it is on the canvas"
+    assert point, "no piece of the workbench with pieces inside it is on the canvas"
     page.mouse.dblclick(point["x"], point["y"])
 
     page.wait_for_function(
         "(path) => window.fractalViewer.focusPath.join('.') === path",
-        arg=f"printer_1.{point['name']}",
+        arg=f"workbench.{point['name']}",
         timeout=5000,
     )
     expect(page.locator("#breadcrumb")).to_contain_text(point["name"])
@@ -89,10 +90,10 @@ ON_THE_GRID = """(key) => {
 
 @pytest.mark.e2e
 def test_a_part_stepped_into_stands_on_the_grid_and_fills_the_view(page: Page, base_url: str):
-    """calibration_cube stands in the parts library far from the site's origin. Stepped
+    """calibration_cube stands in the universe far from the site's origin. Stepped
     into, it stands on the floor grid, which lies under the level in view, and is framed
     near enough to take a good share of the view, as View › Fit frames it."""
-    _open(page, f"{base_url}/viewer/sites/parts_library")
+    _open(page, f"{base_url}/viewer/sites/apothecary")
     page.locator("#contents-list .contents-item[data-path='calibration_cube']").dblclick()
     page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'calibration_cube'")
     page.evaluate("() => window.fractalViewer.waveDone")
@@ -137,7 +138,7 @@ def test_the_site_is_drawn_as_openscad_draws_it_not_mirrored(page: Page, base_ur
     its -x, its -y side, its top. Seen from the site's front, the notch is at the top left,
     as OpenSCAD draws it -- a ray through it meets the mesh 1.5 mm in, one through the
     top right meets the front face -- and the axes are the site's: red x, green y, blue z."""
-    _open(page, f"{base_url}/viewer/sites/parts_library")
+    _open(page, f"{base_url}/viewer/sites/apothecary")
     page.locator("#contents-list .contents-item[data-path='calibration_cube']").dblclick()
     page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'calibration_cube'")
     page.wait_for_function(
@@ -185,7 +186,7 @@ def v_slot_as_it_was():
 def test_apply_draws_what_it_rendered(page: Page, base_url: str, v_slot_as_it_was):
     """A staged length survives re-selecting the part from the ring; Apply renders it,
     the mesh on screen is the new one, and nothing is left staged."""
-    _open(page, f"{base_url}/viewer/sites/parts_library")
+    _open(page, f"{base_url}/viewer/sites/apothecary")
     row = page.locator("#contents-list .contents-item[data-path='v_slot']")
     row.click()
     windows.open_window(page, "part-parameters")
@@ -239,7 +240,7 @@ def pinned(printer_url):
 
 
 def _leave_the_site(page: Page, url: str) -> None:
-    page.locator("#site-select").select_option("parts_library")
+    page.locator("#universe-crumb").click()
 
 
 def _unpin(page: Page, url: str) -> None:

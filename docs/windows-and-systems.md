@@ -43,7 +43,9 @@ this.panels.register('gather', {
 
 A view -- windows laid out together -- is `defineView(id, { title, layout,
 requires, hint })`, its layout written in window ids; a focused system's view
-is defined from the registry, so a page defines none by hand.
+is defined from the registry, so a page defines none by hand. A view pressed in
+⊞ Windows is the ring's cell pressed: the page gives `fillMenu` its own way with
+a view (`views`: what its entry says, and its press), which is `openView`.
 
 **Tests.** Where a window opens, what a view lays out, what a browser
 remembers, a window's life, what a person moves and the column's limit are

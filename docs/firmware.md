@@ -295,7 +295,7 @@ each connected board from four independent sources:
 | View | Source | What it tells you |
 |---|---|---|
 | Detected | each toolchain module's own finding: `arduino-cli board list`, or the Rust module's pyserial port list | serial port, USB bridge VID:PID and serial number, any board arduino-cli matched, which module found it |
-| Probed | `esptool flash_id`, else `espflash board-info` | chip model and revision, MAC, flash size, crystal; cached per port; **resets the board** |
+| Probed | `esptool flash_id`, else `espflash board-info` | chip model and revision, MAC, flash size, crystal; cached per port, for the board on it; **resets the board** |
 | Expected | Apothecary's own flash record | the sketch last uploaded to that MAC (or port), with its FQBN, time, and the SHA-256 of both the binary and the sources, plus drift flags: *source edited since*, *newer build never uploaded*, *sketch gone* |
 | Observed | the finding module's monitor: `arduino-cli monitor`, or Apothecary's own pyserial monitor for Rust | the sketch that announces itself over serial |
 
@@ -303,6 +303,40 @@ each connected board from four independent sources:
 apothecary firmware probe /dev/ttyUSB0             # identify the chip
 apothecary firmware listen /dev/ttyUSB0 --reset    # a few seconds of serial; names the running sketch
 ```
+
+### A record is one board's, not its port's
+
+What a probe or an identification learns is kept under the port's name, and a
+port's name moves: the kernel numbers ports in the order it meets them, so the
+board on `/dev/ttyUSB0` today may be another one after a replug or a restart.
+The record is therefore read in one place (`FirmwareState.cached_device`), and
+counts only for the board the port holds now:
+
+- Beside each record is kept what the serial engine's port list said of the
+  port when the record was written: the bridge's vendor, product and serial
+  number, and the USB socket it is in. The record counts while the list says
+  the same; a board moved to another socket is asked again. The list is
+  pyserial's, read in this process, so asking costs no process and a poll can
+  afford it (`devices.ports_now`).
+- **Another board on the port is a board nothing has probed or identified.**
+  Its lines are checked in either dialect, it is asked what it is before
+  anything else is sent to it, a pin stores its own identity, and a flash is
+  not kept under the MAC of the board that left. The record is not thrown
+  away: the board it was made of, back on that port, is known again.
+- **A port with nothing on it keeps its record.** It says what board was last
+  there, which is what marks an unplugged printer's node `offline`; nothing
+  can be sent to a board that is not there.
+- A record written before the list's word was kept beside it, or for a port
+  the list did not hold, is compared by its own vendor, product and serial
+  number, whichever finder spelled them (`0x1A86` is `0x1a86`).
+
+Two limits. Two bridges that say the same of themselves -- no serial number,
+or a generic one -- are told apart by their socket, so one unplugged and its
+twin plugged into the same socket is, to the port list, the same board. And a
+port the list does not hold -- a motherboard's own UART, a simulated port --
+keeps its record whatever is wired to it; there the modules' scan is the only
+word, and `firmware devices` leaves out a record whose vendor, product or
+serial number differ from the scan's.
 
 A sketch that wants to be identified prints, at boot **and every few
 seconds** (the monitor takes longer to attach than a boot banner lasts):
@@ -341,7 +375,9 @@ apothecary firmware printer /dev/ttyUSB1        # identify (M115) and poll once
 ```
 
 The identification is cached on the device, so `devices` and the viewer know
-it is a printer from then on without touching the port. A poll (`M105`,
+it is a printer from then on without touching the port -- for as long as the
+port holds that board ([a record is one board's](#a-record-is-one-boards-not-its-ports)).
+A poll (`M105`,
 `M114`, `M27`, `M119`, and `M31` while printing) yields a `PrinterStatus`
 whose `state` is one of the garage site's `PRINTER_STATUSES` (`idle`,
 `printing`, `offline`), so a printer node can take it verbatim. The parsers
@@ -386,7 +422,11 @@ the node follows from then.
 A pin stores the board's own identity (its MAC, else its USB bridge's serial
 number, else the port), so it still holds when the kernel numbers the port
 differently after a replug. A pin by a path that resolves to the same device
-(`/dev/serial/by-id/…`, a udev name) matches too.
+(`/dev/serial/by-id/…`, a udev name) matches too. The identity is that of the
+board on the port, never of one that held the port before: a bridge with no
+serial number (a CH340) is pinned by its port. The row the pin answers with
+carries what was stored, and the page's status line says it -- the serial
+number or MAC and the port it was found on, or the port alone.
 
 ### In the viewer: one Machine per board
 

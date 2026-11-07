@@ -89,6 +89,9 @@ def machine_ready(
     if by_hand:
         rings.on_world(page, "Panels", "Windows", by_id("machine").cell)
         page.wait_for_function("() => window.apothecaryPanels.isOpen('machine-log')")
+        # The view lands on the machine's file, or says there is none: what it says
+        # and where the world looks are settled once that is done.
+        page.evaluate("() => window.fractalViewer.viewDone")
     else:
         machine_view(page)
 

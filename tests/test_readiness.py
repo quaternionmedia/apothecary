@@ -146,7 +146,7 @@ class TestServedFromTheOneEntryPoint:
         """The checklist has to live where the parts do, or it is a second
         surface people have to remember to look at.
         """
-        page = client.get("/viewer/sites/parts_library").text
+        page = client.get("/viewer/sites/apothecary").text
         assert "loadPartChecklist" in page
         assert "part-checklist" in page
 

@@ -519,7 +519,7 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     wedges = _wedges(page)
     assert wedges["8"] == "Pieces" and wedges["6"] == "Site" and wedges["1"] == "Step out"
     # The trail's crumb one level up is Step out, and wears its address.
-    up_crumb = page.locator("#breadcrumb .crumb").nth(-2)
+    up_crumb = page.locator("#view-banner .crumb").nth(-2)
     expect(up_crumb).to_have_attribute("data-address", "1", timeout=5000)
     page.keyboard.press("1")
     assert _intents(page)[-1]["action"] == "zoom-out"
@@ -577,6 +577,8 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
         *(f"airgap-{sid}" for sid in windows.AIRGAP_SECTIONS),
         # The Working space, a tab of Site's ring, closed until asked for.
         "working",
+        # The Procedure, a tab of Site's ring, closed until asked for.
+        "procedure",
     ]
     assert not any(windows.state(page, f"airgap-{s}")["open"] for s in windows.AIRGAP_SECTIONS)
     expect(page.locator(".lm_goldenlayout")).to_have_count(1)
@@ -629,7 +631,15 @@ def test_a_closed_window_stays_closed_and_the_ring_reopens_it(page: Page, ring_u
     page.keyboard.press(next(cell for cell, label in inner.items() if label == "Site"))
     # Panels › Site is a ring of Site and its own windows: Site first.
     site_ring = _wedges(page)
-    assert sorted(site_ring.values()) == ["Jobs", "Pinned", "Problems", "SCAD", "Site", "Workspace"]
+    assert sorted(site_ring.values()) == [
+        "Jobs",
+        "Pinned",
+        "Problems",
+        "Procedure",
+        "SCAD",
+        "Site",
+        "Workspace",
+    ]
     page.keyboard.press(next(cell for cell, label in site_ring.items() if label == "Site"))
     expect(page.locator("#ring-overlay")).to_have_count(0)
     expect(windows.panel(page, "site")).to_be_visible()

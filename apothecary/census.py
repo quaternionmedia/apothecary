@@ -123,7 +123,11 @@ class NothingFound(Exception):  # timeless: allow a search's result, in the pres
 # Every control written into the page, by the name it carries there. The name is
 # its id where it has one and its class where it does not.
 CONTROLS: Dict[str, Tuple[str, str, str]] = {
-    "site-select": (WIDGET, WHAT_YOU_SEE, "a drop-down of arrangements, loading the one chosen"),
+    # The view banner: its first crumb and the site's are the trail; a site under the
+    # site crumb's ▾ is the control that chooses one.
+    "universe-crumb": (LIST, WHAT_YOU_SEE, "the trail's first crumb: the universe, from anywhere"),
+    "site-level": (LIST, WHAT_YOU_SEE, "the trail's crumb for the site: up to its own level"),
+    "site-item": (WIDGET, WHAT_YOU_SEE, "a site under the site crumb's ▾, loading the one chosen"),
     # The header's View menu (a fold, like Site's): how the world is drawn.
     "snap-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box for snapping to a grid"),
     "walls-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that lets a click in the world pick a wall"),
@@ -483,6 +487,19 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "print-pause": (WIDGET, WHAT_IS_THERE, "a button that stops feeding the print from here"),
     "print-resume": (WIDGET, WHAT_IS_THERE, "a button that feeds the print from here again"),
     "print-cancel": (WIDGET, WHAT_IS_THERE, "a button that ends the print from here, heaters off"),
+    # ---- Procedure, apothecary/static/widgets/procedure.js -------------------
+    # A site's procedures. GO and Start over are Site › Procedure too (RING_BACKED).
+    "procedure-choice": (WIDGET, WHAT_YOU_SEE, "a drop-down of the site's procedures"),
+    "procedure-go": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button on the step standing by, firing it through the family's hub",
+    ),
+    "procedure-again": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that starts a procedure over, what came before staying in the log",
+    ),
     # ---- Settings, apothecary/static/widgets/settings.js -------------------
     # Every shortcut and navigation setting: one row each, its default shown and a
     # reset beside it, and Reset all. They change how the page takes a press, not
@@ -591,6 +608,10 @@ RING_BACKED: Dict[str, str] = {
     "models:click:closest": "models:ask",
     "models-word": "models:say:colour:red",
     "models:keydown:closest": "models:say:colour:red",
+    # GO and Start over are the cells of Panels › Site › Procedure
+    "procedure-go": "procedure:go",
+    "procedure-again": "procedure:again",
+    "procedure:click:closest": "procedure:go",
     # the Airgap's verbs are the cells of Panels › Airgap
     "airgap-play": "airgap:play",
     "playEl:click:setPlaying": "airgap:play",
@@ -868,10 +889,22 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "canvas:pointerup:onCameraDragEnd": (DRAG, WHAT_IS_THERE, "letting go keeps the camera's aim"),
     # controls of its own
-    "siteSelect:change:chooseSite": (
+    "siteMenuBody:click:closest": (
         WIDGET,
         WHAT_YOU_SEE,
-        "choosing from the drop-down, which loads it and puts it in the address",
+        "choosing a site under the site crumb's ▾, which loads it and puts it in the address",
+    ),
+    # The site crumb's ▾: listed afresh as it opens, the site in view focused; the
+    # arrows move along the sites.
+    "siteMenuEl:toggle:fillSiteMenu": (
+        AUTOMATIC,
+        NOTHING,
+        "the site crumb's ▾ opened: the sites listed afresh, the one in view focused",
+    ),
+    "siteMenuBody:keydown:stepFocus": (
+        GESTURE,
+        NOTHING,
+        "the arrows, Home and End moving along the sites under the site crumb's ▾",
     ),
     "snapToggle:change:setTranslationSnap": (WIDGET, WHAT_YOU_SEE, "the snapping tick-box"),
     "wallsToggle:change:setWallsSelectable": (
@@ -1081,6 +1114,13 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "gather-out:click:closest": (WIDGET, WHAT_YOU_SEE, "answering a question with a button"),
     "pic-file:change:addFiles": (WIDGET, WHAT_YOU_SEE, "adding the chosen pictures"),
     # ---- Site --------------------------------------------------------------
+    "print-preview:input:previewOn": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the Cut or Print card's preview slider, drawing a file's toolpath in the world",
+    ),
+    "procedure:click:closest": (WIDGET, WHAT_IS_THERE, "GO or Start over"),
+    "procedure:change:closest": (WIDGET, WHAT_YOU_SEE, "the procedure chosen"),
     "models:click:closest": (WIDGET, WHAT_IS_THERE, "Ask, about the shape chosen on a mat"),
     "models:change:closest": (WIDGET, WHAT_IS_THERE, "an origin's tick-box, switching it"),
     "models:keydown:closest": (WIDGET, WHAT_IS_THERE, "Enter in a person's word, saying it"),
@@ -1108,7 +1148,16 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "the header's count of problems, bringing Problems in front",
     ),
     "li:dblclick:stepIn": (LIST, WHAT_YOU_SEE, "stepping into a piece from the list"),
-    "rootCrumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "the top of the trail"),
+    "universeCrumbEl:click:toUniverse": (
+        LIST,
+        WHAT_YOU_SEE,
+        "the trail's first crumb: out to the universe, or up to its own level",
+    ),
+    "siteLevelEl:click:toSiteLevel": (
+        LIST,
+        WHAT_YOU_SEE,
+        "the trail's crumb for the site: up to its own level, and there the other sites",
+    ),
     "crumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
     # how much to draw
     "detailModeEl:change:clear": (WIDGET, WHAT_YOU_SEE, "choosing how much to draw"),

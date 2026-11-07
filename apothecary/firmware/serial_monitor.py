@@ -81,6 +81,7 @@ def list_ports() -> List[BoardInfo]:
                 vid=f"0x{p.vid:04x}" if p.vid is not None else None,
                 pid=f"0x{p.pid:04x}" if p.pid is not None else None,
                 serial_number=p.serial_number or None,
+                location=p.location or None,
             )
         )
     return sorted(found, key=lambda b: b.port)

@@ -71,6 +71,16 @@ from its work zero, so it stands where the controller's last poll says that is
 shows before the cut does. In `apothecary serve --demo` the router's work zero is seeded at
 the coupon's stock, so the coupon's toolpath is drawn on the coupon.
 
+⊞ Windows › Machine, and the ring's Panels › Windows › Machine view, land on it. The
+Machine of the machine selected, or else stepped into, is opened when none is, its windows
+are laid out, the file its card has chosen is drawn, all of it, and the world is framed on
+the path; a slider a person left part way stays there. With no file of that machine's kept, the status line says how
+one comes to be: Slice or Toolpath of a part chosen under makes, or Choose File.
+
+The files kept are every machine's. A card chooses the newest that was not made for the
+other kind of machine -- a router's toolpath is not a printer's to print -- and the Machine
+view draws the other kind's only where a person turned its preview on.
+
 ## Not built
 
 - Following a running job along the path: a job's lines sent map to a segment (`Group.sent`

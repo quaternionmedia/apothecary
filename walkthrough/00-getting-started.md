@@ -115,8 +115,8 @@ page the browser test that walks it writes as it goes.
 
 Where each starts:
 
-- **Designing a part** and **editing its SCAD** start in the catalog,
-  `/viewer/sites/parts_library`: a part's ring, Part › Edit. Its parameters
+- **Designing a part** and **editing its SCAD** start in the universe,
+  `/viewer/sites/apothecary`, where every part is: a part's ring, Part › Edit. Its parameters
   open in Parameters, a window under Selected; Panels › Windows › Part view
   lays out its SCAD editor beside them.
 - **A picture to a print** starts at the bench in the garage: its ring,

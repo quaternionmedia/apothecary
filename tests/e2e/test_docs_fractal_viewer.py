@@ -20,7 +20,7 @@ from viewer_ready import by_hand
 @pytest.mark.docs
 def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     """Zoom from the garage's Structures down to a Feature, then switch to
-    the parts library and zoom to a part, its SCAD in Selected's editor.
+    the universe and zoom to a part, its SCAD in Selected's editor.
     """
     page.request.post(f"{base_url}/sites/garage/reset")
 
@@ -33,8 +33,8 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
             "Feature, to unbounded depth -- with the same click/double-click/"
             "scroll controls at every level. It absorbs both the former "
             "Site/Structure hierarchy viewer and the former standalone parts "
-            "browser: the registered parts library is reached by zooming "
-            "down to a leaf, not a separate page."
+            "browser: a registered part is a leaf of the universe, the "
+            "`apothecary` site, reached by zooming down, not a separate page."
         ),
     )
 
@@ -59,7 +59,7 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
 
     page.keyboard.press("Backspace")
     expect(page.locator("#minimap .minimap-tick.filled")).to_have_count(2)
-    page.locator("#breadcrumb .crumb").first.click()
+    page.locator("#site-level").click()
     expect(page.locator("#contents-list")).to_contain_text("workbench")
     docs.step(
         "Back out to the root -- Backspace goes up a level, and a crumb of the trail in "
@@ -150,9 +150,9 @@ def test_fractal_viewer_workflow(page: Page, base_url: str, doc_recorder):
     assert windows.state(page, "pictures")["stack"] == ["pictures", "bench", "settings"]
     expect(windows.panel(page, "pictures")).to_be_visible()
 
-    page.goto(f"{base_url}/viewer/sites/parts_library")
+    page.goto(f"{base_url}/viewer/sites/apothecary")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    docs.step("Switch to the parts_library site")
+    docs.step("Switch to the universe, the apothecary site")
 
     # A part with parameters; the first, arduino_uno, declares none. Its Part laid out
     # from the ring: Selected, its Parameters, and its SCAD in a window of its own.

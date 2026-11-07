@@ -14,7 +14,7 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # The viewer's controls of its own: a change that adds one raises this; one that removes
 # one may lower it. `uv run apothecary census` lists them, and docs/census.md says what
 # is counted, how each is classified and how the ceiling and the share's floor move.
-VIEWER_CEILING = 200
+VIEWER_CEILING = 203
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -378,7 +378,7 @@ def test_the_viewers_ring_backed_share_is_at_least_its_floor():
     `apothecary census` gives the share."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 115 / 200, f"{backed} of {own} ring-backed"
+    assert backed / own >= 117 / 203, f"{backed} of {own} ring-backed"
 
 
 def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address():
@@ -389,8 +389,13 @@ def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address
     assert by_name["docs-link"].ring_action == "panel:docs"
     listening = {f.key: f for f in taken.found if f.how == "listening"}
     assert listening["window:popstate:followAddress"].surface == census.AUTOMATIC
-    assert listening["siteSelect:change:chooseSite"].surface == census.WIDGET
-    assert "siteSelect:change:loadSite" not in census.LISTENING
+    # A site chosen under the banner's site crumb is the control that chooses one;
+    # the banner's crumbs are the trail.
+    assert listening["siteMenuBody:click:closest"].surface == census.WIDGET
+    assert by_name["site-item"].surface == census.WIDGET
+    assert listening["universeCrumbEl:click:toUniverse"].surface == census.LIST
+    assert listening["siteLevelEl:click:toSiteLevel"].surface == census.LIST
+    assert "site-select" not in census.CONTROLS
 
 
 def test_no_serial_overlay_or_watch_control_is_counted_and_open_opens_a_machine():

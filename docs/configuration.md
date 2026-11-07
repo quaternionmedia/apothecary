@@ -9,7 +9,7 @@ needed: each has a default.
 |---|---|---|---|
 | `APOTHECARY_PORT` | The port `serve` and `photo view` listen on, and the one `slicer slice` and `lighting simulate` find a running server on; `--port` names another for one command | `6283` | [dev-loop.md](dev-loop.md#two-loops-at-once) |
 | `APOTHECARY_TOOLS_DIR` | The folder OpenSCAD snapshots, OrcaSlicer and the firmware toolchains are installed in | `~/.apothecary/tools` | [firmware.md](firmware.md#setup), [openscad.md](openscad.md#installing-a-snapshot) |
-| `APOTHECARY_STATE_DIR` | The state folder, this account's alone: pinned boards, flash records, cached probes, bed readings, kept prints and slices, jobs, cameras | `~/.apothecary` | [firmware.md](firmware.md#setup) |
+| `APOTHECARY_STATE_DIR` | The state folder, this account's alone: pinned boards, flash records, cached probes, bed readings, kept prints and slices, jobs, cameras, the family's table and a site's procedures ([family.md](family.md)) | `~/.apothecary` | [firmware.md](firmware.md#setup) |
 | `APOTHECARY_CACHE_DIR` | The render cache -- a node's STLs, a part's variants -- and the demo's state folder | `.cache` in the checkout | [parts-authoring.md](parts-authoring.md) |
 | `APOTHECARY_PICTURE_ROOT` | The one folder pictures are read from; never a home folder or anything above one, or the state folder | The folder `serve` was started in | [pictures.md](pictures.md#where-pictures-live) |
 | `APOTHECARY_OPENSCAD` | The OpenSCAD every render uses, and the only one tried | The search order | [openscad.md](openscad.md#which-openscad-a-render-uses) |

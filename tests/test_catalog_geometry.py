@@ -12,12 +12,12 @@ from rendered_parts import built_stl_fixture  # noqa: F401
 
 from apothecary import meshes
 from apothecary.api import app
-from apothecary.example_parts_library import create_parts_library_site
 from apothecary.hierarchy import Assembly, part_stl_path
 from apothecary.primitives import Import
 from apothecary.projects.parts.base import BasePart
 from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
 from apothecary.projects.parts.datum_core import DEFAULT as CORE
+from apothecary.universe import create_universe_site
 
 client = TestClient(app)
 
@@ -104,7 +104,7 @@ class TestCatalogLeafCompiles:
 
     def test_the_whole_catalog_renders(self, datum_core_stl):
         # A site made entirely of part_ref leaves.
-        scad = create_parts_library_site().render()
+        scad = create_universe_site().render()
         assert datum_core_stl in scad
 
     def test_the_catalog_survives_a_part_nobody_has_built(self):
@@ -119,9 +119,9 @@ class TestViewerSurfaces:
         """The panel says 'Load a site to see generated OpenSCAD' until this
         response carries a `scad` key, so an error here reads as a blank panel.
         """
-        site = client.get("/sites/parts_library").json()
+        site = client.get("/sites/apothecary").json()
         positions = {s["name"]: s["position"] for s in site["structures"]}
-        response = client.post("/sites/parts_library/layout", json={"positions": positions})
+        response = client.post("/sites/apothecary/layout", json={"positions": positions})
         assert response.status_code == 200, response.text
 
         body = response.json()
@@ -131,7 +131,7 @@ class TestViewerSurfaces:
     @pytest.mark.slow
     def test_node_stl_renders_a_catalog_leaf(self, built_stl, monkeypatch):
         _build_to(monkeypatch, CORE, built_stl(CORE))
-        response = client.get("/sites/parts_library/nodes/datum_core/stl")
+        response = client.get("/sites/apothecary/nodes/datum_core/stl")
         assert response.status_code == 200, response.text
         assert len(response.content) > 1000
 
@@ -140,7 +140,7 @@ class TestViewerSurfaces:
         """The scratch SCAD lives in the cache beside its STL, and goes once rendered."""
         monkeypatch.setenv("APOTHECARY_CACHE_DIR", str(tmp_path))
         _build_to(monkeypatch, CUBE, built_stl(CUBE))
-        assert client.get("/sites/parts_library/nodes/calibration_cube/stl").status_code == 200
+        assert client.get("/sites/apothecary/nodes/calibration_cube/stl").status_code == 200
         assert list((tmp_path / "node_stl").glob("*.stl"))
         assert list((tmp_path / "node_stl").glob("*.scad")) == []
 
@@ -149,13 +149,13 @@ class TestSitePayloadCarriesScad:
     """The viewer's code panel reads `scad` off an ordinary site read."""
 
     def test_get_site_includes_generated_scad(self, datum_core_stl):
-        body = client.get("/sites/parts_library").json()
+        body = client.get("/sites/apothecary").json()
         assert datum_core_stl in body["scad"]
 
     def test_layout_still_includes_it(self, datum_core_stl):
-        site = client.get("/sites/parts_library").json()
+        site = client.get("/sites/apothecary").json()
         positions = {s["name"]: s["position"] for s in site["structures"]}
-        body = client.post("/sites/parts_library/layout", json={"positions": positions}).json()
+        body = client.post("/sites/apothecary/layout", json={"positions": positions}).json()
         assert datum_core_stl in body["scad"]
 
     def test_a_site_that_cannot_compile_reports_it_rather_than_500ing(self, monkeypatch):

@@ -342,7 +342,7 @@ def test_editing_a_parts_scad_twice_round(
     )
     refs_before = _variant_refs_here()
     page.set_viewport_size({"width": WIDTHS[0][0], "height": WIDTHS[0][1]})
-    site = f"{scad_url}/viewer/sites/parts_library"
+    site = f"{scad_url}/viewer/sites/apothecary"
     assert page.request.post(f"{scad_url}/parts/{PART}/stl/generate").ok
     _open(page, site)
 
@@ -550,7 +550,7 @@ def test_editing_a_parts_scad_twice_round(
     page.keyboard.press("F5")
     expect(_status(page)).to_contain_text(f"{PART} regenerated from its edited SCAD", timeout=60000)
     settled(page)
-    assert "/viewer/sites/parts_library" in page.url  # F5 reloaded nothing
+    assert "/viewer/sites/apothecary" in page.url  # F5 reloaded nothing
     assert _height(page) == pytest.approx(22, abs=0.05)
     expect(page.locator("#part-envelope .floor")).to_have_text(" · 12.00 mm below the floor")
     expect(envelope).to_have_class(re.compile(r"\bdiffers\b"))
@@ -652,7 +652,7 @@ def test_after_a_scad_edit_defaults_then_apply_draws_the_saved_part(
     own Defaults and Apply."""
     quarter = "translate([0, 0, size]) cube(size / 4);"  # 12.5 mm tall, this test's own
     assert page.request.post(f"{scad_url}/parts/{PART}/stl/generate").ok
-    _open(page, f"{scad_url}/viewer/sites/parts_library")
+    _open(page, f"{scad_url}/viewer/sites/apothecary")
     _ring(page, "Part", "Edit")
     windows.part_view(page)
     expect(_code(page)).to_be_visible(timeout=20000)
@@ -712,7 +712,7 @@ def test_the_code_taken_before_the_controls_are_built_keeps_the_keys(
     The part's parameters are held back here until the code has the focus, as a slow
     machine holds them."""
     quarter = "translate([0, 0, size]) cube(size / 4);"
-    _open(page, f"{scad_url}/viewer/sites/parts_library")
+    _open(page, f"{scad_url}/viewer/sites/apothecary")
     page.evaluate(
         """(part) => { const real = window.fetch;
             const held = new Promise((go) => { window.releaseParams = go; });

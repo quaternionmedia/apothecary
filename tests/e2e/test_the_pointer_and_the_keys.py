@@ -437,6 +437,41 @@ def test_the_resistance_and_the_limits_change_when_the_step_comes(page: Page, ur
     assert abs(orbit["farthest"] - max(2000, orbit["reach"]["distance"] * 2)) < 0.01, orbit
 
 
+@pytest.mark.e2e
+def test_the_wheel_steps_within_a_site_and_never_to_another(page: Page, url: str):
+    """Page Up at a site's own level goes to the universe, and a step into a site's
+    piece there opens the site. The wheel pushed on past the limit does neither: at a
+    site's own level it is at the top, and on a site's piece it says how the site is
+    opened."""
+    _open(page, url)
+    page.evaluate(TO_THE_LIMIT, "out")
+    _wheel(page, 8)
+    expect(page.locator("#status")).to_contain_text("Already at the top of garage")
+    assert page.evaluate("() => window.fractalViewer.siteName") == "garage"
+
+    page.goto(f"{url}/viewer/sites/apothecary")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    settled(page)
+    page.locator(ROW.format("site-garage")).click()
+    page.evaluate(TO_THE_LIMIT, "in")
+    # As near as the view comes, the world is full of pieces: the wheel is turned
+    # over the world wherever it shows, on a piece or not.
+    spot = page.evaluate(
+        "() => { const v = window.fractalViewer, r = v.canvas.getBoundingClientRect(); "
+        "for (let i = 1; i < 16; i++) for (let j = 1; j < 16; j++) { "
+        "const x = r.left + (r.width * i) / 16, y = r.top + (r.height * j) / 16; "
+        "if (document.elementFromPoint(x, y) === v.canvas) return [x, y]; } return null; }"
+    )
+    assert spot, "the world is nowhere under the pointer"
+    page.mouse.move(*spot)
+    page.wait_for_function(WHEEL_COUNTS)
+    for _ in range(8):
+        page.mouse.wheel(0, -NOTCH)
+    expect(page.locator("#status")).to_contain_text("garage is a site: a double-click, Page Down")
+    assert page.evaluate("() => window.fractalViewer.siteName") == "apothecary"
+    assert _orbit(page)["focus"] == []
+
+
 # --------------------------------------------------------------------------
 # Kept per browser, and reset
 # --------------------------------------------------------------------------
@@ -614,7 +649,7 @@ def test_one_key_check_for_every_shortcut(page: Page, url: str):
     the ring; Ctrl+Backspace steps out of nothing, Backspace does; the ring's key is
     matched by where it is (Cyrillic ь on the M key) and with Caps Lock on; the tilde,
     the world alone, by where it is, a dead key there included."""
-    page.goto(f"{url}/viewer/sites/parts_library")
+    page.goto(f"{url}/viewer/sites/apothecary")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     page.locator(ROW.format("calibration_cube")).click()
     windows.part_view(page)  # its Parameters, where the sliders are
@@ -826,7 +861,7 @@ def test_a_still_long_press_by_touch_opens_the_ring(page: Page, url: str):
 
 @pytest.mark.e2e
 def test_ctrl_s_saves_the_variant_from_anywhere_while_the_editor_is_open(page: Page, url: str):
-    page.goto(f"{url}/viewer/sites/parts_library")
+    page.goto(f"{url}/viewer/sites/apothecary")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     page.locator(ROW.format("calibration_cube")).click()
     windows.part_view(page)  # its Parameters and its SCAD
@@ -873,7 +908,7 @@ def test_the_canvas_rings_constant_cells_keep_one_address_everywhere(page: Page,
     page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'printer_1'")
     nested = _canvas_ring(page)
     assert {k: nested[k] for k in constant} == constant and nested["Step out"] == "1"
-    page.goto(f"{url}/viewer/sites/parts_library")
+    page.goto(f"{url}/viewer/sites/apothecary")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     library = _canvas_ring(page)
     assert {k: library[k] for k in constant} == constant and "Group" not in library
@@ -927,7 +962,7 @@ def test_the_stage_bar_is_pinned_only_while_editing(page: Page, url: str):
     """calibration_cube chosen from Site: its editor in Selected, its bar in the part's
     section, nothing pinned above the body, and Selected's name first. A value staged:
     the bar pinned. Put back: in its section again. Part › Edit: pinned, nothing staged."""
-    page.goto(f"{url}/viewer/sites/parts_library")
+    page.goto(f"{url}/viewer/sites/apothecary")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     page.locator(ROW.format("calibration_cube")).click()
     windows.open_window(page, "part-parameters")

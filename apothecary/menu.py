@@ -34,6 +34,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .hierarchy import Assembly
+from .site_names import UNIVERSE, UNIVERSE_SHOWN
 from .systems import SYSTEMS
 
 MOST_OPTIONS = 8
@@ -528,23 +529,29 @@ def resolve(
 
 
 def _grouped(
-    prefix: str, names: Sequence[str], action_of: Callable[[str], str]
+    prefix: str,
+    names: Sequence[str],
+    action_of: Callable[[str], str],
+    shown: Optional[Dict[str, str]] = None,
 ) -> Optional[Option]:
     """One option that opens a ring of names, or nothing when there are none.
 
     Each name is a leaf whose id and action are ``action_of(name)``, labelled
-    so that no two read the same. A list of things is not a list of verbs, so
+    so that no two read the same -- by what ``shown`` says of it, where it says
+    anything. A list of things is not a list of verbs, so
     more than eight are split into groups of at most eight -- one more press,
     nothing hidden -- and more than two levels of eight can hold is refused.
     """
     ordered = list(names)
     if not ordered:
         return None
+    shown = shown or {}
 
     def leaves(members: Sequence[str]) -> List[Option]:
+        said = distinct([shown.get(name, name) for name in members])
         return [
             Option(id=action_of(name), label=label, action=action_of(name))
-            for name, label in zip(members, distinct(members), strict=True)
+            for name, label in zip(members, said, strict=True)
         ]
 
     if len(ordered) <= MOST_OPTIONS:
@@ -685,6 +692,9 @@ PANELS: Sequence[Tuple[str, str]] = (
     # a printer's ring opens it on that printer. A ring's label holds twelve
     # characters, so its cells say Workspace.
     ("working", "Workspace"),
+    # Procedure: the steps that bring a site into working order, each fired through the
+    # family's hub on GO, a tab of Site's ring registered by the page's script.
+    ("procedure", "Procedure"),
     # Registered by the page's script rather than marked in its markup: Pictures
     # (every picture under the picture root, each pinned here or forgotten), Models
     # (image models through qmcp asked about the shape chosen on a mat, closed until
@@ -722,7 +732,7 @@ VIEWS = tuple((system.id, system.cell) for system in SYSTEMS)
 # Machine and its control pad.
 _BEFORE_WINDOWS = ("site", "selected", "pictures", "machine")
 _RINGS = {
-    "site": ("site", "problems", "pinned", "jobs", "scad", "working"),
+    "site": ("site", "problems", "pinned", "jobs", "scad", "working", "procedure"),
     # Models before Gather, so Models keeps its address when Gather goes
     # (docs/plans/ui-coordination-2026-10-31.md).
     "pictures": ("pictures", "models", "gather"),
@@ -756,6 +766,8 @@ def _panels() -> Option:
             children=[
                 _models(toggle(each, labels[each]))
                 if each == "models"
+                else _procedure(toggle(each, labels[each]))
+                if each == "procedure"
                 else toggle(each, labels[each])
                 for each in _RINGS[pid]
             ],
@@ -849,6 +861,20 @@ def _colours(words: Sequence[str]) -> List[Option]:
     if rest:
         cells.append(Option(id="models:colour:more", label="More", children=[say(w) for w in rest]))
     return cells
+
+
+def _procedure(toggle: Option) -> Option:
+    """Panels › Site › Procedure: the window, then its verbs, which the page hands to it
+    (widgets/procedure.js). Seated after the window's own cell."""
+    return Option(
+        id="panels:procedure",
+        label="Procedure",
+        children=[
+            toggle,
+            Option(id="procedure:go", label="GO", action="procedure:go"),
+            Option(id="procedure:again", label="Start over", action="procedure:again"),
+        ],
+    )
 
 
 def _models(toggle: Option) -> Option:
@@ -1390,7 +1416,13 @@ def _canvas_ring(
         option
         for option in (
             _canvas_pieces("Pieces", focus_path, focus, picture.made),
-            _grouped("Site", site_names, lambda name: f"site:{name}"),
+            # The universe is listed with the sites, by the name the page gives it.
+            _grouped(
+                "Site",
+                site_names,
+                lambda name: f"site:{name}",
+                shown={UNIVERSE: UNIVERSE_SHOWN},
+            ),
             _view(),
             _panels(),
             _pictures(picture),
@@ -1840,6 +1872,9 @@ CARRIED_BY: Dict[str, Carries] = {
     # A printer's Working space: the page opens the window on the printer, watches
     # its board and keeps frames with its polls (widgets/working_space.js).
     "working": Carries.VIEWER,
+    # GO and Start over: the page hands each to the Procedure window, which fires
+    # through the family's hub (widgets/procedure.js).
+    "procedure": Carries.VIEWER,
     # How the world is drawn: the header's View menu (snapping, detail, outlines,
     # whether a click picks a wall).
     "view": Carries.VIEWER,

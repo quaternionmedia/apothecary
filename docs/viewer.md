@@ -11,7 +11,8 @@ controls as they are. The loops through them are walkthrough pages
 | Address | Opens |
 |---|---|
 | `/viewer` (or `/`) | the garage |
-| `/viewer/sites/<name>` | a site: `garage`, `parts_library` (the catalog), `datum_core` |
+| `/viewer/sites/<name>` | a site: `garage`, `datum_core`, `theatre`, or `apothecary`, the universe ([below](#the-world)); `/viewer/sites/parts_library`, the name it had, goes there with its query |
+| `/viewer/parts/<name>` | the universe, stepped into that part |
 | `?focus=<path>` | stepped into that piece |
 | `?panel=bench` | with the Bench in front (`/firmware` redirects here) |
 | `?machine=<port>` | with the Machine of the board on that port open (`/firmware/monitor?port=` leads here) |
@@ -21,15 +22,28 @@ controls as they are. The loops through them are walkthrough pages
 
 Left to right, one row:
 
-- **The site drop-down** loads another site and puts it in the address,
-  `/viewer/sites/<name>`, so a reload or a link lands on it and Back returns
-  to the one before; the old site's focus, Machine and variants stay with it.
-  The drop-down, Site in the canvas ring, a link and Back are the only ways
-  the site on screen changes: no other verb switches it as a side effect. A
-  picture's view or a take-back in another site names that site and leaves the
-  screen where it is.
-- **The breadcrumb**: the site, then each piece you have stepped into. A crumb
-  steps out to its level; Page Up or Backspace steps out one.
+- **The view banner**: where you are, as one trail,
+  `🧪 Apothecary › garage ▾ › cnc_router › frame_system`.
+  - **The first crumb is the universe**, and the page's heading. From a site
+    it goes to the universe, the site's piece selected there, and Back
+    returns; in the universe it goes up to its own level. Its tooltip says the
+    page is a prototype under an unratified record. At the universe the trail
+    is this crumb alone, then any part stepped into.
+  - **The site's crumb** is the site in view. Its name goes up to the site's
+    own level. Its ▾ lists every site but the universe, ● the one in view;
+    one chosen is loaded and put in the address, `/viewer/sites/<name>`, so a
+    reload or a link lands on it and Back returns to the one before; the old
+    site's focus, Machine and variants stay with it. At the site's own level
+    its name opens the same list.
+  - **Each piece stepped into** follows. A crumb steps out to its level; Page
+    Up or Backspace steps out one. This part alone gives way on a narrow
+    page: its start is cut, and the level in view stays.
+
+  The first two crumbs are links, so a new tab opens from either. The banner,
+  Site in the canvas ring, a step into a site's piece in the universe or out
+  of a site's own level, a link and Back are the only ways the site on screen
+  changes: no other verb switches it as a side effect. A picture's view or a
+  take-back in another site names that site and leaves the screen where it is.
 - **⚙ View**: how the world is drawn ([below](#how-the-world-is-drawn)), and
   Settings ([below](#settings)).
 - **⊞ Windows**: the views, then every window by its group, ● open and ○
@@ -89,9 +103,36 @@ before the view so it never turns it.
 ring's -- else the selection, else what the middle of the view shows, walls
 passed through as a click passes them; as deep as it is drawn. The status line
 says which, and why. Stepping out lands on the piece left, selected. Inside a
-piece the world draws what it holds, not the piece: stepped into a printer, its
-board and its posts are drawn, and its body is the picture at the level above.
-A piece that holds nothing is drawn itself.
+piece the world draws what it holds, not the piece: stepped into the workbench,
+its frame is drawn. A piece that holds nothing is drawn itself.
+
+**A machine is its part.** A piece drawn as a part it names, with pieces of
+its own inside it -- the router, a printer -- is drawn itself too: stepped
+into, its part stands alone and whole, with its working volume and its board's
+badge and nothing else of the site. What it holds is Site's rows there, each
+stepped into from its row (a double-click, or Selected's "⤵ Step into"), where
+the piece's own contents are drawn and the machine is not. A click on the part
+selects the machine: its part, its Device line with the pin and what the board
+last said, and the pieces inside it by name. There it has no Detail and no
+"⤵ Step into", wears no move arrows, which are a piece's at the site's own
+level, and a double-click on it says it is already the level in view.
+`?focus=<machine>` arrives there with it selected.
+
+**Apothecary is the universe.** The site `apothecary` holds every registered
+part as a leaf on a catalog grid, and every other site as one piece, in a cell
+of its own in the row in front of them; a site added while the server runs
+gets its piece, and the universe does not hold itself. A site's piece is drawn
+in miniature: its site's top-level pieces as boxes, coloured as the site
+colours them, a wall faded, scaled into the cell and never larger than they
+are, from the site as it stands. Nothing is rendered to draw one. It is not to
+scale beside the parts, so Selected says it is a site and how large the site
+really is, and offers "⤵ Step into"; it has no parameters and wears no move
+arrows. A double-click on it, Page Down, or that button opens its site as the
+banner's site crumb would, so Back returns. Page Up or Backspace at a site's
+own level goes to the universe, as the banner's first crumb does, the site's
+piece selected there. The wheel steps within
+a site and never from one to another. A building is left off the grid while a
+site's piece stands for it: the theatre is the theatre site's.
 
 **Automatic zoom** is the wheel's step: once the camera is as near the level's
 pieces as it may come, or as far out, more scrolling the same way adds up, and
@@ -145,8 +186,8 @@ ring's View is, which adds **Fit**: frame the pieces at this level (Shift+F;
 | ⚙ View, and the ring's View | Does |
 |---|---|
 | Snap to grid | Snaps a dragged piece to a 50 mm grid (on at first) |
-| Detail: Full, Black box, Dot | How much of each compound piece to draw: its real geometry, its bounding box, or a marker. Leaves are always drawn in full; Selected's Detail overrides it for one piece |
-| Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first) |
+| Detail: Full, Black box, Dot | How much of each compound piece to draw: its real geometry, its bounding box, or a marker. Leaves are always drawn in full, and so is a machine stepped into; Selected's Detail overrides it for one piece |
+| Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first); a machine stepped into, the whole level, has none |
 | Select walls | A click in the world picks a wall again, until the page is left (off at first) |
 | Settings | Opens the Settings panel, its tab in front ([below](#settings)) |
 
@@ -205,7 +246,7 @@ opened are seated after them.
 
 **The canvas ring** lists Pieces 8 (each piece at this level; at a site's top
 the pieces made from pictures are one more cell, Made; at a leaf, the leaf
-itself), Site 6 (every site), View 2, Panels 4, Pictures 9 and Rebuild 3 (the
+itself), Site 6 (every site, Apothecary among them), View 2, Panels 4, Pictures 9 and Rebuild 3 (the
 site built again from its factory, as it was first built: chosen twice); then
 Step out 1 (when stepped in) and Group (each category of the site's pieces:
 expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
@@ -318,11 +359,17 @@ which the page, the ring and the tests all read.
 |---|---|
 | Default | The page's own layout, as Reset layout puts it |
 | Part | The world; Selected over Parameters, Variants, History and Readiness; the SCAD window over Site, Problems and SCAD |
-| Machine | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot |
+| Machine | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
 | Airgap | The Airgap and each of its sections in a window, the world among them |
 
-A view needs its main window: the Machine view with no board open is offered
-greyed, and asked for from the ring it says so and leaves the layout as it was.
+A view needs its main window. The Machine view opens the Machine of the machine
+selected, or else stepped into, when none is open; with none to open it is offered
+greyed, and asked for, from ⊞ Windows or the ring, it says why and leaves the layout
+as it was.
+Laid out, it lands on the file the machine would run: the path of the file its
+Print or Cut has chosen drawn in the world, all of it, and framed, the slider
+that goes through it beside it ([toolpath-preview.md](toolpath-preview.md#in-the-page));
+with no file of that machine's kept, the status line says how one comes to be.
 A section for another kind of board is left out of it. A window a view leaves
 out is closed, and comes back by a + or ⊞ Windows; the views and the windows in
 them are remembered like any layout.
@@ -335,7 +382,9 @@ them are remembered like any layout.
   Remove or Unpin), the site's **Jobs** (its tab counts them and the running
   ones; a row opens its machine) and its **SCAD**, generated from the tree.
 - **Selected**: the selected piece -- its name, place and footprint, a
-  compound piece's Detail, "⤵ Step into" for one with children -- then its
+  compound piece's Detail, "⤵ Step into" for one with children (a site's
+  piece in the universe: that it is a site, its real size, and the step into
+  it) -- then its
   part, with the staged changes' bar while it is edited (the Part's main
   window, [below](#the-part-editor)), its Device line where a board belongs -- on a board, a printer,
   a piece that names a sketch, or anything a board is pinned to already (a
@@ -599,7 +648,7 @@ defaults, and a change holds until the page is left.
 | `m` | Opens the ring on the selection (Settings' Open the ring) |
 | Shift+M | Opens the canvas ring, whatever is selected (Settings' Open the canvas ring) |
 | Page Down | Steps in: the selection, else what the middle of the view shows (Settings' Step in), while the world has the keys |
-| Page Up, or Backspace | Steps out a level (Settings' Step out), Page Up while the world has the keys |
+| Page Up, or Backspace | Steps out a level (Settings' Step out), Page Up while the world has the keys; from a site's own level, to the universe |
 | Arrows, Shift+arrows | Pan, and turn, the view, while the world has the keyboard's focus |
 | `~` (or the key left of 1) | Shows the world alone, or every window back |
 | `P` | Takes a picture, with a camera selected |
