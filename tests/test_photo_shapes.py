@@ -345,13 +345,13 @@ def test_find_explains_an_unknown_finder(three_shapes):
     assert "plain" in result.output and "stated" in result.output
 
 
-def test_photo_look_is_retired_and_names_photo_find(three_shapes):
+def test_photo_look_is_no_command_and_find_is(three_shapes):
     """The viewer calls this step Find shapes, and the command uses the same word:
-    `photo look` is refused, naming `photo find`."""
+    `photo find` is the command, and `photo look` is none."""
     result = CliRunner().invoke(cli, ["photo", "look", str(three_shapes)])
-    assert result.exit_code == 1
-    assert "apothecary photo find" in result.output
-    assert "look" not in CliRunner().invoke(cli, ["photo", "--help"]).output.split("Commands:")[1]
+    assert result.exit_code == 2 and "No such command" in result.output
+    listed = CliRunner().invoke(cli, ["photo", "--help"]).output.split("Commands:")[1]
+    assert "find" in listed and "look" not in listed
 
 
 def test_build_says_plainly_when_nothing_is_measured(three_shapes):

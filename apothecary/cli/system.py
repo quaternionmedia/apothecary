@@ -1,4 +1,4 @@
-"""`apothecary check`, and the retired system, install and submodules."""
+"""`apothecary check`."""
 
 import importlib.metadata
 import os
@@ -15,10 +15,7 @@ from ..projects.parts.stl_renderer import (
     openscad_version,
 )
 from ..projects.registry import PartLoadError, load_part, scan_projects
-from .retired import retired
 from .utils import _safe_echo
-
-system = retired("system", "use `apothecary check`")
 
 
 def _parts():
@@ -231,9 +228,3 @@ def _next_step(renderer: OpenSCADRenderer) -> str:
     if renderer.is_available and has_manifold(renderer.openscad_path):
         return f"next: apothecary serve --demo ({page})"
     return f"next: apothecary openscad install, then apothecary serve --demo ({page})"
-
-
-install = retired("install", "nothing to install: three.js is vendored")
-
-
-submodules = retired("submodules", "use `git submodule update --init --recursive`")

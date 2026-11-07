@@ -6,9 +6,6 @@ import click
 
 from ..scene import SceneLoadError, load_scene_from_json
 from ..templates import TemplateRenderer
-from .retired import retired
-
-testrun = retired("testrun", "use `apothecary render`, which renders the example scene")
 
 
 @click.command("render")

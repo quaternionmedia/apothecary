@@ -153,7 +153,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Removed
 
-- `system`, `install`, `submodules`, `testrun`, `dev`, `inventory` and `photo look`: stubs naming what to use. ([code](apothecary/cli/retired.py))
+- `system`, `install`, `submodules`, `testrun`, `dev`, `inventory` and `photo look`: a script that calls one meets `No such command`; `apothecary --help` names what to use. ([code](apothecary/cli/main.py))
 - `test setup-e2e`, `validate-e2e` and `run-e2e`, also stubs. ([code](apothecary/cli/testing.py))
 - The JSCAD viewer's install step and `package.json`; no route served it. ([code](apothecary/cli/server.py))
 - `/parts/random`, `/parts/{name}/jscad`, `/parts/{name}/files`, `/openscad/status`. ([code](apothecary/api.py))

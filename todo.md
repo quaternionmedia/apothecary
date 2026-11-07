@@ -181,10 +181,9 @@ Decided, not started. Each waits on what its line names.
   area at a tag, shallow stacks, and the shared files split. The merge queue
   needs required checks, so it waits on `main`'s protection (*For a person to
   decide*).
-- The hidden command stubs `apothecary/cli/retired.py` makes (`system`,
-  `install`, `testrun`, `dev`, `inventory`, `submodules`, `photo look`,
-  `test setup-e2e`, `test validate-e2e`, `test run-e2e`) are removed one
-  release after they were hidden.
+- The hidden command stubs `apothecary/cli/retired.py` makes for the test
+  command (`test setup-e2e`, `test validate-e2e`, `test run-e2e`) are removed
+  one release after they were hidden.
 
 ## For a person to do
 

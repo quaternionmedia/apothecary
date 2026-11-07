@@ -7,7 +7,6 @@ from .census import census
 from .docs import docs
 from .evidence import evidence
 from .firmware import firmware
-from .inventory import inventory
 from .kernels import kernel_reference
 from .lighting import lighting
 from .openscad import openscad
@@ -15,12 +14,12 @@ from .parts import parts
 from .photo import photo
 from .preflight import preflight
 from .release import release
-from .render import render_scene, render_scene_jscad, template_generate, testrun, validate
+from .render import render_scene, render_scene_jscad, template_generate, validate
 from .rig import rig
-from .server import DEFAULT_PORT, dev, serve
+from .server import DEFAULT_PORT, serve
 from .slicer import slicer
 from .spaces import problems, solutions
-from .system import check, install, submodules, system
+from .system import check
 from .testing import test
 from .vision import vision
 
@@ -77,20 +76,14 @@ def cli():
 # Register individual commands
 cli.add_command(problems)
 cli.add_command(solutions)
-cli.add_command(system)
 cli.add_command(check)
-cli.add_command(install)
-cli.add_command(submodules)
-cli.add_command(testrun)
 cli.add_command(render_scene)
 cli.add_command(render_scene_jscad)
 cli.add_command(template_generate)
 cli.add_command(validate)
 cli.add_command(serve)
-cli.add_command(dev)
 
 # Register command groups
-cli.add_command(inventory)
 cli.add_command(parts)
 cli.add_command(preflight)
 cli.add_command(release)

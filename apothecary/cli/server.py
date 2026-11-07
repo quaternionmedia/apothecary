@@ -13,7 +13,6 @@ from ..projects.parts.skeleton import ROOT
 from ..stays_local import require_loopback
 from ..wiring.carlos import CARLOS_ENV, loopback_url
 from ..wiring.carlos import SITE_ENV as CARLOS_SITE_ENV
-from .retired import retired
 from .utils import _safe_echo
 
 # The viewer answers on tau, 6283: a full turn, the circles and rotations every part
@@ -259,9 +258,6 @@ def _start_the_demo() -> None:
     click.echo(f"  Slicer:   {slicer}")
     click.echo("  Console:  a simulated console sweeps the theatre's lighting rig")
     click.echo("  To leave: stop it, and run apothecary serve without --demo")
-
-
-dev = retired("dev", "use `apothecary parts generate-stl --all && apothecary serve --reload`")
 
 
 def refresh_docs_in_background() -> subprocess.Popen | None:
