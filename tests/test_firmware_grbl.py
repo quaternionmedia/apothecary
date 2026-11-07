@@ -20,6 +20,7 @@ from apothecary.api import app, printers_in
 from apothecary.cli import cli
 from apothecary.evidence import printers as evidence_printers
 from apothecary.firmware import devices, gcode, grbl
+from apothecary.firmware.models import GRBL, MACHINE_OF, MARLIN, PrinterInfo
 from apothecary.firmware.toolchains import PortHeld, ToolchainError
 
 PORT = "/dev/ttyFAKE1"  # the scripted arduino-cli's unmatched board
@@ -102,6 +103,17 @@ def test_parse_build_info_parser_state_settings_alarm_and_probe():
     assert state["units"] == "mm" and state["distance"] == "absolute"
     assert grbl.parse_alarm(["error:9", "ALARM:3", "ok"]) == 3 and grbl.parse_alarm(["ok"]) is None
     assert grbl.alarm_text(3).startswith("reset while in motion")
+
+
+def test_the_kind_of_machine_follows_the_dialect():
+    """A board's kind is read from the dialect it answered in, never kept beside it: a
+    record that says otherwise reads as its dialect's kind, and the JSON carries it."""
+    assert PrinterInfo(firmware_name="Marlin 2.1").machine == "printer"
+    assert PrinterInfo(firmware_name="Grbl 1.3a", dialect=GRBL).machine == "router"
+    kept = PrinterInfo(**{"firmware_name": "Grbl 1.3a", "dialect": "grbl", "machine": "printer"})
+    assert kept.machine == "router"
+    assert PrinterInfo(firmware_name="Grbl 1.3a", dialect=GRBL).model_dump()["machine"] == "router"
+    assert (gcode.MACHINE, grbl.MACHINE) == (MACHINE_OF[MARLIN], MACHINE_OF[GRBL])
 
 
 def test_router_info_names_the_firmware_the_machine_and_the_dialect():

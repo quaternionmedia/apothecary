@@ -8,7 +8,14 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated, List, Optional
 
-from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 # vendor:arch:board[:menu=value,...] -- e.g. arduino:avr:uno, esp32:esp32:esp32:FlashMode=qio
 FQBN_RE = re.compile(r"^[A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-]+(:[A-Za-z0-9_.\-=,]+)?$")
@@ -396,6 +403,9 @@ class ListenRequest(ProbeRequest):
 # G-code on a printer (gcode.py), GRBL's on a router (grbl.py).
 MARLIN = "marlin"
 GRBL = "grbl"
+# The kind of machine each dialect drives (apothecary/jobs.py's machine kinds): what a
+# board's kind follows from, once it has answered in one.
+MACHINE_OF = {MARLIN: "printer", GRBL: "router"}
 
 
 class PrinterInfo(BaseModel):
@@ -417,13 +427,18 @@ class PrinterInfo(BaseModel):
     baud: int = 115200
     boot_lines: List[str] = Field(default_factory=list)  # banner captured after the DTR reset
     identified_at: Optional[datetime] = None
-    # The G-code dialect the board speaks, and the kind of machine it drives
-    # (apothecary/jobs.py's machine kinds): Marlin's on a printer (gcode.py), GRBL's
-    # on a router (grbl.py). The dialect decides how it is polled and what may be
-    # typed at it; the kind decides which operations it offers and what its
-    # Machine shows.
+    # The G-code dialect the board speaks: Marlin's on a printer (gcode.py), GRBL's on
+    # a router (grbl.py). It decides how the board is polled and what may be typed at
+    # it; the kind of machine it drives follows from it (``machine``).
     dialect: str = MARLIN
-    machine: str = "printer"
+
+    @computed_field
+    @property
+    def machine(self) -> str:
+        """The kind of machine the board drives (apothecary/jobs.py's machine kinds),
+        read from its dialect alone: what decides which operations it offers and what
+        its Machine shows. In the board's record and its JSON as any field is."""
+        return MACHINE_OF.get(self.dialect, MACHINE_OF[MARLIN])
 
 
 class Heater(BaseModel):

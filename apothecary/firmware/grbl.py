@@ -32,11 +32,11 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from . import gcode
 from .gcode import GcodeLink, LinkBusy, OutOfBounds, mesh_stats
-from .models import GRBL, BedReading, PrinterInfo, PrinterStatus, Spindle, TableGrid
+from .models import GRBL, MACHINE_OF, BedReading, PrinterInfo, PrinterStatus, Spindle, TableGrid
 from .toolchains import ToolchainError
 
 DIALECT = GRBL
-MACHINE = "router"
+MACHINE = MACHINE_OF[DIALECT]
 
 # --- parsers: grbl 1.1's documented replies ---------------------------------------
 
@@ -315,7 +315,6 @@ def router_info_from(lines: List[str], baud: int, boot_lines: List[str] = ()) ->
         version = banner.group(1)
     return PrinterInfo(
         dialect=DIALECT,
-        machine=MACHINE,
         firmware_name=f"Grbl {version}",
         machine_type=info["machine"] or ("Grbl_ESP32" if version.startswith("1.3") else None),
         protocol_version=info["build"],

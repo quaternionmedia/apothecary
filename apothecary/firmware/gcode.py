@@ -40,7 +40,7 @@ import time
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Protocol, Tuple
 
-from .models import MARLIN, BedReading, Heater, PrinterInfo, PrinterStatus
+from .models import MACHINE_OF, MARLIN, BedReading, Heater, PrinterInfo, PrinterStatus
 from .toolchains import PortHeld, ToolchainError
 
 # --- parsers: Marlin's documented replies -------------------------------------
@@ -1075,9 +1075,9 @@ EMERGENCY_STOP = "M112"  # always accepted, latch or not; halts the board until 
 
 
 # This dialect, as a board's ``PrinterInfo`` names it, and the kind of machine it
-# drives (apothecary/jobs.py's machine kinds).
+# drives (apothecary/jobs.py's machine kinds, models.MACHINE_OF).
 DIALECT = MARLIN
-MACHINE = "printer"
+MACHINE = MACHINE_OF[DIALECT]
 
 
 class OutOfBounds(ValueError):
