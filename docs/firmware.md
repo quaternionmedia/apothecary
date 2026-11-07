@@ -434,25 +434,27 @@ link is held (`printers`), and never opens a port itself. A pin talks to no
 printer; the viewer polls a printer whose link is held once as it pins it, so
 the node follows from then.
 
-A pin stores the board's own identity (its MAC, else its USB bridge's serial
-number, else the port), so it still holds when the kernel numbers the port
-differently after a replug. A pin by a path that resolves to the same device
-(`/dev/serial/by-id/…`, a udev name) matches too. The identity is that of the
-board on the port, never of one that held the port before: a bridge with no
-serial number (a CH340) is pinned by its port. The row the pin answers with
-carries what was stored, and the page's status line says it -- the serial
-number or MAC and the port it was found on, or the port alone.
+A board has one key, and a pin, a flash record and a bed reading are kept under
+it (`models.board_key`): its MAC, else its USB bridge's serial number, else, for a
+bridge with no serial number (a CH340), the bridge's make, `usb:1a86:7523`. So a pin
+still holds when the kernel numbers the port differently after a replug: the router
+pinned on `/dev/ttyUSB0` is found on `/dev/ttyUSB1`. The key is that of the board on
+the port, never of one that held the port before. The row the pin answers with
+carries what was stored, and the page's status line says it -- the key and the port
+it was found on.
 
-A pin by its port names no board of its own. A board on the port with a MAC or a
-serial number is another board, which a pin of its own would have named by it:
-the Ender on the port name the router's pin holds is not the router's, its polls
-drive no router node and the family's steps for the router do not reach it. The
-pin keeps the kind of machine its board answered as (`printer`, `router`),
-learning it the first time the board answers if it was pinned before, and a
-board on the port that answers as another kind is another board too. Likewise a
-flash kept by the port of a devkit nothing has probed counts for that devkit
-alone, and no sketch is expected of a board that answers as a printer or a
-router: nothing here flashes it.
+A make is the same for two bridges of one model. While two are plugged in it tells
+neither: a pin or a flash made then is the port's, a pin by the make names no board
+and its row says which ports it is on, and a flash kept under the make counts for
+neither. A key
+by make names no board with a serial number of its own, and none that answered as
+another kind of machine than the pin's: the pin keeps the kind its board answered as
+(`printer`, `router`), learning it the first time the board answers if it was
+pinned before. A pin can be typed as a port, or a path that resolves to the same
+device (`/dev/serial/by-id/…`, a udev name); it names the board on that port when
+the board has no key of its own. A board probed after it was pinned or flashed by
+its make, its MAC read, is the same board. No sketch is expected of a board that
+answers as a printer or a router: nothing here flashes it.
 
 ### In the viewer: one Machine per board
 

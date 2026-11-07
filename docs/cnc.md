@@ -157,7 +157,8 @@ pin; `tests/e2e/test_router_ui.py` walks the Machine against it.
 
 - The bench, past the first answer: the real controller identifies itself as
   `Grbl 1.3a · Grbl_ESP32` at 115200 baud, `Idle`, behind a CH340 bridge
-  (`0x1A86:0x7523`) with no USB serial number, so its pin follows the port.
+  (`0x1A86:0x7523`) with no USB serial number, so its pin is kept under the
+  bridge's make, `usb:1a86:7523`, and follows it from port to port.
   What `$I` and `$$` hold, whether opening the port resets it and which way it
   homes are confirmed in section I of [the bench checklist](bench-checklist.md#i-the-router-the-anolex-4060-evo-ultra-2),
   the first replies kept as the Ender's are

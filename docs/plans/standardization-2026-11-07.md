@@ -1,6 +1,6 @@
 # One way of doing each thing: a plan
 
-*Built: the nine slices, as a local stack of branches, each holding its test;
+*Built: the ten slices, as a local stack of branches, each holding its test;
 the whole suite's run on the stack's top is in the session's ledger. Nothing
 here is pushed: the owner decides when the stack goes.*
 
@@ -42,7 +42,7 @@ written. Each finding names its place and what else could explain it.
 | What | Where | What else it could be |
 |---|---|---|
 | The kind of machine a board drives, stored beside the dialect it answered in, when every constructor derives it from the dialect | `PrinterInfo.dialect` and `PrinterInfo.machine`; `gcode.identify_printer` and `grbl.identify_router` set `machine` from their module's `MACHINE`; `dialects.Dialect.machine` carries the same | a dialect driving two kinds of machine, a laser on GRBL say; that kind would bring its own identification, and the field back with it |
-| A board's identity, two ways: the one a pin, a flash record and a job store (its MAC, else its bridge's serial number, else its port) and the one a reading is kept under (the same, else `usb:vid:pid`) | `DeviceInfo.identity`, `devices.stable_identity`, `bindings.same_device`; `occupants.key_of` | the two are decided in `docs/plans/machine-identity-2026-11-07.md`: a pin by port is a pin of a board with nothing of its own, and a reading under a make's key follows the board; folding the first onto the second changes what a pin stores, which is a migration of the state file |
+| A board's identity, two ways: the one a pin, a flash record and a job store (its MAC, else its bridge's serial number, else its port) and the one a reading is kept under (the same, else `usb:vid:pid`) | `DeviceInfo.identity`, `devices.stable_identity`, `bindings.same_device`; `occupants.key_of` | slice 10 folds the first onto the second: one key, `models.board_key` |
 | The words for a streamed job (`a print`, `a cut`) and which kinds stream, beside the registry of operations | `devices.STREAMED`, `devices.WHAT_HOLDS`; `jobs.Operation` | the registry is pure of the firmware package by design; the nouns could ride the `Operation` all the same |
 | A kind of machine as a boolean | `api._machines_in(..., router: bool)`, the pair `printers_in` and `routers_in` | two conveniences over one function; the boolean is what stops a third kind |
 
@@ -123,6 +123,7 @@ top. "Holds it" is the test that fails on the code beneath the slice.
 | 7 | `build/retired-names-gone` | *The owner's yes, 2026-11-07.* the seven names and `cli/inventory.py` go; `cli/retired.py` stays for `cli/testing.py`'s three, which are the test command's; `test_cli.py`'s rows; the CHANGELOG; `todo.md`'s rule | `apothecary inventory` is "No such command" |
 | 8 | `build/shims-gone` | *The owner's yes, 2026-11-07.* `t1_core_stub` moves to `projects/parts/datum_core.py`; `KiCadProvider` goes, `datum_bench` defaulting to a `StubProvider` holding the stub; `docs/fitting-a-part.md` | `apothecary.shims` does not import; `build()` serves the same board |
 | 9 | `build/kept-file-kind` | *The owner's yes, 2026-11-07.* `_MADE_FOR` and `_with_its_kind` go; a kept file's kind is what it was kept with | a kept file with no kind beside a cut record has no kind |
+| 10 | `build/one-key-per-board` | *The owner's yes, 2026-11-07, with no reader of the state file's old shape.* `models.board_key` is a board's one key, which `DeviceInfo.identity`, `occupants.key_of`, a pin and a flash record use; `DeviceInfo.names` and `bindings.same_device` tell a pin's or a record's board; a make shared by two bridges plugged in names neither; `FlashRecord.board` goes; `serial_monitor`'s devkit reads `flashed_to(port)`; the wiring names an unnamed board by its own key or its port | the router pinned by its make is found on another port and named by neither twin; a CH340 devkit flashed before its MAC was read keeps its flash, and counts for neither twin; a flash made beside a twin is the port's |
 
 Each branch's gate and run are in the session's ledger
 (the shared notes folder, `standardize-ledger.md`), with the mutation each
@@ -130,9 +131,12 @@ test was shown to catch.
 
 ## What was decided
 
-The owner decided the three removals on 2026-11-07: the retired command names
-(the recorded rule said one release after hiding, and no release has been cut),
-the `shims` package, and the kept file's inferred kind. The `LEGACY_EXECUTABLE`
+The owner decided four things on 2026-11-07. The three removals: the retired
+command names (the recorded rule said one release after hiding, and no release has
+been cut), the `shims` package, and the kept file's inferred kind. And one key per
+board: "migrate, don't worry about old states we can rebuild", so the state file's
+old shape is not read: a pin kept by port stays a typed pin by port, and a flash
+record kept by port names a board with no key of its own. The `LEGACY_EXECUTABLE`
 path is live and kept. The four named efforts stay.
 
 ## What is left, and why
@@ -144,10 +148,6 @@ path is live and kept. The four named efforts stay.
   state, the links and the dialect; `forget_port` names each module's port-keyed
   cache. No re-export: every caller names the new module, the suite's helper
   included. After the test restructuring lands, so the two do not collide.
-- **The board's identity.** One key for a board, `occupants.key_of`, stored by
-  pins and flash records too, with the state file migrated (a pin by port whose
-  board is on a bridge without a serial number becomes a pin by the bridge's
-  make). A migration the owner approves, in a slice of its own.
 - **The status route's top-level fields.** The CLI and the page read the
   per-module list instead, and `legacy_status` goes. The page is the viewer
   session's; a follow-up once that lands.

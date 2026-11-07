@@ -66,7 +66,7 @@ Every board unplugged: nothing here opens a port, and nothing can move.
       bridge), each on its own port, and the router's CH340 with no serial
       number. Note which port name each took today, and the router's USB
       socket; the port numbers can swap between plug-ins, and a pin follows its
-      board's serial number.
+      board's serial number, or the router's bridge's make.
 - [ ] **Pin the printer.** Select `printer_1` in Site. Its Device section lists
       the free ports: choose the printer's, **Pin**. The pin goes to the
       printer's mainboard, and when nothing is printing the page asks the
@@ -103,6 +103,9 @@ one machine on the number another held; nothing in them moves a machine.
 - [ ] Pin the router (section I), then plug the printer into the router's
       socket: `cnc_router` does not take the printer, whose serial number its
       pin would have named; its node says *not connected*.
+- [ ] With the router pinned, plug it into another socket and reload the
+      page: whatever port number it takes, `cnc_router` holds it on that
+      port, its pin still `usb:1a86:7523`.
 
 ## A. The link, nothing armed
 
@@ -264,7 +267,8 @@ The suites hold every path below against the simulated router; this is how
 the same paths are confirmed on the real machine. Its controller has answered
 `apothecary firmware printer <port>` at 115200 baud: `Grbl 1.3a · Grbl_ESP32`,
 `Idle`, behind a CH340 bridge (`0x1A86:0x7523`) with no USB serial number, so a
-pin follows its port, and keeps the kind of machine its board answered as. The
+pin is kept under the bridge's make, `usb:1a86:7523`, and keeps the kind of machine
+its board answered as. The
 rest of this section has not been walked, so the first boxes record what it says
 ([docs/cnc.md](cnc.md) says what is assumed). Stay at the machine while
 anything turns or moves, with a hand on its own red stop: the page's ⏹ E-STOP
@@ -272,9 +276,9 @@ is the controller's soft reset, and the button is faster. Spindle and motion
 only with the table clear and no tool in the collet until the last box.
 
 - [ ] `uv run apothecary firmware devices` with the router's USB lead in: its
-      port, the bridge's vid:pid and whether it has a serial number (a pin
-      follows the board when it has one, the port when it has not). Note them;
-      the bridge so far is a CH340 without one.
+      port, the bridge's vid:pid and whether it has a serial number (a pin is
+      kept under the serial number when it has one, under the bridge's make
+      when it has not). Note them; the bridge so far is a CH340 without one.
 - [ ] `uv run apothecary firmware printer <port> --query '$I' --query '$$'`:
       the firmware line (`Grbl 1.3a` is what the maker's listing says), the
       machine name, the build, the settings. Note whether opening the port
@@ -304,8 +308,9 @@ only with the table clear and no tool in the collet until the last box.
 - [ ] **Pin the router.** Select `cnc_router` in Site, choose the port in its
       Device section, **Pin**: the pin goes to the controller in the control
       box, the status line says it was asked `$I`, and `cnc_router` wears 🪚.
-      Pinned lists it as `garage › cnc_router.frame_system.controller ← ` and
-      its port; `GET /firmware/pins` gives the pin `"kind": "router"`.
+      Pinned lists it as `garage › cnc_router.frame_system.controller ←
+      usb:1a86:7523`, its bridge's make; `GET /firmware/pins` gives the pin
+      `"kind": "router"`.
 - [ ] Its Machine opens with its plan's part and file chosen, now with its
       board: ▶ Cut is offered.
 - [ ] Open its Machine: `idle`, the controller's word beside it (`Idle`, or

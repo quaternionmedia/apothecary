@@ -27,10 +27,10 @@ from apothecary.firmware import devices, gcode, grbl, occupants, serial_monitor
 from apothecary.firmware.models import (
     BoardInfo,
     DeviceInfo,
-    FlashRecord,
     LevelingRecord,
     PrinterInfo,
 )
+from apothecary.firmware.sketches import find_sketch
 
 PORT = "/dev/ttyMOVES0"
 OTHER = "/dev/ttyMOVES1"
@@ -42,6 +42,7 @@ ENDER = {"vid": "0x0403", "pid": "0x6001", "serial_number": "MADEUPENDER1", "loc
 ENDER_TWIN = {**ENDER, "serial_number": "MADEUPENDER2", "location": "1-5"}
 ROUTER = {"vid": "0x1a86", "pid": "0x7523", "serial_number": None, "location": "1-3"}
 ROUTER_TWIN = {**ROUTER, "location": "1-4"}
+ROUTER_MAKE = "usb:1a86:7523"  # the key of a bridge with no serial number: its make
 # An ESP32 devkit behind a CP2102, which carries a serial number of its own.
 DEVKIT = {"vid": "0x10c4", "pid": "0xea60", "serial_number": "MADEUPDEVKIT", "location": "1-6"}
 
@@ -315,9 +316,13 @@ def test_a_port_is_pinned_as_the_board_on_it(bench):
     _a_printer_was_identified(bench)
     assert devices.stable_identity(PORT) == "MADEUPENDER1"
     bench.plug(PORT, ROUTER)
-    # A CH340 has no serial number: the router is pinned by its port, not as the printer.
-    assert devices.stable_identity(PORT) == PORT
+    # A CH340 has no serial number: the router is pinned by its bridge's make, never as
+    # the printer whose record the port's name holds.
+    assert devices.stable_identity(PORT) == ROUTER_MAKE
     assert devices.stable_identity("MADEUPENDER1") == "MADEUPENDER1"
+    # A twin of its bridge on the machine: the make tells neither, so the port.
+    bench.plug(OTHER, ROUTER_TWIN)
+    assert devices.stable_identity(PORT) == PORT
 
 
 def test_a_flash_is_not_kept_under_the_mac_of_the_board_that_left(bench):
@@ -330,7 +335,7 @@ def test_a_flash_is_not_kept_under_the_mac_of_the_board_that_left(bench):
     )
     bench.plug(PORT, ROUTER)
     record = devices.make_flash_record(PORT, None, "esp32:esp32:esp32")
-    assert record.mac is None and record.identity == PORT
+    assert record.mac is None and record.identity == ROUTER_MAKE
 
 
 def test_asking_what_is_known_starts_no_process_and_reads_the_list_once(bench, fake_arduino_cli):
@@ -454,14 +459,14 @@ def test_pin_stores_the_board_on_the_port_and_says_what_it_stored(bench, garage)
     bench.plug(PORT, ROUTER)
     c = TestClient(app)
     row = c.put(f"/sites/garage/nodes/{CONTROLLER}/device", json={"identity": PORT}).json()
-    # The router, by its port: not the printer whose record that port's name still holds.
-    assert row["identity"] == PORT
+    # The router, by its bridge's make: not the printer whose record that port's name holds.
+    assert row["identity"] == ROUTER_MAKE
     assert row["device"]["port"] == PORT and row["device"]["printer"] is None
     # The controller is a board model whose folder holds no sketch, as the printer's
     # mainboard is: each runs a firmware of its own, and the row says so.
     assert row["note"] == "no sketch for 'anolex_grbl_esp32'"
     pins = [b for b in devices.get_state().bindings("garage") if b.path == CONTROLLER]
-    assert [b.identity for b in pins] == [PORT]
+    assert [b.identity for b in pins] == [ROUTER_MAKE]
     # The printer plugged in again elsewhere is not what the router's node holds.
     bench.plug(OTHER, ENDER)
     rows = c.get("/sites/garage/devices").json()["bindings"]
@@ -514,7 +519,7 @@ def test_no_view_of_the_port_says_the_printer_is_still_on_it(bench, garage):
     assert answers["/jobs/choices"].json()["machine"] == {
         "kind": None,
         "port": PORT,
-        "identity": PORT,
+        "identity": ROUTER_MAKE,
         "path": None,
     }
     assert answers["/firmware/printers/info"].json()["device"]["device"]["printer"] is None
@@ -720,15 +725,15 @@ def test_two_bridges_of_one_make_share_a_key_and_own_nothing_under_it(bench):
     assert occupants.on_port(PORT).owns("usb:1a86:7523")
 
 
-# --- a pin by port name, and a flash kept by port --------------------------------------
+# --- a pin by a bridge's make, and a flash kept by the board's key ---------------------
 
 
 def _the_router_pinned_by_its_port(bench, c):
     """The router pinned from the port list: a CH340 has no serial number, so the pin
-    is its port, and it learns the router's kind."""
+    is its bridge's make, and it learns the router's kind."""
     _a_router_was_identified(bench)
     row = c.put(f"/sites/garage/nodes/{CONTROLLER}/device", json={"identity": PORT}).json()
-    assert row["identity"] == PORT
+    assert row["identity"] == ROUTER_MAKE
     (pin,) = [b for b in devices.get_state().bindings("garage") if b.path == CONTROLLER]
     assert pin.kind == "router"
 
@@ -767,7 +772,7 @@ def test_a_board_of_another_kind_on_the_pin_s_port_is_not_its_board(bench, garag
     c.delete(f"/sites/garage/nodes/{CONTROLLER}/device")
 
 
-def test_a_pin_by_port_learns_its_board_s_kind_the_first_time_it_answers(bench, garage):
+def test_a_pin_learns_its_board_s_kind_the_first_time_it_answers(bench, garage):
     bench.plug(PORT, ROUTER)
     c = TestClient(app)
     c.put(f"/sites/garage/nodes/{CONTROLLER}/device", json={"identity": PORT})
@@ -779,22 +784,35 @@ def test_a_pin_by_port_learns_its_board_s_kind_the_first_time_it_answers(bench, 
     c.delete(f"/sites/garage/nodes/{CONTROLLER}/device")
 
 
-def _flashed_by_port(board=None):
-    record = FlashRecord(
-        identity=PORT,
-        port=PORT,
-        sketch="esp32_blink",
-        flashed_at=datetime.now(timezone.utc),
-        board=board,
+def test_the_router_pinned_by_its_make_is_found_on_whichever_port_it_is_on(bench, garage):
+    """The pin follows the router to the port the kernel numbers it on next, and names
+    neither of two bridges of its make while both are plugged in."""
+    c = TestClient(app)
+    _the_router_pinned_by_its_port(bench, c)
+    bench.unplug(PORT)
+    bench.plug(OTHER, ROUTER)
+    assert _the_controller_s_board(c)["port"] == OTHER
+    bench.plug(PORT, ROUTER_TWIN)
+    rows = c.get("/sites/garage/devices").json()["bindings"]
+    row = next(r for r in rows if r["path"] == CONTROLLER)
+    assert row["device"] is None
+    assert row["note"] == (
+        f"{ROUTER_MAKE} is on {PORT} and {OTHER}: two bridges of one make, pin one by its port"
     )
-    devices.get_state().record_flash(record)
+    c.delete(f"/sites/garage/nodes/{CONTROLLER}/device")
+
+
+def _flashed(port=PORT):
+    devices.get_state().record_flash(
+        devices.make_flash_record(port, find_sketch("esp32_blink@arduino"), "esp32:esp32:esp32")
+    )
 
 
 def test_a_printer_never_should_run_what_a_devkit_on_its_port_was_flashed_with(bench, tmp_path):
-    """A devkit flashed before it was probed is kept by its port; the Ender later on that
-    port name runs its own firmware, which nothing here flashes."""
+    """A devkit's flash is kept under its key; the Ender later on that port name runs its
+    own firmware, which nothing here flashes."""
     bench.plug(PORT, DEVKIT)
-    _flashed_by_port()
+    _flashed()
     devkit = next(d for d in devices.detected_devices() if d.port == PORT)
     assert devices.expected_firmware(devkit, tmp_path).record.sketch == "esp32_blink"
     _a_printer_was_identified(bench)
@@ -803,15 +821,44 @@ def test_a_printer_never_should_run_what_a_devkit_on_its_port_was_flashed_with(b
     assert devices.expected_firmware(ender, tmp_path).record is None
 
 
-def test_a_flash_kept_by_port_counts_for_the_board_it_was_made_on(bench, tmp_path):
+def test_a_flash_counts_for_the_board_it_was_made_on(bench, tmp_path):
     bench.plug(PORT, DEVKIT)
-    _flashed_by_port(board="MADEUPDEVKIT")
+    _flashed()
     bench.plug(PORT, {**DEVKIT, "serial_number": "MADEUPDEVKIT2", "location": "1-7"})
     other = next(d for d in devices.detected_devices() if d.port == PORT)
     assert devices.expected_firmware(other, tmp_path).record is None
     bench.plug(PORT, DEVKIT)
     again = next(d for d in devices.detected_devices() if d.port == PORT)
     assert devices.expected_firmware(again, tmp_path).record.sketch == "esp32_blink"
+
+
+def test_a_board_flashed_before_its_mac_was_read_keeps_its_flash(bench, tmp_path):
+    """A devkit behind a CH340, flashed before esptool read its MAC, is kept under its
+    bridge's make; read later, it is the same board. A twin of its bridge plugged in
+    makes the make tell neither."""
+    bench.plug(PORT, ROUTER)
+    _flashed()
+    (record,) = devices.get_state().flashes()
+    assert record.identity == ROUTER_MAKE
+    scanned = next(d for d in devices.detected_devices() if d.port == PORT)
+    probed = scanned.model_copy(update={"mac": "aa:bb:cc:00:00:02"})
+    devices.get_state().remember_device(probed)
+    assert devices.expected_firmware(probed, tmp_path).record.sketch == "esp32_blink"
+    bench.plug(OTHER, ROUTER_TWIN)
+    assert devices.expected_firmware(probed, tmp_path).record is None
+
+
+def test_a_flash_made_beside_a_twin_of_its_bridge_is_the_port_s(bench, tmp_path):
+    """Two bridges of one make plugged in are told by their ports: a flash made then is
+    kept under its port, and the twin left on the machine is not said to run it."""
+    bench.plug(PORT, ROUTER)
+    bench.plug(OTHER, ROUTER_TWIN)
+    _flashed()
+    (record,) = devices.get_state().flashes()
+    assert record.identity == PORT
+    bench.unplug(PORT)
+    twin = next(d for d in devices.detected_devices() if d.port == OTHER)
+    assert devices.expected_firmware(twin, tmp_path).record is None
 
 
 # --- the simulated boards --------------------------------------------------------------

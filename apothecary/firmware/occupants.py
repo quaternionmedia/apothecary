@@ -11,9 +11,9 @@ and its firmware, from the record ``FirmwareState.cached_device`` has read again
 the port list; a board nothing has identified is there with its key and no kind.
 None when the port holds nothing and no record says what was last there.
 
-A board's key is its MAC, else its USB bridge's serial number -- the identity a pin
-stores -- else, for a bridge with no serial number (the router's CH340), its maker's
-and product's ids. Those follow the board from port to port, and are the same for
+A board's key is its MAC, else its USB bridge's serial number, else, for a bridge with
+no serial number (the router's CH340), its maker's and product's ids: the one key a pin,
+a flash record and a bed reading are kept under (``models.board_key``). Those follow the board from port to port, and are the same for
 two bridges of one make: while two such are on the machine, the key is shared, and
 nothing kept under it is either's.
 """
@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from . import devices
+from .models import board_key
 
 
 @dataclass(frozen=True)
@@ -43,18 +44,10 @@ class Occupant:
 
 
 def key_of(board) -> Optional[str]:
-    """A board's own key, from its record (``DeviceInfo``) or the port list's word
-    (``BoardInfo``): its MAC, its bridge's serial number, or ``usb:vid:pid``."""
-    mac = (getattr(board, "mac", None) or "").strip()
-    if mac:
-        return mac
-    serial_number = (board.serial_number or "").strip()
-    if serial_number:
-        return serial_number
-    vid, pid = devices._usb_id(board.vid), devices._usb_id(board.pid)
-    if isinstance(vid, int) and isinstance(pid, int):
-        return f"usb:{vid:04x}:{pid:04x}"
-    return None
+    """A board's own key (``models.board_key``), from its record (``DeviceInfo``) or
+    the port list's word (``BoardInfo``): its MAC, its bridge's serial number, or
+    its bridge's make, ``usb:vid:pid``."""
+    return board_key(getattr(board, "mac", None), board.serial_number, board.vid, board.pid)
 
 
 def on_port(port: str, state: Optional[devices.FirmwareState] = None) -> Optional[Occupant]:

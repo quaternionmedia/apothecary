@@ -21,6 +21,36 @@ from pydantic import (
 FQBN_RE = re.compile(r"^[A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-]+(:[A-Za-z0-9_.\-=,]+)?$")
 # Serial device names on the platforms arduino-cli/esptool support.
 PORT_RE = re.compile(r"^(/dev/[A-Za-z0-9_.\-/]+|COM[0-9]+)$")
+USB_MAKE_RE = re.compile(r"^usb:[0-9a-f]{4}:[0-9a-f]{4}$")
+
+
+def usb_make(vid: Optional[str], pid: Optional[str]) -> Optional[str]:
+    """A USB bridge's make as a key, ``usb:1a86:7523``, whichever finder spelled its
+    ids (arduino-cli's ``0x1A86``, pyserial's ``0x1a86``); None without both."""
+    try:
+        v, p = int((vid or "").strip(), 16), int((pid or "").strip(), 16)
+    except ValueError:
+        return None
+    return f"usb:{v:04x}:{p:04x}"
+
+
+def board_key(
+    mac: Optional[str], serial_number: Optional[str], vid: Optional[str], pid: Optional[str]
+) -> Optional[str]:
+    """A board's one key, which a pin, a flash record and a bed reading are kept
+    under: its MAC, else its USB bridge's serial number, else, for a bridge with no
+    serial number (a CH340), the bridge's make. The first two are the board's own;
+    the make is shared by two bridges of one model, so while two are plugged in it
+    tells neither (``occupants.Occupant.shared``). None for a port with none of them."""
+    mac = (mac or "").strip().lower()
+    if mac:
+        return mac
+    serial_number = (serial_number or "").strip()
+    if serial_number:
+        return serial_number
+    return usb_make(vid, pid)
+
+
 # vendor:arch  (a platform/core id)
 CORE_ID_RE = re.compile(r"^[A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-]+$")
 
@@ -328,25 +358,34 @@ class DeviceInfo(BaseModel):
 
     @property
     def identity(self) -> str:
-        """Stable key for flash records and pins: the MAC, else the bridge's USB
-        serial number, else the port.
+        """The board's key (``board_key``), which pins and flash records store; the
+        port for a board with no key at all.
 
         A port name is the socket, not the board: the kernel may number the
         same printer ``/dev/ttyUSB0`` after a replug or a reboot and
-        ``/dev/ttyUSB1`` before it, while its USB bridge's serial number stays.
+        ``/dev/ttyUSB1`` before it, while its MAC, its bridge's serial number and
+        its bridge's make stay.
         """
-        return self.mac or self.serial_number or self.port
+        return board_key(self.mac, self.serial_number, self.vid, self.pid) or self.port
+
+    @property
+    def names(self) -> set:
+        """Every key a pin or a record of this board may hold, in lower case: its MAC
+        and its bridge's serial number, and its bridge's make when the bridge has no
+        serial number -- so a board probed after it was pinned by its make, or
+        flashed before its MAC was read, is still the same board."""
+        out = {(self.mac or "").strip().lower(), (self.serial_number or "").strip().lower()}
+        if not (self.serial_number or "").strip():
+            out.add(usb_make(self.vid, self.pid) or "")
+        return out - {""}
 
 
 class FlashRecord(BaseModel):
     """What Apothecary last put on a device -- the code that *should* be running."""
 
-    identity: str  # DeviceInfo.identity at flash time
+    identity: str  # the board's key at flash time (DeviceInfo.identity)
     port: str
     mac: Optional[str] = None
-    # The board's key (occupants.key_of) at flash time: a record kept by its port, for a
-    # board never probed, counts for that board alone. None on a record kept before.
-    board: Optional[str] = None
     sketch: Optional[str] = None  # its name, what it announces; None for a raw esptool flash
     sketch_id: Optional[str] = None  # which implementation of it (SketchInfo.id)
     toolchain: Optional[str] = None  # the module that built and flashed it
@@ -637,16 +676,18 @@ USB_SERIAL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]{2,63}$")  # an FTDI's A
 
 
 def validate_identity(value: str) -> str:
-    """A ``DeviceInfo.identity``: a MAC (normalised to lower case), a serial port,
-    or a USB bridge's serial number."""
+    """A ``DeviceInfo.identity``: a MAC or a USB bridge's make (each normalised to
+    lower case), a serial port, or a USB bridge's serial number."""
     v = value.strip()
-    if MAC_RE.match(v.lower()):
+    if MAC_RE.match(v.lower()) or USB_MAKE_RE.match(v.lower()):
         return v.lower()
     if PORT_RE.match(v):
         return v
     if USB_SERIAL_RE.match(v):
         return v
-    raise ValueError(f"not a device identity (MAC, serial port or USB serial number): {value!r}")
+    raise ValueError(
+        f"not a device identity (MAC, serial port, USB serial number or usb:vid:pid): {value!r}"
+    )
 
 
 class ManualBinding(BaseModel):
@@ -654,7 +695,7 @@ class ManualBinding(BaseModel):
 
     site: str
     path: str  # dotted node path, as GET /sites/{name}/nodes/{path}/stl addresses it
-    identity: str  # DeviceInfo.identity: MAC, USB bridge serial number, or port
+    identity: str  # the board's key (DeviceInfo.identity), or a port typed by hand
     bound_at: datetime
     # The kind of machine its board answered as ("printer", "router"), once it has:
     # a board on the pin's port that answers as another kind is another board.

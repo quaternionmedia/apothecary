@@ -100,7 +100,7 @@ class SimulatedDevkit:
     def _flashed(self) -> Optional[str]:
         from .devices import get_state
 
-        record = get_state().last_flash(self.port, self.port)
+        record = get_state().flashed_to(self.port)
         return record.sketch if record else None
 
     def hello(self) -> bytes:

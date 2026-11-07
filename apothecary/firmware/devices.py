@@ -66,6 +66,7 @@ from ..stays_local import subprocess_env
 from . import dialects, gcode, grbl, occupants, serial_monitor
 from .models import (
     PRINT_FILE_ID,
+    USB_MAKE_RE,
     BedReading,
     BoardInfo,
     DeviceInfo,
@@ -79,6 +80,7 @@ from .models import (
     PrintFile,
     SketchInfo,
     TableGrid,
+    usb_make,
 )
 from .sketches import find_sketch
 from .toolchains import (
@@ -310,20 +312,31 @@ class FirmwareState:
     def flashes(self) -> List[FlashRecord]:
         return [FlashRecord(**f) for f in self._load()["flashes"]]
 
-    def last_flash(
-        self, identity: str, port: Optional[str] = None, board: Optional[str] = None
-    ) -> Optional[FlashRecord]:
-        """Newest record for a MAC; falls back to the port for never-probed boards,
-        a record that names its board (``board``, a key) counting for that one alone."""
+    def last_flash(self, device: DeviceInfo) -> Optional[FlashRecord]:
+        """The newest record of what was flashed to ``device``: one kept under any of
+        its keys, as a pin is told (``bindings.same_device``). A key by make shared
+        with a twin on the machine now names neither, and counts for neither."""
+        from .bindings import same_device
+
+        make = None if (device.serial_number or "").strip() else usb_make(device.vid, device.pid)
+        shared = make is not None and any(
+            other != device.port and occupants.key_of(seen) == make
+            for other, seen in ports_now().items()
+        )
         newest: Optional[FlashRecord] = None
         for rec in self.flashes():
-            by_port = port and rec.mac is None and rec.port == port
-            if by_port and rec.board is not None and board is not None and rec.board != board:
-                by_port = False
-            if rec.identity == identity or by_port:
+            if shared and rec.identity.lower() == make:
+                continue
+            if same_device(rec.identity, device.port, device):
                 if newest is None or rec.flashed_at >= newest.flashed_at:
                     newest = rec
         return newest
+
+    def flashed_to(self, port: str) -> Optional[FlashRecord]:
+        """The newest record of a flash made through ``port``, whichever board took it:
+        what a simulated devkit, which is its port, runs."""
+        records = [rec for rec in self.flashes() if rec.port == port]
+        return max(records, key=lambda rec: rec.flashed_at, default=None)
 
     def remember_device(self, device: DeviceInfo) -> None:
         """Keep ``device`` as the record of the board on its port, beside what the
@@ -338,15 +351,16 @@ class FirmwareState:
                 data["seen"][device.port] = _sighting(seen)
             else:
                 data["seen"].pop(device.port, None)
-            # A pin by this port learns the kind of machine its board answered as, the
+            # A pin of this board learns the kind of machine its board answered as, the
             # first time it answers: a board answering as another kind later is another.
             if kind is not None:
                 from .bindings import same_device
 
                 for pin in data["bindings"]:
-                    if pin.get("kind") is None and pin.get("identity") in (device.port,):
-                        if same_device(pin["identity"], device.port, device):
-                            pin["kind"] = kind
+                    if pin.get("kind") is None and same_device(
+                        pin["identity"], device.port, device
+                    ):
+                        pin["kind"] = kind
             self._save(data)
 
     def cached_device(self, port: str) -> Optional[DeviceInfo]:
@@ -468,12 +482,12 @@ def make_flash_record(
     state = state or get_state()
     cached = state.cached_device(port)
     mac = cached.mac if cached else None
-    on_port = occupants.on_port(port, state)
     return FlashRecord(
-        identity=mac or port,
+        # The key a pin made now would store: the board's, from its record or the
+        # scan, or the port while a twin of its bridge is on the machine.
+        identity=stable_identity(port, state),
         port=port,
         mac=mac,
-        board=on_port.key if on_port is not None else None,
         sketch=sketch.name if sketch else None,
         sketch_id=sketch.id if sketch else None,
         toolchain=sketch.toolchain if sketch else None,
@@ -496,7 +510,7 @@ def expected_firmware(
         # which nothing here flashes: whatever a devkit on its port was last flashed
         # with is not what it should run.
         return ExpectedFirmware()
-    record = state.last_flash(device.identity, device.port, occupants.key_of(device))
+    record = state.last_flash(device)
     if record is None:
         return ExpectedFirmware()
     out = ExpectedFirmware(record=record)
@@ -863,18 +877,25 @@ def machine_kind(device: Optional[DeviceInfo]) -> Optional[str]:
 
 
 def stable_identity(identity: str, state: Optional[FirmwareState] = None) -> str:
-    """The identity of the board on a port -- the one there now, or the one last
-    there when the port is empty -- else ``identity``.
+    """The key of the board on a port -- the one there now, or the one last there
+    when the port is empty -- else ``identity``.
 
-    A pin made by port would break the next time the kernel numbered the
-    port differently; the MAC or the USB bridge's serial number does not. A
-    board with neither (a CH340 bridge has no serial number) is pinned by its
-    port: never by what another board left under that port's name.
+    A pin made by port would break the next time the kernel numbered the port
+    differently; the board's key does not (``models.board_key``): its MAC, its
+    bridge's serial number, or the make of a bridge with neither (a CH340). A make
+    another bridge on the machine shares tells neither, so that board is pinned by
+    its port, and never by what another board left under that port's name.
     """
     if not identity.startswith("/") and not identity.upper().startswith("COM"):
-        return identity  # already a MAC or a serial number
+        return identity  # already a key
     device = known_device(identity, state)
-    return device.identity if device is not None else identity
+    if device is None or device.identity == device.port:
+        return identity
+    if USB_MAKE_RE.match(device.identity):
+        on_port = occupants.on_port(identity, state)
+        if on_port is None or on_port.shared:
+            return identity
+    return device.identity
 
 
 # Who wants to know a printer's state after each poll: api.py registers the

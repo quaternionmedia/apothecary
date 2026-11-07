@@ -325,7 +325,7 @@ def test_a_rust_sketch_compiles_and_uploads_through_the_routes(
     assert done["status"] == "succeeded", done
     assert any("Flashing has completed!" in line for line in done["lines"])
     assert fake_cli_calls(espflash)[-1][:2] == ["flash", "--skip-update-check"]
-    record = devices.get_state().last_flash(PORT, PORT)
+    record = devices.get_state().flashed_to(PORT)
     assert record.sketch == "esp32_blink" and record.sketch_id == RUST
     assert record.toolchain == "rust-esp32" and record.target == "esp32" and record.fqbn is None
     assert record.build_sha256 == devices.file_sha256(elf)
