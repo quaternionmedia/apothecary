@@ -25,7 +25,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator, List, NamedTuple, Optional
 
-from ..firmware.devices import private_folder, state_dir
+from ..state_folder import private_folder, state_dir
 from .observation import Observation
 
 SIGHTINGS = "_sightings"

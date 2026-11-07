@@ -25,6 +25,7 @@ from .firmware import devices
 from .projects.parts.skeleton import ROOT
 from .projects.registry import PartLoadError, part_named
 from .site_names import current
+from .state_folder import state_dir, write_whole
 
 NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,199}$")
 
@@ -51,7 +52,7 @@ def kind_of_part(part_ref: str) -> Optional[str]:
 def _kept_at(site: str, path: str) -> Path:
     if not NAME.match(site) or not NAME.match(path):
         raise ValueError(f"no plan can be kept for {site!r}, {path!r}")
-    return devices.state_dir() / "plans" / current(site) / f"{path}.json"
+    return state_dir() / "plans" / current(site) / f"{path}.json"
 
 
 def load(site: str, path: str) -> Optional[MachinePlan]:
@@ -87,8 +88,7 @@ def save(
         planned_at=datetime.now(timezone.utc),
     )
     kept = _kept_at(site, path)
-    devices.private_folder(kept.parent)
-    kept.write_text(plan.model_dump_json(indent=2), encoding="utf-8")
+    write_whole(kept, plan.model_dump_json(indent=2))
     return plan
 
 

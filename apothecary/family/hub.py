@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter
 from hearth import coordinator
 
-from ..firmware.devices import state_dir
+from ..state_folder import state_dir
 from ..version import __version__
 from ..wiring.carlos import CARLOS, carlos_url, loopback_url
 from . import beside

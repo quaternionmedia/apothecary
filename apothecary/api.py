@@ -132,6 +132,7 @@ from .slicer.models import Made as SlicedMade
 from .slicer.models import SlicedFor
 from .slicer.modules import SlicerError
 from .slicer.profiles import Declared
+from .state_folder import state_dir
 from .stays_local import LocalOnly
 from .templates import TemplateRenderer
 from .theatre_site import create_theatre_site, load_theatre_rig, validate_theatre
@@ -1798,8 +1799,6 @@ def _home_folders() -> List[Path]:
 
 def _state_folder() -> Path:
     """Where the serial numbers, camera labels and readings live: never pictures."""
-    from .firmware.devices import state_dir
-
     return state_dir().expanduser().resolve()
 
 

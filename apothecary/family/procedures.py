@@ -23,7 +23,6 @@ answered 202 ended.
 from __future__ import annotations
 
 import json
-import os
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -32,8 +31,8 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..evidence import log
-from ..firmware.devices import private_folder, state_dir
 from ..site_names import former
+from ..state_folder import state_dir, write_whole
 from ..wiring.carlos import CARLOS
 from . import hub, members
 
@@ -121,11 +120,7 @@ def names(site: str) -> List[str]:
 
 def save(site: str, name: str, procedure: Procedure) -> None:
     """Written whole or not at all."""
-    path = _file(site, name)
-    private_folder(path.parent)
-    fresh = path.with_suffix(".writing")
-    fresh.write_text(procedure.model_dump_json(indent=2) + "\n", encoding="utf-8")
-    os.replace(fresh, path)
+    write_whole(_file(site, name), procedure.model_dump_json(indent=2) + "\n")
 
 
 def load(site: str, name: str) -> Optional[Procedure]:

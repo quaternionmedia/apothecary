@@ -44,9 +44,7 @@ when it is imported.
 from __future__ import annotations
 
 import json
-import os
 import re
-import tempfile
 import threading
 from dataclasses import dataclass
 from datetime import datetime
@@ -57,6 +55,7 @@ from pydantic import BaseModel, Field
 
 from .site_names import current as current_site
 from .stamped import claim, stamp
+from .state_folder import private_folder, state_dir, write_whole
 
 OUTCOMES: Tuple[str, ...] = ("running", "done", "cancelled", "failed")
 Outcome = Literal["running", "done", "cancelled", "failed"]
@@ -247,29 +246,13 @@ LISTENERS: List[Callable[[Job], None]] = []
 _LOCK = threading.Lock()
 
 
-def _state_dir() -> Path:
-    from .firmware.devices import state_dir
-
-    return state_dir()
-
-
 def jobs_dir() -> Path:
-    return _state_dir() / "jobs"
+    return state_dir() / "jobs"
 
 
 def _write(job: Job) -> None:
-    from .firmware.devices import private_folder
-
-    folder = private_folder(jobs_dir())
     # Whole or not at all: a reader never meets half a job.
-    fd, tmp = tempfile.mkstemp(dir=folder, prefix=".", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as out:
-            out.write(job.model_dump_json(indent=2))
-        os.replace(tmp, folder / f"{job.id}.json")
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
+    write_whole(jobs_dir() / f"{job.id}.json", job.model_dump_json(indent=2))
 
 
 def _tell(job: Job) -> None:
@@ -290,8 +273,6 @@ def begin(job: Job, live: Callable[[], Job]) -> Job:
         raise ValueError(f"{job.id!r} is not a job id")
     if not job.running:
         raise ValueError("a job begins running")
-    from .firmware.devices import private_folder
-
     with _LOCK:
         kept = claim(private_folder(jobs_dir()), job.id, ".json")
         job.id = kept.name.removesuffix(".json")
@@ -388,7 +369,7 @@ def list_jobs(
 
 def _carry_over_print_records() -> None:
     """Each print record not yet a job becomes one (see the module's docstring)."""
-    records = _state_dir() / "prints" / "records"
+    records = state_dir() / "prints" / "records"
     if not records.is_dir():
         return
     for path in records.glob("*.json"):
@@ -411,7 +392,7 @@ def _from_print_record(path: Path) -> Optional[Job]:
     if record.id != path.stem or not JOB_ID_RE.match(record.id):
         return None
     size = None
-    kept = _state_dir() / "prints" / f"{record.file_id}.json"
+    kept = state_dir() / "prints" / f"{record.file_id}.json"
     if JOB_ID_RE.match(record.file_id) and kept.is_file():
         try:
             size = int(json.loads(kept.read_text(encoding="utf-8"))["size"])

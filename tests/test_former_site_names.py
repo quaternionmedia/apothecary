@@ -16,6 +16,7 @@ from apothecary import api, jobs
 from apothecary.family import procedures
 from apothecary.firmware import devices
 from apothecary.site_names import FORMER, UNIVERSE, current, former
+from apothecary.state_folder import state_dir
 from apothecary.vision import cameras
 
 client = TestClient(api.app)
@@ -106,7 +107,7 @@ def test_a_camera_kept_under_the_former_name_stands_in_the_universe():
         "added": pose,
         "added_at": "2026-10-20T18:04:11Z",
     }
-    path = devices.state_dir() / cameras.RECORDS
+    path = state_dir() / cameras.RECORDS
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"cameras": [record]}), encoding="utf-8")
     assert [c.name for c in cameras.records(UNIVERSE)] == ["camera_1"]
@@ -143,14 +144,14 @@ def test_a_job_kept_under_the_former_name_is_the_universes():
 
 def test_a_procedure_kept_under_the_former_name_is_the_universes_and_is_written_under_it():
     step = {"number": "1", "name": "look", "discipline": "mechanical"}
-    was = devices.state_dir() / "procedures" / "parts_library" / "check.json"
+    was = state_dir() / "procedures" / "parts_library" / "check.json"
     was.parent.mkdir(parents=True)
     was.write_text(json.dumps({"steps": [step]}), encoding="utf-8")
     assert procedures.names(UNIVERSE) == ["check"]
     kept = procedures.load(UNIVERSE, "check")
     assert [s.name for s in kept.steps] == ["look"]
     procedures.save(UNIVERSE, "check", kept)
-    assert (devices.state_dir() / "procedures" / UNIVERSE / "check.json").is_file()
+    assert (state_dir() / "procedures" / UNIVERSE / "check.json").is_file()
     assert procedures.names(UNIVERSE) == ["check"]
 
 

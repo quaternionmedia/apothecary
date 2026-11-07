@@ -32,7 +32,6 @@ happened (OrcaSlicer's whole configuration is in the G-code it wrote).
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
 import tempfile
@@ -44,6 +43,7 @@ from typing import Callable, Dict, List, Optional, Protocol
 
 from .. import preview
 from ..firmware import devices
+from ..state_folder import private_folder, state_dir, write_whole
 from .models import Bounds, Estimate, Made, Setting, SlicedFor, SliceRecord, SlicerMessage
 from .modules import Log, NotInstalled, SlicerError, chosen_id, get_module
 from .profiles import Declared, PrinterProfile, load_part, load_profile, printers
@@ -254,11 +254,11 @@ def resolve(
 
 
 def slices_dir() -> Path:
-    return devices.state_dir() / "slices"
+    return state_dir() / "slices"
 
 
 def _work_dir() -> Path:
-    folder = devices.private_folder(slices_dir() / "work")
+    folder = private_folder(slices_dir() / "work")
     return Path(tempfile.mkdtemp(prefix=f"{uuid.uuid4().hex[:8]}.", dir=folder))
 
 
@@ -350,15 +350,7 @@ def slice_into(
 
 
 def _write_record(record: SliceRecord) -> None:
-    folder = devices.private_folder(slices_dir())
-    fd, tmp = tempfile.mkstemp(dir=folder, prefix=".", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as out:
-            out.write(record.model_dump_json(indent=2))
-        os.replace(tmp, folder / f"{record.file_id}.json")
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
+    write_whole(slices_dir() / f"{record.file_id}.json", record.model_dump_json(indent=2))
 
 
 def get_record(file_id: str) -> Optional[SliceRecord]:

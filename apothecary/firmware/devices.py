@@ -19,9 +19,10 @@ Views of one board, kept separate so the GUI can show where they disagree:
   the dialect it answered in. Cached like a probe; polled for temperatures,
   positions and progress afterwards.
 
-Records live in ``~/.apothecary/firmware-state.json`` (``APOTHECARY_STATE_DIR``
-overrides): machine state, not repository state, so it is never committed. A
-print streamed from here is a job (``apothecary/jobs.py``), kept beside them.
+Records live in the state folder's ``firmware-state.json``
+(``apothecary/state_folder.py`` says where the folder is): machine state, not
+repository state, so it is never committed. A print streamed from here is a job
+(``apothecary/jobs.py``), kept beside them.
 
 A probe's or an identification's record is kept under its port's name, and a
 port's name moves: the kernel numbers ports in the order it meets them. So the
@@ -37,7 +38,6 @@ import json
 import os
 import re
 import subprocess
-import tempfile
 import threading
 import time
 from datetime import datetime, timezone
@@ -54,7 +54,7 @@ try:
 except ImportError:
     msvcrt = None
 
-from .. import jobs
+from .. import jobs, state_folder
 from ..preview import Preview, for_machine
 from ..preview import of as preview_of
 from ..preview.moves import split_comments
@@ -224,29 +224,8 @@ def _sighting(board: BoardInfo) -> dict:
 # --- persistent state -------------------------------------------------------------
 
 
-def state_dir() -> Path:
-    override = os.environ.get("APOTHECARY_STATE_DIR", "").strip()
-    return Path(override).expanduser() if override else Path.home() / ".apothecary"
-
-
-def private_folder(folder: Path) -> Path:
-    """Make ``folder`` (and what is above it, up to the state folder) readable by
-    this account alone: serial numbers, camera labels and readings are the
-    person's, whatever the umask says about the rest of their files."""
-    folder.mkdir(parents=True, exist_ok=True)
-    root = state_dir()
-    for here in [folder, *folder.parents]:
-        try:
-            os.chmod(here, 0o700)
-        except OSError:
-            pass
-        if here == root or root not in here.parents:
-            break
-    return folder
-
-
 def state_file() -> Path:
-    return state_dir() / "firmware-state.json"
+    return state_folder.state_dir() / "firmware-state.json"
 
 
 class _StateLock:
@@ -262,7 +241,7 @@ class _StateLock:
     def __enter__(self):
         self._thread.acquire()
         try:
-            private_folder(self.path.parent)
+            state_folder.private_folder(self.path.parent)
             self._fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600)
             if fcntl is not None:
                 fcntl.flock(self._fd, fcntl.LOCK_EX)
@@ -319,11 +298,7 @@ class FirmwareState:
         return data
 
     def _save(self, data: dict) -> None:
-        private_folder(self.path.parent)
-        fd, tmp = tempfile.mkstemp(dir=self.path.parent, prefix=".firmware-state.", suffix=".tmp")
-        with os.fdopen(fd, "w", encoding="utf-8") as out:
-            out.write(json.dumps(data, indent=2, default=str))
-        os.replace(tmp, self.path)
+        state_folder.write_whole(self.path, json.dumps(data, indent=2, default=str))
 
     def record_flash(self, record: FlashRecord) -> None:
         with self._lock:
@@ -1126,7 +1101,7 @@ def port_of(job: dict) -> str:
 
 
 def leveling_dir() -> Path:
-    return state_dir() / "leveling"
+    return state_folder.state_dir() / "leveling"
 
 
 def leveling_records(port: Optional[str] = None) -> List[LevelingRecord]:
@@ -1179,7 +1154,7 @@ def leveling_record(record_id: str) -> Optional[LevelingRecord]:
 def _save_leveling(record: LevelingRecord) -> Path:
     """Keep ``record`` under its id, or its id with ``-2``, ``-3``… after it when another
     reading has that id (two in one millisecond); the record takes the id it is kept under."""
-    kept = claim(private_folder(leveling_dir()), record.id, ".json")
+    kept = claim(state_folder.private_folder(leveling_dir()), record.id, ".json")
     record.id = kept.name.removesuffix(".json")
     kept.write_text(record.model_dump_json(indent=2), encoding="utf-8")
     return kept
@@ -1354,7 +1329,7 @@ def start_leveling(
 
 
 def prints_dir() -> Path:
-    return state_dir() / "prints"
+    return state_folder.state_dir() / "prints"
 
 
 def _print_meta_path(file_id: str) -> Path:
@@ -1376,7 +1351,7 @@ def save_print_file(name: str, data: bytes, machine: Optional[str] = None) -> Pr
     stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", Path(name).name).strip("_.") or "print"
     stem = re.sub(r"\.(gcode|gco|g|txt)$", "", stem, flags=re.IGNORECASE)[:60]
     # Its own id, though another file of the same name was kept in the same millisecond.
-    kept = claim(private_folder(prints_dir()), f"{stamp(at)}-{stem}", ".gcode")
+    kept = claim(state_folder.private_folder(prints_dir()), f"{stamp(at)}-{stem}", ".gcode")
     file_id = kept.name.removesuffix(".gcode")
     kept.write_text(text, encoding="utf-8")
     meta = PrintFile(
@@ -1403,7 +1378,7 @@ def _with_its_kind(meta: PrintFile) -> PrintFile:
     if meta.machine is not None:
         return meta
     for folder, machine in _MADE_FOR.items():
-        if (state_dir() / folder / f"{meta.id}.json").is_file():
+        if (state_folder.state_dir() / folder / f"{meta.id}.json").is_file():
             return meta.model_copy(update={"machine": machine})
     return meta
 

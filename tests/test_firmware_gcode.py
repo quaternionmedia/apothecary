@@ -22,6 +22,7 @@ from apothecary.cli import cli
 from apothecary.firmware import devices, gcode
 from apothecary.firmware.models import DeviceInfo, PrinterInfo, PrintRequest
 from apothecary.firmware.toolchains import PortHeld, ToolchainError
+from apothecary.state_folder import private_folder, state_dir
 
 BOOT = [
     "start",
@@ -615,7 +616,7 @@ def test_a_pinned_poll_is_kept_as_evidence(
 
     # A poll that changes nothing writes nothing, and its id is still one a frame can name.
     def written():
-        folder = devices.state_dir() / "evidence" / "garage" / "observations"
+        folder = state_dir() / "evidence" / "garage" / "observations"
         return sum(len(f.read_text().splitlines()) for f in folder.glob("*.jsonl"))
 
     before = written()
@@ -1603,7 +1604,7 @@ def test_print_files_are_kept_checked_and_forgotten(fake_arduino_cli):
 def test_an_id_of_another_shape_names_no_kept_file(fake_arduino_cli, file_id):
     """A kept file's id starts with its keeping time: one that starts with a dot or holds
     a separator names no file, to read, delete or print, even one in the prints folder."""
-    devices.private_folder(devices.prints_dir())
+    private_folder(devices.prints_dir())
     for suffix in (".gcode", ".json"):
         (devices.prints_dir() / f".hidden{suffix}").write_text("{}", encoding="utf-8")
     assert devices.print_file(file_id) is None

@@ -16,6 +16,7 @@ from apothecary.api import app
 from apothecary.cam import service as cam
 from apothecary.cam.models import CutFor
 from apothecary.firmware import devices, gcode, grbl
+from apothecary.state_folder import state_dir
 
 PORT = "/dev/ttyFAKE1"  # the scripted arduino-cli's unmatched board
 DRY_RUN = (Path(__file__).parents[1] / "docs" / "validation" / "dry-run-square.gcode").read_bytes()
@@ -114,8 +115,8 @@ def test_a_file_a_slice_or_a_toolpath_made_before_files_said_their_kind_says_it(
 ):
     for folder, kind in (("slices", "printer"), ("cuts", "router")):
         kept = devices.save_print_file(f"{kind}.gcode", b"G1 X1 F100\n")
-        (devices.state_dir() / folder).mkdir(exist_ok=True)
-        (devices.state_dir() / folder / f"{kept.id}.json").write_text("{}")
+        (state_dir() / folder).mkdir(exist_ok=True)
+        (state_dir() / folder / f"{kept.id}.json").write_text("{}")
         assert devices.print_file(kept.id).machine == kind
         assert {f.id: f.machine for f in devices.print_files()}[kept.id] == kind
 

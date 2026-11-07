@@ -9,13 +9,11 @@ origin to switch off.
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 import threading
 from pathlib import Path
 from typing import Dict
 
-from ..firmware.devices import private_folder, state_dir
+from ..state_folder import state_dir, write_whole
 
 _lock = threading.Lock()
 
@@ -44,15 +42,6 @@ def switch(origin: str, on: bool) -> Dict[str, bool]:
     with _lock:
         switched = read()
         switched[origin] = on
-        where = path()
-        private_folder(where.parent)
         # Whole or not at all: a write that stops midway leaves the previous file.
-        fd, tmp = tempfile.mkstemp(dir=where.parent, prefix=".switches.", suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as out:
-                out.write(json.dumps(switched, indent=2, sort_keys=True))
-            os.replace(tmp, where)
-        except BaseException:
-            Path(tmp).unlink(missing_ok=True)
-            raise
+        write_whole(path(), json.dumps(switched, indent=2, sort_keys=True))
     return switched
