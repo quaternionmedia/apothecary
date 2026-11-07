@@ -31,9 +31,11 @@ top, then the part's declared print settings:
 
 The machine's start G-code is composed from the pieces the printer's profile
 names (``compose.py``): printer_1's names ``home``, OrcaSlicer's own start for
-the printer, which homes and does no levelling; the stored mesh, probing each print and a
-measured first-layer offset are stubs. The filament is the printer's one,
-named in its profile; choosing another is a stub.
+the printer, which homes and does no levelling; ``stored-mesh`` and
+``probe-each-print`` are named there by a person after the bench's levelling
+boxes, each refused where its precondition fails, and a measured first-layer
+offset is a stub. The filament is the printer's one, named in its profile;
+choosing another is a stub.
 
 The three are written as user profiles of the system ones they start from
 (``"from": "user"``, ``inherits``), so OrcaSlicer's own check that the process
@@ -337,12 +339,15 @@ class OrcaSlicerModule(SlicerModule):
 
     # -- a slice's values ---------------------------------------------------------------
 
-    def settings(self, profile: PrinterProfile, declared: Declared) -> Resolved:
+    def settings(
+        self, profile: PrinterProfile, declared: Declared, port: Optional[str] = None
+    ) -> Resolved:
         section = profile.section(self.id)
-        # The pieces the printer's slices are composed from: a stub named is refused
-        # here, before any profile is read or anything built.
-        start = compose.chosen(compose.START, profile.start.modules, profile.file)
-        filament = compose.chosen(compose.FILAMENT, profile.filament.modules, profile.file)
+        # The pieces the printer's slices are composed from: a stub named, or a piece
+        # whose precondition fails, is refused here, before any profile is read or
+        # anything built.
+        start = compose.chosen(compose.START, profile.start.modules, profile, port)
+        filament = compose.chosen(compose.FILAMENT, profile.filament.modules, profile)
         path, _found_by = self.program()
         version = reported_version(path) if path else None
         index = vendor_index(self._resources(), section.get("vendor"))

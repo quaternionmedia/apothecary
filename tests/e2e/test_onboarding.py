@@ -70,6 +70,20 @@ def _refused(page: Page, piece: str, printer: str = "printer_1") -> str:
     )
 
 
+def _sliced_as_planned(page: Page, piece: str = "footpedal") -> None:
+    """Slice on ``piece`` for printer_1 with no board of it connected: its Machine opens
+    as its plan and slices there, to the end; then it is closed."""
+    assert _refused(page, piece).startswith(f"slicing {piece} for printer_1"), page.locator(
+        "#status"
+    ).inner_text()
+    assert page.evaluate("() => window.fractalViewer.machine.plan") is True
+    windows.machine_ready(page, "printer")
+    expect(windows.in_machine(page, "#print-slice-said")).to_contain_text(
+        f"{piece} sliced for printer_1", timeout=90000
+    )
+    page.evaluate("() => window.fractalViewer.closeMachine()")
+
+
 # --------------------------------------------------------------------------------
 # A printer's Pin
 # --------------------------------------------------------------------------------
@@ -84,13 +98,11 @@ def test_a_printers_pin_pins_its_mainboard_where_device_machine_and_slice_find_i
     so. printer_1's Device then shows the board via its mainboard, its ring's Device
     opens its Machine, and Slice on a part slices for it. Device › Unpin on printer_1
     takes the board's pin back. Before the pin, and with a pin whose board is not
-    connected, Slice says which it is."""
+    connected, Slice plans it: printer_1's Machine opens with no board connected and
+    slices there (apothecary/machine_plans.py)."""
     _open(page, url)
-    # Nothing pinned: Slice says so, and where the pin goes.
-    assert _refused(page, "footpedal") == (
-        f"printer_1 has no board pinned (its board is {BOARD}): select it and Pin its port "
-        "in its Device section, then Slice again"
-    )
+    # Nothing pinned: Slice plans it, in printer_1's Machine with no board connected.
+    _sliced_as_planned(page)
     _row(page, "printer_1").click()
     section = page.locator("#selected-body .device-section")
     pick = section.locator(".dev-pick")
@@ -142,10 +154,7 @@ def test_a_printers_pin_pins_its_mainboard_where_device_machine_and_slice_find_i
     try:
         page.evaluate("() => window.fractalViewer.boards.scan()")
         page.wait_for_function(f"() => !!window.fractalViewer.bindings['{BOARD}']", timeout=10000)
-        assert _refused(page, "footpedal") == (
-            f"printer_1's board {BOARD} is pinned to NOTHERE123, but not connected: connect "
-            "it, or ⟳ Rescan in its Device section, then Slice again"
-        )
+        _sliced_as_planned(page)
         _row(page, "printer_1").click()
         expect(section).to_contain_text("NOTHERE123 not connected")
     finally:

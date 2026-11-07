@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import queue
 import threading
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
@@ -367,7 +367,7 @@ def firmware_printer_command(body: PrinterControlRequest):
     """Send one allowlisted control line -- a printer's heaters, fan, homing, bounded
     jogs and SD pause/resume/abort; a router's homing, unlock, jogs, spindle, work zero,
     probe, hold and resume -- while the latch is armed. The stop (``M112``; a router's
-    ``RESET``) always goes."""
+    ``RESET``) always goes, as the stop of whatever is on the port."""
     if not devices.is_emergency_stop(body.command):
         _busy_guard(body.port)
     data = devices.printer_control(body.port, body.command).model_dump(mode="json")
@@ -380,9 +380,13 @@ def firmware_printer_command(body: PrinterControlRequest):
 
 @router.post("/printers/level", status_code=202)
 def firmware_printer_level(body: LevelingRequest):
-    """Start a bed reading: home, probe (``G29``, latch required) and read, or just read."""
+    """Start a bed reading in the port's dialect: a printer's -- home, probe (``G29``,
+    latch required) and read, or just read the stored mesh; a router's table map --
+    home, then probe down at each point of ``grid`` (latch required)."""
     _busy_guard(body.port)
-    return devices.start_leveling(body.port, probe=body.probe, note=body.note).snapshot()
+    return devices.start_leveling(
+        body.port, probe=body.probe, note=body.note, grid=body.grid
+    ).snapshot()
 
 
 @router.get("/printers/level")
@@ -423,9 +427,15 @@ async def firmware_print_files():
 
 @router.post("/printers/prints", status_code=201)
 async def firmware_print_upload(
-    request: Request, name: str = Query(..., min_length=1, max_length=200)
+    request: Request,
+    name: str = Query(..., min_length=1, max_length=200),
+    machine: Optional[str] = Query(
+        None, pattern="^(printer|router)$", description="the kind of machine it is kept for"
+    ),
 ):
-    """Keep a G-code file (the request body, as text) under ``name``; it is checked, not sent."""
+    """Keep a G-code file (the request body, as text) under ``name``, for a kind of
+    machine; it is checked in that machine's terms, not sent. A file kept for none is
+    sent to none until it is kept again for one."""
     data = await request.body()
     if not data:
         raise HTTPException(status_code=422, detail="an empty file")
@@ -434,7 +444,7 @@ async def firmware_print_upload(
             status_code=413, detail=f"larger than {PRINT_FILE_MAX // (1024 * 1024)} MB"
         )
     # Checking and writing 60 MB takes seconds: off the event loop, so polls keep going.
-    kept = await run_in_threadpool(devices.save_print_file, name, data)
+    kept = await run_in_threadpool(devices.save_print_file, name, data, machine)
     return kept.model_dump(mode="json")
 
 

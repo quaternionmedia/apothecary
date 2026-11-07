@@ -1,0 +1,36 @@
+{
+  "name": "anolex_grbl_esp32",
+  "description": "The Grbl_ESP32 controller in an AnoleX 4060-Evo Ultra 2's control box: an ESP32 behind a CH340 USB bridge on a 100 x 80 mm board, the size assumed since the maker publishes no drawing -- the node a router's serial port is pinned to.",
+  "category": "electrical",
+  "tags": [
+    "board",
+    "anolex",
+    "router",
+    "controller",
+    "grbl",
+    "esp32"
+  ],
+  "preview_color": [
+    0.1,
+    0.3,
+    0.15
+  ],
+  "source": {
+    "title": "anolex_grbl_esp32, assumed",
+    "author": "Quaternion Media",
+    "license": "MIT",
+    "note": "Built in OpenSCAD; the maker publishes no drawing of the board, so its size and layout are assumed and README.md says which. No mesh of anyone's was used."
+  },
+  "bounds": {
+    "min": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "max": [
+      100.0,
+      80.0,
+      12.6
+    ]
+  }
+}

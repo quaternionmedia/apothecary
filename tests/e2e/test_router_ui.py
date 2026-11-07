@@ -11,6 +11,7 @@ port.
 
 from __future__ import annotations
 
+import json
 import re
 
 import httpx
@@ -27,14 +28,34 @@ POLL_MS = 2000
 WITHIN_A_POLL = 3 * POLL_MS
 
 
+# A printer's bed reading kept under the port name the router holds, as one was on
+# the bench: the Ender's, taken while it had the name. It is there to be drawn, and
+# is never the router's.
+A_PRINTER_S_READING = {
+    "id": "20260920T132512.468-dev_ttyFAKE3",
+    "port": ROUTER,
+    "at": "2026-09-20T13:25:12.468000Z",
+    "method": "read",
+    "mesh": [[0.0, 0.4, 0.9], [0.1, 0.5, 1.2], [0.2, 0.7, 1.6]],
+    "stats": {"range": 1.6, "mean": 0.62},
+    "firmware": "Marlin made up",
+}
+
+
 @pytest.fixture(scope="module")
-def url(start_server):
+def url(start_server, tmp_path_factory):
     """The router identified and its controller pinned: cnc_router wears its badge."""
+    state = tmp_path_factory.mktemp("router-state")
+    (state / "leveling").mkdir()
+    (state / "leveling" / f"{A_PRINTER_S_READING['id']}.json").write_text(
+        json.dumps(A_PRINTER_S_READING)
+    )
     url = start_server(
         env_overrides={
             "APOTHECARY_SIMULATED_ROUTER": ROUTER,
             "APOTHECARY_SIMULATED_SPEED": "0.05",
             "FAKE_ROUTER": "1",
+            "APOTHECARY_STATE_DIR": str(state),
         }
     )
     with httpx.Client(base_url=url, timeout=15.0) as http:
@@ -81,7 +102,8 @@ def test_the_router_s_machine_has_a_router_s_cards_and_pad(page: Page, url: str)
     expect(machine.locator("#c-pins")).to_contain_text("none")
     expect(machine.locator("#print-title")).to_have_text("Cut from here")
     expect(machine.locator("#print-start")).to_have_text("▶ Cut")
-    for printers_own in ("#c-hot", "#c-bed", "#level-card", "#chart"):
+    # The Level card is a router's too, as its Table map (test_router_table_map.py).
+    for printers_own in ("#c-hot", "#c-bed", "#level-read", "#chart"):
         expect(machine.locator(printers_own)).to_be_hidden()
     # Where a printer's card has Slice, a router's has Toolpath (docs/cam.md).
     expect(machine.locator("#print-slice")).to_have_text("Toolpath")
@@ -319,3 +341,41 @@ def test_the_page_says_a_router_in_a_router_s_words(page: Page, url: str):
     expect(legend).to_contain_text("spindle")
     for printers_own in ("printing", "hotend", "bed"):
         expect(legend).not_to_contain_text(printers_own)
+
+
+@pytest.mark.e2e
+def test_a_printer_s_reading_under_the_router_s_port_is_never_laid_over_its_table(
+    page: Page, url: str
+):
+    """The server lists the router no reading of a printer's; and the page, asking for
+    the router's own maps and told a printer's reading anyway (the request answered as
+    a server that listed readings by port name alone would), lays none over the
+    router's table: a reading is laid over the kind of machine that took it."""
+    every = httpx.get(f"{url}/firmware/printers/leveling", timeout=15.0).json()
+    assert [r["id"] for r in every if r["port"] == ROUTER] == [A_PRINTER_S_READING["id"]]
+    mine = httpx.get(f"{url}/firmware/printers/leveling", params={"port": ROUTER}, timeout=15.0)
+    assert mine.json() == []
+    asked = []
+
+    def by_port_name(route):
+        asked.append(route.request.url)
+        route.fulfill(json=[A_PRINTER_S_READING])
+
+    page.route(re.compile(r".*/firmware/printers/leveling\?port=.*ttyFAKE3.*"), by_port_name)
+    open_garage(page, url)
+    page.wait_for_function(
+        "() => { const m = window.fractalViewer.marks['cnc_router']; return m && m.marks; }",
+        timeout=15000,
+    )
+    page.evaluate(
+        "() => { const v = window.fractalViewer; v.marks['cnc_router'].readingAt = 0;"
+        " v.refreshReading('cnc_router');"
+        " window.dispatchEvent(new CustomEvent('apothecary:mesh',"
+        f" {{ detail: {json.dumps(A_PRINTER_S_READING)} }})); }}"
+    )
+    page.wait_for_timeout(1000)
+    assert page.evaluate("() => window.fractalViewer.marks['cnc_router'].kind") == "router"
+    assert page.evaluate("() => window.fractalViewer.marks['cnc_router'].marks.mesh()") is None
+    # A router's marks ask, for the router's own table maps (test_router_table_map.py);
+    # what they are answered here is a printer's, and is not theirs.
+    assert asked and all("ttyFAKE3" in url for url in asked)

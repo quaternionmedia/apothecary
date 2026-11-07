@@ -180,7 +180,7 @@ this time, and the cut, run again, leaves holes of the size designed.
     >>> written = toolpath.write(cuts, "router_coupon")
     >>> (written.messages, written.operations[1].words)
     ([], 'hole 8 mm at 110,36.667, 10.5 deep')
-    >>> kept = devices.save_print_file("router_coupon-8mm.nc", toolpath.text(written).encode())
+    >>> kept = devices.save_print_file("router_coupon-8mm.nc", toolpath.text(written).encode(), machine="router")
     >>> link._t.trace.clear()
     >>> job = devices.start_print(PORT, kept.id, links=links)
     >>> job.thread.join(10)
@@ -196,5 +196,5 @@ this time, and the cut, run again, leaves holes of the size designed.
 In the page the same change is the part's editor -- Part › Edit, the hole's
 size, Apply -- then Toolpath on the variant drawn, then ▶ Cut;
 `tests/e2e/test_router_ui.py` goes round it in a browser. What this page does
-not show is the bench: the real controller has not answered this seam, and a
+not show is the bench: the real controller has been identified and polled once, and a
 real coupon has not been measured by hand. That is the plan's next slice.

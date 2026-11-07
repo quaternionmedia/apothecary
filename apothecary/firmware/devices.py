@@ -63,9 +63,10 @@ from ..projects.parts.skeleton import ROOT
 from ..site_names import current as current_site
 from ..stamped import claim, stamp
 from ..stays_local import subprocess_env
-from . import dialects, gcode, grbl, serial_monitor
+from . import dialects, gcode, grbl, occupants, serial_monitor
 from .models import (
     PRINT_FILE_ID,
+    BedReading,
     BoardInfo,
     DeviceInfo,
     ExpectedFirmware,
@@ -77,6 +78,7 @@ from .models import (
     PrinterQueryResult,
     PrintFile,
     SketchInfo,
+    TableGrid,
 )
 from .sketches import find_sketch
 from .toolchains import (
@@ -107,7 +109,9 @@ _PORTS: Optional[tuple] = None  # (monotonic time, {port: BoardInfo})
 
 
 def ports_now() -> Dict[str, BoardInfo]:
-    """What the serial engine's port list finds on each port right now."""
+    """What the serial engine's port list finds on each port right now. A port
+    found holding another board than it last held forgets the last one first
+    (``forget_port``)."""
     global _PORTS
     now = time.monotonic()
     if _PORTS and now - _PORTS[0] < PORTS_TTL:
@@ -117,7 +121,46 @@ def ports_now() -> Dict[str, BoardInfo]:
     except (ToolchainError, OSError):
         listed = {}  # a list that cannot be read finds nothing: records are kept
     _PORTS = (now, listed)
+    _notice(listed)
     return listed
+
+
+# --- a port that changes hands ---------------------------------------------------------
+
+# What the port list last found on each port, kept while the port is empty: a board
+# unplugged and plugged back in is the same board, and keeps what is held for it;
+# another board found there is told nothing of the last one's.
+_HELD_BY: Dict[str, dict] = {}
+_HELD_LOCK = threading.Lock()
+
+
+def _notice(listed: Dict[str, BoardInfo]) -> None:
+    changed = []
+    with _HELD_LOCK:
+        for port, board in listed.items():
+            was, now = _HELD_BY.get(port), _sighting(board)
+            _HELD_BY[port] = now
+            if was is not None and was != now:
+                changed.append(port)
+    for port in changed:
+        forget_port(port)
+
+
+gcode.PORT_LIST_READ = ports_now
+
+
+def forget_port(port: str) -> None:
+    """Let go of everything held in memory for the board that was on ``port``: its
+    last poll, a job of it that has finished, its link, its control latch and its
+    comms log. Every cache this package keys by a port is named here. A job still
+    running is left to fail on its own, its board gone; the records on disk are
+    ``FirmwareState``'s, which reads them against the port list itself."""
+    _LAST_STATUS.pop(port, None)
+    for held in (_PRINTS, _LEVELING):
+        job = held.get(port)
+        if job is not None and job.finished is not None:
+            held.pop(port, None)
+    gcode.get_printer_links().forget(port)
 
 
 def board_on(port: str) -> Optional[BoardInfo]:
@@ -274,11 +317,17 @@ class FirmwareState:
     def flashes(self) -> List[FlashRecord]:
         return [FlashRecord(**f) for f in self._load()["flashes"]]
 
-    def last_flash(self, identity: str, port: Optional[str] = None) -> Optional[FlashRecord]:
-        """Newest record for a MAC; falls back to the port for never-probed boards."""
+    def last_flash(
+        self, identity: str, port: Optional[str] = None, board: Optional[str] = None
+    ) -> Optional[FlashRecord]:
+        """Newest record for a MAC; falls back to the port for never-probed boards,
+        a record that names its board (``board``, a key) counting for that one alone."""
         newest: Optional[FlashRecord] = None
         for rec in self.flashes():
-            if rec.identity == identity or (port and rec.mac is None and rec.port == port):
+            by_port = port and rec.mac is None and rec.port == port
+            if by_port and rec.board is not None and board is not None and rec.board != board:
+                by_port = False
+            if rec.identity == identity or by_port:
                 if newest is None or rec.flashed_at >= newest.flashed_at:
                     newest = rec
         return newest
@@ -288,6 +337,7 @@ class FirmwareState:
         port list says holds the port at this moment (``board_on``): the record is
         that board's, and counts for no other (``cached_device``)."""
         seen = board_on(device.port)
+        kind = machine_kind(device)
         with self._lock:
             data = self._load()
             data["devices"][device.port] = device.model_dump(mode="json")
@@ -295,6 +345,15 @@ class FirmwareState:
                 data["seen"][device.port] = _sighting(seen)
             else:
                 data["seen"].pop(device.port, None)
+            # A pin by this port learns the kind of machine its board answered as, the
+            # first time it answers: a board answering as another kind later is another.
+            if kind is not None:
+                from .bindings import same_device
+
+                for pin in data["bindings"]:
+                    if pin.get("kind") is None and pin.get("identity") in (device.port,):
+                        if same_device(pin["identity"], device.port, device):
+                            pin["kind"] = kind
             self._save(data)
 
     def cached_device(self, port: str) -> Optional[DeviceInfo]:
@@ -325,10 +384,17 @@ class FirmwareState:
 
     # -- node bindings: a device the user pinned to a (site, node path) ----------
 
-    def set_binding(self, site: str, path: str, identity: str) -> ManualBinding:
-        """Pin ``identity`` to the node; replaces any earlier pin for that node."""
+    def set_binding(
+        self, site: str, path: str, identity: str, kind: Optional[str] = None
+    ) -> ManualBinding:
+        """Pin ``identity`` to the node, its board of ``kind`` when that is known;
+        replaces any earlier pin for that node."""
         binding = ManualBinding(
-            site=site, path=path, identity=identity, bound_at=datetime.now(timezone.utc)
+            site=site,
+            path=path,
+            identity=identity,
+            bound_at=datetime.now(timezone.utc),
+            kind=kind,
         )
         with self._lock:
             data = self._load()
@@ -409,10 +475,12 @@ def make_flash_record(
     state = state or get_state()
     cached = state.cached_device(port)
     mac = cached.mac if cached else None
+    on_port = occupants.on_port(port, state)
     return FlashRecord(
         identity=mac or port,
         port=port,
         mac=mac,
+        board=on_port.key if on_port is not None else None,
         sketch=sketch.name if sketch else None,
         sketch_id=sketch.id if sketch else None,
         toolchain=sketch.toolchain if sketch else None,
@@ -430,7 +498,12 @@ def expected_firmware(
     device: DeviceInfo, build_root: Path, state: Optional[FirmwareState] = None
 ) -> ExpectedFirmware:
     state = state or get_state()
-    record = state.last_flash(device.identity, device.port)
+    if device.printer is not None:
+        # A board that answers as a printer or a router runs its own G-code firmware,
+        # which nothing here flashes: whatever a devkit on its port was last flashed
+        # with is not what it should run.
+        return ExpectedFirmware()
+    record = state.last_flash(device.identity, device.port, occupants.key_of(device))
     if record is None:
         return ExpectedFirmware()
     out = ExpectedFirmware(record=record)
@@ -786,7 +859,9 @@ _LAST_STATUS: Dict[str, gcode.PrinterStatus] = {}
 
 
 def last_statuses() -> Dict[str, gcode.PrinterStatus]:
-    """The newest poll per port, for views that must not touch the port themselves."""
+    """The newest poll per port, for views that must not touch the port themselves;
+    of the board on each port now (``ports_now`` has let go of any other's)."""
+    ports_now()
     return dict(_LAST_STATUS)
 
 
@@ -924,17 +999,25 @@ def printer_control(
     state: Optional[FirmwareState] = None,
     links: Optional[gcode.PrinterLinks] = None,
 ) -> PrinterQueryResult:
-    """One allowlisted control line, only while the port's latch is armed (M112 always).
+    """One allowlisted control line, only while the port's latch is armed; the stop
+    always, as the stop of whatever is on the port.
 
     Renews the latch on success. The link is opened (and the port
     identified) on first use like a poll would.
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
+    # A stop, in either dialect's word, is the one line that always goes, and goes as
+    # the stop of whatever is on the port: a printer's M112 asked of a router is its
+    # soft reset, a router's RESET asked of a printer is M112. Anything else is a
     # ValueError when not allowed or out of bounds, in the port's dialect when it is
     # known; a port identified below (its first use) is asked again in its own.
-    cmd = normalise_control(port, command, state)
-    stop = is_emergency_stop(cmd)
+    stop = is_emergency_stop(command)
+    cmd = (
+        " ".join(command.strip().upper().split())
+        if stop
+        else normalise_control(port, command, state)
+    )
     if not stop and not links.control.armed(port):
         raise gcode.ControlNotArmed(f"{port}: control is not armed -- arm it first")
     held = links.get(port)
@@ -946,9 +1029,7 @@ def printer_control(
     if link is None:
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
     dialect = dialect_for(port, state)
-    cmd = normalise_control(port, command, state)
-    if stop and cmd != dialect.stop:
-        raise ValueError(f"not an allowed control code for this machine: {command!r}")
+    cmd = dialect.stop if stop else normalise_control(port, command, state)
     if stop:
         running = _PRINTS.get(port)
         if running and running.finished is None:
@@ -966,6 +1047,12 @@ def printer_control(
 WHAT_HOLDS = {"print": "a print", "cut": "a cut"}
 
 
+def what_holds(job: dict) -> str:
+    """What the job holding the port is called in a refusal: a print, a cut, a bed
+    reading or a table map (``LevelingJob.what``)."""
+    return job.get("what") or WHAT_HOLDS.get(job.get("kind"), "a bed reading")
+
+
 def _job_allows(job: dict, cmd: str) -> None:
     if cmd in dialects.STOPS:
         return
@@ -973,8 +1060,7 @@ def _job_allows(job: dict, cmd: str) -> None:
     if op is not None and op.kind in STREAMED:
         if dialects.BY_MACHINE[op.machine].job_allows.match(cmd):
             return
-    what = WHAT_HOLDS.get(job.get("kind"), "a bed reading")
-    raise PortHeld(f"{port_of(job)}: {what} holds the port ({job.get('stage')})")
+    raise PortHeld(f"{port_of(job)}: {what_holds(job)} holds the port ({job.get('stage')})")
 
 
 def port_of(job: dict) -> str:
@@ -982,8 +1068,9 @@ def port_of(job: dict) -> str:
 
 
 # --- bed leveling: a job that holds the port for minutes, and its records ---------------
-
-LEVELING_PROBE_TIMEOUT_S = 900.0  # a five-by-five probe on a slow bed
+# A reading is the port's dialect's (``Dialect.bed_reading``): a printer's stored mesh,
+# read or probed first (``gcode.read_bed``); a router's table, Z probed at a grid of
+# points (``grbl.probe_table``). Kept the same way, listed and drawn by the same route.
 
 
 def leveling_dir() -> Path:
@@ -991,19 +1078,46 @@ def leveling_dir() -> Path:
 
 
 def leveling_records(port: Optional[str] = None) -> List[LevelingRecord]:
-    """Every saved reading, newest first; for one port when given."""
+    """Every saved reading, newest first; given a port, the readings of the board on
+    it now (``readings_of``): a printer's bed readings, a router's table maps."""
     folder = leveling_dir()
     if not folder.is_dir():
         return []
     records: List[LevelingRecord] = []
     for path in folder.glob("*.json"):
         try:
-            rec = LevelingRecord(**json.loads(path.read_text(encoding="utf-8")))
+            records.append(LevelingRecord(**json.loads(path.read_text(encoding="utf-8"))))
         except (OSError, ValueError):
             continue
-        if port is None or rec.port == port:
-            records.append(rec)
+    if port is not None:
+        records = readings_of(occupants.on_port(port), records)
     return sorted(records, key=lambda r: r.at, reverse=True)
+
+
+def readings_of(
+    board: Optional[occupants.Occupant], records: List[LevelingRecord]
+) -> List[LevelingRecord]:
+    """The readings that are ``board``'s: those kept under its key by a board of its
+    kind -- a printer's bed readings, a router's table maps; a bridge's ``usb:`` key
+    is one make's, and a printer's reading under it is never a router's -- and, for
+    a printer, one kept before readings carried a key, when it was taken on the port
+    the printer is on and names the firmware the printer answered with. Nothing for
+    a board not yet identified as either kind, or one whose key another board on the
+    machine shares."""
+    if board is None or board.kind is None or board.shared:
+        return []
+    return [
+        rec
+        for rec in records
+        if (board.owns(rec.board) and (rec.machine or "printer") == board.kind)
+        or (
+            rec.board is None
+            and board.kind == "printer"
+            and rec.port == board.port
+            and rec.firmware is not None
+            and rec.firmware == board.firmware
+        )
+    ]
 
 
 def leveling_record(record_id: str) -> Optional[LevelingRecord]:
@@ -1019,57 +1133,66 @@ def _save_leveling(record: LevelingRecord) -> Path:
     return kept
 
 
-def read_bed(link: gcode.GcodeLink, port: str, method: str, note: Optional[str]) -> LevelingRecord:
-    """The reading itself: mesh, state, probe offset and temperatures, from an open link."""
-    lines: List[str] = []
-    mesh_lines = link.command("M420 V", timeout=15.0, origin="query")
-    lines += mesh_lines
-    offset_lines = link.command("M851", timeout=10.0, origin="query")
-    lines += offset_lines
-    temp_lines = link.command("M105", timeout=10.0, origin="query")
-    lines += temp_lines
-    grids = gcode.parse_meshes(mesh_lines)
-    temps = gcode.parse_m105(next((ln for ln in temp_lines if gcode.is_temperature_line(ln)), ""))
-    cached = get_state().cached_device(port)
+def _as_record(
+    port: str, reading: BedReading, note: Optional[str], state: Optional[FirmwareState] = None
+) -> LevelingRecord:
+    """The reading as the board's record: whose it is (``occupants``: the board's key
+    and the kind of machine it drives), when, and what it answered as."""
+    cached = (state or get_state()).cached_device(port)
+    board = occupants.on_port(port, state)
     at = datetime.now(timezone.utc)
     slug = re.sub(r"[^A-Za-z0-9]+", "_", port).strip("_")
-    record = LevelingRecord(
+    return LevelingRecord(
         id=f"{stamp(at)}-{slug}",  # with -2 after it, if need be, when it is kept
         port=port,
+        board=board.key if board is not None else None,
+        machine=board.kind if board is not None else None,
         at=at,
-        method=method,
-        mesh=grids[0] if grids else [],
-        subdivided=grids[1] if len(grids) > 1 else None,
-        stats=gcode.mesh_stats(grids[0]) if grids else {},
-        leveling_on=gcode.parse_leveling_state(mesh_lines),
-        probe_offset=gcode.parse_probe_offset(offset_lines),
-        hotend_c=temps["hotends"][0].actual if temps["hotends"] else None,
-        bed_c=temps["bed"].actual if temps["bed"] else None,
         firmware=cached.printer.firmware_name if cached and cached.printer else None,
         note=note,
-        lines=lines[-400:],
+        **reading.model_dump(),
     )
-    return record
 
 
 class LevelingJob:
-    """Home, probe, read, save -- on a thread, announcing its stage on the link."""
+    """The dialect's reading -- a printer's bed homed, probed and read, a router's
+    table probed point by point -- then saved: on a thread, announcing its stage on
+    the link, and while probing how many points are done."""
 
-    def __init__(self, port: str, probe: bool, note: Optional[str], links: gcode.PrinterLinks):
+    def __init__(
+        self,
+        port: str,
+        probe: bool,
+        note: Optional[str],
+        links: gcode.PrinterLinks,
+        dialect: dialects.Dialect = dialects.MARLIN,
+        grid: Optional[TableGrid] = None,
+    ):
         self.port, self.probe, self.note, self.links = port, probe, note, links
+        self.dialect = dialect
+        # A table map's grid (three by three, left out), and the points done of its
+        # total, known before the port is touched; a printer's mesh is its firmware's.
+        self.grid = grid or (TableGrid() if dialect.stored_mesh is None else None)
+        self.what = "a table map" if dialect.stored_mesh is None else "a bed reading"
         self.stage = "starting"
+        self.points: Optional[dict] = (
+            {"done": 0, "total": self.grid.rows * self.grid.cols} if self.grid else None
+        )
         self.started = datetime.now(timezone.utc)
         self.finished: Optional[datetime] = None
         self.error: Optional[str] = None
         self.record: Optional[LevelingRecord] = None
+        self.link: Optional[gcode.GcodeLink] = None
         self.thread = threading.Thread(target=self._run, daemon=True, name=f"leveling-{port}")
 
     def snapshot(self) -> dict:
         return {
             "kind": "leveling",
+            "what": self.what,
             "port": self.port,
             "probe": self.probe,
             "stage": self.stage,
+            "points": dict(self.points) if self.points else None,
             "since": self.started.isoformat(),
             "finished": self.finished.isoformat() if self.finished else None,
             "error": self.error,
@@ -1077,31 +1200,33 @@ class LevelingJob:
             "running": self.finished is None,
         }
 
+    def _stage(self, word: str, points: Optional[dict] = None) -> None:
+        self.stage = word
+        if points is not None:
+            self.points = dict(points)
+        if self.link is not None:
+            self.link.job = self.snapshot()
+
     def _run(self) -> None:
         link = self.links.get(self.port)
         if link is None:
             self.error, self.finished = "no link", datetime.now(timezone.utc)
             return
+        self.link = link
         link.job = self.snapshot()
         try:
-            if self.probe:
-                self.stage = "homing"
-                link.job = self.snapshot()
-                link.command("G28", timeout=120.0, origin="control")
-                self.stage = "probing"
-                link.job = self.snapshot()
-                link.command("G29", timeout=LEVELING_PROBE_TIMEOUT_S, origin="control")
-            self.stage = "reading"
-            link.job = self.snapshot()
-            record = read_bed(link, self.port, "probe" if self.probe else "read", self.note)
+            reading = self.dialect.bed_reading(
+                link, probe=self.probe, grid=self.grid, stage=self._stage
+            )
+            record = _as_record(self.port, reading, self.note)
             _save_leveling(record)
             self.record = record  # named by the id it is kept under, never before it is kept
-            link.log.add("sys", f"bed reading saved: {self.record.id}", "control")
-            self.stage = "saved"
+            link.log.add("sys", f"{self.what} saved: {self.record.id}", "control")
+            self._stage("saved")
         except (ToolchainError, ValueError) as exc:
             self.error = str(exc)
-            self.stage = "failed"
-            link.log.add("sys", f"bed reading failed: {exc}", "control")
+            self._stage("failed")
+            link.log.add("sys", f"{self.what} failed: {exc}", "control")
         finally:
             self.finished = datetime.now(timezone.utc)
             link.job = None
@@ -1111,6 +1236,7 @@ _LEVELING: Dict[str, LevelingJob] = {}
 
 
 def leveling_job(port: str) -> Optional[LevelingJob]:
+    ports_now()  # a port that changed hands has let go of the last board's
     return _LEVELING.get(port)
 
 
@@ -1120,17 +1246,21 @@ def start_leveling(
     note: Optional[str] = None,
     state: Optional[FirmwareState] = None,
     links: Optional[gcode.PrinterLinks] = None,
+    grid: Optional[TableGrid] = None,
 ) -> LevelingJob:
-    """Begin a bed reading on ``port``; a probe needs the control latch armed.
+    """Begin a bed reading on ``port`` in its dialect: a printer's mesh, probed
+    (``probe``) or read as stored; a router's table, probed at ``grid``. A probe
+    needs the control latch armed.
 
     Raises ``ControlNotArmed`` for a probe with the latch down, ``PortHeld`` when
-    a job already holds the port, ``ToolchainError`` when it is not a printer.
+    a job already holds the port, ``ToolchainError`` when it is not a G-code
+    machine, or a stored mesh is asked of a board that keeps none.
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
     running = _LEVELING.get(port)
     if running and running.finished is None:
-        raise PortHeld(f"{port}: a bed reading is already {running.stage}")
+        raise PortHeld(f"{port}: {running.what} is already {running.stage}")
     printing = _PRINTS.get(port)
     if printing and printing.finished is None:
         raise PortHeld(f"{port}: a print holds the port ({printing.stage})")
@@ -1140,7 +1270,29 @@ def start_leveling(
         printer_status(port, state=state, links=links)
     if links.get(port) is None:
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
-    job = LevelingJob(port, probe, note, links)
+    # Asked once the link is open, so the board has said what it is: the reading is
+    # the kind's it answered as -- a printer's bed, a router's table.
+    board = occupants.on_port(port, state)
+    if board is None or board.kind is None:
+        raise ToolchainError(
+            f"{port}: a bed reading is a printer's or a router's, and {port} holds no board "
+            "known as either"
+        )
+    if board.shared:
+        raise ToolchainError(
+            f"{port}: another board on this machine answers to {board.key} as well, so a "
+            "reading kept now could not be told whose: unplug the other first"
+        )
+    dialect = dialects.BY_MACHINE[board.kind]
+    if not probe and dialect.stored_mesh is None:
+        # The mesh (M420 V), the probe offset (M851) and the temperatures are Marlin's
+        # lines; a GRBL controller answers each error:20, and keeps no mesh: its reading
+        # probes the table.
+        raise ToolchainError(
+            f"{port}: a stored mesh is a printer's to read, and {port} holds a {board.kind}, "
+            "whose reading probes the table"
+        )
+    job = LevelingJob(port, probe, note, links, dialect=dialect, grid=grid)
     _LEVELING[port] = job
     job.thread.start()
     return job
@@ -1161,10 +1313,13 @@ def _print_file_path(file_id: str) -> Path:
     return prints_dir() / f"{file_id}.gcode"
 
 
-def save_print_file(name: str, data: bytes) -> PrintFile:
-    """Keep an uploaded file and say what it holds; ``problems`` says why it may not be sent."""
+def save_print_file(name: str, data: bytes, machine: Optional[str] = None) -> PrintFile:
+    """Keep an uploaded file for a kind of machine (``machine``) and say what it holds;
+    ``problems`` says why it may not be sent."""
+    if machine is not None and machine not in dialects.BY_MACHINE:
+        raise ValueError(f"no kind of machine is called {machine!r}")
     text = data.decode("utf-8", "replace")
-    total, problems = gcode.check_gcode(text)
+    total, problems = gcode.check_gcode(text, machine)
     at = datetime.now(timezone.utc)
     stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", Path(name).name).strip("_.") or "print"
     stem = re.sub(r"\.(gcode|gco|g|txt)$", "", stem, flags=re.IGNORECASE)[:60]
@@ -1180,8 +1335,24 @@ def save_print_file(name: str, data: bytes) -> PrintFile:
         lines=total,
         uploaded_at=at,
         problems=problems,
+        machine=machine,
     )
     _print_meta_path(file_id).write_text(meta.model_dump_json(indent=2), encoding="utf-8")
+    return meta
+
+
+# Where a slice's record and a toolpath's are kept, by the file each made
+# (slicer/service.py, cam/service.py): what says which kind of machine a file kept
+# before files said is for.
+_MADE_FOR = {"slices": "printer", "cuts": "router"}
+
+
+def _with_its_kind(meta: PrintFile) -> PrintFile:
+    if meta.machine is not None:
+        return meta
+    for folder, machine in _MADE_FOR.items():
+        if (state_dir() / folder / f"{meta.id}.json").is_file():
+            return meta.model_copy(update={"machine": machine})
     return meta
 
 
@@ -1213,7 +1384,7 @@ def print_files() -> List[PrintFile]:
         except (OSError, ValueError):
             continue
         if _print_file_path(meta.id).is_file():
-            files.append(meta)
+            files.append(_with_its_kind(meta))
     return sorted(files, key=lambda f: f.uploaded_at, reverse=True)
 
 
@@ -1229,7 +1400,7 @@ def print_file(file_id: str) -> Optional[PrintFile]:
     if not path.is_file() or not _print_file_path(file_id).is_file():
         return None
     try:
-        return PrintFile(**json.loads(path.read_text(encoding="utf-8")))
+        return _with_its_kind(PrintFile(**json.loads(path.read_text(encoding="utf-8"))))
     except (OSError, ValueError):
         return None
 
@@ -1543,7 +1714,29 @@ _PRINTS: Dict[str, PrintJob] = {}
 
 
 def print_job(port: str) -> Optional[PrintJob]:
+    ports_now()  # a port that changed hands has let go of the last board's
     return _PRINTS.get(port)
+
+
+def _file_fits(file: PrintFile, port: str, kind: Optional[str]) -> None:
+    """ValueError unless ``file`` was kept for the kind of machine on ``port``: a
+    printer's file on a router homes it with G28 and waits out its millisecond dwells
+    as seconds, and a router's on a printer cuts into the bed."""
+    if kind is None:
+        raise ValueError(
+            f"{port}: the board there has not said what kind of machine it drives -- "
+            f"{file.name} is sent to the kind it was kept for alone"
+        )
+    if file.machine is None:
+        raise ValueError(
+            f"{file.name} says no kind of machine it is for: choose it again with this "
+            f"{kind}'s Choose File, which keeps it for a {kind}"
+        )
+    if file.machine != kind:
+        raise ValueError(
+            f"{file.name} was kept for a {file.machine}, and {port} holds a {kind}: "
+            f"it is never sent to a {kind}"
+        )
 
 
 def _sha256_of(file: PrintFile) -> str:
@@ -1605,6 +1798,7 @@ def start_print(
     if last is not None and last.sd_printing:
         raise PortHeld(f"{port}: the card is printing -- pause or abort that first")
     cached = state.cached_device(port)
+    _file_fits(file, port, machine_kind(cached))
     job = PrintJob(
         port,
         file,
@@ -1636,7 +1830,7 @@ def printer_query(
     cmd = normalise_query(port, command, state)  # ValueError for anything that is not a report
     held = links.get(port)
     if held is not None and held.job is not None and held.job.get("kind") not in STREAMED:
-        raise PortHeld(f"{port}: a bed reading holds the port ({held.job['stage']})")
+        raise PortHeld(f"{port}: {what_holds(held.job)} holds the port ({held.job['stage']})")
     if links.get(port) is None:
         printer_status(port, state=state, links=links)  # identifies + opens; offline if it cannot
     link = links.get(port)

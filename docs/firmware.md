@@ -329,6 +329,14 @@ counts only for the board the port holds now:
 - A record written before the list's word was kept beside it, or for a port
   the list did not hold, is compared by its own vendor, product and serial
   number, whichever finder spelled them (`0x1A86` is `0x1a86`).
+- **What is held in memory for a board goes when another board takes its
+  port**: its last poll, a print or bed reading of it that has finished, its
+  link, its control latch and its comms log (`devices.forget_port`, the one
+  place that names them). Each is read only after the port list
+  (`gcode.PrinterLinks` and `ControlLatch` ask it before they answer), so the
+  router on the printer's old port is shown no temperature, job or log of the
+  printer's and is never found armed. A job still running is left to fail on
+  its own once its board has gone. The same board found again keeps all of it.
 
 Two limits. Two bridges that say the same of themselves -- no serial number,
 or a generic one -- are told apart by their socket, so one unplugged and its
@@ -428,6 +436,17 @@ serial number (a CH340) is pinned by its port. The row the pin answers with
 carries what was stored, and the page's status line says it -- the serial
 number or MAC and the port it was found on, or the port alone.
 
+A pin by its port names no board of its own. A board on the port with a MAC or a
+serial number is another board, which a pin of its own would have named by it:
+the Ender on the port name the router's pin holds is not the router's, its polls
+drive no router node and the family's steps for the router do not reach it. The
+pin keeps the kind of machine its board answered as (`printer`, `router`),
+learning it the first time the board answers if it was pinned before, and a
+board on the port that answers as another kind is another board too. Likewise a
+flash kept by the port of a devkit nothing has probed counts for that devkit
+alone, and no sketch is expected of a board that answers as a printer or a
+router: nothing here flashes it.
+
 ### In the viewer: one Machine per board
 
 A pinned board has one surface in the viewer, its **Machine**
@@ -440,7 +459,8 @@ window is the board's head -- its link verbs, the control latch and pad,
 windows of their own, closed until asked for, and those of the board's kind
 alone. A printer's are **Status** (hotend, bed, position, the SD print,
 endstops and filament), **Temperature** (the chart), **Print** (the print
-from here) and **Bed level**; a devkit's are **Sketch** -- what it should
+from here) and **Bed level**; a router's **Status**, **Cut** and **Table
+map** ([docs/cnc.md](cnc.md#in-the-page)); a devkit's are **Sketch** -- what it should
 run against what it was heard saying (its `apothecary <name>: hello`
 banner), and what changed since it was flashed -- and **Flashing**. Both
 kinds have the board's **one log**, **Log**: a printer's comms log, with the
@@ -511,15 +531,39 @@ seats the options
 verb from the ring goes through the same latch, allowlist and confirms as the
 Machine's button for that verb; the ring never opens a port.
 
+### A machine planned before its board is connected
+
+A machine is a node drawn from a part that says it is one (`BasePart.machine`:
+the Ender a printer, the AnoleX a router), whether or not a board is pinned to
+it (`GET /sites/{name}/machines`). Everything that prepares a job asks its board
+nothing, so a machine with no board connected -- none pinned, or one pinned and
+unplugged -- opens its Machine all the same, from its badge, its ring or ⊞
+Windows › Machine view: its Print or Cut card alone, its head saying no board is
+connected. What it makes is chosen there, its slice or toolpath written for it
+by its node (`GET /sites/{name}/machines/{path}` answers its choices as
+`/jobs/choices` does for a port), the file kept for its kind, and the file's
+path drawn over the machine; a router's stands on its table from the working
+area's front-left corner, its work zero being set at the machine. ▶ and every
+control are its board's. **Keep as plan** keeps the part and the file as the
+machine's plan (`PUT /sites/{name}/machines/{path}/plan`,
+`apothecary/machine_plans.py`), refused for a file kept for another kind of
+machine; the machine's Machine chooses them whenever it opens, its board
+connected or not, unless another was chosen meanwhile. A part that says how it
+is cut has Toolpath on its ring for a router with no board as for one with; a
+printer's plan is made in its own Machine.
+
 ### Control, behind a latch
 
 Disarmed, the default, nothing can heat or move the machine: the API refuses
 control lines with `409`. A printer's Machine's **⚙ Control** arms a per-port latch
 held on the server; it lapses after five minutes without a command (each
 accepted command renews it) and is dropped by a **Release** or a lost link.
-**E-STOP** (`M112`) is always accepted, latch or not, and is written at once,
+**E-STOP** (`M112`; a router's `RESET`) is always accepted, latch or not, and
+goes as the stop of whatever board is on the port, whichever word was sent. It
+is written at once,
 ahead of any exchange in flight (a homing, a bed probe), waiting for no `ok`:
-the board's "Printer halted" is its answer. The board halts until it is
+a printer's "Printer halted" or a router's banner is its answer. A router's
+reset is a realtime byte it acts on at once; a printer halts until it is
 reset -- as soon as it reads the line when its firmware parses M112 early
 (Marlin's `EMERGENCY_PARSER`), else after the moves it has queued.
 
@@ -556,17 +600,66 @@ refused before it reaches the port.
 
 ### Bed leveling
 
-**Read mesh** asks the board for its stored mesh (`M420 V`), the probe offset
-(`M851`) and the temperatures and keeps the three as a *bed reading*; it
-moves nothing and needs no latch. **Probe bed** homes and probes (`G28`,
-`G29`) and then reads; it needs the latch and runs as a job that holds the
-port, during which polls answer from the last poll, queries and control lines
-get `409`, and E-STOP still goes through. Readings are kept under
-`~/.apothecary/leveling/` and drawn as a heatmap with the range, the tilt
-(a least-squares plane) and each corner against the mean, and as a relief
-over the printer's bed in the world. The corner buttons move the nozzle to paper
-height at each corner and are controls. `firmware.gcode.parse_meshes` reads
-Marlin's printed grid and falls back to the `G29 W` points an `M503` prints.
+A bed reading is the port's dialect's (`firmware.dialects.Dialect.bed_reading`:
+`gcode.read_bed` for Marlin, `grbl.probe_table` for GRBL), kept, listed and
+drawn the same way whichever took it.
+
+A printer's: **Read mesh** asks the board for its stored mesh (`M420 V`), the
+probe offset (`M851`) and the temperatures and keeps the three as a *bed
+reading*; it moves nothing and needs no latch. **Probe bed** homes and probes
+(`G28`, `G29`) and then reads; it needs the latch and runs as a job that
+holds the port, during which polls answer from the last poll, queries and
+control lines get `409`, and E-STOP still goes through. Readings are kept
+under `~/.apothecary/leveling/` and drawn as a heatmap with the range, the
+tilt (a least-squares plane) and each corner against the mean, and as a
+relief over the printer's bed in the world. The corner buttons move the
+nozzle to paper height at each corner and are controls.
+`firmware.gcode.parse_meshes` reads Marlin's printed grid and falls back to
+the `G29 W` points an `M503` prints.
+A print's start turns a stored mesh on only through the `stored-mesh` start
+piece (`M420 S1` after `G28`; whether `G28` leaves a mesh on is the
+firmware's, the bench checklist's D), named in the printer's slicer profile and refused unless the board's
+newest reading is a probe under the profile's bound; `probe-each-print` probes
+before each print instead ([the slicer's pieces](slicer.md#what-a-slice-is-composed-from)).
+
+A router's is a **table map**, its Machine's Table map window where a
+printer's has Bed level. A GRBL controller keeps no mesh, so **Probe table**
+makes one: it needs the latch and runs as the same job. The spindle is turned
+off (`M5`) and the machine homed (`$H`), so machine coordinates mean the
+working area, which is the controller's own word, its maximum travel (`$$`),
+and the tool stands at the top of Z. Then at each point of a grid inside the
+working area -- three by three, 20 mm in from the edges, or the `grid` the
+request names: rows and columns of two to nine, the inset, the probe's feed
+-- a rapid there in machine coordinates at the top of Z (`G53 G0`, so a
+person's work zero is neither used nor moved), a probe down (`G38.2`) as far
+as the travel allows and no deeper than the dialect's 80 mm, at 200 mm/min
+unless the grid says otherwise and never over the dialect's 500, and the lift
+back to the top. The touches are the mesh, in machine coordinates, rows from
+the front, with the same range, tilt and corners; the record says where the
+grid lies from the working area's front-left corner (`area`), so the world
+lays the relief where the points were probed, and keeps the controller's own
+word on the last touch (`$#`) with the lines. The job's status says the
+points done of the total (`points`) while it probes. The probe's lead must
+close at every point -- clipped to the table, or the plate's whole surface
+under the grid; a plate held at one point is the pad's Probe Z. A probe that
+does not touch within the move alarms the controller (`ALARM:5`) and ends
+the map there, saying so, with nothing kept. A stored mesh is Marlin's: Read
+mesh is refused for a GRBL board before the port.
+
+A reading is the board's that took it. It records that board's key -- its USB
+bridge's serial number on the Ender; its maker's and product's ids for a bridge
+with none, the router's CH340 -- and the kind of machine it drives, and a port's
+readings are the readings of the board on it now (`firmware.occupants`), of its
+kind: a printer's bed readings, a router's table maps. They follow the board
+from port to port, and a router on a port a printer's readings were taken on is
+listed none of them, nor wears one over its table; a printer's reading kept
+under a bridge's shared key is never a router's. A reading kept before readings
+named their board is the printer's on the port it was taken on that answers
+with the firmware it names. A bed reading is refused on a board nothing has
+identified as a printer or a router, before any of the reading is sent, and a stored mesh
+on anything but a printer; and while two boards on the machine answer to one
+key (two bridges of one make, neither with a serial number), it is refused on
+both, since a reading kept then could not be told whose.
 
 ### Printing without an SD card
 
@@ -574,7 +667,14 @@ Marlin's printed grid and falls back to the `G29 W` points an `M503` prints.
 (`~/.apothecary/prints/`) and checks it before anything is sent: a file that
 saves settings (`M500`), factory-resets (`M502`), updates firmware (`M997`),
 kills or restarts the board, or exceeds the heater caps is refused with the
-reason. **Slice**, beside **makes**, slices the part or piece chosen there for
+reason. A kept file says the kind of machine it was kept for, and is sent to
+that kind alone: Choose File keeps it for its Machine's kind, a slice for a
+printer, a toolpath for a router, and a file a slice or a toolpath made before
+files said is known by its record. A stream refuses a file of another kind, a file
+kept for none (Choose File keeps it again for this machine), and any file for a
+board that has not said what kind of machine it drives; the card lists such a
+file with what it was kept for, and its ▶ stays refused. A file kept for a
+router is checked in GRBL's terms too ([docs/cnc.md](cnc.md)). **Slice**, beside **makes**, slices the part or piece chosen there for
 the printer and chooses the G-code it keeps, so Print follows Slice; a file a
 slice made says what it was sliced from and for which printer ([the
 slicer](slicer.md#in-the-page)). **Print** needs the latch and starts a job that sends one line per

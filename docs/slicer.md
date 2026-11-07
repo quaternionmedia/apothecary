@@ -61,6 +61,7 @@ how a slice uses it:
 | Build volume 220 x 220 x 250 mm | Creality's figure (the part's `BUILD`) and the bench's pin of printer_1 | `printable_area`, `printable_height` |
 | Probe offset X-44 Y-10 Z-3.15 | the bench, M851 | Held, nothing applied: the firmware applies it when G28 homes Z with the probe; `z_offset` stays 0 |
 | The stored mesh, leveling off | the bench, M420 V | Held, nothing applied: the start is `home` alone |
+| A bound on a probe's range: 0.3 mm | [the machine-setup record](validation/2026-11-07-machine-setup.md#recommendations) of 2026-11-07, the Ender's first recommendation: after tramming, Probe bed is expected to find a range under it | The `stored-mesh` piece: the board's newest reading must be a probe under it |
 
 ## What a slice is composed from
 
@@ -74,12 +75,29 @@ what it will do, before anything is built. The printer's profile names its piece
 | Kind | Piece | What it does | |
 |---|---|---|---|
 | start | `home` | The printer's own start, as its OrcaSlicer profile has it: heat, home every axis (G28), prime the nozzle; no levelling | printer_1's |
-| start | `stored-mesh` | After G28, turn on the stored bed mesh (M420 S1) | stub |
-| start | `probe-each-print` | After G28, probe the bed before each print (G29) | stub |
+| start | `stored-mesh` | After the last G28, turn on the stored bed mesh (M420 S1); refused unless the newest bed reading of the printer's board is a probe whose range is under the profile's bound | built; a person names it |
+| start | `probe-each-print` | After the last G28 and the wait for the bed, probe the bed before each print (G29); refused without the probe whose offset the profile holds | built; a person names it |
 | start | `first-layer-offset` | A first-layer Z offset measured at the bench, added to every Z | stub |
 | filament | `printer` | The printer's one filament, named in its profile: Creality Generic PLA | printer_1's |
 | filament | `choose` | A slice names another filament the printer has loaded | stub |
 | declared | `word-print-settings` | A word declares print settings for the pieces made as it, in the shape a part declares them | stub |
+
+**Levelling is named, never assumed.** printer_1's start stays `home`: a
+person names `stored-mesh` or `probe-each-print` (one, not both) after it in
+the profile's `start.modules`, after the bench's levelling boxes. Each
+levelling line follows the last `G28`, which turns levelling off in Marlin
+unless the firmware restores it; a probe also follows the wait for the bed
+(`M190`) when one follows that `G28`, so the bed is probed at the temperature
+it prints at. `stored-mesh` is refused, before anything is read or built,
+unless the newest bed reading of the printer's board -- the Machine's Bed
+level card, `GET /firmware/printers/leveling?port=` -- is a probe whose range
+is under the profile's `measured.mesh_range_bound`; a read of what the board
+stores (`M420 V`) is refused as one. The board is the one on the port a slice
+names, else the one pinned under the site's printer and plugged in; a slice
+that names neither a port nor a site has no board, and the piece says so. What
+the host cannot see is whether a probed mesh was stored: Marlin keeps a probe
+in RAM until it is stored from the printer's screen, so storing it is the
+bench's box, and the piece trusts the newest probe.
 
 ## Print settings from the part
 

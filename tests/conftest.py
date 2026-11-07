@@ -325,7 +325,8 @@ def family_bench(fake_arduino_cli, monkeypatch):
     hub.close()
     for port, path in ((PRINTER, BOARD), (ROUTER, CONTROLLER)):
         devices.identify_printer(port)
-        devices.get_state().set_binding(SITE, path, port)
+        # Pinned as a Pin pins and the demo does: by the board's own identity.
+        devices.get_state().set_binding(SITE, path, devices.stable_identity(port))
     yield links
     links.stop_all()
     hub.close()

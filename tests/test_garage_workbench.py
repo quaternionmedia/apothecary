@@ -116,8 +116,9 @@ def test_garage_shell_fixtures_storage_and_cnc_router_render():
 
 def test_the_cnc_router_is_idle_on_its_stand_with_its_working_area():
     """The router sits on its stand's top as printer_1 sits on the bench's, its
-    working area its build volume, its controller in the control box the node a
-    port is pinned to."""
+    working area its build volume, its controller in the control box the board a
+    port is pinned to, and its gantry built as the printer's is: the legs and the
+    cross beam, the Z carriage inside it, and the spindle in the clamp."""
     site = create_example_site()
     router = next(s for s in site.children if s.name == "cnc_router")
     stand = next(s for s in site.children if s.name == "cnc_stand")
@@ -127,9 +128,20 @@ def test_the_cnc_router_is_idle_on_its_stand_with_its_working_area():
     top, machine = stand.world_bounds(), router.world_bounds()
     assert top.min_point.x <= machine.min_point.x and machine.max_point.x <= top.max_point.x
     assert top.min_point.y <= machine.min_point.y and machine.max_point.y <= top.max_point.y
+    assert [c.name for c in router.children] == ["frame_system", "gantry_system"]
     box = next(c for c in router.children if c.name == "frame_system")
     controller = next(c for c in box.children if c.name == "controller")
-    assert controller.category == "electrical" and controller.part_ref is None
+    assert controller.category == "electrical" and controller.part_ref == "anolex_grbl_esp32"
+    gantry = next(c for c in router.children if c.name == "gantry_system")
+    assert {a.name for a in gantry.additions} == {"left_leg", "right_leg", "cross_beam"}
+    z_carriage = next(c for c in gantry.children if c.name == "z_carriage_system")
+    assert {a.name for a in z_carriage.additions} == {"x_carriage", "z_plate", "clamp"}
+    clamp = next(a for a in z_carriage.additions if a.name == "clamp")
+    assert [f.name for f in clamp.children] == ["spindle"]
+    rendered = site.render()
+    pieces = ("left_leg", "right_leg", "cross_beam", "x_carriage", "z_plate", "clamp", "spindle")
+    for feature in pieces:
+        assert rendered.count(f"Feature: {feature}") == 1, feature
 
 
 def test_site_renders_valid_jscad():

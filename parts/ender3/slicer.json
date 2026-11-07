@@ -3,7 +3,7 @@
   "slicer": "orcaslicer",
   "start": {
     "modules": ["home"],
-    "source": "the owner's decision of 2026-10-10 (docs/plans/slicer-2026-10-10.md): the start of a print is composed from modules as they are wanted; homing, with no levelling -- using the stored mesh, probing each print and a measured first-layer offset are stubs"
+    "source": "the owner's decision of 2026-10-10 (docs/plans/slicer-2026-10-10.md): the start of a print is composed from modules as they are wanted; homing, with no levelling -- stored-mesh (M420 S1 after G28) or probe-each-print (G29) is named here by a person after the bench's levelling boxes (docs/validation/2026-11-07-machine-setup.md), and a measured first-layer offset is a stub"
   },
   "filament": {
     "modules": ["printer"],
@@ -52,13 +52,19 @@
       "value": {"x": -44.0, "y": -10.0, "z": -3.15},
       "unit": "mm",
       "source": "docs/validation/2026-09-20-ender-bench.md: M851 X-44.00 Y-10.00 Z-3.15",
-      "used": "held, and nothing is applied: the firmware applies it when G28 homes Z with the probe, so z_offset stays 0; a measured first-layer offset is the start piece first-layer-offset, a stub"
+      "used": "held, and nothing is applied: the firmware applies it when G28 homes Z with the probe, so z_offset stays 0; the start piece probe-each-print needs it held here; a measured first-layer offset is the start piece first-layer-offset, a stub"
     },
     "bed_mesh": {
       "value": {"range": 2.34, "tilt_x": 1.754, "tilt_y": -0.466, "points": "5 x 5", "leveling": "off"},
       "unit": "mm",
       "source": "docs/validation/2026-09-20-ender-bench.md: M420 V, the stored mesh as it was last probed",
-      "used": "held, and nothing is applied: the start is home alone; turning the stored mesh on (M420 S1, the start piece stored-mesh) and probing each print (probe-each-print) are stubs, and the bench says to tram the bed before trusting it"
+      "used": "held, and nothing is applied: the start is home alone; the start piece stored-mesh (M420 S1 after G28) is refused while the board's newest reading is not a probe under mesh_range_bound, and the bench says to tram the bed before trusting it"
+    },
+    "mesh_range_bound": {
+      "value": 0.3,
+      "unit": "mm",
+      "source": "docs/validation/2026-11-07-machine-setup.md, the Ender's Recommendations, 1: after the bed is trammed, Probe bed is expected to find a range under 0.3 mm, and what is left is the plate's bow, which a mesh corrects and tramming cannot; a bed further out is trammed, not corrected",
+      "used": "the start piece stored-mesh: chosen only while the newest bed reading of the printer's board is a probe whose range is under this, else refused with the reason, and the start stays home"
     }
   }
 }

@@ -40,7 +40,7 @@ import time
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Protocol, Tuple
 
-from .models import MARLIN, Heater, PrinterInfo, PrinterStatus
+from .models import MARLIN, BedReading, Heater, PrinterInfo, PrinterStatus
 from .toolchains import PortHeld, ToolchainError
 
 # --- parsers: Marlin's documented replies -------------------------------------
@@ -875,6 +875,18 @@ class GcodeLink:
         }
 
 
+# Read before a port's link or log is handed out: the device layer's reading of the
+# port list (``devices.ports_now``), which lets go of what is held for a board that has
+# left the port (``PrinterLinks.forget``), so a link or a log is never the last board's.
+# None until that layer is imported.
+PORT_LIST_READ: Optional[Callable[[], object]] = None
+
+
+def _read_port_list() -> None:
+    if PORT_LIST_READ is not None:
+        PORT_LIST_READ()
+
+
 class PrinterLinks:
     """Open links, one per port, released as a group before a task takes a port."""
 
@@ -886,12 +898,17 @@ class PrinterLinks:
         self.control = ControlLatch()
 
     def log_for(self, port: str) -> CommsLog:
+        _read_port_list()
+        return self._log_for(port)
+
+    def _log_for(self, port: str) -> CommsLog:
         with self._lock:
             if port not in self._logs:
                 self._logs[port] = CommsLog(port)
             return self._logs[port]
 
     def get(self, port: str) -> Optional[GcodeLink]:
+        _read_port_list()
         with self._lock:
             return self._links.get(port)
 
@@ -900,6 +917,7 @@ class PrinterLinks:
 
         A link a job holds is never replaced: reopening at another baud would
         drop the print under its own thread."""
+        _read_port_list()
         with self._lock:
             link = self._links.get(port)
             if link is not None and link.baud == baud:
@@ -910,7 +928,7 @@ class PrinterLinks:
                         f"{port}: a {link.job.get('kind')} holds the port -- not reopening it"
                     )
                 link.close()
-            link = GcodeLink(port, baud, self.factory(port, baud), log=self.log_for(port))
+            link = GcodeLink(port, baud, self.factory(port, baud), log=self._log_for(port))
             self._links[port] = link
         link.settle()
         return link
@@ -930,6 +948,21 @@ class PrinterLinks:
             return False
         link.close()
         return True
+
+    def forget(self, port: str) -> None:
+        """Another board is on ``port`` now: the last one's link is closed, its latch
+        dropped and its log let go, so nothing of it is shown or armed as the new
+        board's. A link a job holds is left to the job, which fails on its own once
+        its board has gone."""
+        with self._lock:
+            link = self._links.get(port)
+            if link is not None and link.job is not None:
+                return
+            self.control.disarm(port)
+            self._links.pop(port, None)
+            self._logs.pop(port, None)
+        if link is not None:
+            link.close()
 
     def stop_all(self) -> None:
         with self._lock:
@@ -1183,6 +1216,52 @@ def parse_leveling_state(lines: List[str]) -> Optional[bool]:
     return None
 
 
+# The stored mesh's line: what Read mesh asks for, and what a board without one (a
+# GRBL controller) cannot be asked.
+STORED_MESH = "M420 V"
+LEVELING_PROBE_TIMEOUT_S = 900.0  # a five-by-five probe on a slow bed
+
+
+def read_bed(
+    link: GcodeLink,
+    *,
+    probe: bool = True,
+    grid=None,
+    stage: Callable[..., None] = lambda word, points=None: None,
+) -> BedReading:
+    """A printer's bed reading, Marlin's: with ``probe``, home (``G28``) and probe
+    (``G29``) first; then the stored mesh (``M420 V``), the probe offset (``M851``)
+    and the temperatures (``M105``). ``stage`` is told each step as it starts;
+    ``grid`` is a router's and means nothing here, the mesh being the firmware's.
+    This dialect's ``Dialect.bed_reading``; the router's is ``grbl.probe_table``."""
+    if probe:
+        stage("homing")
+        link.command("G28", timeout=120.0, origin="control")
+        stage("probing")
+        link.command("G29", timeout=LEVELING_PROBE_TIMEOUT_S, origin="control")
+    stage("reading")
+    lines: List[str] = []
+    mesh_lines = link.command(STORED_MESH, timeout=15.0, origin="query")
+    lines += mesh_lines
+    offset_lines = link.command("M851", timeout=10.0, origin="query")
+    lines += offset_lines
+    temp_lines = link.command("M105", timeout=10.0, origin="query")
+    lines += temp_lines
+    grids = parse_meshes(mesh_lines)
+    temps = parse_m105(next((ln for ln in temp_lines if is_temperature_line(ln)), ""))
+    return BedReading(
+        method="probe" if probe else "read",
+        mesh=grids[0] if grids else [],
+        subdivided=grids[1] if len(grids) > 1 else None,
+        stats=mesh_stats(grids[0]) if grids else {},
+        leveling_on=parse_leveling_state(mesh_lines),
+        probe_offset=parse_probe_offset(offset_lines),
+        hotend_c=temps["hotends"][0].actual if temps["hotends"] else None,
+        bed_c=temps["bed"].actual if temps["bed"] else None,
+        lines=lines[-400:],
+    )
+
+
 # --- host printing: what a file may carry, and how long a line may take ----------------
 
 # Codes a streamed file is refused for, whatever else it says: they write the
@@ -1200,6 +1279,15 @@ PRINT_REFUSED: Dict[str, str] = {
     "M6": "is a tool change: the host streams one tool",
 }
 TEMP_CODES = {"M104": HOTEND_MAX_C, "M109": HOTEND_MAX_C, "M140": BED_MAX_C, "M190": BED_MAX_C}
+# The M codes a GRBL controller takes (Grbl 1.1's, and Grbl_ESP32's outputs). Any other
+# in a file kept for a router is a printer's: GRBL answers it error:20, and the cut
+# stops at that line.
+GRBL_M_CODES = {0, 1, 2, 3, 4, 5, 7, 8, 9, 30, 56, 62, 63, 67}
+# Longest a dwell in a router's file may ask, in GRBL's unit, seconds: Marlin counts
+# G4 P in milliseconds, so a printer's half-second pause is eight minutes on a router.
+GRBL_DWELL_MAX_S = 60.0
+CODE_RE = re.compile(r"^([GM])0*(\d+)(?:\.\d+)?$")
+DWELL_P_RE = re.compile(r"\bP(\d+(?:\.\d+)?)")
 SPINDLE_CODES = ("M3", "M4")
 SPINDLE_ARG_RE = re.compile(r"S(\d+(?:\.\d+)?)")
 COMMENT_RE = re.compile(r";.*$|\([^)]*\)")
@@ -1220,12 +1308,14 @@ def line_timeout(cmd: str) -> float:
     return PRINT_SLOW_TIMEOUT_S if code in SLOW_CODES else PRINT_LINE_TIMEOUT_S
 
 
-def check_gcode(text: str) -> Tuple[int, List[str]]:
+def check_gcode(text: str, machine: Optional[str] = None) -> Tuple[int, List[str]]:
     """How many lines a file would send, and every reason it may not be sent.
 
     A reason names its line. Refused codes and temperatures over the seam's
     caps are the two: the same bounds as a typed control, applied once to
-    the whole file rather than line by line as it streams.
+    the whole file rather than line by line as it streams. A file kept for a
+    router (``machine``) is checked in GRBL's terms as well: a code GRBL does not
+    take, and a dwell over a minute in its unit, are refused.
     """
     total = 0
     problems: List[str] = []
@@ -1251,10 +1341,34 @@ def check_gcode(text: str) -> Tuple[int, List[str]]:
                 problems.append(
                     f"line {n}: {code} asks for {m.group(1)} rpm, above {SPINDLE_MAX_RPM}"
                 )
+        if machine == "router":
+            problems.extend(_not_grbl(n, cmd, code))
         if len(problems) >= 20:
             problems.append("... and the check stopped here")
             break
     return total, problems
+
+
+def _not_grbl(n: int, cmd: str, code: str) -> List[str]:
+    """Why a line of a router's file is not GRBL's, if it is not."""
+    m = CODE_RE.match(code)
+    if m is None:
+        return []
+    letter, number = m.group(1), int(m.group(2))
+    if letter == "M" and number not in GRBL_M_CODES:
+        return [
+            f"line {n}: {code} is not a GRBL code: the controller answers error:20 and the cut stops there"
+        ]
+    if letter == "G" and number == 29:
+        return [f"line {n}: {code} is a printer's bed probe, not a GRBL code"]
+    if letter == "G" and number == 4:
+        p = DWELL_P_RE.search(cmd[len(code) :])
+        if p and float(p.group(1)) > GRBL_DWELL_MAX_S:
+            return [
+                f"line {n}: {code} P{p.group(1)} dwells {p.group(1)} s on GRBL, whose P is "
+                "seconds; a printer's file counts it in milliseconds"
+            ]
+    return []
 
 
 CONTROL_TTL_S = 300.0  # a latch that nobody touches for this long disarms itself
@@ -1274,7 +1388,10 @@ class ControlLatch:
         self._until: Dict[str, float] = {}
         self._lock = threading.Lock()
 
+    # Each asks the port list first (_read_port_list), outside the lock: a port that
+    # has changed hands disarms itself there (PrinterLinks.forget).
     def arm(self, port: str, ttl: float = CONTROL_TTL_S) -> float:
+        _read_port_list()
         with self._lock:
             self._until[port] = time.monotonic() + ttl
             return self._until[port]
@@ -1284,6 +1401,7 @@ class ControlLatch:
             self._until.pop(port, None)
 
     def armed(self, port: str) -> bool:
+        _read_port_list()
         with self._lock:
             until = self._until.get(port)
             if until is None:
@@ -1294,6 +1412,7 @@ class ControlLatch:
             return True
 
     def seconds_left(self, port: str) -> float:
+        _read_port_list()
         with self._lock:
             until = self._until.get(port)
             return max(0.0, until - time.monotonic()) if until else 0.0

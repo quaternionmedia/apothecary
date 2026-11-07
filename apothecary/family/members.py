@@ -135,7 +135,7 @@ class Machine(Hosted):
         found = _found()
         pinned = {}
         for binding in devices.get_state().bindings():
-            device = device_for_identity(binding.identity, found)
+            device = device_for_identity(binding.identity, found, binding.kind)
             if device is not None and device.printer is not None:
                 pinned[f"{binding.site}:{binding.path}"] = device.port
         return pinned

@@ -61,7 +61,7 @@ def _watched(name: str, site, path: str, found) -> Dict[str, Any]:
     port = None
     for binding in firmware_devices.get_state().bindings(name):
         if status_bearer_for(site, binding.path) == path:
-            device = device_for_identity(binding.identity, found)
+            device = device_for_identity(binding.identity, found, binding.kind)
             port = device.port if device is not None else None
             if port:
                 break

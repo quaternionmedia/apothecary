@@ -277,7 +277,7 @@ def slice_into(
         f"Slicing {target.made.kind} {target.made.name} for {printer.at.name} "
         f"({printer.profile.file}) with {module.label} {status.tool.version}"
     )
-    resolved = module.settings(printer.profile, target.declared)
+    resolved = module.settings(printer.profile, target.declared, port=printer.at.port)
     if target.declared.note:
         resolved.settings.insert(
             0,
@@ -315,7 +315,7 @@ def slice_into(
                 resolved.settings,
             )
         data = output.gcode.read_bytes()
-        kept = devices.save_print_file(f"{target.made.name}.gcode", data)
+        kept = devices.save_print_file(f"{target.made.name}.gcode", data, machine="printer")
         runner.log(f"Kept {kept.name} ({kept.lines} lines) for the Print card: {kept.id}")
         for problem in kept.problems:
             runner.log(f"  the Print card would refuse it: {problem}")

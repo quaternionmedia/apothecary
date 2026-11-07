@@ -246,8 +246,10 @@ def test_the_garage_printers_are_ender_3s_drawn_as_they_are(monkeypatch):
 
 def test_the_garage_router_is_an_anolex_4060_drawn_as_it_is(monkeypatch):
     """The router is the AnoleX 4060-Evo Ultra 2 part on its stand, its controller in
-    the control box at the back, its working area where the machine's table is; the
-    layout is valid, and the site's render imports the part."""
+    the control box at the back the board model the garage assumes for it, its gantry
+    and the spindle in the clamp placed from the part's own constants, its working
+    area where the machine's table is; the layout is valid, and the site's render
+    imports the part and the board."""
     site = create_example_site()
     router = next(s for s in site.children if s.name == "cnc_router")
     assert router.part_ref == "anolex_4060_evo_ultra_2" and router.base is None
@@ -257,14 +259,35 @@ def test_the_garage_router_is_an_anolex_4060_drawn_as_it_is(monkeypatch):
     box = next(c for c in router.children if c.name == "frame_system")
     assert box.position == anolex.CONTROL_BOX.min_point
     controller = next(c for c in box.children if c.name == "controller")
+    assert controller.part_ref == "anolex_grbl_esp32" and controller.base is None
     assert controller.category == "electrical" and "pin the router's port" in controller.comment
+    board = part_named("anolex_grbl_esp32", ROOT)
+    assert controller.footprint.max_point == board.get_bounds().max_point
+    gantry = next(c for c in router.children if c.name == "gantry_system")
+    beam = next(a for a in gantry.additions if a.name == "cross_beam")
+    assert beam.base.v == Vector3D(x=0, y=anolex.GANTRY_Y - 20, z=anolex.GANTRY_Z)
+    assert beam.base.children[0].size == anolex.CROSS_BEAM == Vector3D(x=630, y=40, z=120)
+    z_carriage = next(c for c in gantry.children if c.name == "z_carriage_system")
+    clamp = next(a for a in z_carriage.additions if a.name == "clamp")
+    spindle = clamp.children[0]
+    # The spindle's axis is the tool's, over the middle of the table at the
+    # part's default axes, its body starting above the collet.
+    assert spindle.base.v == anolex.TOOL + Vector3D(z=anolex.COLLET) == Vector3D(x=315, y=465, z=148)
+    assert spindle.base.children[0].r == anolex.SPINDLE_DIAMETER / 2 == 32.5
     assert validate_garage_layout(site).is_valid
     monkeypatch.setattr(hierarchy, "part_stl_path", lambda ref: f"parts/{ref}.stl")
-    assert site.render().count('import("parts/anolex_4060_evo_ultra_2.stl"') == 1
-    # The part says which of its numbers the maker publishes, as the Ender's does.
+    rendered = site.render()
+    for part in ("anolex_4060_evo_ultra_2", "anolex_grbl_esp32"):
+        assert rendered.count(f'import("parts/{part}.stl"') == 1, part
+    # The part says which of its numbers the maker publishes, as the Ender's does,
+    # and draws its tool where its functions say it stands.
     scad = anolex.DEFAULT.source_file.read_text(encoding="utf-8")
     assert scad.count("published") >= 2
     assert "work_x = 400; work_y = 600; work_z = 80;" in scad
+    assert (
+        "function beam_y() = tool_y() + clamp_bore + clamp[1] / 2 + z_plate[1] + carriage[1]"
+        " + block[2] + beam_x[0] / 2;"
+    ) in scad
     # The API carries the working area and its origin to the viewers.
     client = TestClient(app)
     tree = client.get("/sites/garage").json()["tree"]
@@ -274,21 +297,28 @@ def test_the_garage_router_is_an_anolex_4060_drawn_as_it_is(monkeypatch):
 
 
 def test_the_board_models_are_the_boards_they_say(tmp_path):
-    """Every board model's PCB is the published size, at the origin, flat on z = 0
-    (or standing on its pins), so a site places it by its corner."""
+    """Every board model's PCB is the size its SCAD states -- the published one, or
+    for the router's controller, which its maker publishes no drawing of, an assumed
+    one said to be so -- at the origin, flat on z = 0 (or standing on its pins), so
+    a site places it by its corner."""
     expected = {
         "arduino_uno": (68.58, 53.34),
         "raspberry_pi_4": (85.0, 56.0),
         "teensy_40": (35.56, 17.78),
         "esp32_devkitc": (55.0, 28.0),
         "creality_v422": (102.0, 74.0),
+        "anolex_grbl_esp32": (100.0, 80.0),
     }
     for name, (w, d) in expected.items():
         part = part_named(name, ROOT)
         assert isinstance(part, DescribedPart) and part.category == "electrical"
         text = part.source_file.read_text(encoding="utf-8")
         assert f"size = [{w}, {d}];" in text or f"size = [{int(w)}, {int(d)}];" in text, name
-        assert "published" in text.lower()
+        if name == "anolex_grbl_esp32":
+            assert "publishes no drawing" in text and "assumed" in text
+            assert "assumed" in part.readme_path.read_text(encoding="utf-8")
+        else:
+            assert "published" in text.lower()
         # The declared box; test_parts_parameters holds it to the render.
         box = part.get_bounds()
         assert box.min_point.z >= -2.0 and box.size.x < w + 20 and box.size.y < d + 10, name

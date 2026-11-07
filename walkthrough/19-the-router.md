@@ -15,17 +15,35 @@ the floor of its footprint.
     >>> router.part_ref, router.build_volume.to_list(), router.build_origin.to_list()
     ('anolex_4060_evo_ultra_2', [400.0, 600.0, 80.0], [115.0, 165.0, 100.0])
 
+It is built as printer_1 is: a `frame_system`, the control box at the back
+of the base holding the controller, and a `gantry_system`, the gantry riding
+the Y rails with the Z carriage on its cross beam and the trim router in the
+carriage's 65 mm clamp. The gantry's pieces stand where the part draws them
+with its axes at their defaults, placed from the part's own constants.
+
+    >>> [c.name for c in router.children]
+    ['frame_system', 'gantry_system']
+    >>> gantry = router.children[1]
+    >>> [a.name for a in gantry.additions], [c.name for c in gantry.children]
+    (['left_leg', 'right_leg', 'cross_beam'], ['z_carriage_system'])
+    >>> clamp = next(a for a in gantry.children[0].additions if a.name == "clamp")
+    >>> spindle = clamp.children[0]
+    >>> spindle.name, spindle.base.v.to_list(), spindle.base.children[0].r
+    ('spindle', [315.0, 465.0, 148.0], 32.5)
+
 Its controller runs Grbl_ESP32 and speaks GRBL's dialect of G-code, which
 differs from Marlin's in the places this seam cares about: a board is
 identified by `$I`, there being no `M115`; a poll is the realtime `?` and
 `$G`; what may be typed at it is another short list; and the stop is a soft
 reset. The port is pinned to the controller inside the control box, as
 printer_1's is to its mainboard, and the router above it takes the
-controller's state.
+controller's state. The controller is drawn as the board it is assumed to be
+([the board](../parts/boards/anolex_grbl_esp32/README.md): the maker
+publishes no drawing of it).
 
-    >>> box = next(c for c in router.children if c.name == "frame_system")
-    >>> [c.name for c in box.children], box.children[0].comment
-    (['controller'], "Controller (Grbl_ESP32) -- pin the router's port here")
+    >>> box = router.children[0]
+    >>> [c.name for c in box.children], box.children[0].part_ref, box.children[0].comment
+    (['controller'], 'anolex_grbl_esp32', "Controller (Grbl_ESP32) -- pin the router's port here")
 
 ## The dialect
 
@@ -96,8 +114,40 @@ says its banner.
     "Grbl 1.3a ['$' for help]"
     >>> grbl.poll_router(link).spindle.on
     False
+
+## The table map
+
+The router's bed reading is its own kind. A printer keeps a mesh its firmware
+probed and prints it on request; a GRBL controller keeps none, so the
+router's table is mapped from here: Z probed with the touch plate at each
+point of a grid over the working area, from the top of Z, in machine
+coordinates so a person's work zero is neither used nor moved. The working
+area is the controller's own word, its maximum travel. The simulated
+controller answers a probe with a flat plate 20 mm under the tool, so its map
+is flat, every touch 23 mm down from the top of the travel; the record says
+where the grid lies from the working area's front-left corner.
+
+    >>> from apothecary.firmware.models import TableGrid
+    >>> reading = grbl.probe_table(link, grid=TableGrid(rows=2, cols=3, inset=50))
+    >>> reading.method, reading.mesh
+    ('G38.2', [[-23.0, -23.0, -23.0], [-23.0, -23.0, -23.0]])
+    >>> reading.stats["range"], reading.area
+    (0.0, {'min': {'x': 50.0, 'y': 50.0}, 'max': {'x': 350.0, 'y': 550.0}})
+
+Each point was a rapid there in machine coordinates, the probe down as far as
+the travel allows, and the lift back to the top, every line one the pad could
+send and bounded the same way; the controller's own word on the last touch
+(`$#`) is kept with the lines, after the touch itself.
+
+    >>> [ln for ln in reading.lines if ln.startswith("[PRB:")][-2:]
+    ['[PRB:-50.000,-50.000,-23.000:1]', '[PRB:-50.000,-50.000,-23.000:1]']
     >>> links.close("/dev/ttySIM")
     True
+
+Kept as a bed reading of the router's, a map is listed for its board, laid
+over its table in the world where its points were probed, and shown in its
+Machine's Table map card, which takes the next one
+([docs/firmware.md](../docs/firmware.md#bed-leveling)).
 
 [docs/cnc.md](../docs/cnc.md) says what of the router is built and what is
 not: the page's window for it, the demo's pin and the bench's confirmation

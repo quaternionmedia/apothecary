@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Pattern
 
 from . import gcode, grbl
+from .models import BedReading
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,11 @@ class Dialect:
     line_timeout: Callable[[str], float]  # how long a streamed line may take
     job_allows: Pattern[str]  # what a person may send while a streamed job holds the port
     explain: Optional[Callable[[str], Optional[str]]]  # the words for a board's objection
+    # Its bed reading over a link -- (link, *, probe, grid, stage) -> BedReading: a
+    # printer's stored mesh, a router's table probed -- and the line that reads a mesh
+    # the firmware keeps, where it keeps one (None: a reading is a probe or nothing).
+    bed_reading: Callable[..., BedReading]
+    stored_mesh: Optional[str]
 
 
 MARLIN = Dialect(
@@ -47,6 +53,8 @@ MARLIN = Dialect(
     line_timeout=gcode.line_timeout,
     job_allows=gcode.JOB_ALLOWS,
     explain=None,
+    bed_reading=gcode.read_bed,
+    stored_mesh=gcode.STORED_MESH,
 )
 GRBL = Dialect(
     word=grbl.DIALECT,
@@ -62,6 +70,8 @@ GRBL = Dialect(
     line_timeout=grbl.line_timeout,
     job_allows=grbl.JOB_ALLOWS,
     explain=grbl.explain,
+    bed_reading=grbl.probe_table,
+    stored_mesh=None,
 )
 BY_WORD: Dict[str, Dialect] = {MARLIN.word: MARLIN, GRBL.word: GRBL}
 BY_MACHINE: Dict[str, Dialect] = {d.machine: d for d in BY_WORD.values()}

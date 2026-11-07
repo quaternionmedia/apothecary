@@ -23,8 +23,14 @@ from firmware_helpers import fake_cli_calls
 
 from apothecary.api import app
 from apothecary.cli import cli
-from apothecary.firmware import devices, gcode, grbl, serial_monitor
-from apothecary.firmware.models import BoardInfo, DeviceInfo, PrinterInfo
+from apothecary.firmware import devices, gcode, grbl, occupants, serial_monitor
+from apothecary.firmware.models import (
+    BoardInfo,
+    DeviceInfo,
+    FlashRecord,
+    LevelingRecord,
+    PrinterInfo,
+)
 
 PORT = "/dev/ttyMOVES0"
 OTHER = "/dev/ttyMOVES1"
@@ -36,6 +42,8 @@ ENDER = {"vid": "0x0403", "pid": "0x6001", "serial_number": "MADEUPENDER1", "loc
 ENDER_TWIN = {**ENDER, "serial_number": "MADEUPENDER2", "location": "1-5"}
 ROUTER = {"vid": "0x1a86", "pid": "0x7523", "serial_number": None, "location": "1-3"}
 ROUTER_TWIN = {**ROUTER, "location": "1-4"}
+# An ESP32 devkit behind a CP2102, which carries a serial number of its own.
+DEVKIT = {"vid": "0x10c4", "pid": "0xea60", "serial_number": "MADEUPDEVKIT", "location": "1-6"}
 
 
 def _as_pyserial_lists_it(port, usb):
@@ -362,13 +370,11 @@ def test_a_router_on_a_printer_s_old_port_is_stopped_as_a_router(bench, monkeypa
     assert devices.dialect_of(PORT) == "grbl" and devices.emergency_stop_for(PORT) == "RESET"
     assert devices.printer_status(PORT).spindle.on
     links.control.disarm(PORT)
-    # A printer's stop is refused, said, and not sent: GRBL would answer it error:20
-    # and go on cutting.
-    with pytest.raises(ValueError, match="not an allowed GRBL control"):
-        devices.printer_control(PORT, "M112")
+    # A printer's stop goes as the router's own: GRBL would answer M112 with error:20
+    # and go on cutting, so its soft reset is what is sent.
+    said = devices.printer_control(PORT, "M112")
+    assert said.command == "RESET" and any(ln.startswith("Grbl") for ln in said.lines)
     assert "M112" not in _sent(links)
-    said = devices.printer_control(PORT, "RESET").lines
-    assert any(ln.startswith("Grbl") for ln in said)
     assert not devices.printer_status(PORT).spindle.on
     links.stop_all()
 
@@ -383,13 +389,13 @@ def test_the_stop_of_a_router_nothing_has_asked_yet_goes_too(bench, monkeypatch)
     links.stop_all()
 
 
-def test_a_printer_s_stop_is_never_sent_to_a_router_nothing_has_asked_yet(bench, monkeypatch):
+def test_a_printer_s_stop_reaches_a_router_nothing_has_asked_yet_as_its_reset(bench, monkeypatch):
     links = _links(monkeypatch, grbl.SimulatedRouter)
     _a_printer_was_identified(bench)
     bench.plug(PORT, ROUTER)
-    # It is asked what it is first, answers as a router, and the line is refused.
-    with pytest.raises(ValueError, match="not an allowed GRBL control"):
-        devices.printer_control(PORT, "M112")
+    # It is asked what it is first, answers as a router, and is sent its own stop.
+    said = devices.printer_control(PORT, "M112")
+    assert said.command == "RESET" and any(ln.startswith("Grbl") for ln in said.lines)
     assert "$I" in _sent(links) and "M112" not in _sent(links)
     links.stop_all()
 
@@ -421,9 +427,8 @@ def test_a_printer_on_a_router_s_old_port_is_stopped_as_a_printer(bench, monkeyp
     assert devices.printer_control(PORT, "M112").command == "M112"
     assert "M112" in _sent(links)
     assert devices.dialect_of(PORT) == "marlin" and devices.emergency_stop_for(PORT) == "M112"
-    # And a router's stop is refused on it, not sent.
-    with pytest.raises(ValueError, match="not an allowed control code"):
-        devices.printer_control(PORT, "RESET")
+    # And a router's word for the stop is its own, M112.
+    assert devices.printer_control(PORT, "RESET").command == "M112"
     links.stop_all()
 
 
@@ -452,7 +457,9 @@ def test_pin_stores_the_board_on_the_port_and_says_what_it_stored(bench, garage)
     # The router, by its port: not the printer whose record that port's name still holds.
     assert row["identity"] == PORT
     assert row["device"]["port"] == PORT and row["device"]["printer"] is None
-    assert row["note"] is None
+    # The controller is a board model whose folder holds no sketch, as the printer's
+    # mainboard is: each runs a firmware of its own, and the row says so.
+    assert row["note"] == "no sketch for 'anolex_grbl_esp32'"
     pins = [b for b in devices.get_state().bindings("garage") if b.path == CONTROLLER]
     assert [b.identity for b in pins] == [PORT]
     # The printer plugged in again elsewhere is not what the router's node holds.
@@ -511,6 +518,261 @@ def test_no_view_of_the_port_says_the_printer_is_still_on_it(bench, garage):
         "path": None,
     }
     assert answers["/firmware/printers/info"].json()["device"]["device"]["printer"] is None
+
+
+# --- what is held in memory for a board, when another board takes its port --------------
+
+
+def _a_printer_polled_armed_and_printed(bench, monkeypatch):
+    """The Ender on the port as a session leaves it: polled, a print run to its end,
+    control armed, every exchange in its comms log, its link held."""
+    links = _links(monkeypatch, gcode.SimulatedPrinter)
+    _a_printer_was_identified(bench)
+    assert devices.printer_status(PORT).state == "idle"
+    links.control.arm(PORT)
+    kept = devices.save_print_file("square.gcode", b"G90\nG1 X10 Y10 F3000\n", machine="printer")
+    job = devices.start_print(PORT, kept.id)
+    job.thread.join(10)
+    assert job.finished is not None and devices.print_job(PORT) is job
+    links.control.arm(PORT)
+    assert PORT in devices.last_statuses() and _sent(links) and links.get(PORT) is not None
+    return links
+
+
+def test_a_board_on_a_port_another_held_is_shown_nothing_held_for_that_one(bench, monkeypatch):
+    links = _a_printer_polled_armed_and_printed(bench, monkeypatch)
+    bench.unplug(PORT)
+    bench.plug(PORT, ROUTER)
+    # No poll, no job, no log, no latch, and no link to a board that has gone.
+    assert PORT not in devices.last_statuses()
+    assert devices.print_job(PORT) is None and devices.leveling_job(PORT) is None
+    assert not links.control.armed(PORT) and links.get(PORT) is None
+    assert _sent(links) == []
+    links.stop_all()
+
+
+@pytest.mark.parametrize(
+    "url, empty",
+    [
+        ("/firmware/printers/log", lambda a: a["entries"] == [] and a["held"] is False),
+        (
+            "/firmware/printers/info",
+            lambda a: a["last_status"] is None and a["link"] is None and not a["control"]["armed"],
+        ),
+        ("/firmware/printers/print", lambda a: a["stage"] is None and a["running"] is False),
+        ("/firmware/printers/control", lambda a: a["armed"] is False and a["seconds_left"] == 0),
+    ],
+)
+def test_no_answer_about_the_port_carries_what_was_held_for_the_board_before(
+    bench, monkeypatch, url, empty
+):
+    """Each of the page's questions, asked first once the router holds the port: it
+    reads the port list before what is held, so it never answers with the printer's
+    poll, job, log or latch."""
+    links = _a_printer_polled_armed_and_printed(bench, monkeypatch)
+    bench.plug(PORT, ROUTER)
+    answer = TestClient(app).get(url, params={"port": PORT})
+    assert answer.status_code == 200 and empty(answer.json()), answer.text
+    links.stop_all()
+
+
+def test_the_board_found_again_on_its_port_keeps_its_log(bench, monkeypatch):
+    links = _a_printer_polled_armed_and_printed(bench, monkeypatch)
+    said = _sent(links)
+    bench.unplug(PORT)
+    devices.ports_now()  # the list read while the port is empty
+    bench.plug(PORT, ENDER)
+    assert _sent(links) == said and PORT in devices.last_statuses()
+    links.stop_all()
+
+
+# --- a bed reading is the board's that took it -----------------------------------------
+
+
+def _a_reading_of_the_printer(bench, monkeypatch, port=PORT):
+    """The Ender's bed read on ``port``: its stored mesh, nothing moved."""
+    links = _links(monkeypatch, gcode.SimulatedPrinter)
+    _a_printer_was_identified(bench, port)
+    job = devices.start_leveling(port, probe=False)
+    job.thread.join(10)
+    assert job.stage == "saved", job.error
+    return links, job.record
+
+
+def _a_reading_kept_before_readings_named_their_board(firmware="Marlin made up"):
+    old = LevelingRecord(
+        id="20260920T132512.468-dev_ttyMOVES0",
+        port=PORT,
+        at=datetime(2026, 9, 20, 13, 25, tzinfo=timezone.utc),
+        method="read",
+        mesh=[[0.0, 0.1], [0.2, 0.3]],
+        firmware=firmware,
+    )
+    devices._save_leveling(old)
+    return old
+
+
+def test_a_bed_reading_is_kept_as_the_board_s_that_took_it(bench, monkeypatch):
+    links, reading = _a_reading_of_the_printer(bench, monkeypatch)
+    assert (reading.board, reading.machine) == ("MADEUPENDER1", "printer") and reading.mesh
+    assert [r.id for r in devices.leveling_records(PORT)] == [reading.id]
+    links.stop_all()
+
+
+def test_the_router_on_the_printer_s_port_wears_none_of_its_readings(bench, monkeypatch):
+    """What happened on the bench: the router on the port the Ender's readings were
+    taken on, and the page asking for the port's readings to draw over its table."""
+    links, reading = _a_reading_of_the_printer(bench, monkeypatch)
+    _a_reading_kept_before_readings_named_their_board()
+    _a_router_was_identified(bench)
+    assert devices.leveling_records(PORT) == []
+    answer = TestClient(app).get("/firmware/printers/leveling", params={"port": PORT})
+    assert answer.status_code == 200 and answer.json() == []
+    links.stop_all()
+
+
+def test_the_printer_s_readings_follow_it_to_another_port(bench, monkeypatch):
+    links, reading = _a_reading_of_the_printer(bench, monkeypatch)
+    bench.unplug(PORT)
+    _a_printer_was_identified(bench, OTHER)
+    assert [r.id for r in devices.leveling_records(OTHER)] == [reading.id]
+    links.stop_all()
+
+
+def test_a_reading_kept_without_its_board_is_the_printer_s_on_its_port_with_its_firmware(bench):
+    old = _a_reading_kept_before_readings_named_their_board()
+    _a_printer_was_identified(bench)
+    assert [r.id for r in devices.leveling_records(PORT)] == [old.id]
+    # The same printer on another port, another printer on its port, the router there:
+    # none of them is shown it.
+    bench.unplug(PORT)
+    _a_printer_was_identified(bench, OTHER)
+    assert devices.leveling_records(OTHER) == []
+    bench.plug(PORT, ENDER_TWIN)
+    scanned = next(d for d in devices.detected_devices() if d.port == PORT)
+    other = _answered("marlin", "printer", "Marlin of another build")
+    devices.get_state().remember_device(scanned.model_copy(update={"printer": other}))
+    assert devices.leveling_records(PORT) == []
+    _a_router_was_identified(bench)
+    assert devices.leveling_records(PORT) == []
+
+
+def test_a_stored_mesh_is_refused_on_a_router_and_nothing_marlin_is_sent(bench, monkeypatch):
+    """A router keeps no mesh to read: its own reading probes its table
+    (``test_firmware_table_map.py``), and Read mesh is refused before the port."""
+    links = _links(monkeypatch, grbl.SimulatedRouter)
+    _a_router_was_identified(bench)
+    links.control.arm(PORT)
+    with pytest.raises(
+        devices.ToolchainError, match="a stored mesh is a printer's to read, and .* holds a router"
+    ):
+        devices.start_leveling(PORT, probe=False)
+    assert not {"G28", "G29", "M420 V", "M851"} & set(_sent(links))
+    links.stop_all()
+
+
+def test_two_bridges_of_one_make_share_a_key_and_own_nothing_under_it(bench):
+    bench.plug(PORT, ROUTER)
+    bench.plug(OTHER, ROUTER_TWIN)
+    one, two = occupants.on_port(PORT), occupants.on_port(OTHER)
+    assert one.key == two.key == "usb:1a86:7523" and one.shared and two.shared
+    assert not one.owns("usb:1a86:7523")
+    bench.unplug(OTHER)
+    assert occupants.on_port(PORT).owns("usb:1a86:7523")
+
+
+# --- a pin by port name, and a flash kept by port --------------------------------------
+
+
+def _the_router_pinned_by_its_port(bench, c):
+    """The router pinned from the port list: a CH340 has no serial number, so the pin
+    is its port, and it learns the router's kind."""
+    _a_router_was_identified(bench)
+    row = c.put(f"/sites/garage/nodes/{CONTROLLER}/device", json={"identity": PORT}).json()
+    assert row["identity"] == PORT
+    (pin,) = [b for b in devices.get_state().bindings("garage") if b.path == CONTROLLER]
+    assert pin.kind == "router"
+
+
+def _the_controller_s_board(c):
+    rows = c.get("/sites/garage/devices").json()["bindings"]
+    return next(r for r in rows if r["path"] == CONTROLLER)["device"]
+
+
+def test_the_printer_on_the_router_s_port_is_not_the_router_s(bench, garage):
+    """The Ender on the port name the router's pin holds: it has a serial number, so a
+    pin of its own would have named it, and the router's node does not take it."""
+    c = TestClient(app)
+    _the_router_pinned_by_its_port(bench, c)
+    cnc_router = next(s for s in garage.children if s.name == "cnc_router")
+    _a_printer_was_identified(bench)
+    assert _the_controller_s_board(c) is None
+    polled = gcode.PrinterStatus(port=PORT, polled_at=datetime.now(timezone.utc), state="printing")
+    assert devices.notify_status(polled).synced == []
+    assert cnc_router.status != "printing"
+    c.delete(f"/sites/garage/nodes/{CONTROLLER}/device")
+
+
+def test_a_board_of_another_kind_on_the_pin_s_port_is_not_its_board(bench, garage):
+    """Two bridges of one make, neither with a serial number: the kind the pin learnt
+    tells them apart once the other has answered."""
+    c = TestClient(app)
+    _the_router_pinned_by_its_port(bench, c)
+    bench.plug(PORT, ROUTER_TWIN)
+    scanned = next(d for d in devices.detected_devices() if d.port == PORT)
+    printer = _answered("marlin", "printer", "Marlin on a CH340")
+    devices.get_state().remember_device(scanned.model_copy(update={"printer": printer}))
+    assert _the_controller_s_board(c) is None
+    _a_router_was_identified(bench)
+    assert _the_controller_s_board(c)["port"] == PORT
+    c.delete(f"/sites/garage/nodes/{CONTROLLER}/device")
+
+
+def test_a_pin_by_port_learns_its_board_s_kind_the_first_time_it_answers(bench, garage):
+    bench.plug(PORT, ROUTER)
+    c = TestClient(app)
+    c.put(f"/sites/garage/nodes/{CONTROLLER}/device", json={"identity": PORT})
+    (pin,) = [b for b in devices.get_state().bindings("garage") if b.path == CONTROLLER]
+    assert pin.kind is None  # pinned before it was asked what it is
+    _a_router_was_identified(bench)
+    (pin,) = [b for b in devices.get_state().bindings("garage") if b.path == CONTROLLER]
+    assert pin.kind == "router"
+    c.delete(f"/sites/garage/nodes/{CONTROLLER}/device")
+
+
+def _flashed_by_port(board=None):
+    record = FlashRecord(
+        identity=PORT,
+        port=PORT,
+        sketch="esp32_blink",
+        flashed_at=datetime.now(timezone.utc),
+        board=board,
+    )
+    devices.get_state().record_flash(record)
+
+
+def test_a_printer_never_should_run_what_a_devkit_on_its_port_was_flashed_with(bench, tmp_path):
+    """A devkit flashed before it was probed is kept by its port; the Ender later on that
+    port name runs its own firmware, which nothing here flashes."""
+    bench.plug(PORT, DEVKIT)
+    _flashed_by_port()
+    devkit = next(d for d in devices.detected_devices() if d.port == PORT)
+    assert devices.expected_firmware(devkit, tmp_path).record.sketch == "esp32_blink"
+    _a_printer_was_identified(bench)
+    ender = next(d for d in devices.detected_devices() if d.port == PORT)
+    assert ender.printer is not None
+    assert devices.expected_firmware(ender, tmp_path).record is None
+
+
+def test_a_flash_kept_by_port_counts_for_the_board_it_was_made_on(bench, tmp_path):
+    bench.plug(PORT, DEVKIT)
+    _flashed_by_port(board="MADEUPDEVKIT")
+    bench.plug(PORT, {**DEVKIT, "serial_number": "MADEUPDEVKIT2", "location": "1-7"})
+    other = next(d for d in devices.detected_devices() if d.port == PORT)
+    assert devices.expected_firmware(other, tmp_path).record is None
+    bench.plug(PORT, DEVKIT)
+    again = next(d for d in devices.detected_devices() if d.port == PORT)
+    assert devices.expected_firmware(again, tmp_path).record.sketch == "esp32_blink"
 
 
 # --- the simulated boards --------------------------------------------------------------

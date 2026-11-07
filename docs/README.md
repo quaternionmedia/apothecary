@@ -32,7 +32,7 @@ written by the browser tests that walk them; page 00, pages 07 to 17 and pages
 | [16 — Being depended on](../walkthrough/16-being-depended-on.md) | What a consumer pinning this repository is entitled to |
 | [17 — A part that computes itself](../walkthrough/17-a-part-that-computes-itself.md) | The airgap: a part whose SCAD computes its surfaces from its assignments, the Python mirror that declares its envelope, and the metrics document its panel says |
 | [18 — The working space](../walkthrough/18-the-working-space.md) | A site as its evidence has it and a printer's hour in it, from each of its doors: three cameras added above printer_1, each told its device in its row, a frame set kept with a poll and opened beside it, the budget set; written by the browser suite |
-| [19 — The router](../walkthrough/19-the-router.md) | The garage's CNC router, an AnoleX 4060-Evo Ultra 2: its working area on its table, GRBL's dialect read and bounded, the simulated controller identified, polled, driven and stopped |
+| [19 — The router](../walkthrough/19-the-router.md) | The garage's CNC router, an AnoleX 4060-Evo Ultra 2: its working area on its table, GRBL's dialect read and bounded, the simulated controller identified, polled, driven and stopped, its table mapped by its probe |
 | [20 — A part through the router](../walkthrough/20-a-part-through-the-router.md) | The subtractive loop on one part: the coupon's declared cuts, its toolpath written and checked, kept and cut from here with the work zeroed, the job naming its operation, the cut measured against the design, and the design changed and cut again |
 | [21 — A toolpath, previewed](../walkthrough/21-a-toolpath-previewed.md) | One interpreter and two processes: a print's layers and a cut's passes read through one core, held to the toolpath's own writer, and a design change seen in the moves |
 | [22 — The irl family's hub](../walkthrough/22-the-irl-hub.md) | apothecary as the family's hub on hearth's contract: what it says it is, its table, a fire and what is kept |
@@ -89,6 +89,7 @@ Open plans: each says what is decided and what is not built.
 
 | Page | |
 |---|---|
+| [Each machine keeps its own](plans/machine-identity-2026-11-07.md) | One answer to which board is on a port and what kind of machine it is; every record and cache keyed by it, a port that changes hands forgetting its board, one kind's work refused on another at the server, and the stop always sent; in slices: the stop, the port's forgetting, readings by board, pins by board, files by kind and machines planned before their board built; the page's marks by board not |
 | [A part through the subtractive loop](plans/subtractive-loop-2026-11-04.md) | The loop the app is built around from here, on the router beside the Ender: a part's declared cuts, the app's own toolpath, Cut from here, the cut's operation named, the simulated router's footprint measured and one iteration executed (built); then the bench, then the cut watched |
 | [Pictures in the world: what is open](plans/pictures-the-rest-2026-10-13.md) | Gathering out of core as an extra, and the old photo routes closed: the two phases of the pictures plan not built |
 | [The shape finder, with a model behind it](plans/photo-finders-local-models-2026-09-21.md) | Optional local models behind the photo finder: the seam, the plugin shape, what reach is lawful, the phases |
@@ -126,6 +127,7 @@ whose work is done leaves the table above for this list.
 
 ### Records from the bench
 
+- 2026-11-07 — [The garage's two machines, read from what is recorded](validation/2026-11-07-machine-setup.md): where the relief the viewer lays over the router comes from, the Ender's stored mesh against its probes, the router's settings never read and what each decides, and the boxes the bench needs.
 - 2026-11-05 — [The family started through the hub](validation/2026-11-05-family-started.md): one procedure with a step for every member, carlos and joe real and started by the hub, what each did and what running it found.
 - 2026-11-05 — [Family integrations](validation/2026-11-05-family-integrations.md): how each family member's seam with apothecary stands, each checked against the member itself.
 - 2026-11-03 — [The router walked in the demo](validation/2026-11-03-router-walk.md): the AnoleX 4060-Evo Ultra 2's Machine, pad, cut and stop against the simulated controller, step by step with the owner, and what the walk changed.

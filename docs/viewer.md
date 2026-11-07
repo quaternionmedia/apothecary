@@ -352,7 +352,7 @@ which the page, the ring and the tests all read.
 | System | Main window | Sections |
 |---|---|---|
 | Part | Selected: the piece, its part, what it is drawn from, its envelope, and the staged changes' bar (Apply, Revert, Defaults, Undo, Redo, Ghost) | Parameters (under Selected, sharing a stack with Variants, History and Readiness), SCAD (beside the world) |
-| Machine | The board's head -- its link verbs, the control latch, ⏹ E-STOP -- what it is and its state | Status, Temperature, Print, Bed level (a printer's); Sketch, Flashing (a devkit's); Log -- those of the board's kind, in one stack under the Machine while the column has room, else tabs beside it |
+| Machine | The board's head -- its link verbs, the control latch, ⏹ E-STOP -- what it is and its state | Status, Temperature, Print, Bed level (a printer's); Status, Cut, Table map (a router's); Sketch, Flashing (a devkit's); Log -- those of the board's kind, in one stack under the Machine while the column has room, else tabs beside it |
 | Airgap | The machine drawn at its angle, its scrub and its verbs | Metrics, the field, gap map, inductance, torque, harmonics, run-up, orbit, vibration, Rig, Sweep ([airgap.md](airgap.md#the-panel)) |
 
 | View | |

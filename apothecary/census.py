@@ -360,7 +360,8 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "level-probe": (
         WIDGET,
         WHAT_IS_THERE,
-        "a button that homes, probes the bed and keeps the reading",
+        "a button that homes, probes the bed (a router's table, at a grid of points) and "
+        "keeps the reading",
     ),
     "level-read": (
         WIDGET,
@@ -484,6 +485,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a slider that draws the chosen file's path in the world, through a layer or a pass",
     ),
     "print-start": (WIDGET, WHAT_IS_THERE, "a button that streams the chosen file to the printer"),
+    "print-plan": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that keeps what is made and the file chosen as the machine's plan",
+    ),
     "print-pause": (WIDGET, WHAT_IS_THERE, "a button that stops feeding the print from here"),
     "print-resume": (WIDGET, WHAT_IS_THERE, "a button that feeds the print from here again"),
     "print-cancel": (WIDGET, WHAT_IS_THERE, "a button that ends the print from here, heaters off"),
@@ -727,6 +733,8 @@ RING_BACKED: Dict[str, str] = {
     # the one from here; Send file is the one from here alone.
     "print-start": "print:start",
     "print-preview": "print:preview",
+    # Keep as plan keeps the machine's plan, its board connected or not.
+    "print-plan": "print:plan",
     # Slice slices what makes names, as the Slice cell of a made piece's ring or a
     # part's slices that piece or part, chosen under makes first.
     "print-slice": "slice:piece:printer_1",

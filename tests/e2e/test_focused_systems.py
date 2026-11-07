@@ -106,7 +106,7 @@ SHOWS = {
     "machine-status": "#c-hot:visible, #c-spindle:visible",
     "machine-temperature": "#chart",
     "machine-print": "#print-start",
-    "machine-level": "#level-read",
+    "machine-level": "#level-probe",
     "machine-sketch": "#c-sketch",
     "machine-flashing": "#flash-form",
     "machine-log": "#log",

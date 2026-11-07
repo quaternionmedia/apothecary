@@ -47,7 +47,7 @@ def cut_into(name: str, router: CutFor, variant: Optional[str] = None) -> CutRec
     part, params, cuts = part_cuts(name, variant)
     written = toolpath.write(cuts, name)
     kept = devices.save_print_file(
-        f"{name}-{router.name}.nc", toolpath.text(written).encode("utf-8")
+        f"{name}-{router.name}.nc", toolpath.text(written).encode("utf-8"), machine="router"
     )
     record = CutRecord(
         file_id=kept.id,

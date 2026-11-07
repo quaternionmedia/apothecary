@@ -38,15 +38,13 @@ here: run `apothecary problems`.
 - A step answered 202 by a member beside the hub reads as fired for good: the hub could
   read that member's `/family/events`, as it reads a hosted member's state
   ([the first run](docs/validation/2026-11-05-family-started.md)).
-- What a port's record leaves open: a flash record of a board never probed is still found
-  by its port's name; a family home step on a port another board's record names is refused
+- What a port's record leaves open: a flash record kept before records named their board is
+  still found by its port's name; a family home step on a port another board's record names is refused
   once, with nothing sent, and works on the next try; two identical converters swapped in
   one socket read as one board. None of it has met the real router or the real state file.
 - A machine stepped into is its part alone: its pieces are reached from Site and not drawn
   at its level, a double-click on the control box does not step into `frame_system`, and
   the category chips at that level do nothing.
-- A file kept by Choose File records no kind of machine, so a card cannot tell a hand-kept
-  printer file from a CAM post.
 - The Models window says none is trusted until `apothecary vision check` has passed
   (`apothecary/static/widgets/models.js`, quoted in `docs/models-checklist.md`);
   `apothecary vision` has `ask`, `off`, `on` and `status`.

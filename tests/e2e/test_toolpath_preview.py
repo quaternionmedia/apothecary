@@ -268,7 +268,9 @@ def _keep_only(url: str, *machines: Machine, cut: bool = False) -> None:
             http.delete(f"/firmware/printers/prints/{kept['id']}").raise_for_status()
         for machine in machines:
             http.post(
-                "/firmware/printers/prints", params={"name": machine.file}, content=machine.text
+                "/firmware/printers/prints",
+                params={"name": machine.file, "machine": machine.kind},
+                content=machine.text,
             ).raise_for_status()
         if cut:
             http.post(

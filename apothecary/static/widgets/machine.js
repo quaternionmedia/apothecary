@@ -157,17 +157,17 @@ const CARDS = `
 </div>
 <div data-section="level">
 <div class="cards">
-    <div class="card wide printer-only" id="level-card">
-        <div class="k">Bed level <span class="s" id="level-note"></span></div>
+    <div class="card wide printer-only gcode" id="level-card">
+        <div class="k"><span id="level-title">Bed level</span> <span class="s" id="level-note"></span></div>
         <div class="row">
             <button type="button" id="level-probe" class="warm" title="G28, G29, then read the mesh, the probe offset and the temperatures; saved as a record. Moves the machine: control must be armed. ⌗ Control › Level › Probe">▤ Probe bed</button>
-            <button type="button" id="level-read" title="Read the stored mesh (M420 V), the probe offset and the temperatures without moving; saved as a record">Read mesh</button>
+            <button type="button" id="level-read" class="printer-only" title="Read the stored mesh (M420 V), the probe offset and the temperatures without moving; saved as a record">Read mesh</button>
             <span class="job" id="level-job"></span>
             <span class="grow"></span>
-            <button type="button" data-corner="FL" title="Move the nozzle to the front-left corner at paper height, for a tramming check">◣ FL</button>
-            <button type="button" data-corner="FR" title="Front right, paper height">◢ FR</button>
-            <button type="button" data-corner="BL" title="Back left, paper height">◤ BL</button>
-            <button type="button" data-corner="BR" title="Back right, paper height">◥ BR</button>
+            <button type="button" data-corner="FL" class="printer-only" title="Move the nozzle to the front-left corner at paper height, for a tramming check">◣ FL</button>
+            <button type="button" data-corner="FR" class="printer-only" title="Front right, paper height">◢ FR</button>
+            <button type="button" data-corner="BL" class="printer-only" title="Back left, paper height">◤ BL</button>
+            <button type="button" data-corner="BR" class="printer-only" title="Back right, paper height">◥ BR</button>
         </div>
         <div id="mesh"></div>
         <div class="stats" id="level-stats"><span class="empty">no reading yet — Read mesh, or arm control and Probe bed</span></div>
@@ -192,6 +192,10 @@ const CARDS = `
         <div class="row"><label for="print-preview">preview</label>
             <input type="range" id="print-preview" min="0" max="1" step="1" value="0" title="The chosen file's path, drawn in the world on this machine: off at the left, then through each layer or pass, all of it at the right. Nothing is sent. Its ring's Preview turns it on and off">
             <span class="s" id="print-preview-said"></span>
+        </div>
+        <div class="row"><label for="print-plan">plan</label>
+            <button type="button" id="print-plan" title="Keep what it makes and the file chosen as this machine's plan: chosen again whenever its Machine opens, with its board connected or not. Nothing is sent">Keep as plan</button>
+            <span class="s" id="print-plan-said"></span>
         </div>
         <div class="row">
             <button type="button" id="print-start" class="warm">▶ Send</button>
@@ -360,7 +364,7 @@ const BY_CMD = {
 // the markup, which carries none of its own.
 
 
-export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, say = null, padWindow = null, variantFor = null, sections = {}, onVerb = null, onKind = null, afterPrint = null, afterHello = null } = {}) {
+export function mountMachine(root, { base = "", port = "", host = "world", boards = null, kind = null, inPrinter = false, pin = null, name = null, machineAt = null, say = null, padWindow = null, variantFor = null, sections = {}, onVerb = null, onKind = null, afterPrint = null, afterHello = null } = {}) {
     const BASE = base;
     const model = boards || mountBoards({ base });
     root.classList.add("machine", `host-${host}`);
@@ -396,6 +400,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         get polling() { return state.port ? !!b().polling : false; },  // a poll asked and not yet answered
         get entries() { return state.port ? b().log : []; },
     };
+    // Planning: the Machine of a machine with no board connected (machineAt, its site
+    // and node, with no port). What makes it, its slice or toolpath, the files and the
+    // path drawn ask the board nothing; ▶ and every control are its board's.
+    const planning = () => !state.port && !!machineAt;
     const onWindow = [];  // [event, handler] pairs the module put on the window, taken off by destroy()
     const emit = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
 
@@ -458,13 +466,17 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             if (changed || Number(feed.value) > w.feedMax) feed.value = String(w.feedDefault);
             $("print-file").accept = w.files; $("print-file").title = w.fileTitle;
             $("print-part").title = w.partTitle;
+            $("level-title").textContent = w.level.card; $("level-probe").textContent = w.level.button; $("level-probe").title = w.level.buttonTitle;
         }
         if (changed) state.codesLoaded = false;
         if (changed && state.port) {
             watchNow();
-            if (k === "printer") { loadCodes(); loadLevel(); loadPrintJobs(); loadChoices(); loadPrintFiles(); loadSlicer(); watchPrint(); }
-            else if (k === "router") { loadCodes(); loadWhere(); loadPrintJobs(); loadChoices(); loadPrintFiles(); watchPrint(); }
+            if (k === "printer") { loadCodes(); loadLevel(); loadPrintJobs(); loadChoicesAndFiles(); loadSlicer(); watchPrint(); }
+            else if (k === "router") { loadCodes(); loadWhere(); loadLevel(); loadPrintJobs(); loadChoicesAndFiles(); watchPrint(); }
             else if (!inPrinter) mountFlashing();
+        } else if (changed && planning()) {
+            loadChoicesAndFiles();
+            if (k === "printer") loadSlicer();
         }
         return changed;
     }
@@ -750,7 +762,13 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (flash && flash.port !== port) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
         state.port = port; state.kind = null; state.history = []; state.listening = false;
         applyControlState(null);
-        if (!port) { applyKind(); renderAll(); loadLevel(); loadPrintJobs(); loadChoices(); loadPrintFiles(); return; }
+        for (const el of [root, ...windows]) el.classList.toggle("planning", planning());
+        if (!port) {
+            applyKind(); renderAll(); loadLevel(); loadPrintJobs();
+            if (!planning()) { loadChoices(); loadPrintFiles(); }
+            if (planning()) $("ident").textContent = `${machineAt.path}: no board connected -- planned here; ${words().start} is its board's`;
+            return;
+        }
         // Watched at once as what it is known to be, so a verb carried the moment
         // the Machine opens finds it so; what the server says of it follows.
         applyKind();
@@ -1011,6 +1029,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     });
 
     // --- bed level: probe or read, show the mesh, keep the records -----------------------
+    // A printer's bed, probed or read as stored; a router's table, mapped by its probe
+    // at a grid of points: one card, one route, the kind's words (KINDS[kind].level).
     const level = { records: [], shown: null, timer: null, volume: [220, 220, 250] };
     const onWhere = (ev) => { if (ev.detail && ev.detail.printer && ev.detail.printer.build_volume && (!ev.detail.port || ev.detail.port === state.port)) level.volume = ev.detail.printer.build_volume; };
     window.addEventListener("apothecary:where", onWhere);
@@ -1031,11 +1051,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         return `rgb(${a.map((c, i) => Math.round(c + (c2[i] - c) * t)).join(",")})`;
     }
     function renderLevel() {
-        const rec = level.shown;
+        const rec = level.shown, w = words().level;
         const meshEl = $("mesh"), statsEl = $("level-stats");
         if (!rec || !rec.mesh || !rec.mesh.length) {
             meshEl.innerHTML = ""; meshEl.style.gridTemplateColumns = "";
-            statsEl.innerHTML = '<span class="empty">no reading yet — Read mesh, or arm control and Probe bed</span>';
+            statsEl.innerHTML = `<span class="empty">${esc(w.none)}</span>`;
         } else {
             const st = rec.stats || {};
             const rows = rec.mesh, cols = rows[0].length;
@@ -1043,8 +1063,12 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             // Drawn as the bed lies: the last row printed is the back of the bed, so it goes on top.
             meshEl.innerHTML = [...rows].reverse().map((row) => row.map((v) => `<div class="cell" style="background:${heat(v, st.min, st.max)}" title="${v.toFixed(3)} mm">${v.toFixed(2)}</div>`).join("")).join("");
             const c = st.corners || {};
-            statsEl.innerHTML = `${esc(rec.method)} · ${new Date(rec.at).toLocaleString()} · range <b>${(st.range ?? 0).toFixed(3)}</b> mm · tilt X <b>${(st.tilt_x ?? 0).toFixed(3)}</b> Y <b>${(st.tilt_y ?? 0).toFixed(3)}</b> mm across the bed<br>`
-                + `corners vs mean: FL <b>${(c.front_left ?? 0).toFixed(3)}</b> FR <b>${(c.front_right ?? 0).toFixed(3)}</b> BL <b>${(c.back_left ?? 0).toFixed(3)}</b> BR <b>${(c.back_right ?? 0).toFixed(3)}</b> · leveling ${rec.leveling_on == null ? "?" : (rec.leveling_on ? "on" : "off")}`
+            // A router's map says where its points lie (record.area) and reads in machine
+            // coordinates; a printer's mesh is its firmware's, with the leveling state.
+            const a = rec.area;
+            statsEl.innerHTML = `${esc(rec.method)} · ${new Date(rec.at).toLocaleString()} · range <b>${(st.range ?? 0).toFixed(3)}</b> mm · tilt X <b>${(st.tilt_x ?? 0).toFixed(3)}</b> Y <b>${(st.tilt_y ?? 0).toFixed(3)}</b> mm ${esc(w.across)}<br>`
+                + `corners vs mean: FL <b>${(c.front_left ?? 0).toFixed(3)}</b> FR <b>${(c.front_right ?? 0).toFixed(3)}</b> BL <b>${(c.back_left ?? 0).toFixed(3)}</b> BR <b>${(c.back_right ?? 0).toFixed(3)}</b>`
+                + (a ? ` · Z in machine coordinates · X ${a.min.x}–${a.max.x}, Y ${a.min.y}–${a.max.y} mm from the front-left corner` : ` · leveling ${rec.leveling_on == null ? "?" : (rec.leveling_on ? "on" : "off")}`)
                 + (rec.probe_offset ? ` · probe offset X${rec.probe_offset.x} Y${rec.probe_offset.y} Z${rec.probe_offset.z}` : "")
                 + (rec.bed_c != null ? ` · bed ${rec.bed_c.toFixed(1)}°` : "") + (rec.hotend_c != null ? ` hotend ${rec.hotend_c.toFixed(1)}°` : "")
                 + (rec.note ? `<br>note: ${esc(rec.note)}` : "");
@@ -1055,18 +1079,20 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             : "";
     }
     async function loadLevel() {
-        if (!state.port || state.kind !== "printer") { level.records = []; level.shown = null; renderLevel(); return; }
+        if (!state.port || !isGcode()) { level.records = []; level.shown = null; renderLevel(); return; }
         try {
             level.records = await api(`/firmware/printers/leveling?port=${encodeURIComponent(state.port)}`);
             if (!level.shown || !level.records.some((r) => r.id === level.shown.id)) level.shown = level.records[0] || null;
         } catch (e) { level.records = []; }
         renderLevel();
     }
+    // The stage a reading is at and, while a table map probes, the points done of its total.
+    const levelStage = (job) => `${job.stage}${job.points ? ` ${job.points.done}/${job.points.total}` : ""}…`;
     async function watchLevelJob() {
         clearTimeout(level.timer);
         try {
             const job = await api(`/firmware/printers/level?port=${encodeURIComponent(state.port)}`);
-            $("level-job").textContent = job.running ? `${job.stage}…` : (job.error ? `failed: ${job.error}` : "");
+            $("level-job").textContent = job.running ? levelStage(job) : (job.error ? `failed: ${job.error}` : "");
             if (job.running) { level.timer = setTimeout(watchLevelJob, 1000); return; }
             level.timer = null;
             if (job.record_id) { await loadLevel(); level.shown = level.records.find((r) => r.id === job.record_id) || level.shown; renderLevel(); }
@@ -1076,10 +1102,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     async function startLevel(probe) {
         if (!state.port) return;
         if (probe && !ctl.armed) { refuse("probing moves the machine: arm control first"); return; }
-        if (probe && !confirm(`Home and probe the bed on ${state.port}?\nThe nozzle will travel the whole bed.`)) return;
+        if (probe && !confirm(words().level.ask.replace("{port}", state.port))) return;
         try {
             const job = await post("/firmware/printers/level", { port: state.port, probe });
-            $("level-job").textContent = `${job.stage}…`;
+            $("level-job").textContent = levelStage(job);
             level.timer = setTimeout(watchLevelJob, 800);
         } catch (e) { refuse("bed reading: " + e.message); $("level-job").textContent = e.message; }
     }
@@ -1097,7 +1123,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // A reading or a print that holds the port, as a poll reports it, is followed.
     function followJob(st) {
         const job = st.job;
-        if (job && job.kind === "leveling") { $("level-job").textContent = `${job.stage}…`; if (!level.timer) level.timer = setTimeout(watchLevelJob, 1000); }
+        if (job && job.kind === "leveling") { $("level-job").textContent = levelStage(job); if (!level.timer) level.timer = setTimeout(watchLevelJob, 1000); }
         if (job && (job.kind === "print" || job.kind === "cut")) { prt.job = job; renderPrint(); if (!prt.timer) prt.timer = setTimeout(watchPrint, 1000); }
     }
 
@@ -1119,7 +1145,13 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // right. Nothing is asked of the server until it is moved off the left.
     const pv = { file: null, data: null, turn: 0, told: null };
     const previewOn = () => Number($("print-preview").value) > 0;
-    const previewOrigin = () => fileOrigin(state.port ? b().status : null, level.volume);
+    const previewOrigin = () => {
+        if (!planning() || state.kind !== "router" || !pv.data) return fileOrigin(state.port ? b().status : null, level.volume);
+        // Planned, with no board to say where its work zero is: the stock as if laid on
+        // the table at the working area's front-left corner, its deepest pass on the table.
+        const lows = Object.values(pv.data.bounds || {}).map((box) => box.min[2]);
+        return { x: 0, y: 0, z: Math.max(0, -Math.min(0, ...lows)) };
+    };
     const inMetres = (mm) => (mm >= 1000 ? `${(mm / 1000).toFixed(1)} m` : `${mm.toFixed(0)} mm`);
     function previewUpto() {
         const groups = pv.data ? pv.data.groups : [], at = Number($("print-preview").value);
@@ -1132,7 +1164,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const told = `${on ? pv.file : ""}|${on ? previewUpto() : 0}|${JSON.stringify(origin)}`;
         if (told === pv.told) return;
         pv.told = told;
-        emit("apothecary:toolpath", { port: state.port, preview: on ? pv.data : null, upto: previewUpto(), origin });
+        emit("apothecary:toolpath", { port: state.port, path: machineAt ? machineAt.path : null, preview: on ? pv.data : null, upto: previewUpto(), origin });
     }
     function renderPreview() {
         const said = $("print-preview-said"), d = pv.data;
@@ -1144,7 +1176,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             const at = Number($("print-preview").value), n = d.groups.length, group = d.groups[at - 1];
             const sums = d.kinds.filter((k) => d.length_mm[k]).map((k) => `${k} ${inMetres(d.length_mm[k])}`).join(", ");
             const where = at >= n ? "all of it" : group.label;
-            said.textContent = `${where} · the file: ${sums}, ${fmtDur(d.time_s)} at its feeds${d.within_mm ? ` · drawn to within ${d.within_mm} mm` : ""}`;
+            const zero = planning() && state.kind === "router" ? " · drawn on the working area's front-left corner, its deepest pass on the table: its zero is set at the machine" : "";
+            said.textContent = `${where} · the file: ${sums}, ${fmtDur(d.time_s)} at its feeds${d.within_mm ? ` · drawn to within ${d.within_mm} mm` : ""}${zero}`;
         }
         tellPreview();
     }
@@ -1153,7 +1186,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         pv.file = id;
         pv.data = null;
         renderPreview();
-        if (!id || !state.port || !isGcode()) { slider.value = "0"; slider.max = "1"; renderPreview(); return; }
+        if (!id || !(state.port || planning()) || !isGcode()) { slider.value = "0"; slider.max = "1"; renderPreview(); return; }
         let data;
         try { data = await api(`/firmware/printers/prints/${encodeURIComponent(id)}/preview?machine=${encodeURIComponent(state.kind)}`); }
         catch (e) { if (turn === pv.turn) { slider.value = "0"; refuse(`preview: ${e.message}`); renderPreview(); } return; }
@@ -1185,7 +1218,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // of this machine's kept why there is none (`none`) and how one comes to be
     // (`how`). Null on a devkit, which has no file.
     async function showPreview() {
-        if (!state.port || !isGcode()) return null;
+        if (!(state.port || planning()) || !isGcode()) return null;
         const w = words(), found = { card: w.verb, word: w.slice ? "layer" : "pass", file: null, drawn: false, where: null, refused: null, none: null, how: null };
         await loadPrintFiles();
         const id = $("print-pick").value || null;
@@ -1199,7 +1232,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         found.file = name;
         // A router's file stands at its work zero: its working area and a poll are
         // waited for, so the path is drawn where it will stay.
-        if (w.dialect === "grbl") {
+        if (w.dialect === "grbl" && state.port) {
             await loadWhere();
             if (!b().status) await model.poll(state.port).catch(() => {});
         }
@@ -1225,7 +1258,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     function renderPrint() {
         const job = prt.job, running = !!(job && job.running);
         const paused = running && job.stage === "paused";
-        $("print-start").disabled = running || !$("print-pick").value;
+        const chosen = prt.files.find((f) => f.id === $("print-pick").value);
+        $("print-start").disabled = running || !chosen || !fits(chosen) || !state.port;
+        $("print-start").title = !state.port && machineAt ? `${machineAt.path} has no board connected: its plan is made here, and ${words().start} is its board's once it is`
+            : !chosen || fits(chosen) ? words().startTitle
+            : `${chosen.name} was ${chosen.machine ? `kept for a ${chosen.machine}` : "kept for no kind of machine"}: it is sent to the kind it was kept for alone (Choose File keeps a file for this ${state.kind})`;
         $("print-pause").disabled = !running || paused || (job.stage !== words().running && job.stage !== "finishing");
         $("print-resume").disabled = !paused;
         $("print-cancel").disabled = !running;
@@ -1247,6 +1284,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-history").innerHTML = prt.jobs.map(jobRow).join("");
         showChosenSlice();
         followChosenFile();
+        renderPlan();
     }
     // One job of the history: when it started and finished, its kind, the file it ran
     // and the part it makes, how it ended (and why), and how far it got.
@@ -1272,22 +1310,25 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         try { for (const r of await api("/cam/cuts")) prt.slices[r.file_id] = { ...r, toolpath: true }; } catch (e) { /* no toolpaths kept */ }
         const sel = $("print-pick"), had = pick || sel.value;
         sel.innerHTML = prt.files.length
-            ? prt.files.map((f) => `<option value="${esc(f.id)}" ${f.problems.length ? 'class="bad"' : ""}>${esc(f.name)} · ${f.lines} lines${slicedFrom(f)}${f.problems.length ? " · refused: " + esc(f.problems[0]) : ""}</option>`).join("")
+            ? prt.files.map((f) => `<option value="${esc(f.id)}" ${f.problems.length || !fits(f) ? 'class="bad"' : ""}>${esc(f.name)} · ${f.lines} lines${slicedFrom(f)}${fits(f) ? "" : ` · ${f.machine ? `kept for a ${esc(f.machine)}` : "kept for no kind of machine"}`}${f.problems.length ? " · refused: " + esc(f.problems[0]) : ""}</option>`).join("")
             : '<option value="">— no files kept —</option>';
         // The files kept are every machine's. What was chosen stays chosen, but the
         // other kind of machine's file gives way to the newest that is not; with
         // nothing chosen that one is, before the newest of any.
-        const own = prt.files.find((f) => !madeForAnother(f.id));
+        const own = prt.files.find(fits) || prt.files.find((f) => !madeForAnother(f.id));
         if (had && prt.files.some((f) => f.id === had) && !(own && madeForAnother(had))) sel.value = had;
         else if (own) sel.value = own.id;
         renderPrint();
     }
-    // A kept file whose record says it is the other kind of machine's: a router's
-    // toolpath on a printer, a printer's slice on a router. One kept by hand has no
-    // record, and may be either's.
+    // A kept file says the kind of machine it was kept for (Choose File keeps it for
+    // the Machine's kind, a slice for a printer, a toolpath for a router), and is sent
+    // to that kind alone: a printer's on a router homes it and waits out its
+    // millisecond dwells as seconds. One kept before files said is either's to choose
+    // and neither's to send.
+    const fits = (f) => !!f && f.machine === state.kind;
     function madeForAnother(id) {
-        const r = prt.slices[id];
-        return !!r && !!r.toolpath !== (state.kind === "router");
+        const f = prt.files.find((x) => x.id === id);
+        return !!(f && f.machine) && f.machine !== state.kind;
     }
     async function loadPrintJobs() {
         if (!state.port || !isGcode()) { prt.jobs = []; renderPrint(); return; }
@@ -1302,6 +1343,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const sel = $("print-part"), port = state.port;
         let c = null;
         if (port && isGcode()) { try { c = await api(`/jobs/choices?machine=${encodeURIComponent(port)}`); } catch (e) { c = null; } }
+        else if (planning()) {
+            // The machine's node answers in the same shape, with where it stands.
+            try { c = await api(machinePath()); } catch (e) { c = null; }
+            if (c && c.where && c.where.build_volume) level.volume = c.where.build_volume;
+        }
         if (port !== state.port) return;  // another port was chosen meanwhile
         prt.choices = c;
         const parts = (c && c.site && c.parts) || [];
@@ -1325,6 +1371,49 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-card").scrollIntoView({ block: "nearest" });
         return $("print-part").value === path;
     }
+    // --- the machine's plan ------------------------------------------------------------
+    // What it makes and the file that makes it, kept for the machine's node
+    // (apothecary/machine_plans.py), from its Machine opened with its board or without.
+    // Chosen once when the Machine opens -- a plan for another kind of machine than the
+    // board is, never -- unless a person chose another meanwhile.
+    const pl = { plan: null, applied: false };
+    const machinePath = () => `/sites/${encodeURIComponent(machineAt.site)}/machines/${encodeURIComponent(machineAt.path)}`;
+    async function loadChoicesAndFiles() {
+        await Promise.all([loadChoices(), loadPrintFiles()]);
+        await loadPlan();
+    }
+    async function loadPlan() {
+        if (!machineAt) { renderPlan(); return; }
+        let r = null;
+        try { r = await api(machinePath()); } catch (e) { r = null; }
+        pl.plan = (r && r.plan) || null;
+        if (pl.plan && !pl.applied && pl.plan.kind === state.kind) {
+            pl.applied = true;
+            if (pl.plan.part && !$("print-part").value) await choosePart(pl.plan.part);
+            if (pl.plan.file_id && prt.files.some((f) => f.id === pl.plan.file_id)) { $("print-pick").value = pl.plan.file_id; renderPrint(); }
+        }
+        renderPlan();
+    }
+    function renderPlan() {
+        const said = $("print-plan-said"), button = $("print-plan");
+        button.disabled = !machineAt || (!$("print-part").value && !$("print-pick").value);
+        if (!machineAt) { said.textContent = "pinned in no machine's node"; return; }
+        const p = pl.plan;
+        const file = p && p.file_id ? (prt.files.find((f) => f.id === p.file_id) || { name: p.file_id }).name : null;
+        said.textContent = p ? `kept ${new Date(p.planned_at).toLocaleString()}: ${p.part || "no part named"}, ${file || "no file"}` : "none kept";
+    }
+    async function keepPlan() {
+        if (!machineAt) { refuse("plan: this Machine stands for no machine's node"); return false; }
+        const part = $("print-part").value || null, fileId = $("print-pick").value || null;
+        const file = prt.files.find((f) => f.id === fileId);
+        try { pl.plan = await api(`${machinePath()}/plan`, { method: "PUT", body: JSON.stringify({ part, file_id: fileId }) }); }
+        catch (e) { refuse(`plan: ${e.message}`); return false; }
+        renderPlan();
+        tell(`${machineAt.path}'s plan kept: ${part || "no part named"}, ${file ? file.name : "no file"}; its Machine chooses them whenever it opens` + (state.port ? "" : `, and ${words().start} is its board's once it is connected`));
+        return true;
+    }
+    $("print-plan").onclick = keepPlan;
+
     // --- slicing what makes names, for this printer ---------------------------------
     // Whether a slicer is installed: asked once a printer is shown, and again before
     // a slice, so one installed meanwhile from the Bench is found.
@@ -1349,7 +1438,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     async function startSlice() {
         if (!words().slice) return startToolpath();
         const part = $("print-part").value;
-        if (!state.port) { refuse("slice: no printer chosen"); return false; }
+        if (!state.port && !planning()) { refuse("slice: no printer chosen"); return false; }
         if (!part) { refuse("slice: choose what it makes under makes first"); return false; }
         if (slc.running) { refuse("slice: one is running; its log is in Print from here"); return false; }
         const status = await loadSlicer();
@@ -1359,7 +1448,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         // variant's STL, which the slice's record names (variantFor, the page's).
         const variant = variantFor ? variantFor(part) : null;
         let task;
-        try { task = await post("/slicer/slice", variant ? { port: state.port, part, variant } : { port: state.port, part }); }
+        const at = state.port ? { port: state.port } : { site: machineAt.site, printer: machineAt.path };
+        try { task = await post("/slicer/slice", variant ? { ...at, part, variant } : { ...at, part }); }
         catch (e) { slc.running = false; renderPrint(); refuse(`slice: ${e.message}`); return false; }
         $("print-slice-box").hidden = false;
         $("print-slice-task").hidden = false;
@@ -1374,12 +1464,12 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // the file kept and chosen, what it holds said under makes. True when it was kept.
     async function startToolpath() {
         const part = $("print-part").value;
-        if (!state.port) { refuse("toolpath: no router chosen"); return false; }
+        if (!state.port && !planning()) { refuse("toolpath: no router chosen"); return false; }
         if (!part) { refuse("toolpath: choose what it makes under makes first"); return false; }
         const variant = variantFor ? variantFor(part) : null;
         const site = prt.choices && prt.choices.site, at = prt.choices && prt.choices.machine && prt.choices.machine.path;
         let r;
-        try { r = await post("/cam/cut", { port: state.port, part, site: site || undefined, router: at || undefined, variant: variant || undefined }); }
+        try { r = await post("/cam/cut", { port: state.port || undefined, part, site: site || undefined, router: at || undefined, variant: variant || undefined }); }
         catch (e) { refuse(`toolpath: ${e.message}`); return false; }
         await loadPrintFiles(r.file_id);
         $("print-slice-box").hidden = false;
@@ -1483,10 +1573,12 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     async function keepPrintFile(file) {
         if (!file) return;
         try {
-            const r = await fetch(`${BASE}/firmware/printers/prints?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file, headers: { "Content-Type": "text/plain" } });
+            // Kept for this Machine's kind of machine: checked in its terms, sent to it alone.
+            const kind = isGcode() ? `&machine=${encodeURIComponent(state.kind)}` : "";
+            const r = await fetch(`${BASE}/firmware/printers/prints?name=${encodeURIComponent(file.name)}${kind}`, { method: "POST", body: file, headers: { "Content-Type": "text/plain" } });
             const body = await r.json().catch(() => ({}));
             if (!r.ok) throw new Error(body.detail || r.statusText);
-            logLine("sys", `kept ${body.name}: ${body.lines} lines` + (body.problems.length ? ` -- refused: ${body.problems.join("; ")}` : ""));
+            logLine("sys", `kept ${body.name}: ${body.lines} lines, for a ${body.machine || "machine of no kind"}` + (body.problems.length ? ` -- refused: ${body.problems.join("; ")}` : ""));
             await loadPrintFiles(body.id);
         } catch (e) { refuse("keep file: " + e.message); }
         $("print-file").value = "";
@@ -1609,6 +1701,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (action === "level:read") { await startLevel(false); return true; }
         if (action === "print:start") { await startPrint(); return true; }
         if (action === "print:preview") { togglePreview(); return true; }
+        if (action === "print:plan") return keepPlan();
         if (prt.job && prt.job.running && action in HOST_VERBS) { await printVerb(HOST_VERBS[action]); return true; }
         const lines = LINES_OF();
         if (action in lines) {
@@ -1653,6 +1746,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         for (const btn of $("level-card").querySelectorAll("button[data-corner]")) out.push([btn, `control:corner:${btn.dataset.corner}`]);
         out.push([$("print-start"), "print:start"]);
         out.push([$("print-preview"), "print:preview"]);
+        out.push([$("print-plan"), "print:plan"]);
         out.push([$("print-pause"), "control:sd-pause"]);
         out.push([$("print-resume"), "control:sd-resume"]);
         out.push([$("print-cancel"), "control:sd-abort"]);
@@ -1676,8 +1770,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         device, carry, pairs, pad: togglePad, padBack,
         level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
         print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart, slice: slicePart, slices: () => prt.slices, slicing: () => slc.running, show: showPreview },
+        plan: { keep: keepPlan, load: loadPlan, shown: () => pl.plan, planning },
         destroy() {
-            if (state.port) emit("apothecary:toolpath", { port: state.port, preview: null, upto: 0, origin: null });
+            if (state.port || machineAt) emit("apothecary:toolpath", { port: state.port, path: machineAt ? machineAt.path : null, preview: null, upto: 0, origin: null });
             if (state.port) model.unwatch(state.port, who);
             clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer);
             if (flash) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
@@ -1688,7 +1783,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             pad.remove();
             for (const el of [root, ...windows]) {
                 el.replaceChildren();
-                el.classList.remove("machine", `host-${host}`, "machine-section", "kind-printer", "kind-router", "kind-devkit", "in-printer");
+                el.classList.remove("machine", `host-${host}`, "machine-section", "kind-printer", "kind-router", "kind-devkit", "in-printer", "planning");
             }
         },
     };

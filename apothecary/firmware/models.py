@@ -337,6 +337,9 @@ class FlashRecord(BaseModel):
     identity: str  # DeviceInfo.identity at flash time
     port: str
     mac: Optional[str] = None
+    # The board's key (occupants.key_of) at flash time: a record kept by its port, for a
+    # board never probed, counts for that board alone. None on a record kept before.
+    board: Optional[str] = None
     sketch: Optional[str] = None  # its name, what it announces; None for a raw esptool flash
     sketch_id: Optional[str] = None  # which implementation of it (SketchInfo.id)
     toolchain: Optional[str] = None  # the module that built and flashed it
@@ -505,28 +508,55 @@ class PrinterQueryResult(BaseModel):
     queried_at: datetime
 
 
-class LevelingRecord(BaseModel):
-    """One reading of a printer's bed: the mesh, what it means, and the conditions."""
+class BedReading(BaseModel):
+    """What a dialect's reading of its bed holds, before the board's and the port's
+    words go on it (``LevelingRecord``): a printer's stored mesh as Marlin prints
+    it, or a router's table probed at each point of a grid (``grbl.probe_table``)."""
 
-    id: str
-    port: str
-    at: datetime
-    method: str  # "probe" (G29 then read) or "read" (M420 V only)
-    mesh: List[List[float]] = Field(default_factory=list)
+    method: str  # "probe" (G29 then read), "read" (M420 V only), "G38.2" (a router's table)
+    mesh: List[List[float]] = Field(default_factory=list)  # rows from the front, each left to right
     subdivided: Optional[List[List[float]]] = None
-    stats: dict = Field(default_factory=dict)
-    leveling_on: Optional[bool] = None
-    probe_offset: Optional[dict] = None
+    stats: dict = Field(default_factory=dict)  # gcode.mesh_stats
+    leveling_on: Optional[bool] = None  # Marlin's: whether the mesh is applied
+    probe_offset: Optional[dict] = None  # Marlin's: M851
     hotend_c: Optional[float] = None
     bed_c: Optional[float] = None
-    firmware: Optional[str] = None
-    note: Optional[str] = None
+    # A router's: where the grid lies in the working area, min and max x and y in mm
+    # from its front-left corner (mpos + travel), so the relief is drawn where it was
+    # probed; a printer's grid has no positions and is placed by estimate.
+    area: Optional[dict] = None
     lines: List[str] = Field(default_factory=list)  # everything the firmware said, for the log
 
 
+class LevelingRecord(BedReading):
+    """One reading of a machine's bed: the mesh, what it means, and the conditions --
+    a printer's bed, or a router's table map."""
+
+    id: str
+    port: str  # where it was taken; whose it is is ``board``
+    # The board that took it, by its key (occupants.key_of), and the kind of machine
+    # it drives: a reading is listed for that board alone, wherever it is plugged in.
+    # None on a reading kept before readings carried it.
+    board: Optional[str] = None
+    machine: Optional[str] = None
+    at: datetime
+    firmware: Optional[str] = None
+    note: Optional[str] = None
+
+
+class TableGrid(BaseModel):
+    """A router's table map: the grid of points probed, inside the working area."""
+
+    rows: int = Field(3, ge=2, le=9)  # front to back
+    cols: int = Field(3, ge=2, le=9)  # left to right
+    inset: float = Field(20.0, ge=0, le=250)  # mm in from the working area's edges
+    feed: int = Field(200, ge=10, le=500)  # the probe's, mm/min; the dialect caps it too
+
+
 class LevelingRequest(ProbeRequest):
-    probe: bool = True  # False: read the stored mesh without probing
+    probe: bool = True  # False: read the stored mesh without probing (a printer's)
     note: Optional[str] = Field(None, max_length=200)
+    grid: Optional[TableGrid] = None  # a router's grid; left out, three by three
 
 
 class PrintFile(BaseModel):
@@ -539,6 +569,10 @@ class PrintFile(BaseModel):
     lines: int  # the lines that would be sent: comments and blanks dropped
     uploaded_at: datetime
     problems: List[str] = Field(default_factory=list)  # why it may not be sent, if it may not
+    # The kind of machine it was kept for, "printer" or "router": it is sent to that
+    # kind alone. None on a file kept before files said, and not made by a slice or a
+    # toolpath, which say (devices.print_file).
+    machine: Optional[str] = None
 
 
 class PrintRecord(BaseModel):
@@ -607,6 +641,9 @@ class ManualBinding(BaseModel):
     path: str  # dotted node path, as GET /sites/{name}/nodes/{path}/stl addresses it
     identity: str  # DeviceInfo.identity: MAC, USB bridge serial number, or port
     bound_at: datetime
+    # The kind of machine its board answered as ("printer", "router"), once it has:
+    # a board on the pin's port that answers as another kind is another board.
+    kind: Optional[str] = None
 
 
 class NodeBinding(BaseModel):

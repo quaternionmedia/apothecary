@@ -76,8 +76,10 @@ In the page, a router's Cut card has **Toolpath** where a printer's has Slice:
 what is chosen under *makes* gets its toolpath written for this router, kept
 and chosen, so ▶ Cut follows; what it holds is said under makes, each
 operation with its passes and every message. A part's ring offers Toolpath when
-a router is pinned in the site, as Slice is offered for a printer; it opens the
-router's Machine with the part chosen and writes it there.
+the site has a router, as Slice is offered for a printer; it opens the router's
+Machine with the part chosen and writes it there. None of it needs the router's
+board: with none connected, the Machine is the router's plan
+([docs/firmware.md](firmware.md#a-machine-planned-before-its-board-is-connected)).
 
 ## The cut, and as cut
 

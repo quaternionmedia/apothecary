@@ -245,6 +245,6 @@ def test_routers_in_names_the_router_a_board_answered_as(fake_arduino_cli, route
 
     assert routers_in("garage") == [] and "cnc_router" not in printers_in("garage")
     devices.identify_printer(PORT)
-    devices.get_state().set_binding("garage", CONTROLLER, PORT)
+    devices.get_state().set_binding("garage", CONTROLLER, devices.stable_identity(PORT))
     assert routers_in("garage") == ["cnc_router"]
     assert "cnc_router" not in printers_in("garage")

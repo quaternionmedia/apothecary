@@ -839,6 +839,10 @@
         import { mountBoards } from '/static/boards.js';
         import { boardLabel, boardSummary } from '/static/board_text.js';
         import { KINDS as MACHINE_WORDS, GCODE_KINDS, kindOf as boardKindOf } from '/static/machine_words.js';
+        // Whether a bed reading is a machine of `kind`'s: a reading names the kind of
+        // machine that took it (a printer's bed, a router's table; one kept before
+        // readings said is a printer's), and is laid over that kind's marks alone.
+        const readingOfKind = (record, kind) => !!record && GCODE_KINDS.includes(kind) && (record.machine || 'printer') === kind;
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
         import { mountProcedure } from '/static/widgets/procedure.js';
@@ -1772,6 +1776,9 @@
                 this.onResize();
                 this.marks = {};       // bearer path -> { marks, port, where }
                 this.whereByPort = {}; // port -> Promise of GET /firmware/printers/where
+                // The site's machines by the part each is drawn from (GET /sites/{name}/machines):
+                // what a machine with no board connected is planned as.
+                this.machinesHere = [];
 
                 this.raycaster = new THREE.Raycaster();
                 this.pointer = new THREE.Vector2();
@@ -1897,17 +1904,23 @@
                 // The board model says what changed of a board, or that it scanned: every
                 // drawer of it follows from the one event.
                 window.addEventListener('apothecary:board', (ev) => this.boardChanged(ev.detail));
-                // A bed reading shown in a printer's Machine lands on the marks, and a
-                // jog sent from it moves the nozzle ahead of the poll that confirms it.
+                // A bed reading shown in a Machine lands on the marks of the machine that
+                // took it, by kind -- a printer's bed reading on a printer's, a router's
+                // table map on a router's, never the one over the other -- and a jog sent
+                // from it moves the nozzle ahead of the poll that confirms it.
                 window.addEventListener('apothecary:mesh', (ev) => {
-                    for (const m of Object.values(this.marks)) if (m.marks && ev.detail && ev.detail.port === m.port) m.marks.setMesh(ev.detail);
+                    for (const m of Object.values(this.marks)) if (m.marks && readingOfKind(ev.detail, m.kind) && ev.detail.port === m.port) m.marks.setMesh(ev.detail);
                 });
                 // The chosen file's path: drawn where its machine's marks stand, and kept
                 // for marks not there yet (the site is still loading).
                 window.addEventListener('apothecary:toolpath', (ev) => {
                     if (!ev.detail) return;
-                    this.toolpathByPort[ev.detail.port] = ev.detail;
-                    for (const m of Object.values(this.marks)) if (m.marks && ev.detail.port === m.port) m.marks.setToolpath(ev.detail.preview, ev.detail);
+                    if (ev.detail.port) this.toolpathByPort[ev.detail.port] = ev.detail;
+                    // By its port, or by its node: a machine planned has no port.
+                    for (const [key, m] of Object.entries(this.marks)) {
+                        const its = (ev.detail.port && ev.detail.port === m.port) || (ev.detail.path && ev.detail.path === key);
+                        if (m.marks && its) m.marks.setToolpath(ev.detail.preview, ev.detail);
+                    }
                     this.invalidate();
                 });
                 window.addEventListener('apothecary:position', (ev) => {
@@ -2257,6 +2270,7 @@
                     // for after the scene is on screen, never before; its event
                     // redraws what shows the boards.
                     this.boards.scan();
+                    this.loadMachinesHere(name);
                     this.siteJobs = [];
                     this.renderSiteJobs();
                     this.loadSiteJobs();
@@ -7306,11 +7320,12 @@
                 // last; a part's variant dot is markVariant's.
                 const others = ['place:', 'camera:', 'variant:'];
                 for (const key of this.anchors.keys()) if (!wanted.has(key) && !others.some((p) => key.startsWith(p))) this.anchors.remove(key);
-                for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key)) { m.marks?.destroy(); delete this.marks[key]; }
+                const planned = this.machine && this.machine.plan ? this.machine.path : null;
+                for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key) && !(m.plan && key === planned)) { m.marks?.destroy(); delete this.marks[key]; }
                 // The Machine follows its board -- to the printer a board inside drives,
                 // once it is known to be one -- and goes with it: nothing is left
                 // polling a board unseen.
-                if (this.machine && this.machine.path && !wanted.has(this.machine.path)) {
+                if (this.machine && !this.machine.plan && this.machine.path && !wanted.has(this.machine.path)) {
                     const moved = anchorOf[this.machine.port];
                     if (!moved) { this.closeMachine(); return; }
                     this.machine.path = moved;
@@ -7325,9 +7340,43 @@
             openMachine(path) {
                 const { row } = this.bindingFor(path);
                 const port = row && row.device && row.device.port;
-                if (!port) { this.setStatus(this.noMachine(path), 'error'); return false; }
+                if (!port) {
+                    // No board connected: a machine of the site is planned instead.
+                    const planned = this.plannedMachineOf(path);
+                    if (planned) return this.showPlan(planned);
+                    this.setStatus(this.noMachine(path), 'error');
+                    return false;
+                }
                 const anchor = row.device.printer ? this.bearerPathFor(row.path) : row.path;
                 return this.showMachine(port, anchor, row);
+            }
+            // The site's machines (machine_plans.py), asked with the site.
+            async loadMachinesHere(name) {
+                try {
+                    const r = await fetch(`${BASE_URL}/sites/${encodeURIComponent(name)}/machines`);
+                    if (name === this.siteName) this.machinesHere = r.ok ? await r.json() : [];
+                } catch (e) { if (name === this.siteName) this.machinesHere = []; }
+            }
+            // The machine a path is, or stands in: itself or the nearest above it.
+            plannedMachineOf(path) {
+                if (!path) return null;
+                const parts = path.split('.');
+                for (let n = parts.length; n > 0; n--) {
+                    const at = parts.slice(0, n).join('.');
+                    const found = this.machinesHere.find((m) => m.path === at);
+                    if (found) return found;
+                }
+                return null;
+            }
+            // A machine's Machine with no board connected: what it makes, its slice or
+            // toolpath, the files and the path drawn over it, kept as its plan.
+            showPlan(planned) {
+                if (this.machine && this.machine.plan && this.machine.path === planned.path) { this.panels.open('machine'); return true; }
+                this.mountMachinePanel('', planned.path, null, planned);
+                this.panels.open('machine');
+                const card = planned.kind === 'router' ? 'Cut' : 'Print';
+                this.setStatus(`Opened ${planned.path}'s Machine with no board connected: its ${card} card plans what it makes -- the part, its ${planned.kind === 'router' ? 'toolpath' : 'slice'}, the path drawn over it -- and ▶ is its board's once it is connected`, 'success');
+                return true;
             }
             // Why a machine has no Machine to open: nothing pinned, or a pin whose board
             // is not connected -- each said with what to do about it, and what to press
@@ -7405,6 +7454,7 @@
                 if (!path) return `no Machine is open and nothing is selected: ${how}`;
                 const { row } = this.bindingFor(path);
                 if (row && row.device && row.device.port) return null;
+                if (this.plannedMachineOf(path)) return null;  // planned with no board (showPlan)
                 return row ? this.noMachine(path) : `no Machine is open, and ${path} has no board pinned: ${how}`;
             }
             // What ⊞ Windows says of a view: why it is greyed, else what a press does.
@@ -7458,7 +7508,7 @@
                 if (!found.drawn) return { said: `${found.file}'s path is not drawn: ${found.refused}`, refused: true };
                 // Drawn where the machine's marks stand: one with no volume in this site
                 // has none, and its file's path nowhere to be.
-                const marks = Object.values(this.marks).find((m) => m.marks && m.port === machine.port);
+                const marks = (machine.plan && this.marks[machine.path]) || Object.values(this.marks).find((m) => m.marks && m.port === machine.port);
                 const box = marks ? marks.marks.toolpathBox() : null;
                 if (!box || box.isEmpty()) return { said: `${found.file} is chosen in ${who}'s ${found.card}, but its path has nowhere to be drawn: ${who} stands in ${this.siteName} with no volume of its own`, refused: true };
                 // The world has the room its view left it: framed at that size.
@@ -7469,26 +7519,33 @@
             // The Machine's panel, its body mounted when it is first in front of a
             // person. A board pinned inside a printer is the printer's, whatever it has
             // been identified as so far: its Machine has no Flashing.
-            mountMachinePanel(port, anchor, row) {
+            mountMachinePanel(port, anchor, row, planned = null) {
                 this.closeMachine();
-                const machine = { port, path: anchor, pin: row, handle: null };
+                const machine = { port, path: anchor, pin: row, handle: null, plan: !!planned };
                 this.machine = machine;
                 const bearer = row ? this.statusBearerFor(row.path) : null;
                 const inPrinter = !!(bearer && MACHINE_STATUSES.includes(bearer.status));
                 // Its sections for any kind of board now (the Log); its kind's once the
                 // Machine says what the board is (onKind). A board inside a printer is
-                // the printer's: it has no Flashing.
-                const sectionsOf = (kind) => this.systems.machine.attach({ kind, without: inPrinter ? ['flashing'] : [] });
+                // the printer's: it has no Flashing. Planned, with no board, its Print or
+                // Cut alone: every other section is a board's.
+                const sectionsOf = (kind) => this.systems.machine.attach({
+                    kind,
+                    without: planned ? ['status', 'temperature', 'level', 'sketch', 'flashing', 'log'] : (inPrinter ? ['flashing'] : []),
+                });
                 sectionsOf(null);
                 this.panels.register('machine', {
                     group: 'Machine',
-                    title: anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`,
+                    title: planned ? `${anchor} · no board connected: its plan` : (anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`),
                     // Its tab, beside Pictures and the Bench: the node's name (the
                     // port's last part, pinned nowhere); the whole title its tooltip.
                     tab: anchor ? anchor.split('.').pop() : (port.split('/').pop() || port),
                     body: (slot) => {
                         machine.handle = mountMachine(slot, {
                             base: BASE_URL, port, host: 'world', boards: this.boards, inPrinter, name: anchor,
+                            kind: planned ? planned.kind : null,
+                            // The machine's node, whose plan it keeps (machine_plans.py).
+                            machineAt: anchor && (planned || this.plannedMachineOf(anchor)) ? { site: this.siteName, path: anchor } : null,
                             sections: this.systems.machine.sections,
                             onVerb: (action) => this.openSectionsFor(action),
                             onKind: (kind) => { if (this.machine === machine) sectionsOf(kind); },
@@ -7504,7 +7561,7 @@
                             afterPrint: (job) => this.afterPrint(job),
                             afterHello: (sketch) => this.afterHello(sketch),
                         });
-                        if (this.machine === machine) { window.apothecaryMachine = machine.handle; this.machineOpened(port); }
+                        if (this.machine === machine) { window.apothecaryMachine = machine.handle; if (planned) this.planOpened(planned); else this.machineOpened(port); }
                     },
                     onClose: () => this.closeMachine(),  // its ✕: the watching stops with it
                 });
@@ -7541,6 +7598,25 @@
                 this.keepMachineInAddress(port);
                 const where = this.whereByPort[port] || fetch(`${BASE_URL}/firmware/printers/where?port=${encodeURIComponent(port)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
                 where.then((w) => { if (w && w.printer && this.machine && this.machine.port === port) window.dispatchEvent(new CustomEvent('apothecary:where', { detail: { ...w, port } })); });
+            }
+            // A plan opened: the machine's marks stand on its node as a board's would --
+            // its volume, its table or bed -- with no position to follow, so the path its
+            // Machine draws has somewhere to stand (GET /sites/{name}/machines/{path}).
+            async planOpened(planned) {
+                if (this.marks[planned.path]) return;
+                let answer = null;
+                try {
+                    const r = await fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/machines/${encodeURIComponent(planned.path)}`);
+                    answer = r.ok ? await r.json() : null;
+                } catch (e) { answer = null; }
+                const view = answer && answer.where;
+                if (!view || !view.build_volume || !this.machine || !this.machine.plan || this.machine.path !== planned.path || this.marks[planned.path]) return;
+                const marks = makeMachineMarks(view, { drawVolume: false });
+                marks.group.position.copy(marksToScene(view.position));
+                marks.group.userData.key = planned.path;
+                this.scene.add(marks.group);
+                this.marks[planned.path] = { marks, port: null, where: { printer: view }, kind: planned.kind, plan: true, readingAt: 0, readingId: null };
+                this.invalidate();
             }
             // The Bench's body: its three modules over one task log. A task's end asks
             // the toolchain, the sketches and the ports again, and the boards the site
@@ -7642,6 +7718,8 @@
                 const machine = this.machine;
                 if (!machine) return;
                 this.machine = null;
+                const planMarks = machine.plan ? this.marks[machine.path] : null;
+                if (planMarks && planMarks.plan) { planMarks.marks?.destroy(); delete this.marks[machine.path]; this.invalidate(); }
                 window.apothecaryMachine = null;
                 if (machine.handle) machine.handle.destroy();
                 this.systems.machine.detach();
@@ -7711,7 +7789,8 @@
             ensureMarks(path, row) {
                 const port = row.device.port;
                 const st = row.printer_status;
-                const have = this.marks[path];
+                let have = this.marks[path];
+                if (have && have.plan) { have.marks?.destroy(); delete this.marks[path]; have = null; }
                 if (have) {
                     if (have.marks && st && st.position) have.marks.setPosition(this.toolPosition(st, have.where));
                     if (have.marks) this.refreshReading(path);
@@ -7735,7 +7814,9 @@
                     this.scene.add(marks.group);
                     const first = this.bindings[row.path] && this.bindings[row.path].printer_status;
                     if (first && first.position) marks.setPosition(this.toolPosition(first, where), { immediate: true });
-                    this.marks[path] = { marks, port, where, readingAt: 0, readingId: null };
+                    // The kind of machine the board answered as: a bed reading is a printer's.
+                    const kind = (row.device.printer && row.device.printer.machine) || null;
+                    this.marks[path] = { marks, port, where, kind, readingAt: 0, readingId: null };
                     const toolpath = this.toolpathByPort[port];
                     if (toolpath) marks.setToolpath(toolpath.preview, toolpath);
                     this.refreshReading(path);
@@ -7747,18 +7828,21 @@
                 return toolPositionOf(st, where && where.printer ? where.printer.build_volume : null);
             }
 
-            // The newest bed reading for a printer's port, laid over its bed;
-            // asked again at most every few seconds, on the device refresh, so
-            // a reading taken from a printer's Machine shows up here without a reload.
+            // The newest bed reading of the board on a port (the server lists the
+            // readings of the board on the port now, of its kind: a printer's bed
+            // readings, a router's table maps), laid over its bed or its table; asked
+            // again at most every few seconds, on the device refresh, so a reading taken
+            // from a Machine shows up here without a reload. Marks of a board known as
+            // neither kind ask nothing.
             refreshReading(path) {
                 const m = this.marks[path];
-                if (!m || !m.marks || Date.now() - m.readingAt < 5000) return;
+                if (!m || !m.marks || !GCODE_KINDS.includes(m.kind) || Date.now() - m.readingAt < 5000) return;
                 m.readingAt = Date.now();
                 fetch(`${BASE_URL}/firmware/printers/leveling?port=${encodeURIComponent(m.port)}`)
                     .then((r) => (r.ok ? r.json() : []))
                     .then((records) => {
                         const newest = records[0];
-                        if (this.marks[path] !== m || !newest || newest.id === m.readingId) return;
+                        if (this.marks[path] !== m || !newest || newest.id === m.readingId || !readingOfKind(newest, m.kind)) return;
                         m.readingId = newest.id;
                         m.marks.setMesh(newest);
                     })

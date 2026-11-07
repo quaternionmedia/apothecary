@@ -321,17 +321,16 @@ def test_control_needs_the_latch_and_the_reset_does_not(fake_arduino_cli, router
     # A printer's line is refused on a router once the port is known to be one.
     with pytest.raises(ValueError, match="not an allowed GRBL control"):
         devices.printer_control(PORT, "M104 S200")
-    with pytest.raises(ValueError, match="not an allowed GRBL control"):
-        devices.printer_control(PORT, "M112")
     router_links.control.disarm(PORT)
-    said = devices.printer_control(PORT, "RESET").lines
-    assert any(ln.startswith("Grbl") for ln in said)
+    # The stop needs no latch, and a printer's word for it is the router's soft reset.
+    said = devices.printer_control(PORT, "M112")
+    assert said.command == "RESET" and any(ln.startswith("Grbl") for ln in said.lines)
     assert not devices.printer_status(PORT).spindle.on
 
 
 def test_a_cut_streams_and_is_a_job_of_the_router(fake_arduino_cli, router_links):
     text = "G21 G90\nM3 S12000\nG0 X-10 Y-10\nG1 Z-1 F200\nG1 X-50 F800\nG1 Y-50\nG0 Z0\nM5\nM30\n"
-    kept = devices.save_print_file("pocket.nc", text.encode())
+    kept = devices.save_print_file("pocket.nc", text.encode(), machine="router")
     assert kept.lines == 9 and kept.problems == []
     with pytest.raises(gcode.ControlNotArmed, match="arm control first"):
         devices.start_print(PORT, kept.id)
@@ -359,7 +358,7 @@ def test_a_cut_holds_when_paused_and_a_cancel_holds_and_resets(
 ):
     monkeypatch.setenv("APOTHECARY_SIMULATED_SPEED", "0.2")
     text = "M3 S12000\n" + "G4 P1\n" * 12 + "M5\n"
-    kept = devices.save_print_file("dwell.nc", text.encode())
+    kept = devices.save_print_file("dwell.nc", text.encode(), machine="router")
     router_links.control.arm(PORT)
     job = devices.start_print(PORT, kept.id)
     for _ in range(100):

@@ -12,7 +12,9 @@
  * on its node (the rest its polls set), `feedMax` and `feedDefault` the jog feed's
  * bound and default in mm/min, `files` what a job streams, `slice` whether a file
  * is sliced here, `verb` what a person does with a file, `volume` what its build
- * volume is called. A devkit runs nothing from here and has the few words below.
+ * volume is called, `level` its bed reading's words (a printer's bed, a router's
+ * table map: the card, its probe button, the stats line, the question asked before
+ * the machine moves). A devkit runs nothing from here and has the few words below.
  */
 export const KINDS = {
     printer: {
@@ -32,6 +34,7 @@ export const KINDS = {
         cancel: "Stop feeding, then heaters off, fan off, motors free",
         estop: "M112: emergency stop. Always available, latch or not. Halts the board until it is reset.",
         arm: "Arm the control latch: heaters, fan, homing, bounded jogs and SD pause/resume/abort become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can heat or move the machine.",
+        level: { card: "Bed level", button: "▤ Probe bed", buttonTitle: "G28, G29, then read the mesh, the probe offset and the temperatures; saved as a record. Moves the machine: control must be armed. ⌗ Control › Level › Probe", none: "no reading yet — Read mesh, or arm control and Probe bed", across: "across the bed", ask: "Home and probe the bed on {port}?\nThe nozzle will travel the whole bed." },
     },
     router: {
         icon: "🪚", job: "cut", verb: "Cut", volume: "Working area", dialect: "grbl", running: "running", stop: "RESET", can: "turn and move",
@@ -50,6 +53,7 @@ export const KINDS = {
         cancel: "Hold, then the soft reset: the queue empties and the spindle is off",
         estop: "Soft reset (0x18): everything halts, the queue empties, the spindle is off. Always available, latch or not. A reset in motion leaves the controller in alarm: Unlock or Home.",
         arm: "Arm the control latch: homing, unlock, bounded jogs, the spindle, work zero, a probe and the cut's hold and resume become available in an overlay for 5 minutes of activity. Disarmed, nothing on this page can turn or move the machine.",
+        level: { card: "Table map", button: "▦ Probe table", buttonTitle: "Spindle off, home, then at each point of a three-by-three grid inside the working area, from the top of Z: there in machine coordinates (G53 G0), down to the plate (G38.2), up again. The touches are kept as a record, in machine coordinates, and drawn over the table. Moves the machine: control must be armed, and the probe's lead clipped to the table", none: "no map yet — clip the probe's lead to the table, arm control, and Probe table", across: "across the table", ask: "Home and probe the table on {port}?\nThe tool will travel the whole working area, probing down at each of nine points. The probe's lead must be clipped to the table." },
     },
     devkit: { icon: "⚡", job: null, dialect: null },
 };

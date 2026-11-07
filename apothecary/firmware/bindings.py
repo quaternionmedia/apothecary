@@ -73,18 +73,28 @@ def sketch_for_node(
     return None, f"no sketch for '{ref}'"
 
 
-def same_device(identity: str, port: str, device: Optional[DeviceInfo] = None) -> bool:
+def same_device(
+    identity: str, port: str, device: Optional[DeviceInfo] = None, kind: Optional[str] = None
+) -> bool:
     """Whether a pin's ``identity`` names the board on ``port``.
 
-    It does when it is that port, a path that resolves to the same device
-    node (``/dev/serial/by-id/...``, a udev name), or -- given what is known
-    about the device there -- its MAC or its USB bridge's serial number.
-    The last is what survives a replug that renumbers the port.
+    It does when it is -- given what is known about the device there -- its MAC or
+    its USB bridge's serial number, which survive a replug that renumbers the port;
+    or when it is that port, or a path that resolves to the same device node
+    (``/dev/serial/by-id/...``, a udev name). A pin by port is a pin of a board with
+    nothing of its own to be told by: a board on that port with a MAC or a serial
+    number is another one, which its pin would have named by it; and so is a board
+    that answered as another kind of machine than the pin's (``kind``).
     """
-    if identity == port:
-        return True
-    if identity.startswith("/") and os.path.realpath(identity) == os.path.realpath(port):
-        return True
+    names_the_port = identity == port or (
+        identity.startswith("/") and os.path.realpath(identity) == os.path.realpath(port)
+    )
+    if names_the_port:
+        return device is None or not (
+            device.mac
+            or (device.serial_number or "").strip()
+            or (kind and device.printer is not None and device.printer.machine != kind)
+        )
     if device is None:
         return False
     wanted = identity.lower()
@@ -93,9 +103,11 @@ def same_device(identity: str, port: str, device: Optional[DeviceInfo] = None) -
     return bool(device.serial_number and device.serial_number.lower() == wanted)
 
 
-def device_for_identity(identity: str, found: List[DeviceInfo]) -> Optional[DeviceInfo]:
+def device_for_identity(
+    identity: str, found: List[DeviceInfo], kind: Optional[str] = None
+) -> Optional[DeviceInfo]:
     for d in found:
-        if same_device(identity, d.port, d):
+        if same_device(identity, d.port, d, kind):
             return d
     return None
 
@@ -158,7 +170,7 @@ def bindings_for_site(
         if pin is not None:
             row.binding_source = "manual"
             row.identity = pin.identity
-            row.device = device_for_identity(pin.identity, found)
+            row.device = device_for_identity(pin.identity, found, pin.kind)
             if row.device is None:
                 row.note = f"{pin.identity} not connected"
         elif sketch is not None:
