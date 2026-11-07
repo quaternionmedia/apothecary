@@ -196,5 +196,5 @@ this time, and the cut, run again, leaves holes of the size designed.
 In the page the same change is the part's editor -- Part › Edit, the hole's
 size, Apply -- then Toolpath on the variant drawn, then ▶ Cut;
 `tests/e2e/test_router_ui.py` goes round it in a browser. What this page does
-not show is the bench: the real controller has not answered this seam, and a
+not show is the bench: the real controller has been identified and polled once, and a
 real coupon has not been measured by hand. That is the plan's next slice.
