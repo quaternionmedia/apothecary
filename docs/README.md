@@ -127,6 +127,7 @@ whose work is done leaves the table above for this list.
 
 ### Records from the bench
 
+- 2026-11-07 — [The garage's two machines, read from what is recorded](validation/2026-11-07-machine-setup.md): where the relief the viewer lays over the router comes from, the Ender's stored mesh against its probes, the router's settings never read and what each decides, and the boxes the bench needs.
 - 2026-11-05 — [The family started through the hub](validation/2026-11-05-family-started.md): one procedure with a step for every member, carlos and joe real and started by the hub, what each did and what running it found.
 - 2026-11-05 — [Family integrations](validation/2026-11-05-family-integrations.md): how each family member's seam with apothecary stands, each checked against the member itself.
 - 2026-11-03 — [The router walked in the demo](validation/2026-11-03-router-walk.md): the AnoleX 4060-Evo Ultra 2's Machine, pad, cut and stop against the simulated controller, step by step with the owner, and what the walk changed.
