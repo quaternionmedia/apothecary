@@ -108,11 +108,13 @@ Each is a pull request; a slice that needs another's work stacks on it.
    reading. A reading records its board's key and kind; readings are listed for
    the occupant's key; a reading kept before this, with no key, is the
    occupant's only when it is a printer on the port the reading was taken on
-   whose firmware is the one the reading names. A bed reading is refused on
-   anything but a printer, and while a key is shared; the page lays a reading
-   over a printer's bed alone. Held by tests that take a reading on the
-   simulated printer and put the router on its port, and by a browser test that
-   starts with a printer's reading kept under the router's port name.
+   whose firmware is the one the reading names. A reading is listed for, and
+   laid over, the board of the kind that took it: a printer's bed reading, a
+   router's table map ([docs/cnc.md](../cnc.md#in-the-page)). A stored mesh is
+   read on a printer alone, and no reading is taken while a key is shared. Held
+   by tests that take a reading on the simulated printer and put the router on
+   its port, and by a browser test that starts with a printer's reading kept
+   under the router's port name.
 4. **A kept file says which kind of machine it is for** (`build/files-by-kind`,
    on 5; built). A file records
    `printer` or `router`: Choose File records the Machine's kind, a slice

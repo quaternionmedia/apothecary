@@ -360,7 +360,8 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "level-probe": (
         WIDGET,
         WHAT_IS_THERE,
-        "a button that homes, probes the bed and keeps the reading",
+        "a button that homes, probes the bed (a router's table, at a grid of points) and "
+        "keeps the reading",
     ),
     "level-read": (
         WIDGET,

@@ -839,6 +839,10 @@
         import { mountBoards } from '/static/boards.js';
         import { boardLabel, boardSummary } from '/static/board_text.js';
         import { KINDS as MACHINE_WORDS, GCODE_KINDS, kindOf as boardKindOf } from '/static/machine_words.js';
+        // Whether a bed reading is a machine of `kind`'s: a reading names the kind of
+        // machine that took it (a printer's bed, a router's table; one kept before
+        // readings said is a printer's), and is laid over that kind's marks alone.
+        const readingOfKind = (record, kind) => !!record && GCODE_KINDS.includes(kind) && (record.machine || 'printer') === kind;
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
         import { mountProcedure } from '/static/widgets/procedure.js';
@@ -1900,11 +1904,12 @@
                 // The board model says what changed of a board, or that it scanned: every
                 // drawer of it follows from the one event.
                 window.addEventListener('apothecary:board', (ev) => this.boardChanged(ev.detail));
-                // A bed reading shown in a printer's Machine lands on the marks -- a
-                // printer's alone: a reading is never laid over a router's table -- and a
-                // jog sent from it moves the nozzle ahead of the poll that confirms it.
+                // A bed reading shown in a Machine lands on the marks of the machine that
+                // took it, by kind -- a printer's bed reading on a printer's, a router's
+                // table map on a router's, never the one over the other -- and a jog sent
+                // from it moves the nozzle ahead of the poll that confirms it.
                 window.addEventListener('apothecary:mesh', (ev) => {
-                    for (const m of Object.values(this.marks)) if (m.marks && m.kind === 'printer' && ev.detail && ev.detail.port === m.port) m.marks.setMesh(ev.detail);
+                    for (const m of Object.values(this.marks)) if (m.marks && readingOfKind(ev.detail, m.kind) && ev.detail.port === m.port) m.marks.setMesh(ev.detail);
                 });
                 // The chosen file's path: drawn where its machine's marks stand, and kept
                 // for marks not there yet (the site is still loading).
@@ -7823,19 +7828,21 @@
                 return toolPositionOf(st, where && where.printer ? where.printer.build_volume : null);
             }
 
-            // The newest bed reading of the printer on a port (the server lists the
-            // readings of the board on the port now), laid over its bed; asked again at
-            // most every few seconds, on the device refresh, so a reading taken from a
-            // printer's Machine shows up here without a reload. A router has none.
+            // The newest bed reading of the board on a port (the server lists the
+            // readings of the board on the port now, of its kind: a printer's bed
+            // readings, a router's table maps), laid over its bed or its table; asked
+            // again at most every few seconds, on the device refresh, so a reading taken
+            // from a Machine shows up here without a reload. Marks of a board known as
+            // neither kind ask nothing.
             refreshReading(path) {
                 const m = this.marks[path];
-                if (!m || !m.marks || m.kind !== 'printer' || Date.now() - m.readingAt < 5000) return;
+                if (!m || !m.marks || !GCODE_KINDS.includes(m.kind) || Date.now() - m.readingAt < 5000) return;
                 m.readingAt = Date.now();
                 fetch(`${BASE_URL}/firmware/printers/leveling?port=${encodeURIComponent(m.port)}`)
                     .then((r) => (r.ok ? r.json() : []))
                     .then((records) => {
                         const newest = records[0];
-                        if (this.marks[path] !== m || !newest || newest.id === m.readingId) return;
+                        if (this.marks[path] !== m || !newest || newest.id === m.readingId || !readingOfKind(newest, m.kind)) return;
                         m.readingId = newest.id;
                         m.marks.setMesh(newest);
                     })

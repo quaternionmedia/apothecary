@@ -655,16 +655,17 @@ def test_a_reading_kept_without_its_board_is_the_printer_s_on_its_port_with_its_
     assert devices.leveling_records(PORT) == []
 
 
-def test_a_bed_reading_is_refused_on_a_router_and_nothing_is_sent(bench, monkeypatch):
+def test_a_stored_mesh_is_refused_on_a_router_and_nothing_marlin_is_sent(bench, monkeypatch):
+    """A router keeps no mesh to read: its own reading probes its table
+    (``test_firmware_table_map.py``), and Read mesh is refused before the port."""
     links = _links(monkeypatch, grbl.SimulatedRouter)
     _a_router_was_identified(bench)
     links.control.arm(PORT)
-    for probe in (True, False):
-        with pytest.raises(
-            devices.ToolchainError, match="a bed reading is a printer's, and .* holds a router"
-        ):
-            devices.start_leveling(PORT, probe=probe)
-    assert not {"G28", "G29", "M420 V"} & set(_sent(links))
+    with pytest.raises(
+        devices.ToolchainError, match="a stored mesh is a printer's to read, and .* holds a router"
+    ):
+        devices.start_leveling(PORT, probe=False)
+    assert not {"G28", "G29", "M420 V", "M851"} & set(_sent(links))
     links.stop_all()
 
 

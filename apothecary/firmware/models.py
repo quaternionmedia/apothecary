@@ -508,8 +508,29 @@ class PrinterQueryResult(BaseModel):
     queried_at: datetime
 
 
-class LevelingRecord(BaseModel):
-    """One reading of a printer's bed: the mesh, what it means, and the conditions."""
+class BedReading(BaseModel):
+    """What a dialect's reading of its bed holds, before the board's and the port's
+    words go on it (``LevelingRecord``): a printer's stored mesh as Marlin prints
+    it, or a router's table probed at each point of a grid (``grbl.probe_table``)."""
+
+    method: str  # "probe" (G29 then read), "read" (M420 V only), "G38.2" (a router's table)
+    mesh: List[List[float]] = Field(default_factory=list)  # rows from the front, each left to right
+    subdivided: Optional[List[List[float]]] = None
+    stats: dict = Field(default_factory=dict)  # gcode.mesh_stats
+    leveling_on: Optional[bool] = None  # Marlin's: whether the mesh is applied
+    probe_offset: Optional[dict] = None  # Marlin's: M851
+    hotend_c: Optional[float] = None
+    bed_c: Optional[float] = None
+    # A router's: where the grid lies in the working area, min and max x and y in mm
+    # from its front-left corner (mpos + travel), so the relief is drawn where it was
+    # probed; a printer's grid has no positions and is placed by estimate.
+    area: Optional[dict] = None
+    lines: List[str] = Field(default_factory=list)  # everything the firmware said, for the log
+
+
+class LevelingRecord(BedReading):
+    """One reading of a machine's bed: the mesh, what it means, and the conditions --
+    a printer's bed, or a router's table map."""
 
     id: str
     port: str  # where it was taken; whose it is is ``board``
@@ -519,22 +540,23 @@ class LevelingRecord(BaseModel):
     board: Optional[str] = None
     machine: Optional[str] = None
     at: datetime
-    method: str  # "probe" (G29 then read) or "read" (M420 V only)
-    mesh: List[List[float]] = Field(default_factory=list)
-    subdivided: Optional[List[List[float]]] = None
-    stats: dict = Field(default_factory=dict)
-    leveling_on: Optional[bool] = None
-    probe_offset: Optional[dict] = None
-    hotend_c: Optional[float] = None
-    bed_c: Optional[float] = None
     firmware: Optional[str] = None
     note: Optional[str] = None
-    lines: List[str] = Field(default_factory=list)  # everything the firmware said, for the log
+
+
+class TableGrid(BaseModel):
+    """A router's table map: the grid of points probed, inside the working area."""
+
+    rows: int = Field(3, ge=2, le=9)  # front to back
+    cols: int = Field(3, ge=2, le=9)  # left to right
+    inset: float = Field(20.0, ge=0, le=250)  # mm in from the working area's edges
+    feed: int = Field(200, ge=10, le=500)  # the probe's, mm/min; the dialect caps it too
 
 
 class LevelingRequest(ProbeRequest):
-    probe: bool = True  # False: read the stored mesh without probing
+    probe: bool = True  # False: read the stored mesh without probing (a printer's)
     note: Optional[str] = Field(None, max_length=200)
+    grid: Optional[TableGrid] = None  # a router's grid; left out, three by three
 
 
 class PrintFile(BaseModel):

@@ -288,10 +288,12 @@ MACHINE = System(
         Section(
             "level",
             "Bed level",
-            "a printer's bed: probed or read, its mesh, its corners, its records",
+            "a printer's bed: probed or read, its mesh, its corners, its records; a "
+            "router's table, mapped by its probe at a grid of points, the same",
             home="column",
             verbs=("level:",),
-            kind="printer",
+            kind=("printer", "router"),
+            titles={"router": "Table map"},
         ),
         Section(
             "sketch",

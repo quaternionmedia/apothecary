@@ -30,8 +30,8 @@ import time
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Tuple
 
-from .gcode import SPINDLE_MAX_RPM, GcodeLink, LinkBusy, OutOfBounds
-from .models import GRBL, PrinterInfo, PrinterStatus, Spindle
+from .gcode import SPINDLE_MAX_RPM, GcodeLink, LinkBusy, OutOfBounds, mesh_stats
+from .models import GRBL, BedReading, PrinterInfo, PrinterStatus, Spindle, TableGrid
 from .toolchains import ToolchainError
 
 DIALECT = GRBL
@@ -256,6 +256,36 @@ def parse_parser_state(lines: List[str]) -> dict:
     return out
 
 
+def parse_probe(lines: List[str]) -> Optional[dict]:
+    """The last ``[PRB:x,y,z:t]`` among ``lines`` -- where a probe stopped, in machine
+    coordinates, and whether it touched -- as ``$#`` and a ``G38.2`` report it; None
+    for none."""
+    for line in reversed(lines):
+        m = PRB_RE.match(line.strip())
+        if m:
+            x, y, z = (float(v) for v in m.groups()[:3])
+            return {"x": x, "y": y, "z": z, "touched": m.group(4) == "1"}
+    return None
+
+
+def parse_settings(lines: List[str]) -> Dict[int, float]:
+    """``$$``'s answer, ``$N=value`` per line, by number."""
+    out: Dict[int, float] = {}
+    for line in lines:
+        m = SETTING_RE.match(line.strip())
+        if m:
+            out[int(m.group(1))] = float(m.group(2))
+    return out
+
+
+def travel_of(settings: Dict[int, float]) -> Optional[dict]:
+    """The axes' maximum travel from the settings (``$130``, ``$131``, ``$132``, mm):
+    the working area, in the controller's own word; None when any is missing."""
+    if not all(n in settings for n in (130, 131, 132)):
+        return None
+    return {"x": settings[130], "y": settings[131], "z": settings[132]}
+
+
 def parse_alarm(lines: List[str]) -> Optional[int]:
     """The last ``ALARM:N`` among ``lines``, or None."""
     found = None
@@ -347,7 +377,10 @@ CONTROL_CODES: List[tuple] = [
     (re.compile(r"^G91$"), "relative positioning"),
     (re.compile(r"^G21$"), "millimetres"),
     (re.compile(rf"^G[01]{_AXES}{{1,3}}(?: F\d{{1,5}})?$"), "move"),
-    (re.compile(r"^G53 G0 Z0$"), "the tool to the top of its travel"),
+    (
+        re.compile(rf"^G53 G0{_AXES}{{1,3}}$"),
+        "a move in machine coordinates: the top of Z, a table map's points",
+    ),
     (re.compile(r"^M3 S\d{1,5}$"), "spindle on, clockwise, at a speed"),
     (re.compile(r"^M5$"), "spindle off"),
     (re.compile(r"^G10 L20 P1(?: [XYZ]0){1,3}$"), "work zero here, for the named axes"),
@@ -514,6 +547,7 @@ class SimulatedRouter:
     MACHINE_NAME = "Apothecary simulated router"
     TRAVEL = {"x": 400.0, "y": 600.0, "z": 80.0}
     RAPID = 4000.0  # mm/min, the maker's figure for X and Y
+    PLATE = 20.0  # mm under the tool, wherever it stands: what a probe touches
     PULL_OFF = 3.0  # mm back from the switches after homing
     PLANNER = PLANNER_BLOCKS  # blocks the queue holds before a line waits for room
     REALTIME_BYTES = tuple(b[0] for b in REALTIME.values())
@@ -776,11 +810,19 @@ class SimulatedRouter:
                 feed = self.RAPID if rapid else self.f * self.feed_override / 100
                 self._enqueue(target, feed, "rapid" if rapid else "move")
         elif code == "G53":
-            # G53 G0 Z0: the top of Z travel, in machine coordinates
+            # A rapid in machine coordinates, whatever the work offset: G53 G0 Z0 is the
+            # top of Z travel, G53 G0 X Y a table map's point. Past the travel it alarms
+            # as any move does.
             target = self._end_of_queue()
-            if "Z" in args:
-                target["z"] = float(args["Z"])
-            self._enqueue(target, self.RAPID)
+            for axis in "xyz":
+                if axis.upper() in args:
+                    target[axis] = float(args[axis.upper()])
+            if self.settings.get(20) and any(
+                target[k] > 0.001 or target[k] < -self.TRAVEL[k] - 0.001 for k in "xyz"
+            ):
+                self.state, self.alarm = "Alarm", 2
+                return ["ALARM:2", "[MSG:Reset to continue]"]
+            self._enqueue(target, self.RAPID, "rapid")
         elif code == "G4":
             secs = float(args.get("P", 0)) or 0.0
             self._enqueue(self._end_of_queue(), min(2.0, secs), "dwell")
@@ -796,10 +838,10 @@ class SimulatedRouter:
                 if axis.upper() in args:
                     self.wco[axis] = round(here[axis] - float(args[axis.upper()]), 3)
         elif code == "G38.2":
-            # The plate is 20 mm below where the tool stands, or the move ends short.
+            # The plate is PLATE mm below where the tool stands, or the move ends short.
             here = self._end_of_queue()
             depth = float(args.get("Z", 0))
-            plate = here["z"] - 20.0
+            plate = here["z"] - self.PLATE
             touched = here["z"] + depth <= plate
             z = plate if touched else here["z"] + depth
             self.pos = {**here, "z": z}
@@ -975,6 +1017,133 @@ def query_router(link: GcodeLink, command: str, timeout: float = 15.0) -> List[s
         _status, lines = report(link, timeout=timeout, origin="query")
         return lines
     return link.command(cmd, timeout=timeout, origin="query")
+
+
+# --- the table map: the router's bed reading, Z probed at a grid of points ----------------
+
+
+def table_grid(travel: dict, rows: int, cols: int, inset: float) -> List[List[dict]]:
+    """The points of a table map, in machine coordinates: ``rows`` by ``cols``, spread
+    over the working area ``inset`` mm in from its edges. Machine coordinates run
+    negative from the home corner at the back right, so the front-left point is the
+    most negative in both axes; the rows run front to back and each left to right,
+    as Marlin prints its mesh and ``mesh_stats`` names the corners. ValueError when
+    the grid does not fit."""
+    if rows < 2 or cols < 2:
+        raise ValueError(f"a table map is at least two by two: {rows}x{cols}")
+    if inset < 0 or 2 * inset >= travel["x"] or 2 * inset >= travel["y"]:
+        raise ValueError(
+            f"an inset of {inset} mm leaves no room on a {travel['x']}x{travel['y']} table"
+        )
+    xs = [-travel["x"] + inset + i * (travel["x"] - 2 * inset) / (cols - 1) for i in range(cols)]
+    ys = [-travel["y"] + inset + j * (travel["y"] - 2 * inset) / (rows - 1) for j in range(rows)]
+    return [[{"x": round(x, 3), "y": round(y, 3)} for x in xs] for y in ys]
+
+
+def _machine_position(link: GcodeLink, reports: int = 12) -> dict:
+    """Where the tool stands in machine coordinates, from the status report: a
+    controller set to report the work position says the offset only every few
+    reports, so a few are asked for."""
+    for _ in range(reports):
+        status, _lines = report(link, origin="control")
+        if status["mpos"] is not None:
+            return status["mpos"]
+        time.sleep(0.2)
+    raise ToolchainError(f"{link.port}: the status report never said the machine position")
+
+
+def probe_table(
+    link: GcodeLink,
+    *,
+    probe: bool = True,
+    grid: Optional[TableGrid] = None,
+    stage: Callable[..., None] = lambda word, points=None: None,
+) -> BedReading:
+    """The router's bed reading: its table mapped, Z probed with the touch plate at
+    each point of ``grid`` (three by three, left out) over the working area.
+
+    The working area is the controller's own word, its maximum travel (``$$``).
+    The spindle is turned off and the machine homed, so machine coordinates mean
+    the working area and the tool stands at the top of Z. Then, at each point from
+    the front-left: a rapid there in machine coordinates (``G53 G0``, so a person's
+    work zero is neither used nor moved), a probe down (``G38.2``) as far as the
+    travel allows and no deeper than the dialect's bound, at the grid's feed, and
+    the lift back to the top. A touch is read from the ``[PRB:...]`` line; a probe
+    that does not touch within the move alarms the controller and ends the map
+    there. The touches are the mesh, in machine coordinates, rows from the front;
+    the controller's own word on the last touch (``$#``) is kept with the lines.
+    ``stage`` is told each step and, while probing, the points done of the total.
+    This dialect's ``Dialect.bed_reading``; a stored mesh (``probe=False``) it has
+    none of, and ``devices.start_leveling`` refuses before the port.
+
+    The probe's lead must close at every point: clipped to the table, or the
+    plate's whole surface under the grid. A plate held at one point is the pad's
+    Probe Z, not this.
+    """
+    if not probe:
+        raise ValueError("a router keeps no mesh to read: its reading probes the table")
+    grid = grid or TableGrid()
+    lines: List[str] = []
+    settings_lines = query_router(link, "$$")
+    lines += settings_lines
+    travel = travel_of(parse_settings(settings_lines))
+    if travel is None:
+        raise ToolchainError(f"{link.port}: the controller does not say its travel ($130-$132)")
+    points = table_grid(travel, grid.rows, grid.cols, grid.inset)
+    total = grid.rows * grid.cols
+    feed = min(grid.feed, PROBE_FEED_MAX)
+    stage("homing")
+    lines += control_router(link, "M5", timeout=10.0)
+    lines += control_router(link, "$H", timeout=120.0)
+    top = _machine_position(link)["z"]
+    # From the top of Z the probe may go the rest of the travel, and no further than the
+    # dialect lets a probe go.
+    depth = min(PROBE_MAX_MM, top + travel["z"])
+    if depth <= 0:
+        raise ToolchainError(
+            f"{link.port}: no travel under the tool to probe (Z {top} of {travel['z']})"
+        )
+    probe_line = f"G38.2 Z-{depth:.2f} F{feed}"
+    probe_timeout = depth / feed * 60.0 * 2 + 30.0
+    lines += control_router(link, "G91", timeout=10.0)  # a probe's Z is a distance
+    mesh: List[List[float]] = []
+    try:
+        done = 0
+        for row in points:
+            heights: List[float] = []
+            for point in row:
+                stage("probing", {"done": done, "total": total})
+                lines += control_router(
+                    link, f"G53 G0 X{point['x']:.3f} Y{point['y']:.3f}", timeout=120.0
+                )
+                said = control_router(link, probe_line, timeout=probe_timeout)
+                lines += said
+                touch = parse_probe(said)
+                if touch is None or not touch["touched"]:
+                    raise ToolchainError(
+                        f"{link.port}: no touch at X{point['x']} Y{point['y']}: {said[-1] if said else 'nothing said'}"
+                    )
+                heights.append(round(touch["z"], 3))
+                lines += control_router(link, f"G53 G0 Z{top:.3f}", timeout=120.0)
+                done += 1
+            mesh.append(heights)
+        stage("reading", {"done": done, "total": total})
+        lines += query_router(link, "$#")
+    finally:
+        try:
+            lines += control_router(link, "G90", timeout=10.0)
+        except (ToolchainError, LinkBusy):
+            pass  # the controller in alarm keeps its parser; the alarm is what is said
+    return BedReading(
+        method="G38.2",
+        mesh=mesh,
+        stats=mesh_stats(mesh),
+        area={
+            "min": {"x": grid.inset, "y": grid.inset},
+            "max": {"x": travel["x"] - grid.inset, "y": travel["y"] - grid.inset},
+        },
+        lines=lines[-400:],
+    )
 
 
 def alarm_text(code: Optional[int]) -> Optional[str]:

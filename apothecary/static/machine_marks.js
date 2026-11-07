@@ -1,10 +1,11 @@
 /* What a printer wears in a three.js scene, wherever that scene is: the
  * build volume as a wire box on the printer's base, the bed plane, a nozzle
  * marker at the position the board last reported, and -- when there is a
- * bed reading -- the mesh as a relief over the bed. A router wears its working
- * area, its table and its tool, placed by the position the page computes from
- * its controller's (toolPosition below); a bed reading is a printer's, and its
- * caller lays one over a printer's bed alone.
+ * bed reading -- the mesh as a relief over the bed. A router wears the same:
+ * its working area, its table and its tool, placed by the position the page
+ * computes from its controller's (toolPosition below), and its table map as
+ * the relief, where the map says its points were probed. A reading is laid
+ * over the marks of the kind of machine that took it, by its caller.
  *
  * One group, in the printer's own frame (apothecary's z-up, relative to the
  * printer's origin); the caller places it: the world scene at the printer's
@@ -162,7 +163,11 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
         const lo = Math.min(...flat), hi = Math.max(...flat);
         const range = hi - lo;
         const exaggeration = meshExaggeration(range);
-        const bounds = meshBounds(printer.build_volume, record.probe_offset);
+        // Where the points lie: a router's map says (record.area, from the working area's
+        // front-left corner, where its probe went); a printer's grid is placed by estimate.
+        const bounds = record.area
+            ? { min: { x: record.area.min.x, y: record.area.min.y }, max: { x: record.area.max.x, y: record.area.max.y } }
+            : meshBounds(printer.build_volume, record.probe_offset);
         const stepX = nCols > 1 ? (bounds.max.x - bounds.min.x) / (nCols - 1) : 0;
         const stepY = nRows > 1 ? (bounds.max.y - bounds.min.y) / (nRows - 1) : 0;
         // Vertices in the printer's frame: the bed at the volume's floor, the

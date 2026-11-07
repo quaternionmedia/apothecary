@@ -102,7 +102,8 @@ def test_the_router_s_machine_has_a_router_s_cards_and_pad(page: Page, url: str)
     expect(machine.locator("#c-pins")).to_contain_text("none")
     expect(machine.locator("#print-title")).to_have_text("Cut from here")
     expect(machine.locator("#print-start")).to_have_text("▶ Cut")
-    for printers_own in ("#c-hot", "#c-bed", "#level-card", "#chart"):
+    # The Level card is a router's too, as its Table map (test_router_table_map.py).
+    for printers_own in ("#c-hot", "#c-bed", "#level-read", "#chart"):
         expect(machine.locator(printers_own)).to_be_hidden()
     # Where a printer's card has Slice, a router's has Toolpath (docs/cam.md).
     expect(machine.locator("#print-slice")).to_have_text("Toolpath")
@@ -346,9 +347,10 @@ def test_the_page_says_a_router_in_a_router_s_words(page: Page, url: str):
 def test_a_printer_s_reading_under_the_router_s_port_is_never_laid_over_its_table(
     page: Page, url: str
 ):
-    """The server lists the router no reading; and the page, told one anyway (the
-    request answered as a server that listed readings by port name alone would), lays
-    none over the router's table: a reading is a printer's."""
+    """The server lists the router no reading of a printer's; and the page, asking for
+    the router's own maps and told a printer's reading anyway (the request answered as
+    a server that listed readings by port name alone would), lays none over the
+    router's table: a reading is laid over the kind of machine that took it."""
     every = httpx.get(f"{url}/firmware/printers/leveling", timeout=15.0).json()
     assert [r["id"] for r in every if r["port"] == ROUTER] == [A_PRINTER_S_READING["id"]]
     mine = httpx.get(f"{url}/firmware/printers/leveling", params={"port": ROUTER}, timeout=15.0)
@@ -374,4 +376,6 @@ def test_a_printer_s_reading_under_the_router_s_port_is_never_laid_over_its_tabl
     page.wait_for_timeout(1000)
     assert page.evaluate("() => window.fractalViewer.marks['cnc_router'].kind") == "router"
     assert page.evaluate("() => window.fractalViewer.marks['cnc_router'].marks.mesh()") is None
-    assert asked == []  # a router's marks do not ask
+    # A router's marks ask, for the router's own table maps (test_router_table_map.py);
+    # what they are answered here is a printer's, and is not theirs.
+    assert asked and all("ttyFAKE3" in url for url in asked)

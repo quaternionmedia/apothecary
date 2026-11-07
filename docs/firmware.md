@@ -459,7 +459,8 @@ window is the board's head -- its link verbs, the control latch and pad,
 windows of their own, closed until asked for, and those of the board's kind
 alone. A printer's are **Status** (hotend, bed, position, the SD print,
 endstops and filament), **Temperature** (the chart), **Print** (the print
-from here) and **Bed level**; a devkit's are **Sketch** -- what it should
+from here) and **Bed level**; a router's **Status**, **Cut** and **Table
+map** ([docs/cnc.md](cnc.md#in-the-page)); a devkit's are **Sketch** -- what it should
 run against what it was heard saying (its `apothecary <name>: hello`
 banner), and what changed since it was flashed -- and **Flashing**. Both
 kinds have the board's **one log**, **Log**: a printer's comms log, with the
@@ -599,28 +600,61 @@ refused before it reaches the port.
 
 ### Bed leveling
 
-**Read mesh** asks the board for its stored mesh (`M420 V`), the probe offset
-(`M851`) and the temperatures and keeps the three as a *bed reading*; it
-moves nothing and needs no latch. **Probe bed** homes and probes (`G28`,
-`G29`) and then reads; it needs the latch and runs as a job that holds the
-port, during which polls answer from the last poll, queries and control lines
-get `409`, and E-STOP still goes through. Readings are kept under
-`~/.apothecary/leveling/` and drawn as a heatmap with the range, the tilt
-(a least-squares plane) and each corner against the mean, and as a relief
-over the printer's bed in the world. The corner buttons move the nozzle to paper
-height at each corner and are controls. `firmware.gcode.parse_meshes` reads
-Marlin's printed grid and falls back to the `G29 W` points an `M503` prints.
+A bed reading is the port's dialect's (`firmware.dialects.Dialect.bed_reading`:
+`gcode.read_bed` for Marlin, `grbl.probe_table` for GRBL), kept, listed and
+drawn the same way whichever took it.
 
-A reading is the printer's that took it. It records that board's key -- its USB
-bridge's serial number on the Ender -- and its kind, and a port's readings are the
-readings of the printer on it now (`firmware.occupants`): they follow the printer
+A printer's: **Read mesh** asks the board for its stored mesh (`M420 V`), the
+probe offset (`M851`) and the temperatures and keeps the three as a *bed
+reading*; it moves nothing and needs no latch. **Probe bed** homes and probes
+(`G28`, `G29`) and then reads; it needs the latch and runs as a job that
+holds the port, during which polls answer from the last poll, queries and
+control lines get `409`, and E-STOP still goes through. Readings are kept
+under `~/.apothecary/leveling/` and drawn as a heatmap with the range, the
+tilt (a least-squares plane) and each corner against the mean, and as a
+relief over the printer's bed in the world. The corner buttons move the
+nozzle to paper height at each corner and are controls.
+`firmware.gcode.parse_meshes` reads Marlin's printed grid and falls back to
+the `G29 W` points an `M503` prints.
+
+A router's is a **table map**, its Machine's Table map window where a
+printer's has Bed level. A GRBL controller keeps no mesh, so **Probe table**
+makes one: it needs the latch and runs as the same job. The spindle is turned
+off (`M5`) and the machine homed (`$H`), so machine coordinates mean the
+working area, which is the controller's own word, its maximum travel (`$$`),
+and the tool stands at the top of Z. Then at each point of a grid inside the
+working area -- three by three, 20 mm in from the edges, or the `grid` the
+request names: rows and columns of two to nine, the inset, the probe's feed
+-- a rapid there in machine coordinates at the top of Z (`G53 G0`, so a
+person's work zero is neither used nor moved), a probe down (`G38.2`) as far
+as the travel allows and no deeper than the dialect's 80 mm, at 200 mm/min
+unless the grid says otherwise and never over the dialect's 500, and the lift
+back to the top. The touches are the mesh, in machine coordinates, rows from
+the front, with the same range, tilt and corners; the record says where the
+grid lies from the working area's front-left corner (`area`), so the world
+lays the relief where the points were probed, and keeps the controller's own
+word on the last touch (`$#`) with the lines. The job's status says the
+points done of the total (`points`) while it probes. The probe's lead must
+close at every point -- clipped to the table, or the plate's whole surface
+under the grid; a plate held at one point is the pad's Probe Z. A probe that
+does not touch within the move alarms the controller (`ALARM:5`) and ends
+the map there, saying so, with nothing kept. A stored mesh is Marlin's: Read
+mesh is refused for a GRBL board before the port.
+
+A reading is the board's that took it. It records that board's key -- its USB
+bridge's serial number on the Ender; its maker's and product's ids for a bridge
+with none, the router's CH340 -- and the kind of machine it drives, and a port's
+readings are the readings of the board on it now (`firmware.occupants`), of its
+kind: a printer's bed readings, a router's table maps. They follow the board
 from port to port, and a router on a port a printer's readings were taken on is
-listed none of them, nor wears one over its table. A reading kept before readings
-named their board is the printer's on the port it was taken on that answers with
-the firmware it names. A bed reading is refused on anything but a printer, before
-anything is sent; and while two boards on the machine answer to one key (two
-bridges of one make, neither with a serial number), it is refused on both, since a
-reading kept then could not be told whose.
+listed none of them, nor wears one over its table; a printer's reading kept
+under a bridge's shared key is never a router's. A reading kept before readings
+named their board is the printer's on the port it was taken on that answers
+with the firmware it names. A bed reading is refused on a board nothing has
+identified as a printer or a router, before any of the reading is sent, and a stored mesh
+on anything but a printer; and while two boards on the machine answer to one
+key (two bridges of one make, neither with a serial number), it is refused on
+both, since a reading kept then could not be told whose.
 
 ### Printing without an SD card
 

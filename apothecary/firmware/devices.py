@@ -66,6 +66,7 @@ from ..stays_local import subprocess_env
 from . import dialects, gcode, grbl, occupants, serial_monitor
 from .models import (
     PRINT_FILE_ID,
+    BedReading,
     BoardInfo,
     DeviceInfo,
     ExpectedFirmware,
@@ -77,6 +78,7 @@ from .models import (
     PrinterQueryResult,
     PrintFile,
     SketchInfo,
+    TableGrid,
 )
 from .sketches import find_sketch
 from .toolchains import (
@@ -1045,6 +1047,12 @@ def printer_control(
 WHAT_HOLDS = {"print": "a print", "cut": "a cut"}
 
 
+def what_holds(job: dict) -> str:
+    """What the job holding the port is called in a refusal: a print, a cut, a bed
+    reading or a table map (``LevelingJob.what``)."""
+    return job.get("what") or WHAT_HOLDS.get(job.get("kind"), "a bed reading")
+
+
 def _job_allows(job: dict, cmd: str) -> None:
     if cmd in dialects.STOPS:
         return
@@ -1052,8 +1060,7 @@ def _job_allows(job: dict, cmd: str) -> None:
     if op is not None and op.kind in STREAMED:
         if dialects.BY_MACHINE[op.machine].job_allows.match(cmd):
             return
-    what = WHAT_HOLDS.get(job.get("kind"), "a bed reading")
-    raise PortHeld(f"{port_of(job)}: {what} holds the port ({job.get('stage')})")
+    raise PortHeld(f"{port_of(job)}: {what_holds(job)} holds the port ({job.get('stage')})")
 
 
 def port_of(job: dict) -> str:
@@ -1061,8 +1068,9 @@ def port_of(job: dict) -> str:
 
 
 # --- bed leveling: a job that holds the port for minutes, and its records ---------------
-
-LEVELING_PROBE_TIMEOUT_S = 900.0  # a five-by-five probe on a slow bed
+# A reading is the port's dialect's (``Dialect.bed_reading``): a printer's stored mesh,
+# read or probed first (``gcode.read_bed``); a router's table, Z probed at a grid of
+# points (``grbl.probe_table``). Kept the same way, listed and drawn by the same route.
 
 
 def leveling_dir() -> Path:
@@ -1070,8 +1078,8 @@ def leveling_dir() -> Path:
 
 
 def leveling_records(port: Optional[str] = None) -> List[LevelingRecord]:
-    """Every saved reading, newest first; given a port, the readings of the printer
-    on it now (``readings_of``)."""
+    """Every saved reading, newest first; given a port, the readings of the board on
+    it now (``readings_of``): a printer's bed readings, a router's table maps."""
     folder = leveling_dir()
     if not folder.is_dir():
         return []
@@ -1089,19 +1097,22 @@ def leveling_records(port: Optional[str] = None) -> List[LevelingRecord]:
 def readings_of(
     board: Optional[occupants.Occupant], records: List[LevelingRecord]
 ) -> List[LevelingRecord]:
-    """The readings that are ``board``'s: a printer's alone, those kept under its key;
-    and one kept before readings carried a key, when it was taken on the port the
-    printer is on and names the firmware the printer answered with. Nothing for a
-    board of another kind, one not yet identified, or one whose key another board
-    on the machine shares."""
-    if board is None or board.kind != "printer" or board.shared:
+    """The readings that are ``board``'s: those kept under its key by a board of its
+    kind -- a printer's bed readings, a router's table maps; a bridge's ``usb:`` key
+    is one make's, and a printer's reading under it is never a router's -- and, for
+    a printer, one kept before readings carried a key, when it was taken on the port
+    the printer is on and names the firmware the printer answered with. Nothing for
+    a board not yet identified as either kind, or one whose key another board on the
+    machine shares."""
+    if board is None or board.kind is None or board.shared:
         return []
     return [
         rec
         for rec in records
-        if board.owns(rec.board)
+        if (board.owns(rec.board) and (rec.machine or "printer") == board.kind)
         or (
             rec.board is None
+            and board.kind == "printer"
             and rec.port == board.port
             and rec.firmware is not None
             and rec.firmware == board.firmware
@@ -1122,60 +1133,66 @@ def _save_leveling(record: LevelingRecord) -> Path:
     return kept
 
 
-def read_bed(link: gcode.GcodeLink, port: str, method: str, note: Optional[str]) -> LevelingRecord:
-    """The reading itself: mesh, state, probe offset and temperatures, from an open link."""
-    lines: List[str] = []
-    mesh_lines = link.command("M420 V", timeout=15.0, origin="query")
-    lines += mesh_lines
-    offset_lines = link.command("M851", timeout=10.0, origin="query")
-    lines += offset_lines
-    temp_lines = link.command("M105", timeout=10.0, origin="query")
-    lines += temp_lines
-    grids = gcode.parse_meshes(mesh_lines)
-    temps = gcode.parse_m105(next((ln for ln in temp_lines if gcode.is_temperature_line(ln)), ""))
-    cached = get_state().cached_device(port)
-    board = occupants.on_port(port)
+def _as_record(
+    port: str, reading: BedReading, note: Optional[str], state: Optional[FirmwareState] = None
+) -> LevelingRecord:
+    """The reading as the board's record: whose it is (``occupants``: the board's key
+    and the kind of machine it drives), when, and what it answered as."""
+    cached = (state or get_state()).cached_device(port)
+    board = occupants.on_port(port, state)
     at = datetime.now(timezone.utc)
     slug = re.sub(r"[^A-Za-z0-9]+", "_", port).strip("_")
-    record = LevelingRecord(
+    return LevelingRecord(
         id=f"{stamp(at)}-{slug}",  # with -2 after it, if need be, when it is kept
         port=port,
         board=board.key if board is not None else None,
         machine=board.kind if board is not None else None,
         at=at,
-        method=method,
-        mesh=grids[0] if grids else [],
-        subdivided=grids[1] if len(grids) > 1 else None,
-        stats=gcode.mesh_stats(grids[0]) if grids else {},
-        leveling_on=gcode.parse_leveling_state(mesh_lines),
-        probe_offset=gcode.parse_probe_offset(offset_lines),
-        hotend_c=temps["hotends"][0].actual if temps["hotends"] else None,
-        bed_c=temps["bed"].actual if temps["bed"] else None,
         firmware=cached.printer.firmware_name if cached and cached.printer else None,
         note=note,
-        lines=lines[-400:],
+        **reading.model_dump(),
     )
-    return record
 
 
 class LevelingJob:
-    """Home, probe, read, save -- on a thread, announcing its stage on the link."""
+    """The dialect's reading -- a printer's bed homed, probed and read, a router's
+    table probed point by point -- then saved: on a thread, announcing its stage on
+    the link, and while probing how many points are done."""
 
-    def __init__(self, port: str, probe: bool, note: Optional[str], links: gcode.PrinterLinks):
+    def __init__(
+        self,
+        port: str,
+        probe: bool,
+        note: Optional[str],
+        links: gcode.PrinterLinks,
+        dialect: dialects.Dialect = dialects.MARLIN,
+        grid: Optional[TableGrid] = None,
+    ):
         self.port, self.probe, self.note, self.links = port, probe, note, links
+        self.dialect = dialect
+        # A table map's grid (three by three, left out), and the points done of its
+        # total, known before the port is touched; a printer's mesh is its firmware's.
+        self.grid = grid or (TableGrid() if dialect.stored_mesh is None else None)
+        self.what = "a table map" if dialect.stored_mesh is None else "a bed reading"
         self.stage = "starting"
+        self.points: Optional[dict] = (
+            {"done": 0, "total": self.grid.rows * self.grid.cols} if self.grid else None
+        )
         self.started = datetime.now(timezone.utc)
         self.finished: Optional[datetime] = None
         self.error: Optional[str] = None
         self.record: Optional[LevelingRecord] = None
+        self.link: Optional[gcode.GcodeLink] = None
         self.thread = threading.Thread(target=self._run, daemon=True, name=f"leveling-{port}")
 
     def snapshot(self) -> dict:
         return {
             "kind": "leveling",
+            "what": self.what,
             "port": self.port,
             "probe": self.probe,
             "stage": self.stage,
+            "points": dict(self.points) if self.points else None,
             "since": self.started.isoformat(),
             "finished": self.finished.isoformat() if self.finished else None,
             "error": self.error,
@@ -1183,31 +1200,33 @@ class LevelingJob:
             "running": self.finished is None,
         }
 
+    def _stage(self, word: str, points: Optional[dict] = None) -> None:
+        self.stage = word
+        if points is not None:
+            self.points = dict(points)
+        if self.link is not None:
+            self.link.job = self.snapshot()
+
     def _run(self) -> None:
         link = self.links.get(self.port)
         if link is None:
             self.error, self.finished = "no link", datetime.now(timezone.utc)
             return
+        self.link = link
         link.job = self.snapshot()
         try:
-            if self.probe:
-                self.stage = "homing"
-                link.job = self.snapshot()
-                link.command("G28", timeout=120.0, origin="control")
-                self.stage = "probing"
-                link.job = self.snapshot()
-                link.command("G29", timeout=LEVELING_PROBE_TIMEOUT_S, origin="control")
-            self.stage = "reading"
-            link.job = self.snapshot()
-            record = read_bed(link, self.port, "probe" if self.probe else "read", self.note)
+            reading = self.dialect.bed_reading(
+                link, probe=self.probe, grid=self.grid, stage=self._stage
+            )
+            record = _as_record(self.port, reading, self.note)
             _save_leveling(record)
             self.record = record  # named by the id it is kept under, never before it is kept
-            link.log.add("sys", f"bed reading saved: {self.record.id}", "control")
-            self.stage = "saved"
+            link.log.add("sys", f"{self.what} saved: {self.record.id}", "control")
+            self._stage("saved")
         except (ToolchainError, ValueError) as exc:
             self.error = str(exc)
-            self.stage = "failed"
-            link.log.add("sys", f"bed reading failed: {exc}", "control")
+            self._stage("failed")
+            link.log.add("sys", f"{self.what} failed: {exc}", "control")
         finally:
             self.finished = datetime.now(timezone.utc)
             link.job = None
@@ -1227,17 +1246,21 @@ def start_leveling(
     note: Optional[str] = None,
     state: Optional[FirmwareState] = None,
     links: Optional[gcode.PrinterLinks] = None,
+    grid: Optional[TableGrid] = None,
 ) -> LevelingJob:
-    """Begin a bed reading on ``port``; a probe needs the control latch armed.
+    """Begin a bed reading on ``port`` in its dialect: a printer's mesh, probed
+    (``probe``) or read as stored; a router's table, probed at ``grid``. A probe
+    needs the control latch armed.
 
     Raises ``ControlNotArmed`` for a probe with the latch down, ``PortHeld`` when
-    a job already holds the port, ``ToolchainError`` when it is not a printer.
+    a job already holds the port, ``ToolchainError`` when it is not a G-code
+    machine, or a stored mesh is asked of a board that keeps none.
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
     running = _LEVELING.get(port)
     if running and running.finished is None:
-        raise PortHeld(f"{port}: a bed reading is already {running.stage}")
+        raise PortHeld(f"{port}: {running.what} is already {running.stage}")
     printing = _PRINTS.get(port)
     if printing and printing.finished is None:
         raise PortHeld(f"{port}: a print holds the port ({printing.stage})")
@@ -1247,19 +1270,29 @@ def start_leveling(
         printer_status(port, state=state, links=links)
     if links.get(port) is None:
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
-    # Asked once the link is open, so the board has said what it is.
+    # Asked once the link is open, so the board has said what it is: the reading is
+    # the kind's it answered as -- a printer's bed, a router's table.
     board = occupants.on_port(port, state)
-    if board is None or board.kind != "printer":
-        what = (
-            f"a {board.kind}" if board is not None and board.kind else "no board known as a printer"
+    if board is None or board.kind is None:
+        raise ToolchainError(
+            f"{port}: a bed reading is a printer's or a router's, and {port} holds no board "
+            "known as either"
         )
-        raise ToolchainError(f"{port}: a bed reading is a printer's, and {port} holds {what}")
     if board.shared:
         raise ToolchainError(
             f"{port}: another board on this machine answers to {board.key} as well, so a "
             "reading kept now could not be told whose: unplug the other first"
         )
-    job = LevelingJob(port, probe, note, links)
+    dialect = dialects.BY_MACHINE[board.kind]
+    if not probe and dialect.stored_mesh is None:
+        # The mesh (M420 V), the probe offset (M851) and the temperatures are Marlin's
+        # lines; a GRBL controller answers each error:20, and keeps no mesh: its reading
+        # probes the table.
+        raise ToolchainError(
+            f"{port}: a stored mesh is a printer's to read, and {port} holds a {board.kind}, "
+            "whose reading probes the table"
+        )
+    job = LevelingJob(port, probe, note, links, dialect=dialect, grid=grid)
     _LEVELING[port] = job
     job.thread.start()
     return job
@@ -1797,7 +1830,7 @@ def printer_query(
     cmd = normalise_query(port, command, state)  # ValueError for anything that is not a report
     held = links.get(port)
     if held is not None and held.job is not None and held.job.get("kind") not in STREAMED:
-        raise PortHeld(f"{port}: a bed reading holds the port ({held.job['stage']})")
+        raise PortHeld(f"{port}: {what_holds(held.job)} holds the port ({held.job['stage']})")
     if links.get(port) is None:
         printer_status(port, state=state, links=links)  # identifies + opens; offline if it cannot
     link = links.get(port)

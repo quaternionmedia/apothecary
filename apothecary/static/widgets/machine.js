@@ -157,17 +157,17 @@ const CARDS = `
 </div>
 <div data-section="level">
 <div class="cards">
-    <div class="card wide printer-only" id="level-card">
-        <div class="k">Bed level <span class="s" id="level-note"></span></div>
+    <div class="card wide printer-only gcode" id="level-card">
+        <div class="k"><span id="level-title">Bed level</span> <span class="s" id="level-note"></span></div>
         <div class="row">
             <button type="button" id="level-probe" class="warm" title="G28, G29, then read the mesh, the probe offset and the temperatures; saved as a record. Moves the machine: control must be armed. ⌗ Control › Level › Probe">▤ Probe bed</button>
-            <button type="button" id="level-read" title="Read the stored mesh (M420 V), the probe offset and the temperatures without moving; saved as a record">Read mesh</button>
+            <button type="button" id="level-read" class="printer-only" title="Read the stored mesh (M420 V), the probe offset and the temperatures without moving; saved as a record">Read mesh</button>
             <span class="job" id="level-job"></span>
             <span class="grow"></span>
-            <button type="button" data-corner="FL" title="Move the nozzle to the front-left corner at paper height, for a tramming check">◣ FL</button>
-            <button type="button" data-corner="FR" title="Front right, paper height">◢ FR</button>
-            <button type="button" data-corner="BL" title="Back left, paper height">◤ BL</button>
-            <button type="button" data-corner="BR" title="Back right, paper height">◥ BR</button>
+            <button type="button" data-corner="FL" class="printer-only" title="Move the nozzle to the front-left corner at paper height, for a tramming check">◣ FL</button>
+            <button type="button" data-corner="FR" class="printer-only" title="Front right, paper height">◢ FR</button>
+            <button type="button" data-corner="BL" class="printer-only" title="Back left, paper height">◤ BL</button>
+            <button type="button" data-corner="BR" class="printer-only" title="Back right, paper height">◥ BR</button>
         </div>
         <div id="mesh"></div>
         <div class="stats" id="level-stats"><span class="empty">no reading yet — Read mesh, or arm control and Probe bed</span></div>
@@ -466,12 +466,13 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             if (changed || Number(feed.value) > w.feedMax) feed.value = String(w.feedDefault);
             $("print-file").accept = w.files; $("print-file").title = w.fileTitle;
             $("print-part").title = w.partTitle;
+            $("level-title").textContent = w.level.card; $("level-probe").textContent = w.level.button; $("level-probe").title = w.level.buttonTitle;
         }
         if (changed) state.codesLoaded = false;
         if (changed && state.port) {
             watchNow();
             if (k === "printer") { loadCodes(); loadLevel(); loadPrintJobs(); loadChoicesAndFiles(); loadSlicer(); watchPrint(); }
-            else if (k === "router") { loadCodes(); loadWhere(); loadPrintJobs(); loadChoicesAndFiles(); watchPrint(); }
+            else if (k === "router") { loadCodes(); loadWhere(); loadLevel(); loadPrintJobs(); loadChoicesAndFiles(); watchPrint(); }
             else if (!inPrinter) mountFlashing();
         } else if (changed && planning()) {
             loadChoicesAndFiles();
@@ -1028,6 +1029,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     });
 
     // --- bed level: probe or read, show the mesh, keep the records -----------------------
+    // A printer's bed, probed or read as stored; a router's table, mapped by its probe
+    // at a grid of points: one card, one route, the kind's words (KINDS[kind].level).
     const level = { records: [], shown: null, timer: null, volume: [220, 220, 250] };
     const onWhere = (ev) => { if (ev.detail && ev.detail.printer && ev.detail.printer.build_volume && (!ev.detail.port || ev.detail.port === state.port)) level.volume = ev.detail.printer.build_volume; };
     window.addEventListener("apothecary:where", onWhere);
@@ -1048,11 +1051,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         return `rgb(${a.map((c, i) => Math.round(c + (c2[i] - c) * t)).join(",")})`;
     }
     function renderLevel() {
-        const rec = level.shown;
+        const rec = level.shown, w = words().level;
         const meshEl = $("mesh"), statsEl = $("level-stats");
         if (!rec || !rec.mesh || !rec.mesh.length) {
             meshEl.innerHTML = ""; meshEl.style.gridTemplateColumns = "";
-            statsEl.innerHTML = '<span class="empty">no reading yet — Read mesh, or arm control and Probe bed</span>';
+            statsEl.innerHTML = `<span class="empty">${esc(w.none)}</span>`;
         } else {
             const st = rec.stats || {};
             const rows = rec.mesh, cols = rows[0].length;
@@ -1060,8 +1063,12 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             // Drawn as the bed lies: the last row printed is the back of the bed, so it goes on top.
             meshEl.innerHTML = [...rows].reverse().map((row) => row.map((v) => `<div class="cell" style="background:${heat(v, st.min, st.max)}" title="${v.toFixed(3)} mm">${v.toFixed(2)}</div>`).join("")).join("");
             const c = st.corners || {};
-            statsEl.innerHTML = `${esc(rec.method)} · ${new Date(rec.at).toLocaleString()} · range <b>${(st.range ?? 0).toFixed(3)}</b> mm · tilt X <b>${(st.tilt_x ?? 0).toFixed(3)}</b> Y <b>${(st.tilt_y ?? 0).toFixed(3)}</b> mm across the bed<br>`
-                + `corners vs mean: FL <b>${(c.front_left ?? 0).toFixed(3)}</b> FR <b>${(c.front_right ?? 0).toFixed(3)}</b> BL <b>${(c.back_left ?? 0).toFixed(3)}</b> BR <b>${(c.back_right ?? 0).toFixed(3)}</b> · leveling ${rec.leveling_on == null ? "?" : (rec.leveling_on ? "on" : "off")}`
+            // A router's map says where its points lie (record.area) and reads in machine
+            // coordinates; a printer's mesh is its firmware's, with the leveling state.
+            const a = rec.area;
+            statsEl.innerHTML = `${esc(rec.method)} · ${new Date(rec.at).toLocaleString()} · range <b>${(st.range ?? 0).toFixed(3)}</b> mm · tilt X <b>${(st.tilt_x ?? 0).toFixed(3)}</b> Y <b>${(st.tilt_y ?? 0).toFixed(3)}</b> mm ${esc(w.across)}<br>`
+                + `corners vs mean: FL <b>${(c.front_left ?? 0).toFixed(3)}</b> FR <b>${(c.front_right ?? 0).toFixed(3)}</b> BL <b>${(c.back_left ?? 0).toFixed(3)}</b> BR <b>${(c.back_right ?? 0).toFixed(3)}</b>`
+                + (a ? ` · Z in machine coordinates · X ${a.min.x}–${a.max.x}, Y ${a.min.y}–${a.max.y} mm from the front-left corner` : ` · leveling ${rec.leveling_on == null ? "?" : (rec.leveling_on ? "on" : "off")}`)
                 + (rec.probe_offset ? ` · probe offset X${rec.probe_offset.x} Y${rec.probe_offset.y} Z${rec.probe_offset.z}` : "")
                 + (rec.bed_c != null ? ` · bed ${rec.bed_c.toFixed(1)}°` : "") + (rec.hotend_c != null ? ` hotend ${rec.hotend_c.toFixed(1)}°` : "")
                 + (rec.note ? `<br>note: ${esc(rec.note)}` : "");
@@ -1072,18 +1079,20 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             : "";
     }
     async function loadLevel() {
-        if (!state.port || state.kind !== "printer") { level.records = []; level.shown = null; renderLevel(); return; }
+        if (!state.port || !isGcode()) { level.records = []; level.shown = null; renderLevel(); return; }
         try {
             level.records = await api(`/firmware/printers/leveling?port=${encodeURIComponent(state.port)}`);
             if (!level.shown || !level.records.some((r) => r.id === level.shown.id)) level.shown = level.records[0] || null;
         } catch (e) { level.records = []; }
         renderLevel();
     }
+    // The stage a reading is at and, while a table map probes, the points done of its total.
+    const levelStage = (job) => `${job.stage}${job.points ? ` ${job.points.done}/${job.points.total}` : ""}…`;
     async function watchLevelJob() {
         clearTimeout(level.timer);
         try {
             const job = await api(`/firmware/printers/level?port=${encodeURIComponent(state.port)}`);
-            $("level-job").textContent = job.running ? `${job.stage}…` : (job.error ? `failed: ${job.error}` : "");
+            $("level-job").textContent = job.running ? levelStage(job) : (job.error ? `failed: ${job.error}` : "");
             if (job.running) { level.timer = setTimeout(watchLevelJob, 1000); return; }
             level.timer = null;
             if (job.record_id) { await loadLevel(); level.shown = level.records.find((r) => r.id === job.record_id) || level.shown; renderLevel(); }
@@ -1093,10 +1102,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     async function startLevel(probe) {
         if (!state.port) return;
         if (probe && !ctl.armed) { refuse("probing moves the machine: arm control first"); return; }
-        if (probe && !confirm(`Home and probe the bed on ${state.port}?\nThe nozzle will travel the whole bed.`)) return;
+        if (probe && !confirm(words().level.ask.replace("{port}", state.port))) return;
         try {
             const job = await post("/firmware/printers/level", { port: state.port, probe });
-            $("level-job").textContent = `${job.stage}…`;
+            $("level-job").textContent = levelStage(job);
             level.timer = setTimeout(watchLevelJob, 800);
         } catch (e) { refuse("bed reading: " + e.message); $("level-job").textContent = e.message; }
     }
@@ -1114,7 +1123,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // A reading or a print that holds the port, as a poll reports it, is followed.
     function followJob(st) {
         const job = st.job;
-        if (job && job.kind === "leveling") { $("level-job").textContent = `${job.stage}…`; if (!level.timer) level.timer = setTimeout(watchLevelJob, 1000); }
+        if (job && job.kind === "leveling") { $("level-job").textContent = levelStage(job); if (!level.timer) level.timer = setTimeout(watchLevelJob, 1000); }
         if (job && (job.kind === "print" || job.kind === "cut")) { prt.job = job; renderPrint(); if (!prt.timer) prt.timer = setTimeout(watchPrint, 1000); }
     }
 

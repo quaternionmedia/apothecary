@@ -138,6 +138,7 @@ AREAS = {
             "test_one_machine.py",
             "test_printer_ui.py",
             "test_router_ui.py",
+            "test_router_table_map.py",
             "test_toolpath_preview.py",
             "test_machine_plans.py",
             "test_bench.py",

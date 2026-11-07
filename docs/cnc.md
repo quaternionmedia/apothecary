@@ -53,10 +53,11 @@ and released exactly as a printer's is.
 | Polled by | `M105`, `M114`, `M27`, `M119`, `M31` | the realtime `?` (a status report, no `ok`) and `$G` (the modal words) |
 | Its state | `idle`, `printing`, `offline` | the controller's own word (`Idle`, `Run`, `Jog`, `Home`, `Hold:0`, `Door`, `Alarm`), folded to `idle`, `running`, `hold`, `alarm`, `offline` |
 | What a poll carries | temperatures, position, endstops, filament, SD progress | machine and work position and the offset between them, the spindle's speed and whether it is on, the feed, the input pins on (limits, probe, door, hold), the alarm's number, the overrides |
-| Typed while armed | heaters, fan, homing, bounded jogs, SD pause/resume/abort, the bed | homing (`$H`), unlock (`$X`), jogs (`$J=`), bounded moves, the spindle on at a speed (`M3 S`) and off, work zero here (`G10 L20 P1`), a probe down (`G38.2`), the tool to the top of Z (`G53 G0 Z0`), and the realtime `HOLD`, `RESUME`, `JOG-CANCEL` |
+| Typed while armed | heaters, fan, homing, bounded jogs, SD pause/resume/abort, the bed | homing (`$H`), unlock (`$X`), jogs (`$J=`), bounded moves, the spindle on at a speed (`M3 S`) and off, work zero here (`G10 L20 P1`), a probe down (`G38.2`), a move in machine coordinates (`G53 G0`: the tool to the top of Z, a table map's points), and the realtime `HOLD`, `RESUME`, `JOG-CANCEL` |
 | The bounds | hotend 300 °C, bed 130 °C, a move 300 mm, feed 12000 | a move 600 mm, feed 4000 mm/min (the maker's figure for X and Y), the spindle 24000 rpm, a probe 80 mm deep at 500 mm/min at most |
 | The stop | `M112`, always accepted | `RESET`, the soft reset (`0x18`), always accepted: everything halts, the queue empties, the spindle is off, and a reset in motion leaves the controller in alarm until unlocked or homed |
 | Report-only queries | `M503`, `M119`, `M20`, `M420 V` ... | `$$` (settings), `$#` (offsets, the probe's last touch), `$G`, `$I`, `$N`, `?` |
+| A bed reading | Read mesh, Probe bed; the mesh as a heatmap, and as a relief over the bed in the world | a table map: Probe table turns the spindle off, homes, and at each point of a grid inside the working area goes there in machine coordinates at the top of Z (`G53 G0`), probes down to the touch plate (`G38.2`) and lifts; the touches, in machine coordinates, kept, listed and drawn as a printer's reading is, the relief where the points were probed; a stored mesh (Read mesh) is Marlin's, refused for a GRBL board before the port, and never a printer's reading kept under a port name the router took ([firmware.md](firmware.md#bed-leveling)) |
 | A streamed job | a print, from the slicer's G-code | a cut, from a CAM post's `.nc`, `.ngc`, `.gcode` or `.tap`, refused for a `$` line, a tool change (`M6`), a stop (`M0`, `M1`), a spindle over the cap, a code GRBL does not take (a printer's `M117`, `G29`), or a dwell over a minute (`G4 P` is seconds to GRBL, milliseconds to Marlin); kept for a router, and sent to nothing else; a pause holds the controller (`!`) so it stops where it is, a cancel holds and resets; a line is answered when queued, so the host counts the planner's room from the status report (`Bf:`) and never blocks the port on a full one, and the cut is done when the controller is idle again after its last line (`finishing`) |
 | Its job's word | `print`, the node `printing` | `cut`, the node `running` (`apothecary/jobs.py`) |
 
@@ -118,7 +119,13 @@ work zero and in machine coordinates, the spindle, the feed and the
 overrides, the input pins on. Armed, its control pad holds Motion (the jog
 pad, `$J=` at the feed set, Home `$H`, Unlock `$X`, Top of Z, Go to zero,
 Stop jog), Spindle (On at a speed, Off), Zero and probe (XYZ zero here, Z
-zero here, Probe Z down a depth), and Cut (Resume, Hold, Abort). The Cut window,
+zero here, Probe Z down a depth), and Cut (Resume, Hold, Abort). Its Table
+map window, where a printer's is Bed level, takes the map (Probe table, armed,
+the probe's lead clipped to the table; the card says how many points are
+done) and shows the one kept: the touches as a heatmap, the range, the tilt
+and the corners against the mean, where the grid lies, and each map in its
+history; the world lays the one shown over the table
+([firmware.md](firmware.md#bed-leveling)). The Cut window,
 *Cut from here*, is a printer's Print with a router's words, in the loop's
 order: what it makes and its Toolpath ([docs/cam.md](cam.md)) where a printer has
 Slice, the file, kept and checked, or a CAM post's, then ▶ Cut, Pause (a hold),

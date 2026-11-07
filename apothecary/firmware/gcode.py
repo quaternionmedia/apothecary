@@ -40,7 +40,7 @@ import time
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Protocol, Tuple
 
-from .models import MARLIN, Heater, PrinterInfo, PrinterStatus
+from .models import MARLIN, BedReading, Heater, PrinterInfo, PrinterStatus
 from .toolchains import PortHeld, ToolchainError
 
 # --- parsers: Marlin's documented replies -------------------------------------
@@ -1214,6 +1214,52 @@ def parse_leveling_state(lines: List[str]) -> Optional[bool]:
         if m:
             return m.group(1) == "ON"
     return None
+
+
+# The stored mesh's line: what Read mesh asks for, and what a board without one (a
+# GRBL controller) cannot be asked.
+STORED_MESH = "M420 V"
+LEVELING_PROBE_TIMEOUT_S = 900.0  # a five-by-five probe on a slow bed
+
+
+def read_bed(
+    link: GcodeLink,
+    *,
+    probe: bool = True,
+    grid=None,
+    stage: Callable[..., None] = lambda word, points=None: None,
+) -> BedReading:
+    """A printer's bed reading, Marlin's: with ``probe``, home (``G28``) and probe
+    (``G29``) first; then the stored mesh (``M420 V``), the probe offset (``M851``)
+    and the temperatures (``M105``). ``stage`` is told each step as it starts;
+    ``grid`` is a router's and means nothing here, the mesh being the firmware's.
+    This dialect's ``Dialect.bed_reading``; the router's is ``grbl.probe_table``."""
+    if probe:
+        stage("homing")
+        link.command("G28", timeout=120.0, origin="control")
+        stage("probing")
+        link.command("G29", timeout=LEVELING_PROBE_TIMEOUT_S, origin="control")
+    stage("reading")
+    lines: List[str] = []
+    mesh_lines = link.command(STORED_MESH, timeout=15.0, origin="query")
+    lines += mesh_lines
+    offset_lines = link.command("M851", timeout=10.0, origin="query")
+    lines += offset_lines
+    temp_lines = link.command("M105", timeout=10.0, origin="query")
+    lines += temp_lines
+    grids = parse_meshes(mesh_lines)
+    temps = parse_m105(next((ln for ln in temp_lines if is_temperature_line(ln)), ""))
+    return BedReading(
+        method="probe" if probe else "read",
+        mesh=grids[0] if grids else [],
+        subdivided=grids[1] if len(grids) > 1 else None,
+        stats=mesh_stats(grids[0]) if grids else {},
+        leveling_on=parse_leveling_state(mesh_lines),
+        probe_offset=parse_probe_offset(offset_lines),
+        hotend_c=temps["hotends"][0].actual if temps["hotends"] else None,
+        bed_c=temps["bed"].actual if temps["bed"] else None,
+        lines=lines[-400:],
+    )
 
 
 # --- host printing: what a file may carry, and how long a line may take ----------------

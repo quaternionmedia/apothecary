@@ -96,8 +96,8 @@ one machine on the number another held; nothing in them moves a machine.
       router takes the printer's port number, the Machine of that port shows
       none of the printer's temperatures, job or log, and its control is not
       armed; the router's polls drive nothing onto `printer_1`.
-- [ ] The router's table wears no bed relief, though the printer's readings
-      were taken on that port number. Once the printer is back its bed wears
+- [ ] Nothing of the printer's lies over the router's table, though the
+      printer's readings were taken on that port number. Once the printer is back its bed wears
       the newest reading kept for its board, or, of those kept before readings
       named their board, the newest taken on the port it is on now.
 - [ ] Pin the router (section I), then plug the printer into the router's
@@ -166,7 +166,7 @@ one machine on the number another held; nothing in them moves a machine.
 - [ ] After a probe, **Home all**, then **Read mesh**: leveling on or off. Off
       means a print with a mesh needs the stored-mesh start piece.
 - [ ] The world: the relief over `printer_1`'s bed is the newest reading, and
-      nothing lies over the router's table.
+      nothing of the printer's lies over the router's table.
 
 ## E. Print from here
 
@@ -317,6 +317,14 @@ only with the table clear and no tool in the collet until the last box.
 - [ ] **XYZ zero here**, then jog away and **Go to zero**: the tool returns.
       **Z zero here** with the plate under the collet, then **Probe Z** 25 mm:
       the touch is in the log (`[PRB:…:1]`) and `$#` says where.
+- [ ] **▦ Probe table** in the Table map card, the probe's lead closing at
+      every point of the grid (clipped to the table, or the plate under the
+      whole grid): the question in the router's words, the spindle off and a
+      homing, then a touch at each of nine points, the card counting them. The
+      map is kept, listed in the card's history and laid over the table in the
+      world where its points were probed. Note how long a point takes and that
+      each probe reaches the table; more than 0.2 mm across the map is the Z
+      plate to tram.
 - [ ] **⏸ Hold** mid-jog of 50 mm: the gantry stops where it is, `hold
       (Hold:0)`; **▶ Resume**: it finishes the move.
 - [ ] **⏹ E-STOP** while jogging: the soft reset, the banner in the log, the

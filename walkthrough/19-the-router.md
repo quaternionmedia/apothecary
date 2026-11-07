@@ -96,8 +96,40 @@ says its banner.
     "Grbl 1.3a ['$' for help]"
     >>> grbl.poll_router(link).spindle.on
     False
+
+## The table map
+
+The router's bed reading is its own kind. A printer keeps a mesh its firmware
+probed and prints it on request; a GRBL controller keeps none, so the
+router's table is mapped from here: Z probed with the touch plate at each
+point of a grid over the working area, from the top of Z, in machine
+coordinates so a person's work zero is neither used nor moved. The working
+area is the controller's own word, its maximum travel. The simulated
+controller answers a probe with a flat plate 20 mm under the tool, so its map
+is flat, every touch 23 mm down from the top of the travel; the record says
+where the grid lies from the working area's front-left corner.
+
+    >>> from apothecary.firmware.models import TableGrid
+    >>> reading = grbl.probe_table(link, grid=TableGrid(rows=2, cols=3, inset=50))
+    >>> reading.method, reading.mesh
+    ('G38.2', [[-23.0, -23.0, -23.0], [-23.0, -23.0, -23.0]])
+    >>> reading.stats["range"], reading.area
+    (0.0, {'min': {'x': 50.0, 'y': 50.0}, 'max': {'x': 350.0, 'y': 550.0}})
+
+Each point was a rapid there in machine coordinates, the probe down as far as
+the travel allows, and the lift back to the top, every line one the pad could
+send and bounded the same way; the controller's own word on the last touch
+(`$#`) is kept with the lines, after the touch itself.
+
+    >>> [ln for ln in reading.lines if ln.startswith("[PRB:")][-2:]
+    ['[PRB:-50.000,-50.000,-23.000:1]', '[PRB:-50.000,-50.000,-23.000:1]']
     >>> links.close("/dev/ttySIM")
     True
+
+Kept as a bed reading of the router's, a map is listed for its board, laid
+over its table in the world where its points were probed, and shown in its
+Machine's Table map card, which takes the next one
+([docs/firmware.md](../docs/firmware.md#bed-leveling)).
 
 [docs/cnc.md](../docs/cnc.md) says what of the router is built and what is
 not: the page's window for it, the demo's pin and the bench's confirmation
