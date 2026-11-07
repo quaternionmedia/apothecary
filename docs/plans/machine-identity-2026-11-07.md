@@ -1,10 +1,11 @@
 # Each machine keeps its own: a plan
 
-*Slices 1 to 5 are built: the stop goes to whatever is on a port, a port that
-changes hands forgets what was held in memory for its last board, a bed reading
-is the board's that took it, a pin or a flash kept by port is careful of the
-board that takes the port, and a kept file is sent to the kind of machine it was
-kept for alone. The rest is not built. Each slice is one pull request.*
+*Built: the stop goes to whatever is on a port, a port that changes hands
+forgets what was held in memory for its last board, a bed reading is the board's
+that took it, a pin or a flash kept by port is careful of the board that takes
+the port, a kept file is sent to the kind of machine it was kept for alone, and a
+machine is planned before its board is connected. Slice 6, the page's own marks
+by board, is not built. Each slice is one pull request.*
 
 ## What this plans
 
@@ -126,13 +127,18 @@ Each is a pull request; a slice that needs another's work stacks on it.
    and never matches a board that answers as another. A flash kept by the port
    of an unprobed devkit records the devkit's key and counts for it alone, and a
    board that answers as a printer or a router is never said to run a sketch.
-6. **The page keeps a machine's marks by board** (on 3). Marks, where a machine
-   stands and a drawn toolpath are rebuilt when the board on a node's port
-   changes; one function says a board's kind, and a board not yet identified is
-   of no kind, never a printer.
-7. **A machine planned before it connects** (on 6). A machine's Machine opens
-   without its board: what it will make, its toolpath or slice written and
-   previewed, kept as that machine's plan and chosen when its board connects.
+6. **The page keeps a machine's marks by board** (not built). Marks, where a
+   machine stands and a drawn toolpath would be rebuilt when the board on a
+   node's port changes; one function would say a board's kind, and a board not
+   yet identified would be of no kind, never a printer. The server now forgets
+   and refuses whatever the page believes; a page left open across a replug is
+   what is left.
+7. **A machine planned before it connects** (`build/machine-plans`, on 4;
+   built). A part says the kind of machine it is (`BasePart.machine`), so a
+   machine with no board connected opens its Machine as its plan: what it will
+   make, its toolpath or slice written by its node and drawn over it, kept as
+   that machine's plan and chosen whenever its Machine opens, with its board or
+   without. A cut part's ring offers Toolpath to a router with no board.
 
 `docs/bench-checklist.md` is kept with each: a slice that changes what a person
 sees at the bench changes its box.

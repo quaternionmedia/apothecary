@@ -130,7 +130,11 @@ def _pictures_known(
     known.made = sorted(viewing.made_names(site)) if site else []
     known.camera_parts = sorted(cameras.names(site)) if site else []
     known.printers = printers_in(site) if site else []
-    known.routers = routers_in(site) if site else []
+    # A router is offered with its board or without: one with none is planned
+    # (apothecary/machine_plans.py), so a cut part's Toolpath reaches it unplugged. A
+    # printer is offered with its board alone, Print and Slice standing on every part's
+    # ring: its plan is made in its own Machine.
+    known.routers = sorted({*routers_in(site), *_planned(site, "router")}) if site else []
     target = context.targets[0] if context is not None and context.targets else ""
     if context is not None and context.pointing is Pointing.NODE and target in known.camera_parts:
         device = cameras.record(site, target).device
@@ -145,6 +149,17 @@ def _pictures_known(
         drawn = known.here.views[0]
     known.finders = finders_for(drawn.picture) if drawn is not None and drawn.picture else []
     return known
+
+
+def _planned(site: str, kind: str) -> List[str]:
+    """The site's machines of ``kind``, by the part each is drawn from."""
+    from ..api import _site_store
+    from .machines import machines_of
+
+    try:
+        return [m["path"] for m in machines_of(_site_store.get(site), kind)]
+    except KeyError:
+        return []
 
 
 def _part_seen(site: str, path: str) -> Optional[PartSeen]:

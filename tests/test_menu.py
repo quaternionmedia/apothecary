@@ -716,6 +716,7 @@ def test_the_control_ring_offers_every_allowlisted_verb():
         "control:sd-abort",
         "print:start",
         "print:preview",
+        "print:plan",
         "control:motors-off",
         "control:quickstop",
         "control:break-wait",
@@ -791,6 +792,7 @@ def test_a_router_s_control_ring_is_its_own():
         "control:job-abort",
         "print:start",
         "print:preview",
+        "print:plan",
         "control:estop",
         "control:arm",
     }

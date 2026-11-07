@@ -529,6 +529,7 @@
       "92": "control:sd-abort",
       "94": "print:start",
       "99": "print:preview",
+      "93": "print:plan",
       "38": "control:motors-off",
       "36": "control:quickstop",
       "32": "control:break-wait",
@@ -573,6 +574,7 @@
       "792": "control:sd-abort",
       "794": "print:start",
       "799": "print:preview",
+      "793": "print:plan",
       "738": "control:motors-off",
       "736": "control:quickstop",
       "732": "control:break-wait",
@@ -620,6 +622,7 @@
       "4792": "control:sd-abort",
       "4794": "print:start",
       "4799": "print:preview",
+      "4793": "print:plan",
       "4738": "control:motors-off",
       "4736": "control:quickstop",
       "4732": "control:break-wait",
@@ -995,6 +998,17 @@
               "marked": false,
               "children": null,
               "cell": 9
+            },
+            {
+              "id": "print:plan",
+              "label": "Keep as plan",
+              "action": "print:plan",
+              "enabled": true,
+              "destructive": false,
+              "twice": false,
+              "marked": false,
+              "children": null,
+              "cell": 3
             }
           ],
           "cell": 9
@@ -1555,6 +1569,17 @@
                   "marked": false,
                   "children": null,
                   "cell": 9
+                },
+                {
+                  "id": "print:plan",
+                  "label": "Keep as plan",
+                  "action": "print:plan",
+                  "enabled": true,
+                  "destructive": false,
+                  "twice": false,
+                  "marked": false,
+                  "children": null,
+                  "cell": 3
                 }
               ],
               "cell": 9
@@ -2160,6 +2185,17 @@
                       "marked": false,
                       "children": null,
                       "cell": 9
+                    },
+                    {
+                      "id": "print:plan",
+                      "label": "Keep as plan",
+                      "action": "print:plan",
+                      "enabled": true,
+                      "destructive": false,
+                      "twice": false,
+                      "marked": false,
+                      "children": null,
+                      "cell": 3
                     }
                   ],
                   "cell": 9

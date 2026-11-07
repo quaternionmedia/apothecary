@@ -168,3 +168,7 @@
 .machine-head .cluster { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
 .machine .nb { white-space: nowrap; }
 #print-preview { flex: 0 1 12rem; min-width: 5rem; accent-color: var(--ok); }
+
+/* A machine planned with no board connected: the head's link verbs, the control
+   latch and E-STOP are its board's, and stand for nothing here. */
+.machine.planning .machine-head .cluster { display: none; }

@@ -68,6 +68,7 @@ def create(root: Path) -> BasePart:
         "the electronics box front-left, the LCD, the spool holder -- from published dimensions.",
         params_model=Params,
         category="machine",
+        machine="printer",
         tags=["printer", "ender3", "creality", "fdm"],
         readme_path=root / "parts" / "ender3" / "README.md",
         preview_color=Color(r=0.75, g=0.75, b=0.78),

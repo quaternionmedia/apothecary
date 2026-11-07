@@ -530,6 +530,27 @@ seats the options
 verb from the ring goes through the same latch, allowlist and confirms as the
 Machine's button for that verb; the ring never opens a port.
 
+### A machine planned before its board is connected
+
+A machine is a node drawn from a part that says it is one (`BasePart.machine`:
+the Ender a printer, the AnoleX a router), whether or not a board is pinned to
+it (`GET /sites/{name}/machines`). Everything that prepares a job asks its board
+nothing, so a machine with no board connected -- none pinned, or one pinned and
+unplugged -- opens its Machine all the same, from its badge, its ring or ⊞
+Windows › Machine view: its Print or Cut card alone, its head saying no board is
+connected. What it makes is chosen there, its slice or toolpath written for it
+by its node (`GET /sites/{name}/machines/{path}` answers its choices as
+`/jobs/choices` does for a port), the file kept for its kind, and the file's
+path drawn over the machine; a router's stands on its table from the working
+area's front-left corner, its work zero being set at the machine. ▶ and every
+control are its board's. **Keep as plan** keeps the part and the file as the
+machine's plan (`PUT /sites/{name}/machines/{path}/plan`,
+`apothecary/machine_plans.py`), refused for a file kept for another kind of
+machine; the machine's Machine chooses them whenever it opens, its board
+connected or not, unless another was chosen meanwhile. A part that says how it
+is cut has Toolpath on its ring for a router with no board as for one with; a
+printer's plan is made in its own Machine.
+
 ### Control, behind a latch
 
 Disarmed, the default, nothing can heat or move the machine: the API refuses

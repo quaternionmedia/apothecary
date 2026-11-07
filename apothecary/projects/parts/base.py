@@ -49,6 +49,11 @@ class BasePart(BaseModel):
     description: Optional[str] = None
     params_model: Optional[Type[BaseModel]] = None
     category: Optional[str] = None
+    # The kind of machine the part is, when it is one: "printer" or "router" (the
+    # job registry's machine kinds, apothecary/jobs.py). A node drawn from it is a
+    # machine of that kind, and can be planned before a board is pinned to it
+    # (apothecary/machine_plans.py).
+    machine: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
     readme_path: Optional[Path] = None
     module_name: Optional[str] = None

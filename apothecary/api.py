@@ -115,6 +115,7 @@ from .routes.cameras import router as cameras_router
 from .routes.evidence import router as evidence_router
 from .routes.jobs import router as jobs_router
 from .routes.lighting import router as lighting_router
+from .routes.machines import router as machines_router
 from .routes.part_edits import router as part_edits_router
 from .routes.pictures import router as pictures_router
 from .routes.procedures import router as procedures_router
@@ -223,7 +224,7 @@ app = FastAPI(
         "parts, rendered by OpenSCAD and kept as variants; photos, the views pinned "
         "from them, the cameras that take them and the shapes found in them; firmware "
         "for the boards and printers, with their control and prints; the slicer, and cam, "
-        "the router's toolpath; jobs; "
+        "the router's toolpath; jobs; a site's machines and the plan each keeps before its board is connected; "
         "the evidence a site's printers and cameras leave, as one view of it; "
         "the airgap part's metrics document, its schema and its check; the ring's menu; "
         "the irl family's hub, on hearth's contract; "
@@ -284,6 +285,7 @@ app.include_router(jobs_router)
 # The slicer: its status and install, and a part or a made piece sliced for a printer.
 app.include_router(slicer_router)
 app.include_router(cam_router)
+app.include_router(machines_router)
 # A part's SCAD edited: drafts checked and rendered, and saves as variants in git.
 app.include_router(part_edits_router)
 app.include_router(lighting_router)

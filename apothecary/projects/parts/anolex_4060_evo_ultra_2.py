@@ -69,6 +69,7 @@ def create(root: Path) -> BasePart:
         "dimensions.",
         params_model=Params,
         category="machine",
+        machine="router",
         tags=["router", "cnc", "anolex", "grbl"],
         readme_path=root / "parts" / "anolex_4060_evo_ultra_2" / "README.md",
         preview_color=Color(r=0.72, g=0.74, b=0.78),
