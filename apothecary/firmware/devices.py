@@ -544,7 +544,9 @@ def expected_firmware(
 # ``arduino-cli board list`` takes ~2 s; the viewer's board model, a Machine
 # and the Bench each ask for it, often within a second of one another. A short-lived cache of the raw scan (cached probes are merged
 # afresh each call) turns those into one scan. Long enough to coalesce a
-# page's requests, short enough that a replug shows on the next click.
+# page's requests, short enough that a replug shows on the next click. Its age
+# counts from when the scan ended: a scan as long as this would otherwise be
+# stale before anyone could read it.
 SCAN_TTL = 2.0
 _SCAN: Optional[tuple] = None  # (monotonic time, cli, boards)
 
@@ -594,7 +596,7 @@ def scan_ports(cli: Optional[ArduinoCli] = None, fresh: bool = False):
         boards = [b.model_copy(update={"found_by": "arduino"}) for b in cli.board_list()]
     else:
         boards = _scan_modules()
-    _SCAN = (now, key, boards)
+    _SCAN = (time.monotonic(), key, boards)
     return boards
 
 

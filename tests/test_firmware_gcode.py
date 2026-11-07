@@ -884,6 +884,26 @@ def test_port_scan_is_cached_briefly(fake_arduino_cli, monkeypatch):
     assert scans() == 5
 
 
+def test_a_scan_longer_than_its_cache_still_serves_the_next_caller(fake_arduino_cli, monkeypatch):
+    """A ring asks for the site's printers and then its routers, each through the scan:
+    a scan that takes as long as the cache lasts is one scan for both, not two."""
+    from apothecary.firmware.modules import arduino
+
+    calls = []
+    took = arduino.ArduinoModule.ports
+
+    def slow(self):
+        calls.append(1)
+        time.sleep(0.2)
+        return took(self)
+
+    monkeypatch.setattr(arduino.ArduinoModule, "ports", slow)
+    monkeypatch.setattr(devices, "SCAN_TTL", 0.15)
+    devices.detected_devices(fresh=True)
+    devices.detected_devices()
+    assert len(calls) == 1
+
+
 # --- comms log, reconnect, reset, monitor page ----------------------------------------
 
 
