@@ -3770,9 +3770,9 @@
                 // A verb's place on the ring, named as text: the floor's verbs are under
                 // the canvas ring's Pictures › Floor, and its Add is Pictures › Add.
                 const ring = (verb) => `⌗ ${host === '' ? 'Pictures › Floor › ' : ''}${verb}`;
-                // Nothing here yet: the way in, so the durable hint is where the person
-                // looks. The verbs stay the ring's.
-                if (!views.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Add here')} stands a camera above ${esc(where(host))}, looking down; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk, and ${host === '' ? '⌗ Pictures › Floor › Picture › Folder' : '⌗ Picture › Folder'} one already in the folder, any chosen in Pictures; ${esc(this.ringWays())}, opens the ring</div></div>`;
+                // Nothing here yet: nothing is said. The piece's ring holds Camera and
+                // Picture, and each cell says what it does.
+                if (!views.length) return '';
                 const drawn = pm.drawnAt(host);
                 const rows = [];
                 for (const view of [...views].reverse()) {
@@ -6951,7 +6951,7 @@
                         const why = j.reason ? `${j.reason}. ` : '';
                         return `<li class="site-job ${esc(j.outcome)}" data-job="${esc(j.id)}" title="${esc(why)}Started ${esc(new Date(j.started_at).toLocaleString())}${j.finished_at ? `, ended ${esc(new Date(j.finished_at).toLocaleString())}` : ''}. Select ${esc(machine)} and open it">${esc(machine)} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${how} · ${esc(new Date(j.started_at).toLocaleString())}</li>`;
                     }).join('')
-                    : '<li class="empty">none yet: a print started from the Print card of a printer pinned here is listed here</li>';
+                    : '<li class="empty">none yet</li>';
             }
 
             // A poll of a machine: a running job's progress shown, and a job begun or
@@ -7376,7 +7376,7 @@
                 this.mountMachinePanel('', planned.path, null, planned);
                 this.panels.open('machine');
                 const card = planned.kind === 'router' ? 'Cut' : 'Print';
-                this.setStatus(`Opened ${planned.path}'s Machine with no board connected: its ${card} card plans what it makes -- the part, its ${planned.kind === 'router' ? 'toolpath' : 'slice'}, the path drawn over it -- and ▶ is its board's once it is connected`, 'success');
+                this.setStatus(`Opened ${planned.path}'s Machine with no board connected: its ${card} plans what it makes, and ▶ ${card} is its board's once it is connected`, 'success');
                 return true;
             }
             // Why a machine has no Machine to open: nothing pinned, or a pin whose board

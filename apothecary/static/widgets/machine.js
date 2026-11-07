@@ -170,7 +170,7 @@ const CARDS = `
             <button type="button" data-corner="BR" class="printer-only" title="Back right, paper height">◥ BR</button>
         </div>
         <div id="mesh"></div>
-        <div class="stats" id="level-stats"><span class="empty">no reading yet — Read mesh, or arm control and Probe bed</span></div>
+        <div class="stats" id="level-stats"><span class="empty">no reading yet</span></div>
         <div id="level-history"></div>
     </div>
 </div>
@@ -178,7 +178,7 @@ const CARDS = `
 <div data-section="print">
 <div class="cards">
     <div class="card wide printer-only gcode" id="print-card">
-        <div class="k"><span id="print-title"></span> <span class="s" id="print-note" style="text-transform: none; letter-spacing: 0;"></span></div>
+        <div class="k"><span id="print-title"></span></div>
         <div class="row"><label for="print-part">makes</label>
             <select id="print-part"><option value="">— no part named —</option></select>
             <button type="button" id="print-slice">Slice</button>
@@ -457,7 +457,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (isGcode()) {
             $("poll").title = w.poll; $("q").placeholder = w.queries; $("estop").title = w.estop; $("ctl-label").title = w.arm;
             $("ctl-can").textContent = w.can;
-            $("print-title").textContent = w.title; $("print-note").textContent = w.note;
+            $("print-title").textContent = w.title;
             $("print-start").textContent = w.start; $("print-start").title = w.startTitle;
             $("print-pause").title = w.pause; $("print-cancel").title = w.cancel;
             $("print-slice").textContent = w.prepare;
@@ -1226,7 +1226,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         // Another kind of machine's file is drawn only where a person asked for it.
         if (!id || (madeForAnother(id) && !previewOn())) {
             found.none = id ? `the file chosen, ${name}, was made for a ${w.slice ? "router" : "printer"}, and none is kept for this ${state.kind} yet` : "no file is kept yet";
-            found.how = `choose a part under makes and ${w.prepare}, or Choose File for ${w.slice ? "a sliced file" : "a CAM post's"}`;
+            found.how = "choose a part under makes, or Choose File";
             return found;
         }
         found.file = name;

@@ -466,9 +466,8 @@ def test_with_no_file_kept_the_machine_view_says_how_one_comes_to_be(
     expect(page.locator(f"{windows.MACHINE} > .machine.kind-{kind}")).to_be_attached(timeout=20000)
     said = status(page)
     expect(said).to_contain_text("No path is drawn: no file is kept yet", timeout=10000)
-    makes = "Toolpath" if kind == "router" else "Slice"
     expect(said).to_contain_text(
-        f"In {machine.node}'s {machine.ring}, choose a part under makes and {makes}, or Choose File"
+        f"In {machine.node}'s {machine.ring}, choose a part under makes, or Choose File"
     )
     expect(said).not_to_have_class(re.compile(r"\berror\b"))
     assert windows.state(page, "machine-print")["shown"] is True

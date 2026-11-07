@@ -1,6 +1,6 @@
 # The family's journeys through the viewer: a plan
 
-*A plan, dated: nothing below is built. Each slice is one branch of a local
+*A plan, dated. Built: slice 1, less text. Each slice is one branch of a local
 stack, built in the order listed once the owner says yes to it.*
 
 ## What this plans

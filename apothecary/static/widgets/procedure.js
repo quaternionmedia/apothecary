@@ -88,7 +88,7 @@ export function mountProcedure(root, { base = "", siteName, log = null } = {}) {
         drawn = words;
         $(".procedure-choice").innerHTML = names.map((n) => `<option value="${esc(n)}"${n === name ? " selected" : ""}>${esc(n)}</option>`).join("");
         $(".procedure-head").hidden = !names.length;
-        $(".procedure-none").textContent = names.length ? "" : `No procedure under ${siteName()} yet: docs/family.md says how one is written.`;
+        $(".procedure-none").textContent = names.length ? "" : `no procedure under ${siteName()} yet`;
         $(".procedure-steps").innerHTML = board ? board.steps.map(renderStep).join("") : "";
     }
 
