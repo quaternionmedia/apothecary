@@ -162,8 +162,9 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   (`git diff --exit-code -- 'walkthrough/*.md'` in `pytest.yml`), so a page's words carry
   nothing that changes from run to run -- a temporary folder, a time, a count
   that varies -- and a step that would show one names it instead. A screenshot
-  is rewritten only when its pixels change; commit the page and pictures when
-  they do. What changes on every run whatever the page does -- a time, a
+  is rewritten only when its pixels change; commit the page's words when they
+  do, and its pictures as [CONTRIBUTING.md](../../CONTRIBUTING.md#the-loop)
+  says: those whose change is the page's. What changes on every run whatever the page does -- a time, a
   picture's name made of one -- is blanked (`shows`'s `blank`), and the picture
   is taken once the page has drawn under its blanks, at the size they leave it
   (`doc_capture.picture`), so a picture changes only when the page does. A
@@ -186,8 +187,10 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
 
 After the browser tests, CI runs `tests/e2e/picture_drift.py`: a walkthrough
 picture the run rewrote that differs from the committed one in more than its
-`TOLERANCE` of the pixels is named in a warning, and it never fails the run,
-since a person judges a picture against its caption.
+`TOLERANCE` of the pixels is named in a warning with the box its change lies
+in, and it never fails the run, since a person judges a picture against its
+caption. Here, `--sheets DIR` draws each named picture beside the committed one,
+its changed pixels marked, which is what that person looks at.
 
 Before a screenshot of the viewer, `viewer_ready.settled(page)` waits until the
 level's geometry has loaded (`window.fractalViewer.waveDone`), the camera is at

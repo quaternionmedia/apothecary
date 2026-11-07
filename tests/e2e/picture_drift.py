@@ -1,12 +1,15 @@
 """After the browser tests: each walkthrough picture the run rewrote, against the committed one.
 
-    uv run python tests/e2e/picture_drift.py
+    uv run python tests/e2e/picture_drift.py                 # name them
+    uv run python tests/e2e/picture_drift.py --sheets DIR    # and draw each beside its commit
 
 A picture that differs from the committed one in more than ``TOLERANCE`` of its
-pixels is named in a GitHub warning annotation (``::warning file=...::``), which
-CI shows on the run and a terminal shows as a line. It never fails: a picture is
-looked at against its caption by a person, and a page changed on purpose is
-committed with its pictures. A run rewrites a picture only past a hundredth of a
+pixels is named in a GitHub warning annotation (``::warning file=...::``) with the
+box its changed pixels lie in, which CI shows on the run and a terminal shows as a
+line. It never fails: a picture is looked at against its caption by a person, and a
+page changed on purpose is committed with its pictures. With ``--sheets DIR``, each
+named picture is drawn into DIR beside the committed one, its changed pixels marked,
+so the look is at what changed. A run rewrites a picture only past a hundredth of a
 percent (doc_capture.py's ``_keep_unless_changed``), so what this reads is only
 what the run wrote.
 """
@@ -51,8 +54,41 @@ def differing(old: bytes, new: bytes) -> float:
     return changed / (before.size[0] * before.size[1])
 
 
-def warnings(root: Path = ROOT, tolerance: float = TOLERANCE) -> list[str]:
-    """One annotation per picture past ``tolerance``, naming it."""
+def _pair(old: bytes, new: bytes) -> tuple[Image.Image, Image.Image]:
+    return Image.open(io.BytesIO(old)).convert("RGB"), Image.open(io.BytesIO(new)).convert("RGB")
+
+
+def changed_box(old: bytes, new: bytes) -> tuple[int, int, int, int] | None:
+    """The box the changed pixels lie in, (left, top, right, bottom); None for none."""
+    before, after = _pair(old, new)
+    if before.size != after.size:
+        return (0, 0, *after.size)
+    return ImageChops.difference(before, after).convert("L").getbbox()
+
+
+# The changed pixels, marked over the new picture.
+MARK = (255, 0, 0)
+
+
+def sheet(old: bytes, new: bytes) -> Image.Image:
+    """The committed picture beside the new one, the new one's changed pixels marked."""
+    before, after = _pair(old, new)
+    if before.size == after.size:
+        changed = ImageChops.difference(before, after).convert("L").point(lambda v: 255 * (v > 0))
+        after = Image.composite(Image.new("RGB", after.size, MARK), after, changed)
+    drawn = Image.new(
+        "RGB", (before.width + after.width, max(before.height, after.height)), "white"
+    )
+    drawn.paste(before, (0, 0))
+    drawn.paste(after, (before.width, 0))
+    return drawn
+
+
+def warnings(
+    root: Path = ROOT, tolerance: float = TOLERANCE, sheets: Path | None = None
+) -> list[str]:
+    """One annotation per picture past ``tolerance``, naming it and the box that
+    changed; with ``sheets``, each drawn there beside the committed one."""
     said = []
     for name in rewritten(root):
         path = root / name
@@ -65,27 +101,36 @@ def warnings(root: Path = ROOT, tolerance: float = TOLERANCE) -> list[str]:
                 "committed: look at it against its caption, and commit it with its page"
             )
             continue
-        share = differing(committed.stdout, path.read_bytes())
+        now = path.read_bytes()
+        share = differing(committed.stdout, now)
         if share > tolerance:
+            left, top, right, bottom = changed_box(committed.stdout, now)
             said.append(
                 f"::warning file={name},title=A walkthrough picture changed::{name} "
                 f"differs from the committed picture in {share:.2%} of its pixels, past "
-                f"{tolerance:.1%}: look at it against its caption, and commit it if the "
-                "page changed"
+                f"{tolerance:.1%}, between ({left}, {top}) and ({right}, {bottom}): look "
+                "at it against its caption, and commit it if the page changed"
             )
+            if sheets is not None:
+                sheets.mkdir(parents=True, exist_ok=True)
+                sheet(committed.stdout, now).save(sheets / Path(name).name)
     return said
 
 
-def main(root: Path = ROOT) -> int:
-    said = warnings(root)
+def main(root: Path = ROOT, argv: list[str] | None = None) -> int:
+    argv = [] if argv is None else argv
+    sheets = Path(argv[argv.index("--sheets") + 1]) if "--sheets" in argv else None
+    said = warnings(root, sheets=sheets)
     for line in said:
         print(line)
     print(
         f"{len(said)} walkthrough picture(s) differ from the committed ones past "
         f"{TOLERANCE:.1%} of their pixels"
     )
+    if sheets is not None and said:
+        print(f"each drawn beside its commit, its changed pixels marked, in {sheets}")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(argv=sys.argv[1:]))

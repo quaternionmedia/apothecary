@@ -84,8 +84,24 @@ test. In CI a browser test's cap is also twice the time recorded for it, so a hu
 fails that test and names it, and a job's is twice its recorded median.
 
 `walkthrough/` is executable: its pages are doctests. Pages 01 and 02 are written by their
-browser tests, and a loop's page (03, 04, 05, 06) and the working space's (18) by the browser suite alone; commit what a
-run rewrites, and change their words in the test that writes them, not in the page.
+browser tests, and a loop's page (03, 04, 05, 06) and the working space's (18) by the browser
+suite alone; change their words in the test that writes them, not in the page, and commit
+the words a run rewrites.
+
+**A picture is committed with the page change it shows.** After the run on a stack's head,
+`uv run python tests/e2e/picture_drift.py --sheets .cache/picture-drift` names each
+walkthrough picture the run rewrote past its tolerance, with the box that changed, and
+draws it beside the committed one, its changed pixels marked. Look at every sheet: a
+picture whose marked change is a page's -- a row, a word, a control a level of the stack
+adds or moves -- is committed in the level that changed the page; the rest, a run's noise
+(a log's scroll, a focus ring, a line of text drawn a pixel over) and every picture under
+the tolerance, is put back (`git checkout -- walkthrough/screenshots`). A change and noise
+often share one picture, which is then the page's.
+
+**Docs a stack's levels each touched are read together on its head.** Levels written apart
+can each be true alone and contradict one another, or the code beneath, once stacked: before
+the stack is pulled, the docs its levels change are read against each other and the code
+on the head's tree, and a line found wrong is fixed in the level that wrote it.
 [tests/e2e/README.md](tests/e2e/README.md) has the browser suite's flags and recorders, and
 [walkthrough/15-preflight.md](walkthrough/15-preflight.md) says what `preflight` reproduces
 and what it cannot.
