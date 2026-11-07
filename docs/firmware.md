@@ -607,7 +607,14 @@ reading kept then could not be told whose.
 (`~/.apothecary/prints/`) and checks it before anything is sent: a file that
 saves settings (`M500`), factory-resets (`M502`), updates firmware (`M997`),
 kills or restarts the board, or exceeds the heater caps is refused with the
-reason. **Slice**, beside **makes**, slices the part or piece chosen there for
+reason. A kept file says the kind of machine it was kept for, and is sent to
+that kind alone: Choose File keeps it for its Machine's kind, a slice for a
+printer, a toolpath for a router, and a file a slice or a toolpath made before
+files said is known by its record. A stream refuses a file of another kind, a file
+kept for none (Choose File keeps it again for this machine), and any file for a
+board that has not said what kind of machine it drives; the card lists such a
+file with what it was kept for, and its ▶ stays refused. A file kept for a
+router is checked in GRBL's terms too ([docs/cnc.md](cnc.md)). **Slice**, beside **makes**, slices the part or piece chosen there for
 the printer and chooses the G-code it keeps, so Print follows Slice; a file a
 slice made says what it was sliced from and for which printer ([the
 slicer](slicer.md#in-the-page)). **Print** needs the latch and starts a job that sends one line per

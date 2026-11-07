@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import queue
 import threading
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
@@ -423,9 +423,15 @@ async def firmware_print_files():
 
 @router.post("/printers/prints", status_code=201)
 async def firmware_print_upload(
-    request: Request, name: str = Query(..., min_length=1, max_length=200)
+    request: Request,
+    name: str = Query(..., min_length=1, max_length=200),
+    machine: Optional[str] = Query(
+        None, pattern="^(printer|router)$", description="the kind of machine it is kept for"
+    ),
 ):
-    """Keep a G-code file (the request body, as text) under ``name``; it is checked, not sent."""
+    """Keep a G-code file (the request body, as text) under ``name``, for a kind of
+    machine; it is checked in that machine's terms, not sent. A file kept for none is
+    sent to none until it is kept again for one."""
     data = await request.body()
     if not data:
         raise HTTPException(status_code=422, detail="an empty file")
@@ -434,7 +440,7 @@ async def firmware_print_upload(
             status_code=413, detail=f"larger than {PRINT_FILE_MAX // (1024 * 1024)} MB"
         )
     # Checking and writing 60 MB takes seconds: off the event loop, so polls keep going.
-    kept = await run_in_threadpool(devices.save_print_file, name, data)
+    kept = await run_in_threadpool(devices.save_print_file, name, data, machine)
     return kept.model_dump(mode="json")
 
 

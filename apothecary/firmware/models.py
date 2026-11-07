@@ -547,6 +547,10 @@ class PrintFile(BaseModel):
     lines: int  # the lines that would be sent: comments and blanks dropped
     uploaded_at: datetime
     problems: List[str] = Field(default_factory=list)  # why it may not be sent, if it may not
+    # The kind of machine it was kept for, "printer" or "router": it is sent to that
+    # kind alone. None on a file kept before files said, and not made by a slice or a
+    # toolpath, which say (devices.print_file).
+    machine: Optional[str] = None
 
 
 class PrintRecord(BaseModel):

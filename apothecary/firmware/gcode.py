@@ -1233,6 +1233,15 @@ PRINT_REFUSED: Dict[str, str] = {
     "M6": "is a tool change: the host streams one tool",
 }
 TEMP_CODES = {"M104": HOTEND_MAX_C, "M109": HOTEND_MAX_C, "M140": BED_MAX_C, "M190": BED_MAX_C}
+# The M codes a GRBL controller takes (Grbl 1.1's, and Grbl_ESP32's outputs). Any other
+# in a file kept for a router is a printer's: GRBL answers it error:20, and the cut
+# stops at that line.
+GRBL_M_CODES = {0, 1, 2, 3, 4, 5, 7, 8, 9, 30, 56, 62, 63, 67}
+# Longest a dwell in a router's file may ask, in GRBL's unit, seconds: Marlin counts
+# G4 P in milliseconds, so a printer's half-second pause is eight minutes on a router.
+GRBL_DWELL_MAX_S = 60.0
+CODE_RE = re.compile(r"^([GM])0*(\d+)(?:\.\d+)?$")
+DWELL_P_RE = re.compile(r"\bP(\d+(?:\.\d+)?)")
 SPINDLE_CODES = ("M3", "M4")
 SPINDLE_ARG_RE = re.compile(r"S(\d+(?:\.\d+)?)")
 COMMENT_RE = re.compile(r";.*$|\([^)]*\)")
@@ -1253,12 +1262,14 @@ def line_timeout(cmd: str) -> float:
     return PRINT_SLOW_TIMEOUT_S if code in SLOW_CODES else PRINT_LINE_TIMEOUT_S
 
 
-def check_gcode(text: str) -> Tuple[int, List[str]]:
+def check_gcode(text: str, machine: Optional[str] = None) -> Tuple[int, List[str]]:
     """How many lines a file would send, and every reason it may not be sent.
 
     A reason names its line. Refused codes and temperatures over the seam's
     caps are the two: the same bounds as a typed control, applied once to
-    the whole file rather than line by line as it streams.
+    the whole file rather than line by line as it streams. A file kept for a
+    router (``machine``) is checked in GRBL's terms as well: a code GRBL does not
+    take, and a dwell over a minute in its unit, are refused.
     """
     total = 0
     problems: List[str] = []
@@ -1284,10 +1295,34 @@ def check_gcode(text: str) -> Tuple[int, List[str]]:
                 problems.append(
                     f"line {n}: {code} asks for {m.group(1)} rpm, above {SPINDLE_MAX_RPM}"
                 )
+        if machine == "router":
+            problems.extend(_not_grbl(n, cmd, code))
         if len(problems) >= 20:
             problems.append("... and the check stopped here")
             break
     return total, problems
+
+
+def _not_grbl(n: int, cmd: str, code: str) -> List[str]:
+    """Why a line of a router's file is not GRBL's, if it is not."""
+    m = CODE_RE.match(code)
+    if m is None:
+        return []
+    letter, number = m.group(1), int(m.group(2))
+    if letter == "M" and number not in GRBL_M_CODES:
+        return [
+            f"line {n}: {code} is not a GRBL code: the controller answers error:20 and the cut stops there"
+        ]
+    if letter == "G" and number == 29:
+        return [f"line {n}: {code} is a printer's bed probe, not a GRBL code"]
+    if letter == "G" and number == 4:
+        p = DWELL_P_RE.search(cmd[len(code) :])
+        if p and float(p.group(1)) > GRBL_DWELL_MAX_S:
+            return [
+                f"line {n}: {code} P{p.group(1)} dwells {p.group(1)} s on GRBL, whose P is "
+                "seconds; a printer's file counts it in milliseconds"
+            ]
+    return []
 
 
 CONTROL_TTL_S = 300.0  # a latch that nobody touches for this long disarms itself

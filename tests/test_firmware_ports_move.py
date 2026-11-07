@@ -389,9 +389,7 @@ def test_the_stop_of_a_router_nothing_has_asked_yet_goes_too(bench, monkeypatch)
     links.stop_all()
 
 
-def test_a_printer_s_stop_reaches_a_router_nothing_has_asked_yet_as_its_reset(
-    bench, monkeypatch
-):
+def test_a_printer_s_stop_reaches_a_router_nothing_has_asked_yet_as_its_reset(bench, monkeypatch):
     links = _links(monkeypatch, grbl.SimulatedRouter)
     _a_printer_was_identified(bench)
     bench.plug(PORT, ROUTER)
@@ -530,7 +528,7 @@ def _a_printer_polled_armed_and_printed(bench, monkeypatch):
     _a_printer_was_identified(bench)
     assert devices.printer_status(PORT).state == "idle"
     links.control.arm(PORT)
-    kept = devices.save_print_file("square.gcode", b"G90\nG1 X10 Y10 F3000\n")
+    kept = devices.save_print_file("square.gcode", b"G90\nG1 X10 Y10 F3000\n", machine="printer")
     job = devices.start_print(PORT, kept.id)
     job.thread.join(10)
     assert job.finished is not None and devices.print_job(PORT) is job

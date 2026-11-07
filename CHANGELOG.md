@@ -152,6 +152,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Fixed
 
+- A kept file says which kind of machine it is for and is sent to that kind alone, a router's checked in GRBL's terms: the Ender's dry run was accepted for a cut, its `G28` a move to a stored position and each `G4 P500` a 500-second wait on GRBL. ([doc](docs/firmware.md#printing-without-an-sd-card))
 - A pin by port name never takes a board with a serial number or a MAC, nor one that answers as another kind of machine than its own; a flash kept by port counts for the board it was made on, and a printer or a router is never said to run a sketch. ([doc](docs/firmware.md#a-pin-follows-the-board))
 - A bed reading is the board's that took it, listed for that board wherever it is plugged in and refused on anything but a printer: the router's table wore the Ender's mesh, kept under the port name the router took. ([doc](docs/firmware.md#bed-leveling))
 - A port that changes hands forgets what the server held for its last board -- its last poll, a finished job, its link, its control latch and its comms log -- so a board on another's port is shown none of it and is never found armed. ([doc](docs/firmware.md#a-record-is-one-boards-not-its-ports))

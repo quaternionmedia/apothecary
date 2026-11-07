@@ -45,8 +45,6 @@ here: run `apothecary problems`.
 - A machine stepped into is its part alone: its pieces are reached from Site and not drawn
   at its level, a double-click on the control box does not step into `frame_system`, and
   the category chips at that level do nothing.
-- A file kept by Choose File records no kind of machine, so a card cannot tell a hand-kept
-  printer file from a CAM post.
 - The Models window says none is trusted until `apothecary vision check` has passed
   (`apothecary/static/widgets/models.js`, quoted in `docs/models-checklist.md`);
   `apothecary vision` has `ask`, `off`, `on` and `status`.

@@ -1280,10 +1280,13 @@ def _print_file_path(file_id: str) -> Path:
     return prints_dir() / f"{file_id}.gcode"
 
 
-def save_print_file(name: str, data: bytes) -> PrintFile:
-    """Keep an uploaded file and say what it holds; ``problems`` says why it may not be sent."""
+def save_print_file(name: str, data: bytes, machine: Optional[str] = None) -> PrintFile:
+    """Keep an uploaded file for a kind of machine (``machine``) and say what it holds;
+    ``problems`` says why it may not be sent."""
+    if machine is not None and machine not in dialects.BY_MACHINE:
+        raise ValueError(f"no kind of machine is called {machine!r}")
     text = data.decode("utf-8", "replace")
-    total, problems = gcode.check_gcode(text)
+    total, problems = gcode.check_gcode(text, machine)
     at = datetime.now(timezone.utc)
     stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", Path(name).name).strip("_.") or "print"
     stem = re.sub(r"\.(gcode|gco|g|txt)$", "", stem, flags=re.IGNORECASE)[:60]
@@ -1299,8 +1302,24 @@ def save_print_file(name: str, data: bytes) -> PrintFile:
         lines=total,
         uploaded_at=at,
         problems=problems,
+        machine=machine,
     )
     _print_meta_path(file_id).write_text(meta.model_dump_json(indent=2), encoding="utf-8")
+    return meta
+
+
+# Where a slice's record and a toolpath's are kept, by the file each made
+# (slicer/service.py, cam/service.py): what says which kind of machine a file kept
+# before files said is for.
+_MADE_FOR = {"slices": "printer", "cuts": "router"}
+
+
+def _with_its_kind(meta: PrintFile) -> PrintFile:
+    if meta.machine is not None:
+        return meta
+    for folder, machine in _MADE_FOR.items():
+        if (state_dir() / folder / f"{meta.id}.json").is_file():
+            return meta.model_copy(update={"machine": machine})
     return meta
 
 
@@ -1332,7 +1351,7 @@ def print_files() -> List[PrintFile]:
         except (OSError, ValueError):
             continue
         if _print_file_path(meta.id).is_file():
-            files.append(meta)
+            files.append(_with_its_kind(meta))
     return sorted(files, key=lambda f: f.uploaded_at, reverse=True)
 
 
@@ -1348,7 +1367,7 @@ def print_file(file_id: str) -> Optional[PrintFile]:
     if not path.is_file() or not _print_file_path(file_id).is_file():
         return None
     try:
-        return PrintFile(**json.loads(path.read_text(encoding="utf-8")))
+        return _with_its_kind(PrintFile(**json.loads(path.read_text(encoding="utf-8"))))
     except (OSError, ValueError):
         return None
 
@@ -1666,6 +1685,27 @@ def print_job(port: str) -> Optional[PrintJob]:
     return _PRINTS.get(port)
 
 
+def _file_fits(file: PrintFile, port: str, kind: Optional[str]) -> None:
+    """ValueError unless ``file`` was kept for the kind of machine on ``port``: a
+    printer's file on a router homes it with G28 and waits out its millisecond dwells
+    as seconds, and a router's on a printer cuts into the bed."""
+    if kind is None:
+        raise ValueError(
+            f"{port}: the board there has not said what kind of machine it drives -- "
+            f"{file.name} is sent to the kind it was kept for alone"
+        )
+    if file.machine is None:
+        raise ValueError(
+            f"{file.name} says no kind of machine it is for: choose it again with this "
+            f"{kind}'s Choose File, which keeps it for a {kind}"
+        )
+    if file.machine != kind:
+        raise ValueError(
+            f"{file.name} was kept for a {file.machine}, and {port} holds a {kind}: "
+            f"it is never sent to a {kind}"
+        )
+
+
 def _sha256_of(file: PrintFile) -> str:
     """The kept file's hash: from its description when it carries one, else from its
     bytes."""
@@ -1725,6 +1765,7 @@ def start_print(
     if last is not None and last.sd_printing:
         raise PortHeld(f"{port}: the card is printing -- pause or abort that first")
     cached = state.cached_device(port)
+    _file_fits(file, port, machine_kind(cached))
     job = PrintJob(
         port,
         file,

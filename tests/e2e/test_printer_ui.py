@@ -99,9 +99,13 @@ def _read_the_bed(url: str, probe: bool = False) -> str:
 
 
 def _keep(url: str, name: str, gcode: str) -> str:
-    """Keep a G-code file on the host, as the page's file picker does; returns its id."""
+    """Keep a G-code file on the host, as the printer's file picker does: for a printer.
+    Returns its id."""
     r = httpx.post(
-        f"{url}/firmware/printers/prints", params={"name": name}, content=gcode, timeout=15.0
+        f"{url}/firmware/printers/prints",
+        params={"name": name, "machine": "printer"},
+        content=gcode,
+        timeout=15.0,
     )
     r.raise_for_status()
     return r.json()["id"]

@@ -1,10 +1,10 @@
 # Each machine keeps its own: a plan
 
-*Slices 1, 2, 3 and 5 are built: the stop goes to whatever is on a port, a port
-that changes hands forgets what was held in memory for its last board, a bed
-reading is the board's that took it, and a pin or a flash kept by port is
-careful of the board that takes the port. The rest is not built. Each slice is
-one pull request.*
+*Slices 1 to 5 are built: the stop goes to whatever is on a port, a port that
+changes hands forgets what was held in memory for its last board, a bed reading
+is the board's that took it, a pin or a flash kept by port is careful of the
+board that takes the port, and a kept file is sent to the kind of machine it was
+kept for alone. The rest is not built. Each slice is one pull request.*
 
 ## What this plans
 
@@ -112,8 +112,8 @@ Each is a pull request; a slice that needs another's work stacks on it.
    over a printer's bed alone. Held by tests that take a reading on the
    simulated printer and put the router on its port, and by a browser test that
    starts with a printer's reading kept under the router's port name.
-4. **A kept file says which kind of machine it is for** (`build/files-by-kind`).
-   A file records
+4. **A kept file says which kind of machine it is for** (`build/files-by-kind`,
+   on 5; built). A file records
    `printer` or `router`: Choose File records the Machine's kind, a slice
    records `printer`, a toolpath `router`. A stream refuses a file of the other
    kind, and one that records none, saying how to keep it for this machine. The

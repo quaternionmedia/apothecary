@@ -20,7 +20,7 @@ from apothecary import jobs
 from apothecary.api import app
 from apothecary.cli import cli
 from apothecary.firmware import devices, gcode
-from apothecary.firmware.models import PrintRequest
+from apothecary.firmware.models import DeviceInfo, PrinterInfo, PrintRequest
 from apothecary.firmware.toolchains import PortHeld, ToolchainError
 
 BOOT = [
@@ -1536,10 +1536,10 @@ def test_check_gcode_counts_lines_and_refuses_what_it_must():
 
 
 def test_print_files_are_kept_checked_and_forgotten(fake_arduino_cli):
-    kept = devices.save_print_file("Bracket v2.gcode", SMALL_PRINT.encode())
+    kept = devices.save_print_file("Bracket v2.gcode", SMALL_PRINT.encode(), machine="printer")
     assert kept.name == "Bracket v2.gcode" and kept.lines == 12 and kept.problems == []
     assert kept.id.endswith("-Bracket_v2") and kept.size == len(SMALL_PRINT)
-    bad = devices.save_print_file("../../evil.gcode", b"M500\n")
+    bad = devices.save_print_file("../../evil.gcode", b"M500\n", machine="printer")
     assert bad.problems == ["line 1: M500 saves settings to EEPROM"]
     assert "/" not in bad.id and (devices.prints_dir() / f"{bad.id}.gcode").is_file()
     assert [f.id for f in devices.print_files()] == [bad.id, kept.id]
@@ -1568,8 +1568,8 @@ def test_two_files_kept_in_one_millisecond_are_both_kept(fake_arduino_cli, monke
     the same name kept in the same millisecond takes that id with -2 after it, and the
     first file's lines are still its own."""
     monkeypatch.setattr(devices, "datetime", OneMillisecond)
-    first = devices.save_print_file("cube.gcode", b"G28\n")
-    second = devices.save_print_file("cube.gcode", b"G28\nG1 X5\n")
+    first = devices.save_print_file("cube.gcode", b"G28\n", machine="printer")
+    second = devices.save_print_file("cube.gcode", b"G28\nG1 X5\n", machine="printer")
     assert sorted(f.lines for f in devices.print_files()) == [1, 2]
     assert first.id == "20261014T120000.123-cube" and second.id == "20261014T120000.123-cube-2"
     assert {f.id: f.lines for f in devices.print_files()} == {first.id: 1, second.id: 2}
@@ -1579,7 +1579,7 @@ def test_two_files_kept_in_one_millisecond_are_both_kept(fake_arduino_cli, monke
 
 def test_print_job_streams_pauses_resumes_and_polls_between_lines(fake_arduino_cli, scripted_links):
     port = "/dev/ttyFAKE1"
-    kept = devices.save_print_file("small.gcode", SMALL_PRINT.encode())
+    kept = devices.save_print_file("small.gcode", SMALL_PRINT.encode(), machine="printer")
     gate = threading.Event()
     gate.set()
 
@@ -1677,7 +1677,7 @@ def test_print_job_streams_pauses_resumes_and_polls_between_lines(fake_arduino_c
 
 def test_print_job_cancel_sends_the_safe_off_and_a_stop_does_not(fake_arduino_cli, scripted_links):
     port = "/dev/ttyFAKE1"
-    kept = devices.save_print_file("long.gcode", ("G1 X1\n" * 400).encode())
+    kept = devices.save_print_file("long.gcode", ("G1 X1\n" * 400).encode(), machine="printer")
     gate = threading.Event()
 
     class SlowTransport(ScriptedTransport):
@@ -1714,7 +1714,7 @@ def test_print_job_fails_on_a_board_error_and_still_turns_the_heat_off(
     fake_arduino_cli, scripted_links
 ):
     port = "/dev/ttyFAKE1"
-    kept = devices.save_print_file("bad.gcode", b"G28\nG1 X5\nG1 X6\n")
+    kept = devices.save_print_file("bad.gcode", b"G28\nG1 X5\nG1 X6\n", machine="printer")
     scripted_links.control.arm(port)
     devices.printer_status(port, links=scripted_links)
     ScriptedTransport.instances[0].replies = {
@@ -1739,9 +1739,9 @@ def test_print_refuses_a_file_with_problems_and_a_card_that_is_printing(
     fake_arduino_cli, scripted_links
 ):
     port = "/dev/ttyFAKE1"
-    bad = devices.save_print_file("bad.gcode", b"M500\n")
-    empty = devices.save_print_file("empty.gcode", b"; nothing\n")
-    good = devices.save_print_file("ok.gcode", b"G28\n")
+    bad = devices.save_print_file("bad.gcode", b"M500\n", machine="printer")
+    empty = devices.save_print_file("empty.gcode", b"; nothing\n", machine="printer")
+    good = devices.save_print_file("ok.gcode", b"G28\n", machine="printer")
     scripted_links.control.arm(port)
     with pytest.raises(ValueError, match="may not be sent"):
         devices.start_print(port, bad.id, links=scripted_links)
@@ -1763,7 +1763,9 @@ def test_print_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
         == 422
     )
     r = c.post(
-        "/firmware/printers/prints", params={"name": "small.gcode"}, content=SMALL_PRINT.encode()
+        "/firmware/printers/prints",
+        params={"name": "small.gcode", "machine": "printer"},
+        content=SMALL_PRINT.encode(),
     )
     assert r.status_code == 201 and r.json()["lines"] == 12 and r.json()["problems"] == []
     file_id = r.json()["id"]
@@ -1816,7 +1818,7 @@ def test_release_reconnect_reset_and_upload_are_refused_mid_print(
             super().write(data)
 
     scripted_links.factory = HeldTransport
-    kept = devices.save_print_file("held.gcode", b"G1 X1\nG1 X2\nG1 X3\n")
+    kept = devices.save_print_file("held.gcode", b"G1 X1\nG1 X2\nG1 X3\n", machine="printer")
     c.post("/firmware/printers/control", json={"port": port, "armed": True})
     assert (
         c.post("/firmware/printers/print", json={"port": port, "file_id": kept.id}).status_code
@@ -1973,8 +1975,13 @@ def _printing(tmp_path, monkeypatch, lines=400):
     boards = []
     links = gcode.PrinterLinks(factory=lambda p, b: boards.append(_LossyBoard(p, b)) or boards[-1])
     monkeypatch.setattr(gcode, "line_timeout", lambda cmd: 1.0)
+    # What its identification leaves: a printer, which a printer's file is sent to.
+    answered = PrinterInfo(firmware_name="Marlin", identified_at=datetime.now(timezone.utc))
+    devices.get_state().remember_device(DeviceInfo(port="/dev/ttyJOB", printer=answered))
     links.open("/dev/ttyJOB", 115200)
-    kept = devices.save_print_file("p.gcode", ("M104 S200\n" + "G1 X1\n" * lines).encode())
+    kept = devices.save_print_file(
+        "p.gcode", ("M104 S200\n" + "G1 X1\n" * lines).encode(), machine="printer"
+    )
     links.control.arm("/dev/ttyJOB")
     job = devices.start_print("/dev/ttyJOB", kept.id, links=links)
     return links, boards[0], job
@@ -2062,7 +2069,9 @@ def test_a_print_started_from_the_card_is_a_job_with_its_file_machine_part_and_o
     scripted_links.factory = GatedTransport
     assert c.put(f"/sites/garage/nodes/{BOARD}/device", json={"identity": port}).is_success
     kept = c.post(
-        "/firmware/printers/prints", params={"name": "bracket.gcode"}, content=SMALL_PRINT.encode()
+        "/firmware/printers/prints",
+        params={"name": "bracket.gcode", "machine": "printer"},
+        content=SMALL_PRINT.encode(),
     ).json()
     c.post("/firmware/printers/control", json={"port": port, "armed": True})
     # A part is one of the site's: anything else is refused before a line is sent.
@@ -2129,7 +2138,7 @@ def test_a_cancelled_print_ends_its_job_cancelled_and_frees_the_printer(
 
     scripted_links.factory = SlowTransport
     c.put(f"/sites/garage/nodes/{BOARD}/device", json={"identity": port})
-    kept = devices.save_print_file("long.gcode", ("G1 X1\n" * 400).encode())
+    kept = devices.save_print_file("long.gcode", ("G1 X1\n" * 400).encode(), machine="printer")
     c.post("/firmware/printers/control", json={"port": port, "armed": True})
     started = c.post("/firmware/printers/print", json={"port": port, "file_id": kept.id}).json()
     assert _printer_1(garage).status == "printing"
@@ -2154,7 +2163,7 @@ def test_a_print_on_a_printer_pinned_nowhere_is_a_job_of_no_site_and_names_no_pa
     fake_arduino_cli, scripted_links
 ):
     port = "/dev/ttyFAKE1"
-    kept = devices.save_print_file("dot.gcode", b"G28\n")
+    kept = devices.save_print_file("dot.gcode", b"G28\n", machine="printer")
     scripted_links.control.arm(port)
     with pytest.raises(ValueError, match="pinned in no site"):
         devices.start_print(port, kept.id, part="footpedal", links=scripted_links)
