@@ -1,6 +1,7 @@
 # The family's journeys through the viewer: a plan
 
-*A plan, dated. Built: slice 1, less text. Each slice is one branch of a local
+*A plan, dated. Built: slices 1 and 2, less text and the card that surfaces its
+next step. Each slice is one branch of a local
 stack, built in the order listed once the owner says yes to it.*
 
 ## What this plans
@@ -211,6 +212,24 @@ the registry (a line each in `OPENING`, `SHOWS`, `VERB`, `LINK`, `EMPTY`),
 `test_ring.py` and `test_site_panel.py` where they list Site's windows; the
 README's map row for the family names the Family view; `docs/viewer.md`'s
 systems table and `docs/family.md` say the windows.
+
+## Pages with pictures
+
+A walkthrough page that describes something a person does in the page is written
+by the browser test that does it, its pictures a byproduct of the test asserting
+what a person sees, recorded and never compared, its words fixed in the test
+(AGENTS.md item 13; `tests/e2e/README.md`, *The two recorders*). Pages 19 to 23
+are hermetic doctest pages with no pictures, though each describes a thing a
+person does in the page. Each slice that reshapes a window adds the page's side
+of what that window does, a runtime-bound page of its own linked from the
+hermetic one, with short text in the present tense saying what a person does
+and sees:
+
+| Slice | Page | Written by |
+|---|---|---|
+| 2 | 24, *A cut from the card*: the Cut card from makes to a cancelled cut | `tests/e2e/test_router_ui.py` |
+| 3 | 25, *A procedure through the window*: the family, a step's door, GO, a refusal, the outcome | `tests/e2e/test_procedure_window.py` |
+| 4 | 25 gains the Family view, Members and Deliveries | the same |
 
 ## Questions the owner decides
 

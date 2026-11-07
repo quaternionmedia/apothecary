@@ -136,7 +136,10 @@ history; the world lays the one shown over the table
 order: what it makes and its Toolpath ([docs/cam.md](cam.md)) where a printer has
 Slice, the file, kept and checked, or a CAM post's, then ▶ Cut, Pause (a hold),
 Resume, Cancel (a hold and a reset), the cut's progress with the operation it is
-in, what the file holds, and the router's jobs. A line the controller refuses
+in, what the file holds, and the router's jobs, each control there once what it
+needs holds (Toolpath once a part is chosen, ▶ Cut once a file is, Pause and
+Cancel while a cut runs, Resume while it is held;
+[walkthrough page 24](../walkthrough/24-a-cut-from-the-card.md) pictures each). A line the controller refuses
 (`error:15`) or an alarm it raises (`ALARM:3`) is said in GRBL's words beside
 the line in the log, in the refusal the status line carries, in the reason a
 job that stopped gives, and in the state card. A cut that would leave the travel

@@ -14,10 +14,12 @@ from __future__ import annotations
 import json
 import re
 
+import doc_capture
 import httpx
 import pytest
 import windows
 from boards import wears
+from doc_capture import moments
 from garage import open_garage
 from garage import select as _select
 from playwright.sync_api import Page, expect
@@ -45,6 +47,12 @@ A_PRINTER_S_READING = {
 @pytest.fixture(scope="module")
 def url(start_server, tmp_path_factory):
     """The router identified and its controller pinned: cnc_router wears its badge."""
+    return _router_server(start_server, tmp_path_factory)
+
+
+def _router_server(start_server, tmp_path_factory) -> str:
+    """A server with the simulated router at a twentieth of real time, a printer's
+    reading in its state folder, the router identified and its controller pinned."""
     state = tmp_path_factory.mktemp("router-state")
     (state / "leveling").mkdir()
     (state / "leveling" / f"{A_PRINTER_S_READING['id']}.json").write_text(
@@ -75,6 +83,251 @@ def _disarmed(url):
 
 def _log(page: Page):
     return windows.in_machine(page, "#log")
+
+
+# The page's test runs first, on the module's fresh server: the card it pictures is the
+# one a person first meets, with no job run before it.
+
+# --- walkthrough page 24: a cut from the card, as a person goes round it -----------------
+
+# What changes on every run whatever the page does: a moment, a count of lines or a
+# percentage as a cut streams, a position as the tool moves, the log and the bar.
+STREAMED = r"\d+/\d+ lines|\(\d+(?:\.\d+)?%\)|\b\d+%|\bG\d+(?: [A-Z][\d.-]+)*"
+POSITION = r"-?\d+\.\d+"
+CHANGING = (
+    *moments(windows.MACHINE_WINDOWS, "#status", ".world-badge", "#selected-body .device-section"),
+    *(
+        (where, STREAMED)
+        for where in (
+            f"{windows.MACHINE_WINDOWS} #print-progress",
+            f"{windows.MACHINE_WINDOWS} #print-history",
+            f"{windows.MACHINE_WINDOWS} #c-state-s",
+            ".world-badge",
+            "#status",
+        )
+    ),
+    *((f"{windows.MACHINE_WINDOWS} {part}", POSITION) for part in ("#c-pos", "#c-pos-s")),
+    f"{windows.MACHINE_WINDOWS} #log",
+    f"{windows.MACHINE_WINDOWS} #b-print",
+)
+
+
+@pytest.mark.e2e
+def test_a_cut_from_the_card_as_a_person_goes_round_it(
+    page: Page, start_server, tmp_path_factory, walkthrough
+):
+    """Walkthrough page 24: the Cut card from makes to a cancelled cut, each control
+    there once what it needs holds, pictured at each step. On a server of its own, so
+    the card pictured is the one a person first meets, nothing kept and no job run, and
+    the module's router stands where its other tests expect it."""
+    url = _router_server(start_server, tmp_path_factory)
+    story = walkthrough(
+        ordinal="24",
+        slug="a-cut-from-the-card",
+        title="A cut from the card",
+        intro=(
+            "A cut from the router's Cut card, as a person goes round it: the coupon chosen "
+            "under makes, its toolpath written and drawn on the table, kept as the router's "
+            "plan, control armed and the work zeroed, the cut streamed, held, resumed and "
+            "cancelled. The card shows each control once what it needs holds, and nothing "
+            "before. [docs/cnc.md](../docs/cnc.md) is the router's reference and "
+            "[docs/cam.md](../docs/cam.md) the toolpath's; "
+            "[page 20](20-a-part-through-the-router.md) runs the same loop in this process, "
+            "and [page 21](21-a-toolpath-previewed.md) the preview's core."
+        ),
+        runtime=(
+            "It drives a real browser against a real server of its own. The router is the "
+            "simulated GRBL controller on a fake port, pinned to cnc_router's controller as "
+            "the garage's real one is; its moves take a twentieth of real time. Nothing "
+            "opens a real port, and the real router is section I of "
+            "[docs/bench-checklist.md](../docs/bench-checklist.md)."
+        ),
+        does_not_show=[
+            "**The real router.** Every line here goes to the simulated controller; the "
+            "bench checklist's section I is the same cut on the AnoleX.",
+            "**The toolpath's numbers.** What Toolpath writes, pass by pass, and the holes "
+            "bored to the tool are [page 20](20-a-part-through-the-router.md)'s.",
+            "**A cut run to its end.** The cut is held, resumed and cancelled, so the card's "
+            "three verbs are seen; a cut that ends is a job done, listed the same way.",
+            "**What changes on every run.** Moments, the lines streamed and the tool's "
+            "position are blanked in the pictures.",
+        ],
+        browser_suite_only=True,
+    )
+    errors: list = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    _select(page, "cnc_router")
+    page.locator("#selected-body .device-section .dev-open").click()
+    windows.machine_ready(page, "router", by_hand=True)
+    machine = windows.machine(page)
+    card = machine.locator("#print-card")
+    expect(card.locator("#print-part")).to_be_visible()
+    expect(card.locator("#print-file")).to_be_visible()
+    for later in (
+        "#print-slice",
+        "#print-pick",
+        "#print-delete",
+        "#print-preview-row",
+        "#print-plan-row",
+        "#print-verbs",
+        "#print-progress-row",
+    ):
+        expect(card.locator(later)).to_be_hidden()
+    expect(page.locator("#status")).to_contain_text("No path is drawn: no file is kept yet")
+    story.shows(
+        "cnc_router's Cut, opened: makes, and Choose File",
+        "cnc_router selected in Site, Open in its Device line, then the canvas ring's "
+        "Panels › Windows › Machine view: the router's Machine and its windows laid out "
+        "together. Its Cut card offers the two ways in, a part under makes or a CAM "
+        "post's file from Choose File, and nothing else yet; the status line says so.",
+        blank=CHANGING,
+    )
+
+    # 2. The coupon under makes: Toolpath and Keep as plan are there, ▶ Cut is not.
+    card.locator("#print-part").select_option("router_coupon")
+    expect(card.locator("#print-slice")).to_be_visible()
+    expect(card.locator("#print-slice")).to_have_text("Toolpath")
+    expect(card.locator("#print-plan")).to_be_visible()
+    expect(card.locator("#print-verbs")).to_be_hidden()
+    story.shows(
+        "router_coupon under makes: Toolpath, and Keep as plan",
+        "The coupon on the router's table chosen under makes. Toolpath is there, since "
+        "the part says how it is cut, and Keep as plan, since there is something to keep. "
+        "▶ Cut is not: there is no file yet.",
+        blank=CHANGING,
+    )
+
+    # 3. Toolpath: the file kept and chosen, the card saying what it holds, the file's
+    # row, the preview and ▶ Cut there; the preview moved to the right draws the path.
+    card.locator("#print-slice").click()
+    expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=15000)
+    expect(card.locator("#print-pick option:checked")).to_contain_text(
+        "router_coupon-cnc_router.nc"
+    )
+    expect(card.locator("#print-slice-said")).to_contain_text(
+        "router_coupon toolpath for cnc_router"
+    )
+    for now in ("#print-pick", "#print-delete", "#print-preview-row", "#print-start"):
+        expect(card.locator(now)).to_be_visible()
+    expect(card.locator("#print-start")).to_be_enabled()
+    # The Machine view pressed again lands on the file: its path drawn, all of it, and
+    # the world framed on it.
+    windows.machine_ready(page, "router", by_hand=True)
+    expect(card.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
+    story.shows(
+        "Toolpath writes the coupon's cut: kept, chosen, said, and drawn on the table",
+        "Toolpath writes the cut from what the coupon declares, in GRBL's dialect, keeps "
+        "it and chooses it: the file's row, its ✕, the preview and ▶ Cut are there now, "
+        "and the card says each operation with its passes and what it bored to the tool. "
+        "The Machine view, pressed again, lands on the file: all of its path drawn on the "
+        "table from the router's work zero, and the world framed on it.",
+        blank=CHANGING,
+    )
+
+    # 4. Keep as plan: chosen again whenever the Machine opens.
+    card.locator("#print-plan").click()
+    expect(page.locator("#status")).to_contain_text("cnc_router's plan kept: router_coupon")
+    expect(card.locator("#print-plan-said")).to_contain_text(
+        "router_coupon, router_coupon-cnc_router.nc"
+    )
+    story.says(
+        "Keep as plan keeps the part and the file as the router's plan",
+        "The plan row says what is kept and when. cnc_router's Machine chooses the coupon "
+        "and its toolpath whenever it opens, its board connected or not.",
+        shown=_words(card.locator("#print-plan-said").inner_text()),
+    )
+
+    # 5. Armed: the pad, the probe offered, and the work zeroed where the tool stands.
+    machine.locator("#ctl").check()
+    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    expect(machine.locator("#level-probe")).to_be_visible()
+    # The tool over where a stock's corner is touched off, from wherever it stood: the
+    # cut's depth under it and the safe height over it, within the travel.
+    at = httpx.get(f"{url}/firmware/printers/status", params={"port": ROUTER}, timeout=15.0).json()
+    dx, dy, dz = (
+        want - at["position"][axis] for axis, want in zip("xyz", (-200, -300, -40), strict=True)
+    )
+    jogged = httpx.post(
+        f"{url}/firmware/printers/command",
+        json={"port": ROUTER, "command": f"$J=G91 G21 X{dx:.3f} Y{dy:.3f} Z{dz:.3f} F4000"},
+        timeout=15.0,
+    )
+    assert jogged.status_code == 200 and jogged.json()["lines"] == ["ok"], jogged.text
+    expect(machine.locator("#c-pos-s")).to_contain_text(
+        "machine X-200.0 Y-300.0 Z-40.00", timeout=4 * WITHIN_A_POLL
+    )
+    page.locator("#control button[data-cmd='G10 L20 P1 X0 Y0 Z0']").click()
+    expect(_log(page)).to_contain_text("> G10 L20 P1 X0 Y0 Z0", timeout=5000)
+    expect(machine.locator("#c-pos")).to_contain_text("X0.0 Y0.0 Z0.00", timeout=WITHIN_A_POLL)
+    story.shows(
+        "⚙ Control armed: the pad, Probe table offered, and the work zeroed",
+        "⚙ Control arms the latch for five minutes of activity and opens the control pad, "
+        "a loud window beside the world. The Table map's Probe table is there now, since "
+        "it moves the machine. The tool jogged over the stock's corner, the pad's XYZ zero "
+        "here makes that the work zero, and the path drawn moves with it.",
+        blank=CHANGING,
+    )
+
+    # 6. ▶ Cut: the cut streams, the operation named; Pause and Cancel while it runs.
+    page.once("dialog", lambda d: d.accept())
+    card.locator("#print-start").click()
+    progress = card.locator("#print-progress")
+    expect(progress).to_contain_text(re.compile(r"op \d/4 pass \d/\d: "), timeout=10000)
+    expect(card.locator("#print-pause")).to_be_visible()
+    expect(card.locator("#print-cancel")).to_be_visible()
+    expect(card.locator("#print-resume")).to_be_hidden()
+    expect(card.locator("#print-start")).to_be_disabled()
+    story.shows(
+        "▶ Cut streams it: Pause and Cancel while it runs, the operation named",
+        "▶ Cut asks first, then streams the file one line per ok. The progress line names "
+        "the operation and the pass the cut is in, the badge in the world says the cut, "
+        "and Pause and Cancel are there while it runs; ▶ Cut waits, disabled, until it "
+        "ends.",
+        blank=CHANGING,
+    )
+
+    # 7. Pause: a feed hold, and Resume in Pause's place.
+    card.locator("#print-pause").click()
+    expect(progress).to_contain_text("paused", timeout=5000)
+    expect(machine.locator("#c-state-s")).to_contain_text("Hold", timeout=WITHIN_A_POLL)
+    expect(card.locator("#print-resume")).to_be_visible()
+    expect(card.locator("#print-pause")).to_be_hidden()
+    story.shows(
+        "Pause holds the controller: Resume takes Pause's place",
+        "Pause is GRBL's feed hold: the controller stops where it is and nothing more is "
+        "fed, the state card says Hold, and Resume stands where Pause did.",
+        blank=CHANGING,
+    )
+
+    # 8. Resume, then Cancel pressed twice: the cut ends, and the card is at rest.
+    card.locator("#print-resume").click()
+    expect(progress).to_contain_text("running", timeout=10000)
+    expect(card.locator("#print-pause")).to_be_visible()
+    card.locator("#print-cancel").click()
+    expect(page.locator("#status")).to_contain_text("press again to cancel the cut", timeout=5000)
+    card.locator("#print-cancel").click()
+    expect(progress).to_contain_text("cancelled", timeout=20000)
+    expect(machine.locator("#c-state")).to_have_text("idle", timeout=WITHIN_A_POLL)
+    expect(card.locator("#print-pause")).to_be_hidden()
+    expect(card.locator("#print-cancel")).to_be_hidden()
+    expect(card.locator("#print-start")).to_be_enabled()
+    expect(card.locator("#print-history")).to_contain_text("cut · router_coupon-cnc_router.nc")
+    story.shows(
+        "Cancel, pressed twice: the cut ends, and the card is at rest with its history",
+        "Cancel asks to be pressed again, then holds and resets the controller: the queue "
+        "empties and the spindle is off. The progress line says cancelled, the job is in "
+        "the card's history and in Site's Jobs, and ▶ Cut is offered again, the file "
+        "still chosen.",
+        blank=CHANGING,
+    )
+    assert errors == []
+
+
+def _words(text: str) -> str:
+    """A line with its moment blanked, so the page's words hold from run to run."""
+    return re.sub(doc_capture.MOMENT, "<moment>", text)
 
 
 @pytest.mark.e2e

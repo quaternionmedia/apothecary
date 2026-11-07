@@ -97,7 +97,7 @@
 /* Slicing, in Print from here: the slice's task log while it runs, then what it used.
    Quiet: small, scrolled, one line a value, the part's own in bold. */
 #print-card .slice-box { margin: 0.2rem 0 0.3rem; font-size: 0.74rem; color: var(--ink-2); }
-#print-card [hidden] { display: none !important; }
+#print-card [hidden], #level-card [hidden] { display: none !important; }
 #print-card .slice-box .bench-ui .task-log { max-height: 7rem; }
 #print-card .slice-said .slice-head { color: var(--ink); margin-bottom: 0.2rem; }
 #print-card .slice-said .bad { color: var(--bad); } #print-card .slice-said .warn { color: var(--warn); }

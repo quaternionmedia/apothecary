@@ -15,6 +15,8 @@ watched, the cut measured against the design, and the design changed and cut
 again. [docs/cam.md](../docs/cam.md) is the reference for the toolpath,
 [docs/cnc.md](../docs/cnc.md) for the router, and
 [the plan](../docs/plans/subtractive-loop-2026-11-04.md) for what comes next.
+[Page 24](24-a-cut-from-the-card.md) is the same cut from the page's Cut card, pictured
+step by step.
 
 ## The design: a coupon on the router's table
 

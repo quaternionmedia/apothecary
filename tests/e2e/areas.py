@@ -134,6 +134,8 @@ AREAS = {
             "walkthrough/screenshots/05-*",
             "walkthrough/20-*",
             "walkthrough/21-*",
+            "walkthrough/24-*",
+            "walkthrough/screenshots/24-*",
         ),
         "tests": (
             "test_one_machine.py",

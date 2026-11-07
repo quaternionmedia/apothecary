@@ -619,13 +619,14 @@ drawn the same way whichever took it.
 A printer's: **Read mesh** asks the board for its stored mesh (`M420 V`), the
 probe offset (`M851`) and the temperatures and keeps the three as a *bed
 reading*; it moves nothing and needs no latch. **Probe bed** homes and probes
-(`G28`, `G29`) and then reads; it needs the latch and runs as a job that
+(`G28`, `G29`) and then reads; it is offered once the latch is armed, and runs as a job that
 holds the port, during which polls answer from the last poll, queries and
 control lines get `409`, and E-STOP still goes through. Readings are kept
 under `~/.apothecary/leveling/` and drawn as a heatmap with the range, the
 tilt (a least-squares plane) and each corner against the mean, and as a
-relief over the printer's bed in the world. The corner buttons move the
-nozzle to paper height at each corner and are controls.
+relief over the printer's bed in the world. The corner buttons, offered with
+the probe once the latch is armed, move the nozzle to paper height at each
+corner and are controls.
 `firmware.gcode.parse_meshes` reads Marlin's printed grid and falls back to
 the `G29 W` points an `M503` prints.
 A print's start turns a stored mesh on only through the `stored-mesh` start
@@ -636,7 +637,7 @@ before each print instead ([the slicer's pieces](slicer.md#what-a-slice-is-compo
 
 A router's is a **table map**, its Machine's Table map window where a
 printer's has Bed level. A GRBL controller keeps no mesh, so **Probe table**
-makes one: it needs the latch and runs as the same job. The spindle is turned
+makes one: it is offered once the latch is armed, and runs as the same job. The spindle is turned
 off (`M5`) and the machine homed (`$H`), so machine coordinates mean the
 working area, which is the controller's own word, its maximum travel (`$$`),
 and the tool stands at the top of Z. Then at each point of a grid inside the
@@ -689,7 +690,12 @@ file with what it was kept for, and its ▶ stays refused. A file kept for a
 router is checked in GRBL's terms too ([docs/cnc.md](cnc.md)). **Slice**, beside **makes**, slices the part or piece chosen there for
 the printer and chooses the G-code it keeps, so Print follows Slice; a file a
 slice made says what it was sliced from and for which printer ([the
-slicer](slicer.md#in-the-page)). **Print** needs the latch and starts a job that sends one line per
+slicer](slicer.md#in-the-page)). The card shows each control once what it
+needs holds, in the loop's order: makes and Choose File are the two ways in;
+Slice is there once a part is chosen under makes, the files kept once there is
+one, Keep as plan once a part or a file is chosen, a chosen file's ✕, the
+preview and ▶ Print once a file is chosen, Pause and Cancel while a print runs,
+and Resume while it is paused. **Print** needs the latch and starts a job that sends one line per
 `ok`; a line unanswered for thirty seconds (heat-and-wait and home excepted),
 or answered with an error or a resend, ends the print. While it prints,
 heaters, fan and break-wait stay available; motion, SD, homing, the bed and

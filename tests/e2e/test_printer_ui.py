@@ -790,8 +790,10 @@ def test_a_bed_reading_needs_no_latch_and_a_probe_does(page: Page, fresh_url: st
     expect(page.locator("#level-history .pick.on")).to_contain_text("read")
     assert page.locator("#log .tx.control", has_text="G29").count() == 0
 
-    # A probe is refused while disarmed and never reaches the board.
-    page.locator("#level-probe").click()
+    # Disarmed, the probe is not offered, and one asked for all the same is refused
+    # before it reaches the board.
+    expect(page.locator("#level-probe")).to_be_hidden()
+    page.evaluate("() => window.apothecaryMachine.level.start(true)")
     expect(page.locator("#log .sys", has_text="arm control first")).to_be_visible(timeout=3000)
     assert page.locator("#log .tx.control", has_text="G29").count() == 0
 
@@ -799,6 +801,7 @@ def test_a_bed_reading_needs_no_latch_and_a_probe_does(page: Page, fresh_url: st
     # held for the duration, and the record appears when it is done.
     page.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
+    expect(page.locator("#level-probe")).to_be_visible()
     page.once("dialog", lambda d: d.accept())
     page.locator("#level-probe").click()
     expect(page.locator("#level-job")).to_contain_text("…", timeout=5000)
@@ -871,7 +874,7 @@ def test_a_file_is_kept_or_refused_and_nothing_leaves_disarmed(page: Page, print
     _identify(printer_url)
     _monitor(page, printer_url)
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
-    expect(page.locator("#print-start")).to_be_disabled()
+    expect(page.locator("#print-start")).to_be_hidden()
     page.locator("#print-file").set_input_files(
         {"name": "slow cube.gcode", "mimeType": "text/plain", "buffer": SLOW.encode()}
     )

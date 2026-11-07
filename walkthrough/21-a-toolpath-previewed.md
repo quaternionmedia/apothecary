@@ -5,7 +5,8 @@
 A print and a cut are the same thing to look at before it runs: where the tool goes,
 in what order, and what each move does. So there is one core, `apothecary/preview`, and
 two instantiations of it. [docs/toolpath-preview.md](../docs/toolpath-preview.md) is the
-reference; `tests/e2e/test_toolpath_preview.py` runs the page's side on both machines.
+reference; `tests/e2e/test_toolpath_preview.py` runs the page's side on both machines, and
+[page 24](24-a-cut-from-the-card.md) pictures it on the router's Cut card.
 
 ## One interpreter
 

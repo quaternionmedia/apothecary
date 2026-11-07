@@ -189,22 +189,22 @@ const CARDS = `
             <button type="button" id="print-delete" title="Forget the chosen file">✕</button>
             <input type="file" id="print-file" accept=".gcode,.gco,.g,.txt,text/plain">
         </div>
-        <div class="row"><label for="print-preview">preview</label>
+        <div class="row" id="print-preview-row"><label for="print-preview">preview</label>
             <input type="range" id="print-preview" min="0" max="1" step="1" value="0" title="The chosen file's path, drawn in the world on this machine: off at the left, then through each layer or pass, all of it at the right. Nothing is sent. Its ring's Preview turns it on and off">
             <span class="s" id="print-preview-said"></span>
         </div>
-        <div class="row"><label for="print-plan">plan</label>
+        <div class="row" id="print-plan-row"><label for="print-plan">plan</label>
             <button type="button" id="print-plan" title="Keep what it makes and the file chosen as this machine's plan: chosen again whenever its Machine opens, with its board connected or not. Nothing is sent">Keep as plan</button>
             <span class="s" id="print-plan-said"></span>
         </div>
-        <div class="row">
+        <div class="row" id="print-verbs">
             <button type="button" id="print-start" class="warm">▶ Send</button>
             <button type="button" id="print-pause">⏸ Pause</button>
             <button type="button" id="print-resume" title="Feed lines again (control must be armed)">▶ Resume</button>
             <button type="button" id="print-cancel">■ Cancel</button>
         </div>
-        <div class="row"><span id="print-progress" class="empty"></span><span class="grow"></span><span class="job" id="print-job"></span></div>
-        <div class="bar print"><i id="b-print" style="width:0"></i></div>
+        <div class="row" id="print-progress-row"><span id="print-progress"></span><span class="grow"></span><span class="job" id="print-job"></span></div>
+        <div class="bar print" id="print-bar"><i id="b-print" style="width:0"></i></div>
         <div id="print-slice-box" class="slice-box" hidden>
             <div class="bench-ui" id="print-slice-task"></div>
             <div id="print-slice-said" class="slice-said"></div>
@@ -884,6 +884,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const ttl = ctl.armed ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : "";
         $("ctl-ttl").textContent = ttl; $("ctl-ttl2").textContent = ttl;
         placePad();
+        renderLevelVerbs();
         clearInterval(ctl.timer); ctl.timer = null;
         if (ctl.armed) ctl.timer = setInterval(renderControl, 1000);
     }
@@ -1050,7 +1051,14 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const a = [0x6f, 0xb3, 0xe8], c2 = [0xe8, 0xb0, 0x4a];
         return `rgb(${a.map((c, i) => Math.round(c + (c2[i] - c) * t)).join(",")})`;
     }
+    // The probe and the corners move the machine, so they are there once control is
+    // armed; Read mesh moves nothing and is a printer's whenever its Machine is.
+    function renderLevelVerbs() {
+        $("level-probe").hidden = !ctl.armed;
+        for (const btn of $("level-card").querySelectorAll("button[data-corner]")) btn.hidden = !ctl.armed;
+    }
     function renderLevel() {
+        renderLevelVerbs();
         const rec = level.shown, w = words().level;
         const meshEl = $("mesh"), statsEl = $("level-stats");
         if (!rec || !rec.mesh || !rec.mesh.length) {
@@ -1255,30 +1263,46 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-slice-said").innerHTML = r ? sliceSaid(r) : "";
         $("print-slice-box").hidden = !r;
     }
+    // The card draws the step a person is at, in the loop's order, and each control
+    // after it once what it needs holds: makes and Choose File are the two ways in; a
+    // part chosen has its Slice or Toolpath; a file kept has the files, a file chosen
+    // its ✕, the preview, Keep as plan and ▶; a job running from here has Pause and
+    // Cancel, and Resume while it is paused; a job that ran has its progress. A control
+    // that is there and cannot go yet is disabled, and its tooltip says why.
     function renderPrint() {
         const job = prt.job, running = !!(job && job.running);
         const paused = running && job.stage === "paused";
-        const chosen = prt.files.find((f) => f.id === $("print-pick").value);
-        $("print-start").disabled = running || !chosen || !fits(chosen) || !state.port;
+        const picked = $("print-pick").value, part = $("print-part").value;
+        const chosen = prt.files.find((f) => f.id === picked);
+        $("print-pick").hidden = !prt.files.length;
+        $("print-delete").hidden = !picked;
+        $("print-delete").disabled = running && job.file_id === picked;
+        $("print-preview-row").hidden = !picked;
+        $("print-start").hidden = !picked;
+        $("print-start").disabled = running || !fits(chosen) || !state.port;
         $("print-start").title = !state.port && machineAt ? `${machineAt.path} has no board connected: its plan is made here, and ${words().start} is its board's once it is`
             : !chosen || fits(chosen) ? words().startTitle
             : `${chosen.name} was ${chosen.machine ? `kept for a ${chosen.machine}` : "kept for no kind of machine"}: it is sent to the kind it was kept for alone (Choose File keeps a file for this ${state.kind})`;
-        $("print-pause").disabled = !running || paused || (job.stage !== words().running && job.stage !== "finishing");
-        $("print-resume").disabled = !paused;
-        $("print-cancel").disabled = !running;
-        $("print-delete").disabled = !$("print-pick").value || (running && job.file_id === $("print-pick").value);
+        $("print-pause").hidden = !running || paused;
+        $("print-pause").disabled = !running || (job.stage !== words().running && job.stage !== "finishing");
+        $("print-resume").hidden = !paused;
+        $("print-cancel").hidden = !running;
+        $("print-verbs").hidden = !picked && !running;
         const slicerOk = !words().slice || !!(slc.status && slc.status.ok);
-        $("print-slice").disabled = slc.running || !$("print-part").value;
+        $("print-slice").hidden = !part;
+        $("print-slice").disabled = slc.running;
         $("print-slice").title = slicerOk
             ? words().prepareTitle
             : `No slicer: ${(slc.status && slc.status.why) || "asking"}. Panels › Bench › Install › OrcaSlicer installs it`;
-        if (job && (running || job.stage)) {
+        const went = !!(job && (running || job.stage));
+        $("print-progress-row").hidden = !went;
+        $("print-bar").hidden = !went;
+        if (went) {
             const pct = (job.progress * 100).toFixed(1);
-            $("print-progress").className = "";
             $("print-progress").textContent = `${job.name} · ${job.stage} · ${job.sent}/${job.total} lines (${pct}%) · ${fmtDur(job.elapsed_s)}` + (job.operation && running ? ` · ${job.operation}` : "") + (job.current && running ? ` · ${job.current}` : "") + (job.error ? ` · ${job.error}` : "");
             $("b-print").style.width = pct + "%";
         } else {
-            $("print-progress").className = "empty"; $("print-progress").textContent = words().idle; $("b-print").style.width = "0";
+            $("print-progress").textContent = ""; $("b-print").style.width = "0";
         }
         $("print-job").textContent = running ? `${job.stage}…` : "";
         $("print-history").innerHTML = prt.jobs.map(jobRow).join("");
@@ -1394,13 +1418,15 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         }
         renderPlan();
     }
+    // Keep as plan is there once there is something chosen to keep, and a kept plan is
+    // said; a Machine that stands for no machine's node has no plan, and no row.
     function renderPlan() {
         const said = $("print-plan-said"), button = $("print-plan");
-        button.disabled = !machineAt || (!$("print-part").value && !$("print-pick").value);
-        if (!machineAt) { said.textContent = "pinned in no machine's node"; return; }
-        const p = pl.plan;
+        const p = machineAt ? pl.plan : null;
+        button.hidden = !machineAt || (!$("print-part").value && !$("print-pick").value);
         const file = p && p.file_id ? (prt.files.find((f) => f.id === p.file_id) || { name: p.file_id }).name : null;
-        said.textContent = p ? `kept ${new Date(p.planned_at).toLocaleString()}: ${p.part || "no part named"}, ${file || "no file"}` : "none kept";
+        said.textContent = p ? `kept ${new Date(p.planned_at).toLocaleString()}: ${p.part || "no part named"}, ${file || "no file"}` : "";
+        $("print-plan-row").hidden = button.hidden && !p;
     }
     async function keepPlan() {
         if (!machineAt) { refuse("plan: this Machine stands for no machine's node"); return false; }

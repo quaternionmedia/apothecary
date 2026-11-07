@@ -59,7 +59,9 @@ so the last few are kept. 404 for no such file, 422 for a machine with no proces
 
 ## In the page
 
-The Print and Cut card has one slider, `preview`, and the ring's Control › Print or Cut ›
+The Print and Cut card has one slider, `preview`, there once a file is chosen
+([walkthrough page 24](../walkthrough/24-a-cut-from-the-card.md) pictures it on the
+router), and the ring's Control › Print or Cut ›
 Preview turns it on and off. At the left it is off, and nothing has been asked of the
 server. Moved off the left, the chosen file's path is drawn in the world on its machine:
 what makes the part in colour, moves through the air dim, through each layer or pass, all

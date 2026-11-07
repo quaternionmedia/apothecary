@@ -72,9 +72,9 @@ part, the variant drawn when it was one, its parameters, the router, the stock,
 the tool, the feeds, each operation with its passes, the lines, the length, the
 time, the messages, and the problems the check found.
 
-In the page, a router's Cut card has **Toolpath** where a printer's has Slice:
-what is chosen under *makes* gets its toolpath written for this router, kept
-and chosen, so ▶ Cut follows; what it holds is said under makes, each
+In the page, a router's Cut card has **Toolpath** where a printer's has Slice,
+there once a part is chosen under *makes*: that part gets its toolpath written
+for this router, kept and chosen, so ▶ Cut follows; what it holds is said under makes, each
 operation with its passes and every message. A part's ring offers Toolpath when
 the site has a router, as Slice is offered for a printer; it opens the router's
 Machine with the part chosen and writes it there. None of it needs the router's
