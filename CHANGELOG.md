@@ -126,6 +126,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Changed
 
+- A stack is tested and checked at its head: the whole suite runs here once, on the head of the stack being pulled, and the pull-request workflows other than the stack's own checks and the walkthrough run on a pull request into `main`, a stack's bottom when it opens and its head when it is marked ready, never on a level stacked on another or on a branch's push. ([doc](CONTRIBUTING.md#the-loop))
 - The bench checklist prepares the machines with nothing plugged in -- the state folder copied aside, both machines planned and checked -- then puts one machine on the port number another held, and carries the [setup review](docs/validation/2026-11-07-machine-setup.md)'s boxes: the Ender's corners, mesh, Z offset, PID and e-steps, and the router's `$$` settings, travel, homing, limits and probe. ([doc](docs/bench-checklist.md))
 - The header is one view banner: its title, the prototype pill, the site drop-down and the trail's root crumb are one trail, `🧪 Apothecary › garage ▾ › cnc_router`, the first crumb the universe, the site's crumb its own level and under ▾ the other sites. ([doc](docs/viewer.md#the-header))
 - The site `parts_library` is `apothecary`: `/viewer/sites/parts_library` and `/viewer/parts/{name}` go there, and a pin, a camera, a job and a procedure kept under the former name are read under the new one. ([code](apothecary/site_names.py))

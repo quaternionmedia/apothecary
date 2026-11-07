@@ -30,6 +30,9 @@ ON_A_PULL_REQUEST = {
 }
 # What runs the tests: at a version tag, and on demand.
 AT_A_TAG = {"pytest.yml", "docs-generate.yml", "rust.yml", "steps.yml"}
+# What runs on every level of a stack: the stack's own checks, and the walkthrough's
+# hermetic pages, which the corpus's walkthrough record runs on every pull request.
+ON_EVERY_LEVEL = {"integrates.yml", "one-pr-check.yml", "walkthrough.yml"}
 
 
 def _triggers(name: str) -> dict:
@@ -41,6 +44,28 @@ def _triggers(name: str) -> dict:
 def test_a_pull_request_runs_the_governance_checks_lint_and_the_walkthrough():
     pull = {p.name for p in WORKFLOWS.glob("*.yml") if "pull_request" in _triggers(p.name)}
     assert pull == ON_A_PULL_REQUEST
+
+
+def test_a_stack_is_checked_at_its_head_on_a_pull_request_into_main():
+    """A level stacked on another runs the stack's own checks and the walkthrough; the
+    rest run on a pull request into main -- the bottom when it opens, the head when it
+    is retargeted there and marked ready -- so a stack's tree is checked once, at its
+    head, which carries every level beneath it."""
+    for name in sorted(ON_A_PULL_REQUEST - ON_EVERY_LEVEL):
+        pull = _triggers(name)["pull_request"]
+        assert pull["branches"] == ["main"], name
+        assert "ready_for_review" in pull["types"], name
+    for name in sorted(ON_EVERY_LEVEL):
+        assert "branches" not in (_triggers(name)["pull_request"] or {}), name
+
+
+def test_no_push_but_main_s_or_a_tag_runs_a_workflow():
+    """A branch pushed for a pull request is checked by its pull request, not its push."""
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        push = _triggers(path.name).get("push", False)
+        if push is False:
+            continue
+        assert push in ({"branches": ["main"]}, {"tags": ["v*"]}), path.name
 
 
 def test_the_tests_run_at_a_version_tag_and_on_demand():
