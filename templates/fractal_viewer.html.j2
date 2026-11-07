@@ -7387,13 +7387,19 @@
                 this.setStatus(`Opened ${anchor || port}'s Machine: ⌗ Panels › Windows › Machine view lays out its sections`, 'success');
                 return true;
             }
+            // The piece the Machine view is asked of: the one selected, else the one
+            // stepped into, which is what the world is showing.
+            viewSubject() {
+                if (this.selectedName && this.selectedName !== FLOOR_KEY) return this.selectedName;
+                return this.focusPath.join('.') || null;
+            }
             // Why a view cannot be laid out now, or null. The Machine view needs a
-            // Machine: the one open, else the selected machine's, which it opens.
+            // Machine: the one open, else that of the piece it is asked of, which it opens.
             viewRefusal(id) {
                 const missing = this.panels.viewMissing(id);
                 if (!missing) return null;
                 if (id !== 'machine') return `it lays out ${missing.title}'s windows: open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ''}`;
-                const path = this.selectedName && this.selectedName !== FLOOR_KEY ? this.selectedName : null;
+                const path = this.viewSubject();
                 // How its subject is opened, in the registry's words (systems.py).
                 const how = `select a machine with a board pinned to it, or open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ''}`;
                 if (!path) return `no Machine is open and nothing is selected: ${how}`;
@@ -7407,11 +7413,11 @@
                 if (refused) return { refused: `Not now: ${refused}`, title: null };
                 if (id !== 'machine') return { refused: null, title: null };
                 const lands = 'its windows laid out together, and its chosen file\'s path drawn in the world';
-                return { refused: null, title: this.machine ? `The Machine: ${lands}` : `Opens ${this.selectedName}'s Machine: ${lands}` };
+                return { refused: null, title: this.machine ? `The Machine: ${lands}` : `Opens ${this.viewSubject()}'s Machine: ${lands}` };
             }
             // A view asked for, from ⊞ Windows or the ring's Panels › Windows: its windows
             // laid out together, and what came of it said. The Machine view opens the
-            // selected machine's Machine first when none is open, and lands on the
+            // Machine of the piece it is asked of first when none is open, and lands on the
             // file it would run (landOnPath). `label` is what was pressed, `tail` its
             // ring address. `viewDone` is the last one asked for, settled once it is said.
             openView(id, { label = null, tail = '' } = {}) {
@@ -7423,7 +7429,7 @@
                 const asked = label || (view ? `${view.title} view` : id);
                 const refused = view ? this.viewRefusal(id) : 'no such view';
                 if (refused) { this.setStatus(`${asked}: ${refused}${tail}`, 'error'); return false; }
-                if (id === 'machine' && !this.machine) this.openMachine(this.selectedName);
+                if (id === 'machine' && !this.machine) this.openMachine(this.viewSubject());
                 const registered = () => this.panels.list().filter((w) => w.registered).length;
                 const had = registered();
                 let done = this.panels.applyView(id);

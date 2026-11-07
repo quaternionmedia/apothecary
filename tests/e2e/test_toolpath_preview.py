@@ -361,6 +361,41 @@ def test_windows_machine_opens_the_selected_machine_and_lands_on_its_file_s_path
 
 
 @pytest.mark.e2e
+@pytest.mark.parametrize("kind", list(MACHINES))
+def test_windows_machine_lands_on_the_path_of_the_machine_stepped_into(
+    page: Page, url: str, kind: str
+):
+    """Double-clicked into, nothing selected: the machine stepped into is the one its
+    view opens, and its file's path is drawn and framed, still stepped in."""
+    machine = MACHINES[kind]
+    _keep_only(url, machine)
+    _selected(page, url, None)
+    page.locator(f"#contents-list .contents-item[data-path='{machine.node}']").dblclick()
+    expect(status(page)).to_contain_text(f"Stepped into {machine.node}")
+    assert not page.evaluate("() => window.fractalViewer.selectedName")
+    _from_windows(page)
+    expect(page.locator(f"{windows.MACHINE} > .machine.kind-{kind}")).to_be_attached(timeout=20000)
+    body = windows.machine(page)
+    expect(body.locator("#print-preview-said")).to_contain_text("all of it", timeout=10000)
+    assert _drawn(page, machine.node)["drawn"] == len(machine.expected.kind_of)
+    expect(status(page)).to_contain_text(
+        f"{machine.file}'s path is drawn on {machine.node} and framed"
+    )
+    assert page.evaluate("() => window.fractalViewer.focusPath.join('.')") == machine.node
+
+
+@pytest.mark.e2e
+def test_stepped_into_a_piece_with_no_board_the_machine_view_says_which(page: Page, url: str):
+    """The piece stepped into is what the view is asked of, and it has no board to open."""
+    _selected(page, url, None)
+    page.locator("#contents-list .contents-item[data-path='workbench']").dblclick()
+    expect(status(page)).to_contain_text("Stepped into workbench")
+    _from_windows(page)
+    expect(status(page)).to_contain_text("no Machine is open, and workbench has no board pinned")
+    assert page.evaluate("() => window.fractalViewer.machine") is None
+
+
+@pytest.mark.e2e
 def test_windows_machine_lands_on_the_path_in_a_site_reached_through_the_universe(
     page: Page, url: str
 ):

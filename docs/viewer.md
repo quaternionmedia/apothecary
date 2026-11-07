@@ -362,9 +362,10 @@ which the page, the ring and the tests all read.
 | Machine | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
 | Airgap | The Airgap and each of its sections in a window, the world among them |
 
-A view needs its main window. The Machine view opens the selected machine's
-Machine when none is open; with none to open it is offered greyed, and asked
-for, from ⊞ Windows or the ring, it says why and leaves the layout as it was.
+A view needs its main window. The Machine view opens the Machine of the machine
+selected, or else stepped into, when none is open; with none to open it is offered
+greyed, and asked for, from ⊞ Windows or the ring, it says why and leaves the layout
+as it was.
 Laid out, it lands on the file the machine would run: the path of the file its
 Print or Cut has chosen drawn in the world, all of it, and framed, the slider
 that goes through it beside it ([toolpath-preview.md](toolpath-preview.md#in-the-page));

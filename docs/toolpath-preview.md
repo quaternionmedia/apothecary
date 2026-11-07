@@ -72,9 +72,9 @@ shows before the cut does. In `apothecary serve --demo` the router's work zero i
 the coupon's stock, so the coupon's toolpath is drawn on the coupon.
 
 ⊞ Windows › Machine, and the ring's Panels › Windows › Machine view, land on it. The
-selected machine's Machine is opened when none is, its windows are laid out, the file its
-card has chosen is drawn, all of it, and the world is framed on the path; a slider a person
-left part way stays there. With no file of that machine's kept, the status line says how
+Machine of the machine selected, or else stepped into, is opened when none is, its windows
+are laid out, the file its card has chosen is drawn, all of it, and the world is framed on
+the path; a slider a person left part way stays there. With no file of that machine's kept, the status line says how
 one comes to be: Slice or Toolpath of a part chosen under makes, or Choose File.
 
 The files kept are every machine's. A card chooses the newest that was not made for the
