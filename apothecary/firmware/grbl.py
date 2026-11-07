@@ -30,7 +30,8 @@ import time
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Tuple
 
-from .gcode import SPINDLE_MAX_RPM, GcodeLink, LinkBusy, OutOfBounds, mesh_stats
+from . import gcode
+from .gcode import GcodeLink, LinkBusy, OutOfBounds, mesh_stats
 from .models import GRBL, BedReading, PrinterInfo, PrinterStatus, Spindle, TableGrid
 from .toolchains import ToolchainError
 
@@ -366,6 +367,7 @@ def normalise_query(command: str) -> str:
 # before the first line, by check_gcode below. Extend deliberately.
 JOG_MAX_MM = 600
 FEED_MAX = 4000
+SPINDLE_MAX_RPM = 24000  # the trim router's: what M3 may ask, typed or in a file
 PROBE_MAX_MM = 80
 PROBE_FEED_MAX = 500
 _AXES = r"(?: [XYZ]-?\d{1,3}(?:\.\d{1,3})?)"
@@ -423,7 +425,54 @@ def normalise_control(command: str) -> str:
 JOB_ALLOWS = re.compile(r"^(HOLD|RESUME|M5|M3 S\d+)$")
 
 
-# --- a streamed job: how long a line may take (what a file may carry is gcode.check_gcode) --
+# --- a streamed job: what a file may carry, and how long a line may take -------------------
+
+# The M codes a GRBL controller takes (Grbl 1.1's, and Grbl_ESP32's outputs). Any other
+# in a file kept for a router is a printer's: the controller answers it error:20, and
+# the cut stops at that line.
+M_CODES = {0, 1, 2, 3, 4, 5, 7, 8, 9, 30, 56, 62, 63, 67}
+# Longest a dwell may ask, in GRBL's unit, seconds: Marlin counts G4 P in milliseconds,
+# so a printer's half-second pause is eight minutes on a router.
+DWELL_MAX_S = 60.0
+CODE_RE = re.compile(r"^([GM])0*(\d+)(?:\.\d+)?$")
+DWELL_P_RE = re.compile(r"\bP(\d+(?:\.\d+)?)")
+SPINDLE_CODES = ("M3", "M4")
+SPINDLE_ARG_RE = re.compile(r"S(\d+(?:\.\d+)?)")
+
+
+def _objections(n: int, cmd: str, code: str) -> List[str]:
+    """Why a line of a router's file asks more of the spindle than the bound, or is
+    not GRBL's, if it does or is not."""
+    if code in SPINDLE_CODES:
+        m = SPINDLE_ARG_RE.search(cmd[len(code) :])
+        if m and float(m.group(1)) > SPINDLE_MAX_RPM:
+            return [f"line {n}: {code} asks for {m.group(1)} rpm, above {SPINDLE_MAX_RPM}"]
+    m = CODE_RE.match(code)
+    if m is None:
+        return []
+    letter, number = m.group(1), int(m.group(2))
+    if letter == "M" and number not in M_CODES:
+        return [
+            f"line {n}: {code} is not a GRBL code: the controller answers error:20 and the cut stops there"
+        ]
+    if letter == "G" and number == 29:
+        return [f"line {n}: {code} is a printer's bed probe, not a GRBL code"]
+    if letter == "G" and number == 4:
+        p = DWELL_P_RE.search(cmd[len(code) :])
+        if p and float(p.group(1)) > DWELL_MAX_S:
+            return [
+                f"line {n}: {code} P{p.group(1)} dwells {p.group(1)} s on GRBL, whose P is "
+                "seconds; a printer's file counts it in milliseconds"
+            ]
+    return []
+
+
+def check_gcode(text: str) -> Tuple[int, List[str]]:
+    """A router's file, checked in GRBL's terms (``gcode.check_file``): what every
+    dialect refuses, a spindle over the bound, a code GRBL does not take, a printer's
+    bed probe, and a dwell over a minute in GRBL's unit."""
+    return gcode.check_file(text, _objections)
+
 
 # A move is answered when it is queued, and the queue is fifteen moves deep: a
 # roughing pass of long slow moves holds the fifteenth's `ok` for as long as the

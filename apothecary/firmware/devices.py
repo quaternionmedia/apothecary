@@ -1346,7 +1346,7 @@ def save_print_file(name: str, data: bytes, machine: Optional[str] = None) -> Pr
     if machine is not None and machine not in dialects.BY_MACHINE:
         raise ValueError(f"no kind of machine is called {machine!r}")
     text = data.decode("utf-8", "replace")
-    total, problems = gcode.check_gcode(text, machine)
+    total, problems = dialects.by_machine(machine).check_file(text)
     at = datetime.now(timezone.utc)
     stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", Path(name).name).strip("_.") or "print"
     stem = re.sub(r"\.(gcode|gco|g|txt)$", "", stem, flags=re.IGNORECASE)[:60]

@@ -1043,7 +1043,6 @@ HOTEND_MAX_C = 300
 BED_MAX_C = 130
 JOG_MAX_MM = 300
 FEED_MAX = 12000
-SPINDLE_MAX_RPM = 24000  # the trim router on the garage's router (grbl.py bounds M3 by it)
 CONTROL_CODES: List[tuple] = [
     (re.compile(r"^M104 S(\d{1,3})$"), "hotend target"),
     (re.compile(r"^M140 S(\d{1,3})$"), "bed target"),
@@ -1270,7 +1269,7 @@ def read_bed(
 
 # Codes a streamed file is refused for, whatever else it says: they write the
 # board's settings or take it down, or wait for a hand, and neither a slicer nor
-# a CAM post needs them. One list for both dialects: a Marlin file carries no
+# a CAM post needs them. One list for every dialect: a Marlin file carries no
 # `$` line and a GRBL file no M500, and refusing each in both costs nothing.
 PRINT_REFUSED: Dict[str, str] = {
     "M500": "saves settings to EEPROM",
@@ -1283,17 +1282,6 @@ PRINT_REFUSED: Dict[str, str] = {
     "M6": "is a tool change: the host streams one tool",
 }
 TEMP_CODES = {"M104": HOTEND_MAX_C, "M109": HOTEND_MAX_C, "M140": BED_MAX_C, "M190": BED_MAX_C}
-# The M codes a GRBL controller takes (Grbl 1.1's, and Grbl_ESP32's outputs). Any other
-# in a file kept for a router is a printer's: GRBL answers it error:20, and the cut
-# stops at that line.
-GRBL_M_CODES = {0, 1, 2, 3, 4, 5, 7, 8, 9, 30, 56, 62, 63, 67}
-# Longest a dwell in a router's file may ask, in GRBL's unit, seconds: Marlin counts
-# G4 P in milliseconds, so a printer's half-second pause is eight minutes on a router.
-GRBL_DWELL_MAX_S = 60.0
-CODE_RE = re.compile(r"^([GM])0*(\d+)(?:\.\d+)?$")
-DWELL_P_RE = re.compile(r"\bP(\d+(?:\.\d+)?)")
-SPINDLE_CODES = ("M3", "M4")
-SPINDLE_ARG_RE = re.compile(r"S(\d+(?:\.\d+)?)")
 COMMENT_RE = re.compile(r";.*$|\([^)]*\)")
 TEMP_ARG_RE = re.compile(r"[SR](\d+(?:\.\d+)?)")
 # Lines the firmware answers only when it is done: heating, homing, probing, a dwell.
@@ -1312,15 +1300,18 @@ def line_timeout(cmd: str) -> float:
     return PRINT_SLOW_TIMEOUT_S if code in SLOW_CODES else PRINT_LINE_TIMEOUT_S
 
 
-def check_gcode(text: str, machine: Optional[str] = None) -> Tuple[int, List[str]]:
-    """How many lines a file would send, and every reason it may not be sent.
+# What a dialect objects to in a line of a file, beyond what every dialect refuses:
+# (the line's number, the command, its code) -> the reasons, each naming its line.
+Objections = Callable[[int, str, str], List[str]]
 
-    A reason names its line. Refused codes and temperatures over the seam's
-    caps are the two: the same bounds as a typed control, applied once to
-    the whole file rather than line by line as it streams. A file kept for a
-    router (``machine``) is checked in GRBL's terms as well: a code GRBL does not
-    take, and a dwell over a minute in its unit, are refused.
-    """
+
+def check_file(text: str, objections: Objections) -> Tuple[int, List[str]]:
+    """How many lines a file would send, and every reason it may not be sent: the
+    codes no streamed file carries, a controller setting, and what the file's
+    dialect objects to (``objections``: Marlin's are ``check_gcode``'s, GRBL's
+    ``grbl.check_gcode``'s). A reason names its line. The bounds are a typed
+    control's, applied once to the whole file rather than line by line as it
+    streams; the check stops after twenty reasons."""
     total = 0
     problems: List[str] = []
     for n, raw in enumerate(text.splitlines(), 1):
@@ -1333,46 +1324,26 @@ def check_gcode(text: str, machine: Optional[str] = None) -> Tuple[int, List[str
             problems.append(f"line {n}: {cmd[:12]} is a controller setting, not a job's to send")
         elif code in PRINT_REFUSED:
             problems.append(f"line {n}: {code} {PRINT_REFUSED[code]}")
-        elif code in TEMP_CODES:
-            m = TEMP_ARG_RE.search(cmd[len(code) :])
-            if m and float(m.group(1)) > TEMP_CODES[code]:
-                problems.append(
-                    f"line {n}: {code} asks for {m.group(1)} degC, above {TEMP_CODES[code]}"
-                )
-        elif code in SPINDLE_CODES:
-            m = SPINDLE_ARG_RE.search(cmd[len(code) :])
-            if m and float(m.group(1)) > SPINDLE_MAX_RPM:
-                problems.append(
-                    f"line {n}: {code} asks for {m.group(1)} rpm, above {SPINDLE_MAX_RPM}"
-                )
-        if machine == "router":
-            problems.extend(_not_grbl(n, cmd, code))
+        problems.extend(objections(n, cmd, code))
         if len(problems) >= 20:
             problems.append("... and the check stopped here")
             break
     return total, problems
 
 
-def _not_grbl(n: int, cmd: str, code: str) -> List[str]:
-    """Why a line of a router's file is not GRBL's, if it is not."""
-    m = CODE_RE.match(code)
-    if m is None:
-        return []
-    letter, number = m.group(1), int(m.group(2))
-    if letter == "M" and number not in GRBL_M_CODES:
-        return [
-            f"line {n}: {code} is not a GRBL code: the controller answers error:20 and the cut stops there"
-        ]
-    if letter == "G" and number == 29:
-        return [f"line {n}: {code} is a printer's bed probe, not a GRBL code"]
-    if letter == "G" and number == 4:
-        p = DWELL_P_RE.search(cmd[len(code) :])
-        if p and float(p.group(1)) > GRBL_DWELL_MAX_S:
-            return [
-                f"line {n}: {code} P{p.group(1)} dwells {p.group(1)} s on GRBL, whose P is "
-                "seconds; a printer's file counts it in milliseconds"
-            ]
+def _objections(n: int, cmd: str, code: str) -> List[str]:
+    """A temperature over the seam's caps, Marlin's one objection to a line."""
+    if code in TEMP_CODES:
+        m = TEMP_ARG_RE.search(cmd[len(code) :])
+        if m and float(m.group(1)) > TEMP_CODES[code]:
+            return [f"line {n}: {code} asks for {m.group(1)} degC, above {TEMP_CODES[code]}"]
     return []
+
+
+def check_gcode(text: str) -> Tuple[int, List[str]]:
+    """A printer's file, checked in Marlin's terms (``check_file``): what every
+    dialect refuses, and a temperature over the caps."""
+    return check_file(text, _objections)
 
 
 CONTROL_TTL_S = 300.0  # a latch that nobody touches for this long disarms itself

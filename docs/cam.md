@@ -24,7 +24,7 @@ from its parameters as `Params` reads them:
 - **The tool**: one end mill, its diameter and flutes; the default is a 6 mm
   two-flute.
 - **The feeds**: along a cut, straight down, and the spindle's speed, each
-  bounded by the router's figures (`grbl.FEED_MAX`, `gcode.SPINDLE_MAX_RPM`),
+  bounded by the router's figures (`grbl.FEED_MAX`, `grbl.SPINDLE_MAX_RPM`),
   so a declaration past them is refused before anything is written.
 - **The operations**, in the order they are made: a `Pocket` (a rectangle at
   a corner, a depth), a `Hole` (a centre, a diameter, a depth), an `Outline`
@@ -57,7 +57,7 @@ the tool up and back over the zero, and `M30`.
   into the spoilboard, and says so.
 
 Every move is written with its feed, so the controller's bounds and the seam's
-(`gcode.check_gcode`, the same check a file a CAM post wrote gets) hold on
+(`grbl.check_gcode`, the same check a file a CAM post wrote gets) hold on
 every line; the toolpath's bounds, its length along the cuts and its time at
 the feeds written are recorded with it. What it leaves out or changes is its
 `messages`.

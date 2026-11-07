@@ -172,11 +172,12 @@ def test_the_controller_s_numbers_have_words():
 
 def test_a_streamed_file_may_not_carry_settings_tool_changes_or_a_fast_spindle():
     text = "G21 G90\n$110=4000\nM6 T1\nM3 S30000\nM0\nG1 X10 F800\nS12000 M3\nM5\nM30\n"
-    total, problems = gcode.check_gcode(text)
+    total, problems = grbl.check_gcode(text)
     assert total == 9
     assert problems == [
         "line 2: $110=4000 is a controller setting, not a job's to send",
         "line 3: M6 is a tool change: the host streams one tool",
+        "line 3: M6 is not a GRBL code: the controller answers error:20 and the cut stops there",
         "line 4: M3 asks for 30000 rpm, above 24000",
         "line 5: M0 stops and waits for a button on the machine",
     ]

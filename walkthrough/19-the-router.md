@@ -71,12 +71,12 @@ its own, and the rest is refused before it reaches the port:
     ...
     apothecary.firmware.gcode.OutOfBounds: spindle above 24000 rpm: 'M3 S30000'
 
-A file a CAM post wrote is checked once before its first line, with the
-same list a printer's is checked against and the router's own: a controller
-setting, a tool change or a spindle over the cap keep it from being sent.
+A file a CAM post wrote is checked once before its first line, in the router's
+dialect: what every dialect refuses and what GRBL's own rules do, so a controller
+setting, a tool change, a code GRBL does not take or a spindle over the cap keep
+it from being sent.
 
-    >>> from apothecary.firmware import gcode
-    >>> gcode.check_gcode("G21 G90\n$110=5000\nM3 S12000\nG1 X-50 F800\nM5\n")
+    >>> grbl.check_gcode("G21 G90\n$110=5000\nM3 S12000\nG1 X-50 F800\nM5\n")
     (5, ["line 2: $110=5000 is a controller setting, not a job's to send"])
 
 ## The simulated controller
@@ -87,6 +87,7 @@ and the top of Z, as a Grbl machine homed to its maximum switches has them,
 so the tool stands in the working area at `mpos + travel`: here the middle
 of the table, where the part draws it.
 
+    >>> from apothecary.firmware import gcode
     >>> links = gcode.PrinterLinks(factory=grbl.SimulatedRouter)
     >>> link = links.open("/dev/ttySIM", 115200)
     >>> link._t.time_scale = 0   # its moves take no time on this page

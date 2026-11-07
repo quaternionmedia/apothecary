@@ -54,7 +54,7 @@ def test_the_coupons_toolpath_is_checked_clean_and_names_each_operation():
     cuts = COUPON.cuts()
     assert isinstance(cuts, Cuts) and cuts.stock.x == 140 and cuts.stock.y == 100
     written = toolpath.write(cuts, "router_coupon")
-    total, problems = gcode.check_gcode(toolpath.text(written))
+    total, problems = grbl.check_gcode(toolpath.text(written))
     assert problems == [] and total == len([ln for ln in written.lines if not ln.startswith("(")])
     assert [o.kind for o in written.operations] == ["pocket", "hole", "hole", "outline"]
     assert all(o.cut for o in written.operations)
@@ -111,7 +111,7 @@ def test_feeds_are_bounded_by_the_router_s_figures():
     with pytest.raises(ValueError):
         Feeds(cut=grbl.FEED_MAX + 1)
     with pytest.raises(ValueError):
-        Feeds(rpm=gcode.SPINDLE_MAX_RPM + 1)
+        Feeds(rpm=grbl.SPINDLE_MAX_RPM + 1)
 
 
 # --- kept, recorded, offered --------------------------------------------------------
