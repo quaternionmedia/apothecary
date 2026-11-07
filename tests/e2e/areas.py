@@ -219,6 +219,8 @@ AREAS = {
             "apothecary/family/*",
             "apothecary/routes/procedures.py",
             "apothecary/static/widgets/procedure.*",
+            "walkthrough/25-*",
+            "walkthrough/screenshots/25-*",
         ),
         "tests": ("test_procedure_window.py",),
     },

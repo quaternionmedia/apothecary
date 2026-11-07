@@ -1,8 +1,8 @@
 # The family's journeys through the viewer: a plan
 
-*A plan, dated. Built: slices 1 and 2, less text and the card that surfaces its
-next step. Each slice is one branch of a local
-stack, built in the order listed once the owner says yes to it.*
+*A plan, dated. Built: slices 1 to 3, less text, the card that surfaces its next
+step, and a step and a member as doors. Each slice is one branch of a local stack,
+built in the order listed once the owner says yes to it.*
 
 ## What this plans
 

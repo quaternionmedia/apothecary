@@ -6,7 +6,8 @@ What the irl family fires is a step of a procedure: the steps that bring a site'
 blueprint into working order, each sitting on a node and carrying what each member is
 handed when it fires. A step waits for a person's GO. [docs/family.md](../docs/family.md)
 is the reference, and `tests/test_family_procedures.py` runs the same with a machine
-and a board on the simulated bench.
+and a board on the simulated bench. [Page 25](25-a-procedure-through-the-window.md) is
+the same procedure through the page's Procedure window, pictured step by step.
 
     >>> import os, tempfile
     >>> before = os.environ.get("APOTHECARY_STATE_DIR")

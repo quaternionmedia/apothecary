@@ -506,6 +506,17 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a button that starts a procedure over, what came before staying in the log",
     ),
+    "procedure-node": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a step's node, a button that opens the window its work is in: a Machine, or Pictures",
+    ),
+    "procedure-member": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a member's name, a button that opens the window of the node its next step names, "
+        "or its own page beside the hub",
+    ),
     # ---- Settings, apothecary/static/widgets/settings.js -------------------
     # Every shortcut and navigation setting: one row each, its default shown and a
     # reset beside it, and Reset all. They change how the page takes a press, not
@@ -614,9 +625,11 @@ RING_BACKED: Dict[str, str] = {
     "models:click:closest": "models:ask",
     "models-word": "models:say:colour:red",
     "models:keydown:closest": "models:say:colour:red",
-    # GO and Start over are the cells of Panels › Site › Procedure
+    # GO and Start over are the cells of Panels › Site › Procedure; a step's node opens
+    # the window its ring's Device › Open does
     "procedure-go": "procedure:go",
     "procedure-again": "procedure:again",
+    "procedure-node": "device:open",
     "procedure:click:closest": "procedure:go",
     # the Airgap's verbs are the cells of Panels › Airgap
     "airgap-play": "airgap:play",
@@ -1127,7 +1140,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "the Cut or Print card's preview slider, drawing a file's toolpath in the world",
     ),
-    "procedure:click:closest": (WIDGET, WHAT_IS_THERE, "GO or Start over"),
+    "procedure:click:closest": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "GO or Start over, a step's node or a member's name",
+    ),
     "procedure:change:closest": (WIDGET, WHAT_YOU_SEE, "the procedure chosen"),
     "models:click:closest": (WIDGET, WHAT_IS_THERE, "Ask, about the shape chosen on a mat"),
     "models:change:closest": (WIDGET, WHAT_IS_THERE, "an origin's tick-box, switching it"),

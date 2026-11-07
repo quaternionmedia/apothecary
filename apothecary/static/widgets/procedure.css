@@ -34,3 +34,10 @@
 .procedure-ui .is-refused .procedure-status, .procedure-ui .is-failed .procedure-status,
 .procedure-ui .is-refused .procedure-why, .procedure-ui .is-failed .procedure-why { color: var(--bad); }
 .procedure-ui .is-waiting .name { color: var(--ink-2); font-weight: 400; }
+/* A door: a step's node, or a member's name, pressed to open the window its work is in. */
+.procedure-ui button.procedure-node, .procedure-ui button.procedure-member {
+    background: none; border: none; border-radius: 0; padding: 0; font: inherit; color: inherit;
+    text-decoration: underline dotted var(--ink-3); text-underline-offset: 0.15em;
+}
+.procedure-ui button.procedure-node:hover, .procedure-ui button.procedure-member:hover { color: var(--ink); text-decoration-color: var(--ink); }
+.procedure-ui .meta .procedure-node { color: var(--ink-2); }

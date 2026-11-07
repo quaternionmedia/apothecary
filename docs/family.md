@@ -135,6 +135,17 @@ predecessor has fired, once the evidence it names is in. GO is in the **Procedur
 window, ⊞ Windows › Procedure, which says who the family is and how each step stands.
 `apothecary serve --demo` starts with one, `bring-up`, on the garage's simulated bench.
 
+The window leads to where each step's work is. A step's node is a door: pressed, the
+node's window opens, a machine's or a board's Machine or a camera's Pictures, or the
+status line says why it cannot. A step fired opens the section its member works in,
+where that Machine is open: a machine's step the Status, a board's flash the Flashing,
+its expect the Log; a Machine not open is not opened by a fire. A refused or failed
+step keeps the member's words, with the node's door right after them, so a machine's
+latch is one press away. A member's name is a door too: a member hosted here to the
+window of the node its next step names, a member beside the hub to its own page in a
+new tab; a pull member leads nowhere. GO never arms a latch.
+[Walkthrough page 25](../walkthrough/25-a-procedure-through-the-window.md) pictures it.
+
 | Status | What it means |
 |---|---|
 | waiting | For the step before it, or for its evidence; `why` says which |

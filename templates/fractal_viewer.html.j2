@@ -1751,6 +1751,8 @@
                         this.procedure = mountProcedure(slot, {
                             base: BASE_URL, siteName: () => this.siteName,
                             log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                            // A step's node, or the node a member works on next, as a door.
+                            open: (node, section = null) => this.openProcedureNode(node, section),
                         });
                         window.apothecaryProcedure = this.procedure;
                         this.procedure.shown();
@@ -7350,6 +7352,38 @@
                 }
                 const anchor = row.device.printer ? this.bearerPathFor(row.path) : row.path;
                 return this.showMachine(port, anchor, row);
+            }
+            // The Procedure's door to a step's node, `site:path`: the node selected and its
+            // window opened, as a badge opens its Machine -- a camera's Pictures, a machine's
+            // or a board's Machine -- or why not, said. With `section`, that section of the
+            // node's Machine where it is open, and nothing where it is not: a step fired
+            // opens no Machine, the node's door does. A node whose board is not connected
+            // is asked of the boards once more before the door says so: a member may have
+            // flashed or pinned it since the page last looked.
+            async openProcedureNode(node, section = null) {
+                const at = String(node || '').indexOf(':');
+                const site = at < 0 ? this.siteName : node.slice(0, at);
+                const path = at < 0 ? String(node || '') : node.slice(at + 1);
+                if (!path) return false;
+                if (site !== this.siteName) {
+                    if (!section) this.setStatus(`${node} is in ${site}, not ${this.siteName}: the banner's ▾ opens ${site}`, 'error');
+                    return false;
+                }
+                if (section) return this.machineOpenFor(path) ? this.panels.open(section) : false;
+                const pinned = this.bindingFor(path).row;
+                if (!(pinned && pinned.device && pinned.device.port)) await this.boards.scan();
+                const found = this.renderNodeByKey[path];
+                if (found) this.selectPath(path);
+                if (found && this.isCameraNode(found)) { this.panels.open('pictures'); return true; }
+                return this.openMachine(path);
+            }
+            // Whether the Machine open is this path's: the machine it stands for, or the
+            // board pinned at it or inside it.
+            machineOpenFor(path) {
+                if (!this.machine) return false;
+                if (this.machine.path === path) return true;
+                const { row } = this.bindingFor(path);
+                return !!(row && row.device && row.device.port && this.machine.port === row.device.port);
             }
             // The site's machines (machine_plans.py), asked with the site.
             async loadMachinesHere(name) {
