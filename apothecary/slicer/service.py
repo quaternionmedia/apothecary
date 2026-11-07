@@ -277,7 +277,7 @@ def slice_into(
         f"Slicing {target.made.kind} {target.made.name} for {printer.at.name} "
         f"({printer.profile.file}) with {module.label} {status.tool.version}"
     )
-    resolved = module.settings(printer.profile, target.declared)
+    resolved = module.settings(printer.profile, target.declared, port=printer.at.port)
     if target.declared.note:
         resolved.settings.insert(
             0,

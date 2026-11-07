@@ -159,12 +159,16 @@ one machine on the number another held; nothing in them moves a machine.
       Apothecary never writes the printer's EEPROM; to keep a mesh across a
       power cycle, store it from the printer's own screen.
 - [ ] Bed **60** → Set, the target reached, then **▤ Probe bed**: the range
-      under 0.3 mm; note the centre against the corners.
+      under the printer's profile's bound (`measured.mesh_range_bound` in
+      `parts/ender3/slicer.json`); note the centre against the corners.
 - [ ] Store the mesh from the printer's screen (Configuration › Store
       Settings), power-cycle the printer, then **Read mesh**: the record is the
       probed mesh.
 - [ ] After a probe, **Home all**, then **Read mesh**: leveling on or off. Off
       means a print with a mesh needs the stored-mesh start piece.
+- [ ] Before naming `stored-mesh`: **▤ Probe bed** once more, warm, after
+      the store: the piece reads the newest reading, which must be a probe
+      under the bound.
 - [ ] The world: the relief over `printer_1`'s bed is the newest reading, and
       nothing of the printer's lies over the router's table.
 
@@ -195,6 +199,10 @@ one machine on the number another held; nothing in them moves a machine.
       estimate of time and filament.
 - [ ] Before printing it, read the G-code's start in the card's file list
       (or the kept file): `G28` before the first extrusion, nothing added to Z.
+- [ ] With `stored-mesh` named after `home` in the profile's `start.modules`,
+      Slice again: `M420 S1` on the line after the last `G28`; with the newest
+      reading a read, or a probe over the bound, the slice is refused saying
+      which.
 - [ ] With filament loaded: **▶ Print** it, and watch the first layer. Note
       any stutter on long straight moves.
 - [ ] A one-layer square: the Z offset set on the printer's screen to it, and

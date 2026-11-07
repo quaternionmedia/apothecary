@@ -68,5 +68,6 @@ def test_slicer_status_puts_its_stubs_under_planned(fake_orcaslicer):
     shown = CliRunner().invoke(cli, ["slicer", "status"]).output
     built, planned = shown.split("Planned, not built:")
     assert "start home:" in built.split("A slice is composed from:")[1]
-    assert "start stored-mesh:" in planned and "stored-mesh" not in built
+    assert "start stored-mesh:" in built and "start probe-each-print:" in built
+    assert "start first-layer-offset:" in planned and "first-layer-offset" not in built
     assert "(a stub)" not in shown

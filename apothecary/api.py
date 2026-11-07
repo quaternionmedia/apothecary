@@ -2356,7 +2356,29 @@ def _printer_to_slice_for(
     node = _find_node_by_path(site, path)
     if node is None or not node.part_ref:
         return None
+    if port is None:
+        port = _port_pinned_under(site_name, path)
     return SlicedFor(part=node.part_ref, name=node.name, site=site_name, path=path, port=port)
+
+
+def _port_pinned_under(site_name: str, path: str) -> Optional[str]:
+    """The port the board pinned at ``path`` in ``site_name``, or beneath it (a
+    printer's pin is its board's, under the status bearer), is on now; None with
+    no pin there, or with that board unplugged. The levelling start pieces read a
+    board's bed readings by its port (``slicer/compose.py``)."""
+    state = firmware_devices.get_state()
+    pins = [b for b in state.bindings(site_name) if b.path == path or b.path.startswith(path + ".")]
+    if not pins:
+        return None
+    try:
+        plugged = firmware_devices.detected_devices(state=state)
+    except ToolchainError:
+        return None
+    for binding in pins:
+        on_port = device_for_identity(binding.identity, plugged, binding.kind)
+        if on_port is not None:
+            return on_port.port
+    return None
 
 
 def _the_printer_in(site_name: str, site: Assembly) -> Optional[str]:

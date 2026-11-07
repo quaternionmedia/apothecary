@@ -616,6 +616,11 @@ relief over the printer's bed in the world. The corner buttons move the
 nozzle to paper height at each corner and are controls.
 `firmware.gcode.parse_meshes` reads Marlin's printed grid and falls back to
 the `G29 W` points an `M503` prints.
+A print's start turns a stored mesh on only through the `stored-mesh` start
+piece (`M420 S1` after `G28`; whether `G28` leaves a mesh on is the
+firmware's, the bench checklist's D), named in the printer's slicer profile and refused unless the board's
+newest reading is a probe under the profile's bound; `probe-each-print` probes
+before each print instead ([the slicer's pieces](slicer.md#what-a-slice-is-composed-from)).
 
 A router's is a **table map**, its Machine's Table map window where a
 printer's has Bed level. A GRBL controller keeps no mesh, so **Probe table**

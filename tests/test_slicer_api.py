@@ -83,13 +83,13 @@ def test_the_status_says_each_slicer_the_one_used_and_the_printers(fake_orcaslic
     pieces = {(p["kind"], p["id"]): p for p in body["pieces"]}
     assert not pieces[("start", "home")]["stub"] and not pieces[("filament", "printer")]["stub"]
     for stub in (
-        ("start", "stored-mesh"),
-        ("start", "probe-each-print"),
         ("start", "first-layer-offset"),
         ("filament", "choose"),
         ("declared", "word-print-settings"),
     ):
         assert pieces[stub]["stub"] and pieces[stub]["does"], stub
+    for built in (("start", "stored-mesh"), ("start", "probe-each-print")):
+        assert not pieces[built]["stub"] and pieces[built]["does"], built
     assert "M420 S1" in pieces[("start", "stored-mesh")]["does"]
     assert "G29" in pieces[("start", "probe-each-print")]["does"]
 
@@ -345,6 +345,26 @@ def test_a_site_named_alone_slices_for_its_one_printer(fake_orcaslicer, parts_bu
     done = _slice({"part": "calibration_cube", "site": "garage"})
     assert done["status"] == "succeeded", done["lines"]
     assert done["slice"]["record"]["printer"]["path"] == "printer_1"
+
+
+def test_a_slice_for_a_sites_printer_names_the_port_its_pinned_board_is_on(
+    fake_orcaslicer, parts_built, monkeypatch
+):
+    """The levelling start pieces read a board's bed readings by its port: a slice for
+    a site's printer names the port the board pinned under it is on, and none while
+    that board is unplugged."""
+    from apothecary.firmware.models import DeviceInfo
+
+    devices.get_state().set_binding("garage", BOARD, "A106ZTEU")
+    plugged: list = []
+    monkeypatch.setattr(devices, "detected_devices", lambda *a, **k: list(plugged))
+    done = _slice({"part": "calibration_cube", "site": "garage", "printer": "printer_1"})
+    assert done["status"] == "succeeded", done["lines"]
+    assert done["slice"]["record"]["printer"]["port"] is None
+    plugged.append(DeviceInfo(port="/dev/ttyFAKE1", serial_number="A106ZTEU"))
+    done = _slice({"part": "calibration_cube", "site": "garage"})
+    assert done["status"] == "succeeded", done["lines"]
+    assert done["slice"]["record"]["printer"]["port"] == "/dev/ttyFAKE1"
 
 
 def _piece_in(garage, monkeypatch):

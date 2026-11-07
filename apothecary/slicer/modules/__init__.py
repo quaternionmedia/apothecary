@@ -143,11 +143,16 @@ class SlicerModule(ABC):
         """Fetch and put in place the pinned release, then say where it stands."""
 
     @abstractmethod
-    def settings(self, profile: "PrinterProfile", declared: "Declared") -> Resolved:
+    def settings(
+        self, profile: "PrinterProfile", declared: "Declared", port: Optional[str] = None
+    ) -> Resolved:
         """Every value a slice of ``declared``'s part on ``profile``'s printer uses
         that the answer shows, with where it came from: the part's declared print
-        settings, the printer's profile filling the rest. Raises SlicerError for a
-        part that asks what the printer cannot do."""
+        settings, the printer's profile filling the rest. ``port`` is the one the
+        printer's board is on, when the slice knows it: what a start piece that
+        reads the board's bed readings stands on. Raises SlicerError for a part
+        that asks what the printer cannot do, and for a start piece whose
+        precondition fails."""
 
     @abstractmethod
     def slice(self, model: Path, resolved: Resolved, work: Path) -> Plan:

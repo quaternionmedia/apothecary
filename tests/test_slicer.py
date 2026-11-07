@@ -483,10 +483,14 @@ def test_the_composed_start_reaches_the_gcode(fake_orcaslicer):
 @pytest.mark.parametrize(
     "kind, named, said",
     [
-        ("start", ["home", "stored-mesh"], "'stored-mesh' is a stub, not built yet"),
-        ("start", ["home", "probe-each-print"], "what it will do: after G28, probe the bed"),
-        ("start", ["home", "first-layer-offset"], "'first-layer-offset' is a stub"),
-        ("start", ["stored-mesh", "home"], "is a stub"),
+        ("start", ["home", "first-layer-offset"], "'first-layer-offset' is a stub, not built yet"),
+        (
+            "start",
+            ["home", "first-layer-offset"],
+            "what it will do: raise or lower the first layer",
+        ),
+        ("start", ["stored-mesh", "home"], "a start begins with 'home'"),
+        ("start", ["home", "probe-each-print", "probe-each-print"], "a start piece is named once"),
         ("start", [], "a start begins with 'home'"),
         ("start", ["home", "levelling"], "no start piece 'levelling'"),
         ("filament", ["choose"], "the filament piece 'choose' is a stub"),
@@ -519,16 +523,190 @@ def test_every_piece_says_what_it_does_and_the_stubs_are_the_ones_decided():
 
     assert [(p.kind, p.id) for p in compose.pieces() if not p.stub] == [
         ("start", "home"),
+        ("start", "stored-mesh"),
+        ("start", "probe-each-print"),
         ("filament", "printer"),
     ]
     assert {(p.kind, p.id) for p in compose.pieces() if p.stub} == {
-        ("start", "stored-mesh"),
-        ("start", "probe-each-print"),
         ("start", "first-layer-offset"),
         ("filament", "choose"),
         ("declared", "word-print-settings"),
     }
     assert all(p.does for p in compose.pieces())
+
+
+# --- the levelling pieces: the stored mesh turned on, and a probe before each print ------
+
+PORT = "/dev/ttyFAKE1"
+BOARD = "MADEUPENDER1"  # the printer's mainboard by its USB bridge's serial number
+
+
+def _printer_on(port: str = PORT) -> None:
+    """The record an identification of the printer's mainboard leaves on ``port``: a
+    port's readings are the readings of the board on it (``devices.leveling_records``)."""
+    from datetime import datetime, timezone
+
+    from apothecary.firmware.models import DeviceInfo, PrinterInfo
+
+    printer = PrinterInfo(
+        firmware_name="Marlin TH3D UFW 2.94a",
+        dialect="marlin",
+        machine="printer",
+        identified_at=datetime.now(timezone.utc),
+    )
+    devices.get_state().remember_device(
+        DeviceInfo(port=port, vid="0x0403", pid="0x6001", serial_number=BOARD, printer=printer)
+    )
+
+
+def _reading(board: str, method: str, range_mm: float, at: str) -> str:
+    """A bed reading ``board`` took on ``PORT``, kept as a reading is; its id."""
+    from apothecary.firmware.models import LevelingRecord
+
+    stamp = at[:19].replace("-", "").replace(":", "")
+    record = LevelingRecord(
+        id=f"{stamp}-{board}",
+        port=PORT,
+        at=at,
+        method=method,
+        mesh=[[0.0, range_mm], [0.0, 0.0]],
+        stats={"range": range_mm},
+        firmware="Marlin TH3D UFW 2.94a",
+        board=board,
+        machine="printer",
+    )
+    devices._save_leveling(record)
+    return record.id
+
+
+def _start(*modules: str):
+    """printer_1's profile with its start composed from ``modules``."""
+    profile = load_profile("ender3")
+    profile.start = profile.start.model_copy(update={"modules": list(modules)})
+    return profile
+
+
+def test_the_stored_mesh_goes_on_after_homing_when_the_boards_newest_reading_is_a_probe_under_the_bound(
+    fake_orcaslicer,
+):
+    """M420 S1 on the line after G28, which turns levelling off, only when the board's
+    newest reading is a probe whose range is under the bound the profile holds: a
+    reading of what the board stores (M420 V) does not say the bed is that, and a bed
+    further out than the bound is trammed, not corrected."""
+    _printer_on()
+    _reading(BOARD, "read", 2.34, "2026-11-07T09:00:00+00:00")
+    _reading(BOARD, "probe", 0.25, "2026-11-07T10:00:00+00:00")
+    resolved = get_module("orcaslicer").settings(
+        _start("home", "stored-mesh"), Declared(by="part x"), port=PORT
+    )
+    lines = resolved.configs["machine"]["machine_start_gcode"].splitlines()
+    assert lines[lines.index("G28 ; home all axis") + 1].startswith("M420 S1")
+    assert not [line for line in lines if line.startswith("G29")]
+    shown = _by_name(resolved)
+    assert shown["start"].value == ["home", "stored-mesh"] and shown["start"].origin == "printer"
+    assert "stored-mesh: after G28, turn on the bed mesh the printer stored" in shown["start"].note
+
+
+@pytest.mark.parametrize(
+    "readings, port, bound_held, said",
+    [
+        ([(BOARD, "probe", 0.25)], None, True, "ender3's board is on no known port"),
+        ([], PORT, True, f"no bed reading of the board on {PORT}"),
+        ([("ANOTHERBOARD", "probe", 0.25)], PORT, True, f"no bed reading of the board on {PORT}"),
+        (
+            [(BOARD, "probe", 0.25), (BOARD, "read", 0.25)],
+            PORT,
+            True,
+            "is a read of what the board holds (M420 V), not a probe",
+        ),
+        ([(BOARD, "probe", 0.83)], PORT, True, "found a range of 0.83 mm, not under the 0.3 mm"),
+        ([(BOARD, "probe", 0.3)], PORT, True, "found a range of 0.3 mm, not under the 0.3 mm"),
+        ([(BOARD, "probe", 0.25)], PORT, False, "holds no bound (measured.mesh_range_bound)"),
+    ],
+)
+def test_a_stored_mesh_is_refused_unless_the_boards_newest_reading_is_a_probe_under_the_bound(
+    fake_orcaslicer, readings, port, bound_held, said
+):
+    _printer_on()
+    for hour, (board, method, range_mm) in enumerate(readings, start=9):
+        _reading(board, method, range_mm, f"2026-11-07T{hour:02d}:00:00+00:00")
+    profile = _start("home", "stored-mesh")
+    if not bound_held:
+        del profile.measured["mesh_range_bound"]
+    with pytest.raises(SlicerError, match=re.escape(said)):
+        get_module("orcaslicer").settings(profile, Declared(by="part x"), port=port)
+    assert fake_calls(fake_orcaslicer) == []  # refused before OrcaSlicer is asked anything
+
+
+def test_the_bound_a_probes_range_must_be_under_is_the_profiles_with_its_source(fake_orcaslicer):
+    bound = load_profile("ender3").measured["mesh_range_bound"]
+    assert bound.value == 0.3 and bound.unit == "mm"
+    assert "2026-11-07-machine-setup" in bound.source and "stored-mesh" in bound.used
+
+
+def test_a_probe_each_print_goes_after_homing_and_the_wait_for_the_bed(fake_orcaslicer):
+    """G29 after the last G28 and, when the start then waits for the bed (M190), after
+    that wait, so the bed is probed at the temperature it prints at."""
+    from apothecary.slicer import compose
+
+    resolved = get_module("orcaslicer").settings(
+        _start("home", "probe-each-print"), Declared(by="part x")
+    )
+    lines = resolved.configs["machine"]["machine_start_gcode"].splitlines()
+    at = {
+        code: next(i for i, line in enumerate(lines) if line.startswith(code))
+        for code in ("G28", "M190", "G29", "M109")
+    }
+    assert at["G28"] < at["M190"] < at["G29"] < at["M109"] and at["G29"] == at["M190"] + 1
+    assert not [line for line in lines if line.startswith("M420")]
+    assert "probe-each-print: after G28, probe the bed" in _by_name(resolved)["start"].note
+    probe = [compose.piece("start", "home"), compose.piece("start", "probe-each-print")]
+    assert (
+        compose.compose_start("G28\nM109 S220\n", probe)
+        == f"G28\n{compose.PROBE_LINE}\nM109 S220\n"
+    )
+    assert compose.compose_start("G28 X Y\nM190 S60\nG28 Z\nG1 Z5", probe) == (
+        f"G28 X Y\nM190 S60\nG28 Z\n{compose.PROBE_LINE}\nG1 Z5"
+    )
+    mesh = [compose.piece("start", "home"), compose.piece("start", "stored-mesh")]
+    assert (
+        compose.compose_start("G28\nM190 S60", mesh) == f"G28\n{compose.STORED_MESH_LINE}\nM190 S60"
+    )
+
+
+def test_a_probe_each_print_needs_a_probe_and_a_start_levels_one_way(fake_orcaslicer):
+    profile = _start("home", "probe-each-print")
+    del profile.measured["probe_offset"]
+    with pytest.raises(SlicerError, match=re.escape("holds no probe offset the bench measured")):
+        get_module("orcaslicer").settings(profile, Declared(by="part x"))
+    _printer_on()
+    _reading(BOARD, "probe", 0.25, "2026-11-07T10:00:00+00:00")
+    both = _start("home", "stored-mesh", "probe-each-print")
+    with pytest.raises(SlicerError, match=re.escape("a start levels one way")):
+        get_module("orcaslicer").settings(both, Declared(by="part x"), port=PORT)
+    assert fake_calls(fake_orcaslicer) == []
+
+
+def test_a_levelling_piece_reaches_the_gcode_of_a_slice_for_the_printer_on_its_port(
+    fake_orcaslicer,
+):
+    from apothecary.slicer.models import SlicedFor
+
+    _printer_on()
+    _reading(BOARD, "probe", 0.25, "2026-11-07T10:00:00+00:00")
+    printer = service.Printer(
+        at=SlicedFor(part="ender3", name="printer_1", site="garage", path="printer_1", port=PORT),
+        profile=_start("home", "stored-mesh"),
+    )
+    lines: list = []
+    record = service.slice_into(_target(), printer, service.Here(lines.append))
+    text = Path(devices.prints_dir() / f"{record.file_id}.gcode").read_text().splitlines()
+    homes = text.index("G28 ; home all axis")
+    mesh = next(i for i, line in enumerate(text) if line.startswith("M420 S1"))
+    first = next(i for i, line in enumerate(text) if " E" in line and line.startswith("G1"))
+    assert homes < mesh < first
+    assert any(line.startswith("  start = ['home', 'stored-mesh']") for line in lines)
+    assert record.printer.port == PORT
 
 
 def test_a_word_declaring_print_settings_is_a_stub_in_the_shape_a_part_declares():
