@@ -25,13 +25,33 @@ here: run `apothecary problems`.
   fired step by step through it and the members it starts beside itself are built,
   the owner's questions open:
   [docs/plans/irl-hub-2026-11-02.md](docs/plans/irl-hub-2026-11-02.md).
-- Carlos and joe keeping `family/1`: `/family/identity` and `/family/events` on carlos's
-  `feat/hold-the-rig` and joe's `feat/family-control`, so `hearth check` passes each and
-  the hub's audit names the instance that took a delivery; joe's branch is far behind
-  its main ([the first run](docs/validation/2026-11-05-family-started.md)).
+- Carlos and joe in the family: each keeps `family/1` on its branch (carlos's
+  `feat/hold-the-rig`, joe's `feat/family-control`), `hearth check` passes each and the
+  hub's audit names the instance that took a delivery
+  ([the first run](docs/validation/2026-11-05-family-started.md)). Open around them: joe's
+  branch has no pull request and carries three lines of work over its main
+  (`docs/walkthrough`, `feat/family-demo-contract`, the family routes); joe's routes sit
+  behind a capability, `JOE_ALLOW_FAMILY=1`, and a table's `start` has no environment
+  field, so its command begins with `env`; a follower on joe's `/family/events` holds its
+  stop open and a cross-site read of joe is refused by its guard; carlos's rack tab polls
+  `/family/state` where `/family/events` streams; joe's `listen` and `say` are not started.
 - A step answered 202 by a member beside the hub reads as fired for good: the hub could
   read that member's `/family/events`, as it reads a hosted member's state
   ([the first run](docs/validation/2026-11-05-family-started.md)).
+- What a port's record leaves open: a flash record of a board never probed is still found
+  by its port's name; a family home step on a port another board's record names is refused
+  once, with nothing sent, and works on the next try; two identical converters swapped in
+  one socket read as one board. None of it has met the real router or the real state file.
+- A machine stepped into is its part alone: its pieces are reached from Site and not drawn
+  at its level, a double-click on the control box does not step into `frame_system`, and
+  the category chips at that level do nothing.
+- A file kept by Choose File records no kind of machine, so a card cannot tell a hand-kept
+  printer file from a CAM post.
+- The Models window says none is trusted until `apothecary vision check` has passed
+  (`apothecary/static/widgets/models.js`, quoted in `docs/models-checklist.md`);
+  `apothecary vision` has `ask`, `off`, `on` and `status`.
+- `tests/e2e/durations.json` has no times for the browser tests the view banner added or
+  renamed, so `--shard` balances without them until `apothecary test all --record-durations`.
 - hearth's `web.router` declares GET and HEAD on one route, so FastAPI warns of duplicate
   operation ids at `/openapi.json`; the fix is hearth's.
 - The reader as a hosted member of the irl hub, and a page reading the camera's actions
@@ -53,12 +73,12 @@ here: run `apothecary problems`.
   the made thing's Query hears its hello only from the demo's scripted monitor.
 - The router at the bench. The AnoleX 4060-Evo Ultra 2 is drawn, its
   controller's dialect spoken and its Machine built against the simulated
-  controller; the machine itself has not answered this seam. Section I of
-  [docs/bench-checklist.md](docs/bench-checklist.md) is what a person confirms
-  there: what `$I` and `$$` say, the bridge and whether its DTR resets the
-  controller, which way it homes, and the bounds `apothecary/firmware/grbl.py`
-  takes from the maker's figures. No toolpath is made here: a cut is a CAM
-  post's file ([docs/cnc.md](docs/cnc.md#not-built)).
+  controller; the real controller has identified itself and nothing past that.
+  Section I of [docs/bench-checklist.md](docs/bench-checklist.md) is what a person
+  confirms there: what `$I` and `$$` say, whether its DTR resets the controller,
+  which way it homes, and the bounds `apothecary/firmware/grbl.py` takes from the
+  maker's figures. A toolpath has run on the simulated controller alone
+  ([docs/cam.md](docs/cam.md#not-built), [docs/cnc.md](docs/cnc.md#not-built)).
 - Following a running job along the previewed path: a job's lines sent map to a
   segment and the card does not use it yet; and a cut drawn as the tool's width, not
   its centre ([docs/toolpath-preview.md](docs/toolpath-preview.md#not-built)).
@@ -240,6 +260,8 @@ Decided, not started. Each waits on what its line names.
   who forgets it, or how a person deletes it: qmcp's invocation rows,
   apothecary's observations and frames, carlos's states (*Data retention* in
   [the image-models plan](docs/plans/image-models-through-qmcp-2026-10-30.md#records-it-needs)).
+- `ci/interop-registry.yaml` has no row for carlos or joe, though each keeps `family/1`;
+  the version pin and coverage line in each one's family test are in the shape it reads.
 - The site and structure record's *Pends on* says no production
   implementation of `Assembly` exists; the API, the firmware bindings and
   the gathering are built on it (`apothecary/hierarchy.py`, which calls
