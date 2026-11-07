@@ -337,6 +337,13 @@ counts only for the board the port holds now:
   router on the printer's old port is shown no temperature, job or log of the
   printer's and is never found armed. A job still running is left to fail on
   its own once its board has gone. The same board found again keeps all of it.
+- **A board unplugged lets go of its link.** The first reading of the port list
+  that no longer finds it closes its idle link and drops its control latch
+  (`devices._unplugged`). A link left open to a device that has gone keeps its
+  device node, so the board plugged back in would come up under the next name,
+  `/dev/ttyUSB1` for `/dev/ttyUSB0`, while nothing that polls notices. Its last
+  poll and its comms log are kept for its return, and its first poll back opens
+  the link again. A list that cannot be read closes nothing.
 
 Two limits. Two bridges that say the same of themselves -- no serial number,
 or a generic one -- are told apart by their socket, so one unplugged and its

@@ -586,6 +586,45 @@ def test_the_board_found_again_on_its_port_keeps_its_log(bench, monkeypatch):
     links.stop_all()
 
 
+def test_an_unplugged_board_s_link_is_closed_and_what_it_said_is_kept(bench, monkeypatch):
+    """The list read once the board has gone closes its idle link and drops its latch:
+    a link held open on a device that has gone keeps its device node, and the board
+    plugged back in comes up under the next name. Its last poll and its log wait for
+    it, and its first poll back opens the link again."""
+    links = _a_printer_polled_armed_and_printed(bench, monkeypatch)
+    said = _sent(links)
+    bench.unplug(PORT)
+    devices.ports_now()
+    assert PORT not in links.open_ports and not links.control.armed(PORT)
+    assert _sent(links) == said and PORT in devices.last_statuses()
+    bench.plug(PORT, ENDER)
+    assert devices.printer_status(PORT).state == "idle" and PORT in links.open_ports
+    links.stop_all()
+
+
+def test_a_port_list_that_cannot_be_read_closes_no_link(bench, monkeypatch):
+    links = _a_printer_polled_armed_and_printed(bench, monkeypatch)
+
+    def unreadable():
+        raise OSError("the port list is not there")
+
+    monkeypatch.setattr(serial.tools.list_ports, "comports", unreadable)
+    devices._PORTS = None
+    assert devices.ports_now() == {}
+    assert PORT in links.open_ports and links.control.armed(PORT)
+    links.stop_all()
+
+
+def test_a_job_s_link_is_left_to_the_job_when_its_board_goes(bench, monkeypatch):
+    links = _a_printer_polled_armed_and_printed(bench, monkeypatch)
+    links.get(PORT).job = {"kind": "print"}  # a print still streaming
+    bench.unplug(PORT)
+    devices.ports_now()
+    assert PORT in links.open_ports
+    links.get(PORT).job = None
+    links.stop_all()
+
+
 # --- a bed reading is the board's that took it -----------------------------------------
 
 

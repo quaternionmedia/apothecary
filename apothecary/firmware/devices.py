@@ -111,7 +111,8 @@ _PORTS: Optional[tuple] = None  # (monotonic time, {port: BoardInfo})
 def ports_now() -> Dict[str, BoardInfo]:
     """What the serial engine's port list finds on each port right now. A port
     found holding another board than it last held forgets the last one first
-    (``forget_port``)."""
+    (``forget_port``); a port it no longer finds lets go of its link
+    (``_unplugged``)."""
     global _PORTS
     now = time.monotonic()
     if _PORTS and now - _PORTS[0] < PORTS_TTL:
@@ -119,7 +120,8 @@ def ports_now() -> Dict[str, BoardInfo]:
     try:
         listed = {b.port: b for b in serial_monitor.list_ports()}
     except (ToolchainError, OSError):
-        listed = {}  # a list that cannot be read finds nothing: records are kept
+        _PORTS = (now, {})  # a list that cannot be read finds nothing: all is kept
+        return {}
     _PORTS = (now, listed)
     _notice(listed)
     return listed
@@ -142,8 +144,24 @@ def _notice(listed: Dict[str, BoardInfo]) -> None:
             _HELD_BY[port] = now
             if was is not None and was != now:
                 changed.append(port)
+        emptied = [port for port in _HELD_BY if port not in listed]
     for port in changed:
         forget_port(port)
+    for port in emptied:
+        _unplugged(port)
+
+
+def _unplugged(port: str) -> None:
+    """The port list no longer finds the board it found on ``port``: an idle link to
+    it is closed and its latch dropped. A link left open to a device that has gone
+    holds its device node, so the board plugged back in comes up under the next
+    name (``/dev/ttyUSB1`` for ``/dev/ttyUSB0``), and nothing else notices while
+    nothing polls it. Its last poll and its log are kept for its return; a job's
+    link is the job's, which fails on its own."""
+    try:
+        gcode.get_printer_links().close(port)
+    except PortHeld:
+        pass
 
 
 gcode.PORT_LIST_READ = ports_now
