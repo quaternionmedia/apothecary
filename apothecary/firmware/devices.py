@@ -1368,21 +1368,6 @@ def save_print_file(name: str, data: bytes, machine: Optional[str] = None) -> Pr
     return meta
 
 
-# Where a slice's record and a toolpath's are kept, by the file each made
-# (slicer/service.py, cam/service.py): what says which kind of machine a file kept
-# before files said is for.
-_MADE_FOR = {"slices": "printer", "cuts": "router"}
-
-
-def _with_its_kind(meta: PrintFile) -> PrintFile:
-    if meta.machine is not None:
-        return meta
-    for folder, machine in _MADE_FOR.items():
-        if (state_folder.state_dir() / folder / f"{meta.id}.json").is_file():
-            return meta.model_copy(update={"machine": machine})
-    return meta
-
-
 @lru_cache(maxsize=4)
 def _preview_of_file(file_id: str, machine: str) -> Preview:
     with open(_print_file_path(file_id), encoding="utf-8", errors="replace") as handle:
@@ -1411,7 +1396,7 @@ def print_files() -> List[PrintFile]:
         except (OSError, ValueError):
             continue
         if _print_file_path(meta.id).is_file():
-            files.append(_with_its_kind(meta))
+            files.append(meta)
     return sorted(files, key=lambda f: f.uploaded_at, reverse=True)
 
 
@@ -1427,7 +1412,7 @@ def print_file(file_id: str) -> Optional[PrintFile]:
     if not path.is_file() or not _print_file_path(file_id).is_file():
         return None
     try:
-        return _with_its_kind(PrintFile(**json.loads(path.read_text(encoding="utf-8"))))
+        return PrintFile(**json.loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         return None
 

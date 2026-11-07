@@ -124,15 +124,15 @@ def test_the_app_s_own_toolpath_is_kept_for_the_router_and_checks_clean(fake_ard
     assert kept.machine == "router" and kept.problems == []
 
 
-def test_a_file_a_slice_or_a_toolpath_made_before_files_said_their_kind_says_it(
-    fake_arduino_cli,
-):
-    for folder, kind in (("slices", "printer"), ("cuts", "router")):
-        kept = devices.save_print_file(f"{kind}.gcode", b"G1 X1 F100\n")
+def test_a_kept_file_s_kind_is_what_it_was_kept_with(fake_arduino_cli):
+    """A slice's or a cut's record beside a kept file says nothing of the file's kind:
+    a file kept for none is kept for none until it is kept again for a machine."""
+    for folder in ("slices", "cuts"):
+        kept = devices.save_print_file(f"{folder}.gcode", b"G1 X1 F100\n")
         (state_dir() / folder).mkdir(exist_ok=True)
         (state_dir() / folder / f"{kept.id}.json").write_text("{}")
-        assert devices.print_file(kept.id).machine == kind
-        assert {f.id: f.machine for f in devices.print_files()}[kept.id] == kind
+        assert devices.print_file(kept.id).machine is None
+        assert {f.id: f.machine for f in devices.print_files()}[kept.id] is None
 
 
 def test_choose_file_keeps_a_file_for_the_machine_it_was_chosen_in(fake_arduino_cli):

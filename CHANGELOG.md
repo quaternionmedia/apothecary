@@ -153,6 +153,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Removed
 
+- A kept file's kind read from the slice or cut record beside it: a file's kind is what it was kept with, and one kept for none is kept again for a machine. ([code](apothecary/firmware/devices.py))
 - `apothecary/shims/`: `KiCadProvider`, a provider that read nothing. The datum board's hand-entered envelope (`t1_core_stub`) is the datum part's, served by a `StubProvider`, and a reader of a layout is a provider of its own behind `BlackBoxProvider` when one exists. ([code](apothecary/models/blackbox.py))
 - `system`, `install`, `submodules`, `testrun`, `dev`, `inventory` and `photo look`: a script that calls one meets `No such command`; `apothecary --help` names what to use. ([code](apothecary/cli/main.py))
 - `test setup-e2e`, `validate-e2e` and `run-e2e`, also stubs. ([code](apothecary/cli/testing.py))
