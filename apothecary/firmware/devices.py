@@ -63,7 +63,7 @@ from ..projects.parts.skeleton import ROOT
 from ..site_names import current as current_site
 from ..stamped import claim, stamp
 from ..stays_local import subprocess_env
-from . import dialects, gcode, grbl, serial_monitor
+from . import dialects, gcode, grbl, occupants, serial_monitor
 from .models import (
     PRINT_FILE_ID,
     BoardInfo,
@@ -1040,19 +1040,43 @@ def leveling_dir() -> Path:
 
 
 def leveling_records(port: Optional[str] = None) -> List[LevelingRecord]:
-    """Every saved reading, newest first; for one port when given."""
+    """Every saved reading, newest first; given a port, the readings of the printer
+    on it now (``readings_of``)."""
     folder = leveling_dir()
     if not folder.is_dir():
         return []
     records: List[LevelingRecord] = []
     for path in folder.glob("*.json"):
         try:
-            rec = LevelingRecord(**json.loads(path.read_text(encoding="utf-8")))
+            records.append(LevelingRecord(**json.loads(path.read_text(encoding="utf-8"))))
         except (OSError, ValueError):
             continue
-        if port is None or rec.port == port:
-            records.append(rec)
+    if port is not None:
+        records = readings_of(occupants.on_port(port), records)
     return sorted(records, key=lambda r: r.at, reverse=True)
+
+
+def readings_of(
+    board: Optional[occupants.Occupant], records: List[LevelingRecord]
+) -> List[LevelingRecord]:
+    """The readings that are ``board``'s: a printer's alone, those kept under its key;
+    and one kept before readings carried a key, when it was taken on the port the
+    printer is on and names the firmware the printer answered with. Nothing for a
+    board of another kind, one not yet identified, or one whose key another board
+    on the machine shares."""
+    if board is None or board.kind != "printer" or board.shared:
+        return []
+    return [
+        rec
+        for rec in records
+        if board.owns(rec.board)
+        or (
+            rec.board is None
+            and rec.port == board.port
+            and rec.firmware is not None
+            and rec.firmware == board.firmware
+        )
+    ]
 
 
 def leveling_record(record_id: str) -> Optional[LevelingRecord]:
@@ -1080,11 +1104,14 @@ def read_bed(link: gcode.GcodeLink, port: str, method: str, note: Optional[str])
     grids = gcode.parse_meshes(mesh_lines)
     temps = gcode.parse_m105(next((ln for ln in temp_lines if gcode.is_temperature_line(ln)), ""))
     cached = get_state().cached_device(port)
+    board = occupants.on_port(port)
     at = datetime.now(timezone.utc)
     slug = re.sub(r"[^A-Za-z0-9]+", "_", port).strip("_")
     record = LevelingRecord(
         id=f"{stamp(at)}-{slug}",  # with -2 after it, if need be, when it is kept
         port=port,
+        board=board.key if board is not None else None,
+        machine=board.kind if board is not None else None,
         at=at,
         method=method,
         mesh=grids[0] if grids else [],
@@ -1190,6 +1217,18 @@ def start_leveling(
         printer_status(port, state=state, links=links)
     if links.get(port) is None:
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
+    # Asked once the link is open, so the board has said what it is.
+    board = occupants.on_port(port, state)
+    if board is None or board.kind != "printer":
+        what = (
+            f"a {board.kind}" if board is not None and board.kind else "no board known as a printer"
+        )
+        raise ToolchainError(f"{port}: a bed reading is a printer's, and {port} holds {what}")
+    if board.shared:
+        raise ToolchainError(
+            f"{port}: another board on this machine answers to {board.key} as well, so a "
+            "reading kept now could not be told whose: unplug the other first"
+        )
     job = LevelingJob(port, probe, note, links)
     _LEVELING[port] = job
     job.thread.start()

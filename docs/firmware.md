@@ -579,6 +579,17 @@ over the printer's bed in the world. The corner buttons move the nozzle to paper
 height at each corner and are controls. `firmware.gcode.parse_meshes` reads
 Marlin's printed grid and falls back to the `G29 W` points an `M503` prints.
 
+A reading is the printer's that took it. It records that board's key -- its USB
+bridge's serial number on the Ender -- and its kind, and a port's readings are the
+readings of the printer on it now (`firmware.occupants`): they follow the printer
+from port to port, and a router on a port a printer's readings were taken on is
+listed none of them, nor wears one over its table. A reading kept before readings
+named their board is the printer's on the port it was taken on that answers with
+the firmware it names. A bed reading is refused on anything but a printer, before
+anything is sent; and while two boards on the machine answer to one key (two
+bridges of one make, neither with a serial number), it is refused on both, since a
+reading kept then could not be told whose.
+
 ### Printing without an SD card
 
 **Print from here** keeps a sliced G-code file on the host

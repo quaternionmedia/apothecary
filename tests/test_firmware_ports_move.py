@@ -23,8 +23,8 @@ from firmware_helpers import fake_cli_calls
 
 from apothecary.api import app
 from apothecary.cli import cli
-from apothecary.firmware import devices, gcode, grbl, serial_monitor
-from apothecary.firmware.models import BoardInfo, DeviceInfo, PrinterInfo
+from apothecary.firmware import devices, gcode, grbl, occupants, serial_monitor
+from apothecary.firmware.models import BoardInfo, DeviceInfo, LevelingRecord, PrinterInfo
 
 PORT = "/dev/ttyMOVES0"
 OTHER = "/dev/ttyMOVES1"
@@ -576,6 +576,100 @@ def test_the_board_found_again_on_its_port_keeps_its_log(bench, monkeypatch):
     bench.plug(PORT, ENDER)
     assert _sent(links) == said and PORT in devices.last_statuses()
     links.stop_all()
+
+
+# --- a bed reading is the board's that took it -----------------------------------------
+
+
+def _a_reading_of_the_printer(bench, monkeypatch, port=PORT):
+    """The Ender's bed read on ``port``: its stored mesh, nothing moved."""
+    links = _links(monkeypatch, gcode.SimulatedPrinter)
+    _a_printer_was_identified(bench, port)
+    job = devices.start_leveling(port, probe=False)
+    job.thread.join(10)
+    assert job.stage == "saved", job.error
+    return links, job.record
+
+
+def _a_reading_kept_before_readings_named_their_board(firmware="Marlin made up"):
+    old = LevelingRecord(
+        id="20260920T132512.468-dev_ttyMOVES0",
+        port=PORT,
+        at=datetime(2026, 9, 20, 13, 25, tzinfo=timezone.utc),
+        method="read",
+        mesh=[[0.0, 0.1], [0.2, 0.3]],
+        firmware=firmware,
+    )
+    devices._save_leveling(old)
+    return old
+
+
+def test_a_bed_reading_is_kept_as_the_board_s_that_took_it(bench, monkeypatch):
+    links, reading = _a_reading_of_the_printer(bench, monkeypatch)
+    assert (reading.board, reading.machine) == ("MADEUPENDER1", "printer") and reading.mesh
+    assert [r.id for r in devices.leveling_records(PORT)] == [reading.id]
+    links.stop_all()
+
+
+def test_the_router_on_the_printer_s_port_wears_none_of_its_readings(bench, monkeypatch):
+    """What happened on the bench: the router on the port the Ender's readings were
+    taken on, and the page asking for the port's readings to draw over its table."""
+    links, reading = _a_reading_of_the_printer(bench, monkeypatch)
+    _a_reading_kept_before_readings_named_their_board()
+    _a_router_was_identified(bench)
+    assert devices.leveling_records(PORT) == []
+    answer = TestClient(app).get("/firmware/printers/leveling", params={"port": PORT})
+    assert answer.status_code == 200 and answer.json() == []
+    links.stop_all()
+
+
+def test_the_printer_s_readings_follow_it_to_another_port(bench, monkeypatch):
+    links, reading = _a_reading_of_the_printer(bench, monkeypatch)
+    bench.unplug(PORT)
+    _a_printer_was_identified(bench, OTHER)
+    assert [r.id for r in devices.leveling_records(OTHER)] == [reading.id]
+    links.stop_all()
+
+
+def test_a_reading_kept_without_its_board_is_the_printer_s_on_its_port_with_its_firmware(bench):
+    old = _a_reading_kept_before_readings_named_their_board()
+    _a_printer_was_identified(bench)
+    assert [r.id for r in devices.leveling_records(PORT)] == [old.id]
+    # The same printer on another port, another printer on its port, the router there:
+    # none of them is shown it.
+    bench.unplug(PORT)
+    _a_printer_was_identified(bench, OTHER)
+    assert devices.leveling_records(OTHER) == []
+    bench.plug(PORT, ENDER_TWIN)
+    scanned = next(d for d in devices.detected_devices() if d.port == PORT)
+    other = _answered("marlin", "printer", "Marlin of another build")
+    devices.get_state().remember_device(scanned.model_copy(update={"printer": other}))
+    assert devices.leveling_records(PORT) == []
+    _a_router_was_identified(bench)
+    assert devices.leveling_records(PORT) == []
+
+
+def test_a_bed_reading_is_refused_on_a_router_and_nothing_is_sent(bench, monkeypatch):
+    links = _links(monkeypatch, grbl.SimulatedRouter)
+    _a_router_was_identified(bench)
+    links.control.arm(PORT)
+    for probe in (True, False):
+        with pytest.raises(
+            devices.ToolchainError, match="a bed reading is a printer's, and .* holds a router"
+        ):
+            devices.start_leveling(PORT, probe=probe)
+    assert not {"G28", "G29", "M420 V"} & set(_sent(links))
+    links.stop_all()
+
+
+def test_two_bridges_of_one_make_share_a_key_and_own_nothing_under_it(bench):
+    bench.plug(PORT, ROUTER)
+    bench.plug(OTHER, ROUTER_TWIN)
+    one, two = occupants.on_port(PORT), occupants.on_port(OTHER)
+    assert one.key == two.key == "usb:1a86:7523" and one.shared and two.shared
+    assert not one.owns("usb:1a86:7523")
+    bench.unplug(OTHER)
+    assert occupants.on_port(PORT).owns("usb:1a86:7523")
 
 
 # --- the simulated boards --------------------------------------------------------------

@@ -509,7 +509,12 @@ class LevelingRecord(BaseModel):
     """One reading of a printer's bed: the mesh, what it means, and the conditions."""
 
     id: str
-    port: str
+    port: str  # where it was taken; whose it is is ``board``
+    # The board that took it, by its key (occupants.key_of), and the kind of machine
+    # it drives: a reading is listed for that board alone, wherever it is plugged in.
+    # None on a reading kept before readings carried it.
+    board: Optional[str] = None
+    machine: Optional[str] = None
     at: datetime
     method: str  # "probe" (G29 then read) or "read" (M420 V only)
     mesh: List[List[float]] = Field(default_factory=list)

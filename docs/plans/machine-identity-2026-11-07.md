@@ -1,8 +1,9 @@
 # Each machine keeps its own: a plan
 
-*Slices 1 and 2 are built: the stop goes to whatever is on a port, and a port
-that changes hands forgets what was held in memory for its last board. The rest
-is not built. Each slice is one pull request, in the order below.*
+*Slices 1 to 3 are built: the stop goes to whatever is on a port, a port that
+changes hands forgets what was held in memory for its last board, and a bed
+reading is the board's that took it. The rest is not built. Each slice is one
+pull request, in the order below.*
 
 ## What this plans
 
@@ -99,13 +100,17 @@ Each is a pull request; a slice that needs another's work stacks on it.
    the latch read the port list before they answer, so no reader gets around it.
    Held by tests that run a print on the simulated printer, put the router on
    its port, and ask each of the page's questions first.
-3. **Who is on a port, and a bed reading belongs to the board that took it.**
-   `apothecary/firmware/occupants.py` answers the port's board, its key and its
-   kind; its first reader is the bed reading. A reading records its board's key
-   and kind; readings are listed for the occupant's key; a reading kept before
-   this, with no key, is the occupant's only when it is a printer whose firmware
-   is the one the reading names. A bed reading is refused on anything but a
-   printer, and the page draws a relief only on a printer.
+3. **Who is on a port, and a bed reading belongs to the board that took it**
+   (`build/readings-by-board`; built). `apothecary/firmware/occupants.py`
+   answers the port's board, its key and its kind; its first reader is the bed
+   reading. A reading records its board's key and kind; readings are listed for
+   the occupant's key; a reading kept before this, with no key, is the
+   occupant's only when it is a printer on the port the reading was taken on
+   whose firmware is the one the reading names. A bed reading is refused on
+   anything but a printer, and while a key is shared; the page lays a reading
+   over a printer's bed alone. Held by tests that take a reading on the
+   simulated printer and put the router on its port, and by a browser test that
+   starts with a printer's reading kept under the router's port name.
 4. **A kept file says which kind of machine it is for.** A file records
    `printer` or `router`: Choose File records the Machine's kind, a slice
    records `printer`, a toolpath `router`. A stream refuses a file of the other

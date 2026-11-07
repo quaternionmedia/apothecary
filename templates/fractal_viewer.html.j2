@@ -1897,10 +1897,11 @@
                 // The board model says what changed of a board, or that it scanned: every
                 // drawer of it follows from the one event.
                 window.addEventListener('apothecary:board', (ev) => this.boardChanged(ev.detail));
-                // A bed reading shown in a printer's Machine lands on the marks, and a
+                // A bed reading shown in a printer's Machine lands on the marks -- a
+                // printer's alone: a reading is never laid over a router's table -- and a
                 // jog sent from it moves the nozzle ahead of the poll that confirms it.
                 window.addEventListener('apothecary:mesh', (ev) => {
-                    for (const m of Object.values(this.marks)) if (m.marks && ev.detail && ev.detail.port === m.port) m.marks.setMesh(ev.detail);
+                    for (const m of Object.values(this.marks)) if (m.marks && m.kind === 'printer' && ev.detail && ev.detail.port === m.port) m.marks.setMesh(ev.detail);
                 });
                 // The chosen file's path: drawn where its machine's marks stand, and kept
                 // for marks not there yet (the site is still loading).
@@ -7735,7 +7736,9 @@
                     this.scene.add(marks.group);
                     const first = this.bindings[row.path] && this.bindings[row.path].printer_status;
                     if (first && first.position) marks.setPosition(this.toolPosition(first, where), { immediate: true });
-                    this.marks[path] = { marks, port, where, readingAt: 0, readingId: null };
+                    // The kind of machine the board answered as: a bed reading is a printer's.
+                    const kind = (row.device.printer && row.device.printer.machine) || null;
+                    this.marks[path] = { marks, port, where, kind, readingAt: 0, readingId: null };
                     const toolpath = this.toolpathByPort[port];
                     if (toolpath) marks.setToolpath(toolpath.preview, toolpath);
                     this.refreshReading(path);
@@ -7747,12 +7750,13 @@
                 return toolPositionOf(st, where && where.printer ? where.printer.build_volume : null);
             }
 
-            // The newest bed reading for a printer's port, laid over its bed;
-            // asked again at most every few seconds, on the device refresh, so
-            // a reading taken from a printer's Machine shows up here without a reload.
+            // The newest bed reading of the printer on a port (the server lists the
+            // readings of the board on the port now), laid over its bed; asked again at
+            // most every few seconds, on the device refresh, so a reading taken from a
+            // printer's Machine shows up here without a reload. A router has none.
             refreshReading(path) {
                 const m = this.marks[path];
-                if (!m || !m.marks || Date.now() - m.readingAt < 5000) return;
+                if (!m || !m.marks || m.kind !== 'printer' || Date.now() - m.readingAt < 5000) return;
                 m.readingAt = Date.now();
                 fetch(`${BASE_URL}/firmware/printers/leveling?port=${encodeURIComponent(m.port)}`)
                     .then((r) => (r.ok ? r.json() : []))
