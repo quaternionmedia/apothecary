@@ -107,7 +107,9 @@ _PORTS: Optional[tuple] = None  # (monotonic time, {port: BoardInfo})
 
 
 def ports_now() -> Dict[str, BoardInfo]:
-    """What the serial engine's port list finds on each port right now."""
+    """What the serial engine's port list finds on each port right now. A port
+    found holding another board than it last held forgets the last one first
+    (``forget_port``)."""
     global _PORTS
     now = time.monotonic()
     if _PORTS and now - _PORTS[0] < PORTS_TTL:
@@ -117,7 +119,46 @@ def ports_now() -> Dict[str, BoardInfo]:
     except (ToolchainError, OSError):
         listed = {}  # a list that cannot be read finds nothing: records are kept
     _PORTS = (now, listed)
+    _notice(listed)
     return listed
+
+
+# --- a port that changes hands ---------------------------------------------------------
+
+# What the port list last found on each port, kept while the port is empty: a board
+# unplugged and plugged back in is the same board, and keeps what is held for it;
+# another board found there is told nothing of the last one's.
+_HELD_BY: Dict[str, dict] = {}
+_HELD_LOCK = threading.Lock()
+
+
+def _notice(listed: Dict[str, BoardInfo]) -> None:
+    changed = []
+    with _HELD_LOCK:
+        for port, board in listed.items():
+            was, now = _HELD_BY.get(port), _sighting(board)
+            _HELD_BY[port] = now
+            if was is not None and was != now:
+                changed.append(port)
+    for port in changed:
+        forget_port(port)
+
+
+gcode.PORT_LIST_READ = ports_now
+
+
+def forget_port(port: str) -> None:
+    """Let go of everything held in memory for the board that was on ``port``: its
+    last poll, a job of it that has finished, its link, its control latch and its
+    comms log. Every cache this package keys by a port is named here. A job still
+    running is left to fail on its own, its board gone; the records on disk are
+    ``FirmwareState``'s, which reads them against the port list itself."""
+    _LAST_STATUS.pop(port, None)
+    for held in (_PRINTS, _LEVELING):
+        job = held.get(port)
+        if job is not None and job.finished is not None:
+            held.pop(port, None)
+    gcode.get_printer_links().forget(port)
 
 
 def board_on(port: str) -> Optional[BoardInfo]:
@@ -786,7 +827,9 @@ _LAST_STATUS: Dict[str, gcode.PrinterStatus] = {}
 
 
 def last_statuses() -> Dict[str, gcode.PrinterStatus]:
-    """The newest poll per port, for views that must not touch the port themselves."""
+    """The newest poll per port, for views that must not touch the port themselves;
+    of the board on each port now (``ports_now`` has let go of any other's)."""
+    ports_now()
     return dict(_LAST_STATUS)
 
 
@@ -1117,6 +1160,7 @@ _LEVELING: Dict[str, LevelingJob] = {}
 
 
 def leveling_job(port: str) -> Optional[LevelingJob]:
+    ports_now()  # a port that changed hands has let go of the last board's
     return _LEVELING.get(port)
 
 
@@ -1549,6 +1593,7 @@ _PRINTS: Dict[str, PrintJob] = {}
 
 
 def print_job(port: str) -> Optional[PrintJob]:
+    ports_now()  # a port that changed hands has let go of the last board's
     return _PRINTS.get(port)
 
 

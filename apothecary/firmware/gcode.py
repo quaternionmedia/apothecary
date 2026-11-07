@@ -875,6 +875,18 @@ class GcodeLink:
         }
 
 
+# Read before a port's link or log is handed out: the device layer's reading of the
+# port list (``devices.ports_now``), which lets go of what is held for a board that has
+# left the port (``PrinterLinks.forget``), so a link or a log is never the last board's.
+# None until that layer is imported.
+PORT_LIST_READ: Optional[Callable[[], object]] = None
+
+
+def _read_port_list() -> None:
+    if PORT_LIST_READ is not None:
+        PORT_LIST_READ()
+
+
 class PrinterLinks:
     """Open links, one per port, released as a group before a task takes a port."""
 
@@ -886,12 +898,17 @@ class PrinterLinks:
         self.control = ControlLatch()
 
     def log_for(self, port: str) -> CommsLog:
+        _read_port_list()
+        return self._log_for(port)
+
+    def _log_for(self, port: str) -> CommsLog:
         with self._lock:
             if port not in self._logs:
                 self._logs[port] = CommsLog(port)
             return self._logs[port]
 
     def get(self, port: str) -> Optional[GcodeLink]:
+        _read_port_list()
         with self._lock:
             return self._links.get(port)
 
@@ -900,6 +917,7 @@ class PrinterLinks:
 
         A link a job holds is never replaced: reopening at another baud would
         drop the print under its own thread."""
+        _read_port_list()
         with self._lock:
             link = self._links.get(port)
             if link is not None and link.baud == baud:
@@ -910,7 +928,7 @@ class PrinterLinks:
                         f"{port}: a {link.job.get('kind')} holds the port -- not reopening it"
                     )
                 link.close()
-            link = GcodeLink(port, baud, self.factory(port, baud), log=self.log_for(port))
+            link = GcodeLink(port, baud, self.factory(port, baud), log=self._log_for(port))
             self._links[port] = link
         link.settle()
         return link
@@ -930,6 +948,21 @@ class PrinterLinks:
             return False
         link.close()
         return True
+
+    def forget(self, port: str) -> None:
+        """Another board is on ``port`` now: the last one's link is closed, its latch
+        dropped and its log let go, so nothing of it is shown or armed as the new
+        board's. A link a job holds is left to the job, which fails on its own once
+        its board has gone."""
+        with self._lock:
+            link = self._links.get(port)
+            if link is not None and link.job is not None:
+                return
+            self.control.disarm(port)
+            self._links.pop(port, None)
+            self._logs.pop(port, None)
+        if link is not None:
+            link.close()
 
     def stop_all(self) -> None:
         with self._lock:
@@ -1274,7 +1307,10 @@ class ControlLatch:
         self._until: Dict[str, float] = {}
         self._lock = threading.Lock()
 
+    # Each asks the port list first (_read_port_list), outside the lock: a port that
+    # has changed hands disarms itself there (PrinterLinks.forget).
     def arm(self, port: str, ttl: float = CONTROL_TTL_S) -> float:
+        _read_port_list()
         with self._lock:
             self._until[port] = time.monotonic() + ttl
             return self._until[port]
@@ -1284,6 +1320,7 @@ class ControlLatch:
             self._until.pop(port, None)
 
     def armed(self, port: str) -> bool:
+        _read_port_list()
         with self._lock:
             until = self._until.get(port)
             if until is None:
@@ -1294,6 +1331,7 @@ class ControlLatch:
             return True
 
     def seconds_left(self, port: str) -> float:
+        _read_port_list()
         with self._lock:
             until = self._until.get(port)
             return max(0.0, until - time.monotonic()) if until else 0.0

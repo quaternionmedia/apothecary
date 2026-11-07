@@ -512,6 +512,72 @@ def test_no_view_of_the_port_says_the_printer_is_still_on_it(bench, garage):
     assert answers["/firmware/printers/info"].json()["device"]["device"]["printer"] is None
 
 
+# --- what is held in memory for a board, when another board takes its port --------------
+
+
+def _a_printer_polled_armed_and_printed(bench, monkeypatch):
+    """The Ender on the port as a session leaves it: polled, a print run to its end,
+    control armed, every exchange in its comms log, its link held."""
+    links = _links(monkeypatch, gcode.SimulatedPrinter)
+    _a_printer_was_identified(bench)
+    assert devices.printer_status(PORT).state == "idle"
+    links.control.arm(PORT)
+    kept = devices.save_print_file("square.gcode", b"G90\nG1 X10 Y10 F3000\n")
+    job = devices.start_print(PORT, kept.id)
+    job.thread.join(10)
+    assert job.finished is not None and devices.print_job(PORT) is job
+    links.control.arm(PORT)
+    assert PORT in devices.last_statuses() and _sent(links) and links.get(PORT) is not None
+    return links
+
+
+def test_a_board_on_a_port_another_held_is_shown_nothing_held_for_that_one(bench, monkeypatch):
+    links = _a_printer_polled_armed_and_printed(bench, monkeypatch)
+    bench.unplug(PORT)
+    bench.plug(PORT, ROUTER)
+    # No poll, no job, no log, no latch, and no link to a board that has gone.
+    assert PORT not in devices.last_statuses()
+    assert devices.print_job(PORT) is None and devices.leveling_job(PORT) is None
+    assert not links.control.armed(PORT) and links.get(PORT) is None
+    assert _sent(links) == []
+    links.stop_all()
+
+
+@pytest.mark.parametrize(
+    "url, empty",
+    [
+        ("/firmware/printers/log", lambda a: a["entries"] == [] and a["held"] is False),
+        (
+            "/firmware/printers/info",
+            lambda a: a["last_status"] is None and a["link"] is None and not a["control"]["armed"],
+        ),
+        ("/firmware/printers/print", lambda a: a["stage"] is None and a["running"] is False),
+        ("/firmware/printers/control", lambda a: a["armed"] is False and a["seconds_left"] == 0),
+    ],
+)
+def test_no_answer_about_the_port_carries_what_was_held_for_the_board_before(
+    bench, monkeypatch, url, empty
+):
+    """Each of the page's questions, asked first once the router holds the port: it
+    reads the port list before what is held, so it never answers with the printer's
+    poll, job, log or latch."""
+    links = _a_printer_polled_armed_and_printed(bench, monkeypatch)
+    bench.plug(PORT, ROUTER)
+    answer = TestClient(app).get(url, params={"port": PORT})
+    assert answer.status_code == 200 and empty(answer.json()), answer.text
+    links.stop_all()
+
+
+def test_the_board_found_again_on_its_port_keeps_its_log(bench, monkeypatch):
+    links = _a_printer_polled_armed_and_printed(bench, monkeypatch)
+    said = _sent(links)
+    bench.unplug(PORT)
+    devices.ports_now()  # the list read while the port is empty
+    bench.plug(PORT, ENDER)
+    assert _sent(links) == said and PORT in devices.last_statuses()
+    links.stop_all()
+
+
 # --- the simulated boards --------------------------------------------------------------
 
 

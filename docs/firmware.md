@@ -329,6 +329,14 @@ counts only for the board the port holds now:
 - A record written before the list's word was kept beside it, or for a port
   the list did not hold, is compared by its own vendor, product and serial
   number, whichever finder spelled them (`0x1A86` is `0x1a86`).
+- **What is held in memory for a board goes when another board takes its
+  port**: its last poll, a print or bed reading of it that has finished, its
+  link, its control latch and its comms log (`devices.forget_port`, the one
+  place that names them). Each is read only after the port list
+  (`gcode.PrinterLinks` and `ControlLatch` ask it before they answer), so the
+  router on the printer's old port is shown no temperature, job or log of the
+  printer's and is never found armed. A job still running is left to fail on
+  its own once its board has gone. The same board found again keeps all of it.
 
 Two limits. Two bridges that say the same of themselves -- no serial number,
 or a generic one -- are told apart by their socket, so one unplugged and its
