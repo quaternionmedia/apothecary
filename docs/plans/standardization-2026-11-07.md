@@ -1,8 +1,8 @@
 # One way of doing each thing: a plan
 
-*Built: see the slice table; each slice says whether it is built and what holds
-it. Nothing here is pushed: the slices are a local stack of branches, and the
-owner decides when they go.*
+*Built: the nine slices, as a local stack of branches, each holding its test;
+the whole suite's run on the stack's top is in the session's ledger. Nothing
+here is pushed: the owner decides when the stack goes.*
 
 ## What this plans
 
@@ -120,21 +120,20 @@ top. "Holds it" is the test that fails on the code beneath the slice.
 | 4 | `build/objection-per-dialect` | `gcode.ERROR_RE` is Marlin's words; `gcode.OBJECTIONS` is every dialect's, each dialect adding its own when it is imported; `grbl.OBJECTION_RE` is `error:N` and `ALARM:N`, and `explain` reads its number from it | Marlin's pattern does not match `error:20`; GRBL's is among the link's objections; a bad line to the simulated router still raises with the words |
 | 5 | `build/board-by-part` | `_assembly_tree` loses `inside_machine` and its clause; a node is a board when `is_board(part_ref)` | an electrical leaf with no part inside a machine is not a board; the router's controller is, by its part |
 | 6 | `build/kind-from-dialect` | `PrinterInfo.machine` is computed from `dialect` through one map in `firmware/models.py`; `gcode.MACHINE` and `grbl.MACHINE` read the map; the JSON a record and the API carry keeps the key | `PrinterInfo(dialect=GRBL).machine == "router"`; a record stored with a kind that disagrees with its dialect reads as the dialect's |
-| 7 | `build/retired-names-gone` | *With the owner's yes.* `cli/retired.py` and the seven names; `test_cli.py`'s rows; the CHANGELOG; `todo.md`'s rule. Not `cli/testing.py`'s, which are the test command's | `apothecary inventory` is "No such command" |
-| 8 | `build/shims-gone` | *With the owner's yes.* `t1_core_stub` moves to `projects/parts/datum_core.py`; `KiCadProvider` goes, `datum_bench` defaulting to a `StubProvider` holding the stub; `docs/fitting-a-part.md` | `apothecary.shims` does not import; `build()` serves the same board |
-| 9 | `build/kept-file-kind` | *With the owner's yes.* `_MADE_FOR` and `_with_its_kind` go; a kept file's kind is what it was kept with | a kept file with no kind beside a cut record has no kind |
+| 7 | `build/retired-names-gone` | *The owner's yes, 2026-11-07.* the seven names and `cli/inventory.py` go; `cli/retired.py` stays for `cli/testing.py`'s three, which are the test command's; `test_cli.py`'s rows; the CHANGELOG; `todo.md`'s rule | `apothecary inventory` is "No such command" |
+| 8 | `build/shims-gone` | *The owner's yes, 2026-11-07.* `t1_core_stub` moves to `projects/parts/datum_core.py`; `KiCadProvider` goes, `datum_bench` defaulting to a `StubProvider` holding the stub; `docs/fitting-a-part.md` | `apothecary.shims` does not import; `build()` serves the same board |
+| 9 | `build/kept-file-kind` | *The owner's yes, 2026-11-07.* `_MADE_FOR` and `_with_its_kind` go; a kept file's kind is what it was kept with | a kept file with no kind beside a cut record has no kind |
 
 Each branch's gate and run are in the session's ledger
 (the shared notes folder, `standardize-ledger.md`), with the mutation each
 test was shown to catch.
 
-## What is asked
+## What was decided
 
-Before slices 7 to 9, the owner is sent the list: the retired command names
-(the recorded rule says one release after hiding, and no release has been cut),
+The owner decided the three removals on 2026-11-07: the retired command names
+(the recorded rule said one release after hiding, and no release has been cut),
 the `shims` package, and the kept file's inferred kind. The `LEGACY_EXECUTABLE`
-path is reported as live and kept. The four named efforts are named, not
-proposed.
+path is live and kept. The four named efforts stay.
 
 ## What is left, and why
 
