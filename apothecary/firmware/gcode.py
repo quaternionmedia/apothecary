@@ -585,8 +585,12 @@ class CommsLog:
 # --- link: one open port, request/response with a lock ------------------------------
 
 OK_RE = re.compile(r"^ok\b")
-# Marlin objects with `Error:` or `!!`; GRBL with `error:N` and, out of turn, `ALARM:N`.
-ERROR_RE = re.compile(r"^(Error:|!!|error:\d|ALARM:)")
+# Marlin objects with `Error:` or `!!`. Every dialect's objection is in OBJECTIONS, each
+# dialect adding its own when it is imported (grbl.py: `error:N` and, out of turn,
+# `ALARM:N`): the link closes an exchange on any of them, since a board is asked in
+# one dialect before it is known to speak another.
+ERROR_RE = re.compile(r"^(Error:|!!)")
+OBJECTIONS: List["re.Pattern[str]"] = [ERROR_RE]
 BUSY_RE = re.compile(r"^echo:busy:")
 RESEND_RE = re.compile(r"^Resend:")
 
@@ -763,7 +767,7 @@ class GcodeLink:
                 if line is None:
                     continue
                 lines.append(line)
-                objected = ERROR_RE.match(line) or RESEND_RE.match(line)
+                objected = any(p.match(line) for p in OBJECTIONS) or RESEND_RE.match(line)
                 if not quiet or objected:
                     if quiet:
                         self.log.add("tx", cmd, origin)  # the line it objected to, for the record

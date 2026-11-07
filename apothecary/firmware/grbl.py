@@ -53,6 +53,10 @@ GC_RE = re.compile(r"^\[GC:(.*)\]$")
 # $110=4000.000
 SETTING_RE = re.compile(r"^\$(\d+)=(-?\d+\.?\d*)")
 ALARM_RE = re.compile(r"^ALARM:(\d+)")
+# The controller's objections, `error:N` and `ALARM:N`: what closes an exchange on the
+# link (gcode.OBJECTIONS) and what `explain` puts words to.
+OBJECTION_RE = re.compile(r"^(error|ALARM):(\d+)")
+gcode.OBJECTIONS.append(OBJECTION_RE)
 # Grbl 1.3a ['$' for help]
 BANNER_RE = re.compile(r"^Grbl (\S+) \[")
 # [PRB:-12.000,-20.000,-41.250:1]
@@ -1201,13 +1205,10 @@ def alarm_text(code: Optional[int]) -> Optional[str]:
     return ALARMS.get(code, f"alarm {code}")
 
 
-EXPLAINED_RE = re.compile(r"^(error|ALARM):(\d+)")
-
-
 def explain(line: str) -> Optional[str]:
     """The words for a controller's ``error:N`` or ``ALARM:N``, kept beside the line
     in the port's log and said in a refusal; None for any other line."""
-    m = EXPLAINED_RE.match(line.strip())
+    m = OBJECTION_RE.match(line.strip())
     if not m:
         return None
     code = int(m.group(2))

@@ -170,6 +170,16 @@ def test_the_controller_s_numbers_have_words():
     assert grbl.explain("error:999") == "error 999" and grbl.explain("ok") is None
 
 
+def test_the_link_objects_in_each_dialect_s_own_words():
+    """Marlin's words are the Marlin module's, GRBL's the GRBL module's, and the link
+    closes an exchange on either, before a board is identified as speaking one."""
+    assert gcode.ERROR_RE.match("Error:checksum mismatch") and gcode.ERROR_RE.match("!! kill")
+    assert gcode.ERROR_RE.match("error:20") is None and gcode.ERROR_RE.match("ALARM:3") is None
+    assert grbl.OBJECTION_RE in gcode.OBJECTIONS and gcode.ERROR_RE in gcode.OBJECTIONS
+    assert grbl.OBJECTION_RE.match("error:20") and grbl.OBJECTION_RE.match("ALARM:3")
+    assert grbl.OBJECTION_RE.match("Error:checksum mismatch") is None
+
+
 def test_a_streamed_file_may_not_carry_settings_tool_changes_or_a_fast_spindle():
     text = "G21 G90\n$110=4000\nM6 T1\nM3 S30000\nM0\nG1 X10 F800\nS12000 M3\nM5\nM30\n"
     total, problems = grbl.check_gcode(text)
