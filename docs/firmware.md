@@ -490,8 +490,11 @@ press for. A printer keeps its own firmware and has no Flashing card.
 
 Selected's Device section is one line for a pinned board -- its port and what
 it is doing -- with **Open** (its Machine) and **Unpin**; for a piece with
-nothing pinned, the detected ports to pin, Query (`M115` without pinning) and
-a box to pin by typed identity. The badge over a board in the world opens its
+nothing pinned, the detected ports to pin, Query and a box to pin by typed
+identity. Query asks what a port's board is without pinning it: a printer's
+`M115`, then a router's `$I`. A board that answers neither is named with both
+objections, and one that sent nothing at all to either is said to have: a
+controller switched off behind its powered USB bridge, held by its stop or hung. The badge over a board in the world opens its
 Machine too.
 
 Every drawer of a board -- its badge in the world, its badge in Site's tree,

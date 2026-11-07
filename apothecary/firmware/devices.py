@@ -735,16 +735,33 @@ def _identify(link: gcode.GcodeLink, reset: bool) -> PrinterInfo:
     """What answers on the link: Marlin's ``M115`` first, and when nothing Marlin
     answers, GRBL's ``$I``. A GRBL controller answers ``M115`` with ``error:20``, a
     Marlin board ``$I`` with an unknown-command echo, so each is harmless to the
-    other; the first objection is the one raised when neither answers."""
+    other. When neither answers, the refusal names both questions and each one's
+    objection, and says so when the board sent nothing at all to either."""
+    heard = link.heard
     try:
         return gcode.identify_printer(link, reset=reset)
     except ToolchainError as marlin_said:
         try:
             info = grbl.identify_router(link)
-        except ToolchainError:
-            raise marlin_said from None
+        except ToolchainError as grbl_said:
+            raise ToolchainError(
+                _neither_answered(link.port, marlin_said, grbl_said, silent=link.heard == heard)
+            ) from None
         _annotated(link, info.dialect)
         return info
+
+
+def _neither_answered(port: str, marlin_said: Exception, grbl_said: Exception, silent: bool) -> str:
+    """Why ``port`` is neither a printer nor a router: both questions and what each
+    met, the port named once."""
+    said = "; ".join(str(e).removeprefix(f"{port}: ") for e in (marlin_said, grbl_said))
+    if silent:
+        return (
+            f"{port} sent nothing at all to a printer's M115 or a router's $I ({said}): "
+            "a board answers neither while its machine is switched off, held by its stop, "
+            "or hung until its power is cycled"
+        )
+    return f"{port} answered neither a printer's M115 nor a router's $I ({said})"
 
 
 def _annotated(link: gcode.GcodeLink, dialect: Optional[str]) -> gcode.GcodeLink:

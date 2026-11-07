@@ -352,6 +352,36 @@ def test_identify_refuses_non_gcode_board_and_releases(fake_arduino_cli, scripte
         devices.identify_printer("/dev/ttyNOPE", 115200)
 
 
+def test_a_board_that_answers_neither_dialect_is_refused_naming_both(
+    fake_arduino_cli, scripted_links
+):
+    """Neither a printer's M115 nor a router's $I answered: the refusal names both
+    questions and what each met, the port once, and says so when the board sent
+    nothing at all -- a router's controller switched off behind its powered USB
+    bridge is that."""
+    scripted_links.factory = lambda port, baud: ScriptedTransport(
+        port, baud, {"M115": ["blink 1"]}, boot=[]
+    )  # a sketch that talks, and is neither
+    with pytest.raises(ToolchainError) as talking:
+        devices.identify_printer("/dev/ttyFAKE0", 115200)
+    said = str(talking.value)
+    assert said.startswith("/dev/ttyFAKE0 answered neither a printer's M115 nor a router's $I (")
+    assert "no `ok` for M115" in said and "no [VER: line in the $I reply" in said
+    assert "nothing at all" not in said and said.count("/dev/ttyFAKE0") == 1
+
+    scripted_links.factory = lambda port, baud: ScriptedTransport(
+        port, baud, {"M115": [], "$I": []}, boot=[]
+    )  # a controller switched off: its bridge is on the port list, the board says nothing
+    with pytest.raises(ToolchainError) as silent:
+        devices.identify_printer("/dev/ttyFAKE0", 115200)
+    said = str(silent.value)
+    assert said.startswith(
+        "/dev/ttyFAKE0 sent nothing at all to a printer's M115 or a router's $I ("
+    )
+    assert "no `ok` for M115" in said and "no `ok` for $I" in said and "switched off" in said
+    assert scripted_links.open_ports == []
+
+
 def test_poll_failure_goes_offline_and_drops_link(fake_arduino_cli, scripted_links):
     devices.identify_printer("/dev/ttyFAKE1", 115200)
     ScriptedTransport.instances[0].replies = {"M105": []}

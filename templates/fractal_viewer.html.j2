@@ -7090,9 +7090,10 @@
                 }
             }
 
-            // Ask a detected port what it is (M115) without pinning it.
+            // Ask a detected port what it is (a printer's M115, then a router's $I)
+            // without pinning it. A refusal is the server's, which names both.
             async queryPort(port) {
-                this.queryResult = { port, text: 'asking M115…' };
+                this.queryResult = { port, text: 'asking what it is…' };
                 this.updateDeviceViews();
                 try {
                     const view = await this.boards.identify(port);
@@ -7102,7 +7103,7 @@
                     // The rows' devices follow what it said, from the server.
                     await this.boards.scan();
                 } catch (err) {
-                    this.queryResult = { port, text: `${port}: not a G-code printer (${err.message})` };
+                    this.queryResult = { port, text: err.message };
                     this.setStatus(this.queryResult.text, 'error');
                 }
                 this.updateDeviceViews();
@@ -8071,7 +8072,7 @@
                     else if (!free.length) body = `<div class="device-line device-empty">${this.siteDevices.length ? 'every detected device is already pinned' : 'no devices detected'}</div>${manual}`;
                     else body = `<div class="device-actions">
                             <select class="dev-pick">${free.map((d) => `<option value="${esc(d.port)}"${this.queryResult && this.queryResult.port === d.port ? ' selected' : ''}>${esc(d.port)} · ${esc(boardLabel(d))}</option>`).join('')}</select>
-                            <button type="button" class="dev-query" title="Ask M115 what this is, without pinning">Query</button>
+                            <button type="button" class="dev-query" title="Ask what this is, a printer's M115 then a router's $I, without pinning">Query</button>
                             <button type="button" class="dev-pin">Pin</button>
                         </div>${q}${manual}`;
                 }

@@ -619,6 +619,9 @@ class GcodeLink:
         # The last `ALARM:N` the board said, whenever it said it: a GRBL status report
         # says a controller is in alarm and not which (grbl.poll_router reads this).
         self.alarm: Optional[str] = None
+        # Every byte read from the board since the link opened: unchanged across an
+        # exchange, the board said nothing at all to it.
+        self.heard = 0
         self.opened_at = datetime.now(timezone.utc)
         self.log = log or CommsLog(port)
         self.engine = type(transport).__name__
@@ -665,6 +668,7 @@ class GcodeLink:
             chunk = self._t.read(min(left, 0.5))
             if not chunk:
                 continue
+            self.heard += len(chunk)
             self._buf += chunk
         line, self._buf = self._buf.split(b"\n", 1)
         text = line.decode("utf-8", "replace").rstrip("\r")

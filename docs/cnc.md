@@ -55,7 +55,7 @@ and released exactly as a printer's is.
 
 | | A printer (Marlin, `gcode.py`) | The router (GRBL, `grbl.py`) |
 |---|---|---|
-| Identified by | `M115` | `$I`; a GRBL controller answers `M115` with `error:20`, so Marlin's is tried first and GRBL's when nothing Marlin answers |
+| Identified by | `M115` | `$I`; a GRBL controller answers `M115` with `error:20`, so Marlin's is tried first and GRBL's when nothing Marlin answers; a board answering neither is refused with both objections |
 | Polled by | `M105`, `M114`, `M27`, `M119`, `M31` | the realtime `?` (a status report, no `ok`) and `$G` (the modal words) |
 | Its state | `idle`, `printing`, `offline` | the controller's own word (`Idle`, `Run`, `Jog`, `Home`, `Hold:0`, `Door`, `Alarm`), folded to `idle`, `running`, `hold`, `alarm`, `offline` |
 | What a poll carries | temperatures, position, endstops, filament, SD progress | machine and work position and the offset between them, the spindle's speed and whether it is on, the feed, the input pins on (limits, probe, door, hold), the alarm's number, the overrides |
