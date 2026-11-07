@@ -8,9 +8,9 @@ points it fastens at, and the space that must stay clear around it.
 So a black box is described by its interface, and where that description comes
 from is a separate, replaceable question. `StubProvider` returns hand-entered
 numbers from a datasheet, which is enough to get a scaffold together and is
-what every artifact starts as. A `KiCadProvider` reading a real board outline
-is the same interface with a better source behind it, and swapping it changes
-no geometry code.
+what every artifact starts as. A provider reading a real board outline is the
+same interface with a better source behind it, and swapping it changes no
+geometry code.
 
 That split is deliberate: the seam is the `BlackBoxProvider` protocol, which
 has more than one possible implementation, rather than a KiCad file format

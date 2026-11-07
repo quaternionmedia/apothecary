@@ -16,7 +16,7 @@ from typing import Dict, Optional
 from pydantic import BaseModel, Field
 
 from apothecary.models import BoundingBox3D, Color, PrintSettings, Vector3D
-from apothecary.models.blackbox import BlackBox
+from apothecary.models.blackbox import BlackBox, Keepout, MountPoint
 
 from .base import BasePart, ContestedValue
 from .skeleton import ROOT
@@ -86,13 +86,73 @@ class Params(BaseModel):
         return self.floor_t + self.standoff_h + self.board_t + self.headroom
 
 
+# T1-Core, the datum project's reference board, as a hand-entered envelope: 5 V
+# USB-C bus power, a full 16-pin receptacle, a Wi-Fi module. The sizes stand in for
+# a layout that does not exist; the constraints are the project's records', and are
+# what the geometry must respect: a USB-C receptacle on one edge needing mating
+# clearance, a Wi-Fi module needing an antenna keepout (no ground plane, no metal),
+# and signal only (no mains anywhere near this part). A board read from its layout
+# is another ``BlackBox`` from another provider, and nothing past ``params_for``
+# knows the difference.
+_T1_CORE_W = 40.0
+_T1_CORE_D = 30.0
+_T1_CORE_H = 1.6  # standard board stack
+_MOUNT_INSET = 3.5
+
+
+def t1_core_stub() -> BlackBox:
+    """The reference board as a hand-entered envelope, marked ``source="stub"`` so a
+    scene can report how much of itself is guessed."""
+    return BlackBox(
+        name="t1-core",
+        envelope=BoundingBox3D(
+            min_point=Vector3D(x=0, y=0, z=0),
+            max_point=Vector3D(x=_T1_CORE_W, y=_T1_CORE_D, z=_T1_CORE_H),
+        ),
+        mounts=[
+            MountPoint(name=f"m{i + 1}", position=Vector3D(x=x, y=y, z=0), hole_diameter=2.2)
+            for i, (x, y) in enumerate(
+                [
+                    (_MOUNT_INSET, _MOUNT_INSET),
+                    (_T1_CORE_W - _MOUNT_INSET, _MOUNT_INSET),
+                    (_MOUNT_INSET, _T1_CORE_D - _MOUNT_INSET),
+                    (_T1_CORE_W - _MOUNT_INSET, _T1_CORE_D - _MOUNT_INSET),
+                ]
+            )
+        ],
+        keepouts=[
+            Keepout(
+                name="usb-c-mating",
+                box=BoundingBox3D(
+                    min_point=Vector3D(x=_T1_CORE_W / 2 - 5, y=-9, z=0),
+                    max_point=Vector3D(x=_T1_CORE_W / 2 + 5, y=0, z=4),
+                ),
+                reason="USB-C plug and strain relief need to arrive from outside the "
+                "enclosure; the wall gets an opening here.",
+            ),
+            Keepout(
+                name="antenna",
+                box=BoundingBox3D(
+                    min_point=Vector3D(x=0, y=_T1_CORE_D - 8, z=0),
+                    max_point=Vector3D(x=_T1_CORE_W, y=_T1_CORE_D, z=8),
+                ),
+                reason="Wi-Fi module antenna. Keep printed material thin and metal "
+                "absent; a boss here detunes it.",
+            ),
+        ],
+        source="stub",
+        notes="Envelope is provisional. Constraints (USB-C edge access, antenna "
+        "keepout, signal-only) come from the datum project's records and hold "
+        "regardless of final board size.",
+    )
+
+
 def params_for(board: BlackBox, **overrides: float) -> Params:
     """Derive tray parameters from a black box.
 
     The entire adapter between "something described the board" and "the tray
-    fits it". A provider swap -- the hand-entered stub
-    (``shims.kicad.t1_core_stub``) for a KiCad outline, say -- is invisible
-    past this line.
+    fits it". A provider swap -- the hand-entered stub (``t1_core_stub``) for a
+    board read from its layout, say -- is invisible past this line.
     """
     env = board.envelope
     inset = (
@@ -186,7 +246,7 @@ def create(metadata_root: Path) -> DatumCorePart:
                 ),
                 ContestedValue(
                     value=30.0,
-                    source="apothecary/shims/kicad.py, t1_core_stub",
+                    source="apothecary/projects/parts/datum_core.py, t1_core_stub",
                     note="The hand-entered envelope the black-box seam serves today: a "
                     "specific board rather than the bound. No schematic exists to "
                     "settle which is real.",

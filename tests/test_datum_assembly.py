@@ -8,13 +8,15 @@ its parts nobody has measured.
 
 from __future__ import annotations
 
+import importlib.util
+
 import pytest
 
 from apothecary.models import BoundingBox3D, Vector3D
 from apothecary.models.blackbox import BlackBox, MountPoint, StubProvider
 from apothecary.projects.assemblies import build
 from apothecary.projects.parts import datum_core as datum_part
-from apothecary.shims.kicad import KiCadProvider, t1_core_stub
+from apothecary.projects.parts.datum_core import t1_core_stub
 
 
 def test_stub_board_reports_itself_as_a_stub():
@@ -111,16 +113,19 @@ def test_the_enclosure_itself_is_not_a_stub():
     assert not enclosure.stub, "geometry apothecary authors is not a guess"
 
 
-def test_kicad_provider_does_not_claim_to_have_read_a_board():
-    provider = KiCadProvider()
-    assert provider.can_read_board() is False
-    assert provider.unresolved() == ["t1-core"]
-    assert provider.get("t1-core").source == "stub"
+def test_the_seam_has_one_provider_shape():
+    """A stub serves what nobody has measured, and says so; a reader of a board's
+    layout is a provider of its own when one exists, and nothing stands in for it."""
+    assert importlib.util.find_spec("apothecary.shims") is None
+    _, assembly = build()
+    assert [p.name for p in assembly.placements if p.stub] == [
+        p.name for p in assembly.placements if p.name != "datum-enclosure"
+    ]
 
 
 def test_unknown_black_box_names_what_is_available():
     with pytest.raises(KeyError, match="t1-core"):
-        KiCadProvider().get("no-such-board")
+        StubProvider().register(t1_core_stub()).get("no-such-board")
 
 
 def test_part_is_registered_with_print_settings():

@@ -115,7 +115,6 @@ GROUPS = {
             "apothecary/airgap_metrics.py",
             "apothecary/datum_core_site.py",
             "apothecary/openscad_installer.py",
-            "apothecary/shims/*",
             "apothecary/routes/part_edits.py",
             "apothecary/routes/airgap.py",
             "apothecary/cli/parts.py",

@@ -283,15 +283,6 @@ def capabilities() -> List[Capability]:
             addresses=[],
         )
     )
-    found.append(
-        Capability(
-            name="KiCadProvider",
-            kind="provider",
-            summary="the same interface, reading a real board outline",
-            addresses=["unmeasured"],
-        )
-    )
-
     found.extend(
         [
             Capability(

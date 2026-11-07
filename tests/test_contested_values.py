@@ -84,7 +84,7 @@ class TestParamsEndpoint:
         board_y = next(f for f in body["fields"] if f["name"] == "board_y")
         sources = {c["source"] for c in board_y["contested"]}
         assert any("HANDOFF" in s for s in sources)
-        assert any("kicad" in s for s in sources)
+        assert any("t1_core_stub" in s for s in sources)
 
     def test_no_candidate_cites_a_file_that_no_longer_exists(self):
         """A citation is only provenance while a reader can go and look: every

@@ -153,6 +153,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Removed
 
+- `apothecary/shims/`: `KiCadProvider`, a provider that read nothing. The datum board's hand-entered envelope (`t1_core_stub`) is the datum part's, served by a `StubProvider`, and a reader of a layout is a provider of its own behind `BlackBoxProvider` when one exists. ([code](apothecary/models/blackbox.py))
 - `system`, `install`, `submodules`, `testrun`, `dev`, `inventory` and `photo look`: a script that calls one meets `No such command`; `apothecary --help` names what to use. ([code](apothecary/cli/main.py))
 - `test setup-e2e`, `validate-e2e` and `run-e2e`, also stubs. ([code](apothecary/cli/testing.py))
 - The JSCAD viewer's install step and `package.json`; no route served it. ([code](apothecary/cli/server.py))
