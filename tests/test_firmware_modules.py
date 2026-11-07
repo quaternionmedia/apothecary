@@ -22,7 +22,7 @@ from firmware_helpers import fake_cli_calls
 from apothecary.api import app
 from apothecary.cli import cli
 from apothecary.firmware import bindings, devices, service
-from apothecary.firmware.modules import Tool, get_module, module_for, modules
+from apothecary.firmware.modules import get_module, module_for, modules
 from apothecary.firmware.modules.arduino import ArduinoModule
 from apothecary.firmware.modules.rust_esp32 import (
     CARGO,
@@ -31,7 +31,7 @@ from apothecary.firmware.modules.rust_esp32 import (
     export_paths,
 )
 from apothecary.firmware.sketches import discover_sketches, find_sketch
-from apothecary.firmware.toolchains import ToolchainError
+from apothecary.firmware.toolchains import Tool, ToolchainError, under_tools_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 RUST = "esp32_blink@rust-esp32"
@@ -76,7 +76,7 @@ def test_two_modules_each_saying_what_it_builds():
 
 
 def test_a_tool_is_found_by_its_variable_then_the_tools_dir_then_path(tmp_path, monkeypatch):
-    tool = Tool("gizmo", env="GIZMO", managed="kit/bin/gizmo", command="gizmo")
+    tool = Tool("gizmo", env="GIZMO", managed=under_tools_dir("kit/bin/gizmo"), commands=("gizmo",))
     monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tmp_path / "tools"))
     monkeypatch.setenv("PATH", str(tmp_path / "bin"))
     monkeypatch.delenv("GIZMO", raising=False)
@@ -96,6 +96,23 @@ def test_a_tool_is_found_by_its_variable_then_the_tools_dir_then_path(tmp_path, 
     assert tool.find() == (named, "GIZMO")
     monkeypatch.setenv("GIZMO", "none")  # the suites' servers: none, whatever is installed
     assert tool.find() == (None, None)
+
+
+def test_the_slicer_s_program_is_found_by_the_same_finder(tmp_path, monkeypatch):
+    """One ``Tool`` for every bought engine: the slicer modules keep none of their own,
+    and a tool named by its variable with ``~`` in it is found, as the slicer's is."""
+    from apothecary.slicer import modules as slicer_modules
+    from apothecary.slicer.modules import orcaslicer
+
+    assert "Tool" not in vars(slicer_modules)
+    assert isinstance(orcaslicer.TOOL, Tool)
+    tool = Tool("gizmo", env="GIZMO", managed=lambda: None, commands=("gizmo",))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    mine = tmp_path / "kit" / "gizmo"
+    mine.parent.mkdir()
+    mine.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("GIZMO", "~/kit/gizmo")
+    assert tool.find() == (mine, "GIZMO")
 
 
 # --- the Rust esp32_blink, beside the Arduino one --------------------------------
@@ -225,7 +242,7 @@ def test_the_tools_dir_cargo_runs_with_its_homes_there_and_the_vendored_crates(
     ~/.rustup; crates.io is the vendored folder; espup's linker is on PATH."""
     tools = tmp_path / "tools" / "rust-esp32"
     monkeypatch.setenv("CARGO", "")
-    managed = CARGO.managed_path()
+    managed = CARGO.managed()
     managed.parent.mkdir(parents=True)
     managed.write_text("#!/bin/sh\n")
     (tools / "vendor").mkdir()

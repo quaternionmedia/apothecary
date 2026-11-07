@@ -47,8 +47,8 @@ from typing import List, Optional, Tuple
 
 from ...stays_local import subprocess_env
 from ..models import BoardInfo, ModuleStatus, SketchInfo
-from ..toolchains import ToolchainError, tools_dir
-from . import Log, Plan, Tool, ToolchainModule
+from ..toolchains import Tool, ToolchainError, tools_dir, under_tools_dir
+from . import Log, Plan, ToolchainModule
 from .arduino import part_of, sidecar_baud, sidecar_display
 
 RUST_ESP32 = "rust-esp32"
@@ -102,9 +102,17 @@ def export_file(windows: Optional[bool] = None) -> Path:
     return home() / ("export-esp.ps1" if windows else "export-esp.sh")
 
 
-CARGO = Tool("cargo", env="CARGO", managed=f"{RUST_ESP32}/cargo/bin/cargo", command="cargo")
+CARGO = Tool(
+    "cargo",
+    env="CARGO",
+    managed=under_tools_dir(f"{RUST_ESP32}/cargo/bin/cargo"),
+    commands=("cargo",),
+)
 ESPFLASH = Tool(
-    "espflash", env="ESPFLASH", managed=f"{RUST_ESP32}/bin/espflash", command="espflash"
+    "espflash",
+    env="ESPFLASH",
+    managed=under_tools_dir(f"{RUST_ESP32}/bin/espflash"),
+    commands=("espflash",),
 )
 
 
@@ -220,7 +228,7 @@ class RustEsp32Module(ToolchainModule):
 
     def managed(self, cargo: Optional[Path]) -> bool:
         """Whether ``cargo`` is the one in the tools dir, which runs with its homes there."""
-        return cargo is not None and cargo == CARGO.managed_path()
+        return cargo is not None and cargo == CARGO.managed()
 
     def env(self, cargo: Optional[Path] = None) -> dict:
         cargo = cargo if cargo is not None else CARGO.detect()

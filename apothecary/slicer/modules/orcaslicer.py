@@ -58,12 +58,13 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from ...firmware.toolchains import Tool
 from ...stays_local import subprocess_env
 from .. import compose
 from .. import orcaslicer_installer as installer
 from ..models import Setting, SlicerStatus, SlicerTool
 from ..profiles import Declared, PrinterProfile
-from . import Log, NotInstalled, Output, Plan, Resolved, SlicerError, SlicerModule, Tool
+from . import Log, NotInstalled, Output, Plan, Resolved, SlicerError, SlicerModule
 
 TOOL = Tool(
     name="OrcaSlicer",

@@ -647,7 +647,7 @@ def test_a_rust_build_and_flash_reach_no_host(monkeypatch, tmp_path):
     monkeypatch.setenv("CARGO", "")
     monkeypatch.setenv("ESPFLASH", str(tmp_path / "espflash"))
     (tmp_path / "espflash").write_text("#!/bin/sh\n")
-    cargo = CARGO.managed_path()
+    cargo = CARGO.managed()
     cargo.parent.mkdir(parents=True)
     cargo.write_text("#!/bin/sh\n")
     (tmp_path / "tools" / "rust-esp32" / "vendor").mkdir()
