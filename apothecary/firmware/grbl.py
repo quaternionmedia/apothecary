@@ -585,7 +585,8 @@ class SimulatedRouter:
     answered ``ok`` once queued, the queue runs in its own time (each move the
     time its distance and feed say), and a line that finds the queue full waits
     for room, as a sender counting characters would. Homing answers when it is
-    done, as Grbl's does. Its machine coordinates are negative from the home
+    done, as Grbl's does: ``$H`` homes all three axes, ``$HX``, ``$HY`` or ``$HZ``
+    the one it names, and the others stay where they stand. Its machine coordinates are negative from the home
     corner at the back right and the top of Z, as a Grbl machine homed to its
     maximum switches has them, so the tool stands in the working area at
     ``mpos + travel``. It starts idle with the tool over the middle of the
@@ -812,7 +813,12 @@ class SimulatedRouter:
         if upper.startswith("$H"):
             if self._busy():
                 return ["error:8"]  # a $ command needs the machine idle
-            home = {"x": -self.PULL_OFF, "y": -self.PULL_OFF, "z": -self.PULL_OFF}
+            named = upper[2:].lower()
+            if named not in ("", "x", "y", "z"):
+                return ["error:3"]  # a word after $H that is no axis
+            home = self._end_of_queue()
+            for axis in named or "xyz":
+                home[axis] = -self.PULL_OFF
             self.alarm = None
             self._enqueue(home, self.RAPID / 2, "home")
             return []  # ok once it is done: _answer waits

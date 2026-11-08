@@ -210,6 +210,29 @@ def test_a_streamed_file_may_not_carry_settings_tool_changes_or_a_fast_spindle()
 # --- the simulated router, over a link ---------------------------------------------------
 
 
+def test_the_simulated_router_homes_the_axis_it_is_told_and_no_other(router_links):
+    link = router_links.open(PORT, 115200)
+
+    def at():
+        return grbl.poll_router(link).position
+
+    assert at() == {"x": -200.0, "y": -300.0, "z": -40.0}
+    # Each axis alone: it goes to its switch and pulls off; the others stay put.
+    assert grbl.control_router(link, "$HZ") == ["ok"]
+    assert at() == {"x": -200.0, "y": -300.0, "z": -3.0}
+    assert grbl.control_router(link, "$HX") == ["ok"]
+    assert at() == {"x": -3.0, "y": -300.0, "z": -3.0}
+    assert grbl.control_router(link, "$HY") == ["ok"]
+    assert at() == {"x": -3.0, "y": -3.0, "z": -3.0}
+    # A bare $H still homes all three.
+    assert grbl.control_router(link, "$J=G91 G21 X-20 Y-20 Z-20 F500") == ["ok"]
+    assert grbl.control_router(link, "$H") == ["ok"]
+    assert at() == {"x": -3.0, "y": -3.0, "z": -3.0}
+    # A word after $H that is no axis is refused.
+    with pytest.raises(ToolchainError, match="error:3"):
+        link.command("$HA")
+
+
 def test_the_simulated_router_is_a_plausible_grbl(router_links):
     link = router_links.open(PORT, 115200)
     info = grbl.identify_router(link)
