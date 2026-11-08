@@ -2,24 +2,31 @@
 
 One layout, on every deck it is started for (``Deck`` in ``firmware/deck.py``):
 
-- the top row's keys choose the machine (0 printer_1, 1 cnc_router), cycle the jog
-  step through 0.1, 1 and 10 mm (2), and stop the chosen machine (3);
-- the bottom row's keys each show what the knob under it moves, from the chosen
-  machine's last poll: X, Y and Z, and a fourth quantity -- the router's spindle speed,
-  the printer's extruder;
+- the top row's keys choose the machine (0 printer_1, 1 cnc_router) and cycle the jog
+  step through 0.1, 1 and 10 mm (2);
+- the bottom row holds the stops: 4 stops printer_1 and 5 cnc_router, each by its own
+  dialect's stop, and 7, bright red and last, nearest a hand on the knobs, stops every
+  machine, each by its own; none needs control armed;
 - the strip says which machine, whether its control is armed and for how long, the
-  step, and what the last turn did or why it did nothing;
+  chosen machine's last poll (X, Y, Z and the fourth quantity), the step, and what the
+  last turn did or why it did nothing;
 - knobs one to three jog X, Y and Z by so many steps; the fourth turns the spindle's
-  speed in steps of 1000 rpm (only while it turns) or extrudes 1 mm a step.
+  speed in steps of 1000 rpm (only while it turns) or extrudes 1 mm a step;
+- a machine's key held (``LONG_PRESS_S``) twice in a row, the second within
+  ``ARM_WINDOW_S`` of the first, arms that machine's control for the latch's own five
+  minutes, as the Machine's Control does; one long press alone, a second after the
+  window, or anything pressed between them arms nothing, and the strip says what the
+  first did and what the second will.
 
 **Nothing here moves a machine by a way of its own.** Every line goes through
 ``devices.printer_control``, the function behind ``POST /firmware/printers/command``:
 the port's ``ControlLatch`` must be armed (by the Machine window, or by the two long
-presses above, which arm the same latch), the line is normalised in the port's dialect and refused out of
-its bounds (``grbl.JOG_MAX_MM``, ``gcode.JOG_MAX_MM``, ``grbl.SPINDLE_MAX_RPM``,
-``EXTRUDE_MAX_MM``), and a job holding the port refuses it. The stop key sends
-``devices.emergency_stop_for(port)``, the one line that always goes. The machine's own
-red button is faster, and stays the stop to reach for.
+presses above, which arm the same latch), the line is normalised in the port's dialect
+and refused out of its bounds (``grbl.JOG_MAX_MM``, ``gcode.JOG_MAX_MM``,
+``grbl.SPINDLE_MAX_RPM``, ``EXTRUDE_MAX_MM``), and a job holding the port refuses it. A stop
+key sends ``devices.emergency_stop_for(port)``, the one line that always goes; the
+everything key sends each machine's own, one after another, whatever one of them
+answers. The machine's own red button is faster, and stays the stop to reach for.
 
 It starts for a deck only when ``APOTHECARY_DECK_CONTROL`` is set (the demo sets it) or
 a person asks (``POST /firmware/decks/{id}/control``): opening a real deck takes the
@@ -42,7 +49,14 @@ SITE = "garage"
 STEPS_MM = (0.1, 1.0, 10.0)
 AXES = ("X", "Y", "Z")
 KEY_MACHINE = (0, 1)
-KEY_STEP, KEY_STOP = 2, 3
+KEY_STEP = 2
+# Two classes of stop, the owner's word: one key per machine, each sending that machine's
+# own stop, and one that stops every machine at once. The everything key is the bottom
+# row's last, nearest a hand resting on the knobs, bright red where the per-machine stops
+# are dark; none needs control armed, as the page's E-STOP does not.
+KEY_STOP_MACHINE = (4, 5)  # printer_1's and cnc_router's, in MACHINES' order
+KEY_STOP_ALL = 7
+STOP_ALL_COLOUR, STOP_ONE_COLOUR = "red", "#7a2a22"
 KNOB_FOURTH = 3
 FEED = {"printer": 3000, "router": 1000}  # the page's jog feeds (machine_words.js)
 EXTRUDE_MM_PER_STEP = 1.0
@@ -141,9 +155,18 @@ class DeckController:
             self._stop_listening()
             self._stop_listening = None
 
+    def _refresh(self) -> None:
+        """While the chosen machine's control is armed it is in use: its readouts follow it
+        (a poll is a read, as the Machine's own auto-poll is); disarmed, nothing is asked."""
+        port = self._port_quiet()
+        if port and self.armed(port) > 0:
+            with self._lock:
+                self._after(port)
+
     def _tick(self) -> None:
         while not self._stopped.wait(TICK_S):
             try:
+                self._refresh()
                 self.draw()
             except Exception:  # noqa: BLE001 -- a deck that went away: the next tick tries again
                 pass
@@ -214,8 +237,10 @@ class DeckController:
         if index == KEY_STEP:
             self.step = (self.step + 1) % len(STEPS_MM)
             self.said = (f"step {_mm(self.step_mm)} mm", "grey")
-        elif index == KEY_STOP:
-            self._stop_machine()
+        elif index in KEY_STOP_MACHINE:
+            self._stop([MACHINES[KEY_STOP_MACHINE.index(index)]])
+        elif index == KEY_STOP_ALL:
+            self._stop(list(MACHINES))
 
     # -- what is sent -----------------------------------------------------------------
 
@@ -305,16 +330,25 @@ class DeckController:
             self.said = (f"spindle {rpm} rpm", "grey")
             self._after(port)
 
-    def _stop_machine(self) -> None:
-        port = self._port()
-        if port is None:
-            return
-        try:
-            self.send(port, devices.emergency_stop_for(port))
-            self.sent.append("stop")
-            self.said = (f"STOP sent to {self.machine.name}", "red")
-        except (ValueError, ToolchainError) as exc:
-            self.said = (f"stop: {exc}", "red")
+    def _stop(self, machines: List[Machine]) -> None:
+        """Each of ``machines`` sent its own dialect's stop, one after another, whatever one of
+        them answers: a stop never waits on the latch, a poll or another machine."""
+        stopped, failed = [], []
+        for machine in machines:
+            port = self.resolve(machine)
+            if port is None:
+                failed.append(f"{machine.name} (no board pinned)")
+                continue
+            try:
+                self.send(port, devices.emergency_stop_for(port))
+                self.sent.append(f"stop {machine.name}")
+                stopped.append(machine.name)
+            except (ValueError, ToolchainError) as exc:
+                failed.append(f"{machine.name} ({exc})")
+        said = f"STOP sent to {', '.join(stopped)}" if stopped else "STOP reached nothing"
+        if failed:
+            said += f"; not {', '.join(failed)}"
+        self.said = (said, "red")
 
     def _after(self, port: str) -> None:
         """What the machine says now, for the readouts: a poll never moves anything."""
@@ -362,11 +396,15 @@ class DeckController:
                 chosen = machine is self.machine
                 self._put(index, machine.kind.upper(), "green" if chosen else "grey", machine.name)
             self._put(KEY_STEP, "STEP", "amber", f"{_mm(self.step_mm)} mm")
-            self._put(KEY_STOP, "STOP", "red", self.machine.name)
-            for offset, axis in enumerate(AXES):
-                self._put(4 + offset, axis, "blue", self._readout(axis))
+            for index, machine in zip(KEY_STOP_MACHINE, MACHINES, strict=True):
+                self._put(index, "STOP", STOP_ONE_COLOUR, machine.name)
+            self._put(KEY_STOP_ALL, "STOP ALL", STOP_ALL_COLOUR, "every machine")
+            self._put(3, "", "black", None)
+            self._put(6, "", "black", None)
             name, small = self._fourth_readout()
-            self._put(4 + KNOB_FOURTH, name, "blue", small)
+            readout = (
+                "  ".join(f"{axis} {self._readout(axis)}" for axis in AXES) + f"  {name} {small}"
+            )
             port = self._port_quiet()
             left = self.armed(port) if port else 0.0
             armed = f"armed {int(left) // 60}:{int(left) % 60:02d}" if left > 0 else "disarmed"
@@ -375,7 +413,7 @@ class DeckController:
                 "strip",
                 f"{self.machine.name} · {armed}",
                 "green" if left > 0 else "grey",
-                f"{_mm(self.step_mm)} mm · {text}" if colour != "red" else text,
+                f"{readout} · {_mm(self.step_mm)} mm · {text}" if colour != "red" else text,
             )
 
     def state(self) -> dict:

@@ -53,9 +53,14 @@ def _choose_router(one):
 def test_the_layout_is_drawn_and_sends_nothing(bench):
     controller, one, links = bench
     assert set(one.keys) == set(range(8)) and one.strip is not None
-    assert [one.keys[i]["text"] for i in range(4)] == ["PRINTER", "ROUTER", "STEP", "STOP"]
-    assert [one.keys[i]["text"] for i in (4, 5, 6, 7)] == ["X", "Y", "Z", "E"]
-    assert one.strip["text"] == "printer_1 · disarmed"
+    assert [one.keys[i]["text"] for i in (0, 1, 2)] == ["PRINTER", "ROUTER", "STEP"]
+    # Two classes of stop: one per machine, and one for everything that looks different
+    # and stands last on the bottom row, nearest a hand on the knobs.
+    assert [one.keys[i]["text"] for i in (4, 5, 7)] == ["STOP", "STOP", "STOP ALL"]
+    assert [one.keys[i]["small"] for i in (4, 5, 7)] == ["printer_1", "cnc_router", "every machine"]
+    assert one.keys[7]["colour"] == deck_control.STOP_ALL_COLOUR != one.keys[4]["colour"]
+    assert one.keys[4]["colour"] == one.keys[5]["colour"] == deck_control.STOP_ONE_COLOUR
+    assert one.strip["text"] == "printer_1 · disarmed" and "X " in one.strip["small"]
     assert controller.sent == []
 
 
@@ -137,19 +142,74 @@ def test_the_routers_fourth_knob_turns_the_spindle_only_while_it_turns_and_withi
     assert controller.sent[-1] == f"M3 S{grbl.SPINDLE_MAX_RPM}"
     _turn(one, 3, -99)
     assert controller.sent[-1] == "M3 S0"
-    assert one.keys[7]["text"] == "S"
+    assert " S " in one.strip["small"]  # the fourth quantity is on the strip
 
 
-def test_the_stop_key_stops_the_chosen_machine_whatever_the_latch_says(bench):
-    controller, one, links = bench
-    _choose_router(one)
+def _both_going(links):
+    """The router's spindle on and the printer's hotend heating: what each stop undoes."""
     links.control.arm(ROUTER)
+    links.control.arm(PRINTER)
     devices.printer_control(ROUTER, "M3 S8000")
-    assert grbl.poll_router(links.get(ROUTER)).spindle.on
+    devices.printer_control(PRINTER, "M104 S200")
     links.control.disarm(ROUTER)
-    _press(one, 3)
-    assert controller.sent == ["stop"] and "STOP sent to cnc_router" in one.strip["small"]
-    assert not grbl.poll_router(links.get(ROUTER)).spindle.on
+    links.control.disarm(PRINTER)
+
+
+def _spindle_on(links):
+    return grbl.poll_router(links.get(ROUTER)).spindle.on
+
+
+def _printer_halted(links):
+    try:
+        gcode.poll_printer(links.get(PRINTER))
+    except Exception as exc:  # noqa: BLE001 -- a halted printer answers with its halt
+        return "halted" in str(exc)
+    return False
+
+
+def test_a_machines_own_stop_key_stops_that_machine_alone_whatever_the_latch_says(bench):
+    controller, one, links = bench
+    _both_going(links)
+    assert _spindle_on(links)
+    _press(one, 5)  # cnc_router's
+    assert controller.sent == ["stop cnc_router"]
+    assert "STOP sent to cnc_router" in one.strip["small"] and "printer_1" not in one.strip["small"]
+    assert not _spindle_on(links) and not _printer_halted(links)
+
+
+def test_the_printers_own_stop_key_halts_the_printer_and_leaves_the_router_be(bench):
+    controller, one, links = bench
+    _both_going(links)
+    _press(one, 4)  # printer_1's
+    assert controller.sent == ["stop printer_1"]
+    assert _printer_halted(links) and _spindle_on(links)
+
+
+def test_the_everything_key_reaches_each_machines_own_stop(bench):
+    controller, one, links = bench
+    _both_going(links)
+    seen = []
+    real = controller.send
+
+    def spy(port, line):
+        seen.append((port, line))
+        return real(port, line)
+
+    controller.send = spy
+    _press(one, 7)
+    assert seen == [(PRINTER, "M112"), (ROUTER, "RESET")]  # each by its own dialect's word
+    assert controller.sent == ["stop printer_1", "stop cnc_router"]
+    assert _printer_halted(links) and not _spindle_on(links)
+    assert "STOP sent to printer_1, cnc_router" in one.strip["small"]
+
+
+def test_the_everything_key_goes_on_stopping_when_one_machine_cannot_be_reached(bench):
+    controller, one, links = bench
+    _both_going(links)
+    controller.resolve = lambda machine: ROUTER if machine.name == "cnc_router" else None
+    _press(one, 7)
+    assert controller.sent == ["stop cnc_router"] and not _spindle_on(links)
+    assert "not printer_1 (no board pinned)" in one.strip["small"]
 
 
 def test_a_key_for_one_kind_never_moves_a_board_of_another(bench):

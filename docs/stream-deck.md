@@ -80,16 +80,19 @@ and the window's controls are off.
 The knobs jog the garage's two machines. `apothecary/firmware/deck_control.py` runs one
 layout on a deck:
 
-- **The top row's keys**: 0 **PRINTER** and 1 **ROUTER** choose the machine, 2 **STEP**
-  cycles 0.1, 1 and 10 mm, 3 **STOP** stops the chosen machine.
-- **The bottom row's keys** each show what the knob under it moves, from the chosen
-  machine's last poll: X, Y, Z, and the fourth quantity.
+- **The top row's keys**: 0 **PRINTER** and 1 **ROUTER** choose the machine (held twice,
+  they arm its control, below), 2 **STEP** cycles 0.1, 1 and 10 mm.
+- **The bottom row's keys** are the stops, two classes of them: 4 **STOP printer_1** and
+  5 **STOP cnc_router**, dark red, each stopping that machine alone, and 7 **STOP ALL**,
+  bright red and last, nearest a hand resting on the knobs, stopping every machine, each
+  by its own dialect's stop. Key 6 is dark.
 - **The knobs**: one to three jog X, Y and Z by their steps of the chosen size; the fourth
   turns the router's spindle speed in steps of 1000 rpm, or extrudes 1 mm a step on the
   printer.
 
-The strip says which machine, whether its control is armed and for how long, the step, and
-what the last turn did or why it did nothing.
+The strip says which machine, whether its control is armed and for how long, the chosen
+machine's last poll (X, Y, Z and the fourth quantity), the step, and what the last turn did
+or why it did nothing.
 
 **Nothing the deck sends bypasses what bounds a person's jog.** Every line goes through
 `devices.printer_control`, the function behind `POST /firmware/printers/command`:
@@ -112,12 +115,14 @@ what the last turn did or why it did nothing.
 - a job holding the port refuses a line its dialect does not allow a job;
 - a key for one kind of machine never moves a board of another: the port is polled and its
   kind checked before a line goes;
-- the stop key sends the port's dialect's own stop, `devices.emergency_stop_for(port)`: a
+- a stop key sends the port's dialect's own stop, `devices.emergency_stop_for(port)`: a
   printer's `M112`, a router's soft reset. It goes whatever the latch says, as the pad's
-  E-STOP does.
+  E-STOP does, and waits on no poll. The everything key sends each machine's own, one
+  after another, and goes on to the next when one cannot be reached; the strip names
+  which it reached.
 
 **The machine's own red button is faster than any of this**, and stays the stop to reach
-for: the deck's stop key is a USB report, a host process, a link and a queue away from the
+for: the deck's stop keys are a USB report, a host process, a link and a queue away from the
 controller. Keep a hand on the machine's own switch, as the bench checklist says.
 
 The layout starts on a deck when `APOTHECARY_DECK_CONTROL` is set (the demo sets it), or
@@ -125,6 +130,8 @@ when `POST /firmware/decks/{id}/control` with `{"on": true}` asks; `GET` on the 
 says whether it runs, the machine chosen, the step, the control's seconds left, what it
 said last and the lines it sent. A real deck is opened by it, which takes the device from
 any other program that has it, so it is started on purpose.
+[Walkthrough 27](../walkthrough/27-the-deck-jogging-the-machines.md) goes round it on the
+simulated bench, written by `tests/e2e/test_deck_jog.py`.
 
 ## Simulated
 
