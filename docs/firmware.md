@@ -593,7 +593,10 @@ goes.
 What can be sent is a bounded allowlist, `firmware.gcode.CONTROL_CODES`
 (heaters and fan, homing, moves, extrude and retract, motors off, SD start,
 pause and abort, mesh on and off, probing, break wait, quickstop), with heater,
-travel, feed and extrusion caps beside it. Out-of-bounds values are refused before they reach the port;
+travel, feed and extrusion caps beside it. Homing is one axis at a time as well as all: a printer's `G28` takes any
+of X, Y and Z (`G28 X`), a router's `$H` is all three and `$HX`, `$HY` and `$HZ` one;
+the pad's Home X, Home Y and Home Z each send their kind's line, and the ring's Home has
+the same, the printer's with XY beside them. Out-of-bounds values are refused before they reach the port;
 there is no EEPROM write and no firmware configuration. A jog is three lines
 (`G91`, `G1 …`, `G90`), so the board is left in absolute mode. The travel cap
 bounds each move, not where the head ends up: jogs one after another add up,

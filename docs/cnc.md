@@ -123,7 +123,7 @@ Reboot, Release, ⚙ Control and ⏹ E-STOP, which is the soft reset -- and its
 own cards in Status: the state and the controller's word, the tool in the
 work zero and in machine coordinates, the spindle, the feed and the
 overrides, the input pins on. Armed, its control pad holds Motion (the jog
-pad, `$J=` at the feed set, Home `$H`, Unlock `$X`, Top of Z, Go to zero,
+pad, `$J=` at the feed set, Home `$H` and Home X, Y and Z (`$HX`, `$HY`, `$HZ`), Unlock `$X`, Top of Z, Go to zero,
 Stop jog), Spindle (On at a speed, Off), Zero and probe (XYZ zero here, Z
 zero here, Probe Z down a depth), and Cut (Resume, Hold, Abort). Its Table
 map window, where a printer's is Bed level, takes the map (Probe table, armed,
@@ -145,7 +145,7 @@ the line in the log, in the refusal the status line carries, in the reason a
 job that stopped gives, and in the state card. A cut that would leave the travel
 stops where it would, as `ALARM:2`, so the tool is zeroed with the cut's depth
 under it. The ring's Control
-on a router is its own (`menu.router_control_options`): Home, Unlock, Jog
+on a router is its own (`menu.router_control_options`): Home (All, X, Y, Z), Unlock, Jog
 (with Stop jog), Spindle, Zero (with Probe Z), Cut, Stop, Arm. The router's badge
 in the world and its row on Site's tree say 🪚 and its state, its spindle while
 it turns and the cut's progress, its hour in the Working space charts the spindle,
@@ -166,6 +166,10 @@ pin; `tests/e2e/test_router_ui.py` walks the Machine against it.
   homes are confirmed in section I of [the bench checklist](bench-checklist.md#i-the-router-the-anolex-4060-evo-ultra-2),
   the first replies kept as the Ender's are
   (`docs/validation/2026-09-20-ender-bench.md`).
+- Single-axis homing on the real controller: `$HX`, `$HY` and `$HZ` are Grbl 1.1's
+  and the allowlist takes them, the pad sends them and the simulated router homes only
+  the axis named; whether this Grbl_ESP32 build takes them is confirmed in section I
+  of [the bench checklist](bench-checklist.md#i-the-router-the-anolex-4060-evo-ultra-2).
 - A toolpath from geometry: the toolpath is written from the cuts a part
   declares ([docs/cam.md](cam.md)), not from a mesh; a file a CAM post wrote
   (Easel, Carbide Create, Fusion) is kept and streamed as it is.

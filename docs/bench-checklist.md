@@ -139,6 +139,11 @@ one machine on the number another held; nothing in them moves a machine.
 
 - [ ] **Home XY**, then **Home Z**: X and Y home, the probe touches at the
       bed's centre, the position card reads X0 Y0 and a Z.
+- [ ] Each axis alone: step **10**, then **X+**, **Y+** and **Z+** once each, so
+      each is 10 mm from zero. **Home X**: only X returns to 0 and the log says
+      `G28 X`; **Home Y** and **Home Z** the same, Z last, with the nozzle clear
+      of the bed. A bare `G28` is never in the log for these; a Z home that Marlin
+      refuses until X and Y are known is noted, with its words.
 - [ ] Step **10**, **Y+**: the bed moves 10 mm; the nozzle marker over the
       printer in the world moves when the button is pressed, and the position
       card confirms within one poll. The ring's Control › Jog › Y+ (⌗728) does
@@ -330,6 +335,14 @@ only with the table clear and no tool in the collet until the last box.
       **Home** (`$H`): the gantry seeks its switches, the state card reads
       `running (Home)` and then `idle`, the machine position reads the
       pull-off near zero. Note which corner is home.
+- [ ] Each axis alone, with the tool well clear of the work and a hand on the red
+      stop: step **10**, **X−**, **Y−**, **Z−** once each, then **Home Z** first, so
+      the tool clears the work, then **Home X**, then **Home Y**. Each sends `$HZ`,
+      `$HX`, `$HY` with no bare `$H`; the state card reads `running (Home)` then
+      `idle`, and only that axis goes to its switch and pulls off, the other two
+      readings unchanged. Only the bench answers whether this Grbl_ESP32 build takes
+      a single-axis home: an `error:` or an `ALARM:` in the log is the answer, noted
+      with its number, and `$H` stays the way to home.
 - [ ] Step **10**, **X−**, **Y−**, **Z−** once each: the tool moves 10 mm, the
       work position follows within one poll, and the marker in the world
       moves the same way over the table; a jog past the travel is refused by
