@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from apothecary.api import app
 from apothecary.demo import PRINTER, ROUTER
 from apothecary.firmware import deck, deck_control, devices, gcode, grbl
+from apothecary.firmware.toolchains import PortHeld, ToolchainError
 
 
 @pytest.fixture
@@ -210,6 +211,69 @@ def test_the_everything_key_goes_on_stopping_when_one_machine_cannot_be_reached(
     _press(one, 7)
     assert controller.sent == ["stop cnc_router"] and not _spindle_on(links)
     assert "not printer_1 (no board pinned)" in one.strip["small"]
+
+
+def test_the_everything_key_goes_on_stopping_when_one_machine_refuses_its_stop(bench):
+    controller, one, links = bench
+    _both_going(links)
+    real = controller.send
+
+    def printer_refuses(port, line):
+        if port == PRINTER:
+            raise ToolchainError("no answer")
+        return real(port, line)
+
+    controller.send = printer_refuses
+    _press(one, 7)
+    assert controller.sent == ["stop cnc_router"] and not _spindle_on(links)
+    assert "STOP sent to cnc_router; not printer_1 (no answer)" in one.strip["small"]
+
+
+def test_a_stop_that_reaches_no_machine_says_so(bench):
+    controller, one, links = bench
+    controller.resolve = lambda machine: None
+    _press(one, 7)
+    assert controller.sent == []
+    assert one.strip["small"].startswith("STOP reached nothing; not printer_1 (no board pinned)")
+
+
+def _silent(port):
+    raise ToolchainError("no answer within 2 s")
+
+
+def test_a_jog_on_a_port_another_holds_moves_nothing_and_says_who_holds_it(bench):
+    controller, one, links = bench
+    links.control.arm(ROUTER)
+    _choose_router(one)
+    start = _router(links)
+
+    def held(port, line):
+        raise PortHeld(f"{port} is held by a print")
+
+    controller.send = held
+    _turn(one, 0, 5)
+    assert controller.sent == [] and _router(links) == start
+    assert one.strip["small"].startswith(f"{ROUTER} is held by a print")  # not a refusal
+
+
+def test_a_jog_whose_machine_does_not_answer_its_poll_moves_nothing(bench):
+    controller, one, links = bench
+    links.control.arm(ROUTER)
+    _choose_router(one)
+    start = _router(links)
+    controller.poll = _silent
+    _turn(one, 0, 5)
+    assert controller.sent == [] and _router(links) == start
+    assert "cnc_router: no answer within 2 s" in one.strip["small"]
+
+
+def test_the_fourth_knob_extrudes_nothing_when_the_printer_does_not_answer(bench):
+    controller, one, links = bench
+    links.control.arm(PRINTER)
+    controller.poll = _silent
+    _turn(one, 3, 2)  # printer_1 is chosen
+    assert controller.sent == []
+    assert "printer_1: no answer within 2 s" in one.strip["small"]
 
 
 def test_a_key_for_one_kind_never_moves_a_board_of_another(bench):

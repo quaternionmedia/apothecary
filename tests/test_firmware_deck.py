@@ -248,6 +248,26 @@ def test_validate_says_each_tool_found_with_what_it_has(fake_arduino_cli, monkey
     assert "  ✓ hidapi: libhidapi-libusb.so.0\n" in result.output
 
 
+def test_the_decks_command_lists_what_is_found_and_says_when_none_is(monkeypatch):
+    import json
+
+    from click.testing import CliRunner
+
+    from apothecary.cli import cli
+
+    listed = CliRunner().invoke(cli, ["firmware", "decks"])
+    assert listed.exit_code == 0, listed.output
+    assert "SIMDECK0  Stream Deck +  0x0fd9:0x0084  8 keys, 4 knobs  (simulated)" in listed.output
+    as_json = CliRunner().invoke(cli, ["firmware", "decks", "--json-out"])
+    assert [d["id"] for d in json.loads(as_json.output)] == ["SIMDECK0"]
+    monkeypatch.setenv(deck.SIMULATED_DECK_ENV, "")
+    assert CliRunner().invoke(cli, ["firmware", "decks"]).output == "No Stream Deck + found.\n"
+    monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "pyserial")
+    monkeypatch.setitem(sys.modules, "StreamDeck", None)  # an import of it fails
+    missing = CliRunner().invoke(cli, ["firmware", "decks"])
+    assert missing.exit_code != 0 and "uv sync --extra deck" in missing.output
+
+
 def test_the_toolchains_route_and_the_bench_carry_it(client):
     ids = [m["id"] for m in client.get("/firmware/toolchains").json()]
     assert ids == ["arduino", "rust-esp32", "stream-deck"]
