@@ -6,8 +6,8 @@ are yours to run, in order, from a fresh clone.
 Four steps take a fresh clone to a viewer with a bench it can drive and no
 hardware plugged in: install, see what this machine has, put a fast OpenSCAD
 in place, and serve the demo. Then the five loops, each with what it needs,
-and the installs only some of them want. Page 07 onward is the
-library's tour.
+and the installs only some of them want. [Page 07](07-a-part.md) onward
+is the library's tour.
 
 ## 1. Install
 
@@ -173,16 +173,14 @@ change into `main`.
 
 ## 7. Where next
 
-Pages 01 and 02 are written by their runs: a photograph made into pieces,
-and the bench drawn as it is with a camera above it; 03 to 06 are the loops
-above. [Page 07](07-a-part.md) onward is the library's tour: what a part is
-and how its envelope is checked (07), which numbers are whose (08), an
-assembly as a tree (09), the API (10), the numbers its sources disagree about
-(11), whether a part is ready to build (12), how the commands report state
-(13), and what is open and who can close it (14). Pages 15 and 16 are a
-contributor's: the CI workflows run here before a push, and what a consumer
-pinning this repository may rely on. Then [`docs/`](../docs/README.md): the
-guides, the plans and the records.
+[Page 01](01-photographs-into-pieces.md) and
+[page 02](02-the-bench-as-it-is.md) are written by their runs: a photograph
+made into pieces, and the bench drawn as it is with a camera above it; each
+loop above links its own pages. [Page 07](07-a-part.md) onward is the library's tour, starting at what
+a part is and how its envelope is checked. Every page in this folder is in
+[the documentation's index](../docs/README.md#the-walkthrough), which says
+what each shows; served, `/walkthrough` lists them in order. Then
+[`docs/`](../docs/README.md): the guides, the plans and the records.
 `apothecary --help` is the command reference, and it ends with the steps
 above:
 

@@ -65,6 +65,18 @@ def map_problems(readme: str, root=ROOT) -> list[str]:
         for page in _pages(pages):
             if not (root / page).is_file():
                 problems.append(f"{what[:60]!r} links {page}, which is not there")
+        for text, page in re.findall(
+            r"\[([^\]]+)\]\((walkthrough/[0-9]{2}-[a-z0-9-]+\.md)\)", pages
+        ):
+            if text != page[len("walkthrough/") :][:2]:
+                problems.append(f"{what[:60]!r} links {page} as [{text}]")
+    whats = [row[0] for row in rows if len(row) == 4]
+    for what in sorted({what for what in whats if whats.count(what) > 1}):
+        problems.append(f"{what[:60]!r} is a row twice")
+    linked = {page for row in rows if len(row) == 4 for page in _pages(row[3])}
+    for page in sorted((root / "walkthrough").glob("[0-9][0-9]-*.md")):
+        if f"walkthrough/{page.name}" not in linked:
+            problems.append(f"walkthrough/{page.name} is in no row")
     for path in sorted((root / "tests" / "e2e").glob("test_*.py")):
         if f"e2e/{path.name}" not in named:
             problems.append(f"tests/e2e/{path.name} is in no row")
@@ -98,6 +110,17 @@ def test_the_map_names_only_what_is_there_and_every_browser_test():
             "links walkthrough/07-a-parts.md",
         ),
         (("`e2e/test_scad_loop.py`, ", ""), "walkthrough/06-editing-a-parts-scad.md is written by"),
+        (
+            ("| [19](walkthrough/19-the-router.md) |", "| |"),
+            "walkthrough/19-the-router.md is in no row",
+        ),
+        (
+            (
+                "[28](walkthrough/28-a-whiteboard-to-a-model.md)",
+                "[27](walkthrough/28-a-whiteboard-to-a-model.md)",
+            ),
+            "links walkthrough/28-a-whiteboard-to-a-model.md as [27]",
+        ),
     ],
 )
 def test_the_map_says_what_is_wrong_with_it(breaks, says):
@@ -107,6 +130,14 @@ def test_the_map_says_what_is_wrong_with_it(breaks, says):
     assert old in readme
     problems = map_problems(readme.replace(old, new, 1))
     assert any(says in problem for problem in problems), problems
+
+
+def test_a_row_written_twice_is_named():
+    """A row copied to make another and left as it was is the drift a map falls into."""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    row = next(line for line in readme.splitlines() if "(walkthrough/24-" in line)
+    problems = map_problems(readme.replace(row, f"{row}\n{row}", 1))
+    assert any("is a row twice" in problem for problem in problems), problems
 
 
 def test_the_maps_address_asked_as_another_host_serves_something_here():

@@ -83,10 +83,10 @@ no signal reaches still ends; and a worker that crashes ends a parallel run, nam
 test. In CI a browser test's cap is also twice the time recorded for it, so a hung wait
 fails that test and names it, and a job's is twice its recorded median.
 
-`walkthrough/` is executable: its pages are doctests. Pages 01 and 02 are written by their
-browser tests, and a loop's page (03, 04, 05, 06) and the working space's (18) by the browser
-suite alone; change their words in the test that writes them, not in the page, and commit
-the words a run rewrites.
+`walkthrough/` is executable: its pages are doctests, or the output of the browser test
+that walks them. A page's opening says which, and a written page names its test and the
+command that rewrites it: change its words in that test, not in the page, and commit the
+words a run rewrites.
 
 **A picture is committed with the page change it shows**, and a run's noise is put back;
 **the docs a stack's levels each touch are read together on its head**, since levels
@@ -154,8 +154,8 @@ The rules are in [AGENTS.md](AGENTS.md). In short:
 Prose never states a number a command computes; it names the command. The viewer's
 controls: `apothecary census` ([docs/census.md](docs/census.md) says what it counts, and
 what a change to the page keeps). What is open: `apothecary problems`. The tests:
-`uv run pytest --co -q`. Only pages a run writes (walkthrough pages 01 to 06 and 18, and
-`docs/generated/`) print such numbers.
+`uv run pytest --co -q`. Only pages a run writes (a walkthrough page written by its test,
+and `docs/generated/`) print such numbers.
 
 ## Words on the page
 

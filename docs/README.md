@@ -7,9 +7,11 @@ at `/README.md`, and every page's bar links it. The HTTP API is described at `/o
 
 ## The walkthrough
 
-`walkthrough/` is the path through this repository. Pages 01 to 06, 18, 26 and 27 are
-written by the browser tests that walk them; page 00, pages 07 to 17, pages
-19 to 23 and pages 28 and 29 are doctests, run by `pytest walkthrough`. Start there, at page 00.
+`walkthrough/` is the path through this repository. Each page's opening says what runs
+it: a page *Written by* a browser test is that test's output, and a **Hermetic** page is
+doctests, run by `pytest walkthrough`. The table links every page in the folder, which
+`tests/test_docs_site.py` holds it to; served, `/walkthrough` lists them in order. Start
+at page 00.
 
 | Page | |
 |---|---|
@@ -37,6 +39,8 @@ written by the browser tests that walk them; page 00, pages 07 to 17, pages
 | [21 — A toolpath, previewed](../walkthrough/21-a-toolpath-previewed.md) | One interpreter and two processes: a print's layers and a cut's passes read through one core, held to the toolpath's own writer, and a design change seen in the moves |
 | [22 — The irl family's hub](../walkthrough/22-the-irl-hub.md) | apothecary as the family's hub on hearth's contract: what it says it is, its table, a fire and what is kept |
 | [23 — A procedure](../walkthrough/23-a-procedure.md) | What the family fires: the steps that bring a site's blueprint into working order, each waiting for GO and the evidence it names, a person's own, a member's refusal, a page's read and a member that is not there, and what the log keeps |
+| [24 — A cut from the card](../walkthrough/24-a-cut-from-the-card.md) | The router's Cut card as a person goes round it: the coupon chosen under makes, its toolpath written and drawn on the table, kept as the router's plan, control armed and the work zeroed, the cut streamed, held, resumed and cancelled; written by the browser suite |
+| [25 — A procedure through the window](../walkthrough/25-a-procedure-through-the-window.md) | A site's procedure through the Procedure window on the simulated bench: GO on a step, a step's node as a door to the window its work is in, a machine's step refused in the member's words, the latch armed through that door and the step fired again, and the Family view's Members and Deliveries; written by the browser suite |
 | [26 — The Stream Deck +](../walkthrough/26-the-stream-deck.md) | An Elgato Stream Deck + at the garage's bench: its piece opens the Deck window, a program draws its eight keys and strip, and a simulated deck is pressed, turned and tapped, each event listed and kept; written by the browser suite |
 | [27 — The deck jogging the machines](../walkthrough/27-the-deck-jogging-the-machines.md) | The Stream Deck +'s knobs jog the router through the control latch: its layout drawn, a turn disarmed moving nothing, an armed jog read back on the X key, the step key, and the stop key stopping a spinning spindle; written by the browser suite |
 | [28 — A whiteboard to a model](../walkthrough/28-a-whiteboard-to-a-model.md) | A drawing in marker read by the `outline` finder: the whiteboard as the ground, each closed stroke the shape of what it encloses, named, placed and sized, with what the `plain` finder makes of the same picture |

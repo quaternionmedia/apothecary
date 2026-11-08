@@ -146,6 +146,8 @@ here: run `apothecary problems`.
   pushes with no test named. The browser suite runs in CI at a version tag
   alone, and none has run since; there, each phase's bound names a test that
   hangs.
+- The walkthrough's lists, what their checks leave: a link's anchor is not checked,
+  and the docs site's resolve test passes over a link into `generated/`.
 
 ## Next round
 
