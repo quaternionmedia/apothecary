@@ -1165,6 +1165,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "GO or Start over, or a step's node",
     ),
     "procedure:change:closest": (WIDGET, WHAT_YOU_SEE, "the procedure chosen"),
+    "members:click:closest": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a member's name in Members, opening the window of its next step's node or its page",
+    ),
     "models:click:closest": (WIDGET, WHAT_IS_THERE, "Ask, about the shape chosen on a mat"),
     "models:change:closest": (WIDGET, WHAT_IS_THERE, "an origin's tick-box, switching it"),
     "models:keydown:closest": (WIDGET, WHAT_IS_THERE, "Enter in a person's word, saying it"),
