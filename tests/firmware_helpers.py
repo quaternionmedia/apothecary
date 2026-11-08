@@ -32,6 +32,8 @@ def _isolate_firmware_state(monkeypatch, tmp_path):
     monkeypatch.setattr(devices, "_STATE", None)
     monkeypatch.setattr(devices, "_STREAMS", None)
     monkeypatch.setattr(devices, "_SCAN", None)  # the 2 s port-scan cache must not span tests
+    monkeypatch.setattr(devices, "_PORTS", None)  # the port list's half-second reading
+    monkeypatch.setattr(devices, "_HELD_BY", {})  # and what it last found on each port
     monkeypatch.setattr(devices, "_LAST_STATUS", {})
     monkeypatch.setattr(devices, "_LEVELING", {})  # a bed reading's job is per process
     monkeypatch.setattr(devices, "_PRINTS", {})

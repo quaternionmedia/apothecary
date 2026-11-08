@@ -585,12 +585,14 @@ def _scan_modules():
     return sorted(found.values(), key=lambda b: b.port)
 
 
-def scan_ports(cli: Optional[ArduinoCli] = None, fresh: bool = False):
-    """The ports the toolchain modules find; with ``cli``, that arduino-cli's alone."""
+def scan_ports(cli: Optional[ArduinoCli] = None, fresh: bool = False, any_age: bool = False):
+    """The ports the toolchain modules find; with ``cli``, that arduino-cli's alone.
+    ``any_age`` takes the newest scan however old it is, and scans only when there
+    is none."""
     global _SCAN
     key = cli if cli is not None else "modules"
     now = time.monotonic()
-    if not fresh and _SCAN and _SCAN[1] is key and now - _SCAN[0] < SCAN_TTL:
+    if not fresh and _SCAN and _SCAN[1] is key and (any_age or now - _SCAN[0] < SCAN_TTL):
         return _SCAN[2]
     if cli is not None:
         boards = [b.model_copy(update={"found_by": "arduino"}) for b in cli.board_list()]
@@ -610,18 +612,31 @@ def found_by(port: str) -> Optional[str]:
 
 
 def detected_devices(
-    cli: Optional[ArduinoCli] = None, state: Optional[FirmwareState] = None, fresh: bool = False
+    cli: Optional[ArduinoCli] = None,
+    state: Optional[FirmwareState] = None,
+    fresh: bool = False,
+    any_age: bool = False,
 ) -> List[DeviceInfo]:
     """Every serial port the toolchain modules find, merged with the record of the
     board on it: a record of another board (``FirmwareState.cached_device``, and
     here the scan's own vendor, product and serial number) is left out.
 
     ``fresh`` bypasses the short scan cache (an explicit rescan button); ``cli``
-    asks that arduino-cli alone.
+    asks that arduino-cli alone. ``any_age`` reads the newest scan however old,
+    starting none once one has been made, which the ring's machines need at once:
+    a board on a port the serial engine's list found and no longer finds is left
+    out, unplugged since, and a board plugged in since is not there until the next
+    scan, which the page's board model asks for as it polls.
     """
     state = state or get_state()
     devices: List[DeviceInfo] = []
-    for b in scan_ports(cli, fresh):
+    boards = scan_ports(cli, fresh, any_age=True) if any_age else scan_ports(cli, fresh)
+    if any_age:
+        listed = ports_now()
+        with _HELD_LOCK:
+            seen = set(_HELD_BY)
+        boards = [b for b in boards if b.port in listed or b.port not in seen]
+    for b in boards:
         info = DeviceInfo(
             port=b.port,
             label=b.label,

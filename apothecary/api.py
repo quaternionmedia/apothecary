@@ -2430,7 +2430,8 @@ def _machines_in(site_name: str, statuses, router: bool) -> List[str]:
         return []
     state = firmware_devices.get_state()
     try:
-        plugged = firmware_devices.detected_devices(state=state)
+        # The ring asks this as it opens: no new scan once one has been made.
+        plugged = firmware_devices.detected_devices(state=state, any_age=True)
     except ToolchainError:
         plugged = []
     found = set()
