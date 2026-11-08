@@ -58,7 +58,7 @@ from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder
 from .projects.parts import anolex_4060_evo_ultra_2 as anolex
-from .projects.parts import ender3
+from .projects.parts import ender3, stream_deck_plus
 from .transforms import Translate
 
 # Bench dimensions (mm)
@@ -119,6 +119,7 @@ BENCH_MOUNTED_STRUCTURES = {
     "arduino_uno",
     "raspberry_pi_4",
     "teensy_40",
+    "stream_deck",
 }
 
 # The boards at the bench's right end, from x 1620 on, so the firmware seam has scene nodes to bind real devices to: an ESP32 devkit
@@ -131,6 +132,16 @@ ESP32_BLINK_SIZE = Vector3D(x=55.0, y=28.0, z=16.0)  # a DevKitC standing on its
 ESP32_BLINK_POSITION = Vector3D(x=1640.0, y=150.0, z=BENCH_TOP_Z)
 FOOTPEDAL_SIZE = Vector3D(x=180.0, y=100.0, z=30.0)  # FootpedalParams defaults
 FOOTPEDAL_POSITION = Vector3D(x=1620.0, y=20.0, z=BENCH_TOP_Z)
+# The Stream Deck + (parts/stream_deck_plus, from the maker's published size) at the
+# bench's right end, behind the boards and facing the front, within reach of a person
+# standing at the bench: the controller whose knobs jog the machines
+# (apothecary/firmware/deck_control.py). Outside the bench's clear stretch between
+# printer_1 and the boards, where a picture pinned at the bench is laid
+# (apothecary/vision/free_space.py), so a pinned picture stands where it would without
+# it; and clear of printer_1 moved along the bench to the footpedal, the one overlap
+# the site tests ask a person to see.
+STREAM_DECK_SIZE = stream_deck_plus.OVERALL
+STREAM_DECK_POSITION = Vector3D(x=1650.0, y=440.0, z=BENCH_TOP_Z)
 BENCH_BOARDS = [
     # (node name, part, position on the bench, footprint the model fits in)
     (
@@ -891,6 +902,20 @@ def _build_footpedal() -> Assembly:
     )
 
 
+def _build_stream_deck() -> Assembly:
+    """The Stream Deck + on the bench, drawn as the device is. It names no sketch and
+    is pinned to no port: the deck is found on USB by its own seam
+    (apothecary/firmware/deck.py), and its node leads to the Deck window."""
+    return Assembly(
+        name="stream_deck",
+        role="structure",
+        position=STREAM_DECK_POSITION,
+        footprint=BoundingBox3D(min_point=Vector3D(), max_point=STREAM_DECK_SIZE),
+        category="electrical",
+        part_ref="stream_deck_plus",
+    )
+
+
 def create_example_site() -> Assembly:
     """A garage: a workbench with a printer on top of it, inside its
     own building shell, alongside abstract utility fixtures, storage, the
@@ -921,6 +946,7 @@ def create_example_site() -> Assembly:
             _build_esp32_blink(),
             _build_footpedal(),
             *(_build_bench_board(*board) for board in BENCH_BOARDS),
+            _build_stream_deck(),
         ],
     )
 

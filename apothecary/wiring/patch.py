@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from ..firmware.bindings import walk_paths
-from ..firmware.models import MAC_RE, PORT_RE, USB_SERIAL_RE, DeviceInfo, NodeBinding
+from ..firmware.models import MAC_RE, PORT_RE, USB_MAKE_RE, USB_SERIAL_RE, DeviceInfo, NodeBinding
 from ..hierarchy import Assembly
 from . import catalogue
 
@@ -48,7 +48,8 @@ VERSION = 3
 # The computer's module id. A node path is a dotted name, and no site has a
 # top-level node called this.
 HOST_MODULE = "host"
-# A board no node names is ``usb:<its identity>``.
+# A board no node names is ``usb:<its own identity>``: its MAC or its bridge's serial
+# number, else its port, since a bridge's make is shared by two of one model.
 UNNAMED_PREFIX = "usb:"
 
 # How much a state asks of a person, least first: carlos colours by it.
@@ -58,13 +59,13 @@ LEVELS = ("none", "ok", "warn", "fault")
 class Evidence(BaseModel):
     """How apothecary knows one module of the patch."""
 
-    module: str  # the module's id: the node's dotted path, or usb:<identity>
+    module: str  # the module's id: the node's dotted path, or usb:<its own identity>
     device: str  # its catalogue id
     part_ref: Optional[str] = None
     expected: bool = False  # the site as drawn expects it plugged in
     connected: bool = False  # a board answering on a port now
     port: Optional[str] = None
-    identity: Optional[str] = None  # DeviceInfo.identity: the MAC, the bridge's serial, or the port
+    identity: Optional[str] = None  # DeviceInfo.identity: the board's key, or its port
     binding_source: Optional[str] = None  # "manual" | "sketch" | None, as NodeBinding has it
     sketch: Optional[str] = None  # the sketch the node names
     flashed: Optional[str] = None  # the sketch apothecary last put on the board
@@ -153,6 +154,8 @@ def _identity_kind(identity: str) -> str:
     board that is not answering is described as one that is."""
     if MAC_RE.match(identity.lower()):
         return "its MAC"
+    if USB_MAKE_RE.match(identity.lower()):
+        return "its USB bridge's make"
     if PORT_RE.match(identity) or not USB_SERIAL_RE.match(identity):
         return "its port"
     return "its USB serial number"
@@ -310,7 +313,8 @@ def wiring_for_site(
     for found in devices or []:
         if found.port in claimed:
             continue
-        module_id = UNNAMED_PREFIX + found.identity
+        own = found.port if USB_MAKE_RE.match(found.identity) else found.identity
+        module_id = UNNAMED_PREFIX + own
         device = catalogue.device_by_port(found.fqbn)
         modules.append(_module(module_id, device))
         wiring.evidence.append(

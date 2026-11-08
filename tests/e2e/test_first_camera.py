@@ -63,7 +63,7 @@ def test_allow_before_the_yes_is_refused_and_says_what_to_do(
     base_url: str,
     leaves_garage_as_found,
 ):
-    """Selected names the way in at a bare bench; Camera › Add here adds a camera
+    """Selected says nothing of pictures at a bare bench; Camera › Add here adds a camera
     without asking the browser; its Device offers Allow; Allow, with the prompt
     unanswered, is a refusal that names the prompt, the address bar and the cell to
     press again."""
@@ -71,12 +71,8 @@ def test_allow_before_the_yes_is_refused_and_says_what_to_do(
     page.on("pageerror", lambda e: errors.append(str(e)))
     _open_garage(page, base_url)
     page.locator("#contents-list .contents-item[data-path='workbench']").click()
-    facts = page.locator("#selected-body [data-facts='way-in']")
-    expect(facts).to_contain_text(
-        "⌗ Camera › Add here stands a camera above workbench, looking down"
-    )
-    expect(facts).to_contain_text("⌗ Picture › Add pins a picture from disk")
-    expect(facts).to_contain_text("m, or Ctrl+right-click, opens the ring")
+    expect(page.locator("#selected-body")).to_contain_text("workbench")
+    expect(page.locator("#selected-body .picture-facts")).to_have_count(0)
     assert _mine(page) == []
 
     name = _add_at_the_bench(page)

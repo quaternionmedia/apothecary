@@ -18,13 +18,11 @@ forgotten. A forgotten frame is a record too, so the log says where it went.
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 import threading
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from ..state_folder import write_whole
 from . import log
 
 DEFAULT_BUDGET = 5 * 10**9  # bytes a printer's kept frames may take: 5 GB
@@ -129,17 +127,7 @@ def set_budget(site: str, subject: str, size: int) -> None:
     except (OSError, ValueError):
         named = {}
     named[subject] = int(size)
-    from ..firmware.devices import private_folder
-
-    private_folder(path.parent)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".budgets.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as out:
-            out.write(json.dumps(named, indent=2) + "\n")
-        os.replace(tmp, path)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
+    write_whole(path, json.dumps(named, indent=2) + "\n")
 
 
 def sizes(site: str) -> Dict[str, dict]:

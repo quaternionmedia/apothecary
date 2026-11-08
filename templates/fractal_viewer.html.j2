@@ -803,6 +803,7 @@
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/bench.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/working_space.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/procedure.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/deck.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/airgap.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/models.css">
     <script type="importmap">
@@ -846,6 +847,8 @@
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
         import { mountProcedure } from '/static/widgets/procedure.js';
+        import { mountFamily } from '/static/widgets/family.js';
+        import { mountDeck } from '/static/widgets/deck.js';
         import { mountPictureList } from '/static/widgets/picture_list.js';
         import { mountModels } from '/static/widgets/models.js';
         import { mountToolchain } from '/static/widgets/toolchain.js';
@@ -1692,6 +1695,21 @@
                     machine: {
                         mount: () => ({}),
                     },
+                    // The family: the Procedure is its main window, registered below;
+                    // Members and Deliveries are filled by one widget, mounted the first
+                    // time either is shown. A member's door is the Procedure's to say.
+                    family: {
+                        mount: (slot, sections) => {
+                            this.family = mountFamily({ members: sections.members, deliveries: sections.deliveries }, {
+                                base: BASE_URL,
+                                doorOf: (who, how) => this.procedure?.doorOf(who, how) ?? null,
+                                open: (node) => this.openProcedureNode(node),
+                            });
+                            window.apothecaryFamily = this.family;
+                            return this.family;
+                        },
+                        shown: (widget) => widget.load(),
+                    },
                     airgap: {
                         main: { title: 'Airgap' },
                         mount: (slot, sections) => {
@@ -1745,18 +1763,46 @@
                 // for the height its steps take. Closed, it stops asking.
                 this.procedure = null;
                 this.panels.register('procedure', {
-                    title: 'Procedure', group: 'Site', home: 'beside', open: false,
+                    title: 'Procedure', group: 'Family', home: 'beside', open: false,
                     hint: 'The steps that bring this site into working order, each fired through the family\'s hub on GO',
                     body: (slot) => {
                         this.procedure = mountProcedure(slot, {
                             base: BASE_URL, siteName: () => this.siteName,
                             log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                            // A step's node, or the node a member works on next, as a door.
+                            open: (node, section = null) => this.openProcedureNode(node, section),
                         });
                         window.apothecaryProcedure = this.procedure;
                         this.procedure.shown();
                     },
-                    onOpen: () => this.procedure?.shown(),
-                    onClose: () => this.procedure?.close(),
+                    onOpen: () => {
+                        if (!this.procedureByPage) this.givenProcedure(false);
+                        this.declineProcedure(false);
+                        this.procedure?.shown();
+                    },
+                    onClose: () => {
+                        if (!this.procedureByPage) this.declineProcedure(true);
+                        this.procedure?.close();
+                    },
+                });
+                this.procedureByPage = false;
+                // Deck: the Stream Deck + as apothecary has drawn it, and what it has heard
+                // (widgets/deck.js) -- a stack of its own beside the world, closed until asked for: ⊞ Windows,
+                // or the stream_deck piece's Open Deck. A simulated deck is pressed from here.
+                this.deck = null;
+                this.panels.register('deck', {
+                    title: 'Deck', group: 'Tools', home: 'beside', open: false,
+                    hint: 'The Stream Deck + as drawn from here: its keys and strip as last sent, and what it has heard',
+                    body: (slot) => {
+                        this.deck = mountDeck(slot, {
+                            base: BASE_URL,
+                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                        });
+                        window.apothecaryDeck = this.deck;
+                        this.deck.shown();
+                    },
+                    onOpen: () => this.deck?.shown(),
+                    onClose: () => this.deck?.close(),
                 });
                 // ⊞ Windows: drawn afresh each time it opens, so it says which are open.
                 const windowsBody = this.windowsMenuEl.querySelector('.windows-menu-body');
@@ -2280,6 +2326,7 @@
                     // A Working space in front shows this site; behind, it does once shown.
                     if (this.panels.isShown('working')) this.workingSpace?.open(null);
                     if (this.panels.isShown('procedure')) this.procedure?.load();
+                    this.procedureRoom(name);
                 } catch (err) {
                     this.setStatus(`Error: ${err.message}`, 'error');
                     console.error(err);
@@ -3770,9 +3817,9 @@
                 // A verb's place on the ring, named as text: the floor's verbs are under
                 // the canvas ring's Pictures › Floor, and its Add is Pictures › Add.
                 const ring = (verb) => `⌗ ${host === '' ? 'Pictures › Floor › ' : ''}${verb}`;
-                // Nothing here yet: the way in, so the durable hint is where the person
-                // looks. The verbs stay the ring's.
-                if (!views.length) return `<div class="prop-readonly picture-facts" data-facts="${host === '' ? 'floor' : 'host'}"><div class="k">Pictures at ${esc(where(host))}</div><div data-facts="way-in">${ring('Camera › Add here')} stands a camera above ${esc(where(host))}, looking down; ${host === '' ? '⌗ Pictures › Add' : '⌗ Picture › Add'} pins a picture from disk, and ${host === '' ? '⌗ Pictures › Floor › Picture › Folder' : '⌗ Picture › Folder'} one already in the folder, any chosen in Pictures; ${esc(this.ringWays())}, opens the ring</div></div>`;
+                // Nothing here yet: nothing is said. The piece's ring holds Camera and
+                // Picture, and each cell says what it does.
+                if (!views.length) return '';
                 const drawn = pm.drawnAt(host);
                 const rows = [];
                 for (const view of [...views].reverse()) {
@@ -4186,7 +4233,20 @@
                         <div class="prop-row"><label>Part</label><span title="The part this machine is drawn as">${esc(node.part_ref)}</span></div>`);
                     return;
                 }
+                if (node.part_ref === 'stream_deck_plus') this.appendDeckDoor();
                 this.appendEditor(this.partTarget(node.part_ref));
+            }
+
+            // The Stream Deck + piece's door to the Deck window: the device it is a model of,
+            // as apothecary has drawn it and what it has heard (widgets/deck.js).
+            appendDeckDoor() {
+                this.selectedBodyEl.insertAdjacentHTML('beforeend', `
+                    <div class="device-section"><div class="device-title">Deck</div>
+                        <button type="button" class="deck-open" title="Open the Deck window: the Stream Deck + as drawn from here, and what it has heard">Open Deck</button></div>`);
+                this.selectedBodyEl.querySelector('.deck-open').addEventListener('click', () => {
+                    this.panels.open('deck');
+                    this.setStatus('Opened the Deck: its keys and strip as last sent, and what it has heard; the Bench lists the Stream Deck + module that finds it', 'success');
+                });
             }
 
             // An element of the part's section: in the section kept for its target,
@@ -6951,7 +7011,7 @@
                         const why = j.reason ? `${j.reason}. ` : '';
                         return `<li class="site-job ${esc(j.outcome)}" data-job="${esc(j.id)}" title="${esc(why)}Started ${esc(new Date(j.started_at).toLocaleString())}${j.finished_at ? `, ended ${esc(new Date(j.finished_at).toLocaleString())}` : ''}. Select ${esc(machine)} and open it">${esc(machine)} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${how} · ${esc(new Date(j.started_at).toLocaleString())}</li>`;
                     }).join('')
-                    : '<li class="empty">none yet: a print started from the Print card of a printer pinned here is listed here</li>';
+                    : '<li class="empty">none yet</li>';
             }
 
             // A poll of a machine: a running job's progress shown, and a job begun or
@@ -7090,9 +7150,10 @@
                 }
             }
 
-            // Ask a detected port what it is (M115) without pinning it.
+            // Ask a detected port what it is (a printer's M115, then a router's $I)
+            // without pinning it. A refusal is the server's, which names both.
             async queryPort(port) {
-                this.queryResult = { port, text: 'asking M115…' };
+                this.queryResult = { port, text: 'asking what it is…' };
                 this.updateDeviceViews();
                 try {
                     const view = await this.boards.identify(port);
@@ -7102,7 +7163,7 @@
                     // The rows' devices follow what it said, from the server.
                     await this.boards.scan();
                 } catch (err) {
-                    this.queryResult = { port, text: `${port}: not a G-code printer (${err.message})` };
+                    this.queryResult = { port, text: err.message };
                     this.setStatus(this.queryResult.text, 'error');
                 }
                 this.updateDeviceViews();
@@ -7350,6 +7411,80 @@
                 const anchor = row.device.printer ? this.bearerPathFor(row.path) : row.path;
                 return this.showMachine(port, anchor, row);
             }
+            // The Procedure's door to a step's node, `site:path`: the node selected and its
+            // window opened, as a badge opens its Machine -- a camera's Pictures, a machine's
+            // or a board's Machine -- or why not, said. With `section`, that section of the
+            // node's Machine where it is open, and nothing where it is not: a step fired
+            // opens no Machine, the node's door does. A node whose board is not connected
+            // is asked of the boards once more before the door says so: a member may have
+            // flashed or pinned it since the page last looked.
+            // The Procedure beside the world while the site has a procedure, and its
+            // room given back when it has none -- a window the page opened, never one a
+            // person opened, and never again after a person closed it.
+            procedureDeclined() {
+                try { return localStorage.getItem('apothecary.procedure-declined') === '1'; } catch (e) { return false; }
+            }
+            // Whether the page opened it, kept across a reload with the layout.
+            procedureGiven() {
+                try { return localStorage.getItem('apothecary.procedure-by-page') === '1'; } catch (e) { return false; }
+            }
+            givenProcedure(given) {
+                try {
+                    if (given) localStorage.setItem('apothecary.procedure-by-page', '1');
+                    else localStorage.removeItem('apothecary.procedure-by-page');
+                } catch (e) { /* blocked storage: the window still works */ }
+            }
+            declineProcedure(declined) {
+                try {
+                    if (declined) localStorage.setItem('apothecary.procedure-declined', '1');
+                    else localStorage.removeItem('apothecary.procedure-declined');
+                } catch (e) { /* blocked storage: the window still works */ }
+            }
+            async procedureRoom(name) {
+                let listed = [];
+                try {
+                    const r = await fetch(`${BASE_URL}/sites/${encodeURIComponent(name)}/procedures`);
+                    if (r.ok) listed = (await r.json()).procedures || [];
+                } catch (e) { return; }
+                if (name !== this.siteName) return;
+                const shown = this.panels.isShown('procedure');
+                // In front while a person's ✕ stands: the person opened it again.
+                if (shown && this.procedureDeclined()) { this.declineProcedure(false); this.givenProcedure(false); }
+                if (listed.length && !shown && !this.procedureDeclined()) {
+                    this.procedureByPage = true;
+                    this.panels.open('procedure'); this.givenProcedure(true);
+                    setTimeout(() => { this.procedureByPage = false; }, 0);
+                } else if (!listed.length && shown && this.procedureGiven()) {
+                    this.procedureByPage = true;
+                    this.panels.close('procedure'); this.givenProcedure(false);
+                    setTimeout(() => { this.procedureByPage = false; }, 0);
+                }
+            }
+            async openProcedureNode(node, section = null) {
+                const at = String(node || '').indexOf(':');
+                const site = at < 0 ? this.siteName : node.slice(0, at);
+                const path = at < 0 ? String(node || '') : node.slice(at + 1);
+                if (!path) return false;
+                if (site !== this.siteName) {
+                    if (!section) this.setStatus(`${node} is in ${site}, not ${this.siteName}: the banner's ▾ opens ${site}`, 'error');
+                    return false;
+                }
+                if (section) return this.machineOpenFor(path) ? this.panels.open(section) : false;
+                const pinned = this.bindingFor(path).row;
+                if (!(pinned && pinned.device && pinned.device.port)) await this.boards.scan();
+                const found = this.renderNodeByKey[path];
+                if (found) this.selectPath(path);
+                if (found && this.isCameraNode(found)) { this.panels.open('pictures'); return true; }
+                return this.openMachine(path);
+            }
+            // Whether the Machine open is this path's: the machine it stands for, or the
+            // board pinned at it or inside it.
+            machineOpenFor(path) {
+                if (!this.machine) return false;
+                if (this.machine.path === path) return true;
+                const { row } = this.bindingFor(path);
+                return !!(row && row.device && row.device.port && this.machine.port === row.device.port);
+            }
             // The site's machines (machine_plans.py), asked with the site.
             async loadMachinesHere(name) {
                 try {
@@ -7375,7 +7510,7 @@
                 this.mountMachinePanel('', planned.path, null, planned);
                 this.panels.open('machine');
                 const card = planned.kind === 'router' ? 'Cut' : 'Print';
-                this.setStatus(`Opened ${planned.path}'s Machine with no board connected: its ${card} card plans what it makes -- the part, its ${planned.kind === 'router' ? 'toolpath' : 'slice'}, the path drawn over it -- and ▶ is its board's once it is connected`, 'success');
+                this.setStatus(`Opened ${planned.path}'s Machine with no board connected: its ${card} plans what it makes, and ▶ ${card} is its board's once it is connected`, 'success');
                 return true;
             }
             // Why a machine has no Machine to open: nothing pinned, or a pin whose board
@@ -8071,7 +8206,7 @@
                     else if (!free.length) body = `<div class="device-line device-empty">${this.siteDevices.length ? 'every detected device is already pinned' : 'no devices detected'}</div>${manual}`;
                     else body = `<div class="device-actions">
                             <select class="dev-pick">${free.map((d) => `<option value="${esc(d.port)}"${this.queryResult && this.queryResult.port === d.port ? ' selected' : ''}>${esc(d.port)} · ${esc(boardLabel(d))}</option>`).join('')}</select>
-                            <button type="button" class="dev-query" title="Ask M115 what this is, without pinning">Query</button>
+                            <button type="button" class="dev-query" title="Ask what this is, a printer's M115 then a router's $I, without pinning">Query</button>
                             <button type="button" class="dev-pin">Pin</button>
                         </div>${q}${manual}`;
                 }
@@ -8832,6 +8967,7 @@
     // wiring: what the ring opens on, what each chosen verb calls, and the
     // addresses written onto the controls the page already has.
     import { installRing, annotate, addressOf, resolveRing } from '/static/ring.js';
+    import { steer as steerKnobs } from '/static/deck_knobs.js';
 
     (() => {
         const BASE = {{ base_url | tojson }};
@@ -9060,6 +9196,16 @@
                     viewer.panels.open('models');
                     viewer.setStatus(`${intent.label}${tail}`, 'success');
                     if (viewer.modelsWidget) { viewer.modelsWidget.follow(); viewer.modelsWidget.act(action.slice('models:'.length)); }
+                    return;
+                }
+                // A verb of the Stream Deck +'s knobs: handed to the server's layout on the
+                // deck; the Deck window and each Control pad follow it on their next beat.
+                // Here is the open Machine's machine.
+                if (action.startsWith('deck:')) {
+                    const port = viewer.machine ? viewer.machine.port : null;
+                    steerKnobs(BASE, action.slice('deck:'.length), { port })
+                        .then((said) => { viewer.setStatus(`${intent.label}${tail}: ${said}`, 'success'); viewer.deck?.load(); })
+                        .catch((e) => viewer.setStatus(`${intent.label}${tail}: ${e.message}`, 'error'));
                     return;
                 }
                 // A Procedure verb: the window shown, and GO or Start over done; what came

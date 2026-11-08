@@ -302,7 +302,8 @@ def firmware_listen(body: ListenRequest):
 
 @router.post("/devices/identify")
 def firmware_identify(body: PrinterIdentifyRequest):
-    """Ask ``M115``: is this a printer mainboard, and which firmware? ``reset`` reboots it
+    """Ask what the board is: a printer's ``M115``, then a router's ``$I``, and which
+    firmware answered. ``reset`` reboots it
     first. ``if_idle`` asks only a board nothing here knows to be printing -- a print
     from here, a running job, or its last poll -- and refuses one that may be busy
     (409, saying why) without sending anything: a printer's Pin asks this way."""

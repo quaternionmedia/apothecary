@@ -15,6 +15,9 @@ The modules (``_registry`` is the list):
 - ``rust-esp32`` (``modules/rust_esp32.py``): cargo builds a Cargo project
   for the classic ESP32 on Espressif's Xtensa Rust toolchain, offline, from
   crates vendored at install time; espflash flashes it.
+- ``stream-deck`` (``modules/stream_deck.py``): the Elgato Stream Deck +, found on
+  USB, drawn and heard through python-elgato-streamdeck (``firmware/deck.py``). It
+  builds and flashes nothing; its ``can`` says what it does.
 
 **Ports, too.** A module may find ports and listen to a board itself
 (``ports``, ``monitor_argv``, ``probe``): Arduino through arduino-cli's
@@ -26,9 +29,9 @@ listened to by it (devices.scan_ports).
 **Where a new one plugs in.** A board family or a language added later -- the
 ESP32-C3 on stable Rust, AVR in Rust, the RP2040 -- is a new module, not a
 redesign: a subclass of ``ToolchainModule`` in a file of its own under this
-package, its tools described as ``Tool``s (an environment variable naming the
-one to run, its place in the tools dir, its name on ``PATH``), registered in
-``_registry`` below. Sketch discovery asks every registered module whether a
+package, its tools described as ``Tool``s (``firmware/toolchains.py``: the
+variable naming the one to run, its place in the tools dir, its names on
+``PATH``), registered in ``_registry`` below. Sketch discovery asks every registered module whether a
 folder under ``parts/`` is one of its sketches (``sketch_in``); the status
 route, the Bench's toolchain card, the build form, the compile and upload
 routes and the CLI all go through this interface, so none of them changes.
@@ -39,9 +42,6 @@ in their ``firmware.json``'s ``toolchain``.
 
 from __future__ import annotations
 
-import os
-import platform
-import shutil
 import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -50,7 +50,7 @@ from typing import Callable, ClassVar, Dict, Iterable, List, Optional, Tuple
 
 from ...stays_local import subprocess_env
 from ..models import ARDUINO, BoardInfo, ModuleStatus, SketchInfo, ToolStatus
-from ..toolchains import ToolchainError, tools_dir
+from ..toolchains import Tool, ToolchainError
 
 Log = Callable[[str], None]
 
@@ -58,46 +58,6 @@ Log = Callable[[str], None]
 # settings, not code, and these are what a build leaves behind.
 NOT_SOURCES = {"firmware.json"}
 BUILD_SUFFIXES = {".bin", ".elf", ".map"}
-
-
-def exe(name: str) -> str:
-    return f"{name}.exe" if platform.system() == "Windows" else name
-
-
-@dataclass(frozen=True)
-class Tool:
-    """One program a module runs, found as ``ArduinoCli.detect`` finds arduino-cli:
-    the environment variable naming it, then its place in the tools dir, then
-    ``PATH``. The variable set to ``none`` means none (the browser suites'
-    servers, so they never find a person's own)."""
-
-    name: str
-    env: str
-    managed: str  # its path under tools_dir(), "/"-separated, without .exe
-    command: str  # its name on PATH
-
-    def managed_path(self) -> Path:
-        return (
-            tools_dir()
-            .joinpath(*self.managed.split("/"))
-            .with_name(exe(self.managed.rsplit("/", 1)[-1]))
-        )
-
-    def find(self) -> Tuple[Optional[Path], Optional[str]]:
-        """Where it is, and what found it: the variable, ``tools dir`` or ``PATH``."""
-        named = os.environ.get(self.env, "").strip()
-        if named.lower() == "none":
-            return None, None
-        if named and Path(named).is_file():
-            return Path(named), self.env
-        managed = self.managed_path()
-        if managed.is_file():
-            return managed, "tools dir"
-        found = shutil.which(self.command)
-        return (Path(found), "PATH") if found else (None, None)
-
-    def detect(self) -> Optional[Path]:
-        return self.find()[0]
 
 
 @dataclass
@@ -250,8 +210,9 @@ class ToolchainModule(ABC):
 def _registry() -> Dict[str, ToolchainModule]:
     from .arduino import ArduinoModule
     from .rust_esp32 import RustEsp32Module
+    from .stream_deck import StreamDeckModule
 
-    return {m.id: m for m in (ArduinoModule(), RustEsp32Module())}
+    return {m.id: m for m in (ArduinoModule(), RustEsp32Module(), StreamDeckModule())}
 
 
 _MODULES: Optional[Dict[str, ToolchainModule]] = None

@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, List, Optional
 
-from .toolchains import ArduinoCli, ToolchainError, _exe, tools_dir
+from .toolchains import ArduinoCli, ToolchainError, exe, tools_dir
 
 RELEASES_API = "https://api.github.com/repos/arduino/arduino-cli/releases"
 RELEASES_DOWNLOAD = "https://github.com/arduino/arduino-cli/releases/download"
@@ -134,21 +134,21 @@ def expected_checksum(version: str, name: str, fetch: Callable[[str], bytes] = _
 def extract_binary(archive: bytes, name: str, dest_dir: Path) -> Path:
     """Pull just the ``arduino-cli`` executable out of the release archive."""
     dest_dir.mkdir(parents=True, exist_ok=True)
-    exe = _exe("arduino-cli")
-    target = dest_dir / exe
+    binary = exe("arduino-cli")
+    target = dest_dir / binary
     if name.endswith(".zip"):
         with zipfile.ZipFile(io.BytesIO(archive)) as zf:
-            member = next((m for m in zf.namelist() if Path(m).name == exe), None)
+            member = next((m for m in zf.namelist() if Path(m).name == binary), None)
             if member is None:
-                raise ToolchainError(f"{exe} not found in {name}")
+                raise ToolchainError(f"{binary} not found in {name}")
             target.write_bytes(zf.read(member))
     else:
         with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tf:
             member = next(
-                (m for m in tf.getmembers() if Path(m.name).name == exe and m.isfile()), None
+                (m for m in tf.getmembers() if Path(m.name).name == binary and m.isfile()), None
             )
             if member is None:
-                raise ToolchainError(f"{exe} not found in {name}")
+                raise ToolchainError(f"{binary} not found in {name}")
             extracted = tf.extractfile(member)
             assert extracted is not None
             target.write_bytes(extracted.read())
@@ -169,7 +169,7 @@ class ArduinoCliInstaller:
 
     @property
     def binary(self) -> Path:
-        return self.dest_dir / _exe("arduino-cli")
+        return self.dest_dir / exe("arduino-cli")
 
     def install_binary(self) -> Path:
         existing = ArduinoCli(self.binary) if self.binary.is_file() else None

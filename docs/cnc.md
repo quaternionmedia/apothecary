@@ -55,7 +55,7 @@ and released exactly as a printer's is.
 
 | | A printer (Marlin, `gcode.py`) | The router (GRBL, `grbl.py`) |
 |---|---|---|
-| Identified by | `M115` | `$I`; a GRBL controller answers `M115` with `error:20`, so Marlin's is tried first and GRBL's when nothing Marlin answers |
+| Identified by | `M115` | `$I`; a GRBL controller answers `M115` with `error:20`, so Marlin's is tried first and GRBL's when nothing Marlin answers; a board answering neither is refused with both objections |
 | Polled by | `M105`, `M114`, `M27`, `M119`, `M31` | the realtime `?` (a status report, no `ok`) and `$G` (the modal words) |
 | Its state | `idle`, `printing`, `offline` | the controller's own word (`Idle`, `Run`, `Jog`, `Home`, `Hold:0`, `Door`, `Alarm`), folded to `idle`, `running`, `hold`, `alarm`, `offline` |
 | What a poll carries | temperatures, position, endstops, filament, SD progress | machine and work position and the offset between them, the spindle's speed and whether it is on, the feed, the input pins on (limits, probe, door, hold), the alarm's number, the overrides |
@@ -123,7 +123,7 @@ Reboot, Release, ⚙ Control and ⏹ E-STOP, which is the soft reset -- and its
 own cards in Status: the state and the controller's word, the tool in the
 work zero and in machine coordinates, the spindle, the feed and the
 overrides, the input pins on. Armed, its control pad holds Motion (the jog
-pad, `$J=` at the feed set, Home `$H`, Unlock `$X`, Top of Z, Go to zero,
+pad, `$J=` at the feed set, Home `$H` and Home X, Y and Z (`$HX`, `$HY`, `$HZ`), Unlock `$X`, Top of Z, Go to zero,
 Stop jog), Spindle (On at a speed, Off), Zero and probe (XYZ zero here, Z
 zero here, Probe Z down a depth), and Cut (Resume, Hold, Abort). Its Table
 map window, where a printer's is Bed level, takes the map (Probe table, armed,
@@ -136,13 +136,16 @@ history; the world lays the one shown over the table
 order: what it makes and its Toolpath ([docs/cam.md](cam.md)) where a printer has
 Slice, the file, kept and checked, or a CAM post's, then ▶ Cut, Pause (a hold),
 Resume, Cancel (a hold and a reset), the cut's progress with the operation it is
-in, what the file holds, and the router's jobs. A line the controller refuses
+in, what the file holds, and the router's jobs, each control there once what it
+needs holds (Toolpath once a part is chosen, ▶ Cut once a file is, Pause and
+Cancel while a cut runs, Resume while it is held;
+[walkthrough page 24](../walkthrough/24-a-cut-from-the-card.md) pictures each). A line the controller refuses
 (`error:15`) or an alarm it raises (`ALARM:3`) is said in GRBL's words beside
 the line in the log, in the refusal the status line carries, in the reason a
 job that stopped gives, and in the state card. A cut that would leave the travel
 stops where it would, as `ALARM:2`, so the tool is zeroed with the cut's depth
 under it. The ring's Control
-on a router is its own (`menu.router_control_options`): Home, Unlock, Jog
+on a router is its own (`menu.router_control_options`): Home (All, X, Y, Z), Unlock, Jog
 (with Stop jog), Spindle, Zero (with Probe Z), Cut, Stop, Arm. The router's badge
 in the world and its row on Site's tree say 🪚 and its state, its spindle while
 it turns and the cut's progress, its hour in the Working space charts the spindle,
@@ -157,11 +160,16 @@ pin; `tests/e2e/test_router_ui.py` walks the Machine against it.
 
 - The bench, past the first answer: the real controller identifies itself as
   `Grbl 1.3a · Grbl_ESP32` at 115200 baud, `Idle`, behind a CH340 bridge
-  (`0x1A86:0x7523`) with no USB serial number, so its pin follows the port.
+  (`0x1A86:0x7523`) with no USB serial number, so its pin is kept under the
+  bridge's make, `usb:1a86:7523`, and follows it from port to port.
   What `$I` and `$$` hold, whether opening the port resets it and which way it
   homes are confirmed in section I of [the bench checklist](bench-checklist.md#i-the-router-the-anolex-4060-evo-ultra-2),
   the first replies kept as the Ender's are
   (`docs/validation/2026-09-20-ender-bench.md`).
+- Single-axis homing on the real controller: `$HX`, `$HY` and `$HZ` are Grbl 1.1's
+  and the allowlist takes them, the pad sends them and the simulated router homes only
+  the axis named; whether this Grbl_ESP32 build takes them is confirmed in section I
+  of [the bench checklist](bench-checklist.md#i-the-router-the-anolex-4060-evo-ultra-2).
 - A toolpath from geometry: the toolpath is written from the cuts a part
   declares ([docs/cam.md](cam.md)), not from a mesh; a file a CAM post wrote
   (Easel, Carbide Create, Fusion) is kept and streamed as it is.

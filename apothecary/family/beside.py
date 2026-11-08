@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from hearth.supervise import Spec, Supervisor
 
-from ..firmware.devices import state_dir
+from ..state_folder import state_dir
 from ..stays_local import PROXY_VARIABLES
 from ..wiring.carlos import loopback_url
 

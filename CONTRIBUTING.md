@@ -23,10 +23,11 @@ trying it, and names the optional installs: the slicer and each firmware toolcha
 ## The loop
 
 ```bash
+uv run apothecary test changed --workers 4      # while working, and before each commit: the walkthrough, the unit groups and the browser areas the change reaches
+uv run apothecary test group machines making    # one part of the package at a time: its unit files and the walkthrough (no name: the groups)
 uv run apothecary test run                      # the ordinary command: unit tests and the walkthrough, whose demonstration drives Chromium
-uv run apothecary test all                      # the same, then every browser test
-uv run apothecary test changed                  # while working: the unit tests and the walkthrough, then the browser files the change reaches
-uv run apothecary test all --workers 2 -k part  # the browser part on two workers; further arguments narrow both parts
+uv run apothecary test all                      # the same, then every browser test: the run on a stack's head before it is pulled
+uv run apothecary test all --workers 2 -k part  # both parts on two workers; further arguments narrow both parts
 uv run apothecary test all --record-durations   # the same, the browser tests' times written into tests/e2e/durations.json
 uv run apothecary test all --coverage           # the same, measured: what of the package ran, and of what the change adds or changes
 uv run apothecary test coverage --markdown      # the last measured run's coverage, as a line for a pull request's body
@@ -41,14 +42,27 @@ uv run ruff check apothecary tests              # kept clean; format only the fi
 uv run --group preflight apothecary preflight   # the CI workflows, run here, before a push
 ```
 
-`apothecary test run` is the one to run before a commit; it runs the window manager's
+`apothecary test changed` is the loop while working and before each commit: the
+walkthrough's pages, the unit files of the groups the change reaches
+([tests/groups.py](tests/groups.py)) and the browser files of the areas it reaches
+([tests/e2e/areas.py](tests/e2e/areas.py)), every file of a part when the change touches
+its shared ground; `--list` names them and runs nothing. `apothecary test group NAME` runs
+one group. `apothecary test run` is the ordinary command, and runs the window manager's
 browser tests too. Those need no server, only Chromium, so `uv run pytest` runs them as well
-wherever Playwright has installed it. A pull request's CI runs the governance checks, lint
-and the walkthrough's hermetic pages, and the rest of the tests run in CI at a version tag,
-so the whole suite runs here before every merge: `apothecary test all`, on the pull
-request's head merged onto its base's tip, before it is marked ready and again before it
-merges if that tree has changed. Its body says what ran and what it said, and the merge
-commit says it for the tree that landed. A merge skips no CI: its push to `main` runs those
+wherever Playwright has installed it.
+
+**A stack is tested at its head.** The whole suite runs here before a merge, once, on the
+head of the stack being pulled merged onto its target's tip: `apothecary test all`, then
+`apothecary preflight`. The head carries every level beneath it, so no level is tested
+alone ([the integrated-whole record](governance/qm/adr/DRAFT-review-the-integrated-whole.md),
+its second decision); a pull request on its own is its own head.
+[The integration checklist](docs/integration-checklist.md) is that run box by box, with
+what it leaves for a person and how the stack lands. CI follows the same rule. A pull
+request into `main` -- a stack's bottom when it opens, its head when it is retargeted there and
+marked ready -- runs the governance checks, lint and the walkthrough's hermetic pages. A
+level stacked on another runs only the stack's own checks (`one-pr-check.yml`,
+`integrates.yml`) and the walkthrough, which the corpus's walkthrough record runs on every
+pull request. The rest of the tests run in CI at a version tag. A merge skips no CI: its push to `main` runs those
 checks again, and that run is the default branch's evidence the corpus's walkthrough record
 counts. Cloud CI's runner time is spend (the corpus's spending record), so a push is priced
 before it is made -- the jobs its workflows start and their recorded minutes -- and made
@@ -70,8 +84,15 @@ test. In CI a browser test's cap is also twice the time recorded for it, so a hu
 fails that test and names it, and a job's is twice its recorded median.
 
 `walkthrough/` is executable: its pages are doctests. Pages 01 and 02 are written by their
-browser tests, and a loop's page (03, 04, 05, 06) and the working space's (18) by the browser suite alone; commit what a
-run rewrites, and change their words in the test that writes them, not in the page.
+browser tests, and a loop's page (03, 04, 05, 06) and the working space's (18) by the browser
+suite alone; change their words in the test that writes them, not in the page, and commit
+the words a run rewrites.
+
+**A picture is committed with the page change it shows**, and a run's noise is put back;
+**the docs a stack's levels each touch are read together on its head**, since levels
+written apart can each be true alone and contradict one another once stacked. Both are
+boxes of the integration checklist, which says how: `tests/e2e/picture_drift.py --sheets`
+draws each rewritten picture beside its commit, its change marked.
 [tests/e2e/README.md](tests/e2e/README.md) has the browser suite's flags and recorders, and
 [walkthrough/15-preflight.md](walkthrough/15-preflight.md) says what `preflight` reproduces
 and what it cannot.
@@ -89,13 +110,13 @@ is not a member: it is its own Cargo project, built by its own toolchain
 
 | Workflow | Fails on |
 |---|---|
-| `lint.yml` | On every pull request and a push to `main`: a finding from `ruff check`, at the version `uv.lock` pins, with nothing else installed |
+| `lint.yml` | On a pull request into `main` and a push to it: a finding from `ruff check`, at the version `uv.lock` pins, with nothing else installed |
 | `pytest.yml` | At a `v*` tag and on demand. On Python 3.11: a finding from `ruff check apothecary tests`; the walkthrough; the unit tests with `--slow`, rendering with a pinned OpenSCAD snapshot so the tests that need one run, their coverage measured and kept as the run's artifact (no threshold); the walkthrough and the unit tests again on the newest Python (3.14); the wheel failing to install and render a scene. In three more jobs, in parallel: the browser tests, a third each by recorded time (`--shard K/3`), and a walkthrough page they rewrote |
 | `reuse-lint.yml` | A file with no copyright or licence information (`reuse lint`) |
 | `license-check.yml` | A third-party dependency whose licence is not on the OSI/FSF allowlist, or that has a known vulnerability (`pip-audit`) |
 | `adr-lint.yml` | A record in `governance/qm/adr/`: a draft that narrates its own revisions, a numbered one not ratified, a ratified body edited outside its Amendments, or an index that disagrees with the directory |
 | `signature-check.yml` | A pull request carrying a commit of its own the host does not verify as signed, from 2026-08-15 (the corpus's seed check, run out of `governance/qm/project-seed/ci/`): re-sign it, or say in the description why not |
-| `submodule-check.yml` | A submodule pin its own remote does not have |
+| `submodule-check.yml` | On a pull request into `main` and a push to it: a submodule pin its own remote does not have |
 | `leak-check.yml` | On a pull request into `main` and a push to it: a tracked file naming an account's home folder, a path through one person's home layout or a session's scratch space, a shared-conversation link, or a conversation archive's path (the corpus's seed check, run out of `governance/qm/project-seed/ci/`) |
 | `one-pr-check.yml` | A pull request that is ready while its base is another open pull request's branch, and a pull request body that addresses its own contributor (the corpus's seed checks, run out of `governance/qm/project-seed/ci/`) |
 | `integrates.yml` | A pull request whose head conflicts with the open pull requests merged before it, depth first from their base and oldest first on each, and every pull request stacked on it (`.github/ci/check_integrates.py`): it is fixed in its own branch before it merges |

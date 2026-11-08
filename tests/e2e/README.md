@@ -91,15 +91,17 @@ up to date.
 
 The suite is in areas -- windows, pictures, machine, parts, lighting, the demo --
 each with the sources a change to which reaches it and the files that hold it
-(`tests/e2e/areas.py`). `apothecary test changed` runs the unit tests and the
-walkthrough, then the files of the areas a change touches: every file when it
+(`tests/e2e/areas.py`), as the unit suite is in groups (`tests/groups.py`).
+`apothecary test changed` runs the walkthrough and the unit files of the groups a
+change reaches, then the browser files of the areas it touches: every file when it
 touches shared ground (the page, the app, this suite's helpers and conftest, the
 dependencies), a browser file itself when it changes, none when it reaches no area.
 The change is what the checkout holds against `--since`, the branch's upstream
 when it is not given; `--list` names the files and runs nothing. A new browser file
 goes in one area, and `tests/test_areas.py` fails until it is in one. It is for
 while working and is never the gate: the whole suite, `apothecary test all`, runs
-before every merge, on the tree that lands (`CONTRIBUTING.md`, "The loop").
+before a merge, once, on the head of the stack being pulled, the tree that lands
+(`CONTRIBUTING.md`, "The loop").
 
     uv run apothecary test changed --list --since origin/main
 
@@ -160,8 +162,9 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
   (`git diff --exit-code -- 'walkthrough/*.md'` in `pytest.yml`), so a page's words carry
   nothing that changes from run to run -- a temporary folder, a time, a count
   that varies -- and a step that would show one names it instead. A screenshot
-  is rewritten only when its pixels change; commit the page and pictures when
-  they do. What changes on every run whatever the page does -- a time, a
+  is rewritten only when its pixels change; commit the page's words when they
+  do, and its pictures as [the integration checklist](../../docs/integration-checklist.md#pictures-and-words)
+  says: those whose change is the page's. What changes on every run whatever the page does -- a time, a
   picture's name made of one -- is blanked (`shows`'s `blank`), and the picture
   is taken once the page has drawn under its blanks, at the size they leave it
   (`doc_capture.picture`), so a picture changes only when the page does. A
@@ -184,8 +187,10 @@ Both are fixtures in `conftest.py`; the recorders themselves are in `doc_capture
 
 After the browser tests, CI runs `tests/e2e/picture_drift.py`: a walkthrough
 picture the run rewrote that differs from the committed one in more than its
-`TOLERANCE` of the pixels is named in a warning, and it never fails the run,
-since a person judges a picture against its caption.
+`TOLERANCE` of the pixels is named in a warning with the box its change lies
+in, and it never fails the run, since a person judges a picture against its
+caption. Here, `--sheets DIR` draws each named picture beside the committed one,
+its changed pixels marked, which is what that person looks at.
 
 Before a screenshot of the viewer, `viewer_ready.settled(page)` waits until the
 level's geometry has loaded (`window.fractalViewer.waveDone`), the camera is at

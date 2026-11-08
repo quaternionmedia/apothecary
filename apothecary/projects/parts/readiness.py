@@ -495,7 +495,7 @@ def _stub_check(part) -> Check:
         "Fitted to measured artifacts",
         UNKNOWN,
         f"{len(stubs)} envelope(s) still guessed: " + ", ".join(p.name for p in stubs),
-        "replace a StubProvider with a measured source (KiCadProvider, a datasheet)",
+        "replace a StubProvider with a measured source (a board's layout read, a datasheet)",
     )
 
 

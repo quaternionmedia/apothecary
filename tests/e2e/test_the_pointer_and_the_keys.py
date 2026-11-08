@@ -147,6 +147,37 @@ def _unfocus(page: Page) -> None:
 WHEEL_COUNTS = "() => performance.now() >= window.fractalViewer.stepQuietUntil"
 
 
+# How fast a turn of the wheel scrolls, in pixels a second: a person's quick scroll, eight
+# notches in about a fifth of a second, well inside the page's 250 ms (WHEEL_QUIET_MS)
+# after which a push past the limit is forgotten as a trackpad's momentum.
+TURN_SPEED = 5000
+
+
+def _turn(page: Page, spot, notches: int) -> None:
+    """The wheel turned ``notches`` over ``spot``, positive out: one scroll gesture that
+    the browser itself paces, its wheel events trusted and a few tens of milliseconds
+    apart, as a hand's are. Sent notch by notch, each is a round trip to the browser, and
+    a machine at load held them past that 250 ms and the page forgot each push before the
+    next (the status line stayed `Loaded: Garage`). What it gives up: a gesture's events
+    are smaller than a notch's 120 pixels and add up to the same distance, which is what
+    the page counts, so the page is not shown a mouse wheel's exact notches."""
+    session = page.context.new_cdp_session(page)
+    try:
+        session.send(
+            "Input.synthesizeScrollGesture",
+            {
+                "x": spot[0],
+                "y": spot[1],
+                "yDistance": -notches * NOTCH,
+                "speed": TURN_SPEED,
+                "gestureSourceType": "mouse",
+                "preventFling": True,
+            },
+        )
+    finally:
+        session.detach()
+
+
 def _wheel(page: Page, notches: int) -> None:
     """Turned over the world, clear of what stands on it: negative is in. A turn
     starts once the wheel counts again, or a step just taken would cost it notches."""
@@ -158,8 +189,7 @@ def _wheel(page: Page, notches: int) -> None:
     assert spot, "nowhere over the world to turn the wheel"
     page.mouse.move(*spot)
     page.wait_for_function(WHEEL_COUNTS)
-    for _ in range(abs(notches)):
-        page.mouse.wheel(0, NOTCH if notches > 0 else -NOTCH)
+    _turn(page, spot, notches)
     settled(page)
 
 
@@ -465,8 +495,7 @@ def test_the_wheel_steps_within_a_site_and_never_to_another(page: Page, url: str
     assert spot, "the world is nowhere under the pointer"
     page.mouse.move(*spot)
     page.wait_for_function(WHEEL_COUNTS)
-    for _ in range(8):
-        page.mouse.wheel(0, -NOTCH)
+    _turn(page, spot, -8)
     expect(page.locator("#status")).to_contain_text("garage is a site: a double-click, Page Down")
     assert page.evaluate("() => window.fractalViewer.siteName") == "apothecary"
     assert _orbit(page)["focus"] == []

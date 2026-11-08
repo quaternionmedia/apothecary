@@ -22,6 +22,7 @@ from apothecary.cli import cli
 from apothecary.firmware import devices, gcode
 from apothecary.firmware.models import DeviceInfo, PrinterInfo, PrintRequest
 from apothecary.firmware.toolchains import PortHeld, ToolchainError
+from apothecary.state_folder import private_folder, state_dir
 
 BOOT = [
     "start",
@@ -352,6 +353,36 @@ def test_identify_refuses_non_gcode_board_and_releases(fake_arduino_cli, scripte
         devices.identify_printer("/dev/ttyNOPE", 115200)
 
 
+def test_a_board_that_answers_neither_dialect_is_refused_naming_both(
+    fake_arduino_cli, scripted_links
+):
+    """Neither a printer's M115 nor a router's $I answered: the refusal names both
+    questions and what each met, the port once, and says so when the board sent
+    nothing at all -- a router's controller switched off behind its powered USB
+    bridge is that."""
+    scripted_links.factory = lambda port, baud: ScriptedTransport(
+        port, baud, {"M115": ["blink 1"]}, boot=[]
+    )  # a sketch that talks, and is neither
+    with pytest.raises(ToolchainError) as talking:
+        devices.identify_printer("/dev/ttyFAKE0", 115200)
+    said = str(talking.value)
+    assert said.startswith("/dev/ttyFAKE0 answered neither a printer's M115 nor a router's $I (")
+    assert "no `ok` for M115" in said and "no [VER: line in the $I reply" in said
+    assert "nothing at all" not in said and said.count("/dev/ttyFAKE0") == 1
+
+    scripted_links.factory = lambda port, baud: ScriptedTransport(
+        port, baud, {"M115": [], "$I": []}, boot=[]
+    )  # a controller switched off: its bridge is on the port list, the board says nothing
+    with pytest.raises(ToolchainError) as silent:
+        devices.identify_printer("/dev/ttyFAKE0", 115200)
+    said = str(silent.value)
+    assert said.startswith(
+        "/dev/ttyFAKE0 sent nothing at all to a printer's M115 or a router's $I ("
+    )
+    assert "no `ok` for M115" in said and "no `ok` for $I" in said and "switched off" in said
+    assert scripted_links.open_ports == []
+
+
 def test_poll_failure_goes_offline_and_drops_link(fake_arduino_cli, scripted_links):
     devices.identify_printer("/dev/ttyFAKE1", 115200)
     ScriptedTransport.instances[0].replies = {"M105": []}
@@ -585,7 +616,7 @@ def test_a_pinned_poll_is_kept_as_evidence(
 
     # A poll that changes nothing writes nothing, and its id is still one a frame can name.
     def written():
-        folder = devices.state_dir() / "evidence" / "garage" / "observations"
+        folder = state_dir() / "evidence" / "garage" / "observations"
         return sum(len(f.read_text().splitlines()) for f in folder.glob("*.jsonl"))
 
     before = written()
@@ -854,6 +885,26 @@ def test_port_scan_is_cached_briefly(fake_arduino_cli, monkeypatch):
     assert scans() == 5
 
 
+def test_a_scan_longer_than_its_cache_still_serves_the_next_caller(fake_arduino_cli, monkeypatch):
+    """A ring asks for the site's printers and then its routers, each through the scan:
+    a scan that takes as long as the cache lasts is one scan for both, not two."""
+    from apothecary.firmware.modules import arduino
+
+    calls = []
+    took = arduino.ArduinoModule.ports
+
+    def slow(self):
+        calls.append(1)
+        time.sleep(0.2)
+        return took(self)
+
+    monkeypatch.setattr(arduino.ArduinoModule, "ports", slow)
+    monkeypatch.setattr(devices, "SCAN_TTL", 0.15)
+    devices.detected_devices(fresh=True)
+    devices.detected_devices()
+    assert len(calls) == 1
+
+
 # --- comms log, reconnect, reset, monitor page ----------------------------------------
 
 
@@ -1018,6 +1069,56 @@ def test_control_allowlist_and_bounds():
     for cmd in bad:
         with pytest.raises(ValueError):
             gcode.normalise_control(cmd)
+
+
+def test_an_extrude_is_one_bounded_relative_move_with_its_own_feed():
+    """The first extrude control: a relative E move of at most EXTRUDE_MAX_MM at most
+    EXTRUDE_FEED_MAX mm/min, its feed named so a print's is not inherited, and M83 to say
+    E moves are distances (M82 left by a print would make G91 leave E absolute)."""
+    assert (gcode.EXTRUDE_MAX_MM, gcode.EXTRUDE_FEED_MAX) == (10, 300)
+    assert gcode.normalise_control("m83") == "M83"
+    assert gcode.normalise_control(" g1  e5   f200 ") == "G1 E5 F200"
+    assert gcode.normalise_control("G1 E-10 F300") == "G1 E-10 F300"
+    assert gcode.normalise_control("G1 E0.5 F60") == "G1 E0.5 F60"
+    for over in ("G1 E10.5 F200", "G1 E-11 F200", "G1 E99 F200", "G1 E5 F301", "G1 E5 F999"):
+        with pytest.raises(gcode.OutOfBounds):
+            gcode.normalise_control(over)
+    for refused in (
+        "G1 E5",  # no feed: the print's would be inherited
+        "G1 E100 F200",
+        "G1 X10 E5 F200",  # E with an axis
+        "G0 E5 F200",
+        "G1 E5 F5",
+        "G1 E5 F2000",
+        "G1 E5.123 F200",
+        "M82",
+        "G1 E5 F200; M104 S300",
+        "G92 E0",
+    ):
+        with pytest.raises(ValueError):
+            gcode.normalise_control(refused)
+
+
+def test_an_extrude_goes_to_the_board_only_while_control_is_armed(
+    fake_arduino_cli, fresh_task_runner, scripted_links
+):
+    c = TestClient(app)
+    port = "/dev/ttyFAKE1"
+
+    def send(command):
+        return c.post("/firmware/printers/command", json={"port": port, "command": command})
+
+    unarmed = send("G1 E5 F200")
+    assert unarmed.status_code == 409 and "not armed" in unarmed.json()["detail"]
+    assert not ScriptedTransport.instances  # nothing reached a port
+    c.post("/firmware/printers/control", json={"port": port, "armed": True, "ttl_s": 60})
+    for over in ("G1 E50 F200", "G1 E5 F600", "G1 E5"):
+        assert send(over).status_code == 422, over
+    assert not ScriptedTransport.instances  # armed, and still nothing out of bounds went out
+    assert send("m83").status_code == 200
+    ok = send("g1 e-5 f200")
+    assert ok.status_code == 200 and ok.json()["command"] == "G1 E-5 F200"
+    assert ScriptedTransport.instances[0].sent[-2:] == ["M83", "G1 E-5 F200"]
 
 
 def test_control_latch_arms_renews_and_lapses(monkeypatch):
@@ -1553,7 +1654,7 @@ def test_print_files_are_kept_checked_and_forgotten(fake_arduino_cli):
 def test_an_id_of_another_shape_names_no_kept_file(fake_arduino_cli, file_id):
     """A kept file's id starts with its keeping time: one that starts with a dot or holds
     a separator names no file, to read, delete or print, even one in the prints folder."""
-    devices.private_folder(devices.prints_dir())
+    private_folder(devices.prints_dir())
     for suffix in (".gcode", ".json"):
         (devices.prints_dir() / f".hidden{suffix}").write_text("{}", encoding="utf-8")
     assert devices.print_file(file_id) is None

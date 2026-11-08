@@ -79,19 +79,20 @@ def _rec(identity, port="/dev/ttyUSB0", mac=None, sketch="esp32_blink", when=Non
 
 def test_state_round_trip_and_last_flash(tmp_path):
     state = devices.FirmwareState(tmp_path / "s.json")
-    assert state.flashes() == [] and state.last_flash("x") is None
+    board = DeviceInfo(port="/dev/ttyUSB0", mac="aa:bb")
+    assert state.flashes() == [] and state.last_flash(board) is None
     old = _rec("aa:bb", mac="aa:bb", sketch="old", when=datetime(2026, 1, 1, tzinfo=timezone.utc))
     new = _rec("aa:bb", mac="aa:bb", sketch="new")
     by_port = _rec("/dev/ttyUSB1", port="/dev/ttyUSB1", sketch="portonly")
     for r in (old, new, by_port):
         state.record_flash(r)
-    assert state.last_flash("aa:bb").sketch == "new"
-    assert (
-        state.last_flash("zz:zz", port="/dev/ttyUSB1").sketch == "portonly"
-    )  # never-probed fallback
-    assert (
-        state.last_flash("zz:zz", port="/dev/ttyUSB0") is None
-    )  # MAC-keyed record does not leak to a port match
+    assert state.last_flash(board).sketch == "new"
+    # A record kept under a port, its board having no key at all, names a board on
+    # that port with none either; a board with a key of its own is another.
+    assert state.last_flash(DeviceInfo(port="/dev/ttyUSB1")).sketch == "portonly"
+    assert state.last_flash(DeviceInfo(port="/dev/ttyUSB1", mac="zz:zz")) is None
+    # A MAC's record does not leak to another board on its port.
+    assert state.last_flash(DeviceInfo(port="/dev/ttyUSB0", mac="zz:zz")) is None
     assert json.loads((tmp_path / "s.json").read_text())["flashes"][0]["sketch"] == "old"
 
     dev = DeviceInfo(port="/dev/ttyUSB0", vid="1", pid="2", mac="aa:bb", chip="ESP32")

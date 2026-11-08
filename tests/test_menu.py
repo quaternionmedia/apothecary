@@ -703,6 +703,8 @@ def test_the_control_ring_offers_every_allowlisted_verb():
         "control:home",
         "control:home-xy",
         "control:home-z",
+        "control:home-x",
+        "control:home-y",
         "control:jog:Y+",
         "control:jog:X+",
         "control:jog:Y-",
@@ -1142,9 +1144,25 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [(c.label, c.action, c.cell) for c in machine.children] == [
         ("Machine", "panel:toggle:machine", 8),
         ("Control pad", "panel:pad", 6),
+        # The Stream Deck +'s knobs, seated after the Machine's own two.
+        ("Knobs", None, 2),
     ]
     assert address_of(root, "panel:pad") == "446"
     assert carried_by("panel:pad").name == "VIEWER"
+    knobs = next(c for c in machine.children if c.label == "Knobs")
+    assert [(c.label, c.action, c.cell) for c in knobs.children] == [
+        ("On / off", "deck:knobs", 8),
+        ("Machine", None, 6),
+        ("Step", None, 2),
+        ("Here", "deck:here", 4),
+        ("Deck", "panel:toggle:deck", 9),
+    ]
+    assert address_of(root, "deck:knobs") == "4428"
+    assert address_of(root, "panel:deck") == "4429"
+    assert address_of(root, "deck:machine:cnc_router") == "44266"
+    assert address_of(root, "deck:step:10") == "44222"
+    for action in ("deck:knobs", "deck:machine:printer_1", "deck:step:0.1", "deck:here"):
+        assert carried_by(action).name == "VIEWER"
     site = next(c for c in panels.children if c.label == "Site")
     assert [(c.label, c.action, c.cell) for c in site.children] == [
         ("Site", "panel:toggle:site", 8),
@@ -1211,8 +1229,10 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Part view", "panel:view:part", 2),
         ("Machine view", "panel:view:machine", 4),
         ("Airgap view", "panel:view:airgap", 9),
+        ("Family view", "panel:view:family", 3),
     ]
     assert address_of(root, "panel:view:airgap") == "499"
+    assert address_of(root, "panel:view:family") == "493"
     assert carried_by("panel:view:airgap").name == "VIEWER"
     assert carried_by("panel:world:toggle").name == "VIEWER"
     assert carried_by("panel:layout:reset").name == "VIEWER"
@@ -1235,12 +1255,14 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [(c.label, c.action, c.cell) for c in install.children] == [
         ("Arduino", "bench:install:arduino", 8),
         ("Rust ESP32", "bench:install:rust-esp32", 6),
+        ("Stream Deck", "bench:install:stream-deck", 2),
         # The slicer's modules after the toolchain's, from their own registry.
-        ("OrcaSlicer", "bench:install:slicer:orcaslicer", 2),
+        ("OrcaSlicer", "bench:install:slicer:orcaslicer", 4),
     ]
     assert address_of(root, "bench:install:arduino") == "4368"
     assert address_of(root, "bench:install:rust-esp32") == "4366"
-    assert address_of(root, "bench:install:slicer:orcaslicer") == "4362"
+    assert address_of(root, "bench:install:stream-deck") == "4362"
+    assert address_of(root, "bench:install:slicer:orcaslicer") == "4364"
     # A core by its architecture, one leaf per suggested core.
     cores = bench.children[6]
     assert [c.label for c in cores.children] == ["AVR", "ESP32", "ESP8266", "RP2040", "SAMD"]

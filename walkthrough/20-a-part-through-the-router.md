@@ -15,6 +15,8 @@ watched, the cut measured against the design, and the design changed and cut
 again. [docs/cam.md](../docs/cam.md) is the reference for the toolpath,
 [docs/cnc.md](../docs/cnc.md) for the router, and
 [the plan](../docs/plans/subtractive-loop-2026-11-04.md) for what comes next.
+[Page 24](24-a-cut-from-the-card.md) is the same cut from the page's Cut card, pictured
+step by step.
 
 ## The design: a coupon on the router's table
 
@@ -84,11 +86,11 @@ back to the design.
     hole 3 mm at 110,36.667 is smaller than the 6 mm tool: bored to the tool
     hole 3 mm at 110,63.333 is smaller than the 6 mm tool: bored to the tool
 
-The file is checked as any streamed file is, the same check a CAM post's file
-gets: the lines it would send, and every reason it may not be sent.
+The file is checked in the router's dialect, as any file kept for a router is:
+the lines it would send, and every reason it may not be sent.
 
-    >>> from apothecary.firmware import gcode
-    >>> gcode.check_gcode(toolpath.text(written))
+    >>> from apothecary.firmware import grbl
+    >>> grbl.check_gcode(toolpath.text(written))
     (105, [])
 
 ## Kept, and cut from here
@@ -111,7 +113,7 @@ set at the stock's corner where the tool stands -- the pad's Zero. The
 toolpath's coordinates count from that corner; without it the first move
 would be outside the travel, and the controller would say so.
 
-    >>> from apothecary.firmware import devices, grbl
+    >>> from apothecary.firmware import devices, gcode, grbl
     >>> from apothecary.firmware.models import DeviceInfo
     >>> links = gcode.PrinterLinks(factory=grbl.SimulatedRouter)
     >>> link = links.open(PORT, 115200)

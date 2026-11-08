@@ -49,6 +49,7 @@ MACHINE = ".panel[data-panel='machine']"
 MACHINE_WINDOWS = ".panel[data-panel^='machine']"
 # The Bench: every toolchain's sketches, built and flashed from one window.
 BENCH = ".panel[data-panel='bench']"
+DECK = ".panel[data-panel='deck']"
 
 
 def machine(page: Page):

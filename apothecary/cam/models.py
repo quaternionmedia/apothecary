@@ -13,7 +13,6 @@ from typing import Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, Field
 
 from ..firmware import grbl
-from ..firmware.gcode import SPINDLE_MAX_RPM
 
 
 class Tool(BaseModel):
@@ -26,11 +25,11 @@ class Tool(BaseModel):
 
 class Feeds(BaseModel):
     """Feeds and speed, each within the router's bounds (``grbl.FEED_MAX``,
-    ``gcode.SPINDLE_MAX_RPM``): what the toolpath writes on every move."""
+    ``grbl.SPINDLE_MAX_RPM``): what the toolpath writes on every move."""
 
     cut: float = Field(800.0, gt=0, le=grbl.FEED_MAX)  # mm/min along a cut
     plunge: float = Field(300.0, gt=0, le=grbl.FEED_MAX)  # mm/min straight down
-    rpm: int = Field(12000, gt=0, le=SPINDLE_MAX_RPM)
+    rpm: int = Field(12000, gt=0, le=grbl.SPINDLE_MAX_RPM)
 
 
 class Stock(BaseModel):

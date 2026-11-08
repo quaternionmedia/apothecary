@@ -132,8 +132,25 @@ folder, `procedures/<site>/<name>.json`:
 
 Every step waits for a person's GO, and only the step standing by fires: the one whose
 predecessor has fired, once the evidence it names is in. GO is in the **Procedure**
-window, ⊞ Windows › Procedure, which says who the family is and how each step stands.
+window, which says how each step stands. It stands beside the world
+whenever the site has a procedure, without being asked for, and gives its room back on a site
+with none; a window a person closed stays closed, and one a person opened is the person's.
+It is also ⊞ Windows › Procedure, in the Family group with **Members**, each member, how it is
+reached, its state where the hub started it and its door, and **Deliveries**, the hub's audit,
+newest first, each delivery's step, member, status, milliseconds and the instance that took
+it. Panels › Windows › Family view lays the three out with the world.
 `apothecary serve --demo` starts with one, `bring-up`, on the garage's simulated bench.
+
+The window leads to where each step's work is. A step's node is a door: pressed, the
+node's window opens, a machine's or a board's Machine or a camera's Pictures, or the
+status line says why it cannot. A step fired opens the section its member works in,
+where that Machine is open: a machine's step the Status, a board's flash the Flashing,
+its expect the Log; a Machine not open is not opened by a fire. A refused or failed
+step keeps the member's words, with the node's door right after them, so a machine's
+latch is one press away. A member's name, in Members, is a door too: a member hosted here to the
+window of the node its next step names, a member beside the hub to its own page in a
+new tab; a pull member leads nowhere. GO never arms a latch.
+[Walkthrough page 25](../walkthrough/25-a-procedure-through-the-window.md) pictures it.
 
 | Status | What it means |
 |---|---|

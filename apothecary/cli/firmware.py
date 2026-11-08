@@ -174,12 +174,13 @@ def _print_status(status) -> None:
         )
         for tool in module.tools:
             if tool.ok:
+                # A tool is found by its version, its file or both: hidapi has no version
+                # to say, and a Python package no file of its own.
+                version = tool.version or ""
                 said = (
-                    tool.version
-                    if tool.version.startswith(tool.name)
-                    else f"{tool.name} {tool.version}"
+                    version if version.startswith(tool.name) else f"{tool.name} {version}".rstrip()
                 )
-                click.echo(f"  ✓ {said}: {tool.path}")
+                click.echo(f"  ✓ {said}: {tool.path}" if tool.path else f"  ✓ {said}")
             elif tool.path:
                 click.secho(f"  ✗ {tool.name}: {tool.path} does not run", fg="red")
             else:
@@ -430,6 +431,29 @@ def firmware_devices(json_out: bool):
         return
     for d, e in rows:
         _print_device(d, e)
+
+
+@firmware.command("decks")
+@click.option("--json-out/--text", default=False)
+def firmware_decks(json_out: bool):
+    """The Stream Deck + decks found on USB (none is opened), and what is missing if none can be."""
+    from ..firmware import deck
+
+    try:
+        found = deck.get_decks().list()
+    except deck.DeckUnavailable as exc:
+        _die(exc)
+    if json_out:
+        click.echo(json.dumps([d.model_dump() for d in found], indent=2))
+        return
+    if not found:
+        click.echo("No Stream Deck + found.")
+        return
+    for d in found:
+        click.echo(
+            f"{d.id}  {d.model}  {d.vid}:{d.pid}  {d.keys} keys, {d.knobs} knobs"
+            + ("  (simulated)" if d.simulated else "")
+        )
 
 
 @firmware.command("probe")

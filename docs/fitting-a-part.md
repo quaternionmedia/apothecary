@@ -29,10 +29,10 @@ Nothing new appears as an assembly grows; only the tree gets deeper.
 `apothecary/models/blackbox.py`: a `BlackBox` describes an artifact apothecary
 places but does not author, and `BlackBoxProvider` is a Protocol, so where the
 description comes from is a separate, replaceable question. `StubProvider`
-returns hand-entered datasheet numbers; `KiCadProvider`
-(`apothecary/shims/kicad.py`) reads a real board outline through the same
-interface, and swapping one for the other changes no geometry code. `source`
-on each box tells a measured envelope from a guessed one.
+returns hand-entered datasheet numbers (the datum board's is
+`datum_core.t1_core_stub`); a reader of a real board outline is a provider of
+its own behind the same interface, and swapping one for the other changes no
+geometry code. `source` on each box tells a measured envelope from a guessed one.
 
 `datum_core.params_for(board)` is the whole adapter from a box to tray
 parameters. `apothecary/projects/assemblies/datum_bench.py` places the tray
@@ -50,7 +50,7 @@ each pair has a gate:
 | SCAD variables ↔ `Params` | `tests/test_parameter_coverage.py` |
 | Declared bounds ↔ rendered geometry | `apothecary parts verify` |
 | Black box ↔ part params | `datum_core.params_for`, driven by `datum_bench.py` |
-| Black box ↔ the schematic | `KiCadProvider`; built, unfed until a schematic exists |
+| Black box ↔ the schematic | a provider of its own, when a schematic exists |
 
 ## A pin, not a path
 

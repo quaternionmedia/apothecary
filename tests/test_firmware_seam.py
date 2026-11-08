@@ -321,7 +321,7 @@ def test_extract_binary_tar_and_zip(tmp_path):
         zf.writestr("arduino-cli.exe", b"MZ")
         zf.writestr("LICENSE.txt", b"...")
     if (
-        installer._exe("arduino-cli") == "arduino-cli"
+        installer.exe("arduino-cli") == "arduino-cli"
     ):  # POSIX: expect the posix name, so this zip lacks it
         with pytest.raises(ToolchainError):
             installer.extract_binary(buf.getvalue(), "x.zip", tmp_path / "z")
@@ -354,7 +354,7 @@ def test_installer_downloads_verifies_and_smoke_tests(tmp_path, monkeypatch):
         installer.InstallSpec(dest=tmp_path / "dest"), log=log.append, fetch=fetch
     )
     path = inst.install_binary()
-    assert path == tmp_path / "dest" / installer._exe("arduino-cli")
+    assert path == tmp_path / "dest" / installer.exe("arduino-cli")
     assert ArduinoCli(path).version() == "9.9.9"
     assert any("SHA-256 verified" in line for line in log) and any(
         "9.9.9 OK" in line for line in log

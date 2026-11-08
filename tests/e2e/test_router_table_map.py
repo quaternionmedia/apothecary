@@ -170,8 +170,10 @@ def test_the_machine_s_level_card_is_a_router_s_and_takes_a_map(page: Page, url:
     saved = log.locator(".sys", has_text="a table map saved")
     probed_before, homed_before, saved_before = probes.count(), homings.count(), saved.count()
 
-    # Disarmed: refused on the page, nothing sent.
-    card.locator("#level-probe").click()
+    # Disarmed: the probe is not offered, and one asked for all the same is refused on
+    # the page, nothing sent.
+    expect(card.locator("#level-probe")).to_be_hidden()
+    page.evaluate("() => window.apothecaryMachine.level.start(true)")
     expect(log.locator(".sys", has_text="arm control first")).to_be_visible(timeout=3000)
     expect(probes).to_have_count(probed_before)
 

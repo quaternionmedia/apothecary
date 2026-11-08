@@ -4,7 +4,9 @@ Nothing here knows how to compile or flash. Each class turns a typed request
 into an argv list, runs the engine, and parses its documented output
 (``--json`` for arduino-cli). Swapping an engine -- a different Arduino
 build tool, a different flasher -- is a new class with the same methods, not
-a redesign; see the *Firmware toolchain seam* decision record.
+a redesign; see the *Firmware toolchain seam* decision record. ``Tool`` is how
+any bought engine is found, whatever module runs it -- a firmware toolchain's, a
+slicer's -- and ``tools_dir`` is where an install of Apothecary's puts one.
 """
 
 from __future__ import annotations
@@ -15,8 +17,9 @@ import platform
 import re
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Callable, Iterable, List, Optional, Tuple
 
 from ..stays_local import ARDUINO_CLI_CONFIG, PACKAGE_INDEXES, subprocess_env
 from .models import BoardInfo, CoreInfo, KnownBoard
@@ -60,8 +63,53 @@ def tools_dir() -> Path:
     return Path.home() / ".apothecary" / "tools"
 
 
-def _exe(name: str) -> str:
+def exe(name: str) -> str:
+    """``name`` as the program is called here: with ``.exe`` on Windows."""
     return f"{name}.exe" if platform.system() == "Windows" else name
+
+
+def under_tools_dir(rel: str) -> Callable[[], Path]:
+    """Where a tool an install of Apothecary's puts in the tools dir is: ``rel`` is its
+    path there, "/"-separated, without ``.exe``. A callable, read when it is asked, so
+    ``APOTHECARY_TOOLS_DIR`` counts at that moment."""
+
+    def where() -> Path:
+        return tools_dir().joinpath(*rel.split("/")).with_name(exe(rel.rsplit("/", 1)[-1]))
+
+    return where
+
+
+@dataclass(frozen=True)
+class Tool:
+    """One program a module runs, whatever the module -- a firmware toolchain's, a
+    slicer's -- found the one way: by the environment variable naming it, then where
+    its install put it (``managed``: the one in the tools dir, when there is one),
+    then its names on ``PATH``. The variable set to ``none`` means none (the browser
+    suites' servers, so they never find a person's own)."""
+
+    name: str
+    env: str
+    managed: Callable[[], Optional[Path]]
+    commands: Tuple[str, ...]
+
+    def find(self) -> Tuple[Optional[Path], Optional[str]]:
+        """Where it is, and what found it: the variable, ``tools dir`` or ``PATH``."""
+        named = os.environ.get(self.env, "").strip()
+        if named.lower() == "none":
+            return None, None
+        if named and Path(named).expanduser().is_file():
+            return Path(named).expanduser(), self.env
+        managed = self.managed()
+        if managed is not None and managed.is_file():
+            return managed, "tools dir"
+        for command in self.commands:
+            found = shutil.which(command)
+            if found:
+                return Path(found), "PATH"
+        return None, None
+
+    def detect(self) -> Optional[Path]:
+        return self.find()[0]
 
 
 def arduino_data_dir() -> Path:
@@ -148,7 +196,7 @@ class ArduinoCli:
             return None
         if env and Path(env).is_file():
             return Path(env)
-        managed = tools_dir() / "arduino-cli" / _exe("arduino-cli")
+        managed = tools_dir() / "arduino-cli" / exe("arduino-cli")
         if managed.is_file():
             return managed
         found = shutil.which("arduino-cli")

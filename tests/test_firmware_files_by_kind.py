@@ -15,7 +15,8 @@ from fastapi.testclient import TestClient
 from apothecary.api import app
 from apothecary.cam import service as cam
 from apothecary.cam.models import CutFor
-from apothecary.firmware import devices, gcode, grbl
+from apothecary.firmware import devices, dialects, gcode, grbl
+from apothecary.state_folder import state_dir
 
 PORT = "/dev/ttyFAKE1"  # the scripted arduino-cli's unmatched board
 DRY_RUN = (Path(__file__).parents[1] / "docs" / "validation" / "dry-run-square.gcode").read_bytes()
@@ -89,18 +90,32 @@ def test_a_file_is_sent_to_the_kind_it_was_kept_for(fake_arduino_cli, monkeypatc
 
 
 def test_a_router_s_file_is_checked_in_grbl_s_terms():
-    _, problems = gcode.check_gcode(DRY_RUN.decode(), "router")
+    _, problems = grbl.check_gcode(DRY_RUN.decode())
     dwells = [p for p in problems if "G4 P500 dwells 500 s on GRBL, whose P is seconds" in p]
     assert len(dwells) == DRY_RUN.decode().count("G4 P500")
     assert any("M117 is not a GRBL code" in p for p in problems)
     assert any("M84 is not a GRBL code" in p for p in problems)
-    assert gcode.check_gcode(DRY_RUN.decode(), "printer")[1] == []
-    assert gcode.check_gcode(A_CUT.decode(), "router")[1] == []
-    _, odd = gcode.check_gcode("G29\nG04 P90\nM03 S1000\nG04 P30\n", "router")
+    assert gcode.check_gcode(DRY_RUN.decode())[1] == []
+    assert grbl.check_gcode(A_CUT.decode())[1] == []
+    _, odd = grbl.check_gcode("G29\nG04 P90\nM03 S1000\nG04 P30\n")
     assert odd == [
         "line 1: G29 is a printer's bed probe, not a GRBL code",
         "line 2: G04 P90 dwells 90 s on GRBL, whose P is seconds; a printer's file counts it in milliseconds",
     ]
+
+
+def test_the_spindle_bound_is_the_router_s_and_the_check_is_the_dialect_s():
+    """GRBL's file rules live with GRBL: the spindle bound, the M codes it takes, the
+    dwell in its unit. Marlin's check knows none of them, and a kept file is checked by
+    the dialect of the kind it is kept for."""
+    fast = "M3 S30000\nM5\n"
+    assert grbl.check_gcode(fast) == (2, ["line 1: M3 asks for 30000 rpm, above 24000"])
+    assert gcode.check_gcode(fast) == (2, [])
+    assert dialects.by_machine("router").check_file is grbl.check_gcode
+    assert dialects.by_machine("printer").check_file is gcode.check_gcode
+    assert dialects.by_machine(None).check_file is gcode.check_gcode
+    with pytest.raises(KeyError):
+        dialects.by_machine("laser")
 
 
 def test_the_app_s_own_toolpath_is_kept_for_the_router_and_checks_clean(fake_arduino_cli):
@@ -109,15 +124,15 @@ def test_the_app_s_own_toolpath_is_kept_for_the_router_and_checks_clean(fake_ard
     assert kept.machine == "router" and kept.problems == []
 
 
-def test_a_file_a_slice_or_a_toolpath_made_before_files_said_their_kind_says_it(
-    fake_arduino_cli,
-):
-    for folder, kind in (("slices", "printer"), ("cuts", "router")):
-        kept = devices.save_print_file(f"{kind}.gcode", b"G1 X1 F100\n")
-        (devices.state_dir() / folder).mkdir(exist_ok=True)
-        (devices.state_dir() / folder / f"{kept.id}.json").write_text("{}")
-        assert devices.print_file(kept.id).machine == kind
-        assert {f.id: f.machine for f in devices.print_files()}[kept.id] == kind
+def test_a_kept_file_s_kind_is_what_it_was_kept_with(fake_arduino_cli):
+    """A slice's or a cut's record beside a kept file says nothing of the file's kind:
+    a file kept for none is kept for none until it is kept again for a machine."""
+    for folder in ("slices", "cuts"):
+        kept = devices.save_print_file(f"{folder}.gcode", b"G1 X1 F100\n")
+        (state_dir() / folder).mkdir(exist_ok=True)
+        (state_dir() / folder / f"{kept.id}.json").write_text("{}")
+        assert devices.print_file(kept.id).machine is None
+        assert {f.id: f.machine for f in devices.print_files()}[kept.id] is None
 
 
 def test_choose_file_keeps_a_file_for_the_machine_it_was_chosen_in(fake_arduino_cli):

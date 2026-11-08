@@ -73,8 +73,12 @@ def test_all_runs_both_phases_and_exits_with_the_first_failure(pytest_exits, uni
     [
         ([], [], []),
         (["-k", "part"], ["-k", "part"], ["-k", "part"]),
-        (["--workers", "2"], [], ["-n", "2", *testing.FILES_WHOLE]),
-        (["--workers", "3", "-x"], ["-x"], ["-n", "3", *testing.FILES_WHOLE, "-x"]),
+        (["--workers", "2"], ["-n", "2", *testing.FILES_WHOLE], ["-n", "2", *testing.FILES_WHOLE]),
+        (
+            ["--workers", "3", "-x"],
+            ["-n", "3", *testing.FILES_WHOLE, "-x"],
+            ["-n", "3", *testing.FILES_WHOLE, "-x"],
+        ),
     ],
     ids=["defaults", "pytest-args-to-both", "workers", "workers-and-pytest-args"],
 )
@@ -140,16 +144,24 @@ def test_without_chromium_the_browser_part_says_how_to_install_it_in_one_line(tm
 
 
 def test_changed_runs_the_unit_part_then_the_browser_files_the_change_reaches():
-    """A change to a board's code reaches the machine area's files alone; one to the
-    page reaches every browser file; one that reaches no area runs the unit part alone."""
+    """A change to a board's code reaches the machines group's unit files and the machine
+    area's browser files alone; one to the page reaches every browser file; one that
+    reaches no area runs the unit files of its groups alone."""
+    groups = testing._groups()
     unit, browser = testing.changed_commands(["apothecary/firmware/gcode.py"])
-    assert unit == testing.unit_command()
+    assert unit == testing.unit_command(files=groups.files(["machines"]))
+    assert _args(unit)[:2] == ["-q", "walkthrough"] and "tests/test_jobs.py" in unit
+    assert "tests/test_slicer.py" not in unit
     files = [a for a in _args(browser) if a.startswith("tests/e2e/")]
     assert "tests/e2e/test_one_machine.py" in files and "tests/e2e/test_ring.py" not in files
     assert _args(browser)[-1] == "--start-server"
     _, every = testing.changed_commands(["templates/fractal_viewer.html.j2"], workers=3)
     assert _args(every) == ["-q", "tests/e2e", "--start-server", "-n", "3", *testing.FILES_WHOLE]
-    assert testing.changed_commands(["docs/viewer.md"]) == [testing.unit_command()]
+    assert testing.changed_commands(["docs/viewer.md"]) == [
+        testing.unit_command(files=groups.files(["repository"]))
+    ]
+    every_unit, _ = testing.changed_commands(["apothecary/api.py"], workers=2)
+    assert every_unit == testing.unit_command(workers=2)
 
 
 def test_changed_exits_with_the_first_failing_code_and_lists_without_running(
@@ -161,7 +173,11 @@ def test_changed_exits_with_the_first_failing_code_and_lists_without_running(
     assert done.exit_code == 1 and len(ran) == 2
     assert "tests/e2e/test_lighting_overlay.py" in _args(ran[1])
     listed = CliRunner().invoke(cli, ["test", "changed", "--list"])
-    assert listed.exit_code == 0 and listed.output.strip() == "tests/e2e/test_lighting_overlay.py"
+    assert listed.exit_code == 0
+    assert listed.output.splitlines() == [
+        *testing._groups().files(["viewer"]),
+        "tests/e2e/test_lighting_overlay.py",
+    ]
     assert len(ran) == 2  # --list ran nothing
 
 
@@ -191,3 +207,27 @@ def test_a_crashed_worker_ends_a_parallel_run_and_names_its_test(tmp_path):
     )
     assert ran.returncode == 1
     assert "crashed while running 'test_crashes.py::test_crashes'" in ran.stdout
+
+
+def test_group_lists_the_groups_and_runs_the_named_ones(pytest_exits):
+    """One part of the package at a time: the walkthrough and the named groups' unit
+    files, in parallel with --workers; a name the map does not hold is refused."""
+    groups = testing._groups()
+    listed = CliRunner().invoke(cli, ["test", "group"])
+    assert listed.exit_code == 0
+    assert [line.split()[0] for line in listed.output.splitlines()] == list(groups.GROUPS)
+    ran = pytest_exits(0)
+    done = CliRunner().invoke(cli, ["test", "group", "making", "family", "--workers", "2"])
+    assert done.exit_code == 0
+    assert ran == [testing.unit_command(files=groups.files(["making", "family"]), workers=2)]
+    refused = CliRunner().invoke(cli, ["test", "group", "nowhere"])
+    assert refused.exit_code != 0 and "no group named nowhere" in refused.output
+    assert len(ran) == 1
+
+
+def test_run_takes_workers_for_its_unit_part(pytest_exits):
+    ran = pytest_exits(0, 0)
+    assert CliRunner().invoke(cli, ["test", "run", "--workers", "4"]).exit_code == 0
+    assert ran == testing.run_commands(workers=4)
+    assert _args(ran[0])[-4:] == ["--dist", "loadfile", "--max-worker-restart", "0"]
+    assert "-n" not in ran[1]

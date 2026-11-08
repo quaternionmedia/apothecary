@@ -7,7 +7,7 @@ at `/README.md`, and every page's bar links it. The HTTP API is described at `/o
 
 ## The walkthrough
 
-`walkthrough/` is the path through this repository. Pages 01 to 06 and 18 are
+`walkthrough/` is the path through this repository. Pages 01 to 06, 18, 26 and 27 are
 written by the browser tests that walk them; page 00, pages 07 to 17 and pages
 19 to 23 are doctests, run by `pytest walkthrough`. Start there, at page 00.
 
@@ -37,6 +37,19 @@ written by the browser tests that walk them; page 00, pages 07 to 17 and pages
 | [21 — A toolpath, previewed](../walkthrough/21-a-toolpath-previewed.md) | One interpreter and two processes: a print's layers and a cut's passes read through one core, held to the toolpath's own writer, and a design change seen in the moves |
 | [22 — The irl family's hub](../walkthrough/22-the-irl-hub.md) | apothecary as the family's hub on hearth's contract: what it says it is, its table, a fire and what is kept |
 | [23 — A procedure](../walkthrough/23-a-procedure.md) | What the family fires: the steps that bring a site's blueprint into working order, each waiting for GO and the evidence it names, a person's own, a member's refusal, a page's read and a member that is not there, and what the log keeps |
+| [26 — The Stream Deck +](../walkthrough/26-the-stream-deck.md) | An Elgato Stream Deck + at the garage's bench: its piece opens the Deck window, a program draws its eight keys and strip, and a simulated deck is pressed, turned and tapped, each event listed and kept; written by the browser suite |
+| [27 — The deck jogging the machines](../walkthrough/27-the-deck-jogging-the-machines.md) | The Stream Deck +'s knobs jog the router through the control latch: its layout drawn, a turn disarmed moving nothing, an armed jog read back on the X key, the step key, and the stop key stopping a spinning spindle; written by the browser suite |
+
+## The checklists
+
+What is ticked by a person before a stack is pulled and before a tag is cut. The
+suites hold everything else.
+
+| Checklist | |
+|---|---|
+| [The integration checklist](integration-checklist.md) | A stack, before it is pulled: the tree that will land, the suite once on its head, the pictures judged, the docs read together, preflight, the rows only a person sees, the pull requests and the landing |
+| [The bench checklist](bench-checklist.md) | The Ender 3, an ESP32 and the router for real: pinning, the link, heat, motion, levelling, printing from here, slicing, the emergency stop, the Rust and Arduino blinks, and the router's homing, jogs, spindle, zero, probe and a cut |
+| [The models checklist](models-checklist.md) | Image models through qmcp by hand, against the simulated qmcp: the Models window, asking about a shape, a person's word, switching an origin off, and each way qmcp can be missing |
 
 ## Guides
 
@@ -44,6 +57,7 @@ written by the browser tests that walk them; page 00, pages 07 to 17 and pages
 |---|---|
 | [The dev loop](dev-loop.md) | Change, see, test, commit, integrate: a command for each step, two servers at once on two ports, what others pushed brought into a checkout, and a change brought into main |
 | [The viewer](viewer.md) | The page's own controls: the header and ⚙ View, the world and its faded walls and badges, the ring and its addresses, the windows, the part editor and the SCAD editor, the keys |
+| [The Stream Deck +](stream-deck.md) | An Elgato Stream Deck + found on USB, its keys and strip drawn and its keys, knobs and touches heard, through a module beside the toolchains: setting it up, what is found, drawn and heard, its routes and the simulated deck |
 | [Windows and focused systems](windows-and-systems.md) | For an author: a window of the page -- where it opens, what a browser remembers, an empty one -- and a focused system's registry entry, its widget's hook, and the tests that hold each |
 | [The family's hub](family.md) | apothecary as the `irl` family's hub on hearth's contract: its routes, its table, what goes through it and how `hearth check` judges it |
 | [Lighting](lighting.md) | A site's lighting rig -- fixture types, a patch, live levels -- the theatre site that uses it, another console's exports in its place, and a console's levels by sACN or OSC |
@@ -63,8 +77,6 @@ written by the browser tests that walk them; page 00, pages 07 to 17 and pages
 | [The toolpath](cam.md) | The router's toolpath, written from the cuts a part declares: what a part says, what the toolpath does, how it is kept, recorded and offered, and the cut measured as cut |
 | [The slicer](slicer.md) | OrcaSlicer installed and pinned, the printer's profile kept with its part, a part or a made piece sliced for the pinned printer and kept for the Print card |
 | [The Airgap](airgap.md) | The `airgap` part -- a rotor/stator pair computed in its SCAD -- and the Airgap panel: the part as a field, torque and dynamics model that follows its text in the editor, its verbs on the ring, its rig and sweep as documents, and the metrics document Python reads back |
-| [The bench checklist](bench-checklist.md) | The Ender 3, an ESP32 and the router for real: pinning, the link, heat, motion, levelling, printing from here, slicing, the emergency stop, the Rust and Arduino blinks, and the router's homing, jogs, spindle, zero, probe and a cut |
-| [The models checklist](models-checklist.md) | Image models through qmcp by hand, against the simulated qmcp: the Models window, asking about a shape, a person's word, switching an origin off, and each way qmcp can be missing |
 
 ## The Rust workspace
 
@@ -89,6 +101,10 @@ Open plans: each says what is decided and what is not built.
 
 | Page | |
 |---|---|
+| [Integrating the local stacks](plans/integration-2026-11-07.md) | Every local stack cut from `main` that evening -- testing, the fixes, standardize, homing, family, streamdeck -- finished, merged in landing order into one tree, tested once as a whole by the integration checklist, its owed fixes taken home, and landed on the owner's word: the phases, the conflicts found and each one's resolution, and what only the bench shows |
+| [One way of doing each thing](plans/standardization-2026-11-07.md) | What the package does two ways and the one standard each folds into: a dialect's rules in its own module, one module for the state folder, one finder for every bought engine, a board by its part, a kind of machine from its dialect; in slices, three of them removals with the owner's yes; what is left, named with its reason |
+| [The family's journeys through the viewer](plans/family-journeys-2026-11-07.md) | The page shaped round the paths through the family's work: the sentences telling a person what to do gone, a control surfacing when what it needs holds, a procedure's step and a member each a door to the window its work is in, and the family one focused system with a view of its own; in four slices, each a branch |
+| [The Stream Deck + at the bench](plans/stream-deck-2026-11-07.md) | An Elgato Stream Deck + three ways: a part on the garage's workbench from the maker's figures, a device programmed from here (its keys and strip drawn, its presses, turns and touches heard, through a module beside Arduino's and Rust's and a simulated deck the demo shows), and a controller whose knobs jog the chosen machine's axes through the control latch, the dialect's bounds and its own stop; in slices, with the owner's questions |
 | [Each machine keeps its own](plans/machine-identity-2026-11-07.md) | One answer to which board is on a port and what kind of machine it is; every record and cache keyed by it, a port that changes hands forgetting its board, one kind's work refused on another at the server, and the stop always sent; in slices: the stop, the port's forgetting, readings by board, pins by board, files by kind and machines planned before their board built; the page's marks by board not |
 | [A part through the subtractive loop](plans/subtractive-loop-2026-11-04.md) | The loop the app is built around from here, on the router beside the Ender: a part's declared cuts, the app's own toolpath, Cut from here, the cut's operation named, the simulated router's footprint measured and one iteration executed (built); then the bench, then the cut watched |
 | [Pictures in the world: what is open](plans/pictures-the-rest-2026-10-13.md) | Gathering out of core as an extra, and the old photo routes closed: the two phases of the pictures plan not built |

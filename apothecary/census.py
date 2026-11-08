@@ -327,7 +327,9 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "step:50": (WIDGET, WHAT_YOU_SEE, "a button that makes a jog step five centimetres"),
     "h-feed": (WIDGET, WHAT_YOU_SEE, "a box for how fast to jog"),
     "cmd:G28 X Y": (WIDGET, WHAT_IS_THERE, "a button that homes across and along"),
-    "cmd:G28 Z": (WIDGET, WHAT_IS_THERE, "a button that homes up"),
+    "cmd:HOME-X": (WIDGET, WHAT_IS_THERE, "a button that homes the X axis alone"),
+    "cmd:HOME-Y": (WIDGET, WHAT_IS_THERE, "a button that homes the Y axis alone"),
+    "cmd:HOME-Z": (WIDGET, WHAT_IS_THERE, "a button that homes the Z axis alone"),
     "cmd:M84": (WIDGET, WHAT_IS_THERE, "a button that lets the motors go"),
     "cmd:M410": (WIDGET, WHAT_IS_THERE, "a button that drops every planned move"),
     "cmd:M24": (WIDGET, WHAT_IS_THERE, "a button that starts or resumes the print on the card"),
@@ -440,6 +442,34 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "pinned-view-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one view, in any site"),
     "pinned-board-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one board's pin back"),
+    # ---- Deck, apothecary/static/widgets/deck.js --------------------------
+    # The Stream Deck + as drawn from here: a simulated deck is pressed, turned and
+    # tapped from its window, each the event a real deck reports (a real deck's are off);
+    # the piece's Open Deck opens the window.
+    "deck-open": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button on the Stream Deck + piece that opens the Deck window",
+    ),
+    "deck-key": (WIDGET, WHAT_IS_THERE, "a key of a simulated deck, pressed and released"),
+    "deck-strip-tap": (WIDGET, WHAT_IS_THERE, "the touch strip of a simulated deck, tapped"),
+    "deck-turn": (WIDGET, WHAT_IS_THERE, "a button that turns a simulated deck's knob one step"),
+    "deck-press": (WIDGET, WHAT_IS_THERE, "a button that presses a simulated deck's knob"),
+    # The knobs, the server's layout on the deck: started or stopped, the machine they
+    # move and their step chosen, in the Deck window; Knobs here in a Control pad. Each
+    # is a cell of Panels › Machine › Knobs.
+    "deck-run": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that starts or stops the deck's knobs, the layout that jogs the machines",
+    ),
+    "deck-machine": (WIDGET, WHAT_IS_THERE, "a machine's name, a button that the knobs move it"),
+    "deck-step": (WIDGET, WHAT_YOU_SEE, "a button that makes a knob's step so many millimetres"),
+    "deck-here": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button in a Control pad that the deck's knobs move this machine",
+    ),
     # ---- Models, apothecary/static/widgets/models.js ----------------------
     # Image models through qmcp: an origin switched, the shape chosen on a mat asked
     # about, and a person's word on one of its properties. Ask and a person's word
@@ -505,6 +535,18 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_IS_THERE,
         "a button that starts a procedure over, what came before staying in the log",
+    ),
+    "procedure-node": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a step's node, a button that opens the window its work is in: a Machine, or Pictures",
+    ),
+    # ---- Family, apothecary/static/widgets/family.js -------------------------
+    "family-member": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a member's name, a button that opens the window of the node its next step names, "
+        "or its own page beside the hub",
     ),
     # ---- Settings, apothecary/static/widgets/settings.js -------------------
     # Every shortcut and navigation setting: one row each, its default shown and a
@@ -614,9 +656,11 @@ RING_BACKED: Dict[str, str] = {
     "models:click:closest": "models:ask",
     "models-word": "models:say:colour:red",
     "models:keydown:closest": "models:say:colour:red",
-    # GO and Start over are the cells of Panels › Site › Procedure
+    # GO and Start over are the cells of Panels › Site › Procedure; a step's node opens
+    # the window its ring's Device › Open does
     "procedure-go": "procedure:go",
     "procedure-again": "procedure:again",
+    "procedure-node": "device:open",
     "procedure:click:closest": "procedure:go",
     # the Airgap's verbs are the cells of Panels › Airgap
     "airgap-play": "airgap:play",
@@ -663,8 +707,10 @@ RING_BACKED: Dict[str, str] = {
     "cmd:M106 S{h-fan}": "control:fan-on",
     "cmd:M107": "control:fan-off",
     "cmd:HOME": "control:home",
+    "cmd:HOME-X": "control:home-x",
+    "cmd:HOME-Y": "control:home-y",
+    "cmd:HOME-Z": "control:home-z",
     "cmd:G28 X Y": "control:home-xy",
-    "cmd:G28 Z": "control:home-z",
     "jog:Y+": "control:jog:Y+",
     "jog:X+": "control:jog:X+",
     "jog:Y-": "control:jog:Y-",
@@ -801,6 +847,13 @@ RING_BACKED: Dict[str, str] = {
     # Camera › Workspace, Add a camera its Camera › Add here, and a camera row's
     # device and Allow the camera's own Device (whose leaves are camera:device:<id>)
     "ws-back": "panel:toggle:working",
+    "deck-open": "panel:toggle:deck",
+    # the knobs' controls are the cells of Panels › Machine › Knobs (whose machines and
+    # steps are leaves deck:machine:<name> and deck:step:<mm>)
+    "deck-run": "deck:knobs",
+    "deck-machine": "deck:machine",
+    "deck-step": "deck:step",
+    "deck-here": "deck:here",
     "ws-hour": "working:open",
     "ws-add-camera": "camera:add-here",
     "ws-choose": "camera:device",
@@ -1127,11 +1180,25 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "the Cut or Print card's preview slider, drawing a file's toolpath in the world",
     ),
-    "procedure:click:closest": (WIDGET, WHAT_IS_THERE, "GO or Start over"),
+    "procedure:click:closest": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "GO or Start over, or a step's node",
+    ),
     "procedure:change:closest": (WIDGET, WHAT_YOU_SEE, "the procedure chosen"),
+    "members:click:closest": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a member's name in Members, opening the window of its next step's node or its page",
+    ),
     "models:click:closest": (WIDGET, WHAT_IS_THERE, "Ask, about the shape chosen on a mat"),
     "models:change:closest": (WIDGET, WHAT_IS_THERE, "an origin's tick-box, switching it"),
     "models:keydown:closest": (WIDGET, WHAT_IS_THERE, "Enter in a person's word, saying it"),
+    "?:click:open": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the Stream Deck + piece's Open Deck, opening the Deck window",
+    ),
     "pinned-list:click:closest": (
         WIDGET,
         WHAT_IS_THERE,

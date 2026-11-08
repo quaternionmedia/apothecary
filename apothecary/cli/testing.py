@@ -30,18 +30,24 @@ def _pytest_argv(*args: str) -> list[str]:
     return [sys.executable, "-m", "pytest", "-q", *args]
 
 
-def unit_command(slow: bool = False) -> list[str]:
-    """The unit suite and the walkthrough's pages, without a browser."""
-    argv = _pytest_argv(WALKTHROUGH, "tests", f"--ignore={BROWSER}")
+# Tests in parallel: a file's tests on one worker, and a worker that crashes ends the
+# run, its test named. One started in its place leaves xdist's loadfile scheduler
+# waiting on the crashed file forever.
+FILES_WHOLE = ["--dist", "loadfile", "--max-worker-restart", "0"]
+
+
+def unit_command(slow: bool = False, files: list[str] | None = None, workers: int = 1) -> list[str]:
+    """The walkthrough's pages and the unit suite, without a browser: every unit file, or
+    only ``files`` (tests/groups.py's); with ``workers`` above one, that many in
+    parallel, a file's tests together."""
+    tests = ["tests", f"--ignore={BROWSER}"] if files is None else files
+    argv = _pytest_argv(WALKTHROUGH, *tests)
+    if workers > 1:
+        argv += ["-n", str(workers), *FILES_WHOLE]
     if slow:
         argv.append("--slow")
     return argv
 
-
-# Browser tests in parallel: a file's tests on one worker, and a worker that crashes
-# ends the run, its test named. One started in its place leaves xdist's loadfile
-# scheduler waiting on the crashed file forever.
-FILES_WHOLE = ["--dist", "loadfile", "--max-worker-restart", "0"]
 
 # The browser tests the ordinary command runs: the walkthrough's demonstration, and
 # the window manager on a page of its own, which starts no server.
@@ -67,16 +73,18 @@ COVERAGE = ["--cov", "--cov-report="]
 
 def all_commands(slow: bool = False, workers: int = 1, coverage: bool = False) -> list[list[str]]:
     """The argvs `apothecary test all` executes, one pytest each, in order."""
-    unit, browser = unit_command(slow=slow), browser_command(every=True, workers=workers)
+    unit = unit_command(slow=slow, workers=workers)
+    browser = browser_command(every=True, workers=workers)
     if coverage:
         unit += COVERAGE
         browser += [*COVERAGE, "--cov-append"]
     return [unit, browser]
 
 
-def run_commands(slow: bool = False) -> list[list[str]]:
-    """The argvs `apothecary test run` executes, one pytest each, in order."""
-    return [unit_command(slow=slow), browser_command()]
+def run_commands(slow: bool = False, workers: int = 1) -> list[list[str]]:
+    """The argvs `apothecary test run` executes, one pytest each, in order: ``workers``
+    runs the unit part in parallel; the walkthrough's demonstration is one browser."""
+    return [unit_command(slow=slow, workers=workers), browser_command()]
 
 
 def _pytest(argv: list[str], env: dict | None = None) -> int:
@@ -122,9 +130,13 @@ HELP = """Run the test suite, exiting as pytest does.
                         package's statements, and those the change adds or
                         changes (--markdown: a line for a pull request's body)
   apothecary test changed
-                        while working: the unit tests and the walkthrough, then
-                        the browser files of the areas a change reaches (--since
-                        REF; the branch's upstream by default)
+                        while working, and before each commit: the walkthrough
+                        and the unit files of the groups a change reaches, then
+                        the browser files of the areas it reaches (--since REF;
+                        the branch's upstream by default)
+  apothecary test group [NAME...]
+                        the unit suite's groups; with names, their unit files and
+                        the walkthrough
   uv run pytest         the quick inner loop, browser tests skipped
 
 The walkthrough's demonstration and every browser test drive Chromium:
@@ -149,19 +161,26 @@ def _every_browser_test_is_test_all(ctx, param, value):
 @click.option(
     "--slow", is_flag=True, help="Also run tests marked slow (full renders, accuracy benches)."
 )
+@click.option(
+    "--workers",
+    type=click.IntRange(min=1),
+    default=1,
+    show_default=True,
+    help="The unit part in parallel, a file's tests together (pytest-xdist).",
+)
 # Every browser test is `test all`'s; the flag stays, hidden, to say so.
 @click.option(
     "--e2e", is_flag=True, hidden=True, expose_value=False, callback=_every_browser_test_is_test_all
 )
 @click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
-def test_run(slow: bool, pytest_args: tuple[str, ...]):
+def test_run(slow: bool, workers: int, pytest_args: tuple[str, ...]):
     """The ordinary command: the unit tests and the walkthrough, whose demonstration
     drives Chromium in a pytest of its own; further arguments go to pytest.
 
     They go to both pytests, and it exits with the first failing code; a part that
     selects no test is not a failure when the other ran some.
     """
-    codes = [_pytest(argv + list(pytest_args)) for argv in run_commands(slow=slow)]
+    codes = [_pytest(argv + list(pytest_args)) for argv in run_commands(slow=slow, workers=workers)]
     raise SystemExit(_first_failure(codes))
 
 
@@ -174,7 +193,7 @@ def test_run(slow: bool, pytest_args: tuple[str, ...]):
     type=click.IntRange(min=1),
     default=1,
     show_default=True,
-    help="Browser tests in parallel, a file's tests together (pytest-xdist).",
+    help="Both parts in parallel, a file's tests together (pytest-xdist).",
 )
 @click.option(
     "--coverage",
@@ -196,7 +215,8 @@ def test_all(slow: bool, workers: int, coverage: bool, since: str, pytest_args: 
     through, writes the browser tests' times into tests/e2e/durations.json, which
     the shards are balanced by; --steps runs the step-through tests too, which skip
     otherwise. --coverage measures both parts, the server the browser tests drive
-    included, and says what they covered, as `test coverage` does."""
+    included, and says what they covered, as `test coverage` does. Before a stack is
+    pulled it runs once on its head: docs/integration-checklist.md, box by box."""
     env = coverage_env() if coverage else None
     codes = [
         _pytest(argv + list(pytest_args), env=env)
@@ -239,12 +259,23 @@ for _name, _instead in (
     test.add_command(retired(f"test {_name}", _instead), name=_name)
 
 
+def _map(path: str):
+    """A checkout's map of its suite, not the package's: tests/groups.py for the unit
+    files, tests/e2e/areas.py for the browser files."""
+    spec = importlib.util.spec_from_file_location(path.rsplit("/", 1)[-1][:-3], ROOT / path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _areas():
-    """The browser suite's areas (tests/e2e/areas.py): a checkout's, not the package's."""
-    spec = importlib.util.spec_from_file_location("areas", ROOT / BROWSER / "areas.py")
-    areas = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(areas)
-    return areas
+    """The browser suite's areas (tests/e2e/areas.py)."""
+    return _map(f"{BROWSER}/areas.py")
+
+
+def _groups():
+    """The unit suite's groups (tests/groups.py)."""
+    return _map("tests/groups.py")
 
 
 def changed_paths(since: str | None) -> list[str]:
@@ -268,11 +299,12 @@ def changed_paths(since: str | None) -> list[str]:
 
 
 def changed_commands(changed: list[str], workers: int = 1) -> list[list[str]]:
-    """The argvs `apothecary test changed` runs: the unit suite with the walkthrough, then
-    the browser files the change reaches, if it reaches any."""
-    areas = _areas()
-    reached = areas.reached(changed)
-    commands = [unit_command()]
+    """The argvs `apothecary test changed` runs: the walkthrough's pages with the unit
+    files the change reaches (all of them when it touches shared ground), then the
+    browser files it reaches, if it reaches any."""
+    groups, areas = _groups(), _areas()
+    units, reached = groups.reached(changed), areas.reached(changed)
+    commands = [unit_command(files=None if units == groups.ALL else units, workers=workers)]
     browser = [BROWSER] if reached == areas.ALL else reached
     if browser:
         argv = _pytest_argv(*browser, "--start-server")
@@ -295,20 +327,25 @@ def changed_commands(changed: list[str], workers: int = 1) -> list[list[str]]:
     type=click.IntRange(min=1),
     default=1,
     show_default=True,
-    help="Browser tests in parallel, a file's tests together (pytest-xdist).",
+    help="Both parts in parallel, a file's tests together (pytest-xdist).",
 )
 @click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
 def test_changed(since: str | None, only_list: bool, workers: int, pytest_args: tuple[str, ...]):
-    """The unit tests and the walkthrough, then the browser files of the areas a change
-    reaches (tests/e2e/areas.py): every browser file when it touches shared ground, a
-    browser file itself when it changes, none when it reaches no area. The change is
-    what this checkout holds against --since, uncommitted and new files included;
-    without it, against the branch's upstream. It is for while working: the run before
-    a merge is `test all`'s, the whole suite."""
+    """The walkthrough and the unit files of the groups a change reaches
+    (tests/groups.py), then the browser files of the areas it reaches
+    (tests/e2e/areas.py): every file of a part when the change touches its shared
+    ground, a file itself when it changes, none when it reaches no group or area. The
+    change is what this checkout holds against --since, uncommitted and new files
+    included; without it, against the branch's upstream. It is for while working: the
+    run before a merge is `test all`'s, the whole suite, on the stack's head."""
     changed = changed_paths(since)
     if only_list:
-        areas = _areas()
-        reached = areas.reached(changed)
+        groups, areas = _groups(), _areas()
+        units, reached = groups.reached(changed), areas.reached(changed)
+        if units == groups.ALL:
+            click.echo("every unit file (tests): the change touches shared ground")
+        else:
+            click.echo("\n".join(units) if units else "no unit file")
         if reached == areas.ALL:
             click.echo(f"every browser file ({BROWSER}): the change touches shared ground")
         else:
@@ -317,3 +354,31 @@ def test_changed(since: str | None, only_list: bool, workers: int, pytest_args: 
     commands = changed_commands(changed, workers=workers)
     codes = [_pytest(argv + list(pytest_args)) for argv in commands]
     raise SystemExit(_first_failure(codes))
+
+
+@test.command("group", context_settings={"ignore_unknown_options": True})
+@click.argument("names", nargs=-1)
+@click.option(
+    "--workers",
+    type=click.IntRange(min=1),
+    default=1,
+    show_default=True,
+    help="Unit files in parallel, a file's tests together (pytest-xdist).",
+)
+def test_group(names: tuple[str, ...], workers: int):
+    """The walkthrough and the unit files of the groups NAMES (tests/groups.py): one part
+    of the package at a time, as quick as that part. Without a name, the groups, each
+    with what it holds. Further pytest arguments follow `--`."""
+    groups = _groups()
+    if not names:
+        for name, group in groups.GROUPS.items():
+            click.echo(
+                f"{name:12} {len(group['tests']):3} files  {', '.join(group['sources'][:3])}"
+            )
+        return
+    pytest_args = [n for n in names if n.startswith("-")]
+    try:
+        files = groups.files([n for n in names if not n.startswith("-")])
+    except KeyError as unknown:
+        raise click.ClickException(unknown.args[0]) from None
+    raise SystemExit(_pytest(unit_command(files=files, workers=workers) + pytest_args))

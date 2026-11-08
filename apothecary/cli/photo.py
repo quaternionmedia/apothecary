@@ -16,7 +16,6 @@ from pydantic import ValidationError
 from ..vision import ScaleReference, get, names
 from ..vision import build as build_arrangement
 from ..vocabulary import starter_words, word_for
-from .retired import retired
 from .server import _loopback_or_die, _port_free_or_die, port_option, run_server
 
 
@@ -103,10 +102,6 @@ def find_shapes(image: Path, finder: str, as_json: bool):
     click.echo("")
     click.echo("Nothing above is a measurement. To get millimetres, use 'photo build'")
     click.echo("with --width-mm, or name a shape whose real width you know.")
-
-
-# The viewer calls this step Find shapes; `photo look` names it for one release.
-photo.add_command(retired("photo look", "use `apothecary photo find`"), name="look")
 
 
 @photo.command("build")

@@ -6,7 +6,12 @@ name: 🧹 Lint
 # rest of the tests run here before a pull request is ready, and in pytest.yml at a
 # version tag.
 on:
+  # A stack is checked at its head, on a pull request into main: the bottom when it
+  # opens, the head when it is retargeted there and marked ready. A level stacked on
+  # another is not checked alone (CONTRIBUTING.md, "The loop").
   pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches:
     - main

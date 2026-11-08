@@ -86,6 +86,7 @@ import { KINDS, kindOf as kindOfBoard } from "/static/machine_words.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
 import { again } from "/static/twice.js";
+import { running as knobsRunning, choose as chooseKnobs } from "/static/deck_knobs.js";
 
 const MAX_HISTORY = 300;
 
@@ -170,7 +171,7 @@ const CARDS = `
             <button type="button" data-corner="BR" class="printer-only" title="Back right, paper height">◥ BR</button>
         </div>
         <div id="mesh"></div>
-        <div class="stats" id="level-stats"><span class="empty">no reading yet — Read mesh, or arm control and Probe bed</span></div>
+        <div class="stats" id="level-stats"><span class="empty">no reading yet</span></div>
         <div id="level-history"></div>
     </div>
 </div>
@@ -178,7 +179,7 @@ const CARDS = `
 <div data-section="print">
 <div class="cards">
     <div class="card wide printer-only gcode" id="print-card">
-        <div class="k"><span id="print-title"></span> <span class="s" id="print-note" style="text-transform: none; letter-spacing: 0;"></span></div>
+        <div class="k"><span id="print-title"></span></div>
         <div class="row"><label for="print-part">makes</label>
             <select id="print-part"><option value="">— no part named —</option></select>
             <button type="button" id="print-slice">Slice</button>
@@ -189,22 +190,22 @@ const CARDS = `
             <button type="button" id="print-delete" title="Forget the chosen file">✕</button>
             <input type="file" id="print-file" accept=".gcode,.gco,.g,.txt,text/plain">
         </div>
-        <div class="row"><label for="print-preview">preview</label>
+        <div class="row" id="print-preview-row"><label for="print-preview">preview</label>
             <input type="range" id="print-preview" min="0" max="1" step="1" value="0" title="The chosen file's path, drawn in the world on this machine: off at the left, then through each layer or pass, all of it at the right. Nothing is sent. Its ring's Preview turns it on and off">
             <span class="s" id="print-preview-said"></span>
         </div>
-        <div class="row"><label for="print-plan">plan</label>
+        <div class="row" id="print-plan-row"><label for="print-plan">plan</label>
             <button type="button" id="print-plan" title="Keep what it makes and the file chosen as this machine's plan: chosen again whenever its Machine opens, with its board connected or not. Nothing is sent">Keep as plan</button>
             <span class="s" id="print-plan-said"></span>
         </div>
-        <div class="row">
+        <div class="row" id="print-verbs">
             <button type="button" id="print-start" class="warm">▶ Send</button>
             <button type="button" id="print-pause">⏸ Pause</button>
             <button type="button" id="print-resume" title="Feed lines again (control must be armed)">▶ Resume</button>
             <button type="button" id="print-cancel">■ Cancel</button>
         </div>
-        <div class="row"><span id="print-progress" class="empty"></span><span class="grow"></span><span class="job" id="print-job"></span></div>
-        <div class="bar print"><i id="b-print" style="width:0"></i></div>
+        <div class="row" id="print-progress-row"><span id="print-progress"></span><span class="grow"></span><span class="job" id="print-job"></span></div>
+        <div class="bar print" id="print-bar"><i id="b-print" style="width:0"></i></div>
         <div id="print-slice-box" class="slice-box" hidden>
             <div class="bench-ui" id="print-slice-task"></div>
             <div id="print-slice-said" class="slice-said"></div>
@@ -246,6 +247,10 @@ const CONTROL = `
         <button type="button" id="ctl-disarm">🔒 Disarm</button>
     </div>
     <div class="body">
+        <div class="grp deck-knobs-grp" hidden>
+            <div class="k">Stream Deck +</div>
+            <div class="row"><span id="deck-knobs-on"></span><button type="button" id="deck-here" title="The deck's knobs move this machine, as its key on the deck chooses it. ⌗ Panels › Machine › Knobs › Here">🎛 Knobs here</button></div>
+        </div>
         <div class="grp printer-only">
             <div class="k">Heaters</div>
             <div class="row">hotend <input type="number" id="h-hot" min="0" max="300" step="5" value="200"> °C
@@ -270,7 +275,8 @@ const CONTROL = `
             </div>
             <div class="row steps">step <button type="button" data-step="0.1">0.1</button><button type="button" data-step="1">1</button><button type="button" data-step="10" class="on">10</button><button type="button" data-step="50">50</button> mm
                 · F <input type="number" id="h-feed" min="10" max="12000" step="100" value="3000" title="How fast to jog, in mm/min"></div>
-            <div class="row printer-only"><button type="button" data-cmd="G28 X Y">Home XY</button><button type="button" data-cmd="G28 Z">Home Z</button><button type="button" data-cmd="M84">Motors off</button><button type="button" data-cmd="M410">Quickstop</button></div>
+            <div class="row"><button type="button" data-cmd="HOME-X">Home X</button><button type="button" data-cmd="HOME-Y">Home Y</button><button type="button" data-cmd="HOME-Z">Home Z</button></div>
+            <div class="row printer-only"><button type="button" data-cmd="G28 X Y">Home XY</button><button type="button" data-cmd="M84">Motors off</button><button type="button" data-cmd="M410">Quickstop</button></div>
             <div class="row router-only"><button type="button" data-cmd="$X" title="Unlock after an alarm ($X): the controller moves again, where it believes it is">Unlock</button><button type="button" data-cmd="G53 G0 Z0" title="The tool to the top of its travel, in machine coordinates">Top of Z</button><button type="button" data-cmd="G0 X0 Y0" title="The tool over the work zero, at its height">Go to zero</button><button type="button" data-cmd="JOG-CANCEL" title="Stop a jog in flight">Stop jog</button></div>
         </div>
         <div class="grp printer-only">
@@ -311,6 +317,8 @@ const LINES = {
     "control:fan-on": (m) => m.fillTemplate("M106 S{h-fan}"),
     "control:fan-off": () => "M107",
     "control:home": () => "G28",
+    "control:home-x": () => "G28 X",
+    "control:home-y": () => "G28 Y",
     "control:home-xy": () => "G28 X Y",
     "control:home-z": () => "G28 Z",
     "control:sd-resume": () => "M24",
@@ -353,7 +361,7 @@ const BY_CMD = {
     "M104 S{h-hot}": "control:hotend-on", "M104 S0": "control:hotend-off",
     "M140 S{h-bed}": "control:bed-on", "M140 S0": "control:bed-off",
     "M106 S{h-fan}": "control:fan-on", "M107": "control:fan-off",
-    "HOME": "control:home", "G28 X Y": "control:home-xy", "G28 Z": "control:home-z",
+    "HOME": "control:home", "HOME-X": "control:home-x", "HOME-Y": "control:home-y", "HOME-Z": "control:home-z", "G28 X Y": "control:home-xy",
     "M24": "control:sd-resume", "M25": "control:sd-pause", "M524": "control:sd-abort", "M84": "control:motors-off",
     "M410": "control:quickstop", "M108": "control:break-wait", "M420 S1": "control:mesh-on", "M420 S0": "control:mesh-off",
     "$X": "control:unlock", "M3 S{r-rpm}": "control:spindle-on", "M5": "control:spindle-off",
@@ -457,7 +465,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (isGcode()) {
             $("poll").title = w.poll; $("q").placeholder = w.queries; $("estop").title = w.estop; $("ctl-label").title = w.arm;
             $("ctl-can").textContent = w.can;
-            $("print-title").textContent = w.title; $("print-note").textContent = w.note;
+            $("print-title").textContent = w.title;
             $("print-start").textContent = w.start; $("print-start").title = w.startTitle;
             $("print-pause").title = w.pause; $("print-cancel").title = w.cancel;
             $("print-slice").textContent = w.prepare;
@@ -466,6 +474,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             if (changed || Number(feed.value) > w.feedMax) feed.value = String(w.feedDefault);
             $("print-file").accept = w.files; $("print-file").title = w.fileTitle;
             $("print-part").title = w.partTitle;
+            for (const b of pad.querySelectorAll('button[data-cmd^="HOME-"]')) b.title = w.homeAxis(b.dataset.cmd.slice(-1));
             $("level-title").textContent = w.level.card; $("level-probe").textContent = w.level.button; $("level-probe").title = w.level.buttonTitle;
         }
         if (changed) state.codesLoaded = false;
@@ -874,6 +883,29 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // `out` is whether the pad stands popped out, in the host's window: it is, each
     // time the latch is armed.
     const ctl = { armed: false, until: 0, step: 10, timer: null, askedAt: 0, pending: 0, out: true };
+    // The deck's knobs, the server's layout (deck_knobs.js), followed while the pad is shown:
+    // the machine they move and their step; Knobs here points them at this machine.
+    const knob = { now: null, timer: null };
+    async function followKnobs() {
+        let all = [];
+        try { all = await knobsRunning(BASE); } catch (e) { all = []; }
+        const k = all.find((c) => c.running) || null;
+        knob.now = k;
+        const grp = $("control").querySelector(".deck-knobs-grp");
+        grp.hidden = !k;
+        if (!k) return;
+        const here = !!state.port && k.port === state.port;
+        $("deck-knobs-on").textContent = `knobs on ${here ? "this machine" : k.machine} · step ${k.step_mm} mm`;
+        $("deck-here").hidden = here;
+    }
+    async function knobsHere() {
+        if (!knob.now || !state.port) return;
+        try {
+            const s = await chooseKnobs(BASE, knob.now.deck, { port: state.port });
+            tell(`the deck's knobs move ${s.machine}, step ${s.step_mm} mm`);
+        } catch (e) { refuse(`knobs: ${e.message}`); }
+        await followKnobs();
+    }
     const latchFresh = (asked) => asked > ctl.askedAt && ctl.pending === 0;
     function renderControl() {
         const left = Math.max(0, Math.round((ctl.until - Date.now()) / 1000));
@@ -884,8 +916,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const ttl = ctl.armed ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : "";
         $("ctl-ttl").textContent = ttl; $("ctl-ttl2").textContent = ttl;
         placePad();
+        renderLevelVerbs();
         clearInterval(ctl.timer); ctl.timer = null;
         if (ctl.armed) ctl.timer = setInterval(renderControl, 1000);
+        if (ctl.armed && !knob.timer) { followKnobs(); knob.timer = setInterval(followKnobs, 2000); }
+        else if (!ctl.armed && knob.timer) { clearInterval(knob.timer); knob.timer = null; }
     }
     function applyControlState(c) {
         const was = ctl.armed;
@@ -1012,7 +1047,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     $("h-fan").addEventListener("input", () => { $("h-fan-v").textContent = $("h-fan").value; });
     $("control").addEventListener("click", (ev) => {
         const btn = ev.target.closest("button"); if (!btn) return;
-        if (btn.dataset.step) {
+        if (btn.id === "deck-here") {
+            knobsHere();
+        } else if (btn.dataset.step) {
             ctl.step = Number(btn.dataset.step);
             for (const s of $("control").querySelectorAll(".steps button")) s.classList.toggle("on", s === btn);
         } else if (btn.dataset.jog) {
@@ -1023,8 +1060,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             // resets the controller itself and stops or starts feeding with it.
             const verb = HOST_VERBS[BY_CMD[btn.dataset.cmd]];
             if (verb && prt.job && prt.job.running) { printVerb(verb); return; }
-            // One home button for both G-code machines: each dialect's line.
-            sendControl(btn.dataset.cmd === "HOME" ? LINES_OF()["control:home"](handle) : fillTemplate(btn.dataset.cmd));
+            // One home button per axis, and for all, for both G-code machines: each dialect's line.
+            sendControl(btn.dataset.cmd.startsWith("HOME") ? LINES_OF()[BY_CMD[btn.dataset.cmd]](handle) : fillTemplate(btn.dataset.cmd));
         }
     });
 
@@ -1050,7 +1087,14 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const a = [0x6f, 0xb3, 0xe8], c2 = [0xe8, 0xb0, 0x4a];
         return `rgb(${a.map((c, i) => Math.round(c + (c2[i] - c) * t)).join(",")})`;
     }
+    // The probe and the corners move the machine, so they are there once control is
+    // armed; Read mesh moves nothing and is a printer's whenever its Machine is.
+    function renderLevelVerbs() {
+        $("level-probe").hidden = !ctl.armed;
+        for (const btn of $("level-card").querySelectorAll("button[data-corner]")) btn.hidden = !ctl.armed;
+    }
     function renderLevel() {
+        renderLevelVerbs();
         const rec = level.shown, w = words().level;
         const meshEl = $("mesh"), statsEl = $("level-stats");
         if (!rec || !rec.mesh || !rec.mesh.length) {
@@ -1226,7 +1270,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         // Another kind of machine's file is drawn only where a person asked for it.
         if (!id || (madeForAnother(id) && !previewOn())) {
             found.none = id ? `the file chosen, ${name}, was made for a ${w.slice ? "router" : "printer"}, and none is kept for this ${state.kind} yet` : "no file is kept yet";
-            found.how = `choose a part under makes and ${w.prepare}, or Choose File for ${w.slice ? "a sliced file" : "a CAM post's"}`;
+            found.how = "choose a part under makes, or Choose File";
             return found;
         }
         found.file = name;
@@ -1255,30 +1299,46 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-slice-said").innerHTML = r ? sliceSaid(r) : "";
         $("print-slice-box").hidden = !r;
     }
+    // The card draws the step a person is at, in the loop's order, and each control
+    // after it once what it needs holds: makes and Choose File are the two ways in; a
+    // part chosen has its Slice or Toolpath; a file kept has the files, a file chosen
+    // its ✕, the preview, Keep as plan and ▶; a job running from here has Pause and
+    // Cancel, and Resume while it is paused; a job that ran has its progress. A control
+    // that is there and cannot go yet is disabled, and its tooltip says why.
     function renderPrint() {
         const job = prt.job, running = !!(job && job.running);
         const paused = running && job.stage === "paused";
-        const chosen = prt.files.find((f) => f.id === $("print-pick").value);
-        $("print-start").disabled = running || !chosen || !fits(chosen) || !state.port;
+        const picked = $("print-pick").value, part = $("print-part").value;
+        const chosen = prt.files.find((f) => f.id === picked);
+        $("print-pick").hidden = !prt.files.length;
+        $("print-delete").hidden = !picked;
+        $("print-delete").disabled = running && job.file_id === picked;
+        $("print-preview-row").hidden = !picked;
+        $("print-start").hidden = !picked;
+        $("print-start").disabled = running || !fits(chosen) || !state.port;
         $("print-start").title = !state.port && machineAt ? `${machineAt.path} has no board connected: its plan is made here, and ${words().start} is its board's once it is`
             : !chosen || fits(chosen) ? words().startTitle
             : `${chosen.name} was ${chosen.machine ? `kept for a ${chosen.machine}` : "kept for no kind of machine"}: it is sent to the kind it was kept for alone (Choose File keeps a file for this ${state.kind})`;
-        $("print-pause").disabled = !running || paused || (job.stage !== words().running && job.stage !== "finishing");
-        $("print-resume").disabled = !paused;
-        $("print-cancel").disabled = !running;
-        $("print-delete").disabled = !$("print-pick").value || (running && job.file_id === $("print-pick").value);
+        $("print-pause").hidden = !running || paused;
+        $("print-pause").disabled = !running || (job.stage !== words().running && job.stage !== "finishing");
+        $("print-resume").hidden = !paused;
+        $("print-cancel").hidden = !running;
+        $("print-verbs").hidden = !picked && !running;
         const slicerOk = !words().slice || !!(slc.status && slc.status.ok);
-        $("print-slice").disabled = slc.running || !$("print-part").value;
+        $("print-slice").hidden = !part;
+        $("print-slice").disabled = slc.running;
         $("print-slice").title = slicerOk
             ? words().prepareTitle
             : `No slicer: ${(slc.status && slc.status.why) || "asking"}. Panels › Bench › Install › OrcaSlicer installs it`;
-        if (job && (running || job.stage)) {
+        const went = !!(job && (running || job.stage));
+        $("print-progress-row").hidden = !went;
+        $("print-bar").hidden = !went;
+        if (went) {
             const pct = (job.progress * 100).toFixed(1);
-            $("print-progress").className = "";
             $("print-progress").textContent = `${job.name} · ${job.stage} · ${job.sent}/${job.total} lines (${pct}%) · ${fmtDur(job.elapsed_s)}` + (job.operation && running ? ` · ${job.operation}` : "") + (job.current && running ? ` · ${job.current}` : "") + (job.error ? ` · ${job.error}` : "");
             $("b-print").style.width = pct + "%";
         } else {
-            $("print-progress").className = "empty"; $("print-progress").textContent = words().idle; $("b-print").style.width = "0";
+            $("print-progress").textContent = ""; $("b-print").style.width = "0";
         }
         $("print-job").textContent = running ? `${job.stage}…` : "";
         $("print-history").innerHTML = prt.jobs.map(jobRow).join("");
@@ -1394,13 +1454,15 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         }
         renderPlan();
     }
+    // Keep as plan is there once there is something chosen to keep, and a kept plan is
+    // said; a Machine that stands for no machine's node has no plan, and no row.
     function renderPlan() {
         const said = $("print-plan-said"), button = $("print-plan");
-        button.disabled = !machineAt || (!$("print-part").value && !$("print-pick").value);
-        if (!machineAt) { said.textContent = "pinned in no machine's node"; return; }
-        const p = pl.plan;
+        const p = machineAt ? pl.plan : null;
+        button.hidden = !machineAt || (!$("print-part").value && !$("print-pick").value);
         const file = p && p.file_id ? (prt.files.find((f) => f.id === p.file_id) || { name: p.file_id }).name : null;
-        said.textContent = p ? `kept ${new Date(p.planned_at).toLocaleString()}: ${p.part || "no part named"}, ${file || "no file"}` : "none kept";
+        said.textContent = p ? `kept ${new Date(p.planned_at).toLocaleString()}: ${p.part || "no part named"}, ${file || "no file"}` : "";
+        $("print-plan-row").hidden = button.hidden && !p;
     }
     async function keepPlan() {
         if (!machineAt) { refuse("plan: this Machine stands for no machine's node"); return false; }
@@ -1774,7 +1836,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         destroy() {
             if (state.port || machineAt) emit("apothecary:toolpath", { port: state.port, path: machineAt ? machineAt.path : null, preview: null, upto: 0, origin: null });
             if (state.port) model.unwatch(state.port, who);
-            clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer);
+            clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer); clearInterval(knob.timer);
             if (flash) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
             if (slc.tasks) { slc.tasks.destroy(); slc.tasks = null; }
             for (const [event, fn] of onWindow) window.removeEventListener(event, fn);

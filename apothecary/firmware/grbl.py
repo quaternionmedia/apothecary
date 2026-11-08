@@ -30,12 +30,13 @@ import time
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Tuple
 
-from .gcode import SPINDLE_MAX_RPM, GcodeLink, LinkBusy, OutOfBounds, mesh_stats
-from .models import GRBL, BedReading, PrinterInfo, PrinterStatus, Spindle, TableGrid
+from . import gcode
+from .gcode import GcodeLink, LinkBusy, OutOfBounds, mesh_stats
+from .models import GRBL, MACHINE_OF, BedReading, PrinterInfo, PrinterStatus, Spindle, TableGrid
 from .toolchains import ToolchainError
 
 DIALECT = GRBL
-MACHINE = "router"
+MACHINE = MACHINE_OF[DIALECT]
 
 # --- parsers: grbl 1.1's documented replies ---------------------------------------
 
@@ -52,6 +53,10 @@ GC_RE = re.compile(r"^\[GC:(.*)\]$")
 # $110=4000.000
 SETTING_RE = re.compile(r"^\$(\d+)=(-?\d+\.?\d*)")
 ALARM_RE = re.compile(r"^ALARM:(\d+)")
+# The controller's objections, `error:N` and `ALARM:N`: what closes an exchange on the
+# link (gcode.OBJECTIONS) and what `explain` puts words to.
+OBJECTION_RE = re.compile(r"^(error|ALARM):(\d+)")
+gcode.OBJECTIONS.append(OBJECTION_RE)
 # Grbl 1.3a ['$' for help]
 BANNER_RE = re.compile(r"^Grbl (\S+) \[")
 # [PRB:-12.000,-20.000,-41.250:1]
@@ -310,7 +315,6 @@ def router_info_from(lines: List[str], baud: int, boot_lines: List[str] = ()) ->
         version = banner.group(1)
     return PrinterInfo(
         dialect=DIALECT,
-        machine=MACHINE,
         firmware_name=f"Grbl {version}",
         machine_type=info["machine"] or ("Grbl_ESP32" if version.startswith("1.3") else None),
         protocol_version=info["build"],
@@ -366,6 +370,7 @@ def normalise_query(command: str) -> str:
 # before the first line, by check_gcode below. Extend deliberately.
 JOG_MAX_MM = 600
 FEED_MAX = 4000
+SPINDLE_MAX_RPM = 24000  # the trim router's: what M3 may ask, typed or in a file
 PROBE_MAX_MM = 80
 PROBE_FEED_MAX = 500
 _AXES = r"(?: [XYZ]-?\d{1,3}(?:\.\d{1,3})?)"
@@ -423,7 +428,54 @@ def normalise_control(command: str) -> str:
 JOB_ALLOWS = re.compile(r"^(HOLD|RESUME|M5|M3 S\d+)$")
 
 
-# --- a streamed job: how long a line may take (what a file may carry is gcode.check_gcode) --
+# --- a streamed job: what a file may carry, and how long a line may take -------------------
+
+# The M codes a GRBL controller takes (Grbl 1.1's, and Grbl_ESP32's outputs). Any other
+# in a file kept for a router is a printer's: the controller answers it error:20, and
+# the cut stops at that line.
+M_CODES = {0, 1, 2, 3, 4, 5, 7, 8, 9, 30, 56, 62, 63, 67}
+# Longest a dwell may ask, in GRBL's unit, seconds: Marlin counts G4 P in milliseconds,
+# so a printer's half-second pause is eight minutes on a router.
+DWELL_MAX_S = 60.0
+CODE_RE = re.compile(r"^([GM])0*(\d+)(?:\.\d+)?$")
+DWELL_P_RE = re.compile(r"\bP(\d+(?:\.\d+)?)")
+SPINDLE_CODES = ("M3", "M4")
+SPINDLE_ARG_RE = re.compile(r"S(\d+(?:\.\d+)?)")
+
+
+def _objections(n: int, cmd: str, code: str) -> List[str]:
+    """Why a line of a router's file asks more of the spindle than the bound, or is
+    not GRBL's, if it does or is not."""
+    if code in SPINDLE_CODES:
+        m = SPINDLE_ARG_RE.search(cmd[len(code) :])
+        if m and float(m.group(1)) > SPINDLE_MAX_RPM:
+            return [f"line {n}: {code} asks for {m.group(1)} rpm, above {SPINDLE_MAX_RPM}"]
+    m = CODE_RE.match(code)
+    if m is None:
+        return []
+    letter, number = m.group(1), int(m.group(2))
+    if letter == "M" and number not in M_CODES:
+        return [
+            f"line {n}: {code} is not a GRBL code: the controller answers error:20 and the cut stops there"
+        ]
+    if letter == "G" and number == 29:
+        return [f"line {n}: {code} is a printer's bed probe, not a GRBL code"]
+    if letter == "G" and number == 4:
+        p = DWELL_P_RE.search(cmd[len(code) :])
+        if p and float(p.group(1)) > DWELL_MAX_S:
+            return [
+                f"line {n}: {code} P{p.group(1)} dwells {p.group(1)} s on GRBL, whose P is "
+                "seconds; a printer's file counts it in milliseconds"
+            ]
+    return []
+
+
+def check_gcode(text: str) -> Tuple[int, List[str]]:
+    """A router's file, checked in GRBL's terms (``gcode.check_file``): what every
+    dialect refuses, a spindle over the bound, a code GRBL does not take, a printer's
+    bed probe, and a dwell over a minute in GRBL's unit."""
+    return gcode.check_file(text, _objections)
+
 
 # A move is answered when it is queued, and the queue is fifteen moves deep: a
 # roughing pass of long slow moves holds the fifteenth's `ok` for as long as the
@@ -533,7 +585,8 @@ class SimulatedRouter:
     answered ``ok`` once queued, the queue runs in its own time (each move the
     time its distance and feed say), and a line that finds the queue full waits
     for room, as a sender counting characters would. Homing answers when it is
-    done, as Grbl's does. Its machine coordinates are negative from the home
+    done, as Grbl's does: ``$H`` homes all three axes, ``$HX``, ``$HY`` or ``$HZ``
+    the one it names, and the others stay where they stand. Its machine coordinates are negative from the home
     corner at the back right and the top of Z, as a Grbl machine homed to its
     maximum switches has them, so the tool stands in the working area at
     ``mpos + travel``. It starts idle with the tool over the middle of the
@@ -760,7 +813,12 @@ class SimulatedRouter:
         if upper.startswith("$H"):
             if self._busy():
                 return ["error:8"]  # a $ command needs the machine idle
-            home = {"x": -self.PULL_OFF, "y": -self.PULL_OFF, "z": -self.PULL_OFF}
+            named = upper[2:].lower()
+            if named not in ("", "x", "y", "z"):
+                return ["error:3"]  # a word after $H that is no axis
+            home = self._end_of_queue()
+            for axis in named or "xyz":
+                home[axis] = -self.PULL_OFF
             self.alarm = None
             self._enqueue(home, self.RAPID / 2, "home")
             return []  # ok once it is done: _answer waits
@@ -1152,13 +1210,10 @@ def alarm_text(code: Optional[int]) -> Optional[str]:
     return ALARMS.get(code, f"alarm {code}")
 
 
-EXPLAINED_RE = re.compile(r"^(error|ALARM):(\d+)")
-
-
 def explain(line: str) -> Optional[str]:
     """The words for a controller's ``error:N`` or ``ALARM:N``, kept beside the line
     in the port's log and said in a refusal; None for any other line."""
-    m = EXPLAINED_RE.match(line.strip())
+    m = OBJECTION_RE.match(line.strip())
     if not m:
         return None
     code = int(m.group(2))

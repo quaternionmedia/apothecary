@@ -678,6 +678,65 @@ FRAMED = """(key) => {
 }"""
 
 
+@pytest.mark.e2e
+def test_each_axis_of_the_printer_homes_alone_and_only_while_armed(page: Page, printer_url: str):
+    """Home X, Home Y and Home Z each send `G28 X`, `G28 Y` or `G28 Z` and no other line,
+    and only that axis goes back to zero; disarmed, the pad is not there and the board is
+    refused the line."""
+    _identify(printer_url)
+    _monitor(page, printer_url)
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
+    expect(page.locator("#control")).to_be_hidden()
+    refused = page.request.post(
+        f"{printer_url}/firmware/printers/command", data={"port": PRINTER, "command": "G28 X"}
+    )
+    assert refused.status == 409
+
+    page.locator("#ctl").check()
+    pad = page.locator("#control")
+    expect(pad).to_be_visible(timeout=5000)
+
+    def position() -> dict:
+        text = page.locator("#c-pos").inner_text()
+        return {a: float(v) for a, v in re.findall(r"([XYZ])\s*(-?\d+(?:\.\d+)?)", text)}
+
+    def sent() -> list:
+        return page.locator("#log .tx.control").all_inner_texts()
+
+    # The SD print paused, each axis 10 mm from zero, so each home has somewhere to
+    # come back from.
+    pad.locator("button[data-cmd='M25']").click()
+    expect(page.locator("#c-state")).to_contain_text("idle", timeout=WITHIN_A_POLL)
+    pad.locator("button[data-step='10']").click()
+    for jog in ("X+", "Y+", "Z+"):
+        pad.locator(f"button[data-jog='{jog}']").click()
+    expect(page.locator("#c-pos")).to_contain_text("Z10.0", timeout=WITHIN_A_POLL)
+    assert position() == {"X": 10.0, "Y": 10.0, "Z": 10.0}
+
+    homes = []
+    for axis, left in (("X", {"Y": 10.0, "Z": 10.0}), ("Y", {"Z": 10.0}), ("Z", {})):
+        home = pad.locator(f"button[data-cmd='HOME-{axis}']")
+        expect(home).to_have_attribute(
+            "title",
+            re.compile(
+                rf"^Home {axis} alone \(G28 {axis}\): the other axes stay where they stand\. "
+                r"Moves the machine: control must be armed · ⌗\d+$"
+            ),
+        )
+        home.click()
+        expect(page.locator("#log .tx.control", has_text=f"G28 {axis}").last).to_be_visible(
+            timeout=5000
+        )
+        expect(page.locator("#c-pos")).to_contain_text(f"{axis}0.0", timeout=WITHIN_A_POLL)
+        got = position()
+        assert got[axis] == 0.0 and all(got[a] == v for a, v in left.items()), (axis, got)
+        homes.append(f"G28 {axis}")
+        said = [m.group(0) for t in sent() if (m := re.search(r"G28(?: [XYZ])*$", t.strip()))]
+        assert sorted(said) == homes, (axis, sent())
+    page.locator("#ctl-disarm").click()
+    expect(pad).to_be_hidden(timeout=3000)
+
+
 def _ring_control_pad(page: Page) -> None:
     """The canvas ring's Panels › Machine › Control pad."""
     page.locator("#viewer-canvas").click(
@@ -790,8 +849,10 @@ def test_a_bed_reading_needs_no_latch_and_a_probe_does(page: Page, fresh_url: st
     expect(page.locator("#level-history .pick.on")).to_contain_text("read")
     assert page.locator("#log .tx.control", has_text="G29").count() == 0
 
-    # A probe is refused while disarmed and never reaches the board.
-    page.locator("#level-probe").click()
+    # Disarmed, the probe is not offered, and one asked for all the same is refused
+    # before it reaches the board.
+    expect(page.locator("#level-probe")).to_be_hidden()
+    page.evaluate("() => window.apothecaryMachine.level.start(true)")
     expect(page.locator("#log .sys", has_text="arm control first")).to_be_visible(timeout=3000)
     assert page.locator("#log .tx.control", has_text="G29").count() == 0
 
@@ -799,6 +860,7 @@ def test_a_bed_reading_needs_no_latch_and_a_probe_does(page: Page, fresh_url: st
     # held for the duration, and the record appears when it is done.
     page.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
+    expect(page.locator("#level-probe")).to_be_visible()
     page.once("dialog", lambda d: d.accept())
     page.locator("#level-probe").click()
     expect(page.locator("#level-job")).to_contain_text("…", timeout=5000)
@@ -871,7 +933,7 @@ def test_a_file_is_kept_or_refused_and_nothing_leaves_disarmed(page: Page, print
     _identify(printer_url)
     _monitor(page, printer_url)
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
-    expect(page.locator("#print-start")).to_be_disabled()
+    expect(page.locator("#print-start")).to_be_hidden()
     page.locator("#print-file").set_input_files(
         {"name": "slow cube.gcode", "mimeType": "text/plain", "buffer": SLOW.encode()}
     )

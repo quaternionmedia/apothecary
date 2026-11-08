@@ -90,6 +90,13 @@ OPENING = {
         "/viewer/parts/airgap",
         lambda page: rings.on_world(page, "Panels", "Airgap", "Airgap"),
     ),
+    # The family: the Procedure, its main window, opened from the windows' own api (the
+    # state here has no procedure, so the page does not open it itself).
+    "family": Opening(
+        "family",
+        "/viewer/sites/garage",
+        lambda page: page.evaluate("() => window.apothecaryPanels.open('procedure')"),
+    ),
 }
 
 
@@ -105,8 +112,8 @@ SHOWS = {
     "part-readiness": "#part-checklist",
     "machine-status": "#c-hot:visible, #c-spindle:visible",
     "machine-temperature": "#chart",
-    "machine-print": "#print-start",
-    "machine-level": "#level-probe",
+    "machine-print": "#print-part",
+    "machine-level": "#level-stats",
     "machine-sketch": "#c-sketch",
     "machine-flashing": "#flash-form",
     "machine-log": "#log",
@@ -121,6 +128,8 @@ SHOWS = {
     "airgap-vibration": "canvas[data-airgap='dynSpec']",
     "airgap-rig": ".airgap-rig",
     "airgap-sweep": ".airgap-sweep",
+    "family-members": ".family-members",
+    "family-deliveries": ".family-deliveries",
 }
 
 # A verb on a ring that acts on a section, carried as a person carries it: the ring

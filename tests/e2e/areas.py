@@ -1,11 +1,12 @@
 """Which browser tests a change reaches: the suite in areas, each named for what a
 person does with the page, with the sources it stands on and the files that hold it.
 
-`apothecary test changed` runs the unit tests and the walkthrough, then the browser
-files of the areas a change touches: every file when it touches shared ground -- the
+`apothecary test changed` runs the walkthrough and the unit files of the groups a change
+reaches (tests/groups.py), then the browser files of the areas it touches: every file when it touches shared ground -- the
 page itself, the server's app, this suite's own helpers and conftest, the
 dependencies -- a browser file itself when it changes, none when it reaches no area.
-The whole suite (`apothecary test all`) runs before a pull request is ready.
+The whole suite (`apothecary test all`) runs once, on the head of a stack, before it is
+pulled.
 
     python tests/e2e/areas.py FILE...   # the browser files a change to FILE... reaches, or ALL
 
@@ -127,12 +128,20 @@ AREAS = {
             "apothecary/static/widgets/toolchain.js",
             "parts/esp32_blink/*",
             "parts/footpedal/*",
+            "apothecary/static/widgets/deck.*",
+            "apothecary/static/deck_knobs.js",
+            "walkthrough/26-*",
+            "walkthrough/screenshots/26-*",
+            "walkthrough/27-*",
+            "walkthrough/screenshots/27-*",
             "walkthrough/02-*",
             "walkthrough/screenshots/02-*",
             "walkthrough/05-*",
             "walkthrough/screenshots/05-*",
             "walkthrough/20-*",
             "walkthrough/21-*",
+            "walkthrough/24-*",
+            "walkthrough/screenshots/24-*",
         ),
         "tests": (
             "test_one_machine.py",
@@ -142,6 +151,8 @@ AREAS = {
             "test_toolpath_preview.py",
             "test_machine_plans.py",
             "test_bench.py",
+            "test_deck.py",
+            "test_deck_jog.py",
             "test_the_firmware_loop.py",
             "test_the_made_thing.py",
             "test_onboarding.py",
@@ -216,8 +227,11 @@ AREAS = {
             "apothecary/family/*",
             "apothecary/routes/procedures.py",
             "apothecary/static/widgets/procedure.*",
+            "apothecary/static/widgets/family.js",
+            "walkthrough/25-*",
+            "walkthrough/screenshots/25-*",
         ),
-        "tests": ("test_procedure_window.py",),
+        "tests": ("test_procedure_doors.py", "test_procedure_window.py"),
     },
     "models": {
         "sources": (

@@ -352,9 +352,53 @@ MACHINE = System(
 )
 
 
+FAMILY = System(
+    id="family",
+    title="Family",
+    group="Family",
+    # The Procedure: the site's steps and GO. It keeps the id it had, so every address
+    # that names it holds still.
+    main="procedure",
+    cell="Family view",
+    opened_by="⊞ Windows › Procedure",
+    sections=(
+        Section(
+            "members",
+            "Members",
+            "each member of the family, how it is reached, its state where the hub started "
+            "it, and its door to the window its next step works in",
+        ),
+        Section(
+            "deliveries",
+            "Deliveries",
+            "the hub's audit, newest first: each delivery's step, member, status, "
+            "milliseconds and the instance that took it",
+        ),
+    ),  # fmt: skip
+    # The Procedure tall beside the world; Members and Deliveries under it, where Jobs
+    # and Selected keep the column. A Machine that is open stays where it is: a step's
+    # door opens it.
+    view={
+        "row": [
+            {"world": True, "size": 34},
+            {"stack": ["procedure"], "size": 30},
+            {
+                "column": [
+                    {"stack": ["family-members"], "size": 20},
+                    {"stack": ["family-deliveries"], "size": 26},
+                    {"stack": ["jobs", "working"], "size": 22, "active": "jobs"},
+                    {"stack": ["selected"], "size": 32},
+                ],
+                "size": 36,
+            },
+        ]
+    },
+)
+
+
 # In the order their views are listed: under Panels › Windows, after the
 # layout's own two cells, and in ⊞ Windows after Default.
-SYSTEMS: Tuple[System, ...] = (PART, MACHINE, AIRGAP)
+SYSTEMS: Tuple[System, ...] = (PART, MACHINE, AIRGAP, FAMILY)
 
 
 def by_id(system_id: str) -> System:

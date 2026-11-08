@@ -243,12 +243,13 @@ export function mountBoards({ base = "", site = () => null } = {}) {
     }
 
     // --- asking a board what it is ---------------------------------------------------------------
-    // M115: is this a printer, and which firmware? Opens and keeps the link. `ifIdle`
+    // What the board is: a printer's M115, then a router's $I, and which firmware
+    // answered. Opens and keeps the link. `ifIdle`
     // asks only a board the server knows nothing printing on, and refuses (throws,
     // saying why, nothing sent) one that may be busy: a printer's Pin asks this way.
     async function identify(port, { ifIdle = false } = {}) {
         const b = board(port);
-        note(port, `asking ${port} M115 (no reset)${ifIdle ? ", if nothing is printing on it" : ""}`);
+        note(port, `asking ${port} what it is: M115, then $I (no reset)${ifIdle ? ", if nothing is printing on it" : ""}`);
         try {
             const view = await post("/firmware/devices/identify", ifIdle ? { port, if_idle: true } : { port });
             takeView(b, view);

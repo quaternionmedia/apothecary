@@ -80,6 +80,18 @@ here: run `apothecary problems`.
 - Following a running job along the previewed path: a job's lines sent map to a
   segment and the card does not use it yet; and a cut drawn as the tool's width, not
   its centre ([docs/toolpath-preview.md](docs/toolpath-preview.md#not-built)).
+- `tests/test_firmware_ports.py::test_listening_through_the_server_hears_the_hello_with_no_arduino_cli`
+  listens a second time for one second on a stream that has already given the boot
+  hello, so it needs the simulated devkit's tenth blink inside that second; on a machine
+  loaded past its cores, as with `--workers` beside other runs, the blinks slow and the
+  hello falls outside. It passes alone and in a serial run.
+- `tests/e2e/test_one_machine.py::test_one_poller_per_board_whatever_draws_it` counts a
+  board's status requests over four poll periods; on a machine loaded past its cores
+  it counted three. It passes alone, and on a machine loaded below its cores.
+- `apothecary preflight` on a stack not yet pushed reads signature-check as a defect:
+  the workflow asks the forge (`--source host`), which has never been sent those
+  commits. `apothecary/preflight.py`'s recorded differences could name it, covered here
+  by `check_signatures.py --source git`.
 - Page 06's picture of F5 comes in two forms from run to run: the SCAD editor at its
   left edge, or scrolled sideways, with the caret in view either way. Which one a run
   gets does not follow the commit, so a picture of it past the drift tolerance is not
@@ -176,10 +188,9 @@ Decided, not started. Each waits on what its line names.
   area at a tag, shallow stacks, and the shared files split. The merge queue
   needs required checks, so it waits on `main`'s protection (*For a person to
   decide*).
-- The hidden command stubs `apothecary/cli/retired.py` makes (`system`,
-  `install`, `testrun`, `dev`, `inventory`, `submodules`, `photo look`,
-  `test setup-e2e`, `test validate-e2e`, `test run-e2e`) are removed one
-  release after they were hidden.
+- The hidden command stubs `apothecary/cli/retired.py` makes for the test
+  command (`test setup-e2e`, `test validate-e2e`, `test run-e2e`) are removed
+  one release after they were hidden.
 
 ## For a person to do
 

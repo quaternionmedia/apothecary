@@ -25,6 +25,12 @@ dependencies = [
     "qm-hearth",
 ]
 
+[project.optional-dependencies]
+# The Elgato Stream Deck +: python-elgato-streamdeck (MIT, no Python dependency of its
+# own) loads the system's hidapi with ctypes and reaches no host; see
+# apothecary/firmware/deck.py and docs/stream-deck.md.
+deck = ["streamdeck>=0.9.5"]
+
 [project.scripts]
 apothecary = "apothecary.cli:main"
 

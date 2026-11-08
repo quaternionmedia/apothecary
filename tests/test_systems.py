@@ -71,7 +71,8 @@ def test_the_page_is_given_the_registry_as_it_is_rendered():
     )
     assert given is not None
     assert json.loads(given.group(1)) == manifest()
-    assert manifest()[-1]["sections"][0]["window"] == f"{by_id('airgap').id}-metrics"
+    assert manifest()[2]["sections"][0]["window"] == f"{by_id('airgap').id}-metrics"
+    assert manifest()[-1]["id"] == "family"
 
 
 def test_the_page_registers_systems_from_the_registry_alone():

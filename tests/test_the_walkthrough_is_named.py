@@ -2,6 +2,7 @@
 and not the runs that write a loop's page (03, 04, 05, 06), which the browser suite
 writes: CI's browser shards write them and check them against what is committed."""
 
+import functools
 import subprocess
 import sys
 from pathlib import Path
@@ -22,18 +23,21 @@ DEMONSTRATION_MODULES = {
 }
 
 
+@functools.cache
+def _listing(argv: tuple[str, ...]) -> str:
+    """One pytest's collection, made once per command for the module's tests."""
+    done = subprocess.run([*argv, "--collect-only"], cwd=ROOT, capture_output=True, text=True)
+    assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
+    return done.stdout
+
+
 def _collected(every: bool = False) -> str:
     """What `apothecary test run` collects (with ``every``, `test all`), its pytests'
     listings one after the other."""
     commands = testing.run_commands()
     if every:
         commands = [testing.unit_command(), testing.browser_command(every=True)]
-    listings = []
-    for argv in commands:
-        done = subprocess.run(argv + ["--collect-only"], cwd=ROOT, capture_output=True, text=True)
-        assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
-        listings.append(done.stdout)
-    return "\n".join(listings)
+    return "\n".join(_listing(tuple(argv)) for argv in commands)
 
 
 def test_the_command_collects_the_run_that_writes_the_page():

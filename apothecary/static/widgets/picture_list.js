@@ -92,11 +92,9 @@ export function mountPictureList(root, { base = "", world = null, log = null, ga
     const segs = (path) => path.split("/").map(encodeURIComponent).join("/");
 
     // --- the list ------------------------------------------------------------------------
-    // What choosing a row does, said once above the rows: the step after it.
+    // The picture chosen, named above the rows; nothing while none is.
     function renderChoice() {
-        $("pictures-where").textContent = state.chosen
-            ? `${state.chosen} chosen: the ring's Picture › Folder pins it where the ring stands (Escape lets go)`
-            : "Choose a picture to pin it from the ring: Picture › Folder, at a structure or the floor";
+        $("pictures-where").textContent = state.chosen ? `${state.chosen} chosen` : "";
         for (const row of root.querySelectorAll(".picture-row")) {
             const on = row.dataset.path === state.chosen;
             row.classList.toggle("chosen", on);
@@ -159,7 +157,7 @@ export function mountPictureList(root, { base = "", world = null, log = null, ga
     function render() {
         const list = $("pictures-list");
         if (!state.pictures.length) {
-            list.innerHTML = '<span class="empty">no pictures in the folder yet: take one with a camera, drop one on the world, add some here, or put some in the folder</span>';
+            list.innerHTML = '<span class="empty">no pictures yet</span>';
         } else {
             const here = world && world.siteName ? world.siteName() : "";
             const groups = new Map();

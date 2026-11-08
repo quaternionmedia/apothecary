@@ -25,6 +25,7 @@ Panels › Bench › Bench on the canvas ring opens the Bench, maximised here fr
 
 ```
 rust-esp32: installed
+stream-deck: not installed
 orcaslicer: not installed
 esp32_blink@arduino · esp32:esp32:esp32
 esp32_blink@rust-esp32 · esp32

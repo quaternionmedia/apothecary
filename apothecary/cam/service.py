@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 
 from ..firmware import devices
 from ..slicer.profiles import load_part
+from ..state_folder import state_dir
 from . import toolpath
 from .models import CutFor, CutRecord
 
@@ -19,7 +20,7 @@ class CamError(Exception):
 
 
 def cuts_dir() -> Path:
-    return devices.state_dir() / "cuts"
+    return state_dir() / "cuts"
 
 
 def part_cuts(name: str, variant: Optional[str] = None):

@@ -16,9 +16,10 @@ The modules (``_registry`` is the list):
 
 **Where another plugs in.** A second slicer -- PrusaSlicer's command line,
 CuraEngine, a slicer of resin printers -- is a subclass of ``SlicerModule`` in a
-file of its own under this package, its program described as a ``Tool`` (the
-environment variable naming the one to run, the one its install put in the
-tools dir, its names on ``PATH``), registered in ``_registry`` below. The
+file of its own under this package, its program described as a ``Tool``
+(``firmware/toolchains.py``, the one finder for every bought engine: the variable
+naming the one to run, the one its install put in the tools dir, its names on
+``PATH``), registered in ``_registry`` below. The
 routes, the CLI and the slice task go through this interface, so none of them
 changes. A printer's profile -- the ``slicer.json`` kept with its part (see
 ``apothecary/slicer/profiles.py``) -- has a section per module, since each
@@ -34,8 +35,6 @@ change, kept with the printer -- or, for one process, the variable.
 from __future__ import annotations
 
 import os
-import platform
-import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -58,39 +57,6 @@ class SlicerError(RuntimeError):
 
 class NotInstalled(SlicerError):
     """The slicer a slice would use is not installed, or does not run."""
-
-
-def exe(name: str) -> str:
-    return f"{name}.exe" if platform.system() == "Windows" else name
-
-
-@dataclass(frozen=True)
-class Tool:
-    """The program a module runs, found as the firmware toolchains find theirs: the
-    environment variable naming it, then the one its install put in the tools dir,
-    then ``PATH``. The variable set to ``none`` means none (the browser suites'
-    servers, so they never find a person's own)."""
-
-    name: str
-    env: str
-    managed: Callable[[], Optional[Path]]  # the installed one, if there is one
-    commands: Tuple[str, ...]  # its names on PATH
-
-    def find(self) -> Tuple[Optional[Path], Optional[str]]:
-        """Where it is, and what found it: the variable, ``tools dir`` or ``PATH``."""
-        named = os.environ.get(self.env, "").strip()
-        if named.lower() == "none":
-            return None, None
-        if named and Path(named).expanduser().is_file():
-            return Path(named).expanduser(), self.env
-        managed = self.managed()
-        if managed is not None and managed.is_file():
-            return managed, "tools dir"
-        for command in self.commands:
-            found = shutil.which(command)
-            if found:
-                return Path(found), "PATH"
-        return None, None
 
 
 @dataclass

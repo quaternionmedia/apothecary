@@ -8,6 +8,9 @@ with every machine simulated:
 - **cnc_router's controller** is pinned to the simulated GRBL router
   (``firmware/grbl.py``'s ``SimulatedRouter``), idle with its tool over the middle
   of the table, on ``/dev/ttyFAKE3``;
+- **a Stream Deck +**, ``DEMODECK`` (``firmware/deck.py``), keeps the images it is sent and
+  hears the events the page or a route gives it, and its knobs jog the simulated printer and
+  router (``firmware/deck_control.py``); no HID device is listed or opened;
 - **an ESP32 devkit** on ``/dev/ttyFAKE2`` runs whatever was last flashed to it and
   says that sketch's hello (the scripted bench's ``FAKE_DEVKIT``);
 - **arduino-cli, cargo and espflash** are the scripted ones the browser suites run
@@ -66,6 +69,7 @@ BOARD = "printer_1.frame_system.mainboard"
 DEVKIT = "/dev/ttyFAKE2"  # the scripted bench's devkit
 ROUTER = "/dev/ttyFAKE3"  # the scripted bench's router controller: the simulated Grbl_ESP32
 CONTROLLER = "cnc_router.frame_system.controller"
+DECK = "DEMODECK"  # the simulated Stream Deck +
 CONSOLE_HZ = 10  # the simulated console's levels a second, as `lighting simulate` sends them
 
 log = logging.getLogger(__name__)
@@ -189,6 +193,8 @@ def prepare(root: Optional[Path] = None) -> Demo:
         "APOTHECARY_SIMULATED_PRINTER": "idle",
         "APOTHECARY_SIMULATED_ROUTER": ROUTER,  # that port answers as the simulated router
         "APOTHECARY_SIMULATED_DEVKIT": "",  # the scripted arduino-cli finds the devkit
+        "APOTHECARY_SIMULATED_DECK": DECK,  # the Stream Deck + that keeps what it is sent
+        "APOTHECARY_DECK_CONTROL": "1",  # and whose knobs jog the two simulated machines
         "ARDUINO_CLI": str(write_fake_arduino_cli(bench / "arduino-cli")),
         "CARGO": str(write_fake_cargo(bench / "cargo")),
         "ESPFLASH": str(write_fake_espflash(bench / "espflash")),

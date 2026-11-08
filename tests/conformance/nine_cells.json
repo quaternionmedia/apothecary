@@ -510,6 +510,8 @@
       "68": "control:home",
       "66": "control:home-xy",
       "62": "control:home-z",
+      "64": "control:home-x",
+      "69": "control:home-y",
       "28": "control:jog:Y+",
       "26": "control:jog:X+",
       "22": "control:jog:Y-",
@@ -555,6 +557,8 @@
       "768": "control:home",
       "766": "control:home-xy",
       "762": "control:home-z",
+      "764": "control:home-x",
+      "769": "control:home-y",
       "728": "control:jog:Y+",
       "726": "control:jog:X+",
       "722": "control:jog:Y-",
@@ -603,6 +607,8 @@
       "4768": "control:home",
       "4766": "control:home-xy",
       "4762": "control:home-z",
+      "4764": "control:home-x",
+      "4769": "control:home-y",
       "4728": "control:jog:Y+",
       "4726": "control:jog:X+",
       "4722": "control:jog:Y-",
@@ -753,6 +759,28 @@
               "marked": false,
               "children": null,
               "cell": 2
+            },
+            {
+              "id": "control:home-x",
+              "label": "X",
+              "action": "control:home-x",
+              "enabled": true,
+              "destructive": false,
+              "twice": false,
+              "marked": false,
+              "children": null,
+              "cell": 4
+            },
+            {
+              "id": "control:home-y",
+              "label": "Y",
+              "action": "control:home-y",
+              "enabled": true,
+              "destructive": false,
+              "twice": false,
+              "marked": false,
+              "children": null,
+              "cell": 9
             }
           ],
           "cell": 6
@@ -1324,6 +1352,28 @@
                   "marked": false,
                   "children": null,
                   "cell": 2
+                },
+                {
+                  "id": "control:home-x",
+                  "label": "X",
+                  "action": "control:home-x",
+                  "enabled": true,
+                  "destructive": false,
+                  "twice": false,
+                  "marked": false,
+                  "children": null,
+                  "cell": 4
+                },
+                {
+                  "id": "control:home-y",
+                  "label": "Y",
+                  "action": "control:home-y",
+                  "enabled": true,
+                  "destructive": false,
+                  "twice": false,
+                  "marked": false,
+                  "children": null,
+                  "cell": 9
                 }
               ],
               "cell": 6
@@ -1940,6 +1990,28 @@
                       "marked": false,
                       "children": null,
                       "cell": 2
+                    },
+                    {
+                      "id": "control:home-x",
+                      "label": "X",
+                      "action": "control:home-x",
+                      "enabled": true,
+                      "destructive": false,
+                      "twice": false,
+                      "marked": false,
+                      "children": null,
+                      "cell": 4
+                    },
+                    {
+                      "id": "control:home-y",
+                      "label": "Y",
+                      "action": "control:home-y",
+                      "enabled": true,
+                      "destructive": false,
+                      "twice": false,
+                      "marked": false,
+                      "children": null,
+                      "cell": 9
                     }
                   ],
                   "cell": 6

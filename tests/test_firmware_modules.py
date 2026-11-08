@@ -22,7 +22,7 @@ from firmware_helpers import fake_cli_calls
 from apothecary.api import app
 from apothecary.cli import cli
 from apothecary.firmware import bindings, devices, service
-from apothecary.firmware.modules import Tool, get_module, module_for, modules
+from apothecary.firmware.modules import get_module, module_for, modules
 from apothecary.firmware.modules.arduino import ArduinoModule
 from apothecary.firmware.modules.rust_esp32 import (
     CARGO,
@@ -31,7 +31,7 @@ from apothecary.firmware.modules.rust_esp32 import (
     export_paths,
 )
 from apothecary.firmware.sketches import discover_sketches, find_sketch
-from apothecary.firmware.toolchains import ToolchainError
+from apothecary.firmware.toolchains import Tool, ToolchainError, under_tools_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 RUST = "esp32_blink@rust-esp32"
@@ -60,12 +60,12 @@ def _wait(client, task_id):
 # --- the interface ----------------------------------------------------------------
 
 
-def test_two_modules_each_saying_what_it_builds():
-    """Arduino first; Rust for the ESP32 beside it. Another family or language is
-    another entry here, not a change to the callers."""
+def test_three_modules_each_saying_what_it_does():
+    """Arduino first; Rust for the ESP32 beside it, the Stream Deck + after it. Another
+    family or language is another entry here, not a change to the callers."""
     found = modules()
-    assert [m.id for m in found] == ["arduino", "rust-esp32"]
-    arduino, rust = found
+    assert [m.id for m in found] == ["arduino", "rust-esp32", "stream-deck"]
+    arduino, rust, _deck = found
     assert arduino.languages == ("arduino",) and "esp32" in arduino.families
     assert arduino.needs_board
     assert rust.languages == ("rust",) and rust.families == ("esp32",)
@@ -76,7 +76,7 @@ def test_two_modules_each_saying_what_it_builds():
 
 
 def test_a_tool_is_found_by_its_variable_then_the_tools_dir_then_path(tmp_path, monkeypatch):
-    tool = Tool("gizmo", env="GIZMO", managed="kit/bin/gizmo", command="gizmo")
+    tool = Tool("gizmo", env="GIZMO", managed=under_tools_dir("kit/bin/gizmo"), commands=("gizmo",))
     monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tmp_path / "tools"))
     monkeypatch.setenv("PATH", str(tmp_path / "bin"))
     monkeypatch.delenv("GIZMO", raising=False)
@@ -96,6 +96,23 @@ def test_a_tool_is_found_by_its_variable_then_the_tools_dir_then_path(tmp_path, 
     assert tool.find() == (named, "GIZMO")
     monkeypatch.setenv("GIZMO", "none")  # the suites' servers: none, whatever is installed
     assert tool.find() == (None, None)
+
+
+def test_the_slicer_s_program_is_found_by_the_same_finder(tmp_path, monkeypatch):
+    """One ``Tool`` for every bought engine: the slicer modules keep none of their own,
+    and a tool named by its variable with ``~`` in it is found, as the slicer's is."""
+    from apothecary.slicer import modules as slicer_modules
+    from apothecary.slicer.modules import orcaslicer
+
+    assert "Tool" not in vars(slicer_modules)
+    assert isinstance(orcaslicer.TOOL, Tool)
+    tool = Tool("gizmo", env="GIZMO", managed=lambda: None, commands=("gizmo",))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    mine = tmp_path / "kit" / "gizmo"
+    mine.parent.mkdir()
+    mine.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("GIZMO", "~/kit/gizmo")
+    assert tool.find() == (mine, "GIZMO")
 
 
 # --- the Rust esp32_blink, beside the Arduino one --------------------------------
@@ -225,7 +242,7 @@ def test_the_tools_dir_cargo_runs_with_its_homes_there_and_the_vendored_crates(
     ~/.rustup; crates.io is the vendored folder; espup's linker is on PATH."""
     tools = tmp_path / "tools" / "rust-esp32"
     monkeypatch.setenv("CARGO", "")
-    managed = CARGO.managed_path()
+    managed = CARGO.managed()
     managed.parent.mkdir(parents=True)
     managed.write_text("#!/bin/sh\n")
     (tools / "vendor").mkdir()
@@ -262,7 +279,8 @@ def test_the_tools_dir_cargo_runs_with_its_homes_there_and_the_vendored_crates(
 def test_status_says_each_module_and_its_tools(fake_rust, tmp_path):
     status = service.toolchain_status()
     assert status.arduino_cli_ok and status.ok  # the top level is Arduino's
-    arduino, rust = status.toolchains
+    arduino, rust, deck = status.toolchains
+    assert deck.id == "stream-deck" and deck.label == "Stream Deck +" and not deck.installable
     assert arduino.id == "arduino" and arduino.ok and arduino.tools[0].name == "arduino-cli"
     assert rust.id == "rust-esp32" and rust.label == "Rust for the ESP32"
     assert rust.ok and [t.name for t in rust.tools] == ["cargo", "espflash"]
@@ -308,7 +326,7 @@ def test_a_rust_sketch_compiles_and_uploads_through_the_routes(
     assert done["status"] == "succeeded", done
     assert any("Flashing has completed!" in line for line in done["lines"])
     assert fake_cli_calls(espflash)[-1][:2] == ["flash", "--skip-update-check"]
-    record = devices.get_state().last_flash(PORT, PORT)
+    record = devices.get_state().flashed_to(PORT)
     assert record.sketch == "esp32_blink" and record.sketch_id == RUST
     assert record.toolchain == "rust-esp32" and record.target == "esp32" and record.fqbn is None
     assert record.build_sha256 == devices.file_sha256(elf)
@@ -337,10 +355,10 @@ def test_the_status_route_and_the_toolchains_route_carry_every_module(fake_rust)
     client = TestClient(app)
     status = client.get("/firmware/status").json()
     assert status["arduino_cli_ok"] and status["ok"]
-    assert [t["id"] for t in status["toolchains"]] == ["arduino", "rust-esp32"]
+    assert [t["id"] for t in status["toolchains"]] == ["arduino", "rust-esp32", "stream-deck"]
     assert status["toolchains"][1]["ok"]
     listed = client.get("/firmware/toolchains").json()
-    assert [t["id"] for t in listed] == ["arduino", "rust-esp32"]
+    assert [t["id"] for t in listed] == ["arduino", "rust-esp32", "stream-deck"]
     sketches = client.get("/firmware/sketches").json()
     rust = next(s for s in sketches if s["id"] == RUST)
     assert rust["toolchain"] == "rust-esp32" and rust["name"] == "esp32_blink"

@@ -40,7 +40,7 @@ import time
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Protocol, Tuple
 
-from .models import MARLIN, BedReading, Heater, PrinterInfo, PrinterStatus
+from .models import MACHINE_OF, MARLIN, BedReading, Heater, PrinterInfo, PrinterStatus
 from .toolchains import PortHeld, ToolchainError
 
 # --- parsers: Marlin's documented replies -------------------------------------
@@ -585,8 +585,12 @@ class CommsLog:
 # --- link: one open port, request/response with a lock ------------------------------
 
 OK_RE = re.compile(r"^ok\b")
-# Marlin objects with `Error:` or `!!`; GRBL with `error:N` and, out of turn, `ALARM:N`.
-ERROR_RE = re.compile(r"^(Error:|!!|error:\d|ALARM:)")
+# Marlin objects with `Error:` or `!!`. Every dialect's objection is in OBJECTIONS, each
+# dialect adding its own when it is imported (grbl.py: `error:N` and, out of turn,
+# `ALARM:N`): the link closes an exchange on any of them, since a board is asked in
+# one dialect before it is known to speak another.
+ERROR_RE = re.compile(r"^(Error:|!!)")
+OBJECTIONS: List["re.Pattern[str]"] = [ERROR_RE]
 BUSY_RE = re.compile(r"^echo:busy:")
 RESEND_RE = re.compile(r"^Resend:")
 
@@ -619,6 +623,9 @@ class GcodeLink:
         # The last `ALARM:N` the board said, whenever it said it: a GRBL status report
         # says a controller is in alarm and not which (grbl.poll_router reads this).
         self.alarm: Optional[str] = None
+        # Every byte read from the board since the link opened: unchanged across an
+        # exchange, the board said nothing at all to it.
+        self.heard = 0
         self.opened_at = datetime.now(timezone.utc)
         self.log = log or CommsLog(port)
         self.engine = type(transport).__name__
@@ -665,6 +672,7 @@ class GcodeLink:
             chunk = self._t.read(min(left, 0.5))
             if not chunk:
                 continue
+            self.heard += len(chunk)
             self._buf += chunk
         line, self._buf = self._buf.split(b"\n", 1)
         text = line.decode("utf-8", "replace").rstrip("\r")
@@ -759,7 +767,7 @@ class GcodeLink:
                 if line is None:
                     continue
                 lines.append(line)
-                objected = ERROR_RE.match(line) or RESEND_RE.match(line)
+                objected = any(p.match(line) for p in OBJECTIONS) or RESEND_RE.match(line)
                 if not quiet or objected:
                     if quiet:
                         self.log.add("tx", cmd, origin)  # the line it objected to, for the record
@@ -1039,7 +1047,8 @@ HOTEND_MAX_C = 300
 BED_MAX_C = 130
 JOG_MAX_MM = 300
 FEED_MAX = 12000
-SPINDLE_MAX_RPM = 24000  # the trim router on the garage's router (grbl.py bounds M3 by it)
+EXTRUDE_MAX_MM = 10  # one extrude or retract move, relative: filament, never a whole spool
+EXTRUDE_FEED_MAX = 300  # mm/min; a move names its feed, never inheriting a print's
 CONTROL_CODES: List[tuple] = [
     (re.compile(r"^M104 S(\d{1,3})$"), "hotend target"),
     (re.compile(r"^M140 S(\d{1,3})$"), "bed target"),
@@ -1049,6 +1058,11 @@ CONTROL_CODES: List[tuple] = [
     (re.compile(r"^G90$"), "absolute positioning"),
     (re.compile(r"^G91$"), "relative positioning"),
     (re.compile(r"^G[01](?:(?: [XYZ]-?\d{1,3}(?:\.\d{1,2})?){1,3})?(?: F\d{2,5})?$"), "move (jog)"),
+    (re.compile(r"^M83$"), "extruder relative: E moves are distances, whatever a print left set"),
+    (
+        re.compile(r"^G1 E-?\d{1,2}(?:\.\d{1,2})? F\d{2,3}$"),
+        "extrude or retract (relative E, with its feed)",
+    ),
     (re.compile(r"^M84$"), "steppers off"),
     (re.compile(r"^M18$"), "steppers off"),
     (re.compile(r"^M23 (?!.*\.\.)([A-Za-z0-9_~./-]{1,64})$"), "select SD file (no ..)"),
@@ -1068,9 +1082,9 @@ EMERGENCY_STOP = "M112"  # always accepted, latch or not; halts the board until 
 
 
 # This dialect, as a board's ``PrinterInfo`` names it, and the kind of machine it
-# drives (apothecary/jobs.py's machine kinds).
+# drives (apothecary/jobs.py's machine kinds, models.MACHINE_OF).
 DIALECT = MARLIN
-MACHINE = "printer"
+MACHINE = MACHINE_OF[DIALECT]
 
 
 class OutOfBounds(ValueError):
@@ -1095,6 +1109,12 @@ def normalise_control(command: str) -> str:
             raise OutOfBounds(f"bed target above {BED_MAX_C} degC: {command!r}")
         if cmd.startswith("M106") and m.group(1) and int(m.group(1)) > 255:
             raise OutOfBounds(f"fan speed above 255: {command!r}")
+        if cmd.startswith("G1 E"):
+            if abs(float(re.search(r" E(-?\d+(?:\.\d+)?)", cmd).group(1))) > EXTRUDE_MAX_MM:
+                raise OutOfBounds(f"extrusion beyond {EXTRUDE_MAX_MM} mm: {command!r}")
+            if int(re.search(r" F(\d+)", cmd).group(1)) > EXTRUDE_FEED_MAX:
+                raise OutOfBounds(f"extrusion feedrate above {EXTRUDE_FEED_MAX}: {command!r}")
+            return cmd
         if cmd[0] == "G" and cmd[1] in "01":
             for axis_val in re.findall(r" [XYZ](-?\d+(?:\.\d+)?)", cmd):
                 if abs(float(axis_val)) > JOG_MAX_MM:
@@ -1266,7 +1286,7 @@ def read_bed(
 
 # Codes a streamed file is refused for, whatever else it says: they write the
 # board's settings or take it down, or wait for a hand, and neither a slicer nor
-# a CAM post needs them. One list for both dialects: a Marlin file carries no
+# a CAM post needs them. One list for every dialect: a Marlin file carries no
 # `$` line and a GRBL file no M500, and refusing each in both costs nothing.
 PRINT_REFUSED: Dict[str, str] = {
     "M500": "saves settings to EEPROM",
@@ -1279,17 +1299,6 @@ PRINT_REFUSED: Dict[str, str] = {
     "M6": "is a tool change: the host streams one tool",
 }
 TEMP_CODES = {"M104": HOTEND_MAX_C, "M109": HOTEND_MAX_C, "M140": BED_MAX_C, "M190": BED_MAX_C}
-# The M codes a GRBL controller takes (Grbl 1.1's, and Grbl_ESP32's outputs). Any other
-# in a file kept for a router is a printer's: GRBL answers it error:20, and the cut
-# stops at that line.
-GRBL_M_CODES = {0, 1, 2, 3, 4, 5, 7, 8, 9, 30, 56, 62, 63, 67}
-# Longest a dwell in a router's file may ask, in GRBL's unit, seconds: Marlin counts
-# G4 P in milliseconds, so a printer's half-second pause is eight minutes on a router.
-GRBL_DWELL_MAX_S = 60.0
-CODE_RE = re.compile(r"^([GM])0*(\d+)(?:\.\d+)?$")
-DWELL_P_RE = re.compile(r"\bP(\d+(?:\.\d+)?)")
-SPINDLE_CODES = ("M3", "M4")
-SPINDLE_ARG_RE = re.compile(r"S(\d+(?:\.\d+)?)")
 COMMENT_RE = re.compile(r";.*$|\([^)]*\)")
 TEMP_ARG_RE = re.compile(r"[SR](\d+(?:\.\d+)?)")
 # Lines the firmware answers only when it is done: heating, homing, probing, a dwell.
@@ -1308,15 +1317,18 @@ def line_timeout(cmd: str) -> float:
     return PRINT_SLOW_TIMEOUT_S if code in SLOW_CODES else PRINT_LINE_TIMEOUT_S
 
 
-def check_gcode(text: str, machine: Optional[str] = None) -> Tuple[int, List[str]]:
-    """How many lines a file would send, and every reason it may not be sent.
+# What a dialect objects to in a line of a file, beyond what every dialect refuses:
+# (the line's number, the command, its code) -> the reasons, each naming its line.
+Objections = Callable[[int, str, str], List[str]]
 
-    A reason names its line. Refused codes and temperatures over the seam's
-    caps are the two: the same bounds as a typed control, applied once to
-    the whole file rather than line by line as it streams. A file kept for a
-    router (``machine``) is checked in GRBL's terms as well: a code GRBL does not
-    take, and a dwell over a minute in its unit, are refused.
-    """
+
+def check_file(text: str, objections: Objections) -> Tuple[int, List[str]]:
+    """How many lines a file would send, and every reason it may not be sent: the
+    codes no streamed file carries, a controller setting, and what the file's
+    dialect objects to (``objections``: Marlin's are ``check_gcode``'s, GRBL's
+    ``grbl.check_gcode``'s). A reason names its line. The bounds are a typed
+    control's, applied once to the whole file rather than line by line as it
+    streams; the check stops after twenty reasons."""
     total = 0
     problems: List[str] = []
     for n, raw in enumerate(text.splitlines(), 1):
@@ -1329,46 +1341,26 @@ def check_gcode(text: str, machine: Optional[str] = None) -> Tuple[int, List[str
             problems.append(f"line {n}: {cmd[:12]} is a controller setting, not a job's to send")
         elif code in PRINT_REFUSED:
             problems.append(f"line {n}: {code} {PRINT_REFUSED[code]}")
-        elif code in TEMP_CODES:
-            m = TEMP_ARG_RE.search(cmd[len(code) :])
-            if m and float(m.group(1)) > TEMP_CODES[code]:
-                problems.append(
-                    f"line {n}: {code} asks for {m.group(1)} degC, above {TEMP_CODES[code]}"
-                )
-        elif code in SPINDLE_CODES:
-            m = SPINDLE_ARG_RE.search(cmd[len(code) :])
-            if m and float(m.group(1)) > SPINDLE_MAX_RPM:
-                problems.append(
-                    f"line {n}: {code} asks for {m.group(1)} rpm, above {SPINDLE_MAX_RPM}"
-                )
-        if machine == "router":
-            problems.extend(_not_grbl(n, cmd, code))
+        problems.extend(objections(n, cmd, code))
         if len(problems) >= 20:
             problems.append("... and the check stopped here")
             break
     return total, problems
 
 
-def _not_grbl(n: int, cmd: str, code: str) -> List[str]:
-    """Why a line of a router's file is not GRBL's, if it is not."""
-    m = CODE_RE.match(code)
-    if m is None:
-        return []
-    letter, number = m.group(1), int(m.group(2))
-    if letter == "M" and number not in GRBL_M_CODES:
-        return [
-            f"line {n}: {code} is not a GRBL code: the controller answers error:20 and the cut stops there"
-        ]
-    if letter == "G" and number == 29:
-        return [f"line {n}: {code} is a printer's bed probe, not a GRBL code"]
-    if letter == "G" and number == 4:
-        p = DWELL_P_RE.search(cmd[len(code) :])
-        if p and float(p.group(1)) > GRBL_DWELL_MAX_S:
-            return [
-                f"line {n}: {code} P{p.group(1)} dwells {p.group(1)} s on GRBL, whose P is "
-                "seconds; a printer's file counts it in milliseconds"
-            ]
+def _objections(n: int, cmd: str, code: str) -> List[str]:
+    """A temperature over the seam's caps, Marlin's one objection to a line."""
+    if code in TEMP_CODES:
+        m = TEMP_ARG_RE.search(cmd[len(code) :])
+        if m and float(m.group(1)) > TEMP_CODES[code]:
+            return [f"line {n}: {code} asks for {m.group(1)} degC, above {TEMP_CODES[code]}"]
     return []
+
+
+def check_gcode(text: str) -> Tuple[int, List[str]]:
+    """A printer's file, checked in Marlin's terms (``check_file``): what every
+    dialect refuses, and a temperature over the caps."""
+    return check_file(text, _objections)
 
 
 CONTROL_TTL_S = 300.0  # a latch that nobody touches for this long disarms itself

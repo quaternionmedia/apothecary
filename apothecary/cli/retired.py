@@ -1,5 +1,6 @@
-"""Retired command names, kept hidden for one release so a script that calls one
-learns what replaced it instead of meeting "No such command"."""
+"""A retired command name, kept hidden for one release so a script that calls one
+learns what replaced it instead of meeting "No such command": the test command's
+three (apothecary/cli/testing.py)."""
 
 import click
 

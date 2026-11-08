@@ -7,8 +7,8 @@ place a real artifact will later replace a guess.
 What is real here: the enclosure geometry, the board envelope's effect on it,
 and the printer settings.
 
-What is stubbed, and says so: the board outline (hand-entered, not read from
-KiCad), the module and connector envelopes, and the mounting surface. Each is
+What is stubbed, and says so: the board outline (hand-entered, not read from a
+layout), the module and connector envelopes, and the mounting surface. Each is
 a :class:`~apothecary.models.blackbox.BlackBox` from a provider, so replacing
 one is a provider change rather than an edit here.
 
@@ -28,9 +28,8 @@ from apothecary.models import BoundingBox3D, Vector3D
 from apothecary.models.blackbox import BlackBox, BlackBoxProvider, Keepout, StubProvider
 from apothecary.primitives import Cube
 from apothecary.projects.parts.datum_core import Params as DatumParams
-from apothecary.projects.parts.datum_core import params_for
+from apothecary.projects.parts.datum_core import params_for, t1_core_stub
 from apothecary.scene import Scene
-from apothecary.shims.kicad import KiCadProvider
 from apothecary.transforms import Translate
 
 
@@ -106,14 +105,14 @@ def build(
 ) -> tuple[Scene, Assembly]:
     """Generate a datum iteration and place it in a scene.
 
-    `provider` defaults to the KiCad shim, which today serves hand-entered
-    envelopes. Pass any other provider satisfying the protocol — including a
-    real KiCad reader, when one exists — and nothing below changes.
+    `provider` defaults to a stub serving the reference board's hand-entered
+    envelope. Pass any other provider satisfying the protocol -- a reader of a
+    board's layout, when one exists -- and nothing below changes.
 
     `surfaces` is the same seam for whatever the enclosure mounts to, so a
     caller can supply a real wall plate without editing this function.
     """
-    provider = provider or KiCadProvider()
+    provider = provider or StubProvider().register(t1_core_stub())
     origin = at or Vector3D()
 
     board = provider.get(board_name)

@@ -18,7 +18,7 @@ standing in the air where it is put. What is known about one is its record:
   And one device is one camera: choosing it for one takes it off any other.
 
 A label may be a person's own words ("FaceTime HD Camera (Built-in)"), so the
-records are kept in the state folder (``firmware.devices.state_dir``), made the
+records are kept in the state folder (``state_folder.state_dir``), made the
 person's alone, and written whole under one lock, as a board's pins are. Nothing
 about the device goes into the site: the camera's node carries its place and
 its shape, and nothing else.
@@ -40,8 +40,6 @@ from __future__ import annotations
 
 import json
 import math
-import os
-import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -54,6 +52,7 @@ from ..models.bounds import BoundingBox3D
 from ..models.vectors import Vector3D
 from ..primitives import Cube, Cylinder
 from ..site_names import current as current_site
+from ..state_folder import state_dir, write_whole
 from ..transforms import Rotate, Translate
 from .projection import Box, Hit, first_surface, looking
 
@@ -125,8 +124,6 @@ _LOCK = threading.Lock()
 
 
 def _records_file() -> Path:
-    from ..firmware.devices import state_dir
-
     return state_dir() / RECORDS
 
 
@@ -150,20 +147,10 @@ def _load() -> List[Camera]:
 
 
 def _save(cameras: List[Camera]) -> None:
-    from ..firmware.devices import private_folder
-
-    path = _records_file()
-    private_folder(path.parent)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".camera_parts.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as out:
-            out.write(
-                json.dumps({"cameras": [c.model_dump(mode="json") for c in cameras]}, indent=2)
-            )
-        os.replace(tmp, path)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
+    write_whole(
+        _records_file(),
+        json.dumps({"cameras": [c.model_dump(mode="json") for c in cameras]}, indent=2),
+    )
 
 
 def records(site: Optional[str] = None) -> List[Camera]:

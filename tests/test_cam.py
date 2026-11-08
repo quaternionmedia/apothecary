@@ -54,7 +54,7 @@ def test_the_coupons_toolpath_is_checked_clean_and_names_each_operation():
     cuts = COUPON.cuts()
     assert isinstance(cuts, Cuts) and cuts.stock.x == 140 and cuts.stock.y == 100
     written = toolpath.write(cuts, "router_coupon")
-    total, problems = gcode.check_gcode(toolpath.text(written))
+    total, problems = grbl.check_gcode(toolpath.text(written))
     assert problems == [] and total == len([ln for ln in written.lines if not ln.startswith("(")])
     assert [o.kind for o in written.operations] == ["pocket", "hole", "hole", "outline"]
     assert all(o.cut for o in written.operations)
@@ -111,7 +111,7 @@ def test_feeds_are_bounded_by_the_router_s_figures():
     with pytest.raises(ValueError):
         Feeds(cut=grbl.FEED_MAX + 1)
     with pytest.raises(ValueError):
-        Feeds(rpm=gcode.SPINDLE_MAX_RPM + 1)
+        Feeds(rpm=grbl.SPINDLE_MAX_RPM + 1)
 
 
 # --- kept, recorded, offered --------------------------------------------------------
@@ -248,3 +248,38 @@ def test_routers_in_names_the_router_a_board_answered_as(fake_arduino_cli, route
     devices.get_state().set_binding("garage", CONTROLLER, devices.stable_identity(PORT))
     assert routers_in("garage") == ["cnc_router"]
     assert "cnc_router" not in printers_in("garage")
+
+
+def test_the_ring_s_machines_start_no_scan_once_one_has_been_made(
+    fake_arduino_cli, router_links, garage, monkeypatch
+):
+    """A ring asks for the site's printers and routers as it opens: they read the
+    newest scan however old it is, so the ring never waits on arduino-cli; a board
+    the port list found and no longer finds is not offered."""
+    from types import SimpleNamespace
+
+    import serial.tools.list_ports
+    from firmware_helpers import fake_cli_calls
+
+    from apothecary.api import printers_in
+
+    def scans():
+        return sum(1 for argv in fake_cli_calls(fake_arduino_cli) if argv[:2] == ["board", "list"])
+
+    devices.identify_printer(PORT)
+    devices.get_state().set_binding("garage", CONTROLLER, devices.stable_identity(PORT))
+    devices.detected_devices(fresh=True)
+    before = scans()
+    monkeypatch.setattr(devices, "SCAN_TTL", 0.0)  # every scan is old
+    assert routers_in("garage") == ["cnc_router"] and "cnc_router" not in printers_in("garage")
+    assert scans() == before
+    on_list = SimpleNamespace(
+        device=PORT, vid=0x1A86, pid=0x7523, serial_number=None, location="1-3"
+    )
+    monkeypatch.setattr(serial.tools.list_ports, "comports", lambda: [on_list])
+    monkeypatch.setattr(devices, "_PORTS", None)
+    devices.ports_now()  # the list finds the router's port
+    monkeypatch.setattr(serial.tools.list_ports, "comports", lambda: [])
+    monkeypatch.setattr(devices, "_PORTS", None)
+    assert routers_in("garage") == []  # unplugged since the scan
+    assert scans() == before

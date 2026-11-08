@@ -109,6 +109,7 @@ INSTALL_POINTS = {
     "apothecary.routes": PACKAGE / "routes" / "__init__.py",
     "apothecary.rig": PACKAGE / "rig" / "__init__.py",
     "apothecary.evidence": PACKAGE / "evidence" / "__init__.py",
+    "apothecary.state_folder": PACKAGE / "state_folder.py",
 }
 ROOT_CONFTEST = ROOT / "conftest.py"
 
@@ -243,10 +244,11 @@ def test_each_install_point_puts_the_guard_on_before_any_of_its_own_code(source)
 # What reads personal data, by the means the record names: the serial link, an
 # image library, the state folder and the picture root. Outside the install
 # points' packages none of it is done, but through one of them: the state folder
-# is apothecary.firmware's to resolve and the picture root apothecary.api's, so a
-# module that calls either has imported an install point first.
+# is apothecary.state_folder's to resolve and the picture root apothecary.api's,
+# so a module that calls either has imported an install point first.
 GUARDED_SOURCES = (
     "api.py",
+    "state_folder.py",
     "cli/",
     "vision/",
     "gathering/",
@@ -257,7 +259,7 @@ GUARDED_SOURCES = (
 )
 READER_MODULES = {"serial": "the serial link", "PIL": "an image library"}
 READER_VARIABLES = {"APOTHECARY_STATE_DIR", "APOTHECARY_PICTURE_ROOT"}
-RESOLVED_BY = {"state_dir": "apothecary.firmware", "_picture_root": "apothecary.api"}
+RESOLVED_BY = {"state_dir": "apothecary.state_folder", "_picture_root": "apothecary.api"}
 
 
 def _imported_from(node: ast.ImportFrom, package: str) -> str:
@@ -329,8 +331,7 @@ def test_no_module_outside_the_install_points_reads_personal_data():
     """A module that reads personal data where no install point covers it fails
     here before it merges: the guard goes on by package, so a reader written
     elsewhere would read with the network open. Reaching the state folder
-    through apothecary.firmware (jobs, the slicer's service) is under the guard
-    from that import on."""
+    through apothecary.state_folder puts the guard on from that import."""
     readers = {}
     for source in sorted(PACKAGE.rglob("*.py")):
         rel = source.relative_to(PACKAGE).as_posix()
@@ -646,7 +647,7 @@ def test_a_rust_build_and_flash_reach_no_host(monkeypatch, tmp_path):
     monkeypatch.setenv("CARGO", "")
     monkeypatch.setenv("ESPFLASH", str(tmp_path / "espflash"))
     (tmp_path / "espflash").write_text("#!/bin/sh\n")
-    cargo = CARGO.managed_path()
+    cargo = CARGO.managed()
     cargo.parent.mkdir(parents=True)
     cargo.write_text("#!/bin/sh\n")
     (tmp_path / "tools" / "rust-esp32" / "vendor").mkdir()

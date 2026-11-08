@@ -59,8 +59,8 @@ def test_a_picture_past_the_tolerance_and_a_new_one_are_named(checkout):
     assert said == [
         "::warning file=walkthrough/screenshots/03-02-b.png,title=A walkthrough picture "
         "changed::walkthrough/screenshots/03-02-b.png differs from the committed picture in "
-        "3.00% of its pixels, past 0.1%: look at it against its caption, and commit it if "
-        "the page changed",
+        "3.00% of its pixels, past 0.1%, between (0, 0) and (100, 3): look at it against "
+        "its caption, and commit it if the page changed",
         "::warning file=walkthrough/screenshots/03-03-c.png,title=A new walkthrough "
         "picture::walkthrough/screenshots/03-03-c.png is not committed: look at it against "
         "its caption, and commit it with its page",
@@ -82,3 +82,21 @@ def test_it_never_fails(checkout, capsys):
     assert out[-1] == (
         "1 walkthrough picture(s) differ from the committed ones past 0.1% of their pixels"
     )
+
+
+def test_sheets_draw_each_named_picture_beside_its_commit_with_its_change_marked(
+    checkout, tmp_path
+):
+    """What a person looks at to tell a page's change from a run's noise: the committed
+    picture on the left, the new one on the right with every changed pixel marked."""
+    shots = checkout / picture_drift.PICTURES
+    _picture(shots / "03-01-a.png", dots=8)  # within the tolerance: no sheet
+    _picture(shots / "03-02-b.png", dots=300)
+    sheets = tmp_path / "sheets"
+    assert picture_drift.main(checkout, ["--sheets", str(sheets)]) == 0
+    assert sorted(p.name for p in sheets.iterdir()) == ["03-02-b.png"]
+    drawn = Image.open(sheets / "03-02-b.png").convert("RGB")
+    assert drawn.size == (200, 100)
+    assert drawn.getpixel((0, 0)) == (60, 60, 60)  # the committed one, unmarked
+    assert drawn.getpixel((100, 0)) == picture_drift.MARK  # a changed pixel, marked
+    assert drawn.getpixel((150, 50)) == (60, 60, 60)  # an unchanged one, as it was

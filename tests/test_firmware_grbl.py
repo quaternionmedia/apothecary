@@ -20,6 +20,7 @@ from apothecary.api import app, printers_in
 from apothecary.cli import cli
 from apothecary.evidence import printers as evidence_printers
 from apothecary.firmware import devices, gcode, grbl
+from apothecary.firmware.models import GRBL, MACHINE_OF, MARLIN, PrinterInfo
 from apothecary.firmware.toolchains import PortHeld, ToolchainError
 
 PORT = "/dev/ttyFAKE1"  # the scripted arduino-cli's unmatched board
@@ -104,6 +105,17 @@ def test_parse_build_info_parser_state_settings_alarm_and_probe():
     assert grbl.alarm_text(3).startswith("reset while in motion")
 
 
+def test_the_kind_of_machine_follows_the_dialect():
+    """A board's kind is read from the dialect it answered in, never kept beside it: a
+    record that says otherwise reads as its dialect's kind, and the JSON carries it."""
+    assert PrinterInfo(firmware_name="Marlin 2.1").machine == "printer"
+    assert PrinterInfo(firmware_name="Grbl 1.3a", dialect=GRBL).machine == "router"
+    kept = PrinterInfo(**{"firmware_name": "Grbl 1.3a", "dialect": "grbl", "machine": "printer"})
+    assert kept.machine == "router"
+    assert PrinterInfo(firmware_name="Grbl 1.3a", dialect=GRBL).model_dump()["machine"] == "router"
+    assert (gcode.MACHINE, grbl.MACHINE) == (MACHINE_OF[MARLIN], MACHINE_OF[GRBL])
+
+
 def test_router_info_names_the_firmware_the_machine_and_the_dialect():
     info = grbl.router_info_from(BUILD_INFO, 115200)
     assert (info.dialect, info.machine) == ("grbl", "router")
@@ -170,13 +182,24 @@ def test_the_controller_s_numbers_have_words():
     assert grbl.explain("error:999") == "error 999" and grbl.explain("ok") is None
 
 
+def test_the_link_objects_in_each_dialect_s_own_words():
+    """Marlin's words are the Marlin module's, GRBL's the GRBL module's, and the link
+    closes an exchange on either, before a board is identified as speaking one."""
+    assert gcode.ERROR_RE.match("Error:checksum mismatch") and gcode.ERROR_RE.match("!! kill")
+    assert gcode.ERROR_RE.match("error:20") is None and gcode.ERROR_RE.match("ALARM:3") is None
+    assert grbl.OBJECTION_RE in gcode.OBJECTIONS and gcode.ERROR_RE in gcode.OBJECTIONS
+    assert grbl.OBJECTION_RE.match("error:20") and grbl.OBJECTION_RE.match("ALARM:3")
+    assert grbl.OBJECTION_RE.match("Error:checksum mismatch") is None
+
+
 def test_a_streamed_file_may_not_carry_settings_tool_changes_or_a_fast_spindle():
     text = "G21 G90\n$110=4000\nM6 T1\nM3 S30000\nM0\nG1 X10 F800\nS12000 M3\nM5\nM30\n"
-    total, problems = gcode.check_gcode(text)
+    total, problems = grbl.check_gcode(text)
     assert total == 9
     assert problems == [
         "line 2: $110=4000 is a controller setting, not a job's to send",
         "line 3: M6 is a tool change: the host streams one tool",
+        "line 3: M6 is not a GRBL code: the controller answers error:20 and the cut stops there",
         "line 4: M3 asks for 30000 rpm, above 24000",
         "line 5: M0 stops and waits for a button on the machine",
     ]
@@ -185,6 +208,29 @@ def test_a_streamed_file_may_not_carry_settings_tool_changes_or_a_fast_spindle()
 
 
 # --- the simulated router, over a link ---------------------------------------------------
+
+
+def test_the_simulated_router_homes_the_axis_it_is_told_and_no_other(router_links):
+    link = router_links.open(PORT, 115200)
+
+    def at():
+        return grbl.poll_router(link).position
+
+    assert at() == {"x": -200.0, "y": -300.0, "z": -40.0}
+    # Each axis alone: it goes to its switch and pulls off; the others stay put.
+    assert grbl.control_router(link, "$HZ") == ["ok"]
+    assert at() == {"x": -200.0, "y": -300.0, "z": -3.0}
+    assert grbl.control_router(link, "$HX") == ["ok"]
+    assert at() == {"x": -3.0, "y": -300.0, "z": -3.0}
+    assert grbl.control_router(link, "$HY") == ["ok"]
+    assert at() == {"x": -3.0, "y": -3.0, "z": -3.0}
+    # A bare $H still homes all three.
+    assert grbl.control_router(link, "$J=G91 G21 X-20 Y-20 Z-20 F500") == ["ok"]
+    assert grbl.control_router(link, "$H") == ["ok"]
+    assert at() == {"x": -3.0, "y": -3.0, "z": -3.0}
+    # A word after $H that is no axis is refused.
+    with pytest.raises(ToolchainError, match="error:3"):
+        link.command("$HA")
 
 
 def test_the_simulated_router_is_a_plausible_grbl(router_links):

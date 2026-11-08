@@ -14,7 +14,7 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # The viewer's controls of its own: a change that adds one raises this; one that removes
 # one may lower it. `uv run apothecary census` lists them, and docs/census.md says what
 # is counted, how each is classified and how the ceiling and the share's floor move.
-VIEWER_CEILING = 204
+VIEWER_CEILING = 217
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -378,7 +378,7 @@ def test_the_viewers_ring_backed_share_is_at_least_its_floor():
     `apothecary census` gives the share."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 117 / 203, f"{backed} of {own} ring-backed"
+    assert backed / own >= 126 / 217, f"{backed} of {own} ring-backed"
 
 
 def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address():
@@ -566,3 +566,28 @@ def test_settings_rows_are_counted_and_unbacked_and_its_view_item_is_view_settin
     ):
         assert listening[key].surface == census.GESTURE, key
     assert listening["settingsOpenBtn:click:openSettings"].ring_action == "view:settings"
+
+
+def test_the_knobs_controls_are_cells_of_panels_machine_knobs():
+    """The Deck window's knobs and a Control pad's Knobs here are each backed by a cell of
+    Panels › Machine › Knobs that is there: on or off, a machine, a step, and Here; and
+    the piece's Open Deck by its Deck."""
+    from apothecary.menu import _panels
+
+    def actions(option):
+        yield option.id
+        if option.action:
+            yield option.action
+        for child in option.children or ():
+            yield from actions(child)
+
+    on_the_ring = set(actions(_panels()))
+    by_name = {f.name: f for f in census.take().controls_of_its_own()}
+    for name, cell in (
+        ("deck-run", "deck:knobs"),
+        ("deck-machine", "deck:machine"),
+        ("deck-step", "deck:step"),
+        ("deck-here", "deck:here"),
+        ("deck-open", "panel:toggle:deck"),
+    ):
+        assert by_name[name].ring_action == cell and cell in on_the_ring, name

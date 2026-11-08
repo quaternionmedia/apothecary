@@ -53,12 +53,14 @@ from .example_hierarchy import (
 )
 from .family import hub as family_hub
 from .family import members as family_members
+from .firmware import deck_control
 from .firmware import devices as firmware_devices
 from .firmware import gcode as firmware_gcode
 from .firmware import grbl as firmware_grbl
 from .firmware.api import _device_view as firmware_device_view
 from .firmware.api import router as firmware_router
 from .firmware.bindings import bindings_for_site, device_for_identity, same_device
+from .firmware.deck_api import router as firmware_deck_router
 from .firmware.models import DeviceAttachRequest, validate_port
 from .firmware.toolchains import ToolchainError
 from .hierarchy import Assembly
@@ -132,6 +134,7 @@ from .slicer.models import Made as SlicedMade
 from .slicer.models import SlicedFor
 from .slicer.modules import SlicerError
 from .slicer.profiles import Declared
+from .state_folder import state_dir
 from .stays_local import LocalOnly
 from .templates import TemplateRenderer
 from .theatre_site import create_theatre_site, load_theatre_rig, validate_theatre
@@ -205,7 +208,9 @@ async def lifespan(app: FastAPI):
     lighting_routes.start_console_feeds()
     family_hub.start()
     wiring_routes.start_following()
+    deck_control.start_all()
     yield
+    deck_control.stop_all()
     wiring_routes.stop_following()
     family_hub.close()
     lighting_routes.stop_console_feeds()
@@ -477,6 +482,7 @@ def _part_payload(part, params_query: str | None) -> Dict[str, object]:
 
 
 app.include_router(firmware_router)
+app.include_router(firmware_deck_router)
 
 
 @app.get("/")
@@ -1512,7 +1518,6 @@ def _assembly_tree(
     node: Assembly,
     parent_world_position: Vector3D | None = None,
     parent_category: str | None = None,
-    inside_machine: bool = False,
 ) -> Dict[str, object]:
     """Recursive serialization of an Assembly node and everything beneath it.
 
@@ -1575,16 +1580,9 @@ def _assembly_tree(
         "site_ref": node.site_ref,
         "sketch_ref": node.sketch_ref,
         **(_site_piece(node, world_position) if node.site_ref is not None else {}),
-        # A board (a printer's mainboard, a devkit): where a machine's Pin puts its port.
-        # Inside a machine, an electrical leaf no part draws is its board too: the
-        # router's controller, which the maker publishes no drawing of.
-        "board": is_board(node.part_ref)
-        or (
-            inside_machine
-            and node.part_ref is None
-            and node.category == "electrical"
-            and not node.children
-        ),
+        # A board (a printer's mainboard, a router's controller, a devkit): a node whose
+        # part the boards library tags one, where a machine's Pin puts its port.
+        "board": is_board(node.part_ref),
         "category": category,
         "position": {"x": world_position.x, "y": world_position.y, "z": world_position.z},
         "footprint": _bounds_dict(node.footprint),
@@ -1604,9 +1602,7 @@ def _assembly_tree(
         ),
         "children": [
             {
-                **_assembly_tree(
-                    child, world_position, category, inside_machine or node.status is not None
-                ),
+                **_assembly_tree(child, world_position, category),
                 "composition": composition,
             }
             for child, composition in composed
@@ -1798,8 +1794,6 @@ def _home_folders() -> List[Path]:
 
 def _state_folder() -> Path:
     """Where the serial numbers, camera labels and readings live: never pictures."""
-    from .firmware.devices import state_dir
-
     return state_dir().expanduser().resolve()
 
 
@@ -2430,7 +2424,8 @@ def _machines_in(site_name: str, statuses, router: bool) -> List[str]:
         return []
     state = firmware_devices.get_state()
     try:
-        plugged = firmware_devices.detected_devices(state=state)
+        # The ring asks this as it opens: no new scan once one has been made.
+        plugged = firmware_devices.detected_devices(state=state, any_age=True)
     except ToolchainError:
         plugged = []
     found = set()
@@ -2652,10 +2647,11 @@ def attach_device(name: str, path: str, body: DeviceAttachRequest):
     """Pin a device to a node; overrides the by-sketch rule.
 
     A port given for a device that is detected right now is stored as that
-    device's own identity (its MAC or USB serial number) when it has one:
-    the pin follows the board, not the socket it happens to be in today. A
-    board with neither is stored as its port, never as what another board
-    left under that port's name. The row answered says what was stored.
+    board's key (``models.board_key``): its MAC, its USB bridge's serial number,
+    or the make of a bridge with neither, so the pin follows the board, not the
+    socket it happens to be in today; never what another board left under that
+    port's name. A make another bridge on the machine shares is stored as the
+    port. The row answered says what was stored.
     """
     site = _get_site_or_404(name)
     if _find_node_by_path(site, path) is None:

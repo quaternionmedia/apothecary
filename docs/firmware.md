@@ -165,9 +165,11 @@ several it refuses to guess.
 The **Bench** is the same toolchain in front of the world: a tab beside
 Pictures (the ring's Panels › Bench; `/firmware` opens the viewer with it). It holds arduino-cli and esptool as installed,
 with **Install** or **Update** (*force* downloads it again); every other
-toolchain module under them -- Rust for the ESP32, its cargo and espflash as
-found, its problems and what it can do -- with an **Install** of its own (`POST
-/firmware/toolchains/{id}/install`; *force* fetches its tools again); Panels ›
+toolchain module under them -- Rust for the ESP32 (its cargo and espflash as
+found) and the [Stream Deck +](stream-deck.md) (a Python package and the system's
+hidapi; it builds nothing) -- each with its problems, what it can do and an **Install** of
+its own (`POST /firmware/toolchains/{id}/install`; *force* fetches its tools again; the
+Stream Deck's is refused and names what installs each tool); Panels ›
 Bench › Install is a ring of the modules, one cell each, drawn from their
 registry (Arduino's arduino-cli, Rust ESP32, and any added later), with the
 slicer's, OrcaSlicer, after them ([the slicer](slicer.md#in-the-page)); the suggested
@@ -337,6 +339,13 @@ counts only for the board the port holds now:
   router on the printer's old port is shown no temperature, job or log of the
   printer's and is never found armed. A job still running is left to fail on
   its own once its board has gone. The same board found again keeps all of it.
+- **A board unplugged lets go of its link.** The first reading of the port list
+  that no longer finds it closes its idle link and drops its control latch
+  (`devices._unplugged`). A link left open to a device that has gone keeps its
+  device node, so the board plugged back in would come up under the next name,
+  `/dev/ttyUSB1` for `/dev/ttyUSB0`, while nothing that polls notices. Its last
+  poll and its comms log are kept for its return, and its first poll back opens
+  the link again. A list that cannot be read closes nothing.
 
 Two limits. Two bridges that say the same of themselves -- no serial number,
 or a generic one -- are told apart by their socket, so one unplugged and its
@@ -427,25 +436,27 @@ link is held (`printers`), and never opens a port itself. A pin talks to no
 printer; the viewer polls a printer whose link is held once as it pins it, so
 the node follows from then.
 
-A pin stores the board's own identity (its MAC, else its USB bridge's serial
-number, else the port), so it still holds when the kernel numbers the port
-differently after a replug. A pin by a path that resolves to the same device
-(`/dev/serial/by-id/…`, a udev name) matches too. The identity is that of the
-board on the port, never of one that held the port before: a bridge with no
-serial number (a CH340) is pinned by its port. The row the pin answers with
-carries what was stored, and the page's status line says it -- the serial
-number or MAC and the port it was found on, or the port alone.
+A board has one key, and a pin, a flash record and a bed reading are kept under
+it (`models.board_key`): its MAC, else its USB bridge's serial number, else, for a
+bridge with no serial number (a CH340), the bridge's make, `usb:1a86:7523`. So a pin
+still holds when the kernel numbers the port differently after a replug: the router
+pinned on `/dev/ttyUSB0` is found on `/dev/ttyUSB1`. The key is that of the board on
+the port, never of one that held the port before. The row the pin answers with
+carries what was stored, and the page's status line says it -- the key and the port
+it was found on.
 
-A pin by its port names no board of its own. A board on the port with a MAC or a
-serial number is another board, which a pin of its own would have named by it:
-the Ender on the port name the router's pin holds is not the router's, its polls
-drive no router node and the family's steps for the router do not reach it. The
-pin keeps the kind of machine its board answered as (`printer`, `router`),
-learning it the first time the board answers if it was pinned before, and a
-board on the port that answers as another kind is another board too. Likewise a
-flash kept by the port of a devkit nothing has probed counts for that devkit
-alone, and no sketch is expected of a board that answers as a printer or a
-router: nothing here flashes it.
+A make is the same for two bridges of one model. While two are plugged in it tells
+neither: a pin or a flash made then is the port's, a pin by the make names no board
+and its row says which ports it is on, and a flash kept under the make counts for
+neither. A key
+by make names no board with a serial number of its own, and none that answered as
+another kind of machine than the pin's: the pin keeps the kind its board answered as
+(`printer`, `router`), learning it the first time the board answers if it was
+pinned before. A pin can be typed as a port, or a path that resolves to the same
+device (`/dev/serial/by-id/…`, a udev name); it names the board on that port when
+the board has no key of its own. A board probed after it was pinned or flashed by
+its make, its MAC read, is the same board. No sketch is expected of a board that
+answers as a printer or a router: nothing here flashes it.
 
 ### In the viewer: one Machine per board
 
@@ -490,8 +501,11 @@ press for. A printer keeps its own firmware and has no Flashing card.
 
 Selected's Device section is one line for a pinned board -- its port and what
 it is doing -- with **Open** (its Machine) and **Unpin**; for a piece with
-nothing pinned, the detected ports to pin, Query (`M115` without pinning) and
-a box to pin by typed identity. The badge over a board in the world opens its
+nothing pinned, the detected ports to pin, Query and a box to pin by typed
+identity. Query asks what a port's board is without pinning it: a printer's
+`M115`, then a router's `$I`. A board that answers neither is named with both
+objections, and one that sent nothing at all to either is said to have: a
+controller switched off behind its powered USB bridge, held by its stop or hung. The badge over a board in the world opens its
 Machine too.
 
 Every drawer of a board -- its badge in the world, its badge in Site's tree,
@@ -577,14 +591,26 @@ it out again, and the ring's Panels › Machine › Control pad does either. Dis
 goes.
 
 What can be sent is a bounded allowlist, `firmware.gcode.CONTROL_CODES`
-(heaters and fan, homing, moves, motors off, SD start, pause and abort, mesh
-on and off, probing, break wait, quickstop), with heater, travel and feed
-caps beside it. Out-of-bounds values are refused before they reach the port;
+(heaters and fan, homing, moves, extrude and retract, motors off, SD start,
+pause and abort, mesh on and off, probing, break wait, quickstop), with heater,
+travel, feed and extrusion caps beside it. Homing is one axis at a time as well as all: a printer's `G28` takes any
+of X, Y and Z (`G28 X`), a router's `$H` is all three and `$HX`, `$HY` and `$HZ` one;
+the pad's Home X, Home Y and Home Z each send their kind's line, and the ring's Home has
+the same, the printer's with XY beside them. Out-of-bounds values are refused before they reach the port;
 there is no EEPROM write and no firmware configuration. A jog is three lines
 (`G91`, `G1 …`, `G90`), so the board is left in absolute mode. The travel cap
 bounds each move, not where the head ends up: jogs one after another add up,
 and the firmware's soft endstops (after a homing) are what keeps the head on
 the machine.
+
+An extrude is one relative `E` move with its own feed, `G1 E<mm> F<mm/min>`: at most
+`gcode.EXTRUDE_MAX_MM` (10 mm) either way, at most `gcode.EXTRUDE_FEED_MAX` (300 mm/min),
+the feed required so a print's faster one is never inherited, and no axis beside it. It
+is the first line that moves the extruder, and it is armed like the rest. `M83` (extruder
+moves are distances) is allowed beside it, since an `M82` a print leaves set would keep
+`G91` from making `E` relative. Marlin's own refusal to extrude below its minimum
+temperature is the only guard against a cold extrude: apothecary does not read the
+hotend's temperature before sending the line.
 
 ```
 POST /firmware/printers/control  {"port": …, "armed": true, "ttl_s": 300}
@@ -607,13 +633,14 @@ drawn the same way whichever took it.
 A printer's: **Read mesh** asks the board for its stored mesh (`M420 V`), the
 probe offset (`M851`) and the temperatures and keeps the three as a *bed
 reading*; it moves nothing and needs no latch. **Probe bed** homes and probes
-(`G28`, `G29`) and then reads; it needs the latch and runs as a job that
+(`G28`, `G29`) and then reads; it is offered once the latch is armed, and runs as a job that
 holds the port, during which polls answer from the last poll, queries and
 control lines get `409`, and E-STOP still goes through. Readings are kept
 under `~/.apothecary/leveling/` and drawn as a heatmap with the range, the
 tilt (a least-squares plane) and each corner against the mean, and as a
-relief over the printer's bed in the world. The corner buttons move the
-nozzle to paper height at each corner and are controls.
+relief over the printer's bed in the world. The corner buttons, offered with
+the probe once the latch is armed, move the nozzle to paper height at each
+corner and are controls.
 `firmware.gcode.parse_meshes` reads Marlin's printed grid and falls back to
 the `G29 W` points an `M503` prints.
 A print's start turns a stored mesh on only through the `stored-mesh` start
@@ -624,7 +651,7 @@ before each print instead ([the slicer's pieces](slicer.md#what-a-slice-is-compo
 
 A router's is a **table map**, its Machine's Table map window where a
 printer's has Bed level. A GRBL controller keeps no mesh, so **Probe table**
-makes one: it needs the latch and runs as the same job. The spindle is turned
+makes one: it is offered once the latch is armed, and runs as the same job. The spindle is turned
 off (`M5`) and the machine homed (`$H`), so machine coordinates mean the
 working area, which is the controller's own word, its maximum travel (`$$`),
 and the tool stands at the top of Z. Then at each point of a grid inside the
@@ -677,7 +704,12 @@ file with what it was kept for, and its ▶ stays refused. A file kept for a
 router is checked in GRBL's terms too ([docs/cnc.md](cnc.md)). **Slice**, beside **makes**, slices the part or piece chosen there for
 the printer and chooses the G-code it keeps, so Print follows Slice; a file a
 slice made says what it was sliced from and for which printer ([the
-slicer](slicer.md#in-the-page)). **Print** needs the latch and starts a job that sends one line per
+slicer](slicer.md#in-the-page)). The card shows each control once what it
+needs holds, in the loop's order: makes and Choose File are the two ways in;
+Slice is there once a part is chosen under makes, the files kept once there is
+one, Keep as plan once a part or a file is chosen, a chosen file's ✕, the
+preview and ▶ Print once a file is chosen, Pause and Cancel while a print runs,
+and Resume while it is paused. **Print** needs the latch and starts a job that sends one line per
 `ok`; a line unanswered for thirty seconds (heat-and-wait and home excepted),
 or answered with an error or a resend, ends the print. While it prints,
 heaters, fan and break-wait stay available; motion, SD, homing, the bed and

@@ -12,6 +12,7 @@ OrcaSlicer of the unit tests. No real serial port is opened.
 
 from __future__ import annotations
 
+import json
 import re
 
 import pytest
@@ -19,6 +20,7 @@ import windows
 from boards import BOARD, PRINTER
 from garage import pin as _pin
 from garage import said as _said
+from garage import status as _status
 from playwright.sync_api import Page, expect
 from rings import labels as _labels
 from rings import open_from_key as _canvas_ring
@@ -26,6 +28,9 @@ from rings import open_on_row as _ring_on
 from rings import press as _press
 from slicer_helpers import write_fake_orcaslicer
 from viewer_ready import settled
+
+from apothecary.firmware.devices import _neither_answered
+from apothecary.firmware.toolchains import ToolchainError
 
 MACHINE = windows.MACHINE
 
@@ -481,3 +486,34 @@ def test_a_piece_made_from_a_picture_has_no_device_section(
     expect(page.locator("#selected-body .device-section")).to_have_count(0)
     _row(page, "printer_1").click()
     expect(page.locator("#selected-body .device-section")).to_be_visible(timeout=10000)
+
+
+@pytest.mark.e2e
+def test_a_query_the_board_refuses_shows_the_servers_words(page: Page, url: str):
+    """Query on a board that answers neither a printer's M115 nor a router's $I shows the
+    server's refusal, which names both, in printer_1's Device and on the status line as an
+    error. The simulated engine answers every port but a router's as the Marlin printer,
+    so the identify request is answered with the refusal the server makes for a board
+    that sent nothing at all."""
+    refused = _neither_answered(
+        PRINTER,
+        ToolchainError(f"{PRINTER}: no `ok` for M115 within 8s (0 lines received)"),
+        ToolchainError(f"{PRINTER}: no `ok` for $I within 8s (0 lines received)"),
+        silent=True,
+    )
+    page.route(
+        "**/firmware/devices/identify",
+        lambda route: route.fulfill(
+            status=503, content_type="application/json", body=json.dumps({"detail": refused})
+        ),
+    )
+    _open(page, url)
+    _row(page, "printer_1").click()
+    section = page.locator("#selected-body .device-section")
+    pick = section.locator(".dev-pick")
+    expect(pick.locator(f"option[value='{PRINTER}']")).to_be_attached(timeout=15000)
+    pick.select_option(PRINTER)
+    section.locator(".dev-query").click()
+    expect(section.locator(".device-query")).to_have_text(refused, timeout=10000)
+    expect(_status(page)).to_have_text(refused)
+    expect(_status(page)).to_have_class(re.compile(r"\berror\b"))

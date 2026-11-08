@@ -66,7 +66,7 @@ Every board unplugged: nothing here opens a port, and nothing can move.
       bridge), each on its own port, and the router's CH340 with no serial
       number. Note which port name each took today, and the router's USB
       socket; the port numbers can swap between plug-ins, and a pin follows its
-      board's serial number.
+      board's serial number, or the router's bridge's make.
 - [ ] **Pin the printer.** Select `printer_1` in Site. Its Device section lists
       the free ports: choose the printer's, **Pin**. The pin goes to the
       printer's mainboard, and when nothing is printing the page asks the
@@ -103,6 +103,9 @@ one machine on the number another held; nothing in them moves a machine.
 - [ ] Pin the router (section I), then plug the printer into the router's
       socket: `cnc_router` does not take the printer, whose serial number its
       pin would have named; its node says *not connected*.
+- [ ] With the router pinned, plug it into another socket and reload the
+      page: whatever port number it takes, `cnc_router` holds it on that
+      port, its pin still `usb:1a86:7523`.
 
 ## A. The link, nothing armed
 
@@ -136,6 +139,11 @@ one machine on the number another held; nothing in them moves a machine.
 
 - [ ] **Home XY**, then **Home Z**: X and Y home, the probe touches at the
       bed's centre, the position card reads X0 Y0 and a Z.
+- [ ] Each axis alone: step **10**, then **X+**, **Y+** and **Z+** once each, so
+      each is 10 mm from zero. **Home X**: only X returns to 0 and the log says
+      `G28 X`; **Home Y** and **Home Z** the same, Z last, with the nozzle clear
+      of the bed. A bare `G28` is never in the log for these; a Z home that Marlin
+      refuses until X and Y are known is noted, with its words.
 - [ ] Step **10**, **Y+**: the bed moves 10 mm; the nozzle marker over the
       printer in the world moves when the button is pressed, and the position
       card confirms within one poll. The ring's Control › Jog › Y+ (⌗728) does
@@ -147,6 +155,15 @@ one machine on the number another held; nothing in them moves a machine.
       parks at each corner at paper height; slide a sheet of paper under it.
       The newest probe's corners on the card say which stand high or low
       against the mean: turn each screw to the paper, then **Home Z**.
+- [ ] **Extrude**, the first control that moves the extruder (from the Stream Deck's
+      fourth knob, section J, or `POST /firmware/printers/command`): with the hotend at a
+      temperature Marlin extrudes at (its own refusal below that is the only guard
+      against a cold extrude) and filament loaded, `M83` then `G1 E5 F200`: the
+      extruder pushes 5 mm; `G1 E-5 F200` pulls it back. `G1 E11 F200` and `G1 E5 F400`
+      are refused before the port (`extrusion beyond 10 mm`, `extrusion feedrate above
+      300`), and `G1 E5` with no feed is refused. Nothing is sent disarmed. After a print
+      that left `M82`, `M83` is what makes the move relative: confirm the position
+      card's E moves by 5, not to 5.
 
 ## D. Armed: levelling
 
@@ -264,7 +281,8 @@ The suites hold every path below against the simulated router; this is how
 the same paths are confirmed on the real machine. Its controller has answered
 `apothecary firmware printer <port>` at 115200 baud: `Grbl 1.3a · Grbl_ESP32`,
 `Idle`, behind a CH340 bridge (`0x1A86:0x7523`) with no USB serial number, so a
-pin follows its port, and keeps the kind of machine its board answered as. The
+pin is kept under the bridge's make, `usb:1a86:7523`, and keeps the kind of machine
+its board answered as. The
 rest of this section has not been walked, so the first boxes record what it says
 ([docs/cnc.md](cnc.md) says what is assumed). Stay at the machine while
 anything turns or moves, with a hand on its own red stop: the page's ⏹ E-STOP
@@ -272,9 +290,9 @@ is the controller's soft reset, and the button is faster. Spindle and motion
 only with the table clear and no tool in the collet until the last box.
 
 - [ ] `uv run apothecary firmware devices` with the router's USB lead in: its
-      port, the bridge's vid:pid and whether it has a serial number (a pin
-      follows the board when it has one, the port when it has not). Note them;
-      the bridge so far is a CH340 without one.
+      port, the bridge's vid:pid and whether it has a serial number (a pin is
+      kept under the serial number when it has one, under the bridge's make
+      when it has not). Note them; the bridge so far is a CH340 without one.
 - [ ] `uv run apothecary firmware printer <port> --query '$I' --query '$$'`:
       the firmware line (`Grbl 1.3a` is what the maker's listing says), the
       machine name, the build, the settings. Note whether opening the port
@@ -304,8 +322,9 @@ only with the table clear and no tool in the collet until the last box.
 - [ ] **Pin the router.** Select `cnc_router` in Site, choose the port in its
       Device section, **Pin**: the pin goes to the controller in the control
       box, the status line says it was asked `$I`, and `cnc_router` wears 🪚.
-      Pinned lists it as `garage › cnc_router.frame_system.controller ← ` and
-      its port; `GET /firmware/pins` gives the pin `"kind": "router"`.
+      Pinned lists it as `garage › cnc_router.frame_system.controller ←
+      usb:1a86:7523`, its bridge's make; `GET /firmware/pins` gives the pin
+      `"kind": "router"`.
 - [ ] Its Machine opens with its plan's part and file chosen, now with its
       board: ▶ Cut is offered.
 - [ ] Open its Machine: `idle`, the controller's word beside it (`Idle`, or
@@ -316,6 +335,14 @@ only with the table clear and no tool in the collet until the last box.
       **Home** (`$H`): the gantry seeks its switches, the state card reads
       `running (Home)` and then `idle`, the machine position reads the
       pull-off near zero. Note which corner is home.
+- [ ] Each axis alone, with the tool well clear of the work and a hand on the red
+      stop: step **10**, **X−**, **Y−**, **Z−** once each, then **Home Z** first, so
+      the tool clears the work, then **Home X**, then **Home Y**. Each sends `$HZ`,
+      `$HX`, `$HY` with no bare `$H`; the state card reads `running (Home)` then
+      `idle`, and only that axis goes to its switch and pulls off, the other two
+      readings unchanged. Only the bench answers whether this Grbl_ESP32 build takes
+      a single-axis home: an `error:` or an `ALARM:` in the log is the answer, noted
+      with its number, and `$H` stays the way to home.
 - [ ] Step **10**, **X−**, **Y−**, **Z−** once each: the tool moves 10 mm, the
       work position follows within one poll, and the marker in the world
       moves the same way over the table; a jog past the travel is refused by
@@ -357,6 +384,65 @@ only with the table clear and no tool in the collet until the last box.
 - [ ] With a tool and stock, the first real cut from a CAM post's file, the
       spindle at its dial's speed: watch the first pass.
 
+## J. The Stream Deck +
+
+Plug the deck in and close Elgato's own software first: it holds the device, and two
+programs cannot. Nothing here moves a machine; the knobs' jogs are further down.
+
+- [ ] `uv sync --extra deck`, then `sudo apt install libhidapi-libusb0` (Debian and
+      Ubuntu). `uv run apothecary check` lists *Stream Deck +* with both tools found;
+      the Bench's card says the same, and its Install is greyed.
+- [ ] `uv run apothecary firmware decks` lists the deck as `0x0fd9:0x0084`, 8 keys,
+      4 knobs, and opens nothing: the deck's screen is as it was. Without the udev
+      rule for the device, a command that acts on it says it cannot be opened.
+- [ ] `PUT /firmware/decks/{id}/keys/0` with `{"text": "X+", "colour": "blue"}` (the
+      id is the one the list gave): key 0, top left, shows *X+* on blue. The strip
+      takes `PUT .../strip`. `GET .../keys/0/image` is the picture sent.
+- [ ] Press each key, turn each knob a click each way, press each knob, tap the strip,
+      hold it and drag across it. `GET .../events` lists each: a key's press and
+      release, a knob's steps (clockwise positive), the press, and the touch's
+      kind and strip coordinates (the strip is 800 wide, 100 tall).
+- [ ] `POST .../release`, then draw a key again: the deck is opened afresh.
+
+Then the knobs. The printer and the router are pinned as in sections C and I, the bed
+clear and the tool clear of stock. Start the layout with
+`POST /firmware/decks/{id}/control` `{"on": true}` (or `APOTHECARY_DECK_CONTROL=1`).
+Keep a hand on each machine's own power switch: it is faster than the deck's stop keys.
+
+- [ ] The top row shows **PRINTER**, **ROUTER**, **STEP**; the bottom row **STOP**
+      (printer_1), **STOP** (cnc_router), a dark key and a bright red **STOP ALL** last,
+      under the right hand; the strip says *printer_1 · disarmed* and the printer's X, Y,
+      Z. **ROUTER** turns the second key green and the strip says *cnc_router*.
+- [ ] Disarmed, turn every knob: nothing moves, the strip says *disarmed*, and the control
+      latch is still disarmed.
+- [ ] Arming from the deck: hold **ROUTER** for a second and let go: the strip says to long
+      press again within 5 s, and control is still disarmed (the Machine's pad). Wait
+      6 s, hold it again: still disarmed. Hold it twice within 5 s: the strip says
+      *armed* with the minutes left, and the Machine's pad pops out red as ⚙ Control's
+      does. A short press, **STEP** or a knob between the two holds breaks the pair.
+- [ ] With the router armed (from the deck or the Machine's ⚙ Control). **STEP** to 1 mm, then knob 1
+      one click clockwise: X moves 1 mm toward +X and the X key shows the new position
+      within a poll (on the strip); counter-clockwise, back. Knobs 2 and 3 the same on Y and Z. At
+      10 mm, a fast turn of 70 clicks is refused (`move beyond 600`) and nothing moves.
+- [ ] With the spindle off, knob 4 does nothing and the strip says *spindle off*. Start
+      it at 8000 from the Machine, with no tool: knob 4 one click clockwise reads 9000,
+      the strip's S says so; held clockwise it stops at 24000 and never above.
+- [ ] Router's **STOP** while a jog of 50 mm is under way, control disarmed: the soft reset,
+      the banner in the log, the spindle off, and the printer untouched. Then the machine's
+      own switch: note which stopped the gantry sooner, in a dated record.
+- [ ] **STOP ALL** with both machines doing something (the spindle turning, the hotend
+      heating): the printer halts (`M112`) and the router resets, each in its own log, and
+      the strip names both. Unplug one machine's USB and press it again: the other still
+      stops and the strip names the one it could not reach.
+- [ ] Choose **PRINTER**, arm its control, bed clear. Knobs 1 to 3 jog X, Y and Z in the
+      chosen step, each one `G91`, `G1 .. F3000`, `G90` in the board's log, and the
+      printer is left in absolute positioning. Disarmed again, the same turn sends
+      nothing.
+- [ ] Knob 4 on the printer, the hotend at a temperature Marlin extrudes at, filament
+      loaded: one click clockwise pushes 1 mm (`M83`, `G1 E1 F200`), counter-clockwise
+      pulls it back. Below Marlin's minimum, the board refuses and the log says so.
+      The printer's **STOP** halts it (`M112`) and the page's E-STOP does too.
+
 ## Results
 
 | Section | Date | Passed | Notes |
@@ -374,3 +460,4 @@ only with the table clear and no tool in the collet until the last box.
 | G. Stop and let go | | | |
 | H. The ESP32 | | | |
 | I. The router | | | |
+| J. The Stream Deck + | | | |

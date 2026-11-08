@@ -146,12 +146,21 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     expect(bench.locator(".module-install[data-id='rust-esp32']")).to_have_attribute(
         "data-address", "4366"
     )
+    # The Stream Deck + after them: a card of its own, its two tools as found, its Install
+    # a cell of Install that cannot be pressed (nothing here fetches a package or hidapi).
+    deck = bench.locator(".tc-module[data-id='stream-deck']")
+    expect(deck).to_contain_text("Stream Deck +")
+    expect(deck).to_contain_text(
+        "can find decks, draw keys and strip, hear keys, knobs and touches"
+    )
+    expect(deck.locator(".module-install")).to_have_attribute("data-address", "4362")
+    expect(deck.locator(".module-install")).to_be_disabled()
     # The slicer after them: OrcaSlicer, none of the person's own found by this server,
     # its Install the last cell of Install.
     slicer = bench.locator(".tc-module[data-slicer='orcaslicer']")
     expect(slicer).to_contain_text("not installed: pinned 2.4.2")
     expect(slicer.locator(".slicer-install")).to_have_text("Install OrcaSlicer")
-    expect(slicer.locator(".slicer-install")).to_have_attribute("data-address", "4362")
+    expect(slicer.locator(".slicer-install")).to_have_attribute("data-address", "4364")
     expect(bench.locator(".core-install[data-id='esp8266:esp8266']")).to_have_attribute(
         "data-address", re.compile(r"^431\d$")
     )

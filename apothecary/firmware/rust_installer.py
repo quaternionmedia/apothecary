@@ -443,7 +443,7 @@ class RustEsp32Installer:
     def env(self) -> Dict[str, str]:
         """The installers' environment: the build's -- no fetch redirects, no
         wrapper, homes in the tools dir."""
-        env = self.module.env(cargo=CARGO.managed_path())
+        env = self.module.env(cargo=CARGO.managed())
         env["CARGO_HOME"] = str(cargo_home())
         env["RUSTUP_HOME"] = str(rustup_home())
         env["RUSTUP_INIT_SKIP_PATH_CHECK"] = "yes"

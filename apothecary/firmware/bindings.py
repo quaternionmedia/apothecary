@@ -21,7 +21,7 @@ from typing import Dict, Iterator, List, Optional, Tuple
 from ..hierarchy import Assembly
 from ..projects.parts.skeleton import ROOT
 from .devices import FirmwareState, detected_devices, expected_firmware, get_state, last_statuses
-from .models import DeviceInfo, FlashRecord, NodeBinding, PrinterStatus, SketchInfo
+from .models import USB_MAKE_RE, DeviceInfo, FlashRecord, NodeBinding, PrinterStatus, SketchInfo
 from .service import BUILD_ROOT
 from .sketches import discover_sketches
 
@@ -76,40 +76,52 @@ def sketch_for_node(
 def same_device(
     identity: str, port: str, device: Optional[DeviceInfo] = None, kind: Optional[str] = None
 ) -> bool:
-    """Whether a pin's ``identity`` names the board on ``port``.
+    """Whether a pin's or a flash record's ``identity`` names the board on ``port``.
 
-    It does when it is -- given what is known about the device there -- its MAC or
-    its USB bridge's serial number, which survive a replug that renumbers the port;
-    or when it is that port, or a path that resolves to the same device node
-    (``/dev/serial/by-id/...``, a udev name). A pin by port is a pin of a board with
-    nothing of its own to be told by: a board on that port with a MAC or a serial
-    number is another one, which its pin would have named by it; and so is a board
-    that answered as another kind of machine than the pin's (``kind``).
+    It does when it is one of the board's keys (``DeviceInfo.names``): its MAC or
+    its USB bridge's serial number, which survive a replug that renumbers the port,
+    or the make of a bridge with no serial number (``usb:1a86:7523``), which is the
+    same for two of one model. A key by make names no board with a serial number,
+    while a board with a MAC is one probed after it was pinned or flashed by its
+    make. A port names the board on it, under that name or a path that resolves to
+    the same device node (``/dev/serial/by-id/...``, a udev name), when that board
+    has no key of its own. Neither names a board that answered as another kind of
+    machine than the pin's (``kind``).
     """
+    other_kind = bool(
+        kind
+        and device is not None
+        and device.printer is not None
+        and device.printer.machine != kind
+    )
     names_the_port = identity == port or (
         identity.startswith("/") and os.path.realpath(identity) == os.path.realpath(port)
     )
     if names_the_port:
         return device is None or not (
-            device.mac
-            or (device.serial_number or "").strip()
-            or (kind and device.printer is not None and device.printer.machine != kind)
+            device.mac or (device.serial_number or "").strip() or other_kind
         )
     if device is None:
         return False
     wanted = identity.lower()
-    if device.mac and device.mac.lower() == wanted:
-        return True
-    return bool(device.serial_number and device.serial_number.lower() == wanted)
+    if USB_MAKE_RE.match(wanted) and other_kind:
+        return False
+    return wanted in device.names
 
 
 def device_for_identity(
     identity: str, found: List[DeviceInfo], kind: Optional[str] = None
 ) -> Optional[DeviceInfo]:
-    for d in found:
-        if same_device(identity, d.port, d, kind):
-            return d
-    return None
+    """The one board ``identity`` names among ``found``; None when none does, or when
+    a make names two (``twins``)."""
+    named = [d for d in found if same_device(identity, d.port, d, kind)]
+    return named[0] if len(named) == 1 else None
+
+
+def twins(identity: str, found: List[DeviceInfo], kind: Optional[str] = None) -> List[str]:
+    """The ports of the boards a key by make names, when it names more than one."""
+    named = [d.port for d in found if same_device(identity, d.port, d, kind)]
+    return named if len(named) > 1 else []
 
 
 def bindings_for_site(
@@ -171,7 +183,13 @@ def bindings_for_site(
             row.binding_source = "manual"
             row.identity = pin.identity
             row.device = device_for_identity(pin.identity, found, pin.kind)
-            if row.device is None:
+            two = twins(pin.identity, found, pin.kind)
+            if two:
+                row.note = (
+                    f"{pin.identity} is on {' and '.join(two)}: two bridges of one make, "
+                    "pin one by its port"
+                )
+            elif row.device is None:
                 row.note = f"{pin.identity} not connected"
         elif sketch is not None:
             running = []

@@ -135,7 +135,8 @@ def test_printer_monitor_workflow(page: Page, base_url: str, doc_recorder):
     section.locator(".dev-query").click()
     expect(section.locator(".device-query")).to_contain_text("Marlin", timeout=10000)
     docs.step(
-        "Query asks the port M115 without pinning it -- a Marlin, so a printer", blank=CHANGING
+        "Query asks the port what it is without pinning it -- a Marlin answers M115, so a printer",
+        blank=CHANGING,
     )
 
     section.locator(".dev-pin").click()

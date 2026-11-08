@@ -19,9 +19,10 @@ Views of one board, kept separate so the GUI can show where they disagree:
   the dialect it answered in. Cached like a probe; polled for temperatures,
   positions and progress afterwards.
 
-Records live in ``~/.apothecary/firmware-state.json`` (``APOTHECARY_STATE_DIR``
-overrides): machine state, not repository state, so it is never committed. A
-print streamed from here is a job (``apothecary/jobs.py``), kept beside them.
+Records live in the state folder's ``firmware-state.json``
+(``apothecary/state_folder.py`` says where the folder is): machine state, not
+repository state, so it is never committed. A print streamed from here is a job
+(``apothecary/jobs.py``), kept beside them.
 
 A probe's or an identification's record is kept under its port's name, and a
 port's name moves: the kernel numbers ports in the order it meets them. So the
@@ -37,7 +38,6 @@ import json
 import os
 import re
 import subprocess
-import tempfile
 import threading
 import time
 from datetime import datetime, timezone
@@ -54,7 +54,7 @@ try:
 except ImportError:
     msvcrt = None
 
-from .. import jobs
+from .. import jobs, state_folder
 from ..preview import Preview, for_machine
 from ..preview import of as preview_of
 from ..preview.moves import split_comments
@@ -66,6 +66,7 @@ from ..stays_local import subprocess_env
 from . import dialects, gcode, grbl, occupants, serial_monitor
 from .models import (
     PRINT_FILE_ID,
+    USB_MAKE_RE,
     BedReading,
     BoardInfo,
     DeviceInfo,
@@ -79,6 +80,7 @@ from .models import (
     PrintFile,
     SketchInfo,
     TableGrid,
+    usb_make,
 )
 from .sketches import find_sketch
 from .toolchains import (
@@ -111,7 +113,8 @@ _PORTS: Optional[tuple] = None  # (monotonic time, {port: BoardInfo})
 def ports_now() -> Dict[str, BoardInfo]:
     """What the serial engine's port list finds on each port right now. A port
     found holding another board than it last held forgets the last one first
-    (``forget_port``)."""
+    (``forget_port``); a port it no longer finds lets go of its link
+    (``_unplugged``)."""
     global _PORTS
     now = time.monotonic()
     if _PORTS and now - _PORTS[0] < PORTS_TTL:
@@ -119,7 +122,8 @@ def ports_now() -> Dict[str, BoardInfo]:
     try:
         listed = {b.port: b for b in serial_monitor.list_ports()}
     except (ToolchainError, OSError):
-        listed = {}  # a list that cannot be read finds nothing: records are kept
+        _PORTS = (now, {})  # a list that cannot be read finds nothing: all is kept
+        return {}
     _PORTS = (now, listed)
     _notice(listed)
     return listed
@@ -142,8 +146,24 @@ def _notice(listed: Dict[str, BoardInfo]) -> None:
             _HELD_BY[port] = now
             if was is not None and was != now:
                 changed.append(port)
+        emptied = [port for port in _HELD_BY if port not in listed]
     for port in changed:
         forget_port(port)
+    for port in emptied:
+        _unplugged(port)
+
+
+def _unplugged(port: str) -> None:
+    """The port list no longer finds the board it found on ``port``: an idle link to
+    it is closed and its latch dropped. A link left open to a device that has gone
+    holds its device node, so the board plugged back in comes up under the next
+    name (``/dev/ttyUSB1`` for ``/dev/ttyUSB0``), and nothing else notices while
+    nothing polls it. Its last poll and its log are kept for its return; a job's
+    link is the job's, which fails on its own."""
+    try:
+        gcode.get_printer_links().close(port)
+    except PortHeld:
+        pass
 
 
 gcode.PORT_LIST_READ = ports_now
@@ -206,29 +226,8 @@ def _sighting(board: BoardInfo) -> dict:
 # --- persistent state -------------------------------------------------------------
 
 
-def state_dir() -> Path:
-    override = os.environ.get("APOTHECARY_STATE_DIR", "").strip()
-    return Path(override).expanduser() if override else Path.home() / ".apothecary"
-
-
-def private_folder(folder: Path) -> Path:
-    """Make ``folder`` (and what is above it, up to the state folder) readable by
-    this account alone: serial numbers, camera labels and readings are the
-    person's, whatever the umask says about the rest of their files."""
-    folder.mkdir(parents=True, exist_ok=True)
-    root = state_dir()
-    for here in [folder, *folder.parents]:
-        try:
-            os.chmod(here, 0o700)
-        except OSError:
-            pass
-        if here == root or root not in here.parents:
-            break
-    return folder
-
-
 def state_file() -> Path:
-    return state_dir() / "firmware-state.json"
+    return state_folder.state_dir() / "firmware-state.json"
 
 
 class _StateLock:
@@ -244,7 +243,7 @@ class _StateLock:
     def __enter__(self):
         self._thread.acquire()
         try:
-            private_folder(self.path.parent)
+            state_folder.private_folder(self.path.parent)
             self._fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600)
             if fcntl is not None:
                 fcntl.flock(self._fd, fcntl.LOCK_EX)
@@ -301,11 +300,7 @@ class FirmwareState:
         return data
 
     def _save(self, data: dict) -> None:
-        private_folder(self.path.parent)
-        fd, tmp = tempfile.mkstemp(dir=self.path.parent, prefix=".firmware-state.", suffix=".tmp")
-        with os.fdopen(fd, "w", encoding="utf-8") as out:
-            out.write(json.dumps(data, indent=2, default=str))
-        os.replace(tmp, self.path)
+        state_folder.write_whole(self.path, json.dumps(data, indent=2, default=str))
 
     def record_flash(self, record: FlashRecord) -> None:
         with self._lock:
@@ -317,20 +312,31 @@ class FirmwareState:
     def flashes(self) -> List[FlashRecord]:
         return [FlashRecord(**f) for f in self._load()["flashes"]]
 
-    def last_flash(
-        self, identity: str, port: Optional[str] = None, board: Optional[str] = None
-    ) -> Optional[FlashRecord]:
-        """Newest record for a MAC; falls back to the port for never-probed boards,
-        a record that names its board (``board``, a key) counting for that one alone."""
+    def last_flash(self, device: DeviceInfo) -> Optional[FlashRecord]:
+        """The newest record of what was flashed to ``device``: one kept under any of
+        its keys, as a pin is told (``bindings.same_device``). A key by make shared
+        with a twin on the machine now names neither, and counts for neither."""
+        from .bindings import same_device
+
+        make = None if (device.serial_number or "").strip() else usb_make(device.vid, device.pid)
+        shared = make is not None and any(
+            other != device.port and occupants.key_of(seen) == make
+            for other, seen in ports_now().items()
+        )
         newest: Optional[FlashRecord] = None
         for rec in self.flashes():
-            by_port = port and rec.mac is None and rec.port == port
-            if by_port and rec.board is not None and board is not None and rec.board != board:
-                by_port = False
-            if rec.identity == identity or by_port:
+            if shared and rec.identity.lower() == make:
+                continue
+            if same_device(rec.identity, device.port, device):
                 if newest is None or rec.flashed_at >= newest.flashed_at:
                     newest = rec
         return newest
+
+    def flashed_to(self, port: str) -> Optional[FlashRecord]:
+        """The newest record of a flash made through ``port``, whichever board took it:
+        what a simulated devkit, which is its port, runs."""
+        records = [rec for rec in self.flashes() if rec.port == port]
+        return max(records, key=lambda rec: rec.flashed_at, default=None)
 
     def remember_device(self, device: DeviceInfo) -> None:
         """Keep ``device`` as the record of the board on its port, beside what the
@@ -345,15 +351,16 @@ class FirmwareState:
                 data["seen"][device.port] = _sighting(seen)
             else:
                 data["seen"].pop(device.port, None)
-            # A pin by this port learns the kind of machine its board answered as, the
+            # A pin of this board learns the kind of machine its board answered as, the
             # first time it answers: a board answering as another kind later is another.
             if kind is not None:
                 from .bindings import same_device
 
                 for pin in data["bindings"]:
-                    if pin.get("kind") is None and pin.get("identity") in (device.port,):
-                        if same_device(pin["identity"], device.port, device):
-                            pin["kind"] = kind
+                    if pin.get("kind") is None and same_device(
+                        pin["identity"], device.port, device
+                    ):
+                        pin["kind"] = kind
             self._save(data)
 
     def cached_device(self, port: str) -> Optional[DeviceInfo]:
@@ -475,12 +482,12 @@ def make_flash_record(
     state = state or get_state()
     cached = state.cached_device(port)
     mac = cached.mac if cached else None
-    on_port = occupants.on_port(port, state)
     return FlashRecord(
-        identity=mac or port,
+        # The key a pin made now would store: the board's, from its record or the
+        # scan, or the port while a twin of its bridge is on the machine.
+        identity=stable_identity(port, state),
         port=port,
         mac=mac,
-        board=on_port.key if on_port is not None else None,
         sketch=sketch.name if sketch else None,
         sketch_id=sketch.id if sketch else None,
         toolchain=sketch.toolchain if sketch else None,
@@ -503,7 +510,7 @@ def expected_firmware(
         # which nothing here flashes: whatever a devkit on its port was last flashed
         # with is not what it should run.
         return ExpectedFirmware()
-    record = state.last_flash(device.identity, device.port, occupants.key_of(device))
+    record = state.last_flash(device)
     if record is None:
         return ExpectedFirmware()
     out = ExpectedFirmware(record=record)
@@ -526,7 +533,9 @@ def expected_firmware(
 # ``arduino-cli board list`` takes ~2 s; the viewer's board model, a Machine
 # and the Bench each ask for it, often within a second of one another. A short-lived cache of the raw scan (cached probes are merged
 # afresh each call) turns those into one scan. Long enough to coalesce a
-# page's requests, short enough that a replug shows on the next click.
+# page's requests, short enough that a replug shows on the next click. Its age
+# counts from when the scan ended: a scan as long as this would otherwise be
+# stale before anyone could read it.
 SCAN_TTL = 2.0
 _SCAN: Optional[tuple] = None  # (monotonic time, cli, boards)
 
@@ -565,18 +574,20 @@ def _scan_modules():
     return sorted(found.values(), key=lambda b: b.port)
 
 
-def scan_ports(cli: Optional[ArduinoCli] = None, fresh: bool = False):
-    """The ports the toolchain modules find; with ``cli``, that arduino-cli's alone."""
+def scan_ports(cli: Optional[ArduinoCli] = None, fresh: bool = False, any_age: bool = False):
+    """The ports the toolchain modules find; with ``cli``, that arduino-cli's alone.
+    ``any_age`` takes the newest scan however old it is, and scans only when there
+    is none."""
     global _SCAN
     key = cli if cli is not None else "modules"
     now = time.monotonic()
-    if not fresh and _SCAN and _SCAN[1] is key and now - _SCAN[0] < SCAN_TTL:
+    if not fresh and _SCAN and _SCAN[1] is key and (any_age or now - _SCAN[0] < SCAN_TTL):
         return _SCAN[2]
     if cli is not None:
         boards = [b.model_copy(update={"found_by": "arduino"}) for b in cli.board_list()]
     else:
         boards = _scan_modules()
-    _SCAN = (now, key, boards)
+    _SCAN = (time.monotonic(), key, boards)
     return boards
 
 
@@ -590,18 +601,31 @@ def found_by(port: str) -> Optional[str]:
 
 
 def detected_devices(
-    cli: Optional[ArduinoCli] = None, state: Optional[FirmwareState] = None, fresh: bool = False
+    cli: Optional[ArduinoCli] = None,
+    state: Optional[FirmwareState] = None,
+    fresh: bool = False,
+    any_age: bool = False,
 ) -> List[DeviceInfo]:
     """Every serial port the toolchain modules find, merged with the record of the
     board on it: a record of another board (``FirmwareState.cached_device``, and
     here the scan's own vendor, product and serial number) is left out.
 
     ``fresh`` bypasses the short scan cache (an explicit rescan button); ``cli``
-    asks that arduino-cli alone.
+    asks that arduino-cli alone. ``any_age`` reads the newest scan however old,
+    starting none once one has been made, which the ring's machines need at once:
+    a board on a port the serial engine's list found and no longer finds is left
+    out, unplugged since, and a board plugged in since is not there until the next
+    scan, which the page's board model asks for as it polls.
     """
     state = state or get_state()
     devices: List[DeviceInfo] = []
-    for b in scan_ports(cli, fresh):
+    boards = scan_ports(cli, fresh, any_age=True) if any_age else scan_ports(cli, fresh)
+    if any_age:
+        listed = ports_now()
+        with _HELD_LOCK:
+            seen = set(_HELD_BY)
+        boards = [b for b in boards if b.port in listed or b.port not in seen]
+    for b in boards:
         info = DeviceInfo(
             port=b.port,
             label=b.label,
@@ -735,16 +759,33 @@ def _identify(link: gcode.GcodeLink, reset: bool) -> PrinterInfo:
     """What answers on the link: Marlin's ``M115`` first, and when nothing Marlin
     answers, GRBL's ``$I``. A GRBL controller answers ``M115`` with ``error:20``, a
     Marlin board ``$I`` with an unknown-command echo, so each is harmless to the
-    other; the first objection is the one raised when neither answers."""
+    other. When neither answers, the refusal names both questions and each one's
+    objection, and says so when the board sent nothing at all to either."""
+    heard = link.heard
     try:
         return gcode.identify_printer(link, reset=reset)
     except ToolchainError as marlin_said:
         try:
             info = grbl.identify_router(link)
-        except ToolchainError:
-            raise marlin_said from None
+        except ToolchainError as grbl_said:
+            raise ToolchainError(
+                _neither_answered(link.port, marlin_said, grbl_said, silent=link.heard == heard)
+            ) from None
         _annotated(link, info.dialect)
         return info
+
+
+def _neither_answered(port: str, marlin_said: Exception, grbl_said: Exception, silent: bool) -> str:
+    """Why ``port`` is neither a printer nor a router: both questions and what each
+    met, the port named once."""
+    said = "; ".join(str(e).removeprefix(f"{port}: ") for e in (marlin_said, grbl_said))
+    if silent:
+        return (
+            f"{port} sent nothing at all to a printer's M115 or a router's $I ({said}): "
+            "a board answers neither while its machine is switched off, held by its stop, "
+            "or hung until its power is cycled"
+        )
+    return f"{port} answered neither a printer's M115 nor a router's $I ({said})"
 
 
 def _annotated(link: gcode.GcodeLink, dialect: Optional[str]) -> gcode.GcodeLink:
@@ -836,18 +877,25 @@ def machine_kind(device: Optional[DeviceInfo]) -> Optional[str]:
 
 
 def stable_identity(identity: str, state: Optional[FirmwareState] = None) -> str:
-    """The identity of the board on a port -- the one there now, or the one last
-    there when the port is empty -- else ``identity``.
+    """The key of the board on a port -- the one there now, or the one last there
+    when the port is empty -- else ``identity``.
 
-    A pin made by port would break the next time the kernel numbered the
-    port differently; the MAC or the USB bridge's serial number does not. A
-    board with neither (a CH340 bridge has no serial number) is pinned by its
-    port: never by what another board left under that port's name.
+    A pin made by port would break the next time the kernel numbered the port
+    differently; the board's key does not (``models.board_key``): its MAC, its
+    bridge's serial number, or the make of a bridge with neither (a CH340). A make
+    another bridge on the machine shares tells neither, so that board is pinned by
+    its port, and never by what another board left under that port's name.
     """
     if not identity.startswith("/") and not identity.upper().startswith("COM"):
-        return identity  # already a MAC or a serial number
+        return identity  # already a key
     device = known_device(identity, state)
-    return device.identity if device is not None else identity
+    if device is None or device.identity == device.port:
+        return identity
+    if USB_MAKE_RE.match(device.identity):
+        on_port = occupants.on_port(identity, state)
+        if on_port is None or on_port.shared:
+            return identity
+    return device.identity
 
 
 # Who wants to know a printer's state after each poll: api.py registers the
@@ -1074,7 +1122,7 @@ def port_of(job: dict) -> str:
 
 
 def leveling_dir() -> Path:
-    return state_dir() / "leveling"
+    return state_folder.state_dir() / "leveling"
 
 
 def leveling_records(port: Optional[str] = None) -> List[LevelingRecord]:
@@ -1127,7 +1175,7 @@ def leveling_record(record_id: str) -> Optional[LevelingRecord]:
 def _save_leveling(record: LevelingRecord) -> Path:
     """Keep ``record`` under its id, or its id with ``-2``, ``-3``… after it when another
     reading has that id (two in one millisecond); the record takes the id it is kept under."""
-    kept = claim(private_folder(leveling_dir()), record.id, ".json")
+    kept = claim(state_folder.private_folder(leveling_dir()), record.id, ".json")
     record.id = kept.name.removesuffix(".json")
     kept.write_text(record.model_dump_json(indent=2), encoding="utf-8")
     return kept
@@ -1302,7 +1350,7 @@ def start_leveling(
 
 
 def prints_dir() -> Path:
-    return state_dir() / "prints"
+    return state_folder.state_dir() / "prints"
 
 
 def _print_meta_path(file_id: str) -> Path:
@@ -1319,12 +1367,12 @@ def save_print_file(name: str, data: bytes, machine: Optional[str] = None) -> Pr
     if machine is not None and machine not in dialects.BY_MACHINE:
         raise ValueError(f"no kind of machine is called {machine!r}")
     text = data.decode("utf-8", "replace")
-    total, problems = gcode.check_gcode(text, machine)
+    total, problems = dialects.by_machine(machine).check_file(text)
     at = datetime.now(timezone.utc)
     stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", Path(name).name).strip("_.") or "print"
     stem = re.sub(r"\.(gcode|gco|g|txt)$", "", stem, flags=re.IGNORECASE)[:60]
     # Its own id, though another file of the same name was kept in the same millisecond.
-    kept = claim(private_folder(prints_dir()), f"{stamp(at)}-{stem}", ".gcode")
+    kept = claim(state_folder.private_folder(prints_dir()), f"{stamp(at)}-{stem}", ".gcode")
     file_id = kept.name.removesuffix(".gcode")
     kept.write_text(text, encoding="utf-8")
     meta = PrintFile(
@@ -1338,21 +1386,6 @@ def save_print_file(name: str, data: bytes, machine: Optional[str] = None) -> Pr
         machine=machine,
     )
     _print_meta_path(file_id).write_text(meta.model_dump_json(indent=2), encoding="utf-8")
-    return meta
-
-
-# Where a slice's record and a toolpath's are kept, by the file each made
-# (slicer/service.py, cam/service.py): what says which kind of machine a file kept
-# before files said is for.
-_MADE_FOR = {"slices": "printer", "cuts": "router"}
-
-
-def _with_its_kind(meta: PrintFile) -> PrintFile:
-    if meta.machine is not None:
-        return meta
-    for folder, machine in _MADE_FOR.items():
-        if (state_dir() / folder / f"{meta.id}.json").is_file():
-            return meta.model_copy(update={"machine": machine})
     return meta
 
 
@@ -1384,7 +1417,7 @@ def print_files() -> List[PrintFile]:
         except (OSError, ValueError):
             continue
         if _print_file_path(meta.id).is_file():
-            files.append(_with_its_kind(meta))
+            files.append(meta)
     return sorted(files, key=lambda f: f.uploaded_at, reverse=True)
 
 
@@ -1400,7 +1433,7 @@ def print_file(file_id: str) -> Optional[PrintFile]:
     if not path.is_file() or not _print_file_path(file_id).is_file():
         return None
     try:
-        return _with_its_kind(PrintFile(**json.loads(path.read_text(encoding="utf-8"))))
+        return PrintFile(**json.loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         return None
 
