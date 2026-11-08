@@ -338,6 +338,25 @@ def test_a_real_deck_is_opened_by_what_acts_on_it_and_its_reports_are_events(rea
     assert plus.callbacks["key"] is None
 
 
+def test_a_real_deck_that_will_not_open_says_why_and_is_tried_again(real, client):
+    """The library's open fails as it does when this account may not write the deck's
+    USB device: the deck is refused naming the udev rule, the route answers 503 with it,
+    and nothing is kept, so the same deck opens on the next try once the rule is in."""
+    plus, _ = real
+
+    def will_not_open():
+        raise RuntimeError("Could not open HID device.")
+
+    plus.open = will_not_open
+    with pytest.raises(DeckUnavailable, match="udev rule"):
+        deck.get_decks().get("path_one")
+    answer = client.get("/firmware/decks/path_one")
+    assert answer.status_code == 503, answer.text
+    assert "would not open (Could not open HID device.)" in answer.json()["detail"]
+    del plus.open  # the rule in place
+    assert deck.get_decks().get("path_one").info.serial == "CL12345" and plus.opened == 1
+
+
 def test_without_the_hid_library_a_real_listing_says_so(monkeypatch):
     monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "pyserial")
 

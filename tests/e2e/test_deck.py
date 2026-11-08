@@ -14,6 +14,9 @@ reaches the network. A real deck is section J of the bench checklist
 
 from __future__ import annotations
 
+import json
+import re
+
 import httpx
 import pytest
 import windows
@@ -152,3 +155,29 @@ def test_the_deck_is_drawn_from_here_and_what_it_hears_is_listed(page: Page, url
         "strip's own pixels, 800 across.",
     )
     assert windows.state(page, "deck")["open"]
+
+
+@pytest.mark.e2e
+def test_a_deck_that_will_not_open_says_why_in_its_window(page: Page, url: str):
+    """A deck listed whose state is refused, as a real one's is while this account may not
+    write its USB device, says why in the window's note in place of what the deck is; the
+    note is the deck's again on the first beat the deck answers."""
+    said = (
+        "the Stream Deck + is found but would not open (Could not open HID device.): this "
+        "account may not write its USB device; docs/stream-deck.md gives the udev rule"
+    )
+    state = re.compile(rf".*/firmware/decks/{DECK_ID}$")
+    page.route(
+        state,
+        lambda route: route.fulfill(
+            status=503, content_type="application/json", body=json.dumps({"detail": said})
+        ),
+    )
+    open_garage(page, url)
+    select(page, "stream_deck")
+    page.locator("#selected-body .deck-open").click()
+    deck = page.locator(DECK)
+    expect(deck.locator(".deck-note")).to_have_text(said, timeout=10000)
+    expect(deck.locator(".deck-events")).to_contain_text("nothing heard yet")
+    page.unroute(state)
+    expect(deck.locator(".deck-note")).to_contain_text("a simulated deck", timeout=10000)

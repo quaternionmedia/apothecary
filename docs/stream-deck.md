@@ -23,9 +23,18 @@ either, the module is not installed, every other part of apothecary works as bef
 and `GET /firmware/decks` answers `{"decks": [], "problem": "..."}` naming what to
 install.
 
-A person who is not root on the machine usually needs a udev rule to open a HID
-device; Elgato's vendor id is `0x0fd9` and the Stream Deck +'s product id `0x0084`.
-The library's own README gives the rule.
+A person who is not root on the machine needs a udev rule to open the deck: the
+library opens it through libusb, and its USB device is root's to write. Elgato's
+vendor id is `0x0fd9` and the Stream Deck +'s product id `0x0084`; the library's
+documentation gives this rule, for every Elgato deck:
+
+```bash
+printf 'SUBSYSTEMS=="usb", ATTRS{idVendor}=="0fd9", GROUP="users", TAG+="uaccess"\n' | sudo tee /etc/udev/rules.d/10-streamdeck.rules
+sudo udevadm control --reload-rules     # then unplug the deck and plug it in again
+```
+
+Without it the deck is listed and not opened: `GET /firmware/decks/{id}` answers 503
+naming the rule, and the Deck window says the same.
 
 Apothecary connects to nothing off this machine for this: the library enumerates and
 reads HID reports through the system's hidapi, and the process stays under the guard

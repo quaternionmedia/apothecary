@@ -37,7 +37,7 @@ const heard = (e) => {
 export function mountDeck(root, { base = "", log = null } = {}) {
     root.innerHTML = MARKUP;
     const $ = (sel) => root.querySelector(sel);
-    let alive = true, timer = null, deck = null, last = 0, drawn = null, lines = [];
+    let alive = true, timer = null, deck = null, last = 0, drawn = null, lines = [], problem = null;
     const say = (text, kind = "") => { if (log) log(text, kind); };
 
     async function api(path, opts = {}) {
@@ -72,7 +72,9 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         const at = `${base}/firmware/decks/${encodeURIComponent(deck.id)}`;
         root.querySelectorAll(".deck-key").forEach((b, i) => picture(b, `${at}/keys/${i}/image?v=${stamp(keys[i])}`, !!keys[i]));
         picture($(".deck-strip-tap"), `${at}/strip/image?v=${stamp(drawn && drawn.strip_drawn)}`, !!(drawn && drawn.strip_drawn));
-        $(".deck-note").textContent = inputs
+        $(".deck-note").textContent = problem
+            ? problem
+            : inputs
             ? "a simulated deck: press a key, turn or press a knob, tap the strip; each is the event a real deck reports"
             : "a real deck is pressed by hand; what it shows is what was last sent to it from here";
         $(".deck-events").innerHTML = lines.length ? lines.map((t) => `<li>${esc(t)}</li>`).join("") : '<li class="empty">nothing heard yet</li>';
@@ -106,7 +108,12 @@ export function mountDeck(root, { base = "", log = null } = {}) {
             const news = await api(`/firmware/decks/${encodeURIComponent(deck.id)}/events?since=${last}`);
             for (const e of news.events) if (e.seq > last) lines = [heard(e), ...lines].slice(0, 12);
             last = Math.max(last, news.last);
-        } catch (e) { say(`Deck: ${e.message}`, "bad"); }
+            problem = null;
+        } catch (e) {
+            // Said once, and shown in the window for as long as it lasts.
+            if (e.message !== problem) say(`Deck: ${e.message}`, "bad");
+            problem = e.message;
+        }
         render();
         return deck;
     }

@@ -212,7 +212,13 @@ class HidLink:
 
     def __init__(self, device, report: Report):
         self.device, self.report = device, report
-        device.open()
+        try:
+            device.open()
+        except Exception as exc:  # noqa: BLE001 -- the library's TransportError: the device would not open
+            raise DeckUnavailable(
+                f"the Stream Deck + is found but would not open ({exc}): this account may not "
+                "write its USB device; docs/stream-deck.md gives the udev rule"
+            ) from exc
         device.set_key_callback(self._key)
         device.set_dial_callback(self._dial)
         device.set_touchscreen_callback(self._touch)
