@@ -1681,6 +1681,8 @@ def control_options(device: Device) -> List[Option]:
                 Option(id="control:home:all", label="All", action="control:home"),
                 Option(id="control:home-xy", label="XY", action="control:home-xy"),
                 Option(id="control:home-z", label="Z", action="control:home-z"),
+                Option(id="control:home-x", label="X", action="control:home-x"),
+                Option(id="control:home-y", label="Y", action="control:home-y"),
             ],
         ),
         Option(

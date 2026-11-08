@@ -703,6 +703,8 @@ def test_the_control_ring_offers_every_allowlisted_verb():
         "control:home",
         "control:home-xy",
         "control:home-z",
+        "control:home-x",
+        "control:home-y",
         "control:jog:Y+",
         "control:jog:X+",
         "control:jog:Y-",

@@ -12,7 +12,7 @@
  * on its node (the rest its polls set), `feedMax` and `feedDefault` the jog feed's
  * bound and default in mm/min, `files` what a job streams, `slice` whether a file
  * is sliced here, `verb` what a person does with a file, `volume` what its build
- * volume is called, `level` its bed reading's words (a printer's bed, a router's
+ * volume is called, `homeAxis` the title of an axis's home button, `level` its bed reading's words (a printer's bed, a router's
  * table map: the card, its probe button, the stats line, the question asked before
  * the machine moves). A devkit runs nothing from here and has the few words below.
  */
@@ -27,6 +27,7 @@ export const KINDS = {
         prepare: "Slice",
         prepareTitle: "Slice what is chosen under makes for this printer: its G-code is kept here and chosen, so ▶ Print follows. Writes files only; nothing is sent to the printer. Its ring's Slice does the same",
         identify: "M115", poll: "One poll now (M105/M114/M27/M119)", queries: "report code — M503, M119, M20, M420 V …",
+        homeAxis: (a) => `Home ${a} alone (G28 ${a}): the other axes stay where they stand. Moves the machine: control must be armed`,
         start: "▶ Print", title: "Print from here",
         startTitle: "Stream the chosen file to the printer. Heats and moves: control must be armed. ⌗ Control › Print › Send file",
         pause: "Stop feeding lines; the printer finishes what it has queued",
@@ -45,6 +46,7 @@ export const KINDS = {
         prepare: "Toolpath",
         prepareTitle: "Write the toolpath of what is chosen under makes for this router, from the cuts the part declares: it is kept here and chosen, so ▶ Cut follows. Writes files only; nothing is sent to the router. Its ring's Toolpath does the same",
         identify: "$I", poll: "One poll now (? and $G)", queries: "query — $$, $#, $G, $I, ?",
+        homeAxis: (a) => `Home ${a} alone ($H${a}): the other axes stay where they stand. Moves the machine: control must be armed`,
         start: "▶ Cut", title: "Cut from here",
         startTitle: "Stream the chosen file to the router. Turns the spindle and moves: control must be armed. ⌗ Control › Cut › Send file",
         pause: "Feed hold: the controller stops where it is, and nothing more is fed",

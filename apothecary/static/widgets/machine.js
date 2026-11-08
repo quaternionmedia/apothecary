@@ -270,7 +270,8 @@ const CONTROL = `
             </div>
             <div class="row steps">step <button type="button" data-step="0.1">0.1</button><button type="button" data-step="1">1</button><button type="button" data-step="10" class="on">10</button><button type="button" data-step="50">50</button> mm
                 · F <input type="number" id="h-feed" min="10" max="12000" step="100" value="3000" title="How fast to jog, in mm/min"></div>
-            <div class="row printer-only"><button type="button" data-cmd="G28 X Y">Home XY</button><button type="button" data-cmd="G28 Z">Home Z</button><button type="button" data-cmd="M84">Motors off</button><button type="button" data-cmd="M410">Quickstop</button></div>
+            <div class="row"><button type="button" data-cmd="HOME-X">Home X</button><button type="button" data-cmd="HOME-Y">Home Y</button><button type="button" data-cmd="HOME-Z">Home Z</button></div>
+            <div class="row printer-only"><button type="button" data-cmd="G28 X Y">Home XY</button><button type="button" data-cmd="M84">Motors off</button><button type="button" data-cmd="M410">Quickstop</button></div>
             <div class="row router-only"><button type="button" data-cmd="$X" title="Unlock after an alarm ($X): the controller moves again, where it believes it is">Unlock</button><button type="button" data-cmd="G53 G0 Z0" title="The tool to the top of its travel, in machine coordinates">Top of Z</button><button type="button" data-cmd="G0 X0 Y0" title="The tool over the work zero, at its height">Go to zero</button><button type="button" data-cmd="JOG-CANCEL" title="Stop a jog in flight">Stop jog</button></div>
         </div>
         <div class="grp printer-only">
@@ -311,6 +312,8 @@ const LINES = {
     "control:fan-on": (m) => m.fillTemplate("M106 S{h-fan}"),
     "control:fan-off": () => "M107",
     "control:home": () => "G28",
+    "control:home-x": () => "G28 X",
+    "control:home-y": () => "G28 Y",
     "control:home-xy": () => "G28 X Y",
     "control:home-z": () => "G28 Z",
     "control:sd-resume": () => "M24",
@@ -353,7 +356,7 @@ const BY_CMD = {
     "M104 S{h-hot}": "control:hotend-on", "M104 S0": "control:hotend-off",
     "M140 S{h-bed}": "control:bed-on", "M140 S0": "control:bed-off",
     "M106 S{h-fan}": "control:fan-on", "M107": "control:fan-off",
-    "HOME": "control:home", "G28 X Y": "control:home-xy", "G28 Z": "control:home-z",
+    "HOME": "control:home", "HOME-X": "control:home-x", "HOME-Y": "control:home-y", "HOME-Z": "control:home-z", "G28 X Y": "control:home-xy",
     "M24": "control:sd-resume", "M25": "control:sd-pause", "M524": "control:sd-abort", "M84": "control:motors-off",
     "M410": "control:quickstop", "M108": "control:break-wait", "M420 S1": "control:mesh-on", "M420 S0": "control:mesh-off",
     "$X": "control:unlock", "M3 S{r-rpm}": "control:spindle-on", "M5": "control:spindle-off",
@@ -466,6 +469,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             if (changed || Number(feed.value) > w.feedMax) feed.value = String(w.feedDefault);
             $("print-file").accept = w.files; $("print-file").title = w.fileTitle;
             $("print-part").title = w.partTitle;
+            for (const b of pad.querySelectorAll('button[data-cmd^="HOME-"]')) b.title = w.homeAxis(b.dataset.cmd.slice(-1));
             $("level-title").textContent = w.level.card; $("level-probe").textContent = w.level.button; $("level-probe").title = w.level.buttonTitle;
         }
         if (changed) state.codesLoaded = false;
@@ -1024,8 +1028,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             // resets the controller itself and stops or starts feeding with it.
             const verb = HOST_VERBS[BY_CMD[btn.dataset.cmd]];
             if (verb && prt.job && prt.job.running) { printVerb(verb); return; }
-            // One home button for both G-code machines: each dialect's line.
-            sendControl(btn.dataset.cmd === "HOME" ? LINES_OF()["control:home"](handle) : fillTemplate(btn.dataset.cmd));
+            // One home button per axis, and for all, for both G-code machines: each dialect's line.
+            sendControl(btn.dataset.cmd.startsWith("HOME") ? LINES_OF()[BY_CMD[btn.dataset.cmd]](handle) : fillTemplate(btn.dataset.cmd));
         }
     });
 
