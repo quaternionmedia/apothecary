@@ -150,6 +150,15 @@ one machine on the number another held; nothing in them moves a machine.
       parks at each corner at paper height; slide a sheet of paper under it.
       The newest probe's corners on the card say which stand high or low
       against the mean: turn each screw to the paper, then **Home Z**.
+- [ ] **Extrude**, the first control that moves the extruder (from the Stream Deck's
+      fourth knob, section J, or `POST /firmware/printers/command`): with the hotend at a
+      temperature Marlin extrudes at (its own refusal below that is the only guard
+      against a cold extrude) and filament loaded, `M83` then `G1 E5 F200`: the
+      extruder pushes 5 mm; `G1 E-5 F200` pulls it back. `G1 E11 F200` and `G1 E5 F400`
+      are refused before the port (`extrusion beyond 10 mm`, `extrusion feedrate above
+      300`), and `G1 E5` with no feed is refused. Nothing is sent disarmed. After a print
+      that left `M82`, `M83` is what makes the move relative: confirm the position
+      card's E moves by 5, not to 5.
 
 ## D. Armed: levelling
 

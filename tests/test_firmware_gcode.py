@@ -1071,6 +1071,56 @@ def test_control_allowlist_and_bounds():
             gcode.normalise_control(cmd)
 
 
+def test_an_extrude_is_one_bounded_relative_move_with_its_own_feed():
+    """The first extrude control: a relative E move of at most EXTRUDE_MAX_MM at most
+    EXTRUDE_FEED_MAX mm/min, its feed named so a print's is not inherited, and M83 to say
+    E moves are distances (M82 left by a print would make G91 leave E absolute)."""
+    assert (gcode.EXTRUDE_MAX_MM, gcode.EXTRUDE_FEED_MAX) == (10, 300)
+    assert gcode.normalise_control("m83") == "M83"
+    assert gcode.normalise_control(" g1  e5   f200 ") == "G1 E5 F200"
+    assert gcode.normalise_control("G1 E-10 F300") == "G1 E-10 F300"
+    assert gcode.normalise_control("G1 E0.5 F60") == "G1 E0.5 F60"
+    for over in ("G1 E10.5 F200", "G1 E-11 F200", "G1 E99 F200", "G1 E5 F301", "G1 E5 F999"):
+        with pytest.raises(gcode.OutOfBounds):
+            gcode.normalise_control(over)
+    for refused in (
+        "G1 E5",  # no feed: the print's would be inherited
+        "G1 E100 F200",
+        "G1 X10 E5 F200",  # E with an axis
+        "G0 E5 F200",
+        "G1 E5 F5",
+        "G1 E5 F2000",
+        "G1 E5.123 F200",
+        "M82",
+        "G1 E5 F200; M104 S300",
+        "G92 E0",
+    ):
+        with pytest.raises(ValueError):
+            gcode.normalise_control(refused)
+
+
+def test_an_extrude_goes_to_the_board_only_while_control_is_armed(
+    fake_arduino_cli, fresh_task_runner, scripted_links
+):
+    c = TestClient(app)
+    port = "/dev/ttyFAKE1"
+
+    def send(command):
+        return c.post("/firmware/printers/command", json={"port": port, "command": command})
+
+    unarmed = send("G1 E5 F200")
+    assert unarmed.status_code == 409 and "not armed" in unarmed.json()["detail"]
+    assert not ScriptedTransport.instances  # nothing reached a port
+    c.post("/firmware/printers/control", json={"port": port, "armed": True, "ttl_s": 60})
+    for over in ("G1 E50 F200", "G1 E5 F600", "G1 E5"):
+        assert send(over).status_code == 422, over
+    assert not ScriptedTransport.instances  # armed, and still nothing out of bounds went out
+    assert send("m83").status_code == 200
+    ok = send("g1 e-5 f200")
+    assert ok.status_code == 200 and ok.json()["command"] == "G1 E-5 F200"
+    assert ScriptedTransport.instances[0].sent[-2:] == ["M83", "G1 E-5 F200"]
+
+
 def test_control_latch_arms_renews_and_lapses(monkeypatch):
     latch = gcode.ControlLatch()
     assert not latch.armed("/dev/x") and latch.seconds_left("/dev/x") == 0

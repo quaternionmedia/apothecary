@@ -1047,6 +1047,8 @@ HOTEND_MAX_C = 300
 BED_MAX_C = 130
 JOG_MAX_MM = 300
 FEED_MAX = 12000
+EXTRUDE_MAX_MM = 10  # one extrude or retract move, relative: filament, never a whole spool
+EXTRUDE_FEED_MAX = 300  # mm/min; a move names its feed, never inheriting a print's
 CONTROL_CODES: List[tuple] = [
     (re.compile(r"^M104 S(\d{1,3})$"), "hotend target"),
     (re.compile(r"^M140 S(\d{1,3})$"), "bed target"),
@@ -1056,6 +1058,11 @@ CONTROL_CODES: List[tuple] = [
     (re.compile(r"^G90$"), "absolute positioning"),
     (re.compile(r"^G91$"), "relative positioning"),
     (re.compile(r"^G[01](?:(?: [XYZ]-?\d{1,3}(?:\.\d{1,2})?){1,3})?(?: F\d{2,5})?$"), "move (jog)"),
+    (re.compile(r"^M83$"), "extruder relative: E moves are distances, whatever a print left set"),
+    (
+        re.compile(r"^G1 E-?\d{1,2}(?:\.\d{1,2})? F\d{2,3}$"),
+        "extrude or retract (relative E, with its feed)",
+    ),
     (re.compile(r"^M84$"), "steppers off"),
     (re.compile(r"^M18$"), "steppers off"),
     (re.compile(r"^M23 (?!.*\.\.)([A-Za-z0-9_~./-]{1,64})$"), "select SD file (no ..)"),
@@ -1102,6 +1109,12 @@ def normalise_control(command: str) -> str:
             raise OutOfBounds(f"bed target above {BED_MAX_C} degC: {command!r}")
         if cmd.startswith("M106") and m.group(1) and int(m.group(1)) > 255:
             raise OutOfBounds(f"fan speed above 255: {command!r}")
+        if cmd.startswith("G1 E"):
+            if abs(float(re.search(r" E(-?\d+(?:\.\d+)?)", cmd).group(1))) > EXTRUDE_MAX_MM:
+                raise OutOfBounds(f"extrusion beyond {EXTRUDE_MAX_MM} mm: {command!r}")
+            if int(re.search(r" F(\d+)", cmd).group(1)) > EXTRUDE_FEED_MAX:
+                raise OutOfBounds(f"extrusion feedrate above {EXTRUDE_FEED_MAX}: {command!r}")
+            return cmd
         if cmd[0] == "G" and cmd[1] in "01":
             for axis_val in re.findall(r" [XYZ](-?\d+(?:\.\d+)?)", cmd):
                 if abs(float(axis_val)) > JOG_MAX_MM:

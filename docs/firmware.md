@@ -591,14 +591,23 @@ it out again, and the ring's Panels › Machine › Control pad does either. Dis
 goes.
 
 What can be sent is a bounded allowlist, `firmware.gcode.CONTROL_CODES`
-(heaters and fan, homing, moves, motors off, SD start, pause and abort, mesh
-on and off, probing, break wait, quickstop), with heater, travel and feed
-caps beside it. Out-of-bounds values are refused before they reach the port;
+(heaters and fan, homing, moves, extrude and retract, motors off, SD start,
+pause and abort, mesh on and off, probing, break wait, quickstop), with heater,
+travel, feed and extrusion caps beside it. Out-of-bounds values are refused before they reach the port;
 there is no EEPROM write and no firmware configuration. A jog is three lines
 (`G91`, `G1 …`, `G90`), so the board is left in absolute mode. The travel cap
 bounds each move, not where the head ends up: jogs one after another add up,
 and the firmware's soft endstops (after a homing) are what keeps the head on
 the machine.
+
+An extrude is one relative `E` move with its own feed, `G1 E<mm> F<mm/min>`: at most
+`gcode.EXTRUDE_MAX_MM` (10 mm) either way, at most `gcode.EXTRUDE_FEED_MAX` (300 mm/min),
+the feed required so a print's faster one is never inherited, and no axis beside it. It
+is the first line that moves the extruder, and it is armed like the rest. `M83` (extruder
+moves are distances) is allowed beside it, since an `M82` a print leaves set would keep
+`G91` from making `E` relative. Marlin's own refusal to extrude below its minimum
+temperature is the only guard against a cold extrude: apothecary does not read the
+hotend's temperature before sending the line.
 
 ```
 POST /firmware/printers/control  {"port": …, "armed": true, "ttl_s": 300}
