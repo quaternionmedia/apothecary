@@ -715,7 +715,15 @@ def test_each_axis_of_the_printer_homes_alone_and_only_while_armed(page: Page, p
 
     homes = []
     for axis, left in (("X", {"Y": 10.0, "Z": 10.0}), ("Y", {"Z": 10.0}), ("Z", {})):
-        pad.locator(f"button[data-cmd='HOME-{axis}']").click()
+        home = pad.locator(f"button[data-cmd='HOME-{axis}']")
+        expect(home).to_have_attribute(
+            "title",
+            re.compile(
+                rf"^Home {axis} alone \(G28 {axis}\): the other axes stay where they stand\. "
+                r"Moves the machine: control must be armed · ⌗\d+$"
+            ),
+        )
+        home.click()
         expect(page.locator("#log .tx.control", has_text=f"G28 {axis}").last).to_be_visible(
             timeout=5000
         )

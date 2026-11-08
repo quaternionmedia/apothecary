@@ -443,7 +443,15 @@ def test_each_axis_of_the_router_homes_alone_and_only_while_armed(page: Page, ur
     expect_at["Z"] = {"X": -3.0, "Y": -3.0, "Z": -3.0}
     for axis in "XYZ":
         before = len(sent())
-        pad.locator(f"button[data-cmd='HOME-{axis}']").click()
+        home = pad.locator(f"button[data-cmd='HOME-{axis}']")
+        expect(home).to_have_attribute(
+            "title",
+            re.compile(
+                rf"^Home {axis} alone \(\$H{axis}\): the other axes stay where they stand\. "
+                r"Moves the machine: control must be armed · ⌗\d+$"
+            ),
+        )
+        home.click()
         expect(_log(page)).to_contain_text(f"> $H{axis}", timeout=5000)
         expect(machine.locator("#c-pos-s")).to_contain_text(f"{axis}-3.0", timeout=WITHIN_A_POLL)
         assert machine_position() == expect_at[axis], axis
