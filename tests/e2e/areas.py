@@ -2,21 +2,28 @@
 person does with the page, with the sources it stands on and the files that hold it.
 
 `apothecary test changed` runs the walkthrough and the unit files of the groups a change
-reaches (tests/groups.py), then the browser files of the areas it touches: every file when it touches shared ground -- the
-page itself, the server's app, this suite's own helpers and conftest, the
-dependencies -- a browser file itself when it changes, none when it reaches no area.
-The whole suite (`apothecary test all`) runs once, on the head of a stack, before it is
+reaches (tests/groups.py), then the browser files of the areas it touches: every file
+when it touches shared ground -- the page itself, the server's app, the conftests, the
+dependencies -- a browser file itself when it changes, none when it reaches no area. A
+helper, a module in tests/e2e/ or tests/ that is no test file, reaches the browser files
+that import it, directly or through other helpers, with the areas whose sources name it;
+every browser file when a conftest imports it, and none when no browser file does. A
+data file of tests/ outside tests/e2e/ -- a table of cases, a conformance vector --
+reaches the browser files that name it, as a helper reaches those that import it. The
+whole suite (`apothecary test all`) runs once, on the head of a stack, before it is
 pulled.
 
     python tests/e2e/areas.py FILE...   # the browser files a change to FILE... reaches, or ALL
 
-tests/test_areas.py holds that every browser file is in one area and that every
-pattern names something this checkout tracks.
+Who imports a helper is read from the suite's import statements, by tests/groups.py's
+`importers`. tests/test_areas.py holds that every browser file is in one area and that
+every pattern names something this checkout tracks.
 """
 
 from __future__ import annotations
 
 import fnmatch
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -24,8 +31,16 @@ ROOT = Path(__file__).resolve().parents[2]
 E2E = "tests/e2e"
 ALL = "ALL"
 
+_spec = importlib.util.spec_from_file_location("groups", ROOT / "tests/groups.py")
+groups = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(groups)
+
+# The conftests every browser file runs under.
+CONFTESTS = ("conftest.py", "tests/conftest.py", "tests/e2e/conftest.py")
+
 # Ground every area stands on: a change here runs every browser file.
 SHARED = (
+    "conftest.py",
     "templates/fractal_viewer.html.j2",
     "apothecary/api.py",
     "apothecary/site_store.py",
@@ -259,19 +274,37 @@ def _matches(path: str, patterns) -> bool:
     return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
 
 
+def _naming(name: str) -> set:
+    """The browser files whose text names a file: a data file of tests/, read by path."""
+    return {
+        test.name
+        for test in (ROOT / E2E).glob("test_*.py")
+        if name in test.read_text(encoding="utf-8")
+    }
+
+
 def reached(changed) -> list | str:
     """The browser files a change reaches, in the order the suite holds them, or ALL."""
     files = set()
     for path in changed:
         if _matches(path, SHARED):
             return ALL
-        if path.startswith(f"{E2E}/") and path.endswith(".py"):
-            name = path.rsplit("/", 1)[1]
-            if not name.startswith("test_"):
-                return ALL  # a helper every browser file may import
+        name = path.rpartition("/")[2]
+        if path.startswith(f"{E2E}/") and name.startswith("test_") and name.endswith(".py"):
             if (ROOT / path).exists():  # a file the change deletes runs nothing
                 files.add(name)
             continue
+        if groups.is_helper(path):
+            importing = groups.importers(path, ROOT)
+            if importing & set(CONFTESTS):
+                return ALL
+            files.update(groups.tests_among(importing, E2E))
+        elif (
+            path.startswith("tests/")
+            and not path.startswith(f"{E2E}/")
+            and not name.endswith(".py")
+        ):
+            files.update(_naming(name))
         for area in AREAS.values():
             if _matches(path, area["sources"]):
                 files.update(area["tests"])

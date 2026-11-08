@@ -5,25 +5,40 @@ the package, with the sources it stands on and the files that hold it.
 walkthrough's pages, then the browser files of the areas it reaches
 (tests/e2e/areas.py): every unit file when it touches shared ground -- the package's
 core, the app, the suite's own conftest, the dependencies -- a unit file itself when
-it changes, none when it reaches no group. `apothecary test group NAME...` runs named
-groups. The run before a merge is `apothecary test all` on the stack's head, the whole
-suite.
+it changes, none when it reaches no group. A helper of the suite, a module in tests/
+or tests/e2e/ that is no test file, reaches the unit files that import it, directly or
+through other helpers, with the groups whose sources name it; every unit file when a
+conftest imports it, since a fixture any file asks for may stand on it.
+`apothecary test group NAME...` runs named groups. The run before a merge is
+`apothecary test all` on the stack's head, the whole suite.
 
     python tests/groups.py FILE...   # the unit files a change to FILE... reaches, or ALL
 
-tests/test_groups.py holds that every unit file is in one group and that every pattern
-names something this checkout tracks.
+Who imports a helper is read from the import statements of the suite's modules, one
+inside a function too; a helper a test loads by path or runs in a script of its own is
+named in its group's sources instead. tests/e2e/areas.py reads the browser files'
+imports through `importers` too. tests/test_groups.py holds that every unit file is in
+one group and that every pattern names something this checkout tracks.
 """
 
 from __future__ import annotations
 
+import ast
 import fnmatch
+import functools
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = "tests"
 ALL = "ALL"
+
+# The directories whose modules import one another by name: the browser suite puts
+# tests/ on its path and a unit file may put tests/e2e/ on its own.
+SUITE = ("tests", "tests/e2e")
+
+# The conftests every unit file runs under.
+CONFTESTS = ("conftest.py", "tests/conftest.py")
 
 # Ground every group stands on: a change here runs every unit file.
 SHARED = (
@@ -316,6 +331,11 @@ GROUPS = {
             "apothecary/stamped.py",
             "apothecary/release.py",
             "apothecary/preflight.py",
+            # test_cli_testing.py runs these by path or in a script of its own, which no
+            # import statement shows: the suite's maps, the browser's launch.
+            "tests/groups.py",
+            "tests/e2e/areas.py",
+            "tests/e2e/browsers.py",
         ),
         "tests": (
             "test_cli.py",
@@ -380,6 +400,81 @@ def files(names) -> list[str]:
     return [f"{TESTS}/{name}" for group in names for name in GROUPS[group]["tests"]]
 
 
+@functools.cache
+def _source(root: Path, path: str) -> str:
+    return (root / path).read_text(encoding="utf-8")
+
+
+@functools.cache
+def _imported(root: Path, path: str) -> frozenset[str] | None:
+    """The files the import statements of ``path`` may name, as paths from the root:
+    each name resolved from the root and from each of the suite's directories (a
+    relative one from the file's own), whether or not a file stands there. None for a
+    file that does not parse, which is taken to import every name it spells."""
+    try:
+        tree = ast.parse(_source(root, path), filename=path)
+    except SyntaxError:
+        return None
+    named = set()
+    for node in ast.walk(tree):
+        bases = [PurePosixPath(), *map(PurePosixPath, SUITE)]
+        if isinstance(node, ast.Import):
+            modules = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            # `from x import y` may name a module x/y as well as x's attribute y.
+            prefix = f"{node.module}." if node.module else ""
+            modules = [node.module] if node.module else []
+            modules += [prefix + alias.name for alias in node.names]
+            if node.level:  # `from .x import y`, `from . import x`: the file's own package
+                base = PurePosixPath(path).parent
+                for _ in range(node.level - 1):
+                    base = base.parent
+                bases = [base]
+        else:
+            continue
+        named.update(
+            f"{(base / module.replace('.', '/')).as_posix()}.py"
+            for base in bases
+            for module in modules
+        )
+    return frozenset(named)
+
+
+def _modules(root: Path) -> list[str]:
+    """The suite's modules, as paths from the root, the root's conftest with them."""
+    found = [root / "conftest.py", *(p for d in SUITE for p in sorted((root / d).glob("*.py")))]
+    return [p.relative_to(root).as_posix() for p in found if p.is_file()]
+
+
+def importers(path: str, root: Path = ROOT) -> set[str]:
+    """The suite's modules that import ``path``, a module of the suite as a path from the
+    root, directly or through other modules of the suite."""
+    modules, found, todo = _modules(root), set(), [path]
+    while todo:
+        target = todo.pop()
+        stem = target.rpartition("/")[2].removesuffix(".py")
+        for module in modules:
+            if module in found or stem not in _source(root, module):
+                continue  # a file that never spells the name imports nothing by it
+            imported = _imported(root, module)
+            if imported is None or target in imported:
+                found.add(module)
+                todo.append(module)
+    return found - {path}
+
+
+def is_helper(path: str) -> bool:
+    """A module of the suite that is no test file."""
+    directory, _, name = path.rpartition("/")
+    return directory in SUITE and name.endswith(".py") and not name.startswith("test_")
+
+
+def tests_among(paths, directory: str) -> set[str]:
+    """The names of the test files among ``paths`` that stand in ``directory``."""
+    split = (path.rpartition("/") for path in paths)
+    return {name for held, _, name in split if held == directory and name.startswith("test_")}
+
+
 def reached(changed) -> list | str:
     """The unit files a change reaches, in the order the map holds them, or ALL."""
     found = set()
@@ -391,11 +486,14 @@ def reached(changed) -> list | str:
             if (ROOT / path).exists():  # a file the change deletes runs nothing
                 found.add(name)
             continue
-        groups = [group for group in GROUPS.values() if _matches(path, group["sources"])]
-        if directory == TESTS and name.endswith(".py") and not groups:
-            return ALL  # a helper any unit file may import
-        for group in groups:
-            found.update(group["tests"])
+        if is_helper(path):
+            importing = importers(path, ROOT)
+            if importing & set(CONFTESTS):
+                return ALL
+            found.update(tests_among(importing, TESTS))
+        for group in GROUPS.values():
+            if _matches(path, group["sources"]):
+                found.update(group["tests"])
     held = [name for group in GROUPS.values() for name in group["tests"]]
     return [f"{TESTS}/{name}" for name in held if name in found] + sorted(
         f"{TESTS}/{name}" for name in found - set(held)

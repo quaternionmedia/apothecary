@@ -94,8 +94,10 @@ each with the sources a change to which reaches it and the files that hold it
 (`tests/e2e/areas.py`), as the unit suite is in groups (`tests/groups.py`).
 `apothecary test changed` runs the walkthrough and the unit files of the groups a
 change reaches, then the browser files of the areas it touches: every file when it
-touches shared ground (the page, the app, this suite's helpers and conftest, the
-dependencies), a browser file itself when it changes, none when it reaches no area.
+touches shared ground (the page, the app, the conftests, the dependencies), a browser
+file itself when it changes, none when it reaches no area. A helper -- a module here
+or in `tests/` that is no test file -- reaches the browser files that import it,
+directly or through another helper, and every file when a conftest imports it.
 The change is what the checkout holds against `--since`, the branch's upstream
 when it is not given; `--list` names the files and runs nothing. A new browser file
 goes in one area, and `tests/test_areas.py` fails until it is in one. It is for

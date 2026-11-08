@@ -148,6 +148,13 @@ here: run `apothecary problems`.
   hangs.
 - The walkthrough's lists, what their checks leave: a link's anchor is not checked,
   and the docs site's resolve test passes over a link into `generated/`.
+- What a change reaches is read from import statements, so a helper named in
+  `pytest_plugins`, loaded by importlib, `__import__` or its path, or read as text
+  reaches no test; nor does a test or helper in a folder of tests/ other than
+  e2e/, or a `.md` doctest under tests/. A changed test file does not run the
+  checks that read every test file (`tests/test_e2e_helpers.py`, test_groups'
+  one group per file), and `tests/e2e/durations.json`, which sets every test's
+  bound, is no shared ground. None of these occurs in the suite today.
 
 ## Next round
 
