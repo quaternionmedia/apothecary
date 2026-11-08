@@ -86,6 +86,7 @@ import { KINDS, kindOf as kindOfBoard } from "/static/machine_words.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
 import { again } from "/static/twice.js";
+import { running as knobsRunning, choose as chooseKnobs } from "/static/deck_knobs.js";
 
 const MAX_HISTORY = 300;
 
@@ -246,6 +247,10 @@ const CONTROL = `
         <button type="button" id="ctl-disarm">🔒 Disarm</button>
     </div>
     <div class="body">
+        <div class="grp deck-knobs-grp" hidden>
+            <div class="k">Stream Deck +</div>
+            <div class="row"><span id="deck-knobs-on"></span><button type="button" id="deck-here" title="The deck's knobs move this machine, as its key on the deck chooses it. ⌗ Panels › Machine › Knobs › Here">🎛 Knobs here</button></div>
+        </div>
         <div class="grp printer-only">
             <div class="k">Heaters</div>
             <div class="row">hotend <input type="number" id="h-hot" min="0" max="300" step="5" value="200"> °C
@@ -878,6 +883,29 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // `out` is whether the pad stands popped out, in the host's window: it is, each
     // time the latch is armed.
     const ctl = { armed: false, until: 0, step: 10, timer: null, askedAt: 0, pending: 0, out: true };
+    // The deck's knobs, the server's layout (deck_knobs.js), followed while the pad is shown:
+    // the machine they move and their step; Knobs here points them at this machine.
+    const knob = { now: null, timer: null };
+    async function followKnobs() {
+        let all = [];
+        try { all = await knobsRunning(BASE); } catch (e) { all = []; }
+        const k = all.find((c) => c.running) || null;
+        knob.now = k;
+        const grp = $("control").querySelector(".deck-knobs-grp");
+        grp.hidden = !k;
+        if (!k) return;
+        const here = !!state.port && k.port === state.port;
+        $("deck-knobs-on").textContent = `knobs on ${here ? "this machine" : k.machine} · step ${k.step_mm} mm`;
+        $("deck-here").hidden = here;
+    }
+    async function knobsHere() {
+        if (!knob.now || !state.port) return;
+        try {
+            const s = await chooseKnobs(BASE, knob.now.deck, { port: state.port });
+            tell(`the deck's knobs move ${s.machine}, step ${s.step_mm} mm`);
+        } catch (e) { refuse(`knobs: ${e.message}`); }
+        await followKnobs();
+    }
     const latchFresh = (asked) => asked > ctl.askedAt && ctl.pending === 0;
     function renderControl() {
         const left = Math.max(0, Math.round((ctl.until - Date.now()) / 1000));
@@ -891,6 +919,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         renderLevelVerbs();
         clearInterval(ctl.timer); ctl.timer = null;
         if (ctl.armed) ctl.timer = setInterval(renderControl, 1000);
+        if (ctl.armed && !knob.timer) { followKnobs(); knob.timer = setInterval(followKnobs, 2000); }
+        else if (!ctl.armed && knob.timer) { clearInterval(knob.timer); knob.timer = null; }
     }
     function applyControlState(c) {
         const was = ctl.armed;
@@ -1017,7 +1047,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     $("h-fan").addEventListener("input", () => { $("h-fan-v").textContent = $("h-fan").value; });
     $("control").addEventListener("click", (ev) => {
         const btn = ev.target.closest("button"); if (!btn) return;
-        if (btn.dataset.step) {
+        if (btn.id === "deck-here") {
+            knobsHere();
+        } else if (btn.dataset.step) {
             ctl.step = Number(btn.dataset.step);
             for (const s of $("control").querySelectorAll(".steps button")) s.classList.toggle("on", s === btn);
         } else if (btn.dataset.jog) {
@@ -1804,7 +1836,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         destroy() {
             if (state.port || machineAt) emit("apothecary:toolpath", { port: state.port, path: machineAt ? machineAt.path : null, preview: null, upto: 0, origin: null });
             if (state.port) model.unwatch(state.port, who);
-            clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer);
+            clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer); clearInterval(knob.timer);
             if (flash) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
             if (slc.tasks) { slc.tasks.destroy(); slc.tasks = null; }
             for (const [event, fn] of onWindow) window.removeEventListener(event, fn);

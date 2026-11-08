@@ -73,7 +73,7 @@ POST /firmware/decks/{id}/release              → let go of the device
 
 ## In the page
 
-The **Deck** window (⊞ Windows › Deck, the ring's Panels › Deck, or **Open Deck** on the
+The **Deck** window (⊞ Windows › Deck, the ring's Panels › Machine › Knobs › Deck, or **Open Deck** on the
 `stream_deck` piece of the garage) shows the first deck found: its eight keys and its
 strip as the images last sent to them, `–` where nothing has been drawn from here, its
 four knobs, and the events it has heard, newest first. It follows the deck every second
@@ -139,6 +139,18 @@ when `POST /firmware/decks/{id}/control` with `{"on": true}` asks; `GET` on the 
 says whether it runs, the machine chosen, the step, the control's seconds left, what it
 said last and the lines it sent. A real deck is opened by it, which takes the device from
 any other program that has it, so it is started on purpose.
+
+The knobs are one state, the server's: whether the layout runs, the machine its knobs
+move and their step. The Deck window shows it under the deck's name and changes it --
+**▶ Knobs** starts or stops the layout, a machine's name chooses what the knobs move and
+a step theirs, as the deck's own keys do -- and shows what the deck's keys or anything
+else chose. Each Machine's Control pad, while its control is armed, says where the knobs
+are and their step, and its **🎛 Knobs here** points them at its machine. The ring's
+Panels › Machine › Knobs holds the same verbs, **Here** being the open Machine's machine,
+and the Deck window. None of them arms anything: the knobs move a machine only while its
+control is armed, in its Machine or by two long presses of its key. `GET
+/firmware/decks/control` lists every running layout's state, and `PUT
+/firmware/decks/{id}/control` with a `machine`, a `port` or a `step_mm` chooses.
 [Walkthrough 27](../walkthrough/27-the-deck-jogging-the-machines.md) goes round it on the
 simulated bench, written by `tests/e2e/test_deck_jog.py`.
 

@@ -1144,9 +1144,25 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [(c.label, c.action, c.cell) for c in machine.children] == [
         ("Machine", "panel:toggle:machine", 8),
         ("Control pad", "panel:pad", 6),
+        # The Stream Deck +'s knobs, seated after the Machine's own two.
+        ("Knobs", None, 2),
     ]
     assert address_of(root, "panel:pad") == "446"
     assert carried_by("panel:pad").name == "VIEWER"
+    knobs = next(c for c in machine.children if c.label == "Knobs")
+    assert [(c.label, c.action, c.cell) for c in knobs.children] == [
+        ("On / off", "deck:knobs", 8),
+        ("Machine", None, 6),
+        ("Step", None, 2),
+        ("Here", "deck:here", 4),
+        ("Deck", "panel:toggle:deck", 9),
+    ]
+    assert address_of(root, "deck:knobs") == "4428"
+    assert address_of(root, "panel:deck") == "4429"
+    assert address_of(root, "deck:machine:cnc_router") == "44266"
+    assert address_of(root, "deck:step:10") == "44222"
+    for action in ("deck:knobs", "deck:machine:printer_1", "deck:step:0.1", "deck:here"):
+        assert carried_by(action).name == "VIEWER"
     site = next(c for c in panels.children if c.label == "Site")
     assert [(c.label, c.action, c.cell) for c in site.children] == [
         ("Site", "panel:toggle:site", 8),

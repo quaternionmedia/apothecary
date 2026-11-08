@@ -8967,6 +8967,7 @@
     // wiring: what the ring opens on, what each chosen verb calls, and the
     // addresses written onto the controls the page already has.
     import { installRing, annotate, addressOf, resolveRing } from '/static/ring.js';
+    import { steer as steerKnobs } from '/static/deck_knobs.js';
 
     (() => {
         const BASE = {{ base_url | tojson }};
@@ -9195,6 +9196,16 @@
                     viewer.panels.open('models');
                     viewer.setStatus(`${intent.label}${tail}`, 'success');
                     if (viewer.modelsWidget) { viewer.modelsWidget.follow(); viewer.modelsWidget.act(action.slice('models:'.length)); }
+                    return;
+                }
+                // A verb of the Stream Deck +'s knobs: handed to the server's layout on the
+                // deck; the Deck window and each Control pad follow it on their next beat.
+                // Here is the open Machine's machine.
+                if (action.startsWith('deck:')) {
+                    const port = viewer.machine ? viewer.machine.port : null;
+                    steerKnobs(BASE, action.slice('deck:'.length), { port })
+                        .then((said) => { viewer.setStatus(`${intent.label}${tail}: ${said}`, 'success'); viewer.deck?.load(); })
+                        .catch((e) => viewer.setStatus(`${intent.label}${tail}: ${e.message}`, 'error'));
                     return;
                 }
                 // A Procedure verb: the window shown, and GO or Start over done; what came

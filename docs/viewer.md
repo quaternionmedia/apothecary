@@ -254,9 +254,10 @@ expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
 - **Panels** › Site › Site, Problems, Pinned, Jobs, SCAD and Workspace (the
   Working space, [working-space.md](working-space.md)); Selected;
   Pictures › Pictures, Models (the Models window, then Ask and a person's Colour
-  and Material, [models-checklist.md](models-checklist.md)) and Gather; Machine › Machine (the selected board's) and
+  and Material, [models-checklist.md](models-checklist.md)) and Gather; Machine › Machine (the selected board's),
   Control pad (an armed printer's pad in a loud window of its own or back in its
-  Machine, as the pad's ⧉ Pop out and ⇥ Put back); Windows › World alone (as
+  Machine, as the pad's ⧉ Pop out and ⇥ Put back) and Knobs (the Stream Deck +'s:
+  On / off, Machine, Step, Here and the Deck window, [stream-deck.md](stream-deck.md)); Windows › World alone (as
   `~`), Reset layout, Part view, Machine view, Airgap view and Family view; Bench › Bench (show it), Install (a cell per toolchain
   module, then the slicer), Compile, Upload, Raw flash, Cancel, Cores,
   Libraries; Docs (the documentation in a new tab, as the header's Docs); and

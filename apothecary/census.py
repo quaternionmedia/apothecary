@@ -455,6 +455,21 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "deck-strip-tap": (WIDGET, WHAT_IS_THERE, "the touch strip of a simulated deck, tapped"),
     "deck-turn": (WIDGET, WHAT_IS_THERE, "a button that turns a simulated deck's knob one step"),
     "deck-press": (WIDGET, WHAT_IS_THERE, "a button that presses a simulated deck's knob"),
+    # The knobs, the server's layout on the deck: started or stopped, the machine they
+    # move and their step chosen, in the Deck window; Knobs here in a Control pad. Each
+    # is a cell of Panels › Machine › Knobs.
+    "deck-run": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that starts or stops the deck's knobs, the layout that jogs the machines",
+    ),
+    "deck-machine": (WIDGET, WHAT_IS_THERE, "a machine's name, a button that the knobs move it"),
+    "deck-step": (WIDGET, WHAT_YOU_SEE, "a button that makes a knob's step so many millimetres"),
+    "deck-here": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button in a Control pad that the deck's knobs move this machine",
+    ),
     # ---- Models, apothecary/static/widgets/models.js ----------------------
     # Image models through qmcp: an origin switched, the shape chosen on a mat asked
     # about, and a person's word on one of its properties. Ask and a person's word
@@ -833,6 +848,12 @@ RING_BACKED: Dict[str, str] = {
     # device and Allow the camera's own Device (whose leaves are camera:device:<id>)
     "ws-back": "panel:toggle:working",
     "deck-open": "panel:toggle:deck",
+    # the knobs' controls are the cells of Panels › Machine › Knobs (whose machines and
+    # steps are leaves deck:machine:<name> and deck:step:<mm>)
+    "deck-run": "deck:knobs",
+    "deck-machine": "deck:machine",
+    "deck-step": "deck:step",
+    "deck-here": "deck:here",
     "ws-hour": "working:open",
     "ws-add-camera": "camera:add-here",
     "ws-choose": "camera:device",

@@ -760,6 +760,7 @@ def _panels() -> Option:
                 children=[
                     toggle(pid, label),
                     Option(id="panel:pad", label="Control pad", action="panel:pad"),
+                    _knobs(),
                 ],
             )
         if pid not in _RINGS:
@@ -877,6 +878,44 @@ def _procedure(toggle: Option) -> Option:
             toggle,
             Option(id="procedure:go", label="GO", action="procedure:go"),
             Option(id="procedure:again", label="Start over", action="procedure:again"),
+        ],
+    )
+
+
+def _knobs() -> Option:
+    """Panels › Machine › Knobs: the Stream Deck +'s knobs, the server's layout on the deck
+    (firmware/deck_control.py), which the page hands each verb to -- on or off, the machine
+    they move, their step, and the machine of the Machine that is open -- then the Deck
+    window, which shows them. Seated after the Machine's own two cells, so neither moves."""
+    from .firmware.deck_control import MACHINES, STEPS_MM
+
+    return Option(
+        id="panels:knobs",
+        label="Knobs",
+        children=[
+            Option(id="deck:knobs", label="On / off", action="deck:knobs"),
+            Option(
+                id="deck:machine",
+                label="Machine",
+                children=[
+                    Option(
+                        id=f"deck:machine:{machine.name}",
+                        label=shorten(machine.name),
+                        action=f"deck:machine:{machine.name}",
+                    )
+                    for machine in MACHINES
+                ],
+            ),
+            Option(
+                id="deck:step",
+                label="Step",
+                children=[
+                    Option(id=f"deck:step:{mm:g}", label=f"{mm:g} mm", action=f"deck:step:{mm:g}")
+                    for mm in STEPS_MM
+                ],
+            ),
+            Option(id="deck:here", label="Here", action="deck:here"),
+            Option(id="panel:deck", label="Deck", action="panel:toggle:deck"),
         ],
     )
 
@@ -1883,6 +1922,9 @@ CARRIED_BY: Dict[str, Carries] = {
     # GO and Start over: the page hands each to the Procedure window, which fires
     # through the family's hub (widgets/procedure.js).
     "procedure": Carries.VIEWER,
+    # The Stream Deck +'s knobs: the page hands each to the server's layout on the deck
+    # (static/deck_knobs.js, PUT /firmware/decks/{id}/control).
+    "deck": Carries.VIEWER,
     # How the world is drawn: the header's View menu (snapping, detail, outlines,
     # whether a click picks a wall).
     "view": Carries.VIEWER,

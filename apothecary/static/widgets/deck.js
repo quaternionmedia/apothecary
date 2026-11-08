@@ -5,6 +5,10 @@
  * POST of the event a real deck would report; a real deck is pressed by hand, and
  * its controls are off.
  *
+ * Its knobs, the layout that jogs the garage's machines, are the server's (deck_knobs.js):
+ * the window starts and stops them and chooses the machine they move and their step,
+ * as the deck's own keys do, and shows what the deck, a Control pad or the ring chose.
+ *
  * mountDeck(root, { base, log }) renders into `root` and returns { shown(), close(),
  * load(), state(), destroy() }. shown() loads the first deck found and follows it
  * every 1.5 s while the window is in front; close() stops. Listing a deck opens
@@ -12,12 +16,14 @@
  */
 
 import { esc } from "/static/board_text.js";
+import { armedWords, choose, knobsOf, turn } from "/static/deck_knobs.js";
 
 const KEYS = 8, KNOBS = 4, STRIP = [800, 100], EVERY_MS = 1500;
 
 const MARKUP = `
 <div class="deck-ui">
     <div class="deck-head"><span class="deck-name meta">looking for a Stream Deck +…</span></div>
+    <div class="deck-control"></div>
     <div class="deck-keys"></div>
     <div class="deck-strip"></div>
     <div class="deck-knobs"></div>
@@ -37,7 +43,7 @@ const heard = (e) => {
 export function mountDeck(root, { base = "", log = null } = {}) {
     root.innerHTML = MARKUP;
     const $ = (sel) => root.querySelector(sel);
-    let alive = true, timer = null, deck = null, last = 0, drawn = null, lines = [], problem = null;
+    let alive = true, timer = null, deck = null, last = 0, drawn = null, lines = [], problem = null, knobs = null;
     const say = (text, kind = "") => { if (log) log(text, kind); };
 
     async function api(path, opts = {}) {
@@ -61,7 +67,21 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         if (drawnNow) img.src = url;
     }
 
+    // The knobs: off, or the machine they move, their step and its control.
+    function renderKnobs() {
+        const box = $(".deck-control");
+        if (!deck || !knobs) { box.innerHTML = ""; return; }
+        const on = !!knobs.running;
+        const run = `<button type="button" class="deck-run" title="${on ? "Stop the knobs: the keys and strip stay as drawn" : "Start the knobs: the layout that jogs the garage's machines"}. ⌗ Panels › Machine › Knobs › On / off">${on ? "■ Knobs" : "▶ Knobs"}</button>`;
+        if (!on) { box.innerHTML = `<div class="row">${run}<span class="meta">knobs off</span></div>`; return; }
+        const machines = knobs.machines.map((m) => `<button type="button" class="deck-machine" data-machine="${esc(m)}" aria-pressed="${m === knobs.machine}" title="The knobs move ${esc(m)}, as its key on the deck chooses it. ⌗ Panels › Machine › Knobs › Machine">${esc(m)}</button>`).join("");
+        const steps = knobs.steps_mm.map((mm) => `<button type="button" class="deck-step" data-mm="${mm}" aria-pressed="${mm === knobs.step_mm}" title="A knob's step moves ${mm} mm, as the deck's STEP key cycles it. ⌗ Panels › Machine › Knobs › Step">${mm}</button>`).join("");
+        box.innerHTML = `<div class="row">${run}${machines}</div><div class="row"><span class="meta">step</span>${steps}<span class="meta">mm</span></div>`
+            + `<div class="meta deck-knobs-said">${esc(knobs.machine)} · ${esc(armedWords(knobs))} · ${esc(knobs.said)}</div>`;
+    }
+
     function render() {
+        renderKnobs();
         const inputs = !!(deck && deck.simulated);
         for (const b of root.querySelectorAll(".deck-key, .deck-strip-tap, .deck-turn, .deck-press")) b.disabled = !inputs;
         if (!deck) return;
@@ -108,6 +128,7 @@ export function mountDeck(root, { base = "", log = null } = {}) {
             const news = await api(`/firmware/decks/${encodeURIComponent(deck.id)}/events?since=${last}`);
             for (const e of news.events) if (e.seq > last) lines = [heard(e), ...lines].slice(0, 12);
             last = Math.max(last, news.last);
+            knobs = await knobsOf(base, deck.id);
             problem = null;
         } catch (e) {
             // Said once, and shown in the window for as long as it lasts.
@@ -125,8 +146,20 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         catch (e) { say(`Deck: ${e.message}`, "bad"); return; }
         await load();
     }
+    // A choice of the knobs, made on the server; the deck, the Control pads and this window
+    // all follow it.
+    async function steer(change) {
+        try { knobs = await change(); } catch (e) { say(`Knobs: ${e.message}`, "bad"); }
+        await load();
+    }
     root.addEventListener("click", async (ev) => {
         const b = ev.target.closest("button");
+        if (b && deck && b.classList.contains("deck-run")) {
+            await steer(async () => { await turn(base, deck.id, !(knobs && knobs.running)); return knobsOf(base, deck.id); });
+            return;
+        }
+        if (b && deck && b.classList.contains("deck-machine")) { await steer(() => choose(base, deck.id, { machine: b.dataset.machine })); return; }
+        if (b && deck && b.classList.contains("deck-step")) { await steer(() => choose(base, deck.id, { step_mm: Number(b.dataset.mm) })); return; }
         if (!b || !deck || !deck.simulated) return;
         if (b.classList.contains("deck-key")) { const i = +b.dataset.key; await give("key", i, true); await give("key", i, false); }
         else if (b.classList.contains("deck-turn")) await give("knob-turn", +b.closest(".deck-knob").dataset.knob, +b.dataset.dir);

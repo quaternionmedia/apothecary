@@ -201,6 +201,39 @@ class DeckController:
         self.machine = MACHINES[KEY_MACHINE.index(index)]
         self.last = None
 
+    # -- chosen from the page -----------------------------------------------------------
+
+    def choose(self, machine: Optional[str] = None, port: Optional[str] = None) -> None:
+        """The machine the knobs move, named or found by the port its board is on, as its
+        key on the deck chooses it: the Deck window's machines, a Control pad's Knobs here
+        and the ring's Knobs choose this way. Nothing is armed."""
+        with self._lock:
+            if machine is not None:
+                found = next((m for m in MACHINES if m.name == machine), None)
+                if found is None:
+                    names = ", ".join(m.name for m in MACHINES)
+                    raise ValueError(
+                        f"no machine {machine!r} on the deck: its machines are {names}"
+                    )
+            else:
+                found = next((m for m in MACHINES if port and self.resolve(m) == port), None)
+                if found is None:
+                    raise ValueError(f"{port}: no machine of the deck's has its board there")
+            self._first_long = None
+            self._choose(KEY_MACHINE[MACHINES.index(found)])
+            self.said = (f"{found.name} chosen", "grey")
+            self.draw()
+
+    def set_step(self, mm: float) -> None:
+        """The knobs' step, one of the deck's own, as its STEP key cycles it."""
+        with self._lock:
+            if mm not in STEPS_MM:
+                steps = ", ".join(_mm(s) for s in STEPS_MM)
+                raise ValueError(f"a step of {_mm(mm)} mm: the deck's steps are {steps} mm")
+            self.step = STEPS_MM.index(mm)
+            self.said = (f"step {_mm(self.step_mm)} mm", "grey")
+            self.draw()
+
     def _machine_key(self, event: decks.DeckEvent) -> None:
         """A machine's key: pressed down, or let go. A short press chooses the machine; a
         long one chooses it too, and two in a row arm its control."""
@@ -421,6 +454,9 @@ class DeckController:
             port = self._port_quiet()
             return {
                 "running": self._alive.is_set(),
+                "deck": self.deck.info.id,
+                "machines": [machine.name for machine in MACHINES],
+                "steps_mm": list(STEPS_MM),
                 "machine": self.machine.name,
                 "port": port,
                 "step_mm": self.step_mm,
@@ -453,6 +489,14 @@ def stop(deck_id: str) -> bool:
         return False
     controller.stop()
     return True
+
+
+def controls() -> List[dict]:
+    """Every layout running, one per deck: what its knobs move, their step, the control's
+    seconds left. The Deck window and each Machine's Control pad read it."""
+    with _LOCK:
+        running = list(_RUNNING.values())
+    return [controller.state() for controller in running]
 
 
 def running(deck_id: str) -> Optional[DeckController]:

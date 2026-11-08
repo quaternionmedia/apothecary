@@ -34,6 +34,15 @@ class ControlRequest(BaseModel):
     on: bool
 
 
+class ChoiceRequest(BaseModel):
+    """What the knobs move -- a machine by its name, or by the port its board is on --
+    and their step, any of them."""
+
+    machine: Optional[str] = Field(None, max_length=60)
+    port: Optional[str] = Field(None, max_length=200)
+    step_mm: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
+
+
 class EventRequest(BaseModel):
     kind: str
     index: int = Field(0, ge=0)
@@ -64,6 +73,14 @@ def list_decks():
     except DeckUnavailable as exc:
         return {"decks": [], "problem": str(exc)}
     return {"decks": [d.model_dump() for d in found], "problem": None}
+
+
+# Before /{deck_id}, which would take "control" for a deck's name.
+@router.get("/control")
+def controls():
+    """Every layout running on a deck: the machine its knobs move, their step and its
+    control's seconds left. Opens nothing."""
+    return {"controls": deck_control.controls()}
 
 
 @router.get("/{deck_id}")
@@ -152,3 +169,24 @@ def control(deck_id: str, body: ControlRequest):
         deck_control.stop(deck_id)
         return {"running": False}
     return deck_control.start(deck_id).state()
+
+
+@router.put("/{deck_id}/control")
+def choose(deck_id: str, body: ChoiceRequest):
+    """The machine the running layout's knobs move, and their step: the Deck window, a
+    Control pad's Knobs here and the ring's Knobs choose here. Nothing is armed."""
+    controller = deck_control.running(deck_id)
+    if controller is None:
+        raise HTTPException(
+            409,
+            f"the knobs are not started on {deck_id}: POST /firmware/decks/{deck_id}/control "
+            'with {"on": true} starts them',
+        )
+    try:
+        if body.machine is not None or body.port is not None:
+            controller.choose(body.machine, body.port)
+        if body.step_mm is not None:
+            controller.set_step(body.step_mm)
+    except ValueError as exc:
+        raise _said(exc) from exc
+    return controller.state()

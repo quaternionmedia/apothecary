@@ -129,6 +129,7 @@ AREAS = {
             "parts/esp32_blink/*",
             "parts/footpedal/*",
             "apothecary/static/widgets/deck.*",
+            "apothecary/static/deck_knobs.js",
             "walkthrough/26-*",
             "walkthrough/screenshots/26-*",
             "walkthrough/27-*",

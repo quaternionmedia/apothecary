@@ -397,3 +397,47 @@ def test_arming_a_machine_with_no_board_says_so_and_arms_nothing(bench):
     ended = _held(controller, 1, 100.0, 1.0)
     _held(controller, 1, ended + 1.0, 1.0)
     assert not links.control.armed(ROUTER) and "no board pinned" in one.strip["small"]
+
+
+def test_the_page_chooses_what_the_knobs_move_and_their_step_as_the_keys_do(bench):
+    """A machine chosen by its name or by its board's port, and a step, from the page: the
+    keys and the strip redrawn as the deck's own keys would leave them, nothing armed and
+    nothing sent; what the deck has not got is refused."""
+    controller, one, links = bench
+    controller.choose(machine="cnc_router")
+    assert controller.machine.name == "cnc_router"
+    assert one.keys[1]["colour"] == "green" and one.keys[0]["colour"] == "grey"
+    assert one.strip["text"].startswith("cnc_router · ")
+    controller.choose(port=PRINTER)  # the port printer_1's board is on
+    assert controller.machine.name == "printer_1" and one.keys[0]["colour"] == "green"
+    controller.set_step(10.0)
+    assert controller.step_mm == 10.0 and one.keys[2]["small"] == "10 mm"
+    assert controller.sent == []
+    assert not links.control.armed(PRINTER) and not links.control.armed(ROUTER)
+    with pytest.raises(ValueError, match="its machines are printer_1, cnc_router"):
+        controller.choose(machine="lathe")
+    with pytest.raises(ValueError, match="no machine of the deck's"):
+        controller.choose(port="/dev/ttyNOPE")
+    with pytest.raises(ValueError, match="the deck's steps are 0.1, 1, 10 mm"):
+        controller.set_step(50.0)
+
+
+def test_the_knobs_are_read_and_chosen_by_route_while_they_run(bench):
+    controller, one, links = bench
+    controller.stop()
+    client = TestClient(app)
+    assert client.get("/firmware/decks/control").json() == {"controls": []}
+    refused = client.put("/firmware/decks/SIMDECK0/control", json={"machine": "cnc_router"})
+    assert refused.status_code == 409 and "not started" in refused.json()["detail"]
+    client.post("/firmware/decks/SIMDECK0/control", json={"on": True})
+    [knobs] = client.get("/firmware/decks/control").json()["controls"]
+    assert knobs["deck"] == "SIMDECK0" and knobs["machines"] == ["printer_1", "cnc_router"]
+    assert knobs["steps_mm"] == [0.1, 1.0, 10.0] and knobs["machine"] == "printer_1"
+    chosen = client.put(
+        "/firmware/decks/SIMDECK0/control", json={"port": ROUTER, "step_mm": 0.1}
+    ).json()
+    assert (chosen["machine"], chosen["port"], chosen["step_mm"]) == ("cnc_router", ROUTER, 0.1)
+    assert client.get("/firmware/decks/control").json()["controls"][0]["machine"] == "cnc_router"
+    bad = client.put("/firmware/decks/SIMDECK0/control", json={"step_mm": 50})
+    assert bad.status_code == 422 and "0.1, 1, 10 mm" in bad.json()["detail"]
+    deck_control.stop_all()
