@@ -1,10 +1,11 @@
 """The page as the server answers it, through the page's own controls: Apply off up
 front where this OpenSCAD cannot build a part, the server's integers, choices and groups
 drawn, a saved variant renamed, duplicated, restored from its history, deleted to the
-trash and back, and the trash emptied only when asked twice; two variants compared,
-overlaid and side by side, with what differs; a render waiting its turn said to be
-queued; Download SCAD giving the edit; and Slice and the readiness checklist following
-the variant drawn. A part in a submodule, edited as its overlay, is
+trash and back, and the trash emptied only when asked twice, in the part's Variants
+window, which alone lists them and which the ring's cells and a Save open; two variants
+compared, overlaid and side by side, with what differs; a render waiting its turn said
+to be queued; Download SCAD giving the edit; and Slice and the readiness checklist
+following the variant drawn. A part in a submodule, edited as its overlay, is
 tests/e2e/test_text_tied.py's.
 
 The server is this module's own: the OpenSCAD every test server runs, a variant
@@ -23,6 +24,7 @@ import httpx
 import part_editing
 import pytest
 import rings
+import windows
 from boards import BOARD, PRINTER
 from garage import status as _status
 from playwright.sync_api import Page, expect
@@ -75,6 +77,17 @@ def cube_as_it_was():
             path.unlink(missing_ok=True)
 
 
+@pytest.fixture
+def variants_cleared(url):
+    """After the test, none of the part's variants saved and none in its trash: the next
+    test of the module's server starts from none, as the tests before it leave it."""
+    yield
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        for variant in http.get(f"/parts/{PART}/saved").json():
+            http.delete(f"/parts/{PART}/saved/{variant['name']}").raise_for_status()
+        http.delete(f"/parts/{PART}/trash", params={"confirm": "true"}).raise_for_status()
+
+
 def _open(page: Page, url: str, site: str = "apothecary", part: str = PART) -> None:
     page.set_viewport_size({"width": 1280, "height": 800})
     page.goto(f"{url}/viewer/sites/{site}")
@@ -104,12 +117,23 @@ def _save(page: Page, url: str, name: str, scad: str | None = None, params=None)
     assert answer.ok, answer.text()
 
 
+# The part's saved variants: the list in its Variants window, and the window.
+SAVED = "#part-saved"
+VARIANTS = "part-variants"
+
+
 def _row(page: Page, name: str):
-    return page.locator(f".scad-saved .saved-row[data-variant='{name}']")
+    return page.locator(f"{SAVED} .saved-row[data-variant='{name}']")
+
+
+def _variants(page: Page) -> None:
+    """The Variants window's tab pressed: its list in front of Parameters."""
+    windows.show(page, VARIANTS)
+    expect(page.locator(SAVED)).to_be_visible()
 
 
 def _manage(page: Page, name: str):
-    """The variant's row in the editor's list, its ⋯ unfolded."""
+    """The variant's row in the Variants window's list, its ⋯ unfolded."""
     row = _row(page, name)
     expect(row).to_be_visible(timeout=15000)
     if row.locator(".variant-manage").is_hidden():
@@ -161,6 +185,7 @@ def test_a_saved_variant_is_renamed_duplicated_restored_deleted_and_the_trash_em
     _open(page, url)
     _edit(page)
     expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
+    _variants(page)
 
     # Duplicated, then the copy renamed: each under the name typed beside it.
     row = _manage(page, "first")
@@ -190,7 +215,7 @@ def test_a_saved_variant_is_renamed_duplicated_restored_deleted_and_the_trash_em
     # Deleted: to the trash, which Deleted lists; restored from there.
     _manage(page, "third").locator(".variant-delete").click()
     expect(_status(page)).to_contain_text("third moved to the trash", timeout=15000)
-    trash = page.locator(".scad-saved details.variant-trash")
+    trash = page.locator(f"{SAVED} details.variant-trash")
     expect(trash.locator("summary")).to_have_text("Deleted (1)")
     trash.locator("summary").click()
     trash.locator(".trash-row[data-variant='third'] .trash-restore").click()
@@ -200,7 +225,7 @@ def test_a_saved_variant_is_renamed_duplicated_restored_deleted_and_the_trash_em
     # Deleted for good only when asked twice; and the trash emptied the same way.
     _manage(page, "third").locator(".variant-delete").click()
     expect(_status(page)).to_contain_text("third moved to the trash", timeout=15000)
-    trash = page.locator(".scad-saved details.variant-trash")
+    trash = page.locator(f"{SAVED} details.variant-trash")
     forget = trash.locator(".trash-row[data-variant='third'] .trash-forget")
     forget.click()
     expect(_status(page)).to_contain_text("third would be deleted for good, which cannot be undone")
@@ -211,14 +236,72 @@ def test_a_saved_variant_is_renamed_duplicated_restored_deleted_and_the_trash_em
     assert page.request.get(f"{url}/parts/{PART}/trash").json() == []
     _manage(page, "first").locator(".variant-delete").click()
     expect(_status(page)).to_contain_text("first moved to the trash", timeout=15000)
-    empty = page.locator(".scad-saved details.variant-trash .trash-empty")
+    empty = page.locator(f"{SAVED} details.variant-trash .trash-empty")
     empty.click()
     expect(_status(page)).to_contain_text("every deleted variant would be deleted for good")
     empty.click()
     expect(_status(page)).to_contain_text(
         "the trash is emptied, 1 variant deleted for good", timeout=15000
     )
-    expect(page.locator(".scad-saved details.variant-trash summary")).to_have_text("Deleted (0)")
+    expect(page.locator(f"{SAVED} details.variant-trash summary")).to_have_text("Deleted (0)")
+
+
+@pytest.mark.e2e
+def test_the_variants_window_alone_lists_the_saved_variants(
+    page: Page, url, cube_as_it_was, variants_cleared
+):
+    """A part's saved variants are listed in its Variants window and nowhere else: the
+    SCAD window holds the editor, its name box, Save and Fullscreen. Closed, the Variants
+    window opens for a ring's cell and for a Save; a variant is renamed there from its
+    ring, deleted from its ⋯ and restored from the Deleted fold."""
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    own = CUBE.source_file.read_text()
+    _save(page, url, "one", own.rstrip("\n") + "\n" + TALLER + "\n", {"size": 12})
+    _open(page, url)
+    _edit(page)
+    scad = windows.panel(page, "part-scad")
+    expect(scad.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
+    for control in ("#scad-name", "#scad-save", "#scad-fullscreen"):
+        expect(scad.locator(control)).to_be_visible()
+    for listed in (".scad-saved", ".saved-row", ".saved-variant", ".variant-trash"):
+        expect(scad.locator(listed)).to_have_count(0)
+    expect(_row(page, "one")).to_have_count(1, timeout=15000)
+
+    # Closed, it opens for the ring's Rename, the row's box readied; Enter renames.
+    windows.close(page, VARIANTS)
+    assert not windows.state(page, VARIANTS)["open"]
+    _ring(page, PART, "Part", "Variants", "one", "Rename")
+    expect(_row(page, "one").locator(".variant-to")).to_be_focused(timeout=15000)
+    assert windows.state(page, VARIANTS)["shown"]
+    page.keyboard.type("two")
+    page.keyboard.press("Enter")
+    expect(_status(page)).to_contain_text("one is called two now", timeout=15000)
+    expect(_row(page, "two")).to_be_visible()
+    expect(_row(page, "one")).to_have_count(0)
+
+    # Deleted from its ⋯, to the trash; restored from the Deleted fold under the list.
+    _manage(page, "two").locator(".variant-delete").click()
+    expect(_status(page)).to_contain_text("two moved to the trash", timeout=15000)
+    expect(_row(page, "two")).to_have_count(0)
+    trash = windows.panel(page, VARIANTS).locator("details.variant-trash")
+    expect(trash.locator("summary")).to_have_text("Deleted (1)")
+    trash.locator("summary").click()
+    trash.locator(".trash-row[data-variant='two'] .trash-restore").click()
+    expect(_status(page)).to_contain_text("two is back among the variants", timeout=15000)
+    expect(_row(page, "two")).to_be_visible()
+    expect(trash.locator("summary")).to_have_text("Deleted (0)")
+
+    # Closed again, a Save opens it, the variant saved listed and marked chosen.
+    windows.close(page, VARIANTS)
+    page.locator("#scad-name").fill("three")
+    page.locator("#scad-save").click()
+    expect(_status(page)).to_contain_text(f"{PART} saved as the variant three", timeout=60000)
+    expect(_row(page, "three")).to_be_visible()
+    expect(_row(page, "three")).to_have_class(re.compile(r"\bchosen\b"))
+    assert windows.state(page, VARIANTS)["shown"]
+    expect(scad.locator(".saved-row")).to_have_count(0)
+    assert errors == []
 
 
 @pytest.mark.e2e
@@ -240,6 +323,8 @@ def test_every_action_on_a_saved_variant_is_a_cell_of_part_variants(
     _ring(page, PART, "Part", "Variants", "one", "Draw")
     expect(_status(page)).to_contain_text("one", timeout=60000)
     expect(_row(page, "one")).to_have_class(re.compile(r"\bchosen\b"), timeout=15000)
+    # Its cell brought the Variants window in front of Parameters, where Part › Edit left it.
+    assert windows.state(page, VARIANTS)["shown"]
 
     _ring(page, PART, "Part", "Variants", "one", "Duplicate")
     box = _row(page, "one").locator(".variant-to")
@@ -262,8 +347,13 @@ def test_every_action_on_a_saved_variant_is_a_cell_of_part_variants(
 
     _ring(page, PART, "Part", "Variants", "three", "Delete")
     expect(_status(page)).to_contain_text("three moved to the trash", timeout=15000)
+    # The trash's cells bring the Variants window in front too, its Deleted fold open.
+    windows.show(page, "part-parameters")
+    assert not windows.state(page, VARIANTS)["shown"]
     _ring(page, PART, "Part", "Variants", "Deleted", "three", "Restore")
     expect(_status(page)).to_contain_text("three is back among the variants", timeout=15000)
+    assert windows.state(page, VARIANTS)["shown"]
+    expect(page.locator(f"{SAVED} details.variant-trash")).to_have_attribute("open", "")
 
     # Forget and Empty cannot be undone: chosen once, the wedge itself asks "again to
     # forget" and the ring waits; chosen again, it is done.

@@ -435,8 +435,9 @@ is left out of the layout this browser remembers.
 
 **Part › Edit** on a piece's ring opens its editor: Selected holds the piece
 and the staged changes' bar, and the part's **Parameters** window opens under
-it, the cursor in its first control. Its **SCAD**, **Variants** (its saved
-variants, and the compare), **History** and **Readiness** (to build) are
+it, the cursor in its first control. Its **SCAD**, **Variants** (every saved
+variant, what can be done to each, the trash, and the compare), **History**
+and **Readiness** (to build) are
 windows of their own, each closed until asked for, laid out together by
 Panels › Windows › Part view. Each
 parameter is a control starting from what is drawn, its description as its
@@ -587,7 +588,8 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   first, when `APOTHECARY_VARIANTS_REPO` names another repository to keep them
   in), and that a merge brings its values with it -- or, for a variant whose
   values are in a `.variant.json` beside its SCAD and not in its text, that a
-  merge does not apply them until it is saved again.
+  merge does not apply them until it is saved again. The Variants window lists
+  it, and opens when it is closed.
   What would be a failed render is not saved. A part in a submodule
   (gridfinity) is saved as its **overlay**: the include of the upstream file
   and the values set after it, the submodule never touched; an edit of the
@@ -596,21 +598,24 @@ Outside the editor F5, F6 and Ctrl+Enter are the browser's.
   variant's, and is cleared once the text moves on from it, so Save keeps the
   edit under a name of its own. A name already saved is asked about first:
   Save again replaces it.
-- **Part › Variants** › a saved variant's name opens a ring of what can be done
-  to it, each a button of its row in the editor's list too (its **⋯** unfolds
-  them): **Draw** loads it -- its SCAD into the editor, its values in it and
-  the controls on them, checked and drawn; a part in a submodule's variant is
+- The part's **Variants** window lists every saved variant, newest first: when
+  it was saved, its numbers, whether HEAD holds it and, folded, what it changes
+  against the part's SCAD. **Part › Variants** › a saved variant's name opens a
+  ring of what can be done to it, each a button of its row in that list too (its
+  **⋯** unfolds them), and each cell brings the window in front: **Draw**
+  loads it -- its SCAD into the editor, its values in it and the controls on
+  them, checked and drawn; a part in a submodule's variant is
   its overlay, the upstream file never put in the editor as the part's; a
   variant whose values are in a `.variant.json` and not its text has them
   written in when it is read -- **Rename** and
   **Duplicate**, under the name typed in its row's box (the cell puts the
   cursor there; Enter does it), **History** (each save, newest first, an
   earlier one restored by its **Restore** as a new save, the history keeping
-  what came between), **Compare** and **Delete**. The editor's list says of
-  each what it changes, and whether it is in HEAD.
+  what came between), **Compare** and **Delete**. Choosing a variant's name in
+  the list draws it, as Draw does.
 - Delete moves a variant to the trash (`refs/apothecary/trash/`): **Part ›
-  Variants › Deleted**, and the Deleted fold under the editor's list, hold
-  it -- each deleted variant's **Restore** brings it back, its **Forget**
+  Variants › Deleted**, and the Deleted fold under the Variants window's list,
+  hold it -- each deleted variant's **Restore** brings it back, its **Forget**
   deletes it for good, and **Empty** deletes them all; Forget and Empty only
   when chosen again to confirm.
 - **Compare** draws the variant beside another -- what is drawn, the part's

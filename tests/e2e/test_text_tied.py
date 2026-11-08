@@ -19,6 +19,7 @@ import re
 import part_editing
 import pytest
 import rings
+import windows
 from garage import status as _status
 from playwright.sync_api import Page, expect
 from viewer_ready import settled
@@ -274,7 +275,8 @@ def test_a_saved_variant_of_an_overlay_is_its_overlay_in_the_editor(page: Page, 
     page.route("**/parts/gridfinity/saved/wide", one)
     _open(page, url)
     _edit(page, "gridfinity")
-    row = page.locator(".scad-saved .saved-row[data-variant='wide']")
+    windows.show(page, "part-variants")
+    row = page.locator("#part-saved .saved-row[data-variant='wide']")
     expect(row.locator(".saved-kind")).to_have_text("overlay")
     row.locator(".saved-variant").click()
     expect(_status(page)).to_contain_text(

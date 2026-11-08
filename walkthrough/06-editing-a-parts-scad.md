@@ -41,7 +41,7 @@ calibration_cube regenerated from its edited SCAD: an applied variant, not saved
 
 ## 4. Part › Save keeps it as a variant in git
 
-calibration_cube's ring, Part › Save: the edited SCAD, its values in it, committed to refs/apothecary/variants/calibration_cube/variant-1, the name the editor offered. Nothing in the checkout changes; a merge would bring it, its values with it, and merging is yours to do. It is listed in the part's Variants and, in the editor, with what it changes against the part's SCAD and that HEAD does not hold it. Fullscreen is the next step.
+calibration_cube's ring, Part › Save: the edited SCAD, its values in it, committed to refs/apothecary/variants/calibration_cube/variant-1, the name the editor offered. Nothing in the checkout changes; a merge would bring it, its values with it, and merging is yours to do. It is listed in the part's Variants, its tab pressed to bring it in front of Parameters, with what it changes against the part's SCAD and that HEAD does not hold it. Fullscreen is the next step.
 
 ![Part › Save keeps it as a variant in git](screenshots/06-04-part-save-keeps-it-as-a-variant-in-git.png)
 
@@ -57,7 +57,7 @@ Its Fullscreen button: the editor over the whole page, the code as tall as it ca
 
 ## 6. Round two: a name, a change and Save
 
-In the SCAD window: a name typed, taller, and the top made as big as the cube, rendered once it reads, 20 mm tall; then Ctrl+S in the editor, OpenSCAD's key, which saves as its Save does. Both variants are listed in Variants, brought in front of Parameters, newest first. Drawing the first again is the next step.
+In the SCAD window: a name typed, taller, and the top made as big as the cube, rendered once it reads, 20 mm tall; then Ctrl+S in the editor, OpenSCAD's key, which saves as its Save does. Both variants are listed in Variants, still in front of Parameters, newest first, the list following each Save. Drawing the first again is the next step.
 
 ![Round two: a name, a change and Save](screenshots/06-06-round-two-a-name-a-change-and-save.png)
 

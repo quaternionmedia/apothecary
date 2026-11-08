@@ -187,16 +187,20 @@ PART = System(
         Section(
             "scad",
             "SCAD",
-            "the part's SCAD in the editor: checked as typing stops, rendered, saved as a variant",
+            "the part's SCAD in the editor: checked as typing stops, rendered, and saved "
+            "under the name beside Save, as a variant Variants lists",
             home="beside",
             verbs=("part:scad", "part:save"),
         ),
+        # Every saved variant: Part › Variants' cells, and Part › Variants › Deleted's.
         Section(
             "variants",
             "Variants",
-            "the part's saved variants, each drawn again from its row, and the compare",
+            "every saved variant of the part, with what it changes: drawn from its row, "
+            "renamed, duplicated, an earlier save restored, compared, deleted to the trash "
+            "and restored from it",
             home="part-parameters",
-            verbs=("part:variant:",),
+            verbs=("part:variant:", "part:trash:"),
         ),
         Section(
             "history",

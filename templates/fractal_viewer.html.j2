@@ -585,20 +585,16 @@
                                  border: 1px solid #2a2f38; padding: 2px 4px; font: inherit; }
         .scad-code { height: 260px; border: 1px solid #2a2f38; border-radius: 4px; overflow: hidden; }
         .scad-code .cm-editor { height: 100%; }
-        /* Out of Selected, in a window of its own, the editor fills it: the code takes
-           what its bar and the saved list leave. */
-        /* The Part's SCAD window: the editor fills it, the code taking what the bar and
-           the saved list leave. */
+        /* The Part's SCAD window: the editor fills it, the code taking what the bar
+           leaves. */
         .panel[data-panel="part-scad"] .panel-body-slot { display: flex; flex-direction: column; }
         .panel[data-panel="part-scad"] .panel-body-slot > div, .panel[data-panel="part-scad"] [data-section="scad"],
         .panel[data-panel="part-scad"] .scad-slot { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
         .panel[data-panel="part-scad"] .scad-editor { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
         .panel[data-panel="part-scad"] .scad-code { flex: 1 1 auto; height: auto; min-height: 160px; }
-        .panel[data-panel="part-scad"] .scad-saved { max-height: 22vh; overflow: auto; }
         .scad-editor.fullscreen { position: fixed; inset: 0; z-index: 900; background: #1b1e24;
                                   padding: 10px 14px; }
         .scad-editor.fullscreen .scad-code { flex: 1; height: auto; min-height: 0; }
-        .scad-editor.fullscreen .scad-saved { max-height: 28vh; overflow: auto; }
         .saved-row { padding: 4px 0; border-bottom: 1px solid #23272e; font-size: 11px; }
         .saved-row .saved-variant { background: none; border: 0; padding: 0; color: #4a9eff;
                                     cursor: pointer; font: inherit; font-weight: 600; }
@@ -610,7 +606,7 @@
         .variant-diff summary { cursor: pointer; color: #8a929e; }
         .variant-diff pre { max-height: 200px; overflow: auto; font-size: 11px; background: #14161a;
                             padding: 4px; margin: 4px 0; white-space: pre; }
-        .saved-list .empty, .scad-saved .empty { color: #8a929e; font-size: 11px; }
+        .saved-list .empty { color: #8a929e; font-size: 11px; }
         .section-empty { color: #8a929e; font-size: 0.78rem; font-style: italic; margin: 0.2rem 0; }
         .param input[type=checkbox] { margin-top: 4px; accent-color: #4a9eff; }
         .param input.text, .param .vector input { background: #14161a; color: #d7dae0;
@@ -869,7 +865,7 @@
         import { mountTasks } from '/static/widgets/tasks.js';
         import { mountAirgap } from '/static/widgets/airgap.js';
         import { knownWindows, transientWindows, mountSystems, openFor } from '/static/systems.js';
-        import { mountScadEditor, variantChoices } from '/static/widgets/scad_editor.js';
+        import { mountScadEditor, variantChoices, historyRows, trashRows } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
         import { parseAssignments, lastOf, literalText, writeValues } from '/static/widgets/assignments.js';
         import { makeMachineMarks, makeBoardBadge, sayBoard, toScene as marksToScene, toolPosition as toolPositionOf } from '/static/machine_marks.js';
@@ -1039,9 +1035,6 @@
         // Render on demand: after a frame is drawn, the badges are placed again for
         // this many frames more (anchors.js tests what hides them every few).
         const ANCHOR_TAIL_FRAMES = 8;
-        // The newest of a part's saved variants listed in its Variants window; the
-        // SCAD window lists them all.
-        const SAVED_SHORT_LIST = 5;
         // Whether a key pressed is a person typing: in a box, or in the SCAD editor.
         const typing = (el) => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
         // Whether the focus is somewhere that has keys of its own -- a box written in (a
@@ -4389,11 +4382,38 @@
                     .map((block) => { block.remove(); return [block.dataset.section, block]; }));
                 this.partSection.label = target.label ?? target.part ?? target.key;
                 this.showPartSections();
-                const shortList = this.partEl('#part-saved');
-                if (shortList) {
-                    shortList.onclick = (ev) => {
+                // The part's saved variants, in its Variants window: one chosen draws it;
+                // its ⋯ unfolds what can be done to it, each of which manageVariant does.
+                const savedList = this.partEl('#part-saved');
+                if (savedList) {
+                    const say = ({ ok, said }) => this.setStatus(said, ok ? 'success' : 'error');
+                    const verbs = { 'variant-rename': 'rename', 'variant-duplicate': 'duplicate', 'variant-history': 'history',
+                        'variant-compare': 'compare', 'variant-delete': 'delete', 'variant-restore': 'restore',
+                        'trash-restore': 'undelete', 'trash-forget': 'forget', 'trash-empty': 'empty' };
+                    savedList.onclick = (ev) => {
                         const chosen = ev.target.closest('.saved-variant');
-                        if (chosen) this.chooseSavedVariant(target, chosen.dataset.variant);
+                        if (chosen) { this.chooseSavedVariant(target, chosen.dataset.variant); return; }
+                        const more = ev.target.closest('.variant-more');
+                        if (more) {
+                            const box = more.parentElement.querySelector('.variant-manage');
+                            box.hidden = !box.hidden;
+                            if (!box.hidden) box.querySelector('.variant-to').focus();
+                            return;
+                        }
+                        const button = ev.target.closest('button');
+                        const verb = button && Object.entries(verbs).find(([cls]) => button.classList.contains(cls))?.[1];
+                        if (!verb) return;
+                        const row = button.closest('[data-variant]');
+                        const to = row?.querySelector('.variant-to')?.value.trim() || '';
+                        this.manageVariant(target, verb, row?.dataset.variant ?? null, { to, commit: button.dataset.commit ?? null, button }).then(say);
+                    };
+                    // Enter in a variant's name box: what the ring's Rename or Duplicate readied, else Rename.
+                    savedList.onkeydown = (ev) => {
+                        const box = ev.target.closest('.variant-to');
+                        if (!box || ev.key !== 'Enter') return;
+                        ev.preventDefault();
+                        const row = box.closest('[data-variant]');
+                        this.manageVariant(target, box.dataset.verb || 'rename', row.dataset.variant, { to: box.value.trim() }).then(say);
                     };
                 }
                 // A recent apply's row draws it again, from the cache.
@@ -5895,10 +5915,11 @@
 
             // ---- a part's saved variants, managed ---------------------------------
             //
-            // From a variant's ⋯ in the editor: renamed or duplicated under the name typed
-            // beside it, its history shown and an earlier save restored, compared with what
-            // is drawn, or deleted -- moved to the trash, which the Deleted fold lists, each
-            // restorable, and emptied (one, or all) only when asked twice. What to say.
+            // From a variant's ⋯ in the Variants window: renamed or duplicated under the
+            // name typed beside it, its history shown and an earlier save restored,
+            // compared with what is drawn, or deleted -- moved to the trash, which the
+            // Deleted fold lists, each restorable, and emptied (one, or all) only when
+            // asked twice. What to say.
 
             async manageVariant(target, verb, name, { to = '', commit = null, button = null, confirmed = false } = {}) {
                 const part = encodeURIComponent(target.part);
@@ -5940,14 +5961,14 @@
                     }
                     if (verb === 'history') {
                         const commits = await ask('GET', `/saved/${v}/history`);
-                        this.scadEditor?.showHistory(name, commits);
+                        this.showVariantHistory(target, name, commits);
                         return { ok: true, said: `${target.part}: ${name}'s ${commits.length} save${commits.length === 1 ? '' : 's'}, newest first; Restore puts it back as it was at one` };
                     }
                     if (verb === 'restore') {
                         await ask('POST', `/saved/${v}/restore`, { commit });
                         const commits = await ask('GET', `/saved/${v}/history`);
                         await this.loadSavedVariants(target);
-                        this.scadEditor?.showHistory(name, commits);
+                        this.showVariantHistory(target, name, commits);
                         return { ok: true, said: `${target.part}: ${name} is as it was at ${commit.slice(0, 7)} again, a new save of it; its history keeps what came between. Choosing it draws it` };
                     }
                     if (verb === 'delete') {
@@ -5981,20 +6002,22 @@
             }
 
             // The ring's cells for a saved variant and the trash: the part's editor opened,
-            // its SCAD loaded, then what the variant's buttons do. Rename and Duplicate need
-            // a name, which no cell types: the variant's row unfolds with the cursor in its
-            // name box, and Enter there does it. What to say.
+            // its SCAD loaded, and its Variants window in front -- opening the editor put
+            // Parameters there -- then what the variant's buttons do. Rename and Duplicate
+            // need a name, which no cell types: the variant's row unfolds with the cursor in
+            // its name box, and Enter there does it. What to say.
             async variantOn(path, where, verb, name, confirmed = false) {
                 const target = await this.scadOn(path);
                 if (!target) return { ok: false, said: `${path} has no saved variants here` };
+                this.systems.part.showSection('variants');
                 if (where === 'variant' && verb === 'draw') return this.openSavedVariant(target, name);
                 if (where === 'variant' && (verb === 'rename' || verb === 'duplicate')) {
-                    const ready = this.scadEditor?.armVariant(name, verb);
+                    const ready = this.armVariant(target, name, verb);
                     if (!ready) return { ok: false, said: `${target.part}: no saved variant ${name}` };
                     return { ok: true, said: `${target.part}: type the name to ${verb === 'rename' ? 'rename' : 'copy'} ${name} to, in its box, and press Enter` };
                 }
                 if (where === 'trash') {
-                    this.scadEditor?.openTrash();
+                    this.openTrash(target);
                     return this.manageVariant(target, { restore: 'undelete', forget: 'forget', empty: 'empty' }[verb], name, { confirmed });
                 }
                 return this.manageVariant(target, verb, name);
@@ -6328,12 +6351,9 @@
                         onChange: (text, how) => this.scadChanged(target, text, how),
                         onSave: () => this.saveScadKey(target),
                         onFullscreen: () => this.toggleScadFullscreen(),
-                        onChoose: (name) => this.chooseSavedVariant(target, name),
                         onCheck: () => this.checkAndDraw(target),
                         onApply: () => this.applyKey(target),
                         onName: () => { scad.replacing = null; },
-                        onManage: (verb, name, extra) => this.manageVariant(target, verb, name, extra)
-                            .then(({ ok, said }) => this.setStatus(said, ok ? 'success' : 'error')),
                     };
                     // This part's editor as it was left, when it was: its text, its undo.
                     let editor = this.scadEditors.get(target.key);
@@ -6524,9 +6544,10 @@
                 this.setStatus(said, ok ? 'success' : 'error');
             }
 
-            // The part's variants saved in git: a short list in Variants, all of
-            // them in the SCAD window, each with what it changes. The name Save
-            // keeps an edit under when none is typed is the next free one.
+            // The part's variants saved in git, every one in its Variants window with what
+            // it changes and its ⋯, and the deleted ones in the Deleted fold under them,
+            // left open or shut as it was. The name Save keeps an edit under when none is
+            // typed is the next free one.
             async loadSavedVariants(target, chosen = null) {
                 const scad = this.scadStages[target.key];
                 if (!scad || !target.part) return;
@@ -6546,12 +6567,45 @@
                     this.scadEditor?.suggest(scad.suggested);
                     this.nameFollowsText(target);
                 }
-                const short = this.partEl('#part-saved');
-                if (short && this.partSection.dataset.target === target.key) {
-                    short.innerHTML = variantChoices(scad.saved.slice(0, SAVED_SHORT_LIST), { chosen: mark })
-                        + (scad.saved.length > SAVED_SHORT_LIST ? `<div class="saved-numbers">and ${scad.saved.length - SAVED_SHORT_LIST} more in the editor</div>` : '');
-                }
-                if (this.scadTarget?.key === target.key) this.scadEditor?.showVariants(scad.saved, mark, scad.trash);
+                const list = this.variantList(target);
+                if (!list) return;
+                const open = list.querySelector('.variant-trash')?.open;
+                list.innerHTML = variantChoices(scad.saved, { chosen: mark })
+                    + `<details class="fold variant-trash"${open ? ' open' : ''}><summary>Deleted (${scad.trash.length})</summary>${trashRows(scad.trash)}</details>`;
+            }
+
+            // The Variants window's list of the part being edited, while `target` is.
+            variantList(target) {
+                return this.partSection?.dataset.target === target.key ? this.partEl('#part-saved') : null;
+            }
+
+            // A variant's row unfolded, the cursor in its name box, Enter to do `verb`.
+            armVariant(target, name, verb) {
+                const row = [...(this.variantList(target)?.querySelectorAll('.saved-row') ?? [])].find((r) => r.dataset.variant === name);
+                if (!row) return false;
+                row.querySelector('.variant-manage').hidden = false;
+                const box = row.querySelector('.variant-to');
+                box.dataset.verb = verb;
+                box.placeholder = verb === 'rename' ? `rename ${name} to…` : `copy ${name} as…`;
+                box.focus();
+                box.scrollIntoView({ block: 'nearest' });
+                return true;
+            }
+
+            // The trash's fold opened, to see what the ring's Deleted does.
+            openTrash(target) {
+                const fold = this.variantList(target)?.querySelector('.variant-trash');
+                if (fold) fold.open = true;
+            }
+
+            // A variant's history, unfolded under its row.
+            showVariantHistory(target, name, commits) {
+                const row = [...(this.variantList(target)?.querySelectorAll('.saved-row') ?? [])].find((r) => r.dataset.variant === name);
+                const box = row?.querySelector('.variant-history-list');
+                if (!box) return false;
+                row.querySelector('.variant-manage').hidden = false;
+                box.innerHTML = historyRows(name, commits);
+                return true;
             }
 
             // Save: the SCAD as the editor has it and the numbers staged, a variant in
@@ -6603,6 +6657,9 @@
                 editor.setName(name);
                 this.keepWork(target, { now: true });
                 await this.loadSavedVariants(target, name);
+                // The list follows it: the Variants window opened when it is closed, and
+                // left where it is, in front or not, when it is open.
+                if (!this.panels.isOpen('part-variants')) this.systems.part.showSection('variants');
                 this.noteSaved(target, name, asked.text);
                 // How the variant becomes the part's source is the editor's to say; the
                 // status line says what was saved and what comes next.
@@ -9336,7 +9393,7 @@
                 }
                 // Part › Variants › a variant › Draw, Rename, Duplicate, History, Compare,
                 // Delete; and Part › Variants › Deleted › a variant › Restore, Forget, and
-                // Empty: what its row's buttons in the editor's list do.
+                // Empty: what its row's buttons in the Variants window's list do.
                 const cell = /^part:(?:variant:(draw|rename|duplicate|history|compare|delete)|trash:(restore|forget)):(.+)$/.exec(action);
                 if (cell || action === 'part:trash:empty') {
                     const [where, verb, name] = !cell ? ['trash', 'empty', null] : cell[1] ? ['variant', cell[1], cell[3]] : ['trash', cell[2], cell[3]];
@@ -9504,15 +9561,15 @@
             // The part editor's buttons are the cells of Part, wherever the editor stands
             // (in Selected, popped out, over the page): their tooltips teach the digits.
             for (const [selector, action] of PART_VERBS) for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
-            for (const el of document.querySelectorAll('.part-editor .saved-variant, .scad-editor .saved-variant')) pairs.push([el, `part:variant:draw:${el.dataset.variant}`]);
+            for (const el of document.querySelectorAll('#part-saved .saved-variant')) pairs.push([el, `part:variant:draw:${el.dataset.variant}`]);
             // A saved variant's buttons under its ⋯, and the trash's, are its cells.
             for (const [cls, verb] of [['variant-rename', 'rename'], ['variant-duplicate', 'duplicate'], ['variant-history', 'history'], ['variant-compare', 'compare'], ['variant-delete', 'delete']]) {
-                for (const el of document.querySelectorAll(`.scad-editor .saved-row[data-variant] .${cls}`)) pairs.push([el, `part:variant:${verb}:${el.closest('[data-variant]').dataset.variant}`]);
+                for (const el of document.querySelectorAll(`#part-saved .saved-row[data-variant] .${cls}`)) pairs.push([el, `part:variant:${verb}:${el.closest('[data-variant]').dataset.variant}`]);
             }
             for (const [cls, verb] of [['trash-restore', 'restore'], ['trash-forget', 'forget']]) {
-                for (const el of document.querySelectorAll(`.scad-editor .trash-row[data-variant] .${cls}`)) pairs.push([el, `part:trash:${verb}:${el.closest('[data-variant]').dataset.variant}`]);
+                for (const el of document.querySelectorAll(`#part-saved .trash-row[data-variant] .${cls}`)) pairs.push([el, `part:trash:${verb}:${el.closest('[data-variant]').dataset.variant}`]);
             }
-            for (const el of document.querySelectorAll('.scad-editor .trash-empty')) pairs.push([el, 'part:trash:empty']);
+            for (const el of document.querySelectorAll('#part-saved .trash-empty')) pairs.push([el, 'part:trash:empty']);
             annotate(ring, pairs);
         }
         // The Airgap's buttons, by the verb each one is (Panels › Airgap).

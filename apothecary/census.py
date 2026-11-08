@@ -179,7 +179,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "param-text": (WIDGET, WHAT_YOU_SEE, "a box that stages a part's words"),
     "param-coord": (WIDGET, WHAT_YOU_SEE, "a box that stages one number of a vector, captioned"),
     "cand": (WIDGET, WHAT_YOU_SEE, "a button that stages a contested number's candidate"),
-    # A saved variant managed from its ⋯ in the SCAD editor's list (widgets/scad_editor.js):
+    # A saved variant managed from its ⋯ in the part's Variants window (widgets/scad_editor.js):
     # renamed or duplicated under the name typed beside it, its history and a save of it
     # restored, compared with what is drawn, deleted to the trash; the trash's Deleted
     # fold restores one, or deletes one or all for good, each asked twice.
@@ -222,7 +222,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "part-upstream": (WIDGET, NOTHING, "a link that opens a part's upstream SCAD, read only"),
     # The SCAD editor (widgets/scad_editor.js):
     # the name a save keeps a variant under, Save and Fullscreen; and a saved variant
-    # chosen from a list -- in the part's Variants window, or in the editor.
+    # chosen from the list in the part's Variants window.
     "scad-name": (WIDGET, WHAT_YOU_SEE, "a box for the name a variant is saved under"),
     "scad-save": (WIDGET, WHAT_IS_THERE, "a button that saves the SCAD as a variant in git"),
     "scad-fullscreen": (
