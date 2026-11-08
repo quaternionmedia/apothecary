@@ -165,9 +165,11 @@ several it refuses to guess.
 The **Bench** is the same toolchain in front of the world: a tab beside
 Pictures (the ring's Panels › Bench; `/firmware` opens the viewer with it). It holds arduino-cli and esptool as installed,
 with **Install** or **Update** (*force* downloads it again); every other
-toolchain module under them -- Rust for the ESP32, its cargo and espflash as
-found, its problems and what it can do -- with an **Install** of its own (`POST
-/firmware/toolchains/{id}/install`; *force* fetches its tools again); Panels ›
+toolchain module under them -- Rust for the ESP32 (its cargo and espflash as
+found) and the [Stream Deck +](stream-deck.md) (a Python package and the system's
+hidapi; it builds nothing) -- each with its problems, what it can do and an **Install** of
+its own (`POST /firmware/toolchains/{id}/install`; *force* fetches its tools again; the
+Stream Deck's is refused and names what installs each tool); Panels ›
 Bench › Install is a ring of the modules, one cell each, drawn from their
 registry (Arduino's arduino-cli, Rust ESP32, and any added later), with the
 slicer's, OrcaSlicer, after them ([the slicer](slicer.md#in-the-page)); the suggested

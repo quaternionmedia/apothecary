@@ -15,6 +15,9 @@ The modules (``_registry`` is the list):
 - ``rust-esp32`` (``modules/rust_esp32.py``): cargo builds a Cargo project
   for the classic ESP32 on Espressif's Xtensa Rust toolchain, offline, from
   crates vendored at install time; espflash flashes it.
+- ``stream-deck`` (``modules/stream_deck.py``): the Elgato Stream Deck +, found on
+  USB, drawn and heard through python-elgato-streamdeck (``firmware/deck.py``). It
+  builds and flashes nothing; its ``can`` says what it does.
 
 **Ports, too.** A module may find ports and listen to a board itself
 (``ports``, ``monitor_argv``, ``probe``): Arduino through arduino-cli's
@@ -207,8 +210,9 @@ class ToolchainModule(ABC):
 def _registry() -> Dict[str, ToolchainModule]:
     from .arduino import ArduinoModule
     from .rust_esp32 import RustEsp32Module
+    from .stream_deck import StreamDeckModule
 
-    return {m.id: m for m in (ArduinoModule(), RustEsp32Module())}
+    return {m.id: m for m in (ArduinoModule(), RustEsp32Module(), StreamDeckModule())}
 
 
 _MODULES: Optional[Dict[str, ToolchainModule]] = None

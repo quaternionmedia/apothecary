@@ -59,6 +59,7 @@ from .firmware import grbl as firmware_grbl
 from .firmware.api import _device_view as firmware_device_view
 from .firmware.api import router as firmware_router
 from .firmware.bindings import bindings_for_site, device_for_identity, same_device
+from .firmware.deck_api import router as firmware_deck_router
 from .firmware.models import DeviceAttachRequest, validate_port
 from .firmware.toolchains import ToolchainError
 from .hierarchy import Assembly
@@ -478,6 +479,7 @@ def _part_payload(part, params_query: str | None) -> Dict[str, object]:
 
 
 app.include_router(firmware_router)
+app.include_router(firmware_deck_router)
 
 
 @app.get("/")

@@ -1237,12 +1237,14 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [(c.label, c.action, c.cell) for c in install.children] == [
         ("Arduino", "bench:install:arduino", 8),
         ("Rust ESP32", "bench:install:rust-esp32", 6),
+        ("Stream Deck", "bench:install:stream-deck", 2),
         # The slicer's modules after the toolchain's, from their own registry.
-        ("OrcaSlicer", "bench:install:slicer:orcaslicer", 2),
+        ("OrcaSlicer", "bench:install:slicer:orcaslicer", 4),
     ]
     assert address_of(root, "bench:install:arduino") == "4368"
     assert address_of(root, "bench:install:rust-esp32") == "4366"
-    assert address_of(root, "bench:install:slicer:orcaslicer") == "4362"
+    assert address_of(root, "bench:install:stream-deck") == "4362"
+    assert address_of(root, "bench:install:slicer:orcaslicer") == "4364"
     # A core by its architecture, one leaf per suggested core.
     cores = bench.children[6]
     assert [c.label for c in cores.children] == ["AVR", "ESP32", "ESP8266", "RP2040", "SAMD"]

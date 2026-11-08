@@ -432,6 +432,29 @@ def firmware_devices(json_out: bool):
         _print_device(d, e)
 
 
+@firmware.command("decks")
+@click.option("--json-out/--text", default=False)
+def firmware_decks(json_out: bool):
+    """The Stream Deck + decks found on USB (none is opened), and what is missing if none can be."""
+    from ..firmware import deck
+
+    try:
+        found = deck.get_decks().list()
+    except deck.DeckUnavailable as exc:
+        _die(exc)
+    if json_out:
+        click.echo(json.dumps([d.model_dump() for d in found], indent=2))
+        return
+    if not found:
+        click.echo("No Stream Deck + found.")
+        return
+    for d in found:
+        click.echo(
+            f"{d.id}  {d.model}  {d.vid}:{d.pid}  {d.keys} keys, {d.knobs} knobs"
+            + ("  (simulated)" if d.simulated else "")
+        )
+
+
 @firmware.command("probe")
 @click.argument("port")
 def firmware_probe(port: str):

@@ -60,12 +60,12 @@ def _wait(client, task_id):
 # --- the interface ----------------------------------------------------------------
 
 
-def test_two_modules_each_saying_what_it_builds():
-    """Arduino first; Rust for the ESP32 beside it. Another family or language is
-    another entry here, not a change to the callers."""
+def test_three_modules_each_saying_what_it_does():
+    """Arduino first; Rust for the ESP32 beside it, the Stream Deck + after it. Another
+    family or language is another entry here, not a change to the callers."""
     found = modules()
-    assert [m.id for m in found] == ["arduino", "rust-esp32"]
-    arduino, rust = found
+    assert [m.id for m in found] == ["arduino", "rust-esp32", "stream-deck"]
+    arduino, rust, _deck = found
     assert arduino.languages == ("arduino",) and "esp32" in arduino.families
     assert arduino.needs_board
     assert rust.languages == ("rust",) and rust.families == ("esp32",)
@@ -279,7 +279,8 @@ def test_the_tools_dir_cargo_runs_with_its_homes_there_and_the_vendored_crates(
 def test_status_says_each_module_and_its_tools(fake_rust, tmp_path):
     status = service.toolchain_status()
     assert status.arduino_cli_ok and status.ok  # the top level is Arduino's
-    arduino, rust = status.toolchains
+    arduino, rust, deck = status.toolchains
+    assert deck.id == "stream-deck" and deck.label == "Stream Deck +" and not deck.installable
     assert arduino.id == "arduino" and arduino.ok and arduino.tools[0].name == "arduino-cli"
     assert rust.id == "rust-esp32" and rust.label == "Rust for the ESP32"
     assert rust.ok and [t.name for t in rust.tools] == ["cargo", "espflash"]
@@ -354,10 +355,10 @@ def test_the_status_route_and_the_toolchains_route_carry_every_module(fake_rust)
     client = TestClient(app)
     status = client.get("/firmware/status").json()
     assert status["arduino_cli_ok"] and status["ok"]
-    assert [t["id"] for t in status["toolchains"]] == ["arduino", "rust-esp32"]
+    assert [t["id"] for t in status["toolchains"]] == ["arduino", "rust-esp32", "stream-deck"]
     assert status["toolchains"][1]["ok"]
     listed = client.get("/firmware/toolchains").json()
-    assert [t["id"] for t in listed] == ["arduino", "rust-esp32"]
+    assert [t["id"] for t in listed] == ["arduino", "rust-esp32", "stream-deck"]
     sketches = client.get("/firmware/sketches").json()
     rust = next(s for s in sketches if s["id"] == RUST)
     assert rust["toolchain"] == "rust-esp32" and rust["name"] == "esp32_blink"

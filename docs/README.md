@@ -55,6 +55,7 @@ suites hold everything else.
 |---|---|
 | [The dev loop](dev-loop.md) | Change, see, test, commit, integrate: a command for each step, two servers at once on two ports, what others pushed brought into a checkout, and a change brought into main |
 | [The viewer](viewer.md) | The page's own controls: the header and ⚙ View, the world and its faded walls and badges, the ring and its addresses, the windows, the part editor and the SCAD editor, the keys |
+| [The Stream Deck +](stream-deck.md) | An Elgato Stream Deck + found on USB, its keys and strip drawn and its keys, knobs and touches heard, through a module beside the toolchains: setting it up, what is found, drawn and heard, its routes and the simulated deck |
 | [Windows and focused systems](windows-and-systems.md) | For an author: a window of the page -- where it opens, what a browser remembers, an empty one -- and a focused system's registry entry, its widget's hook, and the tests that hold each |
 | [The family's hub](family.md) | apothecary as the `irl` family's hub on hearth's contract: its routes, its table, what goes through it and how `hearth check` judges it |
 | [Lighting](lighting.md) | A site's lighting rig -- fixture types, a patch, live levels -- the theatre site that uses it, another console's exports in its place, and a console's levels by sACN or OSC |

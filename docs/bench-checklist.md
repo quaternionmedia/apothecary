@@ -362,6 +362,26 @@ only with the table clear and no tool in the collet until the last box.
 - [ ] With a tool and stock, the first real cut from a CAM post's file, the
       spindle at its dial's speed: watch the first pass.
 
+## J. The Stream Deck +
+
+Plug the deck in and close Elgato's own software first: it holds the device, and two
+programs cannot. Nothing here moves a machine; the knobs' jogs are further down.
+
+- [ ] `uv sync --extra deck`, then `sudo apt install libhidapi-libusb0` (Debian and
+      Ubuntu). `uv run apothecary check` lists *Stream Deck +* with both tools found;
+      the Bench's card says the same, and its Install is greyed.
+- [ ] `uv run apothecary firmware decks` lists the deck as `0x0fd9:0x0084`, 8 keys,
+      4 knobs, and opens nothing: the deck's screen is as it was. Without the udev
+      rule for the device, a command that acts on it says it cannot be opened.
+- [ ] `PUT /firmware/decks/{id}/keys/0` with `{"text": "X+", "colour": "blue"}` (the
+      id is the one the list gave): key 0, top left, shows *X+* on blue. The strip
+      takes `PUT .../strip`. `GET .../keys/0/image` is the picture sent.
+- [ ] Press each key, turn each knob a click each way, press each knob, tap the strip,
+      hold it and drag across it. `GET .../events` lists each: a key's press and
+      release, a knob's steps (clockwise positive), the press, and the touch's
+      kind and strip coordinates (the strip is 800 wide, 100 tall).
+- [ ] `POST .../release`, then draw a key again: the deck is opened afresh.
+
 ## Results
 
 | Section | Date | Passed | Notes |
@@ -379,3 +399,4 @@ only with the table clear and no tool in the collet until the last box.
 | G. Stop and let go | | | |
 | H. The ESP32 | | | |
 | I. The router | | | |
+| J. The Stream Deck + | | | |
