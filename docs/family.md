@@ -132,7 +132,10 @@ folder, `procedures/<site>/<name>.json`:
 
 Every step waits for a person's GO, and only the step standing by fires: the one whose
 predecessor has fired, once the evidence it names is in. GO is in the **Procedure**
-window, ⊞ Windows › Procedure, which says who the family is and how each step stands.
+window, which says who the family is and how each step stands. It stands beside the world
+whenever the site has a procedure, without being asked for, and gives its room back on a site
+with none; a window a person closed stays closed, and one a person opened is the person's.
+It is also ⊞ Windows › Procedure.
 `apothecary serve --demo` starts with one, `bring-up`, on the garage's simulated bench.
 
 The window leads to where each step's work is. A step's node is a door: pressed, the

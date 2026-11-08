@@ -28,6 +28,7 @@ WITHIN = 15_000
 # A flash through the scripted arduino-cli, and a hello heard: a member's work, longer
 # than an answer.
 WORK = 30_000
+PROCEDURE = ".panel[data-panel='procedure']"
 
 STEPS = [
     {
@@ -154,7 +155,7 @@ def test_a_procedure_through_the_window(page: Page, url: str, walkthrough):
     errors: list = []
     page.on("pageerror", lambda err: errors.append(str(err)))
     open_garage(page, url)
-    windows.from_the_windows_menu(page, "procedure")
+    expect(page.locator(PROCEDURE)).to_be_visible(timeout=WITHIN)
 
     # 1. Who the family is, the hub's own among them, and the first step standing by.
     family = page.locator(".procedure-family")
@@ -169,8 +170,9 @@ def test_a_procedure_through_the_window(page: Page, url: str, walkthrough):
     _stands(second, "waiting")
     expect(second.locator(".procedure-go")).to_have_count(0)
     story.shows(
-        "The Procedure, from ⊞ Windows: the family, and the steps",
-        "⊞ Windows › Procedure opens the window beside the world. The family is the hub's "
+        "The Procedure, beside the world: the family, and the steps",
+        "The garage has a procedure, so the Procedure stands beside the world without being "
+        "asked for. The family is the hub's "
         "own three: machine and board, hosted here, are doors, and camera, a pull member a "
         "page reads, is a name. Each step has its number, its discipline and its node, a "
         "door to the window its work is in; the first stands by with its GO, the rest wait.",
@@ -305,3 +307,56 @@ def test_a_procedure_through_the_window(page: Page, url: str, walkthrough):
         shown=f"1 {first.locator('.procedure-status').inner_text()}",
     )
     assert errors == []
+
+
+def _beside_the_world(page: Page) -> bool:
+    """The Procedure's window stands right of the world's and does not overlap it."""
+    return page.evaluate(
+        """() => {
+            const w = document.querySelector('.world-window').getBoundingClientRect();
+            const p = document.querySelector(".panel[data-panel='procedure']").getBoundingClientRect();
+            return p.width > 0 && p.left >= w.right - 1;
+        }"""
+    )
+
+
+@pytest.mark.e2e
+def test_the_procedure_stands_beside_the_world_while_the_site_has_one(page: Page, url: str):
+    """The Procedure opens beside the world on a site with a procedure, gives its room
+    back on a site with none and returns with the procedure; a person's ✕ keeps it
+    closed, and a window a person opened is not closed by the page."""
+    open_garage(page, url)
+    expect(page.locator(PROCEDURE)).to_be_visible(timeout=WITHIN)
+    assert _beside_the_world(page)
+
+    # A site with no procedure: the room goes back to the world.
+    from garage import to_site
+
+    to_site(page, "apothecary")
+    expect(page.locator(PROCEDURE)).to_have_count(0, timeout=WITHIN)
+    to_site(page, "garage")
+    expect(page.locator(PROCEDURE)).to_be_visible(timeout=WITHIN)
+
+    # A person's ✕: closed, and it stays closed on the next visit.
+    page.locator(".lm_tab", has_text="Procedure").locator(".lm_close_tab").click()
+    expect(page.locator(PROCEDURE)).to_have_count(0)
+    page.reload()
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=WITHIN)
+    page.wait_for_timeout(1500)
+    expect(page.locator(PROCEDURE)).to_have_count(0)
+
+    # Opened by a person from ⊞ Windows: the page does not take it back.
+    windows.from_the_windows_menu(page, "procedure")
+    expect(page.locator(PROCEDURE)).to_be_visible()
+    to_site(page, "apothecary")
+    page.wait_for_timeout(1500)
+    expect(page.locator(PROCEDURE)).to_be_visible()
+
+
+@pytest.mark.e2e
+def test_a_site_with_no_procedure_has_no_procedure_window(page: Page, start_server):
+    """On a state with no procedure the page opens as it always did."""
+    url = start_server()
+    open_garage(page, url)
+    page.wait_for_timeout(1500)
+    expect(page.locator(PROCEDURE)).to_have_count(0)

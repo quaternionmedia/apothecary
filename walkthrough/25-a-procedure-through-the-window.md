@@ -17,11 +17,11 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ---
 
-## 1. The Procedure, from ⊞ Windows: the family, and the steps
+## 1. The Procedure, beside the world: the family, and the steps
 
-⊞ Windows › Procedure opens the window beside the world. The family is the hub's own three: machine and board, hosted here, are doors, and camera, a pull member a page reads, is a name. Each step has its number, its discipline and its node, a door to the window its work is in; the first stands by with its GO, the rest wait.
+The garage has a procedure, so the Procedure stands beside the world without being asked for. The family is the hub's own three: machine and board, hosted here, are doors, and camera, a pull member a page reads, is a name. Each step has its number, its discipline and its node, a door to the window its work is in; the first stands by with its GO, the rest wait.
 
-![The Procedure, from ⊞ Windows: the family, and the steps](screenshots/25-01-the-procedure-from-windows-the-family-and-the-step.png)
+![The Procedure, beside the world: the family, and the steps](screenshots/25-01-the-procedure-beside-the-world-the-family-and-the-.png)
 
 ## 2. GO on a person's own step: done, and the next stands by
 

@@ -1,7 +1,8 @@
 # The family's journeys through the viewer: a plan
 
 *A plan, dated. Built: slices 1 to 3, less text, the card that surfaces its next
-step, and a step and a member as doors. Each slice is one branch of a local stack,
+step, and a step and a member as doors, then the Procedure beside the world
+while a site has a procedure. Each slice is one branch of a local stack,
 built in the order listed once the owner says yes to it.*
 
 ## What this plans
