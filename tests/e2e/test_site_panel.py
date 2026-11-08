@@ -109,6 +109,7 @@ def test_site_is_a_window_beside_the_world_and_the_retired_panels_are_gone(page,
         "family-deliveries",
         "working",  # the Working space, closed until asked for
         "procedure",  # the Procedure, closed until asked for
+        "deck",  # the Deck, closed until asked for
     ]
     assert windows.state(page, "site")["stack"] == ["site", "problems", "pinned", "jobs", "scad"]
     for gone in ("contents", "validation", "kept", "camera"):
@@ -165,6 +166,7 @@ def test_what_the_rail_remembered_is_ignored_and_forgotten(page, base_url: str):
         ("family-deliveries", False, False),
         ("working", False, False),  # closed until asked for
         ("procedure", False, False),  # closed until asked for
+        ("deck", False, False),  # closed until asked for
     ]
     assert page.locator(windows.WORLD).bounding_box()["x"] <= 1
     assert page.evaluate("() => localStorage.getItem('apothecary.panels')") is None

@@ -62,6 +62,19 @@ POST /firmware/decks/{id}/events               a simulated deck's event, given (
 POST /firmware/decks/{id}/release              → let go of the device
 ```
 
+## In the page
+
+The **Deck** window (⊞ Windows › Deck, the ring's Panels › Deck, or **Open Deck** on the
+`stream_deck` piece of the garage) shows the first deck found: its eight keys and its
+strip as the images last sent to them, `–` where nothing has been drawn from here, its
+four knobs, and the events it has heard, newest first. It follows the deck every second
+and a half while it is in front, which opens the deck. A simulated deck is pressed from
+it -- a key, a knob turned a step either way or pressed, the strip tapped -- each the
+event a real deck reports, posted to the deck's routes; a real deck is pressed by hand
+and the window's controls are off.
+[Walkthrough 26](../walkthrough/26-the-stream-deck.md) goes round it, written by
+`tests/e2e/test_deck.py`.
+
 ## Simulated
 
 With `APOTHECARY_SERIAL_ENGINE=simulated` no HID device is listed or opened. The decks

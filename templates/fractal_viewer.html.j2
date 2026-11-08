@@ -803,6 +803,7 @@
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/bench.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/working_space.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/procedure.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/deck.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/airgap.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/models.css">
     <script type="importmap">
@@ -847,6 +848,7 @@
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
         import { mountProcedure } from '/static/widgets/procedure.js';
         import { mountFamily } from '/static/widgets/family.js';
+        import { mountDeck } from '/static/widgets/deck.js';
         import { mountPictureList } from '/static/widgets/picture_list.js';
         import { mountModels } from '/static/widgets/models.js';
         import { mountToolchain } from '/static/widgets/toolchain.js';
@@ -1784,6 +1786,24 @@
                     },
                 });
                 this.procedureByPage = false;
+                // Deck: the Stream Deck + as apothecary has drawn it, and what it has heard
+                // (widgets/deck.js) -- a stack of its own beside the world, closed until asked for: ⊞ Windows,
+                // or the stream_deck piece's Open Deck. A simulated deck is pressed from here.
+                this.deck = null;
+                this.panels.register('deck', {
+                    title: 'Deck', group: 'Tools', home: 'beside', open: false,
+                    hint: 'The Stream Deck + as drawn from here: its keys and strip as last sent, and what it has heard',
+                    body: (slot) => {
+                        this.deck = mountDeck(slot, {
+                            base: BASE_URL,
+                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                        });
+                        window.apothecaryDeck = this.deck;
+                        this.deck.shown();
+                    },
+                    onOpen: () => this.deck?.shown(),
+                    onClose: () => this.deck?.close(),
+                });
                 // ⊞ Windows: drawn afresh each time it opens, so it says which are open.
                 const windowsBody = this.windowsMenuEl.querySelector('.windows-menu-body');
                 this.windowsMenuEl.addEventListener('toggle', () => {
@@ -4213,7 +4233,20 @@
                         <div class="prop-row"><label>Part</label><span title="The part this machine is drawn as">${esc(node.part_ref)}</span></div>`);
                     return;
                 }
+                if (node.part_ref === 'stream_deck_plus') this.appendDeckDoor();
                 this.appendEditor(this.partTarget(node.part_ref));
+            }
+
+            // The Stream Deck + piece's door to the Deck window: the device it is a model of,
+            // as apothecary has drawn it and what it has heard (widgets/deck.js).
+            appendDeckDoor() {
+                this.selectedBodyEl.insertAdjacentHTML('beforeend', `
+                    <div class="device-section"><div class="device-title">Deck</div>
+                        <button type="button" class="deck-open" title="Open the Deck window: the Stream Deck + as drawn from here, and what it has heard">Open Deck</button></div>`);
+                this.selectedBodyEl.querySelector('.deck-open').addEventListener('click', () => {
+                    this.panels.open('deck');
+                    this.setStatus('Opened the Deck: its keys and strip as last sent, and what it has heard; the Bench lists the Stream Deck + module that finds it', 'success');
+                });
             }
 
             // An element of the part's section: in the section kept for its target,

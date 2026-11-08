@@ -720,6 +720,10 @@ PANELS: Sequence[Tuple[str, str]] = (
     # part's text while the part is edited. Its verbs are a ring of their own under
     # its cell (_airgap), seated last.
     ("airgap", "Airgap"),
+    # The Deck: the Stream Deck + as apothecary has drawn it and what it has heard
+    # (widgets/deck.js), a stack beside the world registered at start and closed until
+    # asked for; the Stream Deck + piece's Open Deck opens it too.
+    ("deck", "Deck"),
 )
 # The views: each focused system's windows laid out together (systems.py), a cell
 # of Panels › Windows after the layout's own two and an entry of the header's

@@ -1,0 +1,23 @@
+/* Deck (widgets/deck.js): the Stream Deck + as drawn from here, and what it has heard.
+ * Scoped to .deck-ui, so the page's own rules are left alone. */
+.deck-ui { font-size: 0.8rem; color: var(--ink); display: flex; flex-direction: column; gap: 0.4rem; }
+.deck-ui .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); margin-top: 0.3rem; }
+.deck-ui .meta { color: var(--ink-3); font-size: 0.72rem; overflow-wrap: anywhere; }
+.deck-ui .note { color: var(--ink-2); font-size: 0.72rem; font-style: italic; }
+.deck-ui .empty { color: var(--ink-3); font-style: italic; }
+.deck-ui .deck-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.3rem; max-width: 26rem; }
+.deck-ui .deck-key, .deck-ui .deck-strip-tap {
+    position: relative; padding: 0; aspect-ratio: 1; background: #101214; color: var(--ink-3);
+    border: 1px solid var(--line); border-radius: 6px; overflow: hidden; cursor: pointer;
+}
+.deck-ui .deck-strip-tap { aspect-ratio: 8 / 1; width: 100%; max-width: 26rem; }
+.deck-ui .deck-key img, .deck-ui .deck-strip-tap img { width: 100%; height: 100%; object-fit: fill; display: block; }
+.deck-ui .deck-key img[hidden], .deck-ui .deck-strip-tap img[hidden], .deck-ui .deck-none[hidden] { display: none; }
+.deck-ui .deck-knobs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.3rem; max-width: 26rem; }
+.deck-ui .deck-knob { display: flex; justify-content: center; gap: 0.15rem; }
+.deck-ui .deck-turn, .deck-ui .deck-press {
+    font: inherit; font-size: 0.78rem; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 0.1rem 0.35rem; cursor: pointer;
+}
+.deck-ui button:disabled { opacity: 0.55; cursor: not-allowed; }
+.deck-ui button:not(:disabled):hover { border-color: var(--ink-3); }
+.deck-ui ol { list-style: none; margin: 0; padding: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; }

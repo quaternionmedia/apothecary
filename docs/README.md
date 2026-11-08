@@ -7,7 +7,7 @@ at `/README.md`, and every page's bar links it. The HTTP API is described at `/o
 
 ## The walkthrough
 
-`walkthrough/` is the path through this repository. Pages 01 to 06 and 18 are
+`walkthrough/` is the path through this repository. Pages 01 to 06, 18 and 26 are
 written by the browser tests that walk them; page 00, pages 07 to 17 and pages
 19 to 23 are doctests, run by `pytest walkthrough`. Start there, at page 00.
 
@@ -37,6 +37,7 @@ written by the browser tests that walk them; page 00, pages 07 to 17 and pages
 | [21 — A toolpath, previewed](../walkthrough/21-a-toolpath-previewed.md) | One interpreter and two processes: a print's layers and a cut's passes read through one core, held to the toolpath's own writer, and a design change seen in the moves |
 | [22 — The irl family's hub](../walkthrough/22-the-irl-hub.md) | apothecary as the family's hub on hearth's contract: what it says it is, its table, a fire and what is kept |
 | [23 — A procedure](../walkthrough/23-a-procedure.md) | What the family fires: the steps that bring a site's blueprint into working order, each waiting for GO and the evidence it names, a person's own, a member's refusal, a page's read and a member that is not there, and what the log keeps |
+| [26 — The Stream Deck +](../walkthrough/26-the-stream-deck.md) | An Elgato Stream Deck + at the garage's bench: its piece opens the Deck window, a program draws its eight keys and strip, and a simulated deck is pressed, turned and tapped, each event listed and kept; written by the browser suite |
 
 ## The checklists
 

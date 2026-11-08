@@ -440,6 +440,19 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "pinned-view-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one view, in any site"),
     "pinned-board-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one board's pin back"),
+    # ---- Deck, apothecary/static/widgets/deck.js --------------------------
+    # The Stream Deck + as drawn from here: a simulated deck is pressed, turned and
+    # tapped from its window, each the event a real deck reports (a real deck's are off);
+    # the piece's Open Deck opens the window.
+    "deck-open": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button on the Stream Deck + piece that opens the Deck window",
+    ),
+    "deck-key": (WIDGET, WHAT_IS_THERE, "a key of a simulated deck, pressed and released"),
+    "deck-strip-tap": (WIDGET, WHAT_IS_THERE, "the touch strip of a simulated deck, tapped"),
+    "deck-turn": (WIDGET, WHAT_IS_THERE, "a button that turns a simulated deck's knob one step"),
+    "deck-press": (WIDGET, WHAT_IS_THERE, "a button that presses a simulated deck's knob"),
     # ---- Models, apothecary/static/widgets/models.js ----------------------
     # Image models through qmcp: an origin switched, the shape chosen on a mat asked
     # about, and a person's word on one of its properties. Ask and a person's word
@@ -815,6 +828,7 @@ RING_BACKED: Dict[str, str] = {
     # Camera › Workspace, Add a camera its Camera › Add here, and a camera row's
     # device and Allow the camera's own Device (whose leaves are camera:device:<id>)
     "ws-back": "panel:toggle:working",
+    "deck-open": "panel:toggle:deck",
     "ws-hour": "working:open",
     "ws-add-camera": "camera:add-here",
     "ws-choose": "camera:device",
@@ -1150,6 +1164,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "models:click:closest": (WIDGET, WHAT_IS_THERE, "Ask, about the shape chosen on a mat"),
     "models:change:closest": (WIDGET, WHAT_IS_THERE, "an origin's tick-box, switching it"),
     "models:keydown:closest": (WIDGET, WHAT_IS_THERE, "Enter in a person's word, saying it"),
+    "?:click:open": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the Stream Deck + piece's Open Deck, opening the Deck window",
+    ),
     "pinned-list:click:closest": (
         WIDGET,
         WHAT_IS_THERE,
