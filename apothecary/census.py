@@ -511,7 +511,8 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a step's node, a button that opens the window its work is in: a Machine, or Pictures",
     ),
-    "procedure-member": (
+    # ---- Family, apothecary/static/widgets/family.js -------------------------
+    "family-member": (
         WIDGET,
         WHAT_YOU_SEE,
         "a member's name, a button that opens the window of the node its next step names, "
@@ -1143,7 +1144,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "procedure:click:closest": (
         WIDGET,
         WHAT_IS_THERE,
-        "GO or Start over, a step's node or a member's name",
+        "GO or Start over, or a step's node",
     ),
     "procedure:change:closest": (WIDGET, WHAT_YOU_SEE, "the procedure chosen"),
     "models:click:closest": (WIDGET, WHAT_IS_THERE, "Ask, about the shape chosen on a mat"),

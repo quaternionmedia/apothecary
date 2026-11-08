@@ -575,6 +575,9 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
         "airgap",
         # The Airgap's sections, each a window of its own, closed until asked for.
         *(f"airgap-{sid}" for sid in windows.AIRGAP_SECTIONS),
+        # The family's Members and Deliveries, closed until asked for.
+        "family-members",
+        "family-deliveries",
         # The Working space, a tab of Site's ring, closed until asked for.
         "working",
         # The Procedure, a tab of Site's ring, closed until asked for.
@@ -665,7 +668,7 @@ def test_the_rings_reset_layout_lays_the_pages_own_out_again(page: Page, ring_ur
     inner = _panels_ring(page)
     page.keyboard.press(next(cell for cell, label in inner.items() if label == "Windows"))
     assert sorted(_wedges(page).values()) == [
-        "Airgap view", "Machine view", "Part view", "Reset layout", "World alone",
+        "Airgap view", "Family view", "Machine view", "Part view", "Reset layout", "World alone",
     ]  # fmt: skip
     page.keyboard.press(
         next(cell for cell, label in _wedges(page).items() if label == "Reset layout")
@@ -708,7 +711,7 @@ def test_a_stacks_plus_opens_any_window_there_and_windows_lists_them_by_group(
     # ⊞ Windows: the views, then the windows; the first focused, the arrows moving.
     page.locator("#windows-menu > summary").click()
     body = page.locator(".windows-menu-body")
-    expect(body.locator(".view-item")).to_have_text(["Default", "Part", "Machine", "Airgap"])
+    expect(body.locator(".view-item")).to_have_text(["Default", "Part", "Machine", "Airgap", "Family"])
     expect(body.locator(".window-item[data-window='gather']")).to_have_text("● Gather")
     assert page.evaluate("() => document.activeElement.dataset.view") == "default"
     page.keyboard.press("ArrowDown")

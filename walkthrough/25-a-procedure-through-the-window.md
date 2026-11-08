@@ -9,7 +9,7 @@ opening, the notes under it and the list of what the page does not show
 are the test's fixed words. Editing the page by hand is editing the output
 of a program: the next run puts it back.
 
-A site's procedure through the Procedure window, as a person goes through it on the simulated bench: who the family is, GO on a step, a step's node as a door to the window its work is in, a fire opening the section its member works in, a machine's step refused in the member's words with its door after them, the latch armed through that door, and the step fired again. [docs/family.md](../docs/family.md) is the reference, and [page 23](23-a-procedure.md) runs a procedure in this process.
+A site's procedure through the Procedure window, as a person goes through it on the simulated bench: GO on a step, a step's node as a door to the window its work is in, a fire opening the section its member works in, a machine's step refused in the member's words with its door after them, the latch armed through that door, the step fired again, and the Family view's Members and Deliveries. [docs/family.md](../docs/family.md) is the reference, and [page 23](23-a-procedure.md) runs a procedure in this process.
 
 **Runtime-bound.** It drives a real browser against a real server of its own, the family's own members hosted in it. The simulated Ender stands idle on a fake port, pinned to printer_1's mainboard; the simulated devkit is on another, flashed by the scripted arduino-cli. Nothing opens a real port.
 
@@ -17,11 +17,11 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ---
 
-## 1. The Procedure, beside the world: the family, and the steps
+## 1. The Procedure, beside the world: the steps
 
-The garage has a procedure, so the Procedure stands beside the world without being asked for. The family is the hub's own three: machine and board, hosted here, are doors, and camera, a pull member a page reads, is a name. Each step has its number, its discipline and its node, a door to the window its work is in; the first stands by with its GO, the rest wait.
+The garage has a procedure, so the Procedure stands beside the world without being asked for. Each step has its number, its discipline and its node, a door to the window its work is in; the first stands by with its GO, the rest wait.
 
-![The Procedure, beside the world: the family, and the steps](screenshots/25-01-the-procedure-beside-the-world-the-family-and-the-.png)
+![The Procedure, beside the world: the steps](screenshots/25-01-the-procedure-beside-the-world-the-steps.png)
 
 ## 2. GO on a person's own step: done, and the next stands by
 
@@ -69,7 +69,13 @@ Armed, the step goes through: the machine member homes the printer, and the fire
 
 ![GO again: homed through the member, its Status open, and the next step stands by](screenshots/25-08-go-again-homed-through-the-member-its-status-open-.png)
 
-## 9. A member's name is a door: board's opens the devkit's Machine
+## 9. The Family view: Members and Deliveries
+
+Panels › Windows › Family view lays the Procedure tall beside the world, Members and Deliveries under it. Members is the hub's own three: machine and board, hosted here, are doors, and camera, a pull member a page reads, is a name. Deliveries is the hub's audit, newest first: each step's delivery with the member that took it and how it was answered.
+
+![The Family view: Members and Deliveries](screenshots/25-09-the-family-view-members-and-deliveries.png)
+
+## 10. A member's name is a door: board's opens the devkit's Machine
 
 A member hosted here leads to the window of the node its next step names, the last it worked on when none is left: board's name opens esp32_blink's Machine.
 
@@ -77,7 +83,7 @@ A member hosted here leads to the window of the node its next step names, the la
 Opened esp32_blink's Machine: ⌗ Panels › Windows › Machine view lays out its sections
 ```
 
-## 10. Start over counts what came before no more; the ring's GO and Start over do the same
+## 11. Start over counts what came before no more; the ring's GO and Start over do the same
 
 Start over puts every step back, what came before staying in the log. The canvas ring's Panels › Site › Procedure › GO fires the step the window offers it on, and its Start over is the window's.
 
@@ -89,7 +95,7 @@ Start over puts every step back, what came before staying in the log. The canvas
 
 - **Members beside the hub.** carlos and joe are not started here, so no member's name opens a page in a new tab: the family is the hub's own three.
 - **The camera's work.** A camera is a pull member, a page's to read, and no step here fires one.
-- **What each member answered over time.** The hub's audit is on no window; a step shows the outcome of its own last fire.
+- **What each member answered, beyond the audit's recent deliveries.** The hub keeps a few of them; a step shows the outcome of its own last fire.
 - **What changes on every run.** Moments, how long a member took to answer, the devkit's log and the flash's output are blanked in the pictures.
 
 Run it yourself:

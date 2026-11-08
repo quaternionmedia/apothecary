@@ -846,6 +846,7 @@
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
         import { mountProcedure } from '/static/widgets/procedure.js';
+        import { mountFamily } from '/static/widgets/family.js';
         import { mountPictureList } from '/static/widgets/picture_list.js';
         import { mountModels } from '/static/widgets/models.js';
         import { mountToolchain } from '/static/widgets/toolchain.js';
@@ -1692,6 +1693,21 @@
                     machine: {
                         mount: () => ({}),
                     },
+                    // The family: the Procedure is its main window, registered below;
+                    // Members and Deliveries are filled by one widget, mounted the first
+                    // time either is shown. A member's door is the Procedure's to say.
+                    family: {
+                        mount: (slot, sections) => {
+                            this.family = mountFamily({ members: sections.members, deliveries: sections.deliveries }, {
+                                base: BASE_URL,
+                                doorOf: (who, how) => this.procedure?.doorOf(who, how) ?? null,
+                                open: (node) => this.openProcedureNode(node),
+                            });
+                            window.apothecaryFamily = this.family;
+                            return this.family;
+                        },
+                        shown: (widget) => widget.load(),
+                    },
                     airgap: {
                         main: { title: 'Airgap' },
                         mount: (slot, sections) => {
@@ -1745,7 +1761,7 @@
                 // for the height its steps take. Closed, it stops asking.
                 this.procedure = null;
                 this.panels.register('procedure', {
-                    title: 'Procedure', group: 'Site', home: 'beside', open: false,
+                    title: 'Procedure', group: 'Family', home: 'beside', open: false,
                     hint: 'The steps that bring this site into working order, each fired through the family\'s hub on GO',
                     body: (slot) => {
                         this.procedure = mountProcedure(slot, {

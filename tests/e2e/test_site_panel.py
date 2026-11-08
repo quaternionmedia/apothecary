@@ -105,6 +105,8 @@ def test_site_is_a_window_beside_the_world_and_the_retired_panels_are_gone(page,
         *(f"part-{sid}" for sid in windows.PART_SECTIONS),
         "airgap",
         *(f"airgap-{sid}" for sid in windows.AIRGAP_SECTIONS),
+        "family-members",  # the family's own, closed until asked for
+        "family-deliveries",
         "working",  # the Working space, closed until asked for
         "procedure",  # the Procedure, closed until asked for
     ]
@@ -159,6 +161,8 @@ def test_what_the_rail_remembered_is_ignored_and_forgotten(page, base_url: str):
         *((f"part-{sid}", False, False) for sid in windows.PART_SECTIONS),
         ("airgap", False, False),
         *((f"airgap-{sid}", False, False) for sid in windows.AIRGAP_SECTIONS),
+        ("family-members", False, False),  # closed until asked for
+        ("family-deliveries", False, False),
         ("working", False, False),  # closed until asked for
         ("procedure", False, False),  # closed until asked for
     ]

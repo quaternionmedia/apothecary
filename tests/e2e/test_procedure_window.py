@@ -1,8 +1,8 @@
 """The Procedure window, as a person goes through it on the simulated bench: walkthrough
 page 25, written by the test here.
 
-⊞ Windows › Procedure says who the family is and how each step stands. GO on a person's
-own step does it. A step's node is a door to the window its work is in, and the status
+The Procedure says how each step stands, and the Family view's Members and Deliveries who
+the family is and what it was sent. GO on a person's own step does it. A step's node is a door to the window its work is in, and the status
 line says why not where it has none; a step fired opens the section its member works
 in, where that Machine is open. GO on a machine's step with its control down is refused
 in the member's own words, the node's door right after them, and may be fired again;
@@ -95,6 +95,7 @@ def url(start_server):
 CHANGING = (
     *moments(windows.MACHINE_WINDOWS, "#status", ".world-badge", "#selected-body .device-section"),
     (".procedure-ui", r"\d+ ms"),
+    (".family-delivery", r" in \d+ ms.*"),
     "#log",
     "#flash-task",
     *(
@@ -127,10 +128,11 @@ def test_a_procedure_through_the_window(page: Page, url: str, walkthrough):
         title="A procedure through the window",
         intro=(
             "A site's procedure through the Procedure window, as a person goes through it on "
-            "the simulated bench: who the family is, GO on a step, a step's node as a door to "
+            "the simulated bench: GO on a step, a step's node as a door to "
             "the window its work is in, a fire opening the section its member works in, a "
             "machine's step refused in the member's words with its door after them, the "
-            "latch armed through that door, and the step fired again. "
+            "latch armed through that door, the step fired again, and the Family view's Members "
+            "and Deliveries. "
             "[docs/family.md](../docs/family.md) is the reference, and "
             "[page 23](23-a-procedure.md) runs a procedure in this process."
         ),
@@ -145,8 +147,8 @@ def test_a_procedure_through_the_window(page: Page, url: str, walkthrough):
             "name opens a page in a new tab: the family is the hub's own three.",
             "**The camera's work.** A camera is a pull member, a page's to read, and no step "
             "here fires one.",
-            "**What each member answered over time.** The hub's audit is on no window; a "
-            "step shows the outcome of its own last fire.",
+            "**What each member answered, beyond the audit's recent deliveries.** The hub keeps "
+            "a few of them; a step shows the outcome of its own last fire.",
             "**What changes on every run.** Moments, how long a member took to answer, the "
             "devkit's log and the flash's output are blanked in the pictures.",
         ],
@@ -157,12 +159,7 @@ def test_a_procedure_through_the_window(page: Page, url: str, walkthrough):
     open_garage(page, url)
     expect(page.locator(PROCEDURE)).to_be_visible(timeout=WITHIN)
 
-    # 1. Who the family is, the hub's own among them, and the first step standing by.
-    family = page.locator(".procedure-family")
-    for member in ("machine", "board", "camera"):
-        expect(family).to_contain_text(member, timeout=WITHIN)
-    expect(family.locator("button.procedure-member")).to_have_count(2)  # machine and board
-    expect(family.locator("span.procedure-member")).to_have_count(1)  # camera, a pull member
+    # 1. The steps, the first standing by.
     first, second, third, fourth, fifth = (_step(page, n) for n in "12345")
     _stands(first, "standing by")
     expect(first).to_contain_text("A person's own step: its GO says the person did it.")
@@ -170,12 +167,10 @@ def test_a_procedure_through_the_window(page: Page, url: str, walkthrough):
     _stands(second, "waiting")
     expect(second.locator(".procedure-go")).to_have_count(0)
     story.shows(
-        "The Procedure, beside the world: the family, and the steps",
+        "The Procedure, beside the world: the steps",
         "The garage has a procedure, so the Procedure stands beside the world without being "
-        "asked for. The family is the hub's "
-        "own three: machine and board, hosted here, are doors, and camera, a pull member a "
-        "page reads, is a name. Each step has its number, its discipline and its node, a "
-        "door to the window its work is in; the first stands by with its GO, the rest wait.",
+        "asked for. Each step has its number, its discipline and its node, a door to the "
+        "window its work is in; the first stands by with its GO, the rest wait.",
         blank=CHANGING,
     )
 
@@ -281,8 +276,30 @@ def test_a_procedure_through_the_window(page: Page, url: str, walkthrough):
         blank=CHANGING,
     )
 
-    # 9. A member's name: the window of the node its next step names.
-    family.locator("button.procedure-member[data-member='board']").click()
+    # 9. The Family view: Members and Deliveries under the Procedure, a member's name a door.
+    rings.on_world(page, "Panels", "Windows", "Family view")
+    members = windows.panel(page, "family-members")
+    deliveries = windows.panel(page, "family-deliveries")
+    for member in ("machine", "board", "camera"):
+        expect(members).to_contain_text(member, timeout=WITHIN)
+    expect(members.locator("button.family-member")).to_have_count(2)  # machine and board
+    expect(members.locator("span.family-member")).to_have_count(1)  # camera, a pull member
+    for member in ("machine", "board"):
+        expect(deliveries.locator(".family-delivery", has_text=member).first).to_be_visible(
+            timeout=WITHIN
+        )
+    story.shows(
+        "The Family view: Members and Deliveries",
+        "Panels › Windows › Family view lays the Procedure tall beside the world, Members and "
+        "Deliveries under it. Members is the hub's own three: machine and board, hosted here, "
+        "are doors, and camera, a pull member a page reads, is a name. Deliveries is the hub's "
+        "audit, newest first: each step's delivery with the member that took it and how it was "
+        "answered.",
+        blank=CHANGING,
+    )
+
+    # 9b. A member's name: the window of the node its next step names.
+    members.locator("button.family-member[data-member='board']").click()
     _machine_of_kind(page, "devkit")
     story.says(
         "A member's name is a door: board's opens the devkit's Machine",

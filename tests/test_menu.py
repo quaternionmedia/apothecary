@@ -1211,8 +1211,10 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Part view", "panel:view:part", 2),
         ("Machine view", "panel:view:machine", 4),
         ("Airgap view", "panel:view:airgap", 9),
+        ("Family view", "panel:view:family", 3),
     ]
     assert address_of(root, "panel:view:airgap") == "499"
+    assert address_of(root, "panel:view:family") == "493"
     assert carried_by("panel:view:airgap").name == "VIEWER"
     assert carried_by("panel:world:toggle").name == "VIEWER"
     assert carried_by("panel:layout:reset").name == "VIEWER"

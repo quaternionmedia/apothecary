@@ -257,7 +257,7 @@ expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
   and Material, [models-checklist.md](models-checklist.md)) and Gather; Machine › Machine (the selected board's) and
   Control pad (an armed printer's pad in a loud window of its own or back in its
   Machine, as the pad's ⧉ Pop out and ⇥ Put back); Windows › World alone (as
-  `~`), Reset layout, Part view, Machine view and Airgap view; Bench › Bench (show it), Install (a cell per toolchain
+  `~`), Reset layout, Part view, Machine view, Airgap view and Family view; Bench › Bench (show it), Install (a cell per toolchain
   module, then the slicer), Compile, Upload, Raw flash, Cancel, Cores,
   Libraries; Docs (the documentation in a new tab, as the header's Docs); and
   Airgap › Airgap (show it), Play, Sweep, To editor, From editor, Copy SCAD,
@@ -322,7 +322,7 @@ layout a person makes is remembered by this browser; Panels › Windows › Rese
 layout puts every window where the page puts it.
 
 Every stack but the world's wears a **+** beside its ☐: it lists every window
-by its group -- Site, Selected, Pictures, Tools, Part, Machine, Airgap -- and a
+by its group -- Site, Selected, Pictures, Tools, Part, Machine, Airgap, Family -- and a
 closed one chosen opens as a tab of that stack; an open one comes in front where
 it is. The header's **⊞ Windows** (⊞ alone on a narrow page) lists the same, a window chosen there opening
 at its place, and above them the **views**: windows laid out together for one
@@ -338,7 +338,7 @@ minimised to its tabs. It has its height back when one of them has something to
 show, is opened, or has its tab pressed, and that height is what the browser
 remembers.
 
-**Focused systems.** The Part, the Machine and the Airgap are each one subject
+**Focused systems.** The Part, the Machine, the Airgap and the Family are each one subject
 in windows of its own: a main window with the subject and its verbs, and
 sections, each a window, grouped under the system. Opening a system shows its
 main window alone; every section is closed until asked for -- from a stack's +,
@@ -354,6 +354,7 @@ which the page, the ring and the tests all read.
 | Part | Selected: the piece, its part, what it is drawn from, its envelope, and the staged changes' bar (Apply, Revert, Defaults, Undo, Redo, Ghost) | Parameters (under Selected, sharing a stack with Variants, History and Readiness), SCAD (beside the world) |
 | Machine | The board's head -- its link verbs, the control latch, ⏹ E-STOP -- what it is and its state | Status, Temperature, Print, Bed level (a printer's); Status, Cut, Table map (a router's); Sketch, Flashing (a devkit's); Log -- those of the board's kind, in one stack under the Machine while the column has room, else tabs beside it |
 | Airgap | The machine drawn at its angle, its scrub and its verbs | Metrics, the field, gap map, inductance, torque, harmonics, run-up, orbit, vibration, Rig, Sweep ([airgap.md](airgap.md#the-panel)) |
+| Family | The Procedure: the site's steps and GO | Members (each member, how it is reached, its door), Deliveries (the hub's audit, newest first) -- tabs beside the Procedure ([family.md](family.md#a-procedure)) |
 
 | View | |
 |---|---|
@@ -361,6 +362,7 @@ which the page, the ring and the tests all read.
 | Part | The world; Selected over Parameters, Variants, History and Readiness; the SCAD window over Site, Problems and SCAD |
 | Machine | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
 | Airgap | The Airgap and each of its sections in a window, the world among them |
+| Family | The world; the Procedure tall beside it; Members and Deliveries under it, with Jobs and Working space, and Selected, in the column |
 
 A view needs its main window. The Machine view opens the Machine of the machine
 selected, or else stepped into, when none is open; with none to open it is offered

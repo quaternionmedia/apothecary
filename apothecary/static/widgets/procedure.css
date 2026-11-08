@@ -1,4 +1,5 @@
-/* Procedure (widgets/procedure.js): the family, and a procedure's steps with their GO.
+/* Procedure (widgets/procedure.js): a procedure's steps with their GO, and the Members and
+ * Deliveries beside it (widgets/family.js, scoped to .family-ui).
  * Scoped to .procedure-ui, so the page's own rules are left alone. */
 .procedure-ui { font-size: 0.8rem; color: var(--ink); display: flex; flex-direction: column; gap: 0.35rem; }
 .procedure-ui .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); margin-top: 0.3rem; }
@@ -16,7 +17,6 @@
 .procedure-ui button { cursor: pointer; }
 .procedure-ui button:hover { border-color: var(--ink-3); }
 .procedure-ui button:disabled { opacity: 0.45; cursor: not-allowed; }
-.procedure-ui .procedure-family { display: flex; flex-wrap: wrap; gap: 0.2rem 0.7rem; }
 .procedure-ui .dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; margin-right: 0.3rem; background: var(--ink-3); }
 .procedure-ui .dot.ok { background: var(--ok); }
 .procedure-ui .dot.warn { background: var(--warn); }
@@ -35,9 +35,27 @@
 .procedure-ui .is-refused .procedure-why, .procedure-ui .is-failed .procedure-why { color: var(--bad); }
 .procedure-ui .is-waiting .name { color: var(--ink-2); font-weight: 400; }
 /* A door: a step's node, or a member's name, pressed to open the window its work is in. */
-.procedure-ui button.procedure-node, .procedure-ui button.procedure-member {
+.procedure-ui button.procedure-node {
     background: none; border: none; border-radius: 0; padding: 0; font: inherit; color: inherit;
     text-decoration: underline dotted var(--ink-3); text-underline-offset: 0.15em;
 }
-.procedure-ui button.procedure-node:hover, .procedure-ui button.procedure-member:hover { color: var(--ink); text-decoration-color: var(--ink); }
+.procedure-ui button.procedure-node:hover { color: var(--ink); text-decoration-color: var(--ink); }
 .procedure-ui .meta .procedure-node { color: var(--ink-2); }
+
+/* Family (widgets/family.js): Members and Deliveries. */
+.family-ui { font-size: 0.8rem; color: var(--ink); }
+.family-ui .empty { color: var(--ink-3); font-style: italic; }
+.family-ui .bad { color: var(--bad); }
+.family-ui .family-members { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; }
+.family-ui .dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; margin-right: 0.3rem; background: var(--ink-3); }
+.family-ui .dot.ok { background: var(--ok); }
+.family-ui .dot.warn { background: var(--warn); }
+.family-ui button.family-member {
+    background: none; border: none; border-radius: 0; padding: 0; font: inherit; color: inherit; cursor: pointer;
+    text-decoration: underline dotted var(--ink-3); text-underline-offset: 0.15em;
+}
+.family-ui button.family-member:hover { color: var(--ink); text-decoration-color: var(--ink); }
+.family-ui ol { list-style: none; margin: 0; padding: 0; }
+.family-ui .family-delivery { border-top: 1px solid var(--line); padding: 0.3rem 0.1rem; font-size: 0.74rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.family-ui .family-delivery .cue { color: var(--ink-3); }
+.family-ui .family-delivery .who { color: var(--ink); }

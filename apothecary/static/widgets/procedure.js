@@ -1,6 +1,6 @@
 /* Procedure: a site's procedures, each step fired through the family's hub on GO.
  *
- * Who the family is (GET /family/), and the procedure chosen (GET
+ * The procedure chosen (GET
  * /sites/{s}/procedures/{p}): each step in order with its discipline, its node and its
  * notes, how it stands, why, and the outcome of its last fire per member. GO is on a
  * step standing by, and on one refused or failed, which may be fired again; Start over
@@ -12,9 +12,8 @@
  * A step fired opens the section its member works in, where that Machine is open: a
  * machine's home or run the Status, a board's flash the Flashing, its expect the Log.
  * A refused or failed step keeps the member's words, with the node's door right after
- * them. A member's name is a door too: a member hosted here to the window of the node
- * its next step names, a member beside the hub to its own page in a new tab; a pull
- * member, read by a page, leads nowhere.
+ * them. A member's name is a door too, in the Members window (widgets/family.js), which
+ * asks this window where each leads: doorOf(member, how).
  *
  * GO and Start over are the canvas ring's Site › Procedure too: the page hands each to
  * act(), and GO there fires the step this window offers it on, the first.
@@ -28,15 +27,11 @@
 
 const LOOK_MS = 2000;
 
-const REACHED = { local: "hosted here", push: "beside the hub", pull: "read by a page" };
-
 // The section of a node's Machine a member's verb works in.
 const SECTION = { machine: "machine-status", flash: "machine-flashing", expect: "machine-log" };
 
 const MARKUP = `
 <div class="procedure-ui">
-    <div class="k">The family</div>
-    <div class="procedure-family"><span class="empty">asking…</span></div>
     <div class="row procedure-head">
         <select class="procedure-choice" aria-label="The procedure"></select>
         <span class="grow"></span>
@@ -52,7 +47,7 @@ export function mountProcedure(root, { base = "", siteName, log = null, open = n
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const say = (text, kind = "") => { if (log) log(text, kind); };
     const slug = (status) => status.replace(/\s+/g, "-");
-    let names = [], name = null, board = null, family = {}, started = {}, drawn = "", busy = false, timer = null;
+    let names = [], name = null, board = null, drawn = "", busy = false, timer = null;
 
     async function api(path, opts = {}) {
         const r = await fetch(base + path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -74,28 +69,12 @@ export function mountProcedure(root, { base = "", siteName, log = null, open = n
         const action = Object.values(next.family[who] || {}).find((a) => a && typeof a === "object" && a.node);
         return next.node || (action && action.node) || null;
     }
-    // Where a member's name leads: a member beside the hub to its page, one hosted here
-    // to the window of its next node; a pull member nowhere.
+    // Where a member's name leads (the Members window draws it): a member beside the hub
+    // to its page, one hosted here to the window of its next node; a pull member nowhere.
     function doorOf(who, how) {
         if (how.via === "push" && how.url) return { url: how.url, title: `opens ${how.url} in a new tab` };
         const node = how.via === "local" && open ? nodeOf(who) : null;
         return node ? { node, title: `opens ${node}'s window, the node its next step names` } : null;
-    }
-
-    // A member the hub started itself says so while it is not up.
-    function renderFamily() {
-        const rows = Object.entries(family).sort(([a], [b]) => a.localeCompare(b));
-        $(".procedure-family").innerHTML = rows.map(([who, how]) => {
-            const state = started[who]?.state;
-            const dot = how.via === "pull" ? "off" : state && state !== "up" ? "warn" : "ok";
-            const words = state && state !== "up" ? ` (${state})` : "";
-            const reached = state ? `${REACHED[how.via]}, started by the hub: ${state}, restarted ${started[who].restarts} times` : REACHED[how.via] || how.via;
-            const door = doorOf(who, how);
-            const title = door ? `${reached}; ${door.title}` : reached;
-            const inner = `<span class="dot ${dot}"></span>${esc(who)}${esc(words)}`;
-            if (!door) return `<span class="procedure-member" title="${esc(title)}">${inner}</span>`;
-            return `<button type="button" class="procedure-member" data-member="${esc(who)}" title="${esc(title)}">${inner}</button>`;
-        }).join("");
     }
 
     // The step's own line says its first error, so an outcome says only another's.
@@ -130,10 +109,9 @@ export function mountProcedure(root, { base = "", siteName, log = null, open = n
     }
 
     function render() {
-        const words = JSON.stringify([names, name, board, family, started, busy]);
+        const words = JSON.stringify([names, name, board, busy]);
         if (words === drawn) return;
         drawn = words;
-        renderFamily();
         $(".procedure-choice").innerHTML = names.map((n) => `<option value="${esc(n)}"${n === name ? " selected" : ""}>${esc(n)}</option>`).join("");
         $(".procedure-head").hidden = !names.length;
         $(".procedure-none").textContent = names.length ? "" : `no procedure under ${siteName()} yet`;
@@ -142,9 +120,7 @@ export function mountProcedure(root, { base = "", siteName, log = null, open = n
 
     async function load() {
         try {
-            const [who, beside, listed] = await Promise.all([api("/family/"), api("/family/beside"), api(siteUrl())]);
-            family = who.members;
-            started = beside;
+            const listed = await api(siteUrl());
             names = listed.procedures;
             if (!names.includes(name)) name = names[0] ?? null;
             board = name ? await api(chosenUrl()) : null;
@@ -190,21 +166,12 @@ export function mountProcedure(root, { base = "", siteName, log = null, open = n
 
     const again = () => post(`${chosenUrl()}/again`, () => [`${name} starts over`]);
 
-    // A member's name pressed: its page in a new tab, or its next node's window.
-    function through(who) {
-        const door = doorOf(who, family[who] || {});
-        if (!door) return;
-        if (door.url) window.open(door.url, "_blank", "noopener");
-        else open(door.node);
-    }
-
     const procedure = $(".procedure-ui");
     procedure.addEventListener("click", (event) => {
         const fires = event.target.closest(".procedure-go");
         if (fires) go(fires.dataset.number);
         else if (event.target.closest(".procedure-again")) again();
         else if (event.target.closest(".procedure-node")) open(event.target.closest(".procedure-node").dataset.node);
-        else if (event.target.closest("button.procedure-member")) through(event.target.closest("button.procedure-member").dataset.member);
     });
     procedure.addEventListener("change", (event) => {
         const chosen = event.target.closest(".procedure-choice");
@@ -232,5 +199,5 @@ export function mountProcedure(root, { base = "", siteName, log = null, open = n
         return load();
     }
 
-    return { load, shown, close, go, act, through };
+    return { load, shown, close, go, act, doorOf };
 }
