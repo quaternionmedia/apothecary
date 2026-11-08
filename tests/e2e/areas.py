@@ -230,7 +230,7 @@ AREAS = {
             "walkthrough/25-*",
             "walkthrough/screenshots/25-*",
         ),
-        "tests": ("test_procedure_window.py",),
+        "tests": ("test_procedure_doors.py", "test_procedure_window.py"),
     },
     "models": {
         "sources": (

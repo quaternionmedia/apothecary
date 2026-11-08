@@ -368,6 +368,9 @@ def test_the_procedure_stands_beside_the_world_while_the_site_has_one(page: Page
     to_site(page, "apothecary")
     page.wait_for_timeout(1500)
     expect(page.locator(PROCEDURE)).to_be_visible()
+    expect(page.locator(f"{PROCEDURE} .procedure-none")).to_have_text(
+        "no procedure under apothecary yet", timeout=WITHIN
+    )
 
 
 @pytest.mark.e2e
