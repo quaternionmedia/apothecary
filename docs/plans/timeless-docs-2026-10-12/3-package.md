@@ -1,7 +1,7 @@
 # Inventory: the package's docstrings, comments and `--help` texts
 
 Area 3 of the timeless-docs sweep: `apothecary/**/*.py` and the `--help` of every command, read
-on the worktree `wt-timeless` (branch `build/timeless-docs`). Read-only. The modules' comments,
+on branch `build/timeless-docs`. Read-only. The modules' comments,
 docstrings and `help=`/`description=` strings were extracted with their source line numbers
 (`code-prose/`, by `extract_prose.py`) and read in full; the source was opened wherever a claim
 needed checking. Line numbers are the source file's.

@@ -50,7 +50,7 @@ STEPS_MM = (0.1, 1.0, 10.0)
 AXES = ("X", "Y", "Z")
 KEY_MACHINE = (0, 1)
 KEY_STEP = 2
-# Two classes of stop, the owner's word: one key per machine, each sending that machine's
+# Two classes of stop: one key per machine, each sending that machine's
 # own stop, and one that stops every machine at once. The everything key is the bottom
 # row's last, nearest a hand resting on the knobs, bright red where the per-machine stops
 # are dark; none needs control armed, as the page's E-STOP does not.
