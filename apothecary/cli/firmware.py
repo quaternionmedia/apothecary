@@ -174,12 +174,13 @@ def _print_status(status) -> None:
         )
         for tool in module.tools:
             if tool.ok:
+                # A tool is found by its version, its file or both: hidapi has no version
+                # to say, and a Python package no file of its own.
+                version = tool.version or ""
                 said = (
-                    tool.version
-                    if tool.version.startswith(tool.name)
-                    else f"{tool.name} {tool.version}"
+                    version if version.startswith(tool.name) else f"{tool.name} {version}".rstrip()
                 )
-                click.echo(f"  ✓ {said}: {tool.path}")
+                click.echo(f"  ✓ {said}: {tool.path}" if tool.path else f"  ✓ {said}")
             elif tool.path:
                 click.secho(f"  ✗ {tool.name}: {tool.path} does not run", fg="red")
             else:

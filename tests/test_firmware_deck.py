@@ -232,6 +232,22 @@ def test_the_module_says_what_is_missing_and_what_installs_it(monkeypatch):
     assert set(status.can) == set(module.can) and "hear keys, knobs and touches" in status.can
 
 
+def test_validate_says_each_tool_found_with_what_it_has(fake_arduino_cli, monkeypatch):
+    """The package is found by its version and hidapi by its file, neither having the
+    other: each is said with what it has, and `firmware validate` runs to its end."""
+    from click.testing import CliRunner
+
+    from apothecary.cli import cli
+    from apothecary.firmware.modules import stream_deck
+
+    monkeypatch.setattr(stream_deck, "package_version", lambda: "0.10.0")
+    monkeypatch.setattr(stream_deck, "hidapi", lambda: "libhidapi-libusb.so.0")
+    result = CliRunner().invoke(cli, ["firmware", "validate"])
+    assert result.exit_code == 0, result.output
+    assert "  ✓ python-elgato-streamdeck 0.10.0\n" in result.output
+    assert "  ✓ hidapi: libhidapi-libusb.so.0\n" in result.output
+
+
 def test_the_toolchains_route_and_the_bench_carry_it(client):
     ids = [m["id"] for m in client.get("/firmware/toolchains").json()]
     assert ids == ["arduino", "rust-esp32", "stream-deck"]
