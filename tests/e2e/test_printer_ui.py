@@ -678,6 +678,57 @@ FRAMED = """(key) => {
 }"""
 
 
+@pytest.mark.e2e
+def test_each_axis_of_the_printer_homes_alone_and_only_while_armed(page: Page, printer_url: str):
+    """Home X, Home Y and Home Z each send `G28 X`, `G28 Y` or `G28 Z` and no other line,
+    and only that axis goes back to zero; disarmed, the pad is not there and the board is
+    refused the line."""
+    _identify(printer_url)
+    _monitor(page, printer_url)
+    expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
+    expect(page.locator("#control")).to_be_hidden()
+    refused = page.request.post(
+        f"{printer_url}/firmware/printers/command", data={"port": PRINTER, "command": "G28 X"}
+    )
+    assert refused.status == 409
+
+    page.locator("#ctl").check()
+    pad = page.locator("#control")
+    expect(pad).to_be_visible(timeout=5000)
+
+    def position() -> dict:
+        text = page.locator("#c-pos").inner_text()
+        return {a: float(v) for a, v in re.findall(r"([XYZ])\s*(-?\d+(?:\.\d+)?)", text)}
+
+    def sent() -> list:
+        return page.locator("#log .tx.control").all_inner_texts()
+
+    # The SD print paused, each axis 10 mm from zero, so each home has somewhere to
+    # come back from.
+    pad.locator("button[data-cmd='M25']").click()
+    expect(page.locator("#c-state")).to_contain_text("idle", timeout=WITHIN_A_POLL)
+    pad.locator("button[data-step='10']").click()
+    for jog in ("X+", "Y+", "Z+"):
+        pad.locator(f"button[data-jog='{jog}']").click()
+    expect(page.locator("#c-pos")).to_contain_text("Z10.0", timeout=WITHIN_A_POLL)
+    assert position() == {"X": 10.0, "Y": 10.0, "Z": 10.0}
+
+    homes = []
+    for axis, left in (("X", {"Y": 10.0, "Z": 10.0}), ("Y", {"Z": 10.0}), ("Z", {})):
+        pad.locator(f"button[data-cmd='HOME-{axis}']").click()
+        expect(page.locator("#log .tx.control", has_text=f"G28 {axis}").last).to_be_visible(
+            timeout=5000
+        )
+        expect(page.locator("#c-pos")).to_contain_text(f"{axis}0.0", timeout=WITHIN_A_POLL)
+        got = position()
+        assert got[axis] == 0.0 and all(got[a] == v for a, v in left.items()), (axis, got)
+        homes.append(f"G28 {axis}")
+        said = [m.group(0) for t in sent() if (m := re.search(r"G28(?: [XYZ])*$", t.strip()))]
+        assert sorted(said) == homes, (axis, sent())
+    page.locator("#ctl-disarm").click()
+    expect(pad).to_be_hidden(timeout=3000)
+
+
 def _ring_control_pad(page: Page) -> None:
     """The canvas ring's Panels › Machine › Control pad."""
     page.locator("#viewer-canvas").click(

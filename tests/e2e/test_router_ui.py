@@ -402,6 +402,62 @@ def test_the_router_s_machine_has_a_router_s_cards_and_pad(page: Page, url: str)
 
 
 @pytest.mark.e2e
+def test_each_axis_of_the_router_homes_alone_and_only_while_armed(page: Page, url: str):
+    """Home X, Home Y and Home Z each send `$HX`, `$HY` or `$HZ` and no other line, and
+    only that axis goes back to its switch; disarmed, the pad is not there and the
+    controller is refused the line."""
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    _select(page, "cnc_router")
+    page.locator("#selected-body .device-section .dev-open").click()
+    windows.machine_ready(page, "router")
+    machine = windows.machine(page)
+    expect(page.locator("#control")).to_be_hidden()
+    refused = page.request.post(
+        f"{url}/firmware/printers/command", data={"port": ROUTER, "command": "$HX"}
+    )
+    assert refused.status == 409
+
+    machine.locator("#ctl").check()
+    pad = page.locator("#control")
+    expect(pad).to_be_visible(timeout=5000)
+
+    def machine_position() -> dict:
+        return {a: float(v) for a, v in re.findall(r"([XYZ])\s*(-?\d+(?:\.\d+)?)", _where(machine))}
+
+    def sent() -> list:
+        return [t for t in _log(page).locator(".tx.control").all_inner_texts()]
+
+    # All three home, then each axis is pulled 10 mm off its switch, so each home that
+    # follows has somewhere to come back from.
+    pad.locator("button[data-cmd='HOME']").click()
+    expect(machine.locator("#c-pos-s")).to_contain_text("X-3.0", timeout=WITHIN_A_POLL)
+    pad.locator("button[data-step='10']").click()
+    for jog in ("X-", "Y-", "Z-"):
+        pad.locator(f"button[data-jog='{jog}']").click()
+        expect(_log(page)).to_contain_text(re.compile(rf"> \$J=G91 G21 {jog[0]}-10"), timeout=5000)
+    expect(machine.locator("#c-pos-s")).to_contain_text("Z-13.0", timeout=WITHIN_A_POLL)
+    assert machine_position() == {"X": -13.0, "Y": -13.0, "Z": -13.0}
+
+    expect_at = {"X": {"X": -3.0, "Y": -13.0, "Z": -13.0}, "Y": {"X": -3.0, "Y": -3.0, "Z": -13.0}}
+    expect_at["Z"] = {"X": -3.0, "Y": -3.0, "Z": -3.0}
+    for axis in "XYZ":
+        before = len(sent())
+        pad.locator(f"button[data-cmd='HOME-{axis}']").click()
+        expect(_log(page)).to_contain_text(f"> $H{axis}", timeout=5000)
+        expect(machine.locator("#c-pos-s")).to_contain_text(f"{axis}-3.0", timeout=WITHIN_A_POLL)
+        assert machine_position() == expect_at[axis], axis
+        assert sent()[before:] == [f"> $H{axis}"], (axis, sent()[before:])
+    pad.locator("#ctl-disarm").click()
+    expect(pad).to_be_hidden(timeout=3000)
+
+
+def _where(machine) -> str:
+    """The machine position the card shows, as text."""
+    return machine.locator("#c-pos-s").inner_text()
+
+
+@pytest.mark.e2e
 def test_a_cut_from_here_streams_pauses_and_is_a_job(page: Page, url: str):
     """A CAM post's file kept and cut: the controller holds when paused and runs again
     when resumed, the badge says the cut, and the job is listed as a cut of the router."""
