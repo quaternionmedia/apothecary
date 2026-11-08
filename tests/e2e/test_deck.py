@@ -181,3 +181,27 @@ def test_a_deck_that_will_not_open_says_why_in_its_window(page: Page, url: str):
     expect(deck.locator(".deck-events")).to_contain_text("nothing heard yet")
     page.unroute(state)
     expect(deck.locator(".deck-note")).to_contain_text("a simulated deck", timeout=10000)
+
+
+@pytest.mark.e2e
+def test_with_no_deck_found_the_window_says_so_and_why(page: Page, url: str):
+    """The list finding no deck: the window says so, its controls off; the list saying
+    why it cannot look (no HID library): the window says that."""
+    listing = re.compile(r".*/firmware/decks$")
+    answer = {"decks": [], "problem": None}
+    page.route(
+        listing,
+        lambda route: route.fulfill(
+            status=200, content_type="application/json", body=json.dumps(answer)
+        ),
+    )
+    open_garage(page, url)
+    select(page, "stream_deck")
+    page.locator("#selected-body .deck-open").click()
+    deck = page.locator(DECK)
+    expect(deck.locator(".deck-name")).to_have_text("no Stream Deck + found", timeout=10000)
+    expect(deck.locator(".deck-key:enabled, .deck-turn:enabled")).to_have_count(0)
+    answer["problem"] = "the HID library cannot be used: no hidapi"
+    expect(deck.locator(".deck-name")).to_have_text(
+        "no Stream Deck +: the HID library cannot be used: no hidapi", timeout=10000
+    )
