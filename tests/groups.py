@@ -70,6 +70,7 @@ GROUPS = {
             "test_board_by_part.py",
             "test_firmware_api.py",
             "test_firmware_deck.py",
+            "test_firmware_deck_control.py",
             "test_firmware_devices.py",
             "test_firmware_files_by_kind.py",
             "test_firmware_gcode.py",

@@ -391,6 +391,40 @@ programs cannot. Nothing here moves a machine; the knobs' jogs are further down.
       kind and strip coordinates (the strip is 800 wide, 100 tall).
 - [ ] `POST .../release`, then draw a key again: the deck is opened afresh.
 
+Then the knobs. The printer and the router are pinned as in sections C and I, the bed
+clear and the tool clear of stock. Start the layout with
+`POST /firmware/decks/{id}/control` `{"on": true}` (or `APOTHECARY_DECK_CONTROL=1`).
+Keep a hand on each machine's own power switch: it is faster than the deck's stop key.
+
+- [ ] The keys show **PRINTER**, **ROUTER**, **STEP**, **STOP**, then X, Y, Z and E; the
+      strip says *printer_1 · disarmed*. **ROUTER** turns the second key green and the
+      strip says *cnc_router*.
+- [ ] Disarmed, turn every knob: nothing moves, the strip says *disarmed*, and the control
+      latch is still disarmed.
+- [ ] Arming from the deck: hold **ROUTER** for a second and let go: the strip says to long
+      press again within 5 s, and control is still disarmed (the Machine's pad). Wait
+      6 s, hold it again: still disarmed. Hold it twice within 5 s: the strip says
+      *armed* with the minutes left, and the Machine's pad pops out red as ⚙ Control's
+      does. A short press, **STEP** or a knob between the two holds breaks the pair.
+- [ ] With the router armed (from the deck or the Machine's ⚙ Control). **STEP** to 1 mm, then knob 1
+      one click clockwise: X moves 1 mm toward +X and the X key shows the new position
+      within a poll; counter-clockwise, back. Knobs 2 and 3 the same on Y and Z. At
+      10 mm, a fast turn of 70 clicks is refused (`move beyond 600`) and nothing moves.
+- [ ] With the spindle off, knob 4 does nothing and the strip says *spindle off*. Start
+      it at 8000 from the Machine, with no tool: knob 4 one click clockwise reads 9000,
+      the S key says so; held clockwise it stops at 24000 and never above.
+- [ ] **STOP** while a jog of 50 mm is under way: the soft reset, the banner in the log,
+      the spindle off. Then the machine's own switch: note which stopped the gantry
+      sooner, in a dated record.
+- [ ] Choose **PRINTER**, arm its control, bed clear. Knobs 1 to 3 jog X, Y and Z in the
+      chosen step, each one `G91`, `G1 .. F3000`, `G90` in the board's log, and the
+      printer is left in absolute positioning. Disarmed again, the same turn sends
+      nothing.
+- [ ] Knob 4 on the printer, the hotend at a temperature Marlin extrudes at, filament
+      loaded: one click clockwise pushes 1 mm (`M83`, `G1 E1 F200`), counter-clockwise
+      pulls it back. Below Marlin's minimum, the board refuses and the log says so.
+      **STOP** halts the printer (`M112`) and the page's E-STOP does too.
+
 ## Results
 
 | Section | Date | Passed | Notes |

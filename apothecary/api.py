@@ -53,6 +53,7 @@ from .example_hierarchy import (
 )
 from .family import hub as family_hub
 from .family import members as family_members
+from .firmware import deck_control
 from .firmware import devices as firmware_devices
 from .firmware import gcode as firmware_gcode
 from .firmware import grbl as firmware_grbl
@@ -207,7 +208,9 @@ async def lifespan(app: FastAPI):
     lighting_routes.start_console_feeds()
     family_hub.start()
     wiring_routes.start_following()
+    deck_control.start_all()
     yield
+    deck_control.stop_all()
     wiring_routes.stop_following()
     family_hub.close()
     lighting_routes.stop_console_feeds()

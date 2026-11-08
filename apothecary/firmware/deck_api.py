@@ -14,6 +14,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from . import deck as decks
+from . import deck_control
 from .deck import DeckUnavailable
 
 router = APIRouter(prefix="/firmware/decks", tags=["firmware"])
@@ -27,6 +28,10 @@ class DrawRequest(BaseModel):
 
 class BrightnessRequest(BaseModel):
     percent: int = Field(ge=0, le=100)
+
+
+class ControlRequest(BaseModel):
+    on: bool
 
 
 class EventRequest(BaseModel):
@@ -129,3 +134,21 @@ def give_event(deck_id: str, body: EventRequest):
 @router.post("/{deck_id}/release")
 def release(deck_id: str):
     return {"released": decks.get_decks().release(deck_id)}
+
+
+@router.get("/{deck_id}/control")
+def control_state(deck_id: str):
+    """Whether the layout that jogs the machines runs on this deck, and what it last did."""
+    controller = deck_control.running(deck_id)
+    return controller.state() if controller else {"running": False}
+
+
+@router.post("/{deck_id}/control")
+def control(deck_id: str, body: ControlRequest):
+    """Start the layout on this deck (opening it) or stop it. The deck arms nothing: a
+    machine's control is armed in its Machine window."""
+    _deck(deck_id)  # a deck that is not there, or cannot be opened, says so first
+    if not body.on:
+        deck_control.stop(deck_id)
+        return {"running": False}
+    return deck_control.start(deck_id).state()

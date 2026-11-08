@@ -75,6 +75,57 @@ and the window's controls are off.
 [Walkthrough 26](../walkthrough/26-the-stream-deck.md) goes round it, written by
 `tests/e2e/test_deck.py`.
 
+## The controller
+
+The knobs jog the garage's two machines. `apothecary/firmware/deck_control.py` runs one
+layout on a deck:
+
+- **The top row's keys**: 0 **PRINTER** and 1 **ROUTER** choose the machine, 2 **STEP**
+  cycles 0.1, 1 and 10 mm, 3 **STOP** stops the chosen machine.
+- **The bottom row's keys** each show what the knob under it moves, from the chosen
+  machine's last poll: X, Y, Z, and the fourth quantity.
+- **The knobs**: one to three jog X, Y and Z by their steps of the chosen size; the fourth
+  turns the router's spindle speed in steps of 1000 rpm, or extrudes 1 mm a step on the
+  printer.
+
+The strip says which machine, whether its control is armed and for how long, the step, and
+what the last turn did or why it did nothing.
+
+**Nothing the deck sends bypasses what bounds a person's jog.** Every line goes through
+`devices.printer_control`, the function behind `POST /firmware/printers/command`:
+
+- the port's control latch must be armed, and it is armed the page's way (⚙ Control in the
+  Machine window) or by **two sequential long presses** of the machine's key: a press held
+  0.8 s chooses the machine and says on the strip that a second will arm its control; the
+  second, of the same key, within 5 s of the first being let go, arms it for the latch's own
+  five minutes through the same `ControlLatch`. One long press alone, a second after the
+  window, a short press, another key or a knob turned between them, or a long press of the
+  other machine's key arms nothing. A turn while disarmed sends nothing and the strip says
+  *disarmed*;
+- the line is normalised in the port's dialect and refused outside its bounds before it
+  reaches the port: a router's jog is `$J=G91 G21 X.. F1000` and at most 600 mm, a
+  printer's is `G91`, `G1 X.. F3000` and `G90`, at most 300 mm, with the return to
+  absolute positioning sent even when the move was refused; the spindle is clamped to
+  `SPINDLE_MAX_RPM` and turned only while it turns; an extrude is the one bounded line of
+  [the firmware guide](firmware.md#control-behind-a-latch), 10 mm at most and 300 mm/min,
+  with `M83` before it;
+- a job holding the port refuses a line its dialect does not allow a job;
+- a key for one kind of machine never moves a board of another: the port is polled and its
+  kind checked before a line goes;
+- the stop key sends the port's dialect's own stop, `devices.emergency_stop_for(port)`: a
+  printer's `M112`, a router's soft reset. It goes whatever the latch says, as the pad's
+  E-STOP does.
+
+**The machine's own red button is faster than any of this**, and stays the stop to reach
+for: the deck's stop key is a USB report, a host process, a link and a queue away from the
+controller. Keep a hand on the machine's own switch, as the bench checklist says.
+
+The layout starts on a deck when `APOTHECARY_DECK_CONTROL` is set (the demo sets it), or
+when `POST /firmware/decks/{id}/control` with `{"on": true}` asks; `GET` on the same route
+says whether it runs, the machine chosen, the step, the control's seconds left, what it
+said last and the lines it sent. A real deck is opened by it, which takes the device from
+any other program that has it, so it is started on purpose.
+
 ## Simulated
 
 With `APOTHECARY_SERIAL_ENGINE=simulated` no HID device is listed or opened. The decks
