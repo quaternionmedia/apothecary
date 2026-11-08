@@ -205,8 +205,9 @@ Decided, not started. Each waits on what its line names.
   firmware, G-code and slicer seams, one screen, rad host integration,
   personal data staying on the device, the adoption-scope amendment -- and
   move the `governance/qm` pin to `project/apothecary`'s tip, the pin alone
-  in its commit. Until then the pin is `baec440`, #211's head, which no other
-  ref carries, so #211's branch stays.
+  in its commit. Until then the pin is `fb90ad4`, the head of #211's branch
+  (`adr/apothecary-airgap-metrics`), which no other branch carries, so #211's
+  branch stays.
 - Propagate qm#226 (the seed's `AGENTS.md`, ADR index and editor settings
   read true in a project's copy) into `project/apothecary`: it is on qm's
   `main` and in no pin. Then copy the seed's `AGENTS.md` and `.vscode/`
