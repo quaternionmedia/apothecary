@@ -244,7 +244,12 @@ def test_a_machine_in_a_site_reached_through_the_universe_is_drawn_as_its_part(
     said(page, "Stepped into cnc_router")
     inside = page.evaluate(LEVEL)
     assert inside["focus"] == "cnc_router"
-    assert inside["drawn"] == {"cnc_router": body}, "the part alone, and the whole of it"
+    assert inside["drawn"]["cnc_router"] == body, "the whole of the part"
+    assert sorted(inside["drawn"]) == [
+        "cnc_router",
+        "cnc_router.frame_system",
+        "cnc_router.gantry_system",
+    ], "its pieces inside it, and nothing else of the site"
     # Out again, twice: the garage's own level, then the universe.
     page.locator("#viewer-canvas").focus()
     page.keyboard.press("PageUp")

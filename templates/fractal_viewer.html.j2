@@ -2519,17 +2519,14 @@
             // key off it), not only its mesh-registry key.
             currentRenderNodes(focus) {
                 const focusPrefix = this.focusPath.join('.');
-                const nodes = [];
                 // A leaf has nothing beneath it, so rendering "the focus node's
                 // children" would draw an empty scene for the one thing a reader
                 // asked to look at: a focused leaf renders itself. Zooming into a
                 // part shows the part. A machine -- a piece drawn as a part, with
-                // pieces of its own inside it -- is its part too: stepped into, the
-                // part stands alone and whole, and its pieces are Site's rows, each a
-                // step further in.
-                if (this.drawsItself(focus)) {
-                    return [{ ...focus, _path: focusPrefix }];
-                }
+                // pieces of its own inside it -- draws its part too, whole, and its
+                // pieces inside it as any level draws its pieces, each a step further
+                // in (raycastPick takes a piece before the part around it).
+                const nodes = this.drawsItself(focus) ? [{ ...focus, _path: focusPrefix }] : [];
                 for (const child of focus.children) {
                     const path = pathForChild(focusPrefix, child.name);
                     if (child.children.length && this.expandedCategories.has(child.category)) {
@@ -2567,8 +2564,9 @@
                 if (this.drawsItself(focus)) this.renderNodeByKey[focusPrefix] = { ...focus, _path: focusPrefix };
             }
 
-            // Whether a level draws its own piece and not what the piece holds: a
-            // leaf, which holds nothing, and a piece drawn as a part, whatever it holds.
+            // Whether a level draws its own piece: a leaf, which holds nothing, and a
+            // piece drawn as a part, whatever it holds -- beside what it holds, which
+            // every level draws.
             drawsItself(focus) {
                 return !focus.children.length || !!focus.part_ref;
             }
@@ -2734,7 +2732,8 @@
                     const detail = this.effectiveDetailFor(child, key);
                     const isCompound = !!(child.children && child.children.length);
 
-                    // A machine stepped into is the whole level: nothing to set it apart from.
+                    // A machine stepped into is the level itself, its pieces inside it:
+                    // nothing to set it apart from.
                     if (isCompound && this.showCompoundOverlays && !this.isLevelsOwn(key)) {
                         this.addCompoundOverlay(key, size, center);
                     }
@@ -3895,9 +3894,9 @@
 
             zoomInAffordanceHtml(node) {
                 if (!node.children.length && !node.site_ref) return '';
-                // The machine the level was stepped into: its pieces are Site's rows.
+                // The machine the level was stepped into: its pieces are drawn inside it.
                 if (this.isLevelsOwn(this.selectedName)) {
-                    return `<div class="prop-readonly" data-facts="inside">Inside it: ${node.children.map((c) => esc(c.name)).join(', ')}. Each is a row in Site; a double-click on one steps into it.</div>`;
+                    return `<div class="prop-readonly" data-facts="inside">Inside it: ${node.children.map((c) => esc(c.name)).join(', ')}, drawn inside it and rows in Site; a double-click on one steps into it.</div>`;
                 }
                 // A site's piece is stepped into as its site; any other piece, as a level.
                 const into = node.site_ref || node.name;
@@ -8405,13 +8404,17 @@
             // in one depth-sorted cast: the nearest wins, so a printer standing
             // over an outline is still the printer. A wall is passed through, to
             // what is behind or inside it, unless the View menu makes walls
-            // selectable. Answers { key } for a node, { pick: { host, view, index } }
-            // for a picture's mark, or null. Every click, drop and right-click in
-            // the world asks here.
+            // selectable. A machine stepped into is drawn around its pieces, so the
+            // level's own part gives way to a piece of it on the same ray, and answers
+            // only where none is. Answers { key } for a node, { pick: { host, view,
+            // index } } for a picture's mark, or null. Every click, drop and
+            // right-click in the world asks here.
             raycastPick(event) {
                 const intersects = this.raycastHits(event);
                 if (!intersects.length) return null;
-                const hit = intersects[0].object;
+                const own = (h) => this.isLevelsOwn(h.object.userData.key);
+                const piece = own(intersects[0]) && intersects.find((h) => h.object.userData.key && !own(h));
+                const hit = (piece || intersects[0]).object;
                 const pick = this.pictureMarks.picked(hit);
                 return pick ? { pick } : { key: hit.userData.key };
             }
@@ -8691,11 +8694,11 @@
                 if (!path) { this.setStatus('Nothing to step into: select a piece, or bring one to the middle of the view', 'error'); return false; }
                 const focus = this.focusPath.join('.');
                 // The piece already stepped into, drawn as itself: its pieces, if it
-                // holds any, are a step further in from Site.
+                // holds any, are drawn inside it, each a step further in.
                 if (focus && path === focus) {
                     const inside = this.currentFocusNode().children.map((c) => c.name);
                     this.setStatus(inside.length
-                        ? `Already inside ${path}: it is drawn whole, and ${inside.join(', ')} ${inside.length > 1 ? 'are rows' : 'is a row'} in Site, where a double-click steps in`
+                        ? `Already inside ${path}: a double-click on ${inside.length > 1 ? `one of its pieces (${inside.join(', ')})` : `its piece ${inside[0]}`} steps into it`
                         : `Already inside ${path}: it holds nothing to step into`, 'error');
                     return false;
                 }

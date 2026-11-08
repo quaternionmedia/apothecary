@@ -106,12 +106,16 @@ says which, and why. Stepping out lands on the piece left, selected. Inside a
 piece the world draws what it holds, not the piece: stepped into the workbench,
 its frame is drawn. A piece that holds nothing is drawn itself.
 
-**A machine is its part.** A piece drawn as a part it names, with pieces of
-its own inside it -- the router, a printer -- is drawn itself too: stepped
-into, its part stands alone and whole, with its working volume and its board's
-badge and nothing else of the site. What it holds is Site's rows there, each
-stepped into from its row (a double-click, or Selected's "⤵ Step into"), where
-the piece's own contents are drawn and the machine is not. A click on the part
+**A machine is its part, its pieces inside it.** A piece drawn as a part it
+names, with pieces of its own inside it -- the router, a printer -- is drawn
+itself too: stepped into, its part stands whole, with its working volume and
+its board's badge and nothing else of the site, and the view frames it. Its
+pieces are drawn inside it as any level draws its pieces -- outlined, under
+View's Detail, opened by Site's category chips -- and are Site's rows. A click,
+a double-click or a drop that meets the part and a piece of it on the same ray
+takes the piece, so a double-click on the printer's electronics box steps into
+its `frame_system`, where the piece's own contents are drawn and the machine
+is not; the part answers only where no piece is behind it. A click on the part
 selects the machine: its part, its Device line with the pin and what the board
 last said, and the pieces inside it by name. There it has no Detail and no
 "⤵ Step into", wears no move arrows, which are a piece's at the site's own
@@ -187,7 +191,7 @@ ring's View is, which adds **Fit**: frame the pieces at this level (Shift+F;
 |---|---|
 | Snap to grid | Snaps a dragged piece to a 50 mm grid (on at first) |
 | Detail: Full, Black box, Dot | How much of each compound piece to draw: its real geometry, its bounding box, or a marker. Leaves are always drawn in full, and so is a machine stepped into; Selected's Detail overrides it for one piece |
-| Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first); a machine stepped into, the whole level, has none |
+| Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first); a machine stepped into, the level's own piece, has none |
 | Select walls | A click in the world picks a wall again, until the page is left (off at first) |
 | Settings | Opens the Settings panel, its tab in front ([below](#settings)) |
 

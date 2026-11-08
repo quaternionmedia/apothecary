@@ -84,7 +84,7 @@ Added from the bench's own ring -- Camera, Add here -- a camera part stands abov
 
 ## 10. Looking into a printer, the camera stays in the garage
 
-A camera is a piece of the site, drawn at the level its site is. Stepped into the printer, the printer is its part, alone and whole, with its frame and its gantry as Site's rows; neither the camera's badge nor its pyramid follows, and stepping back out brings them back.
+A camera is a piece of the site, drawn at the level its site is. Stepped into the printer, the printer is its part, whole, with its frame and its gantry drawn inside it and listed in Site; neither the camera's badge nor its pyramid follows, and stepping back out brings them back.
 
 ![Looking into a printer, the camera stays in the garage](screenshots/02-10-looking-into-a-printer-the-camera-stays-in-the-gar.png)
 

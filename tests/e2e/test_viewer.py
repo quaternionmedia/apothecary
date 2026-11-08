@@ -251,15 +251,42 @@ MACHINES = [
 ]
 
 
+# Whether the view is framed on `key`'s whole: the point it turns about is the middle
+# of the piece's box.
+FRAMED_ON = """(key) => {
+    const v = window.fractalViewer, b = v.boundsFor(v.renderNodeByKey[key], 0);
+    const middle = v.sceneAt(...b.min.map((low, i) => (low + b.max[i]) / 2));
+    return middle.distanceTo(v.orbitControls.target) < 1;
+}"""
+
+# Where on the page the nearest surface under the pointer is `part`'s and the viewer's
+# pick answers `piece`, a piece behind it on the same ray: the first such point of a
+# grid over the canvas.
+BEHIND_THE_PART = """async ({ part, piece }) => {
+    const v = window.fractalViewer, r = v.canvas.getBoundingClientRect();
+    await v.waveDone;
+    for (let i = 1; i < 32; i++) for (let j = 1; j < 32; j++) {
+        const at = { clientX: r.left + (r.width * i) / 32, clientY: r.top + (r.height * j) / 32 };
+        if (document.elementFromPoint(at.clientX, at.clientY) !== v.canvas) continue;
+        const nearest = v.raycastHits(at)[0];
+        if (nearest && nearest.object.userData.key === part && v.raycastChild(at) === piece) {
+            return { x: at.clientX, y: at.clientY };
+        }
+    }
+    return null;
+}"""
+
+
 @pytest.mark.e2e
 @pytest.mark.parametrize("machine, part, pieces", MACHINES)
-def test_stepping_into_a_machine_draws_its_part_alone_and_whole(
+def test_stepping_into_a_machine_draws_its_part_whole_with_its_pieces_inside(
     page: Page, base_url: str, machine: str, part: str, pieces: list
 ):
     """A machine in a site is drawn as the part it names. Stepped into, that part is the
-    level: alone, with nothing else of the site and none of its pieces beside it, and
-    whole, the mesh the level above drew. Its pieces are Site's rows, each a step
-    further in, where what the piece holds is drawn and the machine is not."""
+    level's own piece: whole, the mesh the level above drew, framed, with nothing else
+    of the site beside it. Its pieces are drawn inside it, outlined as any piece with
+    pieces is, and are Site's rows, each a step further in, where what the piece holds
+    is drawn and the machine is not."""
     _open(page, f"{base_url}/viewer/sites/garage")
     body = page.evaluate(LEVEL)["drawn"][machine]
     assert not body["placeholder"], f"{machine} is drawn from {part}'s STL in the garage"
@@ -268,16 +295,20 @@ def test_stepping_into_a_machine_draws_its_part_alone_and_whole(
     page.locator("#selected-body .zoom-in-btn").click()
     expect(page.locator("#status")).to_contain_text(f"Stepped into {machine}")
     inside = page.evaluate(LEVEL)
+    keys = [f"{machine}.{piece}" for piece in pieces]
     assert inside["focus"] == machine
-    assert inside["drawn"] == {machine: body}, "the part alone, and the whole of it"
-    assert inside["outlines"] == [], "the level's own piece is set apart from nothing"
+    assert inside["drawn"][machine] == body, "the part whole, the mesh the level above drew"
+    assert sorted(inside["drawn"]) == sorted([machine, *keys]), "and its pieces, no more"
+    assert page.evaluate(FRAMED_ON, machine), "the view is framed on the machine's whole"
+    assert sorted(inside["outlines"]) == sorted(keys), "the level's own piece has no outline"
     assert inside["volumes"] == [machine], "its working volume is drawn in it"
-    assert inside["rows"] == [f"{machine}.{piece}" for piece in pieces]
+    assert inside["rows"] == keys
 
-    # The part is the piece in Selected once it is clicked, by the name of its part,
-    # with no way offered into the level it already is and no arrows to move it by.
+    # The part is the piece in Selected once it is clicked where no piece of it is
+    # behind, by the name of its part, with no way offered into the level it already
+    # is and no arrows to move it by.
     on_it = page.evaluate(ON_PIECE, machine)
-    assert on_it, f"{machine} is under the pointer somewhere in the view"
+    assert on_it, f"{machine} is under the pointer, nothing of it behind, somewhere in the view"
     page.mouse.click(on_it["x"], on_it["y"])
     assert page.evaluate(LEVEL)["selected"] == machine, "a click on the part selects it"
     selected = page.locator("#selected-body")
@@ -287,13 +318,15 @@ def test_stepping_into_a_machine_draws_its_part_alone_and_whole(
     expect(selected.locator(".detail-select")).to_have_count(0)
     assert page.evaluate(LEVEL)["arrows"] is None
 
-    # Stepping into it again goes nowhere, and says where its pieces are.
+    # Stepping into it again goes nowhere, and says which pieces a double-click takes.
     page.mouse.dblclick(on_it["x"], on_it["y"])
-    expect(page.locator("#status")).to_contain_text(f"Already inside {machine}")
+    status = page.locator("#status")
+    expect(status).to_contain_text(f"Already inside {machine}: a double-click on one of its")
+    expect(status).to_contain_text(", ".join(pieces))
     assert page.evaluate(LEVEL)["focus"] == machine
 
     # A piece, from its row: what it holds is the level, and the machine is not drawn.
-    piece = f"{machine}.{pieces[0]}"
+    piece = keys[0]
     page.locator(f"#contents-list .contents-item[data-path='{piece}']").dblclick()
     expect(page.locator("#status")).to_contain_text(f"Stepped into {piece}")
     deeper = page.evaluate(LEVEL)
@@ -302,15 +335,50 @@ def test_stepping_into_a_machine_draws_its_part_alone_and_whole(
 
 
 @pytest.mark.e2e
+def test_inside_a_machine_a_double_click_on_its_control_box_steps_into_it(
+    page: Page, base_url: str
+):
+    """Stepped into printer_1, its pieces are drawn inside its part, and a pick takes a
+    piece before the part around it: where the printer's own surface is nearest and
+    frame_system, the electronics box under the bed, is behind it on the same ray, a
+    double-click steps into frame_system. Site's category chips act there: mechanical,
+    the category of both its pieces, draws what each holds in its place, and the part
+    stays."""
+    _open(page, f"{base_url}/viewer/sites/garage?focus=printer_1")
+    pieces = ["printer_1.frame_system", "printer_1.gantry_system"]
+    assert sorted(page.evaluate(LEVEL)["drawn"]) == ["printer_1", *pieces]
+
+    chip = page.locator("#category-filters .category-chip", has_text="mechanical")
+    chip.click()
+    expect(page.locator("#category-filters .category-chip.active")).to_have_text("mechanical")
+    opened = page.evaluate(LEVEL)["drawn"]
+    assert "printer_1" in opened, "the level's own part stays"
+    assert "printer_1.frame_system.mainboard" in opened, opened
+    assert "printer_1.gantry_system.left_post" in opened, opened
+    assert not set(pieces) & set(opened), opened
+    chip.click()
+    expect(page.locator("#category-filters .category-chip.active")).to_have_count(0)
+    assert sorted(page.evaluate(LEVEL)["drawn"]) == ["printer_1", *pieces]
+
+    at = page.evaluate(BEHIND_THE_PART, {"part": "printer_1", "piece": pieces[0]})
+    assert at, "somewhere the printer's surface is nearest and its frame_system behind it"
+    page.mouse.dblclick(at["x"], at["y"])
+    expect(page.locator("#status")).to_contain_text(f"Stepped into {pieces[0]} (double-clicked)")
+    assert page.evaluate(LEVEL)["focus"] == pieces[0]
+
+
+@pytest.mark.e2e
 def test_a_link_into_a_machine_lands_on_its_part_selected(page: Page, base_url: str):
-    """`?focus=` on a machine arrives at its part, drawn whole and selected, so its rows
-    are in Selected without another click; it wears no move arrows, which belong to a
-    piece at the site's own level; and View's Detail, which stands a box or a dot in for
-    a piece with pieces inside, leaves the piece the level is for drawn in full."""
+    """`?focus=` on a machine arrives at its part, drawn whole and selected, its pieces
+    inside it, so its rows are in Selected without another click; it wears no move
+    arrows, which belong to a piece at the site's own level; and View's Detail, which
+    stands a box or a dot in for a piece with pieces inside, does so for its pieces and
+    leaves the piece the level is for drawn in full."""
     _open(page, f"{base_url}/viewer/sites/garage?focus=cnc_router")
     arrived = page.evaluate(LEVEL)
+    pieces = ["cnc_router.frame_system", "cnc_router.gantry_system"]
     assert arrived["selected"] == "cnc_router"
-    assert list(arrived["drawn"]) == ["cnc_router"]
+    assert sorted(arrived["drawn"]) == ["cnc_router", *pieces]
     assert not arrived["drawn"]["cnc_router"]["placeholder"]
     assert arrived["arrows"] is None
     part_row = page.locator("#selected-body span[title='The part this machine is drawn as']")
@@ -319,8 +387,10 @@ def test_a_link_into_a_machine_lands_on_its_part_selected(page: Page, base_url: 
     page.locator("#view-menu > summary").click()
     page.locator("#detail-mode").select_option("dot")
     dotted = page.evaluate(LEVEL)
-    assert dotted["drawn"] == arrived["drawn"], "the level's own piece is never a dot"
-    assert _viewer_state(page)["dots"] == 0
+    assert dotted["drawn"]["cnc_router"] == arrived["drawn"]["cnc_router"], (
+        "the level's own piece is never a dot"
+    )
+    assert _viewer_state(page)["dots"] == len(pieces), "its pieces are"
 
 
 @pytest.mark.e2e

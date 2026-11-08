@@ -35,8 +35,8 @@ assumed); `cnc_router.gantry_system` is the gantry on the Y rails, its legs
 and cross beam, with `z_carriage_system` inside it, the X carriage plate, the
 Z plate, the clamp and the spindle in it, each placed from the part's own
 constants where the part draws them at its default axes. Stepped into, the
-router is its part, alone and whole, and the control box and the gantry are
-Site's rows there ([viewer.md](viewer.md#the-world)). `ROUTER_STATUSES` are
+router is its part, whole, with the control box and the gantry drawn inside
+it, each a double-click further in ([viewer.md](viewer.md#the-world)). `ROUTER_STATUSES` are
 the words the router's node takes: `idle`, `running`, `hold`, `alarm`,
 `offline` from its polls, and `maintenance` by hand.
 

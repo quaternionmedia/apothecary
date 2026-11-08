@@ -43,9 +43,6 @@ here: run `apothecary problems`.
   still found by its port's name; a family home step on a port another board's record names is refused
   once, with nothing sent, and works on the next try; two identical converters swapped in
   one socket read as one board. None of it has met the real router or the real state file.
-- A machine stepped into is its part alone: its pieces are reached from Site and not drawn
-  at its level, a double-click on the control box does not step into `frame_system`, and
-  the category chips at that level do nothing.
 - The Models window says none is trusted until `apothecary vision check` has passed
   (`apothecary/static/widgets/models.js`, quoted in `docs/models-checklist.md`);
   `apothecary vision` has `ask`, `off`, `on` and `status`.
