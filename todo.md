@@ -85,6 +85,13 @@ here: run `apothecary problems`.
   hello, so it needs the simulated devkit's tenth blink inside that second; on a machine
   loaded past its cores, as with `--workers` beside other runs, the blinks slow and the
   hello falls outside. It passes alone and in a serial run.
+- `tests/e2e/test_one_machine.py::test_one_poller_per_board_whatever_draws_it` counts a
+  board's status requests over four poll periods; on a machine loaded past its cores
+  it counted three. It passes alone, and on a machine loaded below its cores.
+- `apothecary preflight` on a stack not yet pushed reads signature-check as a defect:
+  the workflow asks the forge (`--source host`), which has never been sent those
+  commits. `apothecary/preflight.py`'s recorded differences could name it, covered here
+  by `check_signatures.py --source git`.
 - Page 06's picture of F5 comes in two forms from run to run: the SCAD editor at its
   left edge, or scrolled sideways, with the caret in view either way. Which one a run
   gets does not follow the commit, so a picture of it past the drift tolerance is not
