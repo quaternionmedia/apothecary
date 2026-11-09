@@ -10,8 +10,6 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from apothecary.models import Vector3D
-
 from .base import BasePart
 from .skeleton import ROOT
 
@@ -39,8 +37,9 @@ def create(metadata_root: Path) -> BasePart:
         params_model=FifelParams,
         category="music",
         tags=["instrument", "fife", "recorder", "music", "printable"],
-        # Rotate to stand tall on Z axis (originally lies along Y)
-        display_rotation=Vector3D(x=90, y=0, z=0),
+        # Its SCAD stands the fife on its head, the way up it prints; print=false
+        # lays it on its side, the lip rest down, as it rests.
+        rest={"print": False},
     )
 
 

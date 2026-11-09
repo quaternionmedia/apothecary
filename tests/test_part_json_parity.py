@@ -1,6 +1,7 @@
 """The parts that were Python modules holding only literals are `part.json`
 files; what they say, and what `apothecary problems` says of them, is what the
-modules said."""
+modules said, but for how solderfan stands: its turn is how it rests, which its
+SCAD draws."""
 
 from __future__ import annotations
 
@@ -11,15 +12,25 @@ from apothecary.cli.main import cli
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.registry import part_named
 
-# name: (description, category, tags, preview colour hex, bounds min/max, display rotation)
+# name: (description, category, tags, preview colour hex, bounds min/max, display rotation,
+# rest pose)
 RECORDED = {
-    "contranot": ("Contra-notation accessory", "misc", ["contra", "notation"], None, None, None),
+    "contranot": (
+        "Contra-notation accessory",
+        "misc",
+        ["contra", "notation"],
+        None,
+        None,
+        None,
+        None,
+    ),
     "couch_block": (
         "Couch block spacer",
         "furniture",
         ["couch", "spacer", "block"],
         "#8B4513",
         ((-76.2, 0, 0), (76.2, 101.6, 50.8)),
+        None,
         None,
     ),
     "dryerknob": (
@@ -29,11 +40,13 @@ RECORDED = {
         "#FFFFFF",
         ((-16.5, -16.5, 0), (16.5, 16.5, 20)),
         None,
+        None,
     ),
     "matboard_cutter_mount": (
         "Matboard cutter mount",
         "tooling",
         ["matboard", "cutter", "mount"],
+        None,
         None,
         None,
         None,
@@ -45,6 +58,7 @@ RECORDED = {
         "#FFD700",
         ((-12.135, -14.266, 0), (15, 14.266, 3)),
         None,
+        None,
     ),
     "solderfan": (
         "Soldering fan mount",
@@ -52,12 +66,14 @@ RECORDED = {
         ["fan", "mount", "soldering"],
         None,
         None,
-        (90, 0, 0),
+        None,
+        {"print": False},
     ),
     "star_cookiecutter": (
         "Star cookie cutter",
         "cookie-cutter",
         ["cookie", "star"],
+        None,
         None,
         None,
         None,
@@ -67,7 +83,7 @@ RECORDED = {
 
 @pytest.mark.parametrize("name", sorted(RECORDED))
 def test_a_part_json_says_what_its_module_said(name):
-    description, category, tags, color, bounds, rotation = RECORDED[name]
+    description, category, tags, color, bounds, rotation, rest = RECORDED[name]
     part = part_named(name, ROOT)
     assert (part.description, part.category, part.tags) == (description, category, tags)
     assert part.readme_path == ROOT / "parts" / "README.md"
@@ -85,6 +101,7 @@ def test_a_part_json_says_what_its_module_said(name):
     else:
         r = part.display_rotation
         assert (r.x, r.y, r.z) == rotation
+    assert part.rest == rest
 
 
 def test_problems_reads_these_parts_as_it_did_when_they_were_modules():

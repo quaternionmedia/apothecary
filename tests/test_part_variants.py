@@ -849,3 +849,35 @@ def test_drafts_that_differ_only_in_how_they_rest_do_not_share_a_rest_pose(poser
     assert (again["regenerated"], again["compiled_from"]) == (False, sphere["variant"])
     assert again["variant"] not in (sphere["variant"], disc["variant"])
     assert again_stl.read_bytes() == sphere_stl.read_bytes()
+
+
+@pytest.fixture
+def fife(tmp_path, monkeypatch):
+    """The fifel, its own STLs and the variant cache at temp paths."""
+    from apothecary.projects.parts.fifel import DEFAULT
+
+    monkeypatch.setenv("APOTHECARY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setattr(BasePart, "get_stl_output_path", lambda self: tmp_path / f"{self.name}.stl")
+    return DEFAULT
+
+
+@needs_openscad
+def test_a_fifel_with_another_bore_lies_on_the_floor_and_prints_standing(fife):
+    """Its SCAD lays the fife on its side to rest and lifts it by the farthest it
+    reaches below its middle, which follows its bore: a variant with a wider bore,
+    asked for as it rests, lies on z 0, the lip rest's tip 15 below the axis and the
+    head's rim 14.42 above it. The variant's own STL, what a slice of it reads,
+    stands on its head as tall as the fife."""
+    from apothecary.slicer.service import part_target
+
+    made = make_variant(fife, {"bore": 24}, pose="rest")
+    assert made.success, (made.error_message, made.messages)
+    printed, _ = variant_paths(fife, made.key)
+    rests, _ = variant_paths(fife, made.key, pose="rest")
+    assert (made.pose, made.stl_path) == ("rest", rests)
+    lo, hi = bounds(read_mesh(rests))
+    assert [*lo, *hi] == pytest.approx([-14.5, -200, 0, 14.5, 0, 29.42], abs=0.01)
+    assert made.measured["min"] == pytest.approx(lo, abs=1e-3)
+    lo, hi = bounds(read_mesh(printed))
+    assert (lo[2], hi[2]) == pytest.approx((0, fife.params_model().height), abs=1e-3)
+    assert part_target("fifel", variant=made.key).stl(lambda line: None) == (printed.read_bytes())

@@ -222,6 +222,52 @@ def test_the_footpedal_stands_on_the_bench_buttons_up_within_its_envelope(
     assert top <= lid + 1, f"drawn {top - lid:.1f} mm above its envelope: {seen}"
 
 
+# How tall the page draws each part whose SCAD turns it to rest (three.js's Box3 of its
+# mesh, y up), and how tall its STL, what a slice and a download read, stands (z). The
+# footpedal's two are near: the garage's test above reads which way up it is drawn.
+AS_IT_RESTS_AND_PRINTS = {"fifel": (25.43, 200), "footpedal": (31, 30.35), "solderfan": (134, 12)}
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("name", sorted(AS_IT_RESTS_AND_PRINTS))
+def test_the_part_view_draws_a_part_as_it_rests_and_offers_no_print_flag(
+    page: Page, base_url: str, tmp_path, name: str
+):
+    """`/viewer/parts/<name>` draws the part as it rests -- solderfan stood on its edge,
+    fifel laid on its side -- where its STL lies the way up it prints; and its Parameters,
+    which offer its wall as each of the three has one, offer no control of which way up it
+    is, its SCAD's print flag being Hidden."""
+    from apothecary.meshes import bounds, read_mesh
+
+    rests, prints = AS_IT_RESTS_AND_PRINTS[name]
+    page.goto(f"{base_url}/viewer/parts/{name}")
+    expect(page.locator("#part-params .param").first).to_be_visible(timeout=20000)
+    page.wait_for_function(
+        "(key) => { const m = window.fractalViewer.meshByName[key];"
+        " return m && !m.userData.isPlaceholder; }",
+        arg=name,
+        timeout=60000,
+    )
+    drawn = page.evaluate(
+        """(key) => {
+            const mesh = window.fractalViewer.meshByName[key];
+            mesh.geometry.computeBoundingBox();
+            const box = new mesh.geometry.boundingBox.constructor().setFromObject(mesh);
+            return box.max.y - box.min.y;
+        }""",
+        name,
+    )
+    assert drawn == pytest.approx(rests, abs=0.1), f"{name} drawn {drawn:.2f} mm tall"
+    stl = tmp_path / f"{name}.stl"
+    stl.write_bytes(
+        httpx.get(f"{base_url}/parts/{name}/stl", timeout=60).raise_for_status().content
+    )
+    lo, hi = bounds(read_mesh(stl))
+    assert hi[2] - lo[2] == pytest.approx(prints, abs=0.1), f"{name}'s STL: {lo} .. {hi}"
+    expect(page.locator("#part-params .param[data-field='wall']")).to_have_count(1)
+    expect(page.locator("#part-params .param[data-field='print']")).to_have_count(0)
+
+
 @pytest.fixture
 def v_slot_as_it_was():
     """Apply renders a variant into the cache, but opening the part draws its own STL,

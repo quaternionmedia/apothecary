@@ -17,7 +17,9 @@ from rendered_parts import face_up
 from apothecary import Cube, Import
 from apothecary.meshes import bounds, read_mesh
 from apothecary.models import Vector3D
+from apothecary.projects.parts.assignments import last_of, parse_assignments
 from apothecary.projects.parts.base import BasePart
+from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.stl_renderer import (
     SUPERSEDED,
     Cancellation,
@@ -32,11 +34,25 @@ from apothecary.projects.parts.stl_renderer import (
     scad_literal,
     write_params_sidecar,
 )
-from apothecary.projects.registry import ProjectInfo
+from apothecary.projects.registry import ProjectInfo, load_part, part_named, scan_projects
 
 needs_openscad = pytest.mark.skipif(
     not get_renderer().is_available, reason="OpenSCAD not installed"
 )
+
+# The parts whose SCAD lays them the way up they print and, with print=false, turns
+# them as they rest: the x, y and z extent of each pose, as OpenSCAD renders it.
+PRINTS_AND_RESTS = {
+    "solderfan": ((134, 134, 12), (134, 12, 134)),  # a tray flat on its base; on its edge
+    "fifel": ((25, 25.43, 200), (25, 200, 25.43)),  # standing on its head; on its side
+}
+
+
+def _library():
+    """Every part of the library, as the registry loads it."""
+    for item in scan_projects(ROOT):
+        if item.kind == "part" and item.has_part:
+            yield load_part(item)
 
 
 class TestOpenSCADRenderer:
@@ -339,6 +355,51 @@ class TestBuildStl:
         assert face_up(rests.stl_path) == pytest.approx(-PEDAL.params_model().theta, abs=0.5)
         assert face_up(printed.stl_path) == pytest.approx(0, abs=0.5)
         assert build_stl(part, pose="rest").skipped == "fresh"
+
+    @needs_openscad
+    @pytest.mark.parametrize("name", sorted(PRINTS_AND_RESTS))
+    def test_a_part_turned_to_rest_prints_as_its_scad_lays_it(self, tmp_path, name):
+        """solderfan's SCAD lays the tray flat on its base and fifel's stands the fife
+        on its head, each the way up it prints, and its STL is that render, unturned;
+        print=false turns it as it rests, the tray stood on its edge, the fife laid on
+        its side. Each pose stands on z 0."""
+        own = part_named(name, ROOT)
+        scad = tmp_path / own.source_file.name
+        shutil.copyfile(own.source_file, scad)
+        part = own.model_copy(update={"source_file": scad})
+        printed, rests = build_stl(part), build_stl(part, pose="rest")
+        assert printed.success and rests.success, (printed.error_message, rests.error_message)
+        for result, size in zip((printed, rests), PRINTS_AND_RESTS[name], strict=True):
+            lo, hi = bounds(read_mesh(result.stl_path))
+            assert [hi[axis] - lo[axis] for axis in range(3)] == pytest.approx(size, abs=0.01)
+            assert lo[2] == pytest.approx(0, abs=1e-3), (result.stl_path.name, lo, hi)
+
+    def test_no_part_offers_how_it_rests_as_a_control(self):
+        """A rest definition is its SCAD's own pose flag, not a parameter: each one a
+        part of the library declares is assigned in its SCAD after ``/* [Hidden] */``
+        and is no field of its model, so neither the page's controls nor OpenSCAD's
+        customizer offer it, where a person setting it would change what a slice
+        reads."""
+        offered, declared = {}, []
+        for part in _library():
+            if not part.rest:
+                continue
+            declared.append(part.name)
+            assigned = last_of(parse_assignments(part.source_file.read_text(encoding="utf-8")))
+            fields = part.params_model.model_fields if part.params_model else {}
+            shown = [
+                n for n in part.rest if n not in assigned or assigned[n].parameter or n in fields
+            ]
+            if shown:
+                offered[part.name] = shown
+        assert sorted(declared) == ["fifel", "footpedal", "solderfan"]
+        assert offered == {}
+
+    def test_no_part_of_the_library_is_turned(self):
+        """Each part's SCAD lays it the way up it prints, which its STL is: none sets
+        ``display_rotation`` (docs/parts-authoring.md#how-it-rests)."""
+        turned = {p.name: p.display_rotation.to_list() for p in _library()}
+        assert {name: turn for name, turn in turned.items() if any(turn)} == {}
 
     def test_the_rest_definitions_reach_the_scad_beside_the_parameters(self, tmp_path):
         part, fake = _part(tmp_path, rest={"standing": True}), FakeRenderer()

@@ -4,6 +4,7 @@ y = 100;
 z = 30;
 wall = 4;
 theta = -16;
+/* [Hidden] */
 // true: laid on its button face, the way up it prints; false: on its base, buttons up, as it rests.
 print = true;
 

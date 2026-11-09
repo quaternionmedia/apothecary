@@ -21,6 +21,12 @@ bore = 20;
 //how thick the walls of the fife are
 wall = 4;
 
+//everything after the next line is hidden: it is not a number to change
+/* [Hidden] */
+
+//true stands the fife on its head, the way up it prints; false lays it on its side, the way it rests (see the end of this file)
+print = true;
+
 //a module in openscad is basically a function. Let's you do a whole bunch of code all at once
 module fifel(){
 
@@ -71,7 +77,8 @@ module fifel(){
 //now we close the fifel module
 }
 
-//now we call the fifel module to generate the code
-fifel();
+//now we call the fifel module to generate the code. To print it, it stands on its head. To rest, rotate lays it on its side, the lip rest down, and translate lifts it by the farthest it reaches below its middle -- the lip rest's tip, or the head's rim -- so it lies on the floor
+if (print) fifel();
+else translate([0, 0, max(bore/2 + 3, (bore + wall + 1)/2)]) rotate([90, 0, 0]) fifel();
 
 //end of fifel!

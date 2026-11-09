@@ -95,17 +95,21 @@ file's own top-level variables.
 ## How it rests
 
 A part's STL is the way up it prints: its SCAD's render, turned by
-`display_rotation` where it has one. That is what a slice and a download read.
-A part that stands otherwise in use declares its rest pose, `rest`: the `-D`
-definitions that make its SCAD draw it as it rests. `footpedal.scad` lays the
-wedge on its button face unless `print` is false, so its wrapper says
-`rest={"print": False}`; a described part says it in its `part.json` as
-`"rest": {"print": false}`.
+`display_rotation` where it has one, and no part in the library has one. That
+is what a slice and a download read. A part that stands otherwise in use
+declares its rest pose, `rest`: the `-D` definitions that make its SCAD draw it
+as it rests. `footpedal.scad` lays the wedge on its button face unless `print`
+is false, so its wrapper says `rest={"print": False}`; `fifel.py` says the
+same of the fife, which its SCAD stands on its head unless `print` is false;
+and `solderfan`, a described part, says it in its `part.json` as
+`"rest": {"print": false}`. Each SCAD assigns its `print` after
+`/* [Hidden] */`, so neither the part's controls nor OpenSCAD's customizer
+offer it: set by hand, it would change which way up a slice is.
 
 The rest pose is the same SCAD, those definitions given beside the part's
 parameters, and never turned, so it follows every parameter and every edit of
 the SCAD: the footpedal stands on its base, its button face tilted by `theta`,
-whatever `theta` is. It is rendered only when it is asked for, into a file of
+whatever `theta` is, and the fife lies on the floor whatever its `bore`. It is rendered only when it is asked for, into a file of
 its own: `<name>.rest.stl` beside the part's STL, with its own freshness and
 params sidecar, and a variant's beside the variant in the cache, under the
 variant's key, kept as long as the variant is.

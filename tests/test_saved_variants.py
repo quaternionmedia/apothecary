@@ -708,6 +708,68 @@ def test_a_footpedal_saved_while_it_stood_on_its_edge_is_drawn_and_sliced_lying_
     assert sliced == lying.stl_path.read_bytes()
 
 
+def test_a_fifel_saved_while_its_turn_laid_it_down_is_listed_opened_and_sliced_standing(
+    tmp_path, listing_openscad
+):
+    """The fifel was laid on its side by display_rotation [90, 0, 0] until its SCAD
+    turned it to rest, behind a print flag the text saved then does not have. A variant
+    saved then is listed and opened with its bore, it is drawn, and the render a slice of
+    it reads is its text unturned -- the fife standing on its head, the way it prints
+    now -- under a key of its own, never the lying render's."""
+    import re
+    import shutil
+
+    from apothecary.meshes import bounds, read_mesh
+    from apothecary.models import Vector3D
+    from apothecary.projects.parts.fifel import DEFAULT as FIFE
+    from apothecary.projects.parts.stl_renderer import OpenSCADRenderer
+    from apothecary.projects.parts.variants import make_variant, variant_paths
+    from apothecary.slicer.service import part_target
+
+    text = FIFE.source_file.read_text(encoding="utf-8")
+    then_text, hidden = re.subn(
+        r"\n//everything after the next line is hidden.*?print = true;\n", "\n", text, flags=re.S
+    )
+    then_text, called = re.subn(r"if \(print\) fifel\(\);\nelse [^\n]*\n", "fifel();\n", then_text)
+    assert (hidden, called) == (1, 1) and "print =" not in then_text
+
+    repo = tmp_path / "checkout"
+    (repo / "parts" / "fifel").mkdir(parents=True)
+    scad = repo / "parts" / "fifel" / "fifel.scad"
+    scad.write_text(then_text, encoding="utf-8")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", PERSON[0])
+    git(repo, "config", "user.email", PERSON[1])
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "The fifel, laid down by its display rotation")
+    turned = Vector3D(x=90, y=0, z=0)
+    then = FIFE.model_copy(update={"source_file": scad, "display_rotation": turned, "rest": None})
+    save_variant(then, "wider", then_text.replace("bore = 20;", "bore = 24;"))
+    shutil.copyfile(FIFE.source_file, scad)
+    git(repo, "commit", "-q", "-am", "The fifel prints standing and rests lying")
+    now = FIFE.model_copy(update={"source_file": scad})
+
+    assert [variant.name for variant in list_saved(now)] == ["wider"]
+    opened = read_saved(now, "wider")
+    assert opened.params == {"bore": 24}
+
+    renderer = OpenSCADRenderer(str(listing_openscad))
+    lying = make_variant(then, {}, renderer=renderer, draft=opened.scad)
+    drawn = make_variant(now, {}, renderer=renderer, draft=opened.scad, pose="rest")
+    assert lying.success and drawn.success, (lying.error_message, drawn.error_message)
+    printed, _ = variant_paths(now, drawn.key)
+
+    def z(stl):
+        lo, hi = bounds(read_mesh(stl))
+        return lo[2], hi[2]
+
+    assert z(lying.stl_path) == pytest.approx((-15, 14.42), abs=0.01)  # as it was before
+    assert z(printed) == pytest.approx((0, FIFE.params_model().height), abs=1e-3)
+    assert drawn.key != lying.key
+    sliced = part_target("fifel", variant=drawn.key).stl(lambda line: None)
+    assert sliced == printed.read_bytes()
+
+
 # --- managing them: rename, duplicate, history, restore, the trash -------------------------
 #
 # Each by git's plumbing alone: the working tree, the index, HEAD, the branches,
