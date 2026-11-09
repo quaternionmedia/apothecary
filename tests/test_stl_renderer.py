@@ -1,6 +1,7 @@
 """Tests for STL rendering and build_stl, the one way a part's STL is built."""
 
 import os
+import shutil
 import stat
 import threading
 import time
@@ -301,6 +302,23 @@ class TestBuildStl:
         assert size == [10, 30, 20]  # 10 x 20 x 30, turned about X
         # The upright render and its wrapper live in a scratch directory.
         assert sorted(p.name for p in tmp_path.iterdir()) == ["block.scad", "block.stl"]
+
+    @needs_openscad
+    def test_the_footpedal_is_built_as_its_scad_lays_it(self, tmp_path):
+        """The footpedal's SCAD lays it on its button face, the way up it prints: the
+        STL it builds is that render, as tall as its z, not stood on its edge."""
+        from apothecary.projects.parts.footpedal import DEFAULT as PEDAL
+
+        scad = tmp_path / "footpedal.scad"
+        shutil.copyfile(PEDAL.source_file, scad)
+        built = build_stl(PEDAL.model_copy(update={"source_file": scad}))
+        own = get_renderer().render_stl(scad, tmp_path / "own.stl")
+        assert built.success and own.success, (built.error_message, own.error_message)
+        lo, hi = bounds(read_mesh(built.stl_path))
+        size = [hi[axis] - lo[axis] for axis in range(3)]
+        assert size[2] == pytest.approx(PEDAL.params_model().z, abs=1), size
+        own_lo, own_hi = bounds(read_mesh(own.stl_path))
+        assert [*lo, *hi] == pytest.approx([*own_lo, *own_hi], abs=1e-3)
 
     @needs_openscad
     def test_generate_stl_all_clears_a_stale_sidecar(self, tmp_path, monkeypatch):

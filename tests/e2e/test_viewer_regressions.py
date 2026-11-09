@@ -165,6 +165,34 @@ def test_the_site_is_drawn_as_openscad_draws_it_not_mirrored(page: Page, base_ur
     assert found["axes"] == {"red": [1, 0, 0], "green": [0, 1, 0], "blue": [0, 0, 1]}, found
 
 
+# Where a node's mesh reaches up and down in the world, from three.js's own Box3 of it
+# (y up), and the node's envelope (the site's z up).
+UP_AND_DOWN = """(key) => {
+    const v = window.fractalViewer, mesh = v.meshByName[key];
+    mesh.geometry.computeBoundingBox();
+    const box = new mesh.geometry.boundingBox.constructor().setFromObject(mesh);
+    const b = v.renderNodeByKey[key].world_bounds;
+    return { drawn: [box.min.y, box.max.y], envelope: [b.min[2], b.max[2]] };
+}"""
+
+
+@pytest.mark.e2e
+def test_the_footpedal_lies_on_the_bench_no_taller_than_its_envelope(page: Page, base_url: str):
+    """The footpedal's STL is its SCAD's render, lying on its button face as it prints: in
+    the garage its mesh, centred on its envelope on the bench, is as tall as the envelope
+    and reaches neither into the bench nor above the envelope's top."""
+    _open(page, f"{base_url}/viewer/sites/garage")
+    page.wait_for_function(
+        "() => { const m = window.fractalViewer.meshByName['footpedal'];"
+        " return m && !m.userData.isPlaceholder; }",
+        timeout=60000,
+    )
+    seen = page.evaluate(UP_AND_DOWN, "footpedal")
+    (bottom, top), (bench, lid) = seen["drawn"], seen["envelope"]
+    assert top - bottom <= lid - bench + 1, f"drawn {top - bottom:.1f} mm tall: {seen}"
+    assert bottom >= bench - 1, f"drawn {bench - bottom:.1f} mm into the bench: {seen}"
+
+
 @pytest.fixture
 def v_slot_as_it_was():
     """Apply renders a variant into the cache, but opening the part draws its own STL,

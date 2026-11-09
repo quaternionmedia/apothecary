@@ -650,6 +650,64 @@ def test_a_real_snapshot_renders_the_overlay_as_it_renders_the_values(
     assert as_overlay.measured["size"] == as_values.measured["size"] == [23.0, 23.0, 23.0]
 
 
+# --- a variant saved while its part was turned ---------------------------------------------
+
+
+def test_a_footpedal_saved_while_it_stood_on_its_edge_is_drawn_and_sliced_lying_flat(
+    tmp_path, listing_openscad
+):
+    """A save is the part's text, and nothing in its commit says how the part was turned.
+    The footpedal stood on its edge, display_rotation [90, 0, 0], until it was dropped; a
+    variant saved then and drawn now is rendered as the part is now -- lying on its button
+    face, as tall as its z -- under a key of its own, never the standing render's, and the
+    footprint read off it is the one read before. A slice of it reads that render."""
+    import shutil
+
+    from apothecary.meshes import bounds, read_mesh
+    from apothecary.models import Vector3D
+    from apothecary.projects.parts.footpedal import DEFAULT as PEDAL
+    from apothecary.projects.parts.stl_renderer import OpenSCADRenderer
+    from apothecary.projects.parts.variants import make_variant
+    from apothecary.slicer.service import part_target
+
+    repo = tmp_path / "checkout"
+    (repo / "parts" / "footpedal").mkdir(parents=True)
+    scad = repo / "parts" / "footpedal" / "footpedal.scad"
+    shutil.copyfile(PEDAL.source_file, scad)
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", PERSON[0])
+    git(repo, "config", "user.email", PERSON[1])
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "The footpedal")
+    now = PEDAL.model_copy(update={"source_file": scad})
+    then = now.model_copy(update={"display_rotation": Vector3D(x=90, y=0, z=0)})
+
+    saved_then = save_variant(then, "wider", scad.read_text().replace("x = 180;", "x = 200;"))
+    head = git(repo, "rev-parse", "HEAD").strip()
+    assert git(repo, "diff", "--name-only", head, saved_then.ref).split() == [
+        "parts/footpedal/footpedal.scad"
+    ]
+    opened = read_saved(now, "wider")
+    assert opened.params == {"x": 200}
+
+    renderer = OpenSCADRenderer(str(listing_openscad))
+    standing = make_variant(then, {}, renderer=renderer, draft=opened.scad)
+    lying = make_variant(now, {}, renderer=renderer, draft=opened.scad)
+    assert standing.success and lying.success, (standing.error_message, lying.error_message)
+
+    def size(stl):
+        lo, hi = bounds(read_mesh(stl))
+        return [hi[axis] - lo[axis] for axis in range(3)]
+
+    assert size(standing.stl_path)[2] > 100  # as it was drawn and sliced before
+    assert size(lying.stl_path)[2] == pytest.approx(PEDAL.params_model().z, abs=1)
+    assert size(lying.stl_path)[0] == pytest.approx(202, abs=1)
+    assert lying.key != standing.key
+    assert lying.measured == standing.measured
+    sliced = part_target("footpedal", variant=lying.key).stl(lambda line: None)
+    assert sliced == lying.stl_path.read_bytes()
+
+
 # --- managing them: rename, duplicate, history, restore, the trash -------------------------
 #
 # Each by git's plumbing alone: the working tree, the index, HEAD, the branches,
