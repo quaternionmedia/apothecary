@@ -385,6 +385,14 @@ GROUPS = {
             "test_time_bounds.py",
         ),
     },
+    # The borders docs/boundaries.md states: any module of the package can move one.
+    "borders": {
+        "sources": (
+            "apothecary/*",
+            "docs/boundaries.md",
+        ),
+        "tests": ("test_boundaries.py",),
+    },
 }
 
 

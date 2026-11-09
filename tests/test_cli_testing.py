@@ -144,12 +144,12 @@ def test_without_chromium_the_browser_part_says_how_to_install_it_in_one_line(tm
 
 
 def test_changed_runs_the_unit_part_then_the_browser_files_the_change_reaches():
-    """A change to a board's code reaches the machines group's unit files and the machine
-    area's browser files alone; one to the page reaches every browser file; one that
-    reaches no area runs the unit files of its groups alone."""
+    """A change to a board's code reaches the machines group's unit files, the border
+    check, and the machine area's browser files alone; one to the page reaches every
+    browser file; one that reaches no area runs the unit files of its groups alone."""
     groups = testing._groups()
     unit, browser = testing.changed_commands(["apothecary/firmware/gcode.py"])
-    assert unit == testing.unit_command(files=groups.files(["machines"]))
+    assert unit == testing.unit_command(files=groups.files(["machines", "borders"]))
     assert _args(unit)[:2] == ["-q", "walkthrough"] and "tests/test_jobs.py" in unit
     assert "tests/test_slicer.py" not in unit
     files = [a for a in _args(browser) if a.startswith("tests/e2e/")]
@@ -175,7 +175,7 @@ def test_changed_exits_with_the_first_failing_code_and_lists_without_running(
     listed = CliRunner().invoke(cli, ["test", "changed", "--list"])
     assert listed.exit_code == 0
     assert listed.output.splitlines() == [
-        *testing._groups().files(["viewer"]),
+        *testing._groups().files(["viewer", "borders"]),
         "tests/e2e/test_lighting_overlay.py",
     ]
     assert len(ran) == 2  # --list ran nothing

@@ -71,6 +71,7 @@ suites hold everything else.
 | [Scene JSON format](scene-json.md) | Scenes, primitives, booleans and transforms as JSON |
 | [Parts authoring](parts-authoring.md) | How to add a part, override its parameters, and check it |
 | [Fitting a part](fitting-a-part.md) | The seam between a consumer and this repository as built: black boxes, a part's parameters and the validator, a gate per pair of descriptions, the pin, and who owns each open problem |
+| [Borders and handoffs](boundaries.md) | Where apothecary ends and another repository begins, the package's layers and the imports that reach up one, and what crosses at each handoff of the loops, held by a test |
 | [Geometry models](models.md) | Vectors, bounds, colors, shapes and units |
 | [Geometry made elsewhere](geometry-from-elsewhere.md) | An STL or OBJ as a part (`apothecary parts import`), and a part described by a sidecar |
 | [The Working space](working-space.md) | A site as its evidence has it: a printer's polls kept as observations, the frames its cameras keep with them under a budget, the window that shows both, and the doors that read them |

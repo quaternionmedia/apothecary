@@ -155,6 +155,53 @@ here: run `apothecary problems`.
   checks that read every test file (`tests/test_e2e_helpers.py`, test_groups'
   one group per file), and `tests/e2e/durations.json`, which sets every test's
   bound, is no shared ground. None of these occurs in the suite today.
+- The borders, what is open ([docs/boundaries.md](docs/boundaries.md)):
+  - The site store, the picture root and a node lookup are private names of
+    `apothecary/api.py`, imported by `cam`, `family` and `finders` from the layer
+    below and by `routes`, `spaces` and `cli` beside and above it. A module of their
+    own below the server would retire four of the page's reaches.
+  - `apothecary.firmware` holds the firmware toolchains, the machine seam (ports,
+    Marlin, GRBL, a port's task) and the tool finder every installer uses; `slicer`,
+    `cam`, `evidence` and `openscad_installer` depend on it for the last two.
+  - What is cut can differ from what is drawn: `part_cuts` reads a variant's
+    `params`, so an edit of its SCAD's body is drawn and not cut, and the router
+    coupon's cuts restate its SCAD's 20 mm offsets as constants. No test compares
+    a toolpath with the SCAD.
+  - A router's travel has two sources: the page draws the tool at its position plus
+    the node's build volume (the Machine card's volume is the Ender's until `where`
+    answers), and the controller's own `$130`-`$132` are read by the table probe
+    alone.
+  - A part's turn is its print orientation and its place in a site both, and a
+    node has no turn of its own. footpedal's SCAD lies on its button face;
+    solderfan's turn stands its tray on edge, 47 mm through the garage's floor;
+    fifel's lays the fife down, against its own comment. A variant is drawn on its
+    `measured` box, off its envelope for a SCAD whose origin is not its corner. The
+    fake OrcaSlicer ignores the model, so only the slicer's argv is tested.
+  - A part's own STL: a slice of the part rebuilds it at its defaults and drops a
+    CLI variant's sidecar, and `GET /parts/{name}/stl` does not say which
+    parameters the file it serves holds.
+  - The status listeners in `apothecary/api.py` act on loaded sites alone, where
+    `where` reads every pin: a poll before the site is opened is not kept against
+    its node.
+  - A job's kind is chosen outside `apothecary/jobs.py`: `start_print` picks a cut
+    by the machine's dialect, the upload route names `printer` and `router`, and
+    the module's docstring says a mill registers `mill` where the code registers
+    `cut` on a router.
+  - Provenance ends at the kept file: a job names its slice or cut by a file id
+    while the file is kept, a slice's record goes with its file, and a record names
+    a cache key, not a saved variant's ref.
+  - The simulated stand-ins say yes where the real tools say no: the scripted
+    arduino-cli builds `parts/footpedal/footpedal.ino`, which arduino-cli 1.5.1
+    refuses; its devkit says hello by the uploaded folder's name; the simulated
+    Marlin answers `ok` to a line it does not script.
+  - Four ways of finding a tool: `Tool.find` passes over a variable naming a
+    missing file where OpenSCAD's variable is final; the tool status shape is
+    defined twice; the Stream Deck's `ok` is "found", where `ModuleStatus.ok` says
+    "can build and flash"; `finders/qmcp.py` names a qmcp extra `pyproject.toml`
+    does not declare.
+  - A cut asked for by port alone keeps its file under the port's name;
+    `apothecary/cam/api.py` tells a `SlicerError` by its class's name; a node's path
+    and a variant's key are matched by patterns written in three places.
 
 ## Next round
 
