@@ -43,8 +43,11 @@ parameters) costs nothing either. Any other variant lives in the cache only.
 
 A request whose text OpenSCAD compiles the same as a variant already
 rendered -- they differ only in comments -- renders nothing: its key gets
-that render, linked (``compiled_key``; ``compiled_from`` names it). See the
-note above ``compiled_for`` for when what a request compiles is known.
+that render, linked (``compiled_key``; ``compiled_from`` names it). Its rest
+pose is linked the same way, only from a rest pose whose own compile -- the
+rest definitions in ``-D`` -- is the same: two texts the print pose compiles
+the same may rest otherwise. See the note above ``compiled_for`` for when
+what a request compiles is known.
 
 One render per key at a time, and the cache keeps the ``PART_VARIANTS_KEEP``
 most recently served of each part: the node-STL cache in ``api.py`` is the
@@ -764,8 +767,9 @@ def _rested(part, made, params, force, timeout, chosen, renderer, cancel, cache,
     """``made`` as it rests: where the part's own STL answered, its rest pose
     beside it (``build_stl``); else the variant's, kept beside the variant under
     its key, rendered from the same text and values with the rest definitions
-    when it is not there, or linked from the variant it compiled the same as.
-    A render of it that fails fails ``made``."""
+    when it is not there, or linked from a variant whose rest pose compiled the
+    same (``compiled_for`` with ``pose`` rest, filed under a compiled key that
+    names the pose). A render of it that fails fails ``made``."""
     made.pose = REST
     if made.key is None:
         result = build_stl(part, params, timeout=timeout, renderer=chosen, pose=REST)
@@ -781,8 +785,12 @@ def _rested(part, made, params, force, timeout, chosen, renderer, cancel, cache,
     stl, record_path = variant_paths(part, key, cache, REST)
     with _LOCKS(f"{_folder_name(part)}/{key}.rest"):
         record = None if force else read_variant(part, key, cache, REST)
-        if record is None and made.compiled_from:
-            record = _rest_of_twin(part, key, made.compiled_from, cache)
+        twin_key = None
+        if record is None and not force:
+            compiled = compiled_for(part, params, renderer, draft, cancel, pose=REST)
+            twin_key = compiled_key(part, compiled, renderer, pose=REST) if compiled else None
+            if twin_key is not None:
+                record = _rest_of_twin(part, key, twin_key, cache)
         if record is None:
             work = stl.with_name(f".{stl.stem}.{uuid.uuid4().hex[:12]}.stl")
             try:
@@ -831,6 +839,8 @@ def _rested(part, made, params, force, timeout, chosen, renderer, cancel, cache,
                     "utf-8"
                 ),
             )
+            if twin_key is not None:
+                _write_atomically(_compiled_path(part, twin_key, cache), key.encode("ascii"))
     made.stl_path = stl
     if record.get("measured") and record.get("measured_from"):
         made.measured, made.measured_from = record["measured"], record["measured_from"]
@@ -838,11 +848,17 @@ def _rested(part, made, params, force, timeout, chosen, renderer, cancel, cache,
         made.measure(None, [])
 
 
-def _rest_of_twin(part: BasePart, key: str, twin: str, cache: Optional[Path]) -> Optional[dict]:
-    """The rest pose of the variant ``key`` compiled the same as, filed under
+def _rest_of_twin(part: BasePart, key: str, compiled: str, cache: Optional[Path]) -> Optional[dict]:
+    """The rest pose filed under the rest compile ``compiled``, filed under
     ``key`` too (its mesh linked), as ``_same_render`` files the variant; None
-    when that variant's rest pose is not kept."""
-    record = read_variant(part, twin, cache, REST) if KEY_PATTERN.match(twin) else None
+    when no other variant's rest pose compiled so, or it is not kept."""
+    try:
+        twin = _compiled_path(part, compiled, cache).read_text(encoding="ascii").strip()
+    except OSError:
+        return None
+    if not KEY_PATTERN.match(twin) or twin == key:
+        return None
+    record = read_variant(part, twin, cache, REST)
     twin_stl, _ = variant_paths(part, twin, cache, REST)
     if record is None or not twin_stl.is_file():
         return None
@@ -898,11 +914,17 @@ def rest_stl(part: BasePart) -> Optional[Path]:
 # mostly the process starting), so none is made here for it.
 
 
-def compiled_for(part: BasePart, params, renderer, draft: Optional[str], cancel=None):
+def compiled_for(
+    part: BasePart, params, renderer, draft: Optional[str], cancel=None, pose: str = PRINT
+):
     """What OpenSCAD compiles for a render of ``part`` with ``params``: the
     remembered compile (the check's), else one made now where the backend is
     CGAL; None where there is none (Python geometry; Manifold with nothing
-    remembered; an OpenSCAD that cannot export CSG)."""
+    remembered; an OpenSCAD that cannot export CSG). With ``pose`` rest, for
+    a part that declares a rest pose, the compile with its rest definitions
+    merged into ``-D``: remembered, else made now where the print pose's is
+    known -- a check was made, or the backend is CGAL -- for the page's check
+    compiles only the print pose."""
     if part.geometry({}) is not None:
         return None
     from .customizer import known_compile, part_compile
@@ -914,6 +936,18 @@ def compiled_for(part: BasePart, params, renderer, draft: Optional[str], cancel=
         text = draft if draft is not None else own_text(part)
     except OSError:
         return None
+    if pose == REST:
+        if not part.rest:
+            return None
+        resting = {**definitions, **part.rest}
+        known = known_compile(edit_file(part), text, resting, renderer)
+        if known is not None:
+            return known
+        if backend_of(renderer) == "manifold" and (
+            known_compile(edit_file(part), text, definitions, renderer) is None
+        ):
+            return None
+        return compile_draft(part, text, resting, renderer, cancel)
     known = known_compile(edit_file(part), text, definitions, renderer)
     if known is not None or backend_of(renderer) == "manifold":
         return known
@@ -922,11 +956,12 @@ def compiled_for(part: BasePart, params, renderer, draft: Optional[str], cancel=
     return part_compile(part, definitions, renderer, cancel)
 
 
-def compiled_key(part: BasePart, compiled, renderer) -> Optional[str]:
+def compiled_key(part: BasePart, compiled, renderer, pose: str = PRINT) -> Optional[str]:
     """Where a compiled tree's render is filed: the tree, and what else decides
     the mesh -- the OpenSCAD and backend, the display rotation and rest pose,
     and the files the SCAD imports that are not SCAD (a mesh, a drawing), by
-    their bytes.
+    their bytes; with ``pose`` rest, the pose too, so a rest pose's compile is
+    never taken for a print pose's.
     None for a compile with no tree to key on."""
     if compiled is None or not compiled.digest:
         return None
@@ -943,6 +978,8 @@ def compiled_key(part: BasePart, compiled, renderer) -> Optional[str]:
     if part.rest:
         rest = json.dumps(part.rest, sort_keys=True, default=_recordable)
         digest.update(f"rest\0{rest}\0".encode("utf-8"))
+    if pose == REST:
+        digest.update(f"pose\0{REST}\0".encode("utf-8"))
     for label, path in sorted(scad_dependencies(part.source_file).items()):
         if path is None or path.suffix.lower() == ".scad":
             continue

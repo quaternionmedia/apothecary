@@ -789,3 +789,63 @@ def test_the_routes_serve_each_pose(pedal, tmp_path):
     rest_record = f"/parts/footpedal/variants/{other['variant']}"
     assert client.get(rest_record, params={"pose": "rest"}).status_code == 404
     assert client.get("/parts/footpedal/stl", params={"pose": "sideways"}).status_code == 422
+
+
+# A part that rests otherwise than it prints, and the same with another rest branch:
+# the print pose compiles to the same tree for both, as OpenSCAD drops the branch not
+# taken.
+RESTS_A_SPHERE = "print = true;\nif (print) cube(10);\nelse sphere(5);\n"
+RESTS_A_DISC = RESTS_A_SPHERE.replace("sphere(5)", "cylinder(r=7, h=3)")
+
+
+@pytest.fixture
+def poser(tmp_path, monkeypatch):
+    """A part of the test's own declaring a rest pose, asked for by the routes; the
+    variant cache at a temp path."""
+    monkeypatch.setenv("APOTHECARY_CACHE_DIR", str(tmp_path / "cache"))
+    scad = tmp_path / "parts" / "poser" / "poser.scad"
+    scad.parent.mkdir(parents=True)
+    scad.write_text(RESTS_A_SPHERE)
+    part = BasePart(name="poser", source_file=scad, rest={"print": False})
+    monkeypatch.setattr(BasePart, "get_stl_output_path", lambda self: tmp_path / f"{self.name}.stl")
+    real = api._load_part_wrapper
+    monkeypatch.setattr(
+        api, "_load_part_wrapper", lambda name: part if name == "poser" else real(name)
+    )
+    return part
+
+
+@needs_openscad
+def test_drafts_that_differ_only_in_how_they_rest_do_not_share_a_rest_pose(poser, tmp_path):
+    """Checked and drawn as it rests, as the page does: a draft that differs from the
+    first only in its rest branch compiles the same in the print pose, whose STL it is
+    given, linked; its rest pose compiles otherwise and is rendered, each its own
+    branch's geometry. A draft that differs from the first only in its comments is
+    given both, linked: nothing is rendered."""
+    client = TestClient(app)
+
+    def drawn(text):
+        checked = client.post("/parts/poser/draft/check", json={"scad": text, "params": {}})
+        assert checked.json()["valid"], checked.text
+        body = client.post(
+            "/parts/poser/draft/render", params={"pose": "rest"}, json={"scad": text, "params": {}}
+        ).json()
+        assert body["pose"] == "rest", body
+        stl = tmp_path / f"{body['variant']}.rest.stl"
+        stl.write_bytes(client.get(body["stl_url"]).content)
+        lo, hi = bounds(read_mesh(stl))
+        return body, stl, [*lo, *hi]
+
+    sphere, sphere_stl, box = drawn(RESTS_A_SPHERE)
+    assert sphere["regenerated"] and box == pytest.approx([-5, -5, -5, 5, 5, 5], abs=0.3)
+
+    disc, disc_stl, box = drawn(RESTS_A_DISC)
+    assert disc["compiled_from"] == sphere["variant"]  # the print pose: the same tree
+    assert disc["regenerated"], disc["message"]  # its rest pose: rendered
+    assert box == pytest.approx([-7, -7, 0, 7, 7, 3], abs=0.1)
+    assert disc_stl.read_bytes() != sphere_stl.read_bytes()
+
+    again, again_stl, box = drawn(RESTS_A_SPHERE + "// the same, said again\n")
+    assert (again["regenerated"], again["compiled_from"]) == (False, sphere["variant"])
+    assert again["variant"] not in (sphere["variant"], disc["variant"])
+    assert again_stl.read_bytes() == sphere_stl.read_bytes()
