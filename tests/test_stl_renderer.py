@@ -11,7 +11,8 @@ from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+from rendered_parts import face_up
 
 from apothecary import Cube, Import
 from apothecary.meshes import bounds, read_mesh
@@ -319,6 +320,46 @@ class TestBuildStl:
         assert size[2] == pytest.approx(PEDAL.params_model().z, abs=1), size
         own_lo, own_hi = bounds(read_mesh(own.stl_path))
         assert [*lo, *hi] == pytest.approx([*own_lo, *own_hi], abs=1e-3)
+
+    @needs_openscad
+    def test_the_footpedal_rests_on_its_base_and_prints_on_its_button_face(self, tmp_path):
+        """Its rest pose is its SCAD with print=false, in a file of its own: on its
+        base (z 0), the largest face that faces up its button face, tilted by theta.
+        Its STL, the print pose, has a flat face up: the inside of the top plate."""
+        from apothecary.projects.parts.footpedal import DEFAULT as PEDAL
+
+        scad = tmp_path / "footpedal.scad"
+        shutil.copyfile(PEDAL.source_file, scad)
+        part = PEDAL.model_copy(update={"source_file": scad})
+        printed, rests = build_stl(part), build_stl(part, pose="rest")
+        assert printed.success and rests.success, (printed.error_message, rests.error_message)
+        assert printed.stl_path == part.get_stl_output_path() != rests.stl_path
+        lo, hi = bounds(read_mesh(rests.stl_path))
+        assert lo[2] == pytest.approx(0, abs=1e-3), (lo, hi)
+        assert face_up(rests.stl_path) == pytest.approx(-PEDAL.params_model().theta, abs=0.5)
+        assert face_up(printed.stl_path) == pytest.approx(0, abs=0.5)
+        assert build_stl(part, pose="rest").skipped == "fresh"
+
+    def test_the_rest_definitions_reach_the_scad_beside_the_parameters(self, tmp_path):
+        part, fake = _part(tmp_path, rest={"standing": True}), FakeRenderer()
+        rests = build_stl(part, {"x": 12}, renderer=fake, pose="rest")
+        assert rests.success and rests.stl_path == tmp_path / "block.rest.stl"
+        assert fake.calls == [(part.source_file, {"x": 12, "standing": True})]
+        assert read_params_sidecar(rests.stl_path)["params"] == {"x": 12}
+        assert build_stl(part, {"x": 12}, renderer=fake, pose="rest").skipped == "fresh"
+        assert build_stl(part, {"x": 12}, renderer=fake).stl_path == tmp_path / "block.stl"
+        assert fake.calls[1:] == [(part.source_file, {"x": 12})]
+
+    def test_a_part_without_a_rest_pose_builds_one_stl(self, tmp_path):
+        part, fake = _part(tmp_path), FakeRenderer()
+        assert build_stl(part, renderer=fake, pose="rest").stl_path == part.get_stl_output_path()
+        assert build_stl(part, renderer=fake).skipped == "fresh"
+        assert len(fake.calls) == 1
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["block.scad", "block.stl"]
+
+    def test_a_rest_pose_is_what_d_can_carry(self, tmp_path):
+        with pytest.raises(ValidationError, match="rest: .*nested parameter model"):
+            _part(tmp_path, rest={"size": Size()})
 
     @needs_openscad
     def test_generate_stl_all_clears_a_stale_sidecar(self, tmp_path, monkeypatch):

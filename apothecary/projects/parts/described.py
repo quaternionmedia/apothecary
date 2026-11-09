@@ -2,9 +2,9 @@
 
 A folder under ``parts/`` that holds a ``<name>.scad`` and a ``part.json`` is
 a part, with no module to write: the sidecar says what the wrapper would
-have said (category, tags, colour, orientation, a description) and, for a
-mesh brought from elsewhere, where it came from (source, author, licence,
-units, up axis) -- the provenance the open-license record asks every
+have said (category, tags, colour, orientation, how it rests, a description)
+and, for a mesh brought from elsewhere, where it came from (source, author,
+licence, units, up axis) -- the provenance the open-license record asks every
 vendored thing to carry.
 
 The registry records the sidecar on the part's entry (``ProjectInfo.sidecar``)
@@ -52,6 +52,9 @@ class Description(BaseModel):
     tags: List[str] = Field(default_factory=list)
     preview_color: Optional[List[float]] = Field(None, description="[r, g, b] in 0..1")
     display_rotation: Optional[List[float]] = Field(None, description="[rx, ry, rz] degrees")
+    rest: Optional[Dict[str, Any]] = Field(
+        None, description='the -D definitions that draw it as it rests, e.g. {"print": false}'
+    )
     bounds: Optional[Dict[str, List[float]]] = Field(
         None, description='{"min": [x, y, z], "max": [x, y, z]} in mm, as placed'
     )
@@ -105,6 +108,8 @@ def part_from_sidecar(scad_path: Path, sidecar_path: Optional[Path] = None) -> D
     if described.display_rotation and len(described.display_rotation) == 3:
         rx, ry, rz = described.display_rotation
         kwargs["display_rotation"] = Vector3D(x=rx, y=ry, z=rz)
+    if described.rest:
+        kwargs["rest"] = dict(described.rest)
     if described.bounds and "min" in described.bounds and "max" in described.bounds:
         lo, hi = described.bounds["min"], described.bounds["max"]
         kwargs["default_bounds"] = BoundingBox3D(

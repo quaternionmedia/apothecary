@@ -200,7 +200,10 @@ Settings are kept by this browser.
 
 The world is the site's own frame, z up, turned onto the screen and never
 mirrored: a part reads as OpenSCAD draws it, its engraved text the right way
-round, and a picture lies on what it was taken of as it was taken. The axes are
+round, and a picture lies on what it was taken of as it was taken. A part is
+drawn as it rests, where it declares that: the footpedal stands on the bench
+on its base, buttons up, while its STL lies on its button face, the way up it
+prints ([How it rests](parts-authoring.md#how-it-rests)). The axes are
 the site's -- red x, green y, blue z -- at its origin while the origin is on the
 floor grid, else at the grid's middle; the grid lies on the floor under the
 level in view, its lines on whole cells, where snapping puts things. A level is
@@ -522,14 +525,14 @@ one clicked is drawn again from the cache of variants, its numbers and its
 SCAD with it.
 
 **A variant is drawn where it stands**: placed by the bounds its render
-measured, at its piece, so a part grown is drawn where it grew, standing on
-what it stood on. Beside the envelope the part declares is what its drawn STL
-measures; when the two differ the line turns amber and says by how much, and a
-part reaching below the floor says how far. Selected's Footprint is what the
-variant drawn measures, the declared one beside it. The readiness checklist is
-of what is drawn -- the variant, its fit judged by what it measured -- against
-the build volume of the printer pinned in the site, and **Slice** slices the
-variant drawn, its record naming it.
+measured as it rests, at its piece, so a part grown is drawn where it grew,
+standing on what it stood on. Beside the envelope the part declares is what its
+drawn STL measures; when the two differ the line turns amber and says by how
+much, and a part reaching below the floor says how far. Selected's Footprint is
+what the variant drawn measures, the declared one beside it. The readiness
+checklist is of the variant drawn, its fit judged by what it measures the way up
+it prints, against the build volume of the printer pinned in the site, and
+**Slice** slices it so, its record naming it.
 
 **Ghost**, the tick-box beside Undo and Part › View › Ghost, shows what was
 drawn before the newest Apply -- the saved part, or the variant before -- faint

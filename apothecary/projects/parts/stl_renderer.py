@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Iterator, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel
 
@@ -59,6 +59,26 @@ def scad_literal(value: object) -> str:
             "booleans and lists, so pass its fields as parameters of their own"
         )
     raise TypeError(f"no OpenSCAD literal for {type(value).__name__}: {value!r}")
+
+
+# The two ways up a part is had (docs/parts-authoring.md#how-it-rests): as it
+# prints, its STL turned by display_rotation, what is sliced and downloaded; and
+# as it rests, what the world draws: its SCAD with the part's ``rest`` definitions,
+# unturned. A part that declares no rest pose rests as it prints.
+PRINT, REST = "print", "rest"
+Pose = Literal["print", "rest"]
+
+
+def posed(part: BasePart, pose: str) -> str:
+    """The pose a request for ``pose`` is answered with: the rest pose only for a
+    part that declares one."""
+    return REST if pose == REST and part.rest else PRINT
+
+
+def posed_path(stl_path: Path, pose: str) -> Path:
+    """Where ``pose`` of the STL at ``stl_path`` is kept: the rest pose beside
+    it, ``<name>.rest.stl``."""
+    return stl_path.with_name(f"{stl_path.stem}.rest.stl") if pose == REST else stl_path
 
 
 def scad_definitions(params: Optional[dict] = None) -> List[str]:
@@ -1096,6 +1116,7 @@ def render_part(
     cancel: Optional[Cancellation] = None,
     scad: Optional[Path] = None,
     binary: bool = False,
+    pose: str = PRINT,
 ) -> RenderResult:
     """Render a part with already-validated ``params`` to ``stl_path``, and
     nothing more: no freshness check, no sidecar. ``binary`` asks OpenSCAD for
@@ -1104,7 +1125,8 @@ def render_part(
     ``stl_path``; any other from its SCAD file, or from ``scad`` standing in
     for it (a draft written beside it), the params reaching it through
     ``part.scad_overrides``. ``rotation`` turns the result; ``renderer``
-    defaults to the OpenSCAD the part asks for; ``cancel`` can stop it."""
+    defaults to the OpenSCAD the part asks for; ``cancel`` can stop it.
+    ``pose`` ``rest`` adds the part's rest definitions to the ``-D`` it gets."""
     if renderer is None:
         renderer = part_renderer(part)
     params = params or {}
@@ -1115,6 +1137,8 @@ def render_part(
         else:
             scad, definitions = Path(tmp) / part.source_file.name, {}
             scad.write_text(text, encoding="utf-8")
+        if posed(part, pose) == REST:
+            definitions = {**definitions, **part.rest}
         if rotation and any(rotation):
             return _render_rotated(
                 renderer, scad, stl_path, rotation, timeout, definitions, cancel, binary
@@ -1140,8 +1164,11 @@ def build_stl(
     force: bool = False,
     timeout: float = 120.0,
     renderer: Optional[OpenSCADRenderer] = None,
+    pose: str = PRINT,
 ) -> RenderResult:
-    """Build a part's STL at the part's own output path.
+    """Build a part's STL at the part's own output path; with ``pose`` ``rest``,
+    for a part that declares a rest pose, the STL of it beside that
+    (``posed_path``), its own freshness and sidecar, never turned.
 
     Overrides are checked against the part's ``params_model`` (ValueError on a
     bad one). The STL on disk is kept (``skipped="fresh"``) unless ``force``, a
@@ -1155,7 +1182,8 @@ def build_stl(
     against the part's ``openscad_min_version``.
     """
     params = part.validate_overrides(params)
-    stl_path = part.get_stl_output_path()
+    pose = posed(part, pose)
+    stl_path = posed_path(part.get_stl_output_path(), pose)
     if not force and _is_fresh(part, stl_path, params):
         return RenderResult(success=True, stl_path=stl_path, skipped="fresh")
 
@@ -1163,8 +1191,8 @@ def build_stl(
     if not can_build:
         return RenderResult(success=False, error_message=reason, skipped="refused")
 
-    rotation = part.display_rotation.to_list()
-    result = render_part(part, stl_path, params, timeout, renderer, rotation)
+    rotation = part.display_rotation.to_list() if pose == PRINT else None
+    result = render_part(part, stl_path, params, timeout, renderer, rotation, pose=pose)
 
     if result.success:
         if params:

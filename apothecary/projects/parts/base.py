@@ -15,7 +15,7 @@ from apothecary.models import (
     Vector3D,
 )
 
-from .stl_renderer import find_openscad, openscad_meets, parse_openscad_version
+from .stl_renderer import find_openscad, openscad_meets, parse_openscad_version, scad_definitions
 
 
 class ContestedValue(BaseModel):
@@ -67,6 +67,12 @@ class BasePart(BaseModel):
     # for preferred "up" orientation (Z-up, sitting on ground plane)
     display_rotation: Vector3D = Field(default_factory=Vector3D)
 
+    # How it rests, where that is not how it prints: the -D definitions that make
+    # its SCAD draw it as it stands in use (the footpedal's {"print": False}). The
+    # world draws that; its STL, what is sliced, stays the print pose. None: it
+    # rests as it prints.
+    rest: Optional[Dict[str, Any]] = None
+
     # Parameters whose value is genuinely in dispute, keyed by parameter name.
     # Empty for a part nobody disagrees about, which is most of them.
     contested: Dict[str, List[ContestedValue]] = Field(default_factory=dict)
@@ -80,6 +86,16 @@ class BasePart(BaseModel):
     def _names_a_version(cls, value: Optional[str]) -> Optional[str]:
         if value is not None and parse_openscad_version(value) is None:
             raise ValueError(f"{value!r} is not an OpenSCAD version such as 2021.01")
+        return value
+
+    @field_validator("rest")
+    @classmethod
+    def _definable(cls, value: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if value is not None:
+            try:
+                scad_definitions(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"rest: {exc}") from None
         return value
 
     @property

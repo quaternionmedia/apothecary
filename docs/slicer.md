@@ -157,8 +157,10 @@ flash never wait for each other.
 OrcaSlicer slices one plate: the part arranged on the bed as it is turned (a
 part is authored the way up it prints) and lifted onto the bed if it reaches
 below it. The G-code kept is named for what was sliced, `<part>.gcode`. A
-part's variant, as the page draws it, is what its Slice slices -- the route's
-`variant`, a key of the variant cache -- and the slice's record names it.
+part's variant, the one the page draws, is what its Slice slices -- the route's
+`variant`, a key of the variant cache -- and the slice's record names it. What
+is sliced is its STL, the way up it prints, where the page draws a part as it
+rests ([How it rests](parts-authoring.md#how-it-rests)).
 
 ## In the page
 

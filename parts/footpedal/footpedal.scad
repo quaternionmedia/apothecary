@@ -4,6 +4,8 @@ y = 100;
 z = 30;
 wall = 4;
 theta = -16;
+// true: laid on its button face, the way up it prints; false: on its base, buttons up, as it rests.
+print = true;
 
 module wedge() {
     
@@ -42,5 +44,5 @@ module pedalboard() {
 }
 
 
-rotate([180-theta, 0, 0]) 
-pedalboard();
+if (print) rotate([180-theta, 0, 0]) pedalboard();
+else pedalboard();

@@ -34,7 +34,9 @@ def create(metadata_root: Path) -> BasePart:
         params_model=FootpedalParams,
         category="electronics",
         tags=["midi", "controller", "arduino", "music", "pedal"],
-        # No display_rotation: its SCAD lays it on its button face, the way up it prints.
+        # Its SCAD lays it on its button face, the way up it prints; print=false
+        # draws it on its base, buttons up, as it stands on the floor.
+        rest={"print": False},
     )
 
 

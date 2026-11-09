@@ -166,21 +166,49 @@ def test_the_site_is_drawn_as_openscad_draws_it_not_mirrored(page: Page, base_ur
 
 
 # Where a node's mesh reaches up and down in the world, from three.js's own Box3 of it
-# (y up), and the node's envelope (the site's z up).
+# (y up), and the node's envelope (the site's z up); and how far the largest flat face
+# of it that faces up leans from straight up: its triangles grouped by plane, their
+# areas summed.
 UP_AND_DOWN = """(key) => {
     const v = window.fractalViewer, mesh = v.meshByName[key];
     mesh.geometry.computeBoundingBox();
     const box = new mesh.geometry.boundingBox.constructor().setFromObject(mesh);
     const b = v.renderNodeByKey[key].world_bounds;
-    return { drawn: [box.min.y, box.max.y], envelope: [b.min[2], b.max[2]] };
+    const at = mesh.geometry.attributes.position, planes = new Map();
+    const p = (i) => [at.getX(i), at.getY(i), at.getZ(i)];
+    for (let i = 0; i + 2 < at.count; i += 3) {
+        const [a, b2, c] = [p(i), p(i + 1), p(i + 2)];
+        const u = a.map((x, k) => b2[k] - x), w = a.map((x, k) => c[k] - x);
+        const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+        const twice = Math.hypot(...n);
+        if (!twice) continue;
+        const unit = n.map((x) => x / twice);
+        const offset = unit.reduce((s, x, k) => s + x * a[k], 0);
+        const plane = `${unit.map((x) => x.toFixed(3)).join()}|${offset.toFixed(1)}`;
+        planes.set(plane, (planes.get(plane) ?? 0) + twice / 2);
+    }
+    let up = null;
+    for (const [plane, area] of planes) {
+        const y = Number(plane.split(',')[1]);
+        if (y > 0 && (!up || area > up.area)) up = { area, y };
+    }
+    return {
+        drawn: [box.min.y, box.max.y], envelope: [b.min[2], b.max[2]],
+        face_up: Math.acos(Math.min(1, up.y)) * 180 / Math.PI,
+    };
 }"""
 
 
 @pytest.mark.e2e
-def test_the_footpedal_lies_on_the_bench_no_taller_than_its_envelope(page: Page, base_url: str):
-    """The footpedal's STL is its SCAD's render, lying on its button face as it prints: in
-    the garage its mesh, centred on its envelope on the bench, is as tall as the envelope
-    and reaches neither into the bench nor above the envelope's top."""
+def test_the_footpedal_stands_on_the_bench_buttons_up_within_its_envelope(
+    page: Page, base_url: str
+):
+    """The footpedal is drawn as it rests and printed as it prints: in the garage its
+    mesh is its rest pose, on its base with the button face up, tilted by theta, where
+    its STL lies on that face; centred on its envelope on the bench, it reaches neither
+    into the bench nor above the envelope's top by more than its rounded edges."""
+    from apothecary.projects.parts.footpedal import FootpedalParams
+
     _open(page, f"{base_url}/viewer/sites/garage")
     page.wait_for_function(
         "() => { const m = window.fractalViewer.meshByName['footpedal'];"
@@ -189,8 +217,9 @@ def test_the_footpedal_lies_on_the_bench_no_taller_than_its_envelope(page: Page,
     )
     seen = page.evaluate(UP_AND_DOWN, "footpedal")
     (bottom, top), (bench, lid) = seen["drawn"], seen["envelope"]
-    assert top - bottom <= lid - bench + 1, f"drawn {top - bottom:.1f} mm tall: {seen}"
+    assert seen["face_up"] == pytest.approx(-FootpedalParams().theta, abs=1), seen
     assert bottom >= bench - 1, f"drawn {bench - bottom:.1f} mm into the bench: {seen}"
+    assert top <= lid + 1, f"drawn {top - lid:.1f} mm above its envelope: {seen}"
 
 
 @pytest.fixture

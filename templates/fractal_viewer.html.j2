@@ -995,6 +995,10 @@
         // part stops its older OpenSCAD run (POST /parts/{name}/stl/generate?page=).
         const PAGE_ID = (globalThis.crypto && crypto.randomUUID)
             ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        // A part is drawn as it rests, its STL and what it measures asked for so; a
+        // part that declares no rest pose is answered as it prints, which is what a
+        // slice and a download read (docs/parts-authoring.md, How it rests).
+        const AS_IT_RESTS = 'pose=rest';
         // How long the controls rest before a staged set is checked.
         const VALIDATE_QUIET_MS = 250;
         // The SCAD editor: a check (evaluated, not rendered) once typing has stopped
@@ -4093,7 +4097,7 @@
                         await this.variantsRead;
                         const record = this.variantRecords[ref];
                         if (record) return { params: record.params, measured: record.measured, measuredFrom: record.measured_from };
-                        const response = await fetch(`${base}/state`);
+                        const response = await fetch(`${base}/state?${AS_IT_RESTS}`);
                         if (!response.ok) return null;
                         const state = await response.json();
                         return { params: state.params, measured: state.measured, measuredFrom: state.measured_from };
@@ -4111,8 +4115,8 @@
                         const draft = scad && scad.text !== null && (tied || scad.text !== scad.own) ? scad.text : null;
                         const version = scad ? scad.version ?? 0 : null;
                         const url = draft === null
-                            ? `${base}/stl/generate?page=${encodeURIComponent(PAGE_ID)}`
-                            : `${base}/draft/render?page=${encodeURIComponent(PAGE_ID)}`;
+                            ? `${base}/stl/generate?page=${encodeURIComponent(PAGE_ID)}&${AS_IT_RESTS}`
+                            : `${base}/draft/render?page=${encodeURIComponent(PAGE_ID)}&${AS_IT_RESTS}`;
                         const sent = draft === null ? { params, editor_version: version }
                             : tied ? { scad: draft, editor_version: version }
                             : { scad: draft, params, editor_version: version };
@@ -4147,7 +4151,7 @@
                         const variant = body.saved ? null : body.variant;
                         if ((this.variantByPart[ref] ?? null) !== (variant ?? null)) this.keepGhost(ref, this.editedKey(ref));
                         if (variant) this.useVariant(ref, variant, body); else this.forgetVariant(ref);
-                        const url = variant ? this.variantUrl(ref, variant) : `${base}/stl?t=${Date.now()}`;
+                        const url = variant ? this.variantUrl(ref, variant) : `${base}/stl?${AS_IT_RESTS}&t=${Date.now()}`;
                         // A variant stands where it measures, at its piece: grown, it is drawn
                         // where it grew, not centred on the envelope the part declares.
                         const load = async (n) => {
@@ -5689,11 +5693,11 @@
                 const base = `${BASE_URL}/parts/${encodeURIComponent(target.part)}`;
                 let body;
                 if (entry.variant) {
-                    const response = await fetch(`${base}/variants/${encodeURIComponent(entry.variant)}`).catch(() => null);
+                    const response = await fetch(`${base}/variants/${encodeURIComponent(entry.variant)}?${AS_IT_RESTS}`).catch(() => null);
                     if (!response?.ok) return { ok: false, said: `${target.label}: that apply is no longer in the cache of variants; Apply renders it again` };
                     body = { ...(await response.json()), variant: entry.variant, saved: false, regenerated: false };
                 } else {
-                    const response = await fetch(`${base}/state`).catch(() => null);
+                    const response = await fetch(`${base}/state?${AS_IT_RESTS}`).catch(() => null);
                     const state = response?.ok ? await response.json() : {};
                     body = { saved: true, variant: null, measured: state.measured ?? entry.measured, measured_from: state.measured_from, regenerated: false };
                 }
@@ -6226,8 +6230,8 @@
                 const base = `${BASE_URL}/parts/${encodeURIComponent(ref)}`;
                 try {
                     const [mesh, state] = await Promise.all([
-                        this.loadSTLMesh(node, `${base}/stl`),
-                        fetch(`${base}/state`).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
+                        this.loadSTLMesh(node, `${base}/stl?${AS_IT_RESTS}`),
+                        fetch(`${base}/state?${AS_IT_RESTS}`).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
                     ]);
                     if (this.ghostBefore[ref]) { disposeDeep(mesh); return; }
                     this.ghostBefore[ref] = { geometry: mesh.geometry, position: mesh.position.clone(), quaternion: mesh.quaternion.clone(), variant: null, label: 'the saved part', measured: state.measured ?? null };
@@ -7978,7 +7982,7 @@
                     if (at < 1) continue;
                     const ref = entry.slice(0, at), key = entry.slice(at + 1);
                     try {
-                        const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(ref)}/variants/${encodeURIComponent(key)}`);
+                        const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(ref)}/variants/${encodeURIComponent(key)}?${AS_IT_RESTS}`);
                         if (!response.ok) {
                             this.setStatus(`${ref}: the variant this address names is no longer kept; drawn as saved`);
                             continue;
@@ -8012,7 +8016,7 @@
             }
 
             variantUrl(ref, key) {
-                return `${BASE_URL}/parts/${encodeURIComponent(ref)}/variants/${encodeURIComponent(key)}/stl`;
+                return `${BASE_URL}/parts/${encodeURIComponent(ref)}/variants/${encodeURIComponent(key)}/stl?${AS_IT_RESTS}`;
             }
 
             // A printer's marks at its node, from what GET /firmware/printers/where
@@ -8939,7 +8943,7 @@
                         this.forgetVariant(ref);
                     }
                 }
-                const stlUrl = `${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/stl`;
+                const stlUrl = `${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/stl?${AS_IT_RESTS}`;
                 try {
                     return await this.loadSTLMesh(node, stlUrl);
                 } catch (firstError) {
@@ -8948,7 +8952,7 @@
                         const genUrl = `${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/stl/generate`;
                         const response = await fetch(genUrl, { method: 'POST' });
                         if (!response.ok) return null;
-                        return await this.loadSTLMesh(node, `${stlUrl}?t=${Date.now()}`);
+                        return await this.loadSTLMesh(node, `${stlUrl}&t=${Date.now()}`);
                     } catch (secondError) {
                         console.warn(`Could not load real geometry for ${node.name}:`, secondError);
                         return null;

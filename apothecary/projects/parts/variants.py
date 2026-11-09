@@ -5,11 +5,11 @@ key computed from everything that decides the mesh: the SCAD and every file
 it includes, uses or imports (or, for a part built by Python geometry, the
 SCAD that geometry writes; or a draft of the part's SCAD, its text standing
 in for the file's), the parameters and the ``-D`` definitions they
-become, the part's display rotation, the OpenSCAD that renders it (its
-version line) and the backend it uses. The same request is the same key, so
-it is rendered once; a different request is a different file, so two tabs
-applying different values never write the same file. A changed include is a
-different key, never a stale hit.
+become, the part's display rotation and rest pose, the OpenSCAD that
+renders it (its version line) and the backend it uses. The same request is
+the same key, so it is rendered once; a different request is a different
+file, so two tabs applying different values never write the same file. A
+changed include is a different key, never a stale hit.
 
 Layout, under ``$APOTHECARY_CACHE_DIR/part_stl`` (by default the checkout's
 ignored ``.cache``)::
@@ -21,6 +21,10 @@ ignored ``.cache``)::
                         OpenSCAD warned about
     <part>/<key>.scad   a draft's text, for a variant rendered from one
                         (apothecary/projects/parts/drafts.py)
+    <part>/<key>.rest.stl, <key>.rest.json
+                        its rest pose and that render's record, for a part
+                        that declares one, rendered when a request asks for
+                        it and kept as long as its variant is
 
 A render is written first under ``$APOTHECARY_CACHE_DIR/part_partial/<part>/``
 and moved into the cache only when OpenSCAD said no error: any message at
@@ -77,6 +81,8 @@ from .base import BasePart
 from .openscad_messages import OpenSCADMessage, parse_openscad_messages, place_messages
 from .skeleton import ROOT
 from .stl_renderer import (
+    PRINT,
+    REST,
     SUPERSEDED,
     Cancellation,
     OpenSCADRenderer,
@@ -84,11 +90,14 @@ from .stl_renderer import (
     _is_fresh,
     _recordable,
     binary_stl,
+    build_stl,
     geometry_scad,
     has_manifold,
     openscad_version,
     params_sidecar_path,
     part_renderer,
+    posed,
+    posed_path,
     read_params_sidecar,
     render_part,
     scad_definitions,
@@ -273,6 +282,8 @@ def variant_key(
         raise ValueError(str(exc)) from None
     add("params", json.dumps(dict(params), sort_keys=True, default=_recordable))
     add("rotation", json.dumps(part.display_rotation.to_list()))
+    if part.rest:
+        add("rest", json.dumps(part.rest, sort_keys=True, default=_recordable))
     add("openscad", openscad_of(renderer) or "none")
     add("backend", backend_of(renderer))
     return digest.hexdigest()[:24]
@@ -301,10 +312,13 @@ class _KeyedLocks:
 _LOCKS = _KeyedLocks()
 
 
-def variant_paths(part: BasePart, key: str, cache: Optional[Path] = None) -> Tuple[Path, Path]:
-    """(STL, record) of a part's variant ``key``."""
+def variant_paths(
+    part: BasePart, key: str, cache: Optional[Path] = None, pose: str = PRINT
+) -> Tuple[Path, Path]:
+    """(STL, record) of a part's variant ``key``; of its rest pose, with ``pose`` ``rest``."""
     folder = (cache or variant_cache_dir()) / _folder_name(part)
-    return folder / f"{key}.stl", folder / f"{key}.json"
+    stem = f"{key}.rest" if pose == REST else key
+    return folder / f"{stem}.stl", folder / f"{stem}.json"
 
 
 def partial_path(part: BasePart, key: str) -> Path:
@@ -352,11 +366,17 @@ def read_variant_draft(part: BasePart, key: str, cache: Optional[Path] = None) -
         return None
 
 
-def read_variant(part: BasePart, key: str, cache: Optional[Path] = None) -> Optional[dict]:
-    """A variant's record, its STL marked served; None when there is none."""
+def read_variant(
+    part: BasePart, key: str, cache: Optional[Path] = None, pose: str = PRINT
+) -> Optional[dict]:
+    """A variant's record, its STL marked served; None when there is none. With
+    ``pose`` ``rest``, its rest pose's record: kept with the variant, which is
+    marked served with it, and None without it."""
     if not KEY_PATTERN.match(key):
         return None
-    stl, record = variant_paths(part, key, cache)
+    if pose == REST and read_variant(part, key, cache) is None:
+        return None
+    stl, record = variant_paths(part, key, cache, pose)
     try:
         mtime_ns = stl.stat().st_mtime_ns
         os.utime(stl, ns=(time.time_ns(), mtime_ns))
@@ -379,7 +399,7 @@ def trim_variants(folder: Path, keep: int = PART_VARIANTS_KEEP) -> None:
     A render still being written is a dot-file and is left alone."""
     served = []
     for stl in folder.glob("*.stl"):
-        if stl.name.startswith("."):
+        if stl.name.startswith(".") or stl.name.endswith(".rest.stl"):
             continue
         try:
             served.append((stl.stat().st_atime_ns, stl))
@@ -390,6 +410,11 @@ def trim_variants(folder: Path, keep: int = PART_VARIANTS_KEEP) -> None:
         stl.unlink(missing_ok=True)
         stl.with_suffix(".json").unlink(missing_ok=True)
         stl.with_suffix(".scad").unlink(missing_ok=True)
+    # A rest pose goes with its variant.
+    for rest in folder.glob("*.rest.stl"):
+        if not rest.name.startswith(".") and not rest.with_suffix("").with_suffix(".stl").exists():
+            rest.unlink(missing_ok=True)
+            rest.with_suffix(".json").unlink(missing_ok=True)
     # What compiled to what: let go with the variant it names.
     for entry in (folder / "compiled").glob("*") if (folder / "compiled").is_dir() else ():
         try:
@@ -461,6 +486,8 @@ class Made:
     compiled_from: Optional[str] = None
     # How long its render waited for a turn in the queue of OpenSCAD runs.
     queued_seconds: float = 0.0
+    # The pose ``stl_path`` and ``measured`` are of: PRINT, or REST where it was asked.
+    pose: str = PRINT
 
     @property
     def success(self) -> bool:
@@ -538,6 +565,7 @@ def make_variant(
     draft: Optional[str] = None,
     place: bool = True,
     values: Optional[Mapping[str, Any]] = None,
+    pose: str = PRINT,
 ) -> Made:
     """The part rendered with ``params``, from the cache when it is there.
 
@@ -562,6 +590,11 @@ def make_variant(
     part's numbers is. It renders as any draft does -- nothing on the side --
     and is recorded as the part with those values: ``params`` them, ``draft``
     None, so a caller that thinks in values reads what it sent.
+
+    ``pose`` ``rest``, for a part that declares a rest pose: the variant as
+    above, then its rest pose (``_rested``), which the answer's STL and
+    measurement are of. The variant, its key and its print-pose STL are what a
+    slice reads.
     """
     if draft is not None:
         if part.geometry({}) is not None:
@@ -575,6 +608,19 @@ def make_variant(
             pass
     params = without_defaults(part, part.validate_overrides(params, scad_text=draft))
     chosen, renderer = renderer, renderer or part_renderer(part)
+    made = _printed(
+        part, params, force, timeout, chosen, renderer, cancel, cache, draft, place, values
+    )
+    if made.success and posed(part, pose) == REST:
+        _rested(part, made, params, force, timeout, chosen, renderer, cancel, cache, draft)
+    return made
+
+
+def _printed(
+    part, params, force, timeout, chosen, renderer, cancel, cache, draft, place, values
+) -> Made:
+    """``make_variant``'s request in the print pose, its ``params`` and ``draft``
+    as it read them; ``chosen`` the OpenSCAD the caller named, if any."""
     canonical = part.get_stl_output_path()
     rotation = part.display_rotation.to_list()
     holds_default = place and draft is None and read_params_sidecar(canonical) is None
@@ -714,6 +760,130 @@ def _finished(part, made, params, holds_default, force, canonical, draft, stl) -
     return made
 
 
+def _rested(part, made, params, force, timeout, chosen, renderer, cancel, cache, draft) -> None:
+    """``made`` as it rests: where the part's own STL answered, its rest pose
+    beside it (``build_stl``); else the variant's, kept beside the variant under
+    its key, rendered from the same text and values with the rest definitions
+    when it is not there, or linked from the variant it compiled the same as.
+    A render of it that fails fails ``made``."""
+    made.pose = REST
+    if made.key is None:
+        result = build_stl(part, params, timeout=timeout, renderer=chosen, pose=REST)
+        if not result.success:
+            made.failure = "refused" if result.skipped == "refused" else "failed"
+            made.error_message = result.error_message
+            return
+        made.stl_path, made.rendered = result.stl_path, made.rendered or result.skipped is None
+        made.render_time_seconds += result.render_time_seconds
+        made.measure(result.measured, [])
+        return
+    key = made.key
+    stl, record_path = variant_paths(part, key, cache, REST)
+    with _LOCKS(f"{_folder_name(part)}/{key}.rest"):
+        record = None if force else read_variant(part, key, cache, REST)
+        if record is None and made.compiled_from:
+            record = _rest_of_twin(part, key, made.compiled_from, cache)
+        if record is None:
+            work = stl.with_name(f".{stl.stem}.{uuid.uuid4().hex[:12]}.stl")
+            try:
+                with _written(part, draft) as scad:
+                    result = render_part(
+                        part,
+                        work,
+                        params,
+                        timeout,
+                        renderer,
+                        cancel=cancel,
+                        scad=scad,
+                        binary=True,
+                        pose=REST,
+                    )
+                    messages = _messages_of(part, result, scad)
+                made.rendered = True
+                made.render_time_seconds += result.render_time_seconds
+                made.queued_seconds += getattr(result, "queued_seconds", 0.0)
+                if result.cancelled:
+                    made.failure, made.error_message = "cancelled", SUPERSEDED
+                    return
+                if not result.success or first_error(messages) is not None:
+                    made.failure, made.messages = "failed", messages
+                    made.error_message = result.error_message or SAID_AN_ERROR
+                    return
+                binary_stl(work)
+                os.replace(work, stl)
+            finally:
+                work.unlink(missing_ok=True)
+            measured = result.measured or measure_stl(stl)
+            source = (FROM_SUMMARY if result.measured else FROM_STL) if measured else None
+            record = {
+                "part": part.name,
+                "key": key,
+                "pose": REST,
+                "rest": part.rest,
+                "rendered": datetime.now().isoformat(timespec="seconds"),
+                "render_time_seconds": result.render_time_seconds,
+                "measured": measured,
+                "measured_from": source,
+            }
+            _write_atomically(
+                record_path,
+                (json.dumps(record, indent=2, sort_keys=True, default=_recordable) + "\n").encode(
+                    "utf-8"
+                ),
+            )
+    made.stl_path = stl
+    if record.get("measured") and record.get("measured_from"):
+        made.measured, made.measured_from = record["measured"], record["measured_from"]
+    else:
+        made.measure(None, [])
+
+
+def _rest_of_twin(part: BasePart, key: str, twin: str, cache: Optional[Path]) -> Optional[dict]:
+    """The rest pose of the variant ``key`` compiled the same as, filed under
+    ``key`` too (its mesh linked), as ``_same_render`` files the variant; None
+    when that variant's rest pose is not kept."""
+    record = read_variant(part, twin, cache, REST) if KEY_PATTERN.match(twin) else None
+    twin_stl, _ = variant_paths(part, twin, cache, REST)
+    if record is None or not twin_stl.is_file():
+        return None
+    stl, record_path = variant_paths(part, key, cache, REST)
+    linked = stl.with_name(f".{stl.name}.{uuid.uuid4().hex[:12]}.tmp")
+    try:
+        try:
+            os.link(twin_stl, linked)
+        except OSError:
+            shutil.copyfile(twin_stl, linked)
+        os.replace(linked, stl)
+    except OSError:
+        return None
+    finally:
+        linked.unlink(missing_ok=True)
+    mine = {**record, "key": key, "compiled_from": twin}
+    _write_atomically(
+        record_path,
+        (json.dumps(mine, indent=2, sort_keys=True, default=_recordable) + "\n").encode("utf-8"),
+    )
+    return mine
+
+
+def rest_stl(part: BasePart) -> Optional[Path]:
+    """The part's own STL as it rests, for the parameters its own STL holds (its
+    params sidecar's; none, the defaults): built beside it when it is not fresh
+    for them, one build at a time. None when it is not there and cannot be
+    built. Only for a part that declares a rest pose."""
+    canonical = part.get_stl_output_path()
+    params = dict((read_params_sidecar(canonical) or {}).get("params") or {})
+    with _LOCKS(f"{_folder_name(part)}/canonical.rest"):
+        try:
+            result = build_stl(part, params, pose=REST)
+        except ValueError:
+            result = None
+    if result is not None and result.success:
+        return result.stl_path
+    path = posed_path(canonical, REST)
+    return path if path.is_file() else None
+
+
 # --- keyed on what OpenSCAD compiles -------------------------------------------------
 #
 # A variant's key is the text it was rendered from. Two texts that differ only
@@ -754,8 +924,9 @@ def compiled_for(part: BasePart, params, renderer, draft: Optional[str], cancel=
 
 def compiled_key(part: BasePart, compiled, renderer) -> Optional[str]:
     """Where a compiled tree's render is filed: the tree, and what else decides
-    the mesh -- the OpenSCAD and backend, the display rotation, and the files
-    the SCAD imports that are not SCAD (a mesh, a drawing), by their bytes.
+    the mesh -- the OpenSCAD and backend, the display rotation and rest pose,
+    and the files the SCAD imports that are not SCAD (a mesh, a drawing), by
+    their bytes.
     None for a compile with no tree to key on."""
     if compiled is None or not compiled.digest:
         return None
@@ -769,6 +940,9 @@ def compiled_key(part: BasePart, compiled, renderer) -> Optional[str]:
         ("backend", backend_of(renderer)),
     ):
         digest.update(f"{label}\0{value}\0".encode("utf-8"))
+    if part.rest:
+        rest = json.dumps(part.rest, sort_keys=True, default=_recordable)
+        digest.update(f"rest\0{rest}\0".encode("utf-8"))
     for label, path in sorted(scad_dependencies(part.source_file).items()):
         if path is None or path.suffix.lower() == ".scad":
             continue
@@ -923,9 +1097,10 @@ class PageRenders:
             return len(self._running)
 
 
-def wants(params: Mapping[str, Any], force: bool) -> str:
+def wants(params: Mapping[str, Any], force: bool, pose: str = PRINT) -> str:
     """What a request asks for, for telling one request from another."""
-    return json.dumps({"params": dict(params), "force": force}, sort_keys=True, default=_recordable)
+    asked = {"params": dict(params), "force": force, **({"pose": pose} if pose != PRINT else {})}
+    return json.dumps(asked, sort_keys=True, default=_recordable)
 
 
 # --- what is on disk ----------------------------------------------------------------
@@ -953,20 +1128,28 @@ class PartState(BaseModel):
     build_note: Optional[str] = Field(None, description="Why it cannot be built here")
 
 
-def part_state(part: BasePart, url_name: Optional[str] = None) -> PartState:
+def part_state(part: BasePart, url_name: Optional[str] = None, pose: str = PRINT) -> PartState:
     """What the part's own STL is: whether it is there, the parameters its
     sidecar records (none: the defaults), when, whether it is newer than
     everything it is built from, and its bounding box. What a page that draws
-    it starts from."""
+    it starts from. With ``pose`` ``rest``, for a part that declares a rest
+    pose, ``stl_url`` and ``measured`` are of that, built when it is not fresh."""
     canonical = part.get_stl_output_path()
     record = read_params_sidecar(canonical) or {}
     params = dict(record.get("params") or {})
     exists = canonical.exists()
-    measured = measure_stl(canonical, part.display_rotation.to_list()) if exists else None
+    url = f"/parts/{url_name or part.name}/stl"
+    if posed(part, pose) == REST:
+        drawn = rest_stl(part)
+        measured = measure_stl(drawn) if drawn is not None else None
+        url = f"{url}?pose={REST}" if drawn is not None else None
+    else:
+        measured = measure_stl(canonical, part.display_rotation.to_list()) if exists else None
+        url = url if exists else None
     return PartState(
         part=part.name,
         exists=exists,
-        stl_url=f"/parts/{url_name or part.name}/stl" if exists else None,
+        stl_url=url,
         params=params,
         default=not params,
         generated=record.get("generated"),
@@ -1000,20 +1183,25 @@ class VariantRecord(BaseModel):
         description="The variant whose render this is too: it compiled the same (its text "
         "differs only in comments), so nothing was rendered for it",
     )
+    pose: str = Field(PRINT, description='What stl_url and measured are of: "print" or "rest"')
 
 
 def variant_record(
-    part: BasePart, key: str, url_name: Optional[str] = None
+    part: BasePart, key: str, url_name: Optional[str] = None, pose: str = PRINT
 ) -> Optional[VariantRecord]:
     """A cached variant's record, for a page that has its key and not its
-    parameters (a tab reloaded, a link followed); None once it is let go."""
+    parameters (a tab reloaded, a link followed); None once it is let go. With
+    ``pose`` ``rest``, for a part that declares a rest pose, ``stl_url`` and
+    ``measured`` are its rest pose's, and None when that is not kept."""
+    pose = posed(part, pose)
     record = read_variant(part, key)
-    if record is None:
+    shown = read_variant(part, key, pose=REST) if pose == REST else record
+    if record is None or shown is None:
         return None
-    measured, source = record.get("measured"), record.get("measured_from")
+    measured, source = shown.get("measured"), shown.get("measured_from")
     if not (measured and source):
-        stl, _ = variant_paths(part, key)
-        measured = measure_stl(stl, part.display_rotation.to_list())
+        stl, _ = variant_paths(part, key, pose=pose)
+        measured = measure_stl(stl, part.display_rotation.to_list() if pose == PRINT else None)
         source = FROM_STL if measured else None
     params = dict(record.get("params") or {})
     draft = record.get("draft")
@@ -1021,7 +1209,7 @@ def variant_record(
     return VariantRecord(
         part=part.name,
         variant=key,
-        stl_url=f"{base}/stl",
+        stl_url=f"{base}/stl" + (f"?pose={REST}" if pose == REST else ""),
         params=params,
         openscad=record.get("openscad"),
         backend=record.get("backend"),
@@ -1034,6 +1222,7 @@ def variant_record(
         draft=draft,
         scad_url=f"{base}/scad" if draft else None,
         compiled_from=record.get("compiled_from"),
+        pose=pose,
     )
 
 
@@ -1059,6 +1248,7 @@ __all__ = [
     "read_variant",
     "read_variant_draft",
     "renamed",
+    "rest_stl",
     "same_text",
     "variant_draft_path",
     "variant_record",

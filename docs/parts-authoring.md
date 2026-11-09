@@ -13,6 +13,7 @@ parts/
 │   ├── my_part.scad      the source
 │   ├── README.md         optional; the wrapper's readme_path
 │   ├── my_part.stl       built by generate-stl, git-ignored
+│   ├── my_part.rest.stl  as it rests, for a part that declares that; git-ignored
 │   └── my_part.params.json   the overrides it was built with, git-ignored
 └── boards/               a category: its subfolders are parts
     ├── board_common.scad a library its parts include, not a part
@@ -77,18 +78,47 @@ DEFAULT = create(ROOT)
 `DEFAULT` is what the CLI, the API and the viewer import. A part with no
 parameters passes no `params_model` and states its envelope as
 `default_bounds=BoundingBox3D(...)` instead of overriding `get_bounds`.
-`display_rotation`, `print_settings` and `contested` are further `BasePart`
-fields; [Geometry models](models.md) describes the types.
+`display_rotation`, `rest` ([below](#how-it-rests)), `print_settings` and
+`contested` are further `BasePart` fields; [Geometry models](models.md)
+describes the types.
 
 ## A sidecar instead of a wrapper
 
 A folder whose SCAD has a `part.json` beside it and no Python module is a
 *described* part: the sidecar says what the wrapper would (description,
-category, tags, colour, rotation, bounds, provenance). See
+category, tags, colour, rotation, rest pose, bounds, provenance). See
 [Described parts](geometry-from-elsewhere.md#described-parts);
 `apothecary parts import` writes one for a mesh made elsewhere. A described
 part has no `Params` model, so its overrides are checked against the SCAD
 file's own top-level variables.
+
+## How it rests
+
+A part's STL is the way up it prints: its SCAD's render, turned by
+`display_rotation` where it has one. That is what a slice and a download read.
+A part that stands otherwise in use declares its rest pose, `rest`: the `-D`
+definitions that make its SCAD draw it as it rests. `footpedal.scad` lays the
+wedge on its button face unless `print` is false, so its wrapper says
+`rest={"print": False}`; a described part says it in its `part.json` as
+`"rest": {"print": false}`.
+
+The rest pose is the same SCAD, those definitions given beside the part's
+parameters, and never turned, so it follows every parameter and every edit of
+the SCAD: the footpedal stands on its base, its button face tilted by `theta`,
+whatever `theta` is. It is rendered only when it is asked for, into a file of
+its own: `<name>.rest.stl` beside the part's STL, with its own freshness and
+params sidecar, and a variant's beside the variant in the cache, under the
+variant's key, kept as long as the variant is.
+
+The page draws a part as it rests, asking for it with `?pose=rest`:
+`GET /parts/{name}/stl` and `/parts/{name}/state`, a variant's
+`/parts/{name}/variants/{key}` and its `/stl`, and `POST
+/parts/{name}/stl/generate` and a draft's render, whose `stl_url` and
+`measured` are then of the rest pose and whose `pose` says so. With no pose,
+each answers the print pose. A part that declares no rest pose rests as it
+prints, and is answered with its STL either way. The bounds a part declares,
+`apothecary parts verify`, the readiness checklist and the slicer stay in the
+print pose.
 
 ## Overrides
 

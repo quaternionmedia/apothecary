@@ -106,7 +106,14 @@ from ..projects.parts.saved import (
     save_variant,
     variant_history,
 )
-from ..projects.parts.stl_renderer import SUPERSEDED, get_renderer, part_renderer, runs_for
+from ..projects.parts.stl_renderer import (
+    PRINT,
+    SUPERSEDED,
+    Pose,
+    get_renderer,
+    part_renderer,
+    runs_for,
+)
 from ..projects.parts.texts import (
     ValueCheck,
     as_edited,
@@ -130,6 +137,12 @@ PAGE = Query(
     max_length=128,
     description="An id the page makes up once per load. A newer request from the same page "
     "for the same part stops this one's OpenSCAD run (409).",
+)
+
+POSE = Query(
+    PRINT,
+    description="rest: its rest pose too, which stl_url and measured are then of, as "
+    "generate's ?pose=rest",
 )
 
 
@@ -407,15 +420,17 @@ def render_text(
     editor_version=None,
     sent: Optional[str] = None,
     values: Optional[Dict[str, Any]] = None,
+    pose: str = PRINT,
 ):
     """A part's text rendered into the variant cache, as generate and a draft's
     render answer it: its values checked first (a refused one is a 422 saying
     which and why), nothing passed on the side. A newer request from the same
     ``page`` stops this one wherever it is (409). ``values``: the text is the
     part's own with these written in (Apply of its numbers), recorded as the
-    part with them -- ``params`` them, ``draft`` null."""
+    part with them -- ``params`` them, ``draft`` null. ``pose`` as
+    ``make_variant`` takes it."""
     renderer = part_renderer(part)
-    cancel = api._page_renders.begin(part.name, page, f"{force}\0{draft_digest(text)}")
+    cancel = api._page_renders.begin(part.name, page, f"{force}\0{pose}\0{draft_digest(text)}")
     try:
         with runs_for(part.name, page):
             listing = None
@@ -440,7 +455,9 @@ def render_text(
                     status_code=422,
                     detail="; ".join(f"{e.field}: {e.message}" for e in checked.errors),
                 )
-            made = make_variant(part, {}, force=force, cancel=cancel, draft=text, values=values)
+            made = make_variant(
+                part, {}, force=force, cancel=cancel, draft=text, values=values, pose=pose
+            )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     finally:
@@ -462,6 +479,7 @@ def render_part_draft(
     body: DraftRequest,
     force: bool = Query(False, description="Render even what the cache already has"),
     page: Optional[str] = PAGE,
+    pose: Pose = POSE,
 ):
     """A draft of the part's text rendered into the variant cache.
 
@@ -480,7 +498,9 @@ def render_part_draft(
     part = _editable(name)
     _openscad_or_503()
     text = the_text(api, part, body.scad, body.params)
-    return render_text(api, name, part, text, force, page, body.editor_version, sent=body.scad)
+    return render_text(
+        api, name, part, text, force, page, body.editor_version, sent=body.scad, pose=pose
+    )
 
 
 @router.get("/parts/{name}/variants/{variant}/scad", response_class=PlainTextResponse)

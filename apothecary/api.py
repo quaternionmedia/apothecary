@@ -86,7 +86,17 @@ from .projects.parts.params import (
     validate_staged,
 )
 from .projects.parts.skeleton import ROOT
-from .projects.parts.stl_renderer import RUNS, build_stl, geometry_scad, part_renderer, runs_for
+from .projects.parts.stl_renderer import (
+    PRINT,
+    REST,
+    RUNS,
+    Pose,
+    build_stl,
+    geometry_scad,
+    part_renderer,
+    posed,
+    runs_for,
+)
 from .projects.parts.stl_renderer import get_renderer as get_stl_renderer
 from .projects.parts.variants import (
     KEY_PATTERN,
@@ -99,6 +109,7 @@ from .projects.parts.variants import (
     read_partial,
     read_variant,
     read_variant_draft,
+    rest_stl,
     variant_paths,
     variant_record,
 )
@@ -635,17 +646,38 @@ def _variant_scad(name: str, part: BasePart, key: str) -> PlainTextResponse:
     return PlainTextResponse(text, headers={**headers, "X-Part-Scad": "values" if values else kind})
 
 
+# Which way up a request wants a part: as it prints (the default, what is sliced and
+# downloaded) or as it rests (what the world draws). A part that declares no rest
+# pose is answered as it prints either way.
+POSE = Query(
+    PRINT,
+    description="print: the way up it prints, its STL as it is sliced; rest: as it "
+    "stands in use, for a part that declares a rest pose (the same STL for one that "
+    "does not)",
+)
+
+
+def posed_url(url: str, pose: str) -> str:
+    """``url`` asking for ``pose``: the print pose is the default, named by nothing."""
+    return f"{url}?pose={REST}" if pose == REST else url
+
+
 @app.get("/parts/{name}/stl")
-def get_part_stl(name: str):
+def get_part_stl(name: str, pose: Pose = POSE):
     """
     Download the STL file for a part.
 
     Returns 404 if the STL hasn't been generated yet.
     Use POST /parts/{name}/stl/generate to create it.
+
+    ``?pose=rest`` asks for it as it rests, for a part that declares a rest
+    pose: built beside its own STL, for the parameters that holds, when it is
+    not fresh for them.
     """
     part = _load_part_wrapper(name)
 
-    stl_path = part.stl_file
+    pose = posed(part, pose)
+    stl_path = rest_stl(part) if pose == REST else part.stl_file
     if stl_path is None or not stl_path.exists():
         raise HTTPException(
             status_code=404,
@@ -658,7 +690,9 @@ def get_part_stl(name: str):
             content=stl_data,
             media_type="application/sla",
             headers={
-                "Content-Disposition": f'attachment; filename="{name}.stl"',
+                "Content-Disposition": f'attachment; filename="{name}'
+                + (".rest" if pose == REST else "")
+                + '.stl"',
                 "X-Part-Name": name,
             },
         )
@@ -702,6 +736,7 @@ def generate_part_stl(
         description="An id the page makes up once per load. A newer request from the "
         "same page for the same part stops this one's OpenSCAD run (409).",
     ),
+    pose: Pose = POSE,
     body: Optional[StlGenerateRequest] = None,
 ):
     """Render a part with ``params`` into the variant cache, and say what OpenSCAD said.
@@ -716,6 +751,9 @@ def generate_part_stl(
     STL. The defaults are also left as the part's own STL, unless its params
     sidecar says it holds another variant; any other variant is the cache's
     alone, so two pages applying different values never share a file.
+    ``?pose=rest``, for a part that declares a rest pose, also makes the
+    variant's rest pose, which ``stl_url`` and ``measured`` are then of
+    (``pose`` says which); the variant and its key are the print pose's.
 
     For a part whose SCAD is its source, the values are written into its own
     text (its SCAD, or a part in a submodule's overlay), and that text renders,
@@ -753,12 +791,14 @@ def generate_part_stl(
 
         text = with_params(part, own_text(part), overrides)
         version = body.editor_version if body else None
-        return render_text(self_api(), name, part, text, force, page, version, values=overrides)
+        return render_text(
+            self_api(), name, part, text, force, page, version, values=overrides, pose=pose
+        )
 
-    cancel = _page_renders.begin(part.name, page, request_wants(overrides, force))
+    cancel = _page_renders.begin(part.name, page, request_wants(overrides, force, pose))
     try:
         with runs_for(part.name, page):
-            made = make_variant(part, overrides, force=force, cancel=cancel)
+            made = make_variant(part, overrides, force=force, cancel=cancel, pose=pose)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     finally:
@@ -895,7 +935,12 @@ def made_answer(
                 else "STL is up to date (force=true rebuilds it)"
             )
         ),
-        "stl_url": (f"/parts/{name}/variants/{made.key}/stl" if made.key else f"/parts/{name}/stl"),
+        "stl_url": posed_url(
+            f"/parts/{name}/variants/{made.key}/stl" if made.key else f"/parts/{name}/stl",
+            made.pose,
+        ),
+        # What stl_url and measured are of: print, or rest where it was asked for.
+        "pose": made.pose,
         "variant": made.key,
         "regenerated": made.rendered,
         "render_time_seconds": made.render_time_seconds,
@@ -921,13 +966,18 @@ def made_answer(
 
 
 @app.get("/parts/{name}/variants/{variant}", response_model=VariantRecord)
-def get_part_variant(name: str, variant: str):
+def get_part_variant(name: str, variant: str, pose: Pose = POSE):
     """What made one cached variant: its parameters, OpenSCAD and backend, its
     measured bounds and what OpenSCAD said, and its ``stl_url``. A page that
     has only the key (a reloaded tab, a link) starts its editor from these.
-    404 once the cache has let it go."""
+    404 once the cache has let it go. ``?pose=rest``: its rest pose's
+    ``stl_url`` and ``measured``, and a 404 when that is not kept."""
     part = _load_part_wrapper(name)
-    record = variant_record(part, variant, url_name=name) if KEY_PATTERN.match(variant) else None
+    record = (
+        variant_record(part, variant, url_name=name, pose=pose)
+        if KEY_PATTERN.match(variant)
+        else None
+    )
     if record is None:
         raise HTTPException(
             status_code=404,
@@ -938,22 +988,25 @@ def get_part_variant(name: str, variant: str):
 
 
 @app.get("/parts/{name}/variants/{variant}/stl")
-def get_part_variant_stl(name: str, variant: str):
+def get_part_variant_stl(name: str, variant: str, pose: Pose = POSE):
     """One variant from the cache, by the ``variant`` key generate answered.
 
     Its bytes never change under its key, whichever page asks: what a page
     applied is what it draws, and the browser keeps it as immutable. 404 once
     the cache has let it go (it keeps the most recently served of each part);
-    generating it again puts it back.
+    generating it again puts it back. ``?pose=rest``: its rest pose, kept with
+    it once a request for the rest pose made it (generate's ``?pose=rest``).
     """
     part = _load_part_wrapper(name)
-    if not KEY_PATTERN.match(variant) or read_variant(part, variant) is None:
+    pose = posed(part, pose)
+    if not KEY_PATTERN.match(variant) or read_variant(part, variant, pose=pose) is None:
         raise HTTPException(
             status_code=404,
-            detail=f"No variant '{variant}' of '{name}' is cached; "
-            f"POST /parts/{name}/stl/generate makes it",
+            detail=f"No variant '{variant}' of '{name}' is cached"
+            + (" in its rest pose" if pose == REST else "")
+            + f"; POST {posed_url(f'/parts/{name}/stl/generate', pose)} makes it",
         )
-    stl, _ = variant_paths(part, variant)
+    stl, _ = variant_paths(part, variant, pose=pose)
     try:
         data = stl.read_bytes()
     except FileNotFoundError:
@@ -962,7 +1015,9 @@ def get_part_variant_stl(name: str, variant: str):
         content=data,
         media_type="application/sla",
         headers={
-            "Content-Disposition": f'attachment; filename="{name}-{variant}.stl"',
+            "Content-Disposition": f'attachment; filename="{name}-{variant}'
+            + (".rest" if pose == REST else "")
+            + '.stl"',
             # A key is everything that made it: its bytes never change under it.
             "Cache-Control": IMMUTABLE,
             "X-Part-Name": name,
@@ -1000,7 +1055,7 @@ def get_part_partial_stl(name: str, variant: str):
 
 
 @app.get("/parts/{name}/state", response_model=PartState)
-def get_part_state(name: str):
+def get_part_state(name: str, pose: Pose = POSE):
     """What the part's own STL is, from its params sidecar.
 
     The parameters it was rendered with (empty: the defaults), when, and
@@ -1009,11 +1064,12 @@ def get_part_state(name: str):
     defaults. ``apothecary parts generate-stl -p`` is what writes a variant
     there; the page's own Apply only ever leaves the defaults there.
     ``can_build`` says whether an OpenSCAD here can build the part at all, and
-    ``build_note`` why not.
+    ``build_note`` why not. ``?pose=rest``: ``stl_url`` and ``measured`` are of
+    it as it rests, as ``GET /parts/{name}/stl?pose=rest`` serves it.
     """
     part = _load_part_wrapper(name)
     can, why = part.can_generate_stl()
-    return part_state(part, url_name=name).model_copy(
+    return part_state(part, url_name=name, pose=pose).model_copy(
         update={"can_build": can, "build_note": why or None}
     )
 

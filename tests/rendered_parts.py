@@ -6,14 +6,20 @@ if it has some, else its SCAD), with the OpenSCAD the part asks for, into the
 session's temp directory, never beside the source. A module uses it by
 importing ``built_stl_fixture``. pytest makes one fixture per importing module
 whatever its scope, so the renders are kept here, not by the fixture.
+
+``face_up(stl)``: how far the largest flat face of a render that faces up leans
+from straight up, which says which way up it was drawn.
 """
 
 from __future__ import annotations
 
+import math
+from collections import defaultdict
 from pathlib import Path
 
 import pytest
 
+from apothecary.meshes import read_mesh
 from apothecary.projects.parts.base import BasePart
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.stl_renderer import RenderResult, get_renderer, render_part
@@ -77,3 +83,21 @@ def built_stl_fixture(tmp_path_factory):
         return result.stl_path
 
     return build
+
+
+def face_up(stl: Path) -> float:
+    """The degrees from +z of the largest flat face of ``stl`` that faces up: its
+    triangles grouped by plane (normal and offset, rounded), their areas summed."""
+    planes: dict = defaultdict(float)
+    for a, b, c in read_mesh(Path(stl)):
+        u, v = [b[i] - a[i] for i in range(3)], [c[i] - a[i] for i in range(3)]
+        n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
+        twice = math.sqrt(sum(x * x for x in n))
+        if twice == 0:
+            continue
+        n = [x / twice for x in n]
+        offset = sum(n[i] * a[i] for i in range(3))
+        planes[(tuple(round(x, 3) + 0.0 for x in n), round(offset, 1))] += twice / 2
+    up = [(area, normal) for (normal, _), area in planes.items() if normal[2] > 0]
+    _, normal = max(up)
+    return math.degrees(math.acos(min(1.0, normal[2])))

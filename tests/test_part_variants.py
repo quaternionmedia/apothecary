@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
+from rendered_parts import face_up
 
 from apothecary import api
 from apothecary.api import app
@@ -659,3 +660,132 @@ def test_the_installed_openscad_renders_a_variant_through_the_route(tmp_path, mo
     summary = has_summary(stl_renderer.get_renderer().openscad_path)
     assert body["measured_from"] == ("summary" if summary else "stl")
     assert not (tmp_path / "cube.stl").exists()
+
+
+# --- a part drawn as it rests -------------------------------------------------------
+
+
+def test_a_part_without_a_rest_pose_is_answered_as_it_prints(cube, openscad):
+    """Asked for as it rests, a part that declares no rest pose is answered as it
+    prints: the same files, the same keys, nothing more rendered."""
+    exe = openscad()
+    client = TestClient(app)
+    body = client.post(
+        "/parts/calibration_cube/stl/generate",
+        params={"pose": "rest"},
+        json={"params": {"size": 12}},
+    ).json()
+    assert body["pose"] == "print"
+    assert body["stl_url"] == f"/parts/calibration_cube/variants/{body['variant']}/stl"
+    assert client.get(body["stl_url"], params={"pose": "rest"}).content == (
+        client.get(body["stl_url"]).content
+    )
+    assert _generate(client).json()["saved"] is True
+    own = "/parts/calibration_cube/stl"
+    assert client.get(own, params={"pose": "rest"}).content == client.get(own).content
+    state = client.get("/parts/calibration_cube/state", params={"pose": "rest"}).json()
+    assert state["stl_url"] == own
+    assert sorted(p.name for p in cube.parent.glob("calibration_cube*")) == [cube.name]
+    assert len(_renders(exe)) == 2
+
+
+needs_openscad = pytest.mark.skipif(
+    not stl_renderer.get_renderer().is_available, reason="OpenSCAD not installed"
+)
+
+
+@pytest.fixture
+def pedal(tmp_path, monkeypatch):
+    """The footpedal, its own STLs and the variant cache at temp paths."""
+    from apothecary.projects.parts.footpedal import DEFAULT
+
+    monkeypatch.setenv("APOTHECARY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setattr(BasePart, "get_stl_output_path", lambda self: tmp_path / f"{self.name}.stl")
+    return DEFAULT
+
+
+@needs_openscad
+def test_a_footpedal_with_theta_changed_rests_on_its_base(pedal):
+    """Its rest pose follows theta, as its SCAD draws it: a variant with theta
+    changed, asked for as it rests, stands on its base, its button face tilted by
+    theta, kept beside the variant under its key and measured as it is drawn. The
+    variant's own STL, what a slice of it reads, lies on its button face."""
+    from apothecary.slicer.service import part_target
+
+    made = make_variant(pedal, {"theta": -10}, pose="rest")
+    assert made.success, (made.error_message, made.messages)
+    printed, _ = variant_paths(pedal, made.key)
+    rests, _ = variant_paths(pedal, made.key, pose="rest")
+    assert (made.pose, made.stl_path) == ("rest", rests)
+    lo, hi = bounds(read_mesh(rests))
+    assert lo[2] == pytest.approx(0, abs=1e-3)
+    assert face_up(rests) == pytest.approx(10, abs=0.5)
+    assert made.measured["min"] == pytest.approx(lo, abs=1e-3)
+    assert made.measured["max"] == pytest.approx(hi, abs=1e-3)
+    assert face_up(printed) == pytest.approx(0, abs=0.5)
+    assert part_target("footpedal", variant=made.key).stl(lambda line: None) == (
+        printed.read_bytes()
+    )
+    again = make_variant(pedal, {"theta": -10}, pose="rest")
+    assert (again.rendered, again.key, again.measured) == (False, made.key, made.measured)
+
+
+@needs_openscad
+def test_the_routes_serve_each_pose(pedal, tmp_path):
+    """With no pose, the print pose, as a slice and a download read it; with
+    ?pose=rest, the footpedal as it rests -- its own STL built beside the print one,
+    a variant's rest pose made by generate's ?pose=rest -- measured as it is."""
+    from apothecary.projects.parts.stl_renderer import build_stl
+
+    client = TestClient(app)
+
+    def drawn(response, name):
+        assert response.status_code == 200, response.text
+        (tmp_path / name).write_bytes(response.content)
+        lo, hi = bounds(read_mesh(tmp_path / name))
+        return face_up(tmp_path / name), lo, hi
+
+    assert client.get("/parts/footpedal/stl").status_code == 404
+    tilt, lo, hi = drawn(client.get("/parts/footpedal/stl", params={"pose": "rest"}), "a.stl")
+    assert (tilt, lo[2]) == (pytest.approx(16, abs=0.5), pytest.approx(0, abs=1e-3))
+    state = client.get("/parts/footpedal/state", params={"pose": "rest"}).json()
+    assert (state["exists"], state["stl_url"]) == (False, "/parts/footpedal/stl?pose=rest")
+    assert state["measured"]["size"]["z"] == pytest.approx(hi[2] - lo[2], abs=1e-3)
+
+    assert build_stl(pedal).success  # as the server's start builds it
+    saved = client.post(
+        "/parts/footpedal/stl/generate", params={"pose": "rest"}, json={"params": {}}
+    ).json()
+    assert (saved["saved"], saved["variant"], saved["pose"]) == (True, None, "rest")
+    assert saved["stl_url"] == "/parts/footpedal/stl?pose=rest"
+    assert saved["measured"] == state["measured"]
+
+    body = client.post(
+        "/parts/footpedal/stl/generate", params={"pose": "rest"}, json={"params": {"theta": -10}}
+    ).json()
+    key = body["variant"]
+    assert (body["pose"], body["stl_url"]) == (
+        "rest",
+        f"/parts/footpedal/variants/{key}/stl?pose=rest",
+    )
+    tilt, lo, _ = drawn(client.get(body["stl_url"]), "b.stl")
+    assert (tilt, lo[2]) == (pytest.approx(10, abs=0.5), pytest.approx(0, abs=1e-3))
+    assert body["measured"]["min_point"]["z"] == pytest.approx(0, abs=1e-3)
+    record = client.get(f"/parts/footpedal/variants/{key}", params={"pose": "rest"}).json()
+    assert (record["pose"], record["stl_url"]) == ("rest", body["stl_url"])
+    assert record["measured"] == body["measured"]
+    tilt, lo, _ = drawn(client.get(f"/parts/footpedal/variants/{key}/stl"), "c.stl")
+    assert tilt == pytest.approx(0, abs=0.5)
+    printed = client.get(f"/parts/footpedal/variants/{key}").json()
+    assert printed["pose"] == "print"
+    assert printed["measured"]["min_point"]["z"] == pytest.approx(lo[2], abs=1e-3)
+
+    other = client.post("/parts/footpedal/stl/generate", json={"params": {"theta": -12}}).json()
+    assert (other["pose"], other["stl_url"]) == (
+        "print",
+        f"/parts/footpedal/variants/{other['variant']}/stl",
+    )
+    assert client.get(other["stl_url"], params={"pose": "rest"}).status_code == 404
+    rest_record = f"/parts/footpedal/variants/{other['variant']}"
+    assert client.get(rest_record, params={"pose": "rest"}).status_code == 404
+    assert client.get("/parts/footpedal/stl", params={"pose": "sideways"}).status_code == 422
