@@ -38,7 +38,7 @@ def create(metadata_root: Path) -> BasePart:
         category="music",
         tags=["instrument", "fife", "recorder", "music", "printable"],
         # Its SCAD stands the fife on its head, the way up it prints; print=false
-        # lays it on its side, the lip rest down, as it rests.
+        # lays it on its side, the lip rest up, as it rests.
         rest={"print": False},
     )
 

@@ -44,7 +44,7 @@ needs_openscad = pytest.mark.skipif(
 # them as they rest: the x, y and z extent of each pose, as OpenSCAD renders it.
 PRINTS_AND_RESTS = {
     "solderfan": ((134, 134, 12), (134, 12, 134)),  # a tray flat on its base; on its edge
-    "fifel": ((25, 25.43, 200), (25, 200, 25.43)),  # standing on its head; on its side
+    "fifel": ((25, 25.43, 200), (25, 200, 25.43)),  # standing on its head; on its tube
 }
 
 
@@ -373,6 +373,23 @@ class TestBuildStl:
             lo, hi = bounds(read_mesh(result.stl_path))
             assert [hi[axis] - lo[axis] for axis in range(3)] == pytest.approx(size, abs=0.01)
             assert lo[2] == pytest.approx(0, abs=1e-3), (result.stl_path.name, lo, hi)
+
+    @needs_openscad
+    def test_the_fife_rests_on_its_tube_its_lip_rest_up(self, tmp_path):
+        """Laid the other way the fife would rest on its lip rest's tip and roll: it lies
+        on its tube, the head's rim on z 0, and what of it stands highest is its lip
+        rest, 20 from its head."""
+        own = part_named("fifel", ROOT)
+        scad = tmp_path / own.source_file.name
+        shutil.copyfile(own.source_file, scad)
+        rests = build_stl(own.model_copy(update={"source_file": scad}), pose="rest")
+        assert rests.success, rests.error_message
+        corners = [corner for triangle in read_mesh(rests.stl_path) for corner in triangle]
+        floor, top = min(z for *_, z in corners), max(z for *_, z in corners)
+        assert floor == pytest.approx(0, abs=1e-3)
+        assert {round(y) for _, y, z in corners if z < floor + 0.01} == {0}
+        highest = [y for _, y, z in corners if z > top - 0.3]
+        assert 11 < min(highest) and max(highest) < 29, (min(highest), max(highest))
 
     def test_no_part_offers_how_it_rests_as_a_control(self):
         """A rest definition is its SCAD's own pose flag, not a parameter: each one a

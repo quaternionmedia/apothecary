@@ -863,10 +863,10 @@ def fife(tmp_path, monkeypatch):
 
 @needs_openscad
 def test_a_fifel_with_another_bore_lies_on_the_floor_and_prints_standing(fife):
-    """Its SCAD lays the fife on its side to rest and lifts it by the farthest it
-    reaches below its middle, which follows its bore: a variant with a wider bore,
-    asked for as it rests, lies on z 0, the lip rest's tip 15 below the axis and the
-    head's rim 14.42 above it. The variant's own STL, what a slice of it reads,
+    """Its SCAD lays the fife on its side to rest, its lip rest up, and lifts it by
+    how far the head's rim reaches below its middle, which follows its bore: a
+    variant with a wider bore, asked for as it rests, lies on z 0, the head's rim
+    14.42 below the axis and the lip rest's tip 15 above it. The variant's own STL, what a slice of it reads,
     stands on its head as tall as the fife."""
     from apothecary.slicer.service import part_target
 
@@ -876,7 +876,7 @@ def test_a_fifel_with_another_bore_lies_on_the_floor_and_prints_standing(fife):
     rests, _ = variant_paths(fife, made.key, pose="rest")
     assert (made.pose, made.stl_path) == ("rest", rests)
     lo, hi = bounds(read_mesh(rests))
-    assert [*lo, *hi] == pytest.approx([-14.5, -200, 0, 14.5, 0, 29.42], abs=0.01)
+    assert [*lo, *hi] == pytest.approx([-14.5, 0, 0, 14.5, 200, 29.42], abs=0.01)
     assert made.measured["min"] == pytest.approx(lo, abs=1e-3)
     lo, hi = bounds(read_mesh(printed))
     assert (lo[2], hi[2]) == pytest.approx((0, fife.params_model().height), abs=1e-3)
