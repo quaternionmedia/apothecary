@@ -3,6 +3,9 @@
 import hashlib
 import io
 import json
+import os
+import re
+import subprocess
 import tarfile
 import time
 import zipfile
@@ -128,7 +131,72 @@ def test_repo_ships_footpedal_sketch():
     assert "footpedal" in names
     footpedal = find_sketch("footpedal", ROOT)
     assert footpedal.fqbn == "arduino:avr:uno"
-    assert "FastLED" in footpedal.libraries
+    # Its include order is one these two versions build with: each is pinned.
+    assert {lib.split("@")[0] for lib in footpedal.libraries} == {"FastLED", "Control Surface"}
+    assert all("@" in lib for lib in footpedal.libraries)
+
+
+def test_each_pin_of_the_footpedal_sketch_has_one_job():
+    """Pin 6 drives the pedal's LED strip and six buttons read pins of their own: a
+    button on the strip's pin is made an input when Control Surface begins."""
+    text = (ROOT / "parts" / "footpedal" / "footpedal.ino").read_text()
+    code = re.sub(r"//[^\n]*|/\*.*?\*/", "", text, flags=re.S)
+    strip = re.findall(r"#define\s+ledpin\s+(\d+)", code)
+    buttons = re.findall(r"NoteButton\s+\w+\s*=?\s*\{\s*(\d+)\s*,", code)
+    assert strip == ["6"] and re.search(r"addLeds<\s*\w+\s*,\s*ledpin\s*>", code)
+    assert len(buttons) == 6 and len(set(strip + buttons)) == 7, f"buttons {buttons}"
+
+
+def test_each_note_of_the_footpedal_sketch_is_a_midi_note():
+    """Control Surface's `MIDI_Notes::Db[-2]` is 1 + 12 * (-2 + 1), and a note below 0
+    is kept as its low seven bits: note 117, where note 1 was meant."""
+    text = (ROOT / "parts" / "footpedal" / "footpedal.ino").read_text()
+    code = re.sub(r"//[^\n]*|/\*.*?\*/", "", text, flags=re.S)
+    base = dict(C=0, Db=1, D=2, Eb=3, E=4, F=5, Gb=6, G=7, Ab=8, A=9, Bb=10, B=11)
+    notes = [
+        base[name] + 12 * (int(octave) + 1)
+        for name, octave in re.findall(r"MIDI_Notes::(\w+)\[\s*(-?\d+)\s*\]", code)
+    ]
+    assert notes == [1, 1, 2, 3, 4, 5, 6], "the LEDs' first note, then the six buttons'"
+
+
+def test_the_footpedal_sketch_builds_with_the_libraries_it_pins(tmp_path):
+    """Where arduino-cli has the AVR core and the library versions firmware.json pins,
+    the sketch builds for its board; where any is missing, it skips."""
+    footpedal = find_sketch("footpedal", ROOT)
+    cli = ArduinoCli()
+    if not cli.is_available:
+        pytest.skip("no arduino-cli here (`apothecary firmware install --avr`)")
+    if "arduino:avr" not in {core.id for core in cli.core_list() if core.installed}:
+        pytest.skip("no AVR core here (`apothecary firmware install --avr`)")
+    listed = subprocess.run(
+        cli.argv("lib", "list", "--json"), capture_output=True, text=True, timeout=60
+    )
+    installed = {
+        (entry["library"]["name"], entry["library"]["version"])
+        for entry in json.loads(listed.stdout).get("installed_libraries", [])
+    }
+    # `Name@Version` wants that version; a bare `Name`, any.
+    missing = [
+        lib
+        for lib in footpedal.libraries
+        for name, _, version in [lib.partition("@")]
+        if not any(n == name and version in ("", v) for n, v in installed)
+    ]
+    if missing:
+        pytest.skip(f"not installed here: {', '.join(missing)} (`apothecary firmware libraries`)")
+
+    # One job, at the lowest priority: a build beside them starves the suite's other
+    # worker, whose listens last a second (tests/test_firmware_ports.py).
+    nice = getattr(os, "nice", None)
+    built = subprocess.run(
+        cli.compile_argv(footpedal.path, footpedal.fqbn, tmp_path / "build") + ["--jobs", "1"],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        preexec_fn=(lambda: nice(19)) if nice else None,
+    )
+    assert built.returncode == 0, (built.stdout + built.stderr)[-3000:]
 
 
 # --- toolchains -----------------------------------------------------------------

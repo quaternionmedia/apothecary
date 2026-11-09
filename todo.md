@@ -63,8 +63,9 @@ here: run `apothecary problems`.
   tarballs (codeload publishes no checksum). A source build takes no nested
   submodules and no `.1` second build of a night. Windows on ARM is refused:
   no ARM64 snapshot is published.
-- `parts/footpedal/footpedal.ino` would not build on a real board: `pushbutton` is
-  never declared, and `ledpin` is pin 6, which `b5` reads too. It prints no
+- The footpedal on its board: section K of
+  [docs/bench-checklist.md](docs/bench-checklist.md) has not been walked, so its
+  build is known and its buttons' notes and the strip are not. It prints no
   `apothecary footpedal: hello`, since its serial line carries Hairless MIDI, so
   the made thing's Query hears its hello only from the demo's scripted monitor.
 - The router at the bench. The AnoleX 4060-Evo Ultra 2 is drawn, its
@@ -185,9 +186,8 @@ here: run `apothecary problems`.
     while the file is kept, a slice's record goes with its file, and a record names
     a cache key, not a saved variant's ref.
   - The simulated stand-ins say yes where the real tools say no: the scripted
-    arduino-cli builds `parts/footpedal/footpedal.ino`, which arduino-cli 1.5.1
-    refuses; its devkit says hello by the uploaded folder's name; the simulated
-    Marlin answers `ok` to a line it does not script.
+    arduino-cli's devkit says hello by the uploaded folder's name, and the
+    simulated Marlin answers `ok` to a line it does not script.
   - Four ways of finding a tool: `Tool.find` passes over a variable naming a
     missing file where OpenSCAD's variable is final; the tool status shape is
     defined twice; the Stream Deck's `ok` is "found", where `ModuleStatus.ok` says

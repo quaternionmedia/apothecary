@@ -443,6 +443,29 @@ Keep a hand on each machine's own power switch: it is faster than the deck's sto
       pulls it back. Below Marlin's minimum, the board refuses and the log says so.
       The printer's **STOP** halts it (`M112`) and the page's E-STOP does too.
 
+## K. The footpedal
+
+The pedal is an Arduino Uno (or a Nano, with `--fqbn
+arduino:avr:nano:cpu=atmega328old` for a CH340 clone) wired as
+[parts/footpedal/footpedal.ino](../parts/footpedal/footpedal.ino) says: six
+buttons, on pins 2, 3, 4, 5, 8 and 7, and the LED strip's data on pin 6. Its
+serial line carries MIDI for Hairless MIDI, so it says no hello and Query does
+not find it.
+
+- [ ] `uv run apothecary firmware install --avr`, then `uv run apothecary
+      firmware libraries --install FastLED@3.10.5 --install "Control
+      Surface@2.1.2"`: the versions its `firmware.json` pins.
+- [ ] The **Bench** tab: choose sketch **footpedal@arduino · arduino:avr:uno**
+      and the pedal's port -- check it is not the printer's. **Compile**
+      (⌗432) ends with the sketch's size; **Compile & upload** (⌗434) ends
+      without an error.
+- [ ] Release the port, and open it in Hairless MIDI at 115200 baud, its MIDI
+      out to a monitor. Press and release each button: a Note On and a Note
+      Off on channel 1, notes 1 to 6 in the pins' order above (C#-2 to F#-2
+      where C-2 is note 0).
+- [ ] Send notes 1 to 8 to the pedal from Hairless's MIDI in: each lights one
+      LED of the strip, and its Note Off puts it out.
+
 ## Results
 
 | Section | Date | Passed | Notes |
@@ -461,3 +484,4 @@ Keep a hand on each machine's own power switch: it is faster than the deck's sto
 | H. The ESP32 | | | |
 | I. The router | | | |
 | J. The Stream Deck + | | | |
+| K. The footpedal | | | |
