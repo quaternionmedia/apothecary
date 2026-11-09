@@ -161,7 +161,7 @@ def check():
         if module.id == "arduino":
             continue
         if module.ok:
-            tools = ", ".join(t.version for t in module.tools if t.ok)
+            tools = ", ".join(t.version or t.name for t in module.tools if t.ok)
             _safe_echo(f"  ✓ {module.label} ({tools})")
             _safe_echo(f"    {module.label} can {can[module.id]}")
         else:

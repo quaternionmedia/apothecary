@@ -32,6 +32,17 @@ def test_cli_check_only_warns_without_openscad(monkeypatch):
     assert "OpenSCAD not found" in result.output
 
 
+def test_cli_check_names_a_found_tool_that_has_no_version(monkeypatch):
+    """hidapi is a system library: found, it has a path and no version."""
+    from apothecary.firmware.modules import stream_deck
+
+    monkeypatch.setattr(stream_deck, "package_version", lambda: "0.9.6")
+    monkeypatch.setattr(stream_deck, "hidapi", lambda: "libhidapi-libusb.so.0")
+    result = CliRunner().invoke(cli, ["check"])
+    assert result.exit_code == 0, result.output
+    assert "✓ Stream Deck + (0.9.6, hidapi)" in result.output
+
+
 def test_cli_render_does_its_job(tmp_path):
     out = tmp_path / "ex.scad"
     result = CliRunner().invoke(cli, ["render", "-o", str(out)])
