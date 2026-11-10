@@ -202,6 +202,8 @@ def sort(reading: Reading, thresholds: Optional[Dict[str, float]] = None) -> Lis
         if len(run) >= held["run"] or stretch >= held["wide"]:
             sure = min(0.85, 0.5 + 0.1 * len(run) + 0.03 * stretch)
             drafts.append((run, Kind.WRITING, sure, "small strokes in a row are writing"))
+        elif len(run) == 1 and run[0].closed and _inside_a_shape(reading, run[0]):
+            drafts.append((run, Kind.DIAGRAM, 0.6, "a closed stroke alone inside a shape is a cut"))
         elif len(run) == 1 and run[0].closed:
             drafts.append(
                 (run, Kind.UNSURE, 0.45, "a small closed stroke alone: a letter, or a hole")
@@ -253,6 +255,11 @@ def sort(reading: Reading, thresholds: Optional[Dict[str, float]] = None) -> Lis
     return marks
 
 
+def _inside_a_shape(reading: Reading, stroke: Stroke) -> bool:
+    """Whether a stroke lies in a region a stroke on the whiteboard encloses."""
+    return stroke.outer != reading.ground and stroke.outer in reading.encloser
+
+
 def _a_line(features: Dict[str, float], held: Dict[str, float]) -> bool:
     """Whether a stroke is a line: long, thin, and along its length no thicker
     than a marker draws, ticks at its ends or not, which a row of letters run
@@ -292,7 +299,8 @@ def _runs(strokes: Sequence[Stroke], gap: float) -> List[List[Stroke]]:
 
 
 def _overlap(mark: Mark, example: Example) -> float:
-    """How much of the smaller of a mark's box and an example's the two share."""
+    """How much of what a mark's box and an example's cover between them the two
+    share: one for the same box, little for a mark and one drawn inside it."""
     left = max(mark.min_point.x, example.min[0])
     top = max(mark.min_point.y, example.min[1])
     right = min(mark.max_point.x, example.max[0])
@@ -301,12 +309,13 @@ def _overlap(mark: Mark, example: Example) -> float:
         return 0.0
     ours = (mark.max_point.x - mark.min_point.x) * (mark.max_point.y - mark.min_point.y)
     theirs = (example.max[0] - example.min[0]) * (example.max[1] - example.min[1])
-    return (right - left) * (bottom - top) / max(min(ours, theirs), 1e-9)
+    shared = (right - left) * (bottom - top)
+    return shared / max(ours + theirs - shared, 1e-9)
 
 
 def apply(marks: List[Mark], answers: Optional[Answers]) -> List[Mark]:
     """The marks with a person's words on them: each example's word given to the
-    mark whose box it shares most of, more than half. The last word on a mark wins."""
+    mark whose box is most nearly its own, by more than half. The last word on a mark wins."""
     if answers is None:
         return marks
     said = list(marks)

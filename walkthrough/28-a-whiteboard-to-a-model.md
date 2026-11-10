@@ -61,16 +61,17 @@ or small strokes in a row, which is how writing lies. Each says why, and how sur
     ...     print(mark.id, mark.kind.value, "--", mark.why)
     m1 diagram -- a closed stroke this size is a shape
     m2 diagram -- a closed stroke this size is a shape
-    m3 unsure -- a small closed stroke alone: a letter, or a hole
+    m3 diagram -- a closed stroke alone inside a shape is a cut
     m4 diagram -- a long straight stroke is a line
     m5 writing -- small strokes in a row are writing
     m6 diagram -- a closed stroke this size is a shape
     m7 writing -- small strokes in a row are writing
     m8 unsure -- a small closed stroke alone: a letter, or a hole
 
-*Unsure* is an answer. The ring drawn inside the plate and the ring alone are each a
-small closed stroke: a hole, a letter, or a shape too small to tell. A mark inside a
-closed stroke says which, and each mark's colour is read and kept, deciding nothing.
+*Unsure* is an answer. The ring alone is a small closed stroke: a letter, or a shape
+too small to tell. The ring drawn inside the plate is taken for a cut through it. A
+mark inside a closed stroke says which, and each mark's colour is read and kept,
+deciding nothing.
 
     >>> found[2].inside, found[7].inside
     ('m1', None)
@@ -99,7 +100,8 @@ beside it.
 The outline finder takes the whiteboard as the ground, whatever runs round it, and
 reads each closed stroke of a diagram's mark as the shape of what it encloses. The
 plate, the disc and the wedge are found, largest first; the wall, the frame, the
-dimension line, the writing and the two rings nobody has spoken for are not shapes.
+dimension line, the writing and the ring nobody has spoken for are not shapes. The
+ring inside the plate is not a shape of its own: it is the plate's cut.
 
     >>> drawing = get("outline").look(photograph)
     >>> [shape.kind.value for shape in drawing.shapes]
@@ -141,6 +143,19 @@ across, so a pixel of it is a millimetre.
     >>> {piece.finder for piece in built.album.provenance.values()}
     {'outline'}
 
+The plate is made with its cut through it, where the ring was drawn from the plate's
+middle, and about as wide as the middle of the ring's stroke, 63 pixels: a working
+picture's pixel is three of this one's.
+
+    >>> (cut,) = drawing.shapes[0].cuts
+    >>> cut.kind.value, abs(cut.long_side * 1600 - 63) < 6
+    ('disc', True)
+    >>> plate_piece = built.site.children[0]
+    >>> type(plate_piece.base).__name__, "1 cut(s) through it" in plate_piece.comment
+    ('Difference', True)
+    >>> [bool(shape.cuts) for shape in drawing.shapes]
+    [True, False, False]
+
 A drawing is flat, so a piece's thickness is a guess until a person gives one.
 
     >>> all(piece.thickness_guessed for piece in built.album.provenance.values())
@@ -170,7 +185,7 @@ glare and a smear, with notes beside the shapes, and framed by a wall.
 
 - **A real photograph.** The whiteboard here is drawn to order, which is how the answers
   are known.
-- **A cut.** The ring inside the plate is left unsure, not cut through it.
+- **A cut inside a cut.** What is drawn inside a cut is not read.
 - **The writing read.** A line of writing is sorted as writing, and what it says is
   not read.
 - **A whiteboard seen from one side.** This one is drawn square on.

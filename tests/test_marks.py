@@ -73,15 +73,60 @@ def test_what_it_cannot_place_is_unsure_and_says_why(whiteboard):
     found = marks.marks_in(whiteboard)
     alone = _at(found, 1330, 1003)
     assert alone.kind is Kind.UNSURE and "a letter, or a hole" in alone.why
+
+
+def test_a_closed_stroke_alone_inside_a_shape_is_a_cut_through_it(whiteboard):
+    """The ring drawn in the plate is a diagram's, and the plate is read with it
+    as a cut: where it was drawn, as wide as its stroke's middle, and round."""
+    found = marks.marks_in(whiteboard)
     hole = _at(found, 335, 423)
-    assert hole.kind is Kind.UNSURE and hole.closed
+    assert hole.kind is Kind.DIAGRAM and "is a cut" in hole.why and hole.sure < 0.8
+    picture = OutlineFinder().look(whiteboard)
+    plate = next(shape for shape in picture.shapes if shape.kind is ShapeKind.RECT)
+    (cut,) = plate.cuts
+    assert cut.kind is ShapeKind.DISC and cut.origin == "outline"
+    assert (cut.centre.x, cut.centre.y) == pytest.approx((335 / 1600, 455 / 1200), abs=0.004)
+    assert cut.long_side == pytest.approx(63 / 1600, abs=0.004)
+    assert [shape.cuts for shape in picture.shapes if shape is not plate] == [[], []]
+
+
+def test_a_cut_is_taken_out_of_the_piece_where_it_was_drawn(whiteboard):
+    from apothecary.booleans import Difference
+    from apothecary.vision import ScaleReference, build
+
+    picture = OutlineFinder().look(whiteboard)
+    built = build(picture, scale=ScaleReference(millimetres_across=1600))
+    plate = next(p for p in built.site.children if p.category == "plate")
+    assert isinstance(plate.base, Difference) and len(plate.base.children) == 2
+    assert "1 cut(s) through it" in plate.comment
+    scad = built.site.render()
+    # The ring's stroke runs from 300 to 370 and is 7 wide, so its middle is 63
+    # across; a millimetre a pixel here.
+    assert "difference()" in scad and "cylinder(" in scad
+    moved = plate.base.children[1]
+    # From the plate's middle (475, 385) to the ring's (335, 455): left, and
+    # towards the front of the build, which is down the picture.
+    assert moved.v.x == pytest.approx(-140.0, abs=4) and moved.v.y == pytest.approx(-70.0, abs=4)
+    assert type(moved.children[0]).__name__ == "Cylinder"
+    assert moved.children[0].r == pytest.approx(31.5, abs=2.5)
+    others = [p for p in built.site.children if p is not plate]
+    assert not any(isinstance(p.base, Difference) for p in others if p.category != "slot")
+
+
+def test_a_person_says_a_ring_inside_a_shape_is_no_cut(whiteboard):
+    found = marks.marks_in(whiteboard)
+    hole = _at(found, 335, 423)
+    answers = marks.Answers(examples=[marks.say(found, hole.id, Kind.WRITING, picture="abc")])
+    marks.save(marks.answers_path(whiteboard), answers)
+    plate = next(s for s in OutlineFinder().look(whiteboard).shapes if s.kind is ShapeKind.RECT)
+    assert plate.cuts == []
 
 
 def test_a_mark_inside_a_closed_stroke_says_which(whiteboard):
     found = marks.marks_in(whiteboard)
     plate = _at(found, 252, 400)
     assert _at(found, 560, 325).inside == plate.id  # top plate, written in it
-    assert _at(found, 335, 423).inside == plate.id  # the hole drawn in it
+    assert _at(found, 335, 423).inside == plate.id  # the ring drawn in it
     assert plate.inside is None
 
 

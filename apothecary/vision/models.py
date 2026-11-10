@@ -28,6 +28,22 @@ class ShapeKind(str, Enum):
     LINE = "line"
 
 
+class Cut(BaseModel):
+    """A closed stroke drawn inside a shape: a hole through the piece made of it.
+
+    Its place is its middle, as fractions of the picture; its sides are fractions
+    of the picture's width, as a shape's are. ``origin`` says who or what read it.
+    """
+
+    kind: ShapeKind
+    centre: Vector2D
+    long_side: float = Field(gt=0)
+    short_side: float = Field(gt=0)
+    turned_degrees: float = Field(0.0, ge=0.0, lt=180.0)
+    confidence: float = Field(1.0, ge=0.0, le=1.0)
+    origin: str = "stub"
+
+
 class FoundShape(BaseModel):
     """One flat shape somebody or something spotted in a picture.
 
@@ -54,6 +70,8 @@ class FoundShape(BaseModel):
 
     long_side: float = Field(0.0, ge=0.0)
     short_side: float = Field(0.0, ge=0.0)
+    cuts: List[Cut] = Field(default_factory=list)
+    """The closed strokes drawn inside this one: holes through what is made of it."""
     """The shape's own two sides, ignoring how it is turned.
 
     Both are fractions of the picture's width, and both assume square pixels,

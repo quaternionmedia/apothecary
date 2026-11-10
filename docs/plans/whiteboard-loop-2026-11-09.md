@@ -6,9 +6,9 @@
 slice 2 the sorter, a person's word from the command line, the examples and
 the fit ([pictures.md](../pictures.md#a-whiteboards-marks)); of slice 3 the
 corners found, a person's word on one and the photograph squared
-([pictures.md](../pictures.md#a-whiteboard-squared)). Not built of those: the
-marks and the corners shown and refined in the page, and the whiteboard as a
-part. Each slice
+([pictures.md](../pictures.md#a-whiteboard-squared)); slice 4, a cut read and
+taken out of the piece. Not built of those: the marks, the corners and the
+cuts shown and refined in the page, and the whiteboard as a part. Each slice
 is one branch of a short stack, built in the order listed once the owner says
 yes to it.*
 

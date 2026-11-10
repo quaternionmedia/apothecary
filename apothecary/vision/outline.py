@@ -8,7 +8,8 @@ round the picture's edge, and is never a shape. A stroke lying on the ground
 that closes is the shape of what it encloses, named by the plain finder's rule
 and no surer than the plain finder is. A mark filled in is the shape it covers.
 A stroke that neither closes nor fills a shape -- a dimension line, an arrow,
-writing -- is not reported, and neither is a stroke inside a shape.
+writing -- is not reported. A closed stroke of a diagram inside a shape is a cut
+through it, reported with the shape and not as one of its own.
 
 Find shapes offers it for a picture that holds a drawing, one closed stroke
 at least (``reads``), so a picture of filled shapes keeps its one finder.
@@ -27,10 +28,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
-from .models import FoundShape, Picture, ShapeKind
+from .geometry import edge_points, smallest_box
+from .models import Cut, FoundShape, Picture, ShapeKind
 from .plain import (
     _FLIP,
     MIN_BLOB_PIXELS,
+    TRUSTWORTHY_PIXELS,
     WORKING_EDGE,
     PictureLibraryMissing,
     _blobs,
@@ -58,6 +61,9 @@ FILLED_FROM = 8
 
 # Where a stroke's upper neighbour is the picture's own edge.
 OUTSIDE = -1
+
+# How much of its tightest box each family fills, for a blob a few pixels across.
+_SMALL_FAMILIES = ((ShapeKind.RECT, 1.0), (ShapeKind.DISC, 0.785), (ShapeKind.TRI, 0.5))
 
 # What a mark with no hole is reported as: a filled shape, never a line or a scribble.
 _FILLED = (ShapeKind.RECT, ShapeKind.DISC, ShapeKind.TRI)
@@ -100,11 +106,16 @@ class OutlineFinder:
         sorted_marks = marks.apply(marks.sort(reading), marks.answers_beside(image))
         drawn = marks.diagram_strokes(sorted_marks)
         read = shapes_of(reading, keep=lambda stroke: stroke.index in drawn)
+        by_index = {stroke.index: stroke for stroke in reading.strokes}
+        shapes = []
+        for shape, closed, index in read:
+            holes = by_index[index].holes if closed else []
+            shapes.append(shape.model_copy(update={"cuts": _cuts(reading, holes, drawn)}))
         picture = Picture(
             name=image.stem,
             pixel_width=reading.full_width,
             pixel_height=reading.full_height,
-            shapes=[shape for shape, _, _ in read],
+            shapes=shapes,
             finder=self.name(),
         )
         return picture, sum(1 for _, closed, _ in read if closed)
@@ -117,6 +128,29 @@ def _closed_strokes(digest: str, image: Path, working_edge: int) -> int:
         return OutlineFinder(working_edge)._look(image)[1]
     except (OSError, ValueError):
         return 0
+
+
+def _cuts(reading: "Reading", holes: List[int], drawn: Set[int]) -> List[Cut]:
+    """The closed strokes of a diagram lying in a shape's holes, each a cut through
+    it. What lies inside a cut is not read."""
+    found: List[Cut] = []
+    for hole in holes:
+        inside = shapes_of(reading, keep=lambda stroke: stroke.index in drawn, lying_in=hole)
+        for shape, _, _ in inside:
+            if not shape.measured_sides:
+                continue
+            found.append(
+                Cut(
+                    kind=shape.kind,
+                    centre=shape.centre,
+                    long_side=shape.long_side,
+                    short_side=shape.short_side,
+                    turned_degrees=shape.turned_degrees,
+                    confidence=shape.confidence,
+                    origin="outline",
+                )
+            )
+    return found
 
 
 @dataclass
@@ -274,12 +308,32 @@ def shapes_of(
                 # A marker's line has a width, and the drawing means its middle:
                 # halfway between what the stroke encloses and what it covers.
                 shape = _between(shape, covered)
+                if min(covered.long_side, covered.short_side) * width < TRUSTWORTHY_PIXELS:
+                    # Too small for what it encloses to say what it is: its family
+                    # is read from all it covers, as a mark filled in is.
+                    family = _small_family(_narrowed(whole, width), width)
+                    if family is not None:
+                        shape = shape.model_copy(update={"kind": family, "turned_degrees": 0.0})
             found.append((len(inside), shape, True, stroke.index))
     found.sort(key=lambda one: one[0], reverse=True)
     return [
         (shape.model_copy(update={"origin": "outline"}), closed, index)
         for _, shape, closed, index in found
     ]
+
+
+def _small_family(blob: List[int], width: int) -> Optional[ShapeKind]:
+    """The family of a blob a few pixels across, from how much of its tightest box
+    it fills, the box counted to its pixels' far edges: across so few pixels the
+    half pixel at each side is a tenth of the answer."""
+    if not blob:
+        return None
+    box = smallest_box(edge_points(blob, width, set(blob)))
+    fullness = len(blob) / ((box.width + 1) * (box.height + 1))
+    family, gap = min(
+        ((kind, abs(fullness - ideal)) for kind, ideal in _SMALL_FAMILIES), key=lambda one: one[1]
+    )
+    return family if gap <= 0.12 else None
 
 
 def _a_filled_shape(mark: FoundShape, blob: List[int], width: int) -> bool:

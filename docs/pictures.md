@@ -117,7 +117,11 @@ To `outline` the whiteboard is the ground, whatever runs round the picture's edg
 and never a shape. A shadow or a glare across it moves no stroke, and a smear is not
 one. It reads the shapes of [a diagram's marks](#a-whiteboards-marks) alone: a
 stroke left open, a dimension line, an arrow and writing are not shapes; a mark
-filled in is the shape it covers; a stroke inside a shape is left out. A gap
+filled in is the shape it covers. A closed stroke of a diagram drawn inside a
+shape is a cut through it: the shape carries it (`cuts`), and the piece made of
+the shape has it taken out where it was drawn, round for a circle and
+square-cornered of its two sides for anything else. What is drawn inside a cut
+is not read. A gap
 in a stroke a few pixels of the working picture wide is closed, a wider one leaves
 the stroke open. `apothecary photo check --finder` measures a finder on drawn
 pictures whose answers are known, filled in and in outline.
@@ -130,7 +134,7 @@ a closed stroke, a line, or small strokes in a row, which is how writing lies.
 
 | Kind | Is | Becomes |
 |---|---|---|
-| `diagram` | A closed stroke the size of a shape, a mark filled in, a long straight line | A shape, where it closes or is filled |
+| `diagram` | A closed stroke the size of a shape, a small closed stroke alone inside one, a mark filled in, a long straight line | A shape where it closes or is filled, or a cut through the shape it lies in |
 | `writing` | Small strokes in a row, or one stroke of letters run together | Nothing yet; it is never a shape |
 | `unsure` | What the sorter cannot place: a small closed stroke alone, a large open one | Nothing, until a person says |
 | `nothing` | A person's word alone: a smear, a magnet, a reflection | Nothing |
