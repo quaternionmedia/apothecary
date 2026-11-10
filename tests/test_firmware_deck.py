@@ -284,7 +284,7 @@ class _Device:
 
     def __init__(self, name, kind="Stream Deck +"):
         self.name, self.kind, self.opened, self.closed = name, kind, 0, 0
-        self.images, self.strip, self.callbacks = {}, [], {}
+        self.images, self.strip, self.callbacks, self.hz = {}, [], {}, None
 
     def deck_type(self):
         return self.kind
@@ -300,6 +300,9 @@ class _Device:
 
     def get_serial_number(self):
         return "CL12345"
+
+    def set_poll_frequency(self, hz):
+        self.hz = hz
 
     def set_key_callback(self, cb):
         self.callbacks["key"] = cb
@@ -350,6 +353,7 @@ def test_a_real_deck_is_opened_by_what_acts_on_it_and_its_reports_are_events(rea
     plus, _ = real
     one = deck.get_decks().get("path_one")
     assert plus.opened == 1 and one.info.serial == "CL12345"
+    assert plus.hz == deck.READ_HZ  # an idle deck is asked more often than the library's 20
     assert deck.get_decks().get("path_one") is one and plus.opened == 1
     one.set_key(0, "X+")
     one.set_strip("hi")

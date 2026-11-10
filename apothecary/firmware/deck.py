@@ -54,6 +54,7 @@ KEY_SIZE = (120, 120)
 STRIP_SIZE = (800, 100)
 SIMULATED_DECK_ENV = "APOTHECARY_SIMULATED_DECK"
 EVENT_LOG = 200  # events kept per deck
+READ_HZ = 100  # how often the library's reader asks an idle deck for a report (its own: 20)
 
 KEY, KNOB_TURN, KNOB_PRESS, TOUCH = "key", "knob-turn", "knob-press", "touch"
 EVENT_KINDS = (KEY, KNOB_TURN, KNOB_PRESS, TOUCH)
@@ -219,6 +220,7 @@ class HidLink:
                 f"the Stream Deck + is found but would not open ({exc}): this account may not "
                 "write its USB device; docs/stream-deck.md gives the udev rule"
             ) from exc
+        device.set_poll_frequency(READ_HZ)
         device.set_key_callback(self._key)
         device.set_dial_callback(self._dial)
         device.set_touchscreen_callback(self._touch)
@@ -285,6 +287,7 @@ class Deck:
         self._events: Deque[DeckEvent] = deque(maxlen=EVENT_LOG)
         self._seq = 0
         self._listeners: List[Listener] = []
+        self._settled: Dict[Listener, Callable[[], None]] = {}
         self._lock = threading.Lock()
         self.link = make_link(self._heard)
         serial = self.link.serial()
@@ -339,21 +342,35 @@ class Deck:
             raise DeckUnavailable(f"{self.info.id} is a real deck: it reports for itself")
         _check_event(kind, index, value, self.info)
         self._heard(kind, index, value)
-        return self._events[-1]
+        event = self._events[-1]
+        # A listener that acts on its own thread has acted by the time this returns: what
+        # a test or the page reads next is what the event did.
+        with self._lock:
+            waits = list(self._settled.values())
+        for wait in waits:
+            wait()
+        return event
 
     def events(self, since: int = 0) -> List[DeckEvent]:
         with self._lock:
             return [e for e in self._events if e.seq > since]
 
-    def listen(self, listener: Listener) -> Callable[[], None]:
-        """``listener`` told of each event from now on; the call that stops it."""
+    def listen(
+        self, listener: Listener, settled: Optional[Callable[[], None]] = None
+    ) -> Callable[[], None]:
+        """``listener`` told of each event from now on, on the thread that heard it, so it
+        returns at once; the call that stops it. ``settled`` returns when the listener has
+        acted on everything it was told: an event given to a simulated deck waits for it."""
         with self._lock:
             self._listeners.append(listener)
+            if settled is not None:
+                self._settled[listener] = settled
 
         def stop() -> None:
             with self._lock:
                 if listener in self._listeners:
                     self._listeners.remove(listener)
+                self._settled.pop(listener, None)
 
         return stop
 

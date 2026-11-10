@@ -7,6 +7,9 @@ HID device and no serial port is opened."""
 
 from __future__ import annotations
 
+import threading
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -466,3 +469,102 @@ def test_the_knobs_are_read_and_chosen_by_route_while_they_run(bench):
     bad = client.put("/firmware/decks/SIMDECK0/control", json={"step_mm": 50})
     assert bad.status_code == 422 and "0.1, 1, 10 mm" in bad.json()["detail"]
     deck_control.stop_all()
+
+
+# --- nothing a hand does waits behind anything else -----------------------------------
+
+
+@pytest.fixture
+def slow(bench, monkeypatch):
+    """A layout whose machine answers only when let: ``poll`` waits on ``gate``, and what
+    was sent is kept in order. The port is a router's by the stand-ins' word alone."""
+    controller, one, _ = bench
+    controller.stop()
+    gate, polling, sent = threading.Event(), threading.Event(), []
+
+    def poll(port):
+        polling.set()
+        assert gate.wait(10), "the test never let the machine answer"
+        return None
+
+    monkeypatch.setattr(deck_control.devices, "known_device", lambda port: None)
+    monkeypatch.setattr(deck_control.devices, "machine_kind", lambda device: "router")
+    monkeypatch.setattr(deck_control.devices, "emergency_stop_for", lambda port: "RESET")
+    mine = deck_control.DeckController(
+        one,
+        resolve=lambda machine: "/dev/slow",
+        send=lambda port, line: sent.append(line),
+        poll=poll,
+        armed=lambda port: 0.0,  # disarmed to the tick, so it asks the machine nothing
+    )
+    mine.machine = deck_control.MACHINES[1]
+    mine.start()
+    yield mine, gate, polling, sent
+    gate.set()
+    mine.stop()
+
+
+def _event(kind, index, value, seq=1):
+    return deck.DeckEvent(seq, kind, index, value)
+
+
+def test_the_reader_is_not_held_by_a_machine_that_is_slow_to_answer(slow):
+    controller, gate, polling, sent = slow
+    began = time.monotonic()
+    controller.hear(_event("knob-turn", 0, 1))
+    assert polling.wait(5)  # the layout's own thread is asking the machine, and waiting
+    controller.hear(_event("key", 2, True))
+    controller.hear(_event("knob-turn", 1, 1))
+    assert time.monotonic() - began < 2 and sent == []
+    gate.set()
+    assert controller.settle(10)
+    assert sent == ["$J=G91 G21 X1 F1000", "$J=G91 G21 Y10 F1000"]  # in order, STEP between
+
+
+def test_turns_of_one_knob_that_wait_together_go_as_one_jog_of_their_sum(slow):
+    controller, gate, polling, sent = slow
+    controller.hear(_event("knob-turn", 2, 1))
+    assert polling.wait(5)
+    for steps in (1, 2, -1, 1):
+        controller.hear(_event("knob-turn", 0, steps))
+    controller.hear(_event("knob-turn", 1, 1))
+    controller.hear(_event("knob-turn", 1, -1))  # there and back: nothing to send
+    gate.set()
+    assert controller.settle(10)
+    assert sent == ["$J=G91 G21 Z1 F1000", "$J=G91 G21 X3 F1000"]
+
+
+def test_a_stop_key_is_sent_at_once_and_nothing_turned_before_it_is_sent_after_it(slow):
+    controller, gate, polling, sent = slow
+    controller.hear(_event("knob-turn", 0, 5))
+    assert polling.wait(5)  # that jog is taken up, the machine not yet answering
+    controller.hear(_event("knob-turn", 1, 5))  # and this one waits behind it
+    controller.hear(_event("key", 5, True))  # the router's own stop
+    assert sent == ["RESET"]  # gone already, the machine still not answering the jog
+    gate.set()
+    assert controller.settle(10)
+    assert sent == ["RESET"], sent  # neither the jog taken up nor the one waiting
+    controller.hear(_event("knob-turn", 0, 1))  # a turn after the stop is a turn again
+    assert controller.settle(10)
+    assert sent == ["RESET", "$J=G91 G21 X1 F1000"]
+
+
+def test_the_everything_key_is_sent_at_once_too(slow):
+    controller, gate, polling, sent = slow
+    controller.hear(_event("knob-turn", 0, 5))
+    assert polling.wait(5)
+    controller.hear(_event("key", 7, True))
+    assert sent == ["RESET", "RESET"]  # each machine's own, the jog still unanswered
+
+
+def test_a_key_or_a_knob_reads_the_newest_scan_and_starts_none(bench, monkeypatch):
+    asked = []
+    real = deck_control.devices.detected_devices
+
+    def detected(*args, **kwargs):
+        asked.append(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(deck_control.devices, "detected_devices", detected)
+    assert deck_control.pinned_port(deck_control.MACHINES[1]) == ROUTER
+    assert asked and all(kwargs.get("any_age") is True for kwargs in asked), asked

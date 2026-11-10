@@ -29,6 +29,15 @@ key sends ``devices.emergency_stop_for(port)``, the one line that always goes; t
 everything key sends each machine's own, one after another, whatever one of them
 answers. The machine's own red button is faster, and stays the stop to reach for.
 
+**Nothing a hand does on the deck waits behind anything else.** The deck's reader only
+hands an event over (``hear``); a thread of the layout's own acts on them in order
+(``handle``), so a machine's answer or a redrawn strip never holds up the next report or
+the time it is stamped with. Turns of one knob that arrive while an earlier one is being
+sent go as one jog of their sum. A stop key is the exception to the order: it is sent
+from ``hear`` itself, ahead of everything waiting, and what was waiting is dropped. No
+key or knob starts a scan for ports (two seconds): the newest scan is read however old,
+and the layout's tick looks for a board that is not found.
+
 It starts for a deck only when ``APOTHECARY_DECK_CONTROL`` is set (the demo sets it) or
 a person asks (``POST /firmware/decks/{id}/control``): opening a real deck takes the
 device from any other program that has it.
@@ -38,8 +47,10 @@ from __future__ import annotations
 
 import os
 import threading
+import time
+from collections import deque
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Deque, Dict, List, Optional, Tuple
 
 from . import deck as decks
 from . import devices, gcode, grbl
@@ -57,6 +68,7 @@ KEY_STEP = 2
 # are dark; none needs control armed, as the page's E-STOP does not.
 KEY_STOP_MACHINE = (4, 5)  # printer_1's and cnc_router's, in MACHINES' order
 KEY_STOP_ALL = 7
+STOP_KEYS = (*KEY_STOP_MACHINE, KEY_STOP_ALL)
 STOP_ALL_COLOUR, STOP_ONE_COLOUR = "red", "#7a2a22"
 KNOB_FOURTH = 3
 FEED = {"printer": 3000, "router": 1000}  # the page's jog feeds (machine_words.js)
@@ -64,6 +76,8 @@ EXTRUDE_MM_PER_STEP = 1.0
 EXTRUDE_FEED = 200  # under gcode.EXTRUDE_FEED_MAX
 SPINDLE_RPM_PER_STEP = 1000
 TICK_S = 2.0
+LOOK_S = 10.0  # a board not found is looked for with a scan this often, by the tick alone
+SETTLE_S = 10.0  # the longest a simulated deck's event waits to have been acted on
 LONG_PRESS_S = 0.8  # a machine's key held this long is a long press
 ARM_WINDOW_S = 5.0  # the second long press of two must begin within this of the first let go
 
@@ -86,7 +100,9 @@ def enabled() -> bool:
 
 
 def pinned_port(machine: Machine) -> Optional[str]:
-    """The port the board pinned to ``machine``'s node is on now, or None."""
+    """The port the board pinned to ``machine``'s node is on now, or None. Read from the
+    newest scan however old, less what the serial engine no longer lists: a key or a knob
+    never waits two seconds on a scan (``look`` is what starts one)."""
     from .bindings import device_for_identity
 
     state = devices.get_state()
@@ -94,11 +110,20 @@ def pinned_port(machine: Machine) -> Optional[str]:
     if pin is None:
         return None
     try:
-        found = devices.detected_devices(state=state)
+        found = devices.detected_devices(state=state, any_age=True)
     except ToolchainError:
         return None
     device = device_for_identity(pin.identity, found, pin.kind)
     return device.port if device is not None else None
+
+
+def look() -> None:
+    """A scan for ports, unless one was made within its own short life: how a board
+    plugged in since the last is found when no page is asking."""
+    try:
+        devices.scan_ports()
+    except ToolchainError:
+        pass
 
 
 def _mm(value: float) -> str:
@@ -135,6 +160,14 @@ class DeckController:
         self._lock = threading.RLock()
         self._stop_listening: Optional[Callable[[], None]] = None
         self._ticker: Optional[threading.Thread] = None
+        self._worker: Optional[threading.Thread] = None
+        self._waiting: Deque[decks.DeckEvent] = deque()  # heard, not yet acted on
+        self._acting = False
+        self._turn = threading.Condition()
+        self._redraw = False
+        self._stops = 0  # stop keys heard
+        self._epoch = 0  # how many had been when the event being acted on was taken up
+        self._looked = 0.0
         self._alive = threading.Event()
         self._stopped = threading.Event()
 
@@ -143,7 +176,9 @@ class DeckController:
     def start(self) -> "DeckController":
         self._alive.set()
         self._stopped.clear()
-        self._stop_listening = self.deck.listen(self.handle)
+        self._worker = threading.Thread(target=self._work, name="deck-events", daemon=True)
+        self._worker.start()
+        self._stop_listening = self.deck.listen(self.hear, self.settle)
         self.draw()
         self._ticker = threading.Thread(target=self._tick, name="deck-control", daemon=True)
         self._ticker.start()
@@ -155,6 +190,17 @@ class DeckController:
         if self._stop_listening:
             self._stop_listening()
             self._stop_listening = None
+        with self._turn:
+            self._waiting.clear()
+            self._turn.notify_all()
+
+    def _look(self) -> None:
+        """A machine whose board is not found is looked for, here and nowhere else."""
+        if self.resolve is not pinned_port or time.monotonic() - self._looked < LOOK_S:
+            return
+        if any(pinned_port(machine) is None for machine in MACHINES):
+            self._looked = time.monotonic()
+            look()
 
     def _refresh(self) -> None:
         """While the chosen machine's control is armed it is in use: its readouts follow it
@@ -167,6 +213,7 @@ class DeckController:
     def _tick(self) -> None:
         while not self._stopped.wait(TICK_S):
             try:
+                self._look()
                 self._refresh()
                 self.draw()
             except Exception:  # noqa: BLE001 -- a deck that went away: the next tick tries again
@@ -178,10 +225,82 @@ class DeckController:
 
     # -- events ---------------------------------------------------------------------
 
+    def hear(self, event: decks.DeckEvent) -> None:
+        """An event as the deck's reader reports it, on the reader's own thread: handed
+        over, and the reader is free for the next. A stop key is sent from here, before
+        anything waiting, and what was waiting is not sent after it."""
+        if event.kind == decks.KEY and event.value and event.index in STOP_KEYS:
+            with self._turn:
+                self._waiting.clear()
+                self._stops += 1
+            self._first_long = None
+            try:
+                self._key(event.index)
+            except Exception as exc:  # noqa: BLE001 -- said on the strip, as in handle
+                self.said = (f"{type(exc).__name__}: {exc}", "red")
+            event = None  # the strip is drawn in its turn, not on the reader's thread
+        with self._turn:
+            if event is None:
+                self._redraw = True
+            else:
+                last = self._waiting[-1] if self._waiting else None
+                if (
+                    event.kind == decks.KNOB_TURN
+                    and last is not None
+                    and last.kind == decks.KNOB_TURN
+                    and last.index == event.index
+                ):
+                    # Turns of one knob with nothing between them are one turn of their sum.
+                    self._waiting[-1] = decks.DeckEvent(
+                        event.seq,
+                        event.kind,
+                        event.index,
+                        int(last.value) + int(event.value),
+                        at=event.at,
+                    )
+                else:
+                    self._waiting.append(event)
+            self._turn.notify_all()
+
+    def _work(self) -> None:
+        while True:
+            with self._turn:
+                while not self._waiting and not self._redraw and not self._stopped.is_set():
+                    self._turn.wait(0.5)
+                if self._stopped.is_set():
+                    self._turn.notify_all()
+                    return
+                event = self._waiting.popleft() if self._waiting else None
+                self._redraw = False
+                self._acting = True
+            try:
+                if event is None:
+                    self.draw()
+                elif not (event.kind == decks.KNOB_TURN and int(event.value) == 0):
+                    self.handle(event)
+            except Exception:  # noqa: BLE001 -- a deck that went away: the next event tries again
+                pass
+            finally:
+                with self._turn:
+                    self._acting = False
+                    self._turn.notify_all()
+
+    def settle(self, timeout: float = SETTLE_S) -> bool:
+        """Returns when everything heard has been acted on; False if ``timeout`` came first."""
+        until = time.monotonic() + timeout
+        with self._turn:
+            while self._waiting or self._redraw or self._acting:
+                left = until - time.monotonic()
+                if left <= 0 or self._stopped.is_set() or not self._alive.is_set():
+                    return not (self._waiting or self._acting)
+                self._turn.wait(min(left, 0.5))
+        return True
+
     def handle(self, event: decks.DeckEvent) -> None:
         """What the deck reported, as the layout reads it. Never raises: what could not be
         done is said on the strip."""
         with self._lock:
+            self._epoch = self._stops
             try:
                 if event.kind == decks.KEY and event.index in KEY_MACHINE:
                     self._machine_key(event)
@@ -308,6 +427,8 @@ class DeckController:
         went = 0
         try:
             for line in lines:
+                if self._stops != self._epoch:
+                    return False  # a stop key since: what was turned before it is not sent
                 self.send(port, line)
                 self.sent.append(line)
                 went += 1
@@ -322,7 +443,7 @@ class DeckController:
         except (ValueError, ToolchainError) as exc:
             self.said = (f"refused: {exc}", "red")
         finally:
-            if went and last is not None:
+            if went and last is not None and self._stops == self._epoch:
                 try:
                     self.send(port, last)
                     self.sent.append(last)
