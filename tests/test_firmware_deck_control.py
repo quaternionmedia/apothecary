@@ -369,6 +369,15 @@ def test_two_long_presses_in_time_arm_that_machines_control_through_the_latch(be
     assert _router(links)["x"] == pytest.approx(start["x"] + 2)
 
 
+def test_a_second_long_press_begun_in_time_arms_however_long_it_is_held(bench):
+    """As a hand does it: the second begun 3.3 s after the first was let go and held 3.2 s,
+    so let go 6.5 s after it."""
+    controller, one, links = bench
+    ended = _held(controller, 1, 100.0, 2.7)
+    _held(controller, 1, ended + 3.3, 3.2)
+    assert links.control.armed(ROUTER)
+
+
 def test_a_second_long_press_after_the_window_arms_nothing(bench):
     controller, one, links = bench
     ended = _held(controller, 1, 100.0, 1.0)

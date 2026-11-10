@@ -113,7 +113,8 @@ or why it did nothing.
 - the port's control latch must be armed, and it is armed the page's way (⚙ Control in the
   Machine window) or by **two sequential long presses** of the machine's key: a press held
   0.8 s chooses the machine and says on the strip that a second will arm its control; the
-  second, of the same key, within 5 s of the first being let go, arms it for the latch's own
+  second, of the same key, begun within 5 s of the first being let go and held as long as it
+  likes, arms it for the latch's own
   five minutes through the same `ControlLatch`. One long press alone, a second after the
   window, a short press, another key or a knob turned between them, or a long press of the
   other machine's key arms nothing. Armed this way, the machine's badge in the world and

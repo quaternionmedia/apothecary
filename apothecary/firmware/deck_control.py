@@ -13,8 +13,8 @@ One layout, on every deck it is started for (``Deck`` in ``firmware/deck.py``):
   last turn did or why it did nothing;
 - knobs one to three jog X, Y and Z by so many steps; the fourth turns the spindle's
   speed in steps of 1000 rpm (only while it turns) or extrudes 1 mm a step;
-- a machine's key held (``LONG_PRESS_S``) twice in a row, the second within
-  ``ARM_WINDOW_S`` of the first, arms that machine's control for the latch's own five
+- a machine's key held (``LONG_PRESS_S``) twice in a row, the second begun within
+  ``ARM_WINDOW_S`` of the first let go, arms that machine's control for the latch's own five
   minutes, as the Machine's Control does; one long press alone, a second after the
   window, or anything pressed between them arms nothing, and the strip says what the
   first did and what the second will.
@@ -65,7 +65,7 @@ EXTRUDE_FEED = 200  # under gcode.EXTRUDE_FEED_MAX
 SPINDLE_RPM_PER_STEP = 1000
 TICK_S = 2.0
 LONG_PRESS_S = 0.8  # a machine's key held this long is a long press
-ARM_WINDOW_S = 5.0  # the second long press of two must follow the first within this
+ARM_WINDOW_S = 5.0  # the second long press of two must begin within this of the first let go
 
 
 @dataclass(frozen=True)
@@ -242,14 +242,17 @@ class DeckController:
         if event.value:
             self._down[index] = event.at
             return
-        held = event.at - self._down.pop(index, event.at)
+        down = self._down.pop(index, event.at)
+        held = event.at - down
         self._choose(index)
         if held < LONG_PRESS_S:
             self._first_long = None
             self.said = (f"{self.machine.name} chosen", "grey")
             return
         first = self._first_long
-        if first is not None and first[0] == index and event.at - first[1] <= ARM_WINDOW_S:
+        # The window runs from the first press let go to the second begun: however long
+        # the second is held, it was begun in time.
+        if first is not None and first[0] == index and down - first[1] <= ARM_WINDOW_S:
             self._first_long = None
             self._arm()
             return
