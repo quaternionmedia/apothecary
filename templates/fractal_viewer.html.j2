@@ -2127,6 +2127,7 @@
             }
 
             setStatus(message, type = '') {
+                this.statusType = type;
                 this.statusEl.textContent = message;
                 this.statusEl.className = 'status' + (type ? ' ' + type : '');
             }
@@ -2318,7 +2319,9 @@
 
             async loadSite(name, focusPathStr = '') {
                 if (!name) return;
-                this.closeMachine();
+                // A board armed in the site before is disarmed, said again once it loads.
+                const disarmed = this.closeMachine();
+                const first = disarmed ? `${disarmed} · ` : '';
                 // A printer of the site before is no printer of this one.
                 this.workingOn = null;
                 this.workingSpace?.close();
@@ -2349,7 +2352,7 @@
                     // A part with work this tab kept from before a reload: said, and its
                     // editor offers it back.
                     const kept = this.keptHere();
-                    this.setStatus(`Loaded: ${data.name}${kept.length ? `; ${kept.join(', ')} ${kept.length > 1 ? 'have' : 'has'} work kept from before the reload, which Part › Edit offers back` : ''}`, 'success');
+                    this.setStatus(`${first}Loaded: ${data.name}${kept.length ? `; ${kept.join(', ')} ${kept.length > 1 ? 'have' : 'has'} work kept from before the reload, which Part › Edit offers back` : ''}`, 'success');
                     // The scan shells out to arduino-cli (a second or two): asked
                     // for after the scene is on screen, never before; its event
                     // redraws what shows the boards.
@@ -2366,7 +2369,7 @@
                     if (this.panels.isShown('procedure')) this.procedure?.load();
                     this.procedureRoom(name);
                 } catch (err) {
-                    this.setStatus(`Error: ${err.message}`, 'error');
+                    this.setStatus(`${first}Error: ${err.message}`, 'error');
                     console.error(err);
                 }
             }
@@ -7803,6 +7806,29 @@
                 });
                 return machine;
             }
+            // A Machine going takes its control pad with it, so a board left armed would
+            // heat and move with no pad on screen: it is disarmed. The status bar says so
+            // ahead of what the turn that closed it said -- another board's Machine opened,
+            // a site loading -- or alone when it said nothing, and as an error if the latch
+            // refuses. Returns what it says, or null when the board was not armed.
+            disarmGone(machine) {
+                if (!machine.port || !machine.handle || !machine.handle.ctl.armed) return null;
+                const who = machine.path || machine.port;
+                const said = `${who} disarmed, its pad gone with its Machine`;
+                fetch(`${BASE_URL}/firmware/printers/control`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ port: machine.port, armed: false }),
+                }).then(async (r) => {
+                    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `HTTP ${r.status}`);
+                }).catch((e) => this.setStatus(`${who} is still armed, its pad gone with its Machine: ${e.message}`, 'error'));
+                const was = this.statusEl.textContent;
+                queueMicrotask(() => {
+                    const now = this.statusEl.textContent;
+                    if (now === was) this.setStatus(said, 'success');
+                    else this.setStatus(`${said} · ${now}`, this.statusType);
+                });
+                return said;
+            }
             // An armed printer's control pad, popped out: a loud window of its own beside
             // the world, its tab red, its frame pulsing as it opens, and the printer
             // framed in what the world has left. Its ✕ puts the pad back in the Machine.
@@ -7948,11 +7974,13 @@
                 const next = this.workingSpace.next();
                 return path ? `${path}'s hour in the Working space: ${next}` : `the Working space of ${this.siteName}: ${next}`;
             }
-            // Stops the Machine watching its board and takes its panel away. Called
-            // again from inside (the panel's onClose), it does nothing.
+            // Stops the Machine watching its board and takes its panel away, its board
+            // disarmed if it was armed (disarmGone, whose words it returns, else null).
+            // Called again from inside (the panel's onClose), it does nothing.
             closeMachine() {
                 const machine = this.machine;
-                if (!machine) return;
+                if (!machine) return null;
+                const said = this.disarmGone(machine);
                 this.machine = null;
                 const planMarks = machine.plan ? this.marks[machine.path] : null;
                 if (planMarks && planMarks.plan) { planMarks.marks?.destroy(); delete this.marks[machine.path]; this.invalidate(); }
@@ -7961,6 +7989,7 @@
                 this.systems.machine.detach();
                 this.panels.unregister('machine');
                 this.keepMachineInAddress(null);
+                return said;
             }
             keepMachineInAddress(port) {
                 const url = new URL(location.href);

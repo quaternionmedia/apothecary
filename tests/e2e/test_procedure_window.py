@@ -304,7 +304,9 @@ def test_a_procedure_through_the_window(page: Page, url: str, walkthrough):
     story.says(
         "A member's name is a door: board's opens the devkit's Machine",
         "A member hosted here leads to the window of the node its next step names, the last "
-        "it worked on when none is left: board's name opens esp32_blink's Machine.",
+        "it worked on when none is left: board's name opens esp32_blink's Machine. The "
+        "printer's Machine goes, and with it the pad of the printer armed since step 7, so "
+        "the printer is disarmed, said first.",
         shown=page.locator("#status").inner_text(),
     )
 

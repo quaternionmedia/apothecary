@@ -77,10 +77,10 @@ Panels › Windows › Family view lays the Procedure tall beside the world, Mem
 
 ## 10. A member's name is a door: board's opens the devkit's Machine
 
-A member hosted here leads to the window of the node its next step names, the last it worked on when none is left: board's name opens esp32_blink's Machine.
+A member hosted here leads to the window of the node its next step names, the last it worked on when none is left: board's name opens esp32_blink's Machine. The printer's Machine goes, and with it the pad of the printer armed since step 7, so the printer is disarmed, said first.
 
 ```
-Opened esp32_blink's Machine: ⌗ Panels › Windows › Machine view lays out its sections
+printer_1 disarmed, its pad gone with its Machine · Opened esp32_blink's Machine: ⌗ Panels › Windows › Machine view lays out its sections
 ```
 
 ## 11. Start over counts what came before no more; the ring's GO and Start over do the same

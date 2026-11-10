@@ -829,6 +829,86 @@ def test_armed_the_pad_opens_a_loud_window_beside_the_world_and_goes_back(
     windows.world_is(page, width)
 
 
+GONE = "printer_1 disarmed, its pad gone with its Machine"
+
+
+def _armed(page: Page, url: str):
+    """printer_1's board pinned, its Machine open, control armed there: the pad out."""
+    _pin(url, BOARD)
+    _identify(url)
+    page.goto(f"{url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    _select(page, "printer_1")
+    page.locator("#selected-body .dev-open").click()
+    windows.machine_ready(page, "printer")
+    page.locator("#ctl").check()
+    expect(windows.panel(page, "control").locator("#control")).to_be_visible(timeout=5000)
+
+
+def _armed_now(url: str) -> bool:
+    r = httpx.get(f"{url}/firmware/printers/control", params={"port": PRINTER}, timeout=15.0)
+    return r.json()["armed"]
+
+
+def _disarmed(url: str):
+    for _ in range(50):
+        if not _armed_now(url):
+            return
+        time.sleep(0.1)
+    raise AssertionError("printer_1 is still armed with its Machine gone")
+
+
+@pytest.mark.e2e
+def test_another_board_s_machine_disarms_the_armed_one_it_replaces(page: Page, printer_url: str):
+    """A Machine going takes its control pad with it, so its board is disarmed, and the
+    status line says so ahead of what the turn said. Here another board's Machine opens
+    in its place; its own Machine opened again is the same Machine, and leaves it armed."""
+    _armed(page, printer_url)
+    page.evaluate("() => window.fractalViewer.openMachine('printer_1')")
+    expect(windows.tab(page, "control")).to_have_count(1)
+    assert _armed_now(printer_url)
+
+    page.evaluate(f"() => window.fractalViewer.openMachineFor('{UNO}')")
+    expect(windows.tab(page, "control")).to_have_count(0, timeout=5000)
+    expect(page.locator("#status")).to_have_text(
+        f"{GONE} · Opened {UNO}'s Machine: ⌗ Panels › Windows › Machine view lays out its sections"
+    )
+    _disarmed(printer_url)
+
+
+@pytest.mark.e2e
+def test_the_machine_closed_by_its_cross_disarms_its_board(page: Page, printer_url: str):
+    """The Machine's ✕: its board disarmed, said alone."""
+    _armed(page, printer_url)
+    windows.close(page, "machine")
+    expect(windows.tab(page, "control")).to_have_count(0, timeout=5000)
+    expect(page.locator("#status")).to_have_text(GONE)
+    _disarmed(printer_url)
+
+
+@pytest.mark.e2e
+def test_another_site_loaded_disarms_the_board_it_leaves(page: Page, printer_url: str):
+    """Another site loaded: the board left in the garage disarmed, said ahead of Loaded."""
+    _armed(page, printer_url)
+    page.evaluate("() => window.fractalViewer.loadSite('theatre')")
+    expect(windows.tab(page, "control")).to_have_count(0, timeout=5000)
+    expect(page.locator("#status")).to_have_text(re.compile(f"^{GONE} · Loaded: "), timeout=15000)
+    _disarmed(printer_url)
+
+
+@pytest.mark.e2e
+def test_its_board_unpinned_disarms_it(page: Page, printer_url: str):
+    """The board leaving the site, its pin taken back in Selected: its Machine goes with
+    it, and it is disarmed, said ahead of the unpin."""
+    _armed(page, printer_url)
+    page.locator("#selected-body .dev-unpin").click()
+    expect(windows.tab(page, "control")).to_have_count(0, timeout=5000)
+    expect(page.locator("#status")).to_have_text(
+        re.compile(f"^{GONE} · printer_1's board {BOARD}: device unpinned"), timeout=5000
+    )
+    _disarmed(printer_url)
+
+
 @pytest.mark.e2e
 def test_a_bed_reading_needs_no_latch_and_a_probe_does(page: Page, fresh_url: str):
     """Read mesh needs no latch and fills the heatmap; Probe bed needs it, shows its stage

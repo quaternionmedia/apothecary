@@ -588,7 +588,9 @@ tab is in front: a real machine is armed. Every arming pops it out, from the
 Machine, the ring or another browser. Its **⇥ Put back**, or its window's ✕,
 puts it back in the Machine's window; its **⧉ Pop out** pops
 it out again, and the ring's Panels › Machine › Control pad does either. Disarmed, it
-goes.
+goes. The pad goes with its Machine -- closed by its ✕, another board's Machine opened
+in its place, another site loaded, or the board unpinned or gone from the site -- so
+the board is disarmed then, and the status bar says so.
 
 What can be sent is a bounded allowlist, `firmware.gcode.CONTROL_CODES`
 (heaters and fan, homing, moves, extrude and retract, motors off, SD start,
