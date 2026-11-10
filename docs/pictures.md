@@ -199,6 +199,20 @@ with where the finder put the corners. A whiteboard that fills the photograph ha
 the photograph's corners, and says so; a photograph whose lightest surface is
 under a sixth of it is refused.
 
+## A whiteboard photographed again
+
+`apothecary photo again BEFORE AFTER` reads two pictures of one whiteboard, each
+squared to it, and lists what the later proposes of the earlier's shapes
+(`apothecary/vision/again.py`): one that moved, one that changed size or gained
+or lost a cut, one that is new, one that is gone. A shape that matches and has not
+changed has no row. Each row says by how much.
+
+Nothing changes until a row is taken: `--take 2` takes one, and what is built,
+with `--width-mm`, is the earlier picture's shapes with the rows taken. A shape
+whose sides a person stated is not proposed over when the drawing resizes it: its
+row says the two disagree, and cannot be taken. `--answers FILE` keeps the rows
+and which were taken.
+
 ## Pieces
 
 A shape made into a piece is a root structure of the same site, standing where

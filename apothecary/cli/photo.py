@@ -412,6 +412,69 @@ def notes_of_whiteboard(
             )
 
 
+@photo.command("again")
+@click.argument("before", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument("after", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--finder", default="outline", show_default=True, help="Which shape finder to use.")
+@click.option(
+    "--take", "took", multiple=True, type=int, help="A row to take, by its number. Repeatable."
+)
+@click.option("--width-mm", type=float, help="How wide the picture is, to build what was taken.")
+@click.option(
+    "--answers",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Keep the rows, and which were taken, in this file.",
+)
+@click.option(
+    "--out",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the drawing instructions of what was taken to this file.",
+)
+def round_again(
+    before: Path,
+    after: Path,
+    finder: str,
+    took: tuple,
+    width_mm: Optional[float],
+    answers: Optional[Path],
+    out: Optional[Path],
+):
+    """A whiteboard photographed again: what changed, as rows to take or leave.
+
+    BEFORE and AFTER are two pictures of one whiteboard, each squared to it
+    (`photo square`). Nothing changes until a row is taken with --take; what is
+    built is the earlier picture's shapes with the rows taken.
+    """
+    from ..vision import again
+
+    earlier = _look_or_explain(finder, before)
+    later = _look_or_explain(finder, after)
+    rows = again.compare(earlier, later)
+    click.echo(f"{before.stem} then {after.stem}: {len(rows)} change(s) proposed")
+    for row in rows:
+        mark = "taken" if row.number in took else ("left" if row.takeable else "stands")
+        click.echo(f"{row.number:3}  {row.change.value:9} {row.kind:5} {mark:6} {row.says}")
+    try:
+        kept = again.taken_from(earlier, later, rows, took)
+    except (KeyError, ValueError) as refused:
+        raise click.ClickException(str(refused).strip('"')) from None
+    if answers:
+        answers.write_text(
+            again.Taken(rows=rows, taken=sorted(took)).model_dump_json(indent=2) + "\n",
+            encoding="utf-8",
+        )
+        click.echo(f"rows kept in {answers}", err=True)
+    if not took:
+        click.echo("nothing taken, so nothing changed: --take N takes a row")
+        return
+    scale = _scale_or_explain(millimetres_across=width_mm) if width_mm is not None else None
+    built = build_arrangement(kept, name=after.stem, scale=scale)
+    click.echo(f"{len(built.site.children)} piece(s) after {len(took)} row(s) taken")
+    if out:
+        out.write_text(built.site.render(), encoding="utf-8")
+        click.echo(f"written to {out}")
+
+
 @photo.command("square")
 @click.argument("image", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option(

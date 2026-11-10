@@ -8,9 +8,12 @@ the fit ([pictures.md](../pictures.md#a-whiteboards-marks)); of slice 3 the
 corners found, a person's word on one and the photograph squared
 ([pictures.md](../pictures.md#a-whiteboard-squared)); slice 4, a cut read and
 taken out of the piece; slice 5, notes with a person's words, a size offered
-and the way out ([pictures.md](../pictures.md#a-whiteboards-notes)). Not built
-of those: the marks, the corners, the cuts and the notes shown and refined in
-the page, and the whiteboard as a part. Each slice
+and the way out ([pictures.md](../pictures.md#a-whiteboards-notes)); slice 6,
+two readings compared and the rows a person takes applied
+([pictures.md](../pictures.md#a-whiteboard-photographed-again)). Not built of
+those: the marks, the corners, the cuts, the notes and the rows shown and
+refined in the page, a note's changed writing asked for again, and the
+whiteboard as a part. Each slice
 is one branch of a short stack, built in the order listed once the owner says
 yes to it.*
 

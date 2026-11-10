@@ -217,6 +217,7 @@ GROUPS = {
             "tests/views_helpers.py",
         ),
         "tests": (
+            "test_again.py",
             "test_finder_accuracy.py",
             "test_finder_geometry.py",
             "test_free_space.py",
