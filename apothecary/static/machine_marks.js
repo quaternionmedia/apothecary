@@ -330,7 +330,7 @@ export function makeBoardBadge(anchors, key, boardPath, { point, selected }) {
         }
         return false;
     };
-    const badge = anchors.badge(key, point, { selected, ignore: inside });
+    const badge = anchors.badge(key, point, { group: "Machine", selected, ignore: inside });
     badge.dataset.path = key;
     badge.dataset.board = boardPath;
     badge.setAttribute("aria-label", "Select this board and open its Machine");

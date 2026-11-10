@@ -35,7 +35,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .hierarchy import Assembly
 from .site_names import UNIVERSE, UNIVERSE_SHOWN
-from .systems import SYSTEMS
+from .systems import SYSTEMS, by_id
 
 MOST_OPTIONS = 8
 LONGEST_LABEL = 12
@@ -226,6 +226,10 @@ class Option(BaseModel):
     # The one of a list the page has chosen elsewhere (a picture chosen in
     # Pictures), drawn marked; a leaf like any other.
     marked: bool = False
+    # The group of windows its work is in (Site, Pictures, a Machine), where it is
+    # the way into one: the wedge wears that group's colour, as its windows do
+    # (static/tokens.css).
+    group: Optional[str] = None
     children: Optional[List["Option"]] = None
     cell: Optional[int] = None
 
@@ -725,6 +729,27 @@ PANELS: Sequence[Tuple[str, str]] = (
     # asked for; the Stream Deck + piece's Open Deck opens it too.
     ("deck", "Deck"),
 )
+# The group each panel's window is registered under, as the page registers it (its
+# markup's data-group, its script's `group:`, a system's entry): a panel's cell wears
+# its group's colour. tests/test_group_colours.py holds this to the page.
+PANEL_GROUPS = {
+    "site": "Site",
+    "problems": "Site",
+    "pinned": "Site",
+    "jobs": "Site",
+    "scad": "Site",
+    "working": "Site",
+    "procedure": "Family",
+    "selected": "Selected",
+    "pictures": "Pictures",
+    "models": "Pictures",
+    "gather": "Pictures",
+    "machine": "Machine",
+    "bench": "Tools",
+    "settings": "Tools",
+    "deck": "Tools",
+    "airgap": "Airgap",
+}
 # The views: each focused system's windows laid out together (systems.py), a cell
 # of Panels › Windows after the layout's own two and an entry of the header's
 # ⊞ Windows. The page defines each from the same entry; a view's windows the page
@@ -745,7 +770,12 @@ _RINGS = {
 
 def _panels() -> Option:
     def toggle(pid: str, label: str) -> Option:
-        return Option(id=f"panel:{pid}", label=label, action=f"panel:toggle:{pid}")
+        return Option(
+            id=f"panel:{pid}",
+            label=label,
+            group=PANEL_GROUPS.get(pid),
+            action=f"panel:toggle:{pid}",
+        )
 
     labels = dict(PANELS)
 
@@ -757,6 +787,7 @@ def _panels() -> Option:
             return Option(
                 id="panels:machine",
                 label=label,
+                group=PANEL_GROUPS[pid],
                 children=[
                     toggle(pid, label),
                     Option(id="panel:pad", label="Control pad", action="panel:pad"),
@@ -768,6 +799,7 @@ def _panels() -> Option:
         return Option(
             id=f"panels:{pid}",
             label=label,
+            group=PANEL_GROUPS.get(pid),
             children=[
                 _models(toggle(each, labels[each]))
                 if each == "models"
@@ -796,7 +828,12 @@ def _panels() -> Option:
                     ),
                 ]
                 + [
-                    Option(id=f"panel:view:{vid}", label=label, action=f"panel:view:{vid}")
+                    Option(
+                        id=f"panel:view:{vid}",
+                        label=label,
+                        group=by_id(vid).group,
+                        action=f"panel:view:{vid}",
+                    )
                     for vid, label in VIEWS
                 ],
             )
@@ -965,6 +1002,7 @@ def _airgap(show: Option) -> Option:
     return Option(
         id="airgap",
         label="Airgap",
+        group="Airgap",
         children=[
             show,
             Option(id="airgap:play", label="Play", action="airgap:play"),
@@ -999,6 +1037,7 @@ def _bench(show: Option) -> Option:
 
     return Option(
         id="bench",
+        group="Tools",
         label="Bench",
         children=[
             show,
@@ -1131,7 +1170,7 @@ def _camera_group(floor: bool, printer: bool = False) -> Option:
     ]
     if printer:
         children.append(Option(id="working", label="Workspace", action="working:open"))
-    return Option(id=f"camera{tail}", label="Camera", children=children)
+    return Option(id=f"camera{tail}", label="Camera", group="Pictures", children=children)
 
 
 def _camera_options(picture: PictureContext) -> List[Option]:
@@ -1214,7 +1253,11 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
     if drawn is None and here.views:
         drawn = here.views[0]
     if drawn is None:
-        return Option(id=f"picture{tail}", label="Picture", children=options) if options else None
+        return (
+            Option(id=f"picture{tail}", label="Picture", group="Pictures", children=options)
+            if options
+            else None
+        )
 
     if len(here.views) > 1:
         leaves = [
@@ -1270,7 +1313,7 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
     find = _find_shapes(drawn, picture.finders, tail)
     if find is not None:
         options.append(find)
-    return Option(id=f"picture{tail}", label="Picture", children=options)
+    return Option(id=f"picture{tail}", label="Picture", group="Pictures", children=options)
 
 
 def _find_shapes(drawn: ViewSeen, finders: Sequence[str], tail: str) -> Optional[Option]:
@@ -1301,10 +1344,13 @@ def _slice_option(printers: Sequence[str]) -> Option:
     cell itself; several are a cell each under Slice, as Print's are. The page carries
     it."""
     if len(printers) == 1:
-        return Option(id="slice:piece", label="Slice", action=f"slice:piece:{printers[0]}")
+        return Option(
+            id="slice:piece", label="Slice", group="Machine", action=f"slice:piece:{printers[0]}"
+        )
     return Option(
         id="slice:piece",
         label="Slice",
+        group="Machine",
         children=_listed("slice:piece", [(f"slice:piece:{p}", p) for p in printers]),
     )
 
@@ -1315,10 +1361,16 @@ def _toolpath_option(routers: Sequence[str]) -> Option:
     for that router, kept and chosen, so Cut follows. One router pinned in the site
     is the cell itself; several are a cell each under Toolpath. The page carries it."""
     if len(routers) == 1:
-        return Option(id="toolpath:piece", label="Toolpath", action=f"toolpath:piece:{routers[0]}")
+        return Option(
+            id="toolpath:piece",
+            label="Toolpath",
+            group="Machine",
+            action=f"toolpath:piece:{routers[0]}",
+        )
     return Option(
         id="toolpath:piece",
         label="Toolpath",
+        group="Machine",
         children=_listed("toolpath:piece", [(f"toolpath:piece:{r}", r) for r in routers]),
     )
 
@@ -1328,10 +1380,13 @@ def _print_option(printers: Sequence[str]) -> Option:
     under its Print from here's *makes*. One printer pinned in the site is the cell
     itself; several are a cell each under Print. The page carries it."""
     if len(printers) == 1:
-        return Option(id="print:piece", label="Print", action=f"print:piece:{printers[0]}")
+        return Option(
+            id="print:piece", label="Print", group="Machine", action=f"print:piece:{printers[0]}"
+        )
     return Option(
         id="print:piece",
         label="Print",
+        group="Machine",
         children=_listed("print:piece", [(f"print:piece:{p}", p) for p in printers]),
     )
 
@@ -1354,7 +1409,7 @@ def _made_picture_group(picture: PictureContext) -> Option:
     options.append(
         Option(id="picture:drop", label="Drop", action="picture:drop", destructive=True, twice=True)
     )
-    return Option(id="picture", label="Picture", children=options)
+    return Option(id="picture", label="Picture", group="Pictures", children=options)
 
 
 def _pictures(picture: PictureContext) -> Option:
@@ -1364,6 +1419,7 @@ def _pictures(picture: PictureContext) -> Option:
     return Option(
         id="pictures",
         label="Pictures",
+        group="Pictures",
         children=[
             Option(id="pictures:add", label="Add", action=f"picture:add:{FLOOR_MARK}"),
             Option(
@@ -1575,7 +1631,7 @@ def _node_ring(
             chosen = _variants_group(seen.variants, seen.deleted)
             if chosen is not None:
                 verbs.append(chosen)
-        options.append(Option(id="part", label="Part", children=verbs))
+        options.append(Option(id="part", label="Part", group="Part", children=verbs))
     # A made piece with a printer pinned in its site to print it on: Print,
     # appended after Part so no cell above moves. A piece with nowhere to be
     # printed has no Print rather than one greyed out.
@@ -1602,7 +1658,9 @@ def _node_ring(
     # one greyed out. A camera's Device is which browser camera it is, among its own
     # verbs above, and no board's.
     if device is not None and device.bound and not camera:
-        options.append(Option(id="device", label="Device", children=_device_options(device)))
+        options.append(
+            Option(id="device", label="Device", group="Machine", children=_device_options(device))
+        )
     # A part with a sketch of its own that no board connected runs: the Bench opened
     # on it, where a board running it would have its Device. Where Device would be,
     # so the cells before it stay.

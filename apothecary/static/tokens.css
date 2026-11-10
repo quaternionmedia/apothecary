@@ -7,3 +7,25 @@
     --ok: #6fdb75; --warn: #ffcc66; --bad: #ff8080; --tx: #9cd2ff;
     --hotend: #e8b04a; --bed: #6fb3e8;
 }
+
+/* A subsystem's colour, said once: a group of windows (Site, Part, a Machine) wears one
+ * colour wherever it is shown. Whatever carries data-group reads it as --group: a
+ * window's tab, the window itself, and its heading and rows in ⊞ Windows and a stack's
+ * +. Each is validated against --bg and kept clear of the colours that mean a state
+ * (--ok, --warn, --bad) and of a focused tab's line. A group with no rule here wears
+ * --ink-3; tests/test_group_colours.py holds that every group the page registers has one. */
+:root {
+    --group-site: #58c4b8; --group-selected: #c3a2ec; --group-pictures: #ea96c2;
+    --group-tools: #aab4c4; --group-lighting: #e6dc8c; --group-part: #a9c868;
+    --group-machine: #f0906a; --group-airgap: #8ea2f4; --group-family: #cfa87c;
+}
+[data-group] { --group: var(--ink-3); }
+[data-group="Site"] { --group: var(--group-site); }
+[data-group="Selected"] { --group: var(--group-selected); }
+[data-group="Pictures"] { --group: var(--group-pictures); }
+[data-group="Tools"] { --group: var(--group-tools); }
+[data-group="Lighting"] { --group: var(--group-lighting); }
+[data-group="Part"] { --group: var(--group-part); }
+[data-group="Machine"] { --group: var(--group-machine); }
+[data-group="Airgap"] { --group: var(--group-airgap); }
+[data-group="Family"] { --group: var(--group-family); }
