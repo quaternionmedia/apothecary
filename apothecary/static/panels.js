@@ -6,6 +6,8 @@
  * panels. The module names no window of the page's: the page gives it the windows a
  * remembered layout may hold (`known`), those made for the moment and never
  * remembered (`transient`), and its own layout (`defaultRoot`); each has a default.
+ * A window registered that is in neither list is lost from a remembered layout, so
+ * registering one says so on the console.
  *
  * Where a window opens when it is not in the layout is its `home`: "column", the one
  * column beside the world, right under the window it follows (`after`), where the
@@ -632,7 +634,12 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
          * tab and frame say it must be seen. `onClose` is called when it is closed;
          * `onOpen` when its filled body is in front of a person again. */
         register(id, { title, tab = null, hint = null, body, home = "tabs", after = null, group = null, open = true, loud = false, onClose = null, onOpen = null } = {}) {
-            if (!knownTypes.has(id)) { knownTypes.add(id); layout.registerComponentFactoryFunction(id, factory); }
+            if (!knownTypes.has(id)) {
+                // Not given in `known` or `transient`: the remembered layout was laid
+                // out without it, so a reload has closed it, its room kept from the world.
+                console.warn(`The window ${id} is not one the page gave panels.js as known or transient: a reload closes it.`);
+                knownTypes.add(id); layout.registerComponentFactoryFunction(id, factory);
+            }
             const r = record(id);
             r.title = title || id; r.tab = tab; r.hint = hint; r.loud = !!loud; r.group = group; r.after = after;
             r.home = HOMES.has(home) || (typeof home === "string" && home && home !== id) ? home : "tabs";

@@ -518,6 +518,23 @@ def test_a_layout_is_remembered_and_a_window_made_for_the_moment_is_not(wm: Page
     assert _where(wm, "b")["front"] == "b"
 
 
+@pytest.mark.e2e
+def test_a_window_the_page_did_not_name_is_closed_by_a_reload_and_registering_it_says_so(
+    wm: Page,
+):
+    """A window registered that the page gave neither as known nor as made for the
+    moment is left out of the layout remembered, so a reload closes it: registering it
+    says so on the console. One the page named as known is open again."""
+    said = []
+    wm.on("console", lambda m: said.append(m.text) if "a reload closes it" in m.text else None)
+    mine = [["k", {"home": "beside"}], ["u", {"home": "beside"}]]
+    _mount(wm, known=["k"], register=PAGE_WINDOWS + mine)
+    assert any("window u " in s for s in said) and not any("window k " in s for s in said)
+    _reload(wm, known=["k"], register=PAGE_WINDOWS + mine)
+    assert _js(wm, "() => P.isOpen('k')") is True
+    assert _js(wm, "() => P.isOpen('u')") is False
+
+
 CHOSEN = ["gone", "y", "z", "w"]
 
 

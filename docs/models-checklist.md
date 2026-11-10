@@ -98,7 +98,8 @@ status bar said, word for word.
 - [ ] Untick `plain/colour` and **Ask**: the line says *plain/colour is
       switched off*, and the colour row reads nothing.
 - [ ] Tick both again, reload the page: both stay ticked (the switches are kept
-      in the state folder).
+      in the state folder), and Models is open again where it was, the world as
+      wide as it was.
 - [ ] With the demo's state folder (`APOTHECARY_STATE_DIR=.cache/demo/state`),
       `uv run apothecary vision off plain/colour` and `vision on plain/colour`
       switch the same origin, and Models shows it the next time it is shown.
@@ -156,7 +157,3 @@ pixels, and nothing else in the viewer changes.
 - A site's own words mapped onto the colour and material lists.
 - Keeping what was asked: it lasts as long as the server, and a restart forgets
   it. The switches are kept.
-- Models beside the world in a layout the browser remembers: opened again after
-  a reload, it takes room from the world each time; until windows beside the
-  world share one stack (docs/plans/ui-coordination-2026-10-31.md), the
-  layout's own Reset gives the room back.

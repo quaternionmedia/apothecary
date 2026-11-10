@@ -432,7 +432,9 @@ them are remembered like any layout.
   world, the code filling it.
 
 A window the page makes for the moment -- a Machine and its sections, the pad --
-is left out of the layout this browser remembers.
+is left out of the layout this browser remembers. Every other window is kept in
+it: one opened from ⊞ Windows -- Models, Marks, the Working space, the Deck -- is
+open again after a reload, where it was, and the world as wide as it was.
 
 ## The part editor
 

@@ -1510,12 +1510,13 @@
                 // maximised or closed. What a person made of it is remembered per
                 // browser, and a remembered layout the page cannot read is ignored.
                 // Its windows: the page's own, laid out as the page lays them (PAGE_LAYOUT),
-                // and every focused system's (apothecary/systems.py); a board's Machine and
-                // its sections, the armed pad and a rig's Lighting are made for the moment.
+                // those of its own it leaves closed until a person opens one, and every
+                // focused system's (apothecary/systems.py); a board's Machine and its
+                // sections, the armed pad and a rig's Lighting are made for the moment.
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
                     defaultRoot: PAGE_LAYOUT,
-                    known: ['gather', ...knownWindows(SYSTEMS)],
+                    known: ['gather', 'models', 'marks', 'working', 'deck', ...knownWindows(SYSTEMS)],
                     transient: ['control', 'lighting', ...transientWindows(SYSTEMS)],
                 });
                 // What the rail this layout replaced remembered: nothing reads it any more.

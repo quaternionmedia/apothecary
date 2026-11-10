@@ -225,6 +225,36 @@ def test_a_layout_remembered_with_a_retired_panel_is_harmless(page, base_url: st
     assert errors == []
 
 
+# Windows the page's own layout leaves closed, each opened from ⊞ Windows by a person:
+# Models and Marks beside the world, Working space among the tabs, the Deck beside.
+OPENED = ("models", "marks", "working", "deck")
+
+
+@pytest.mark.e2e
+def test_windows_a_person_opened_are_open_after_a_reload_where_they_were(page, base_url: str):
+    """Models, Marks, Working space and the Deck, opened from ⊞ Windows, are open again
+    after a reload, each in the stack it was in, and the world keeps the width it had:
+    none is dropped from the remembered layout, its room kept from the world. And no
+    window of the page is one panels.js says a reload closes."""
+    lost = []
+    page.on("console", lambda m: lost.append(m.text) if "a reload closes it" in m.text else None)
+    _open(page, base_url)
+    for pid in OPENED:
+        windows.from_the_windows_menu(page, pid)
+        assert windows.state(page, pid)["open"] is True, pid
+    windows.remembered(page)
+    stacks = {pid: windows.state(page, pid)["stack"] for pid in OPENED}
+    width = windows.world_width(page)
+    page.reload()
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
+    for pid in OPENED:
+        state = windows.state(page, pid)
+        assert state is not None and state["open"] is True, pid
+        assert state["stack"] == stacks[pid], pid
+    assert abs(windows.world_width(page) - width) < 2, (windows.world_width(page), width)
+    assert lost == []
+
+
 @pytest.mark.e2e
 def test_a_problem_marks_its_pieces_and_its_row_selects_one_at_its_level(page, base_url: str):
     """printer_1 moved onto the footpedal: both rows red, saying why on hover; Problems'
