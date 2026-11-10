@@ -330,14 +330,16 @@ at its place, and above them the **views**: windows laid out together for one
 kind of work, each also a cell of Panels › Windows.
 
 Each group has a colour of its own, and a window wears its group's wherever it
-is shown: a line under its tab, fainter while another tab of its stack is in
-front, a line under its header, its heading in ⊞ Windows and a stack's +, and
-the edge of its row there. The line over a tab still says which stack has the
+is shown: its tab tinted with it and a line of it under the tab, both fainter
+while another tab of its stack is in front, a line under its header, its
+heading in ⊞ Windows and a stack's +, and its row there tinted, with its edge. The line over a tab still says which stack has the
 focus, and a loud window stays loud. The ring's cell that leads into a group's
-work wears the same colour along its outer edge: each panel's cell under Panels
+work is tinted with the same colour, the colour itself along its outer edge,
+and brighter under the pointer: each panel's cell under Panels
 and each view's under Panels › Windows, and on a piece's ring Part, Picture,
 Camera, Device, Slice, Toolpath and Print. In the world a machine's badge is
-underlined in the Machine's colour, and a place's and a camera's in Pictures'.
+tinted and underlined in the Machine's colour, and a place's and a camera's in
+Pictures'.
 
 The column beside the world is the one place a window opens by default, and it
 holds four stacks at most: a window opened there while it has fewer is a stack

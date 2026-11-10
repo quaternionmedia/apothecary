@@ -107,6 +107,8 @@ def test_the_ring_and_the_worlds_badges_draw_the_group():
     ring = (ROOT / "apothecary" / "static" / "ring.js").read_text(encoding="utf-8")
     anchors = (ROOT / "apothecary" / "static" / "anchors.js").read_text(encoding="utf-8")
     assert 'class="rim" data-group="${esc(option.group)}"' in ring
+    assert ".apothecary-ring .wedge[data-group] { fill: color-mix(" in ring
+    assert ".apothecary-ring .wedge[data-group].hot { fill: color-mix(" in ring
     assert "if (group) el.dataset.group = group;" in anchors
     assert ".world-badge[data-group]" in TEMPLATE
     marks = (ROOT / "apothecary" / "static" / "machine_marks.js").read_text(encoding="utf-8")

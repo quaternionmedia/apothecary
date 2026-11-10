@@ -195,8 +195,10 @@ const STYLE = `
 .apothecary-ring .wedge { fill: #2a2f2a; stroke: #0f120f; stroke-width: 1.5; cursor: pointer; }
 .apothecary-ring .wedge.empty { fill: #1b1e1b; opacity: 0.35; cursor: default; }
 .apothecary-ring .wedge.disabled { opacity: 0.5; cursor: not-allowed; }
+.apothecary-ring .wedge[data-group] { fill: color-mix(in srgb, var(--group) 26%, #2a2f2a); }
 .apothecary-ring .wedge.destructive { fill: #3a2020; }
 .apothecary-ring .wedge.hot { fill: #4c6a4c; }
+.apothecary-ring .wedge[data-group].hot { fill: color-mix(in srgb, var(--group) 50%, #2a2f2a); }
 .apothecary-ring .wedge.destructive.hot { fill: #7a2a2a; }
 .apothecary-ring .wedge.marked { fill: #23384a; stroke: #6fb3e8; }
 .apothecary-ring .wedge.marked.hot { fill: #33557a; }
@@ -361,10 +363,11 @@ class RingInstance {
                 : `<text class="label"${anchor} x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${label}</text>`;
             parts.push(
                 `<path id="ring-cell-${cell}" class="${cls.join(" ")}" data-cell="${cell}" role="menuitem"`
+                + (option && option.group ? ` data-group="${esc(option.group)}"` : "")
                 + ` aria-label="${option ? esc(armed ? `again to ${option.label.toLowerCase()}` : option.label) : "empty"}"`
                 + (option && option.marked ? ' aria-current="true"' : "")
                 + `${option ? "" : ' aria-disabled="true"'} d="${wedgePath(slot, r0, r1)}"></path>`
-                // Whose it is: its group's colour along its outer edge (tokens.css).
+                // Whose it is: tinted with its group's colour, the colour itself along its outer edge (tokens.css).
                 + (option && option.group ? `<path class="rim" data-group="${esc(option.group)}" d="${wedgePath(slot, r1 - 4, r1)}"></path>` : "")
                 + (option ? words : "")
                 + `<circle class="digit-key${option ? "" : " empty-digit"}" cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="8.5"></circle>`
