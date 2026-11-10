@@ -130,6 +130,17 @@ def test_the_toolpath_is_kept_as_a_cut_file_and_recorded_beside_it(tmp_path, mon
         service.cut_into("calibration_cube", CutFor(name="cnc_router"))
 
 
+def test_the_same_toolpath_written_twice_is_one_file(tmp_path, monkeypatch):
+    """Toolpath pressed again writes the same file, which is the one kept: the Cut card
+    lists it once, with the newer record."""
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    first = service.cut_into("router_coupon", CutFor(name="cnc_router", site="garage", port=PORT))
+    second = service.cut_into("router_coupon", CutFor(name="cnc_router", site="garage", port=PORT))
+    assert second.file_id == first.file_id and second.at > first.at
+    assert [f.id for f in devices.print_files()] == [first.file_id]
+    assert service.records() == [second]
+
+
 def test_the_cut_route_takes_a_site_s_piece_and_refuses_a_part_without_cuts(
     tmp_path, monkeypatch, garage
 ):

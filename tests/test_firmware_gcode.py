@@ -1678,6 +1678,26 @@ def test_two_files_kept_in_one_millisecond_are_both_kept(fake_arduino_cli, monke
     assert devices.print_file(second.id) == second
 
 
+def test_the_same_file_kept_again_is_the_file_already_kept_now_the_newest(fake_arduino_cli):
+    """The same bytes under the same name for the same kind of machine are one file:
+    kept again, it is the file already kept, listed first. Another name, another kind or
+    other bytes is another file."""
+    cube = devices.save_print_file("cube.gcode", b"G28\n", machine="printer")
+    other = devices.save_print_file("other.gcode", b"G28\n", machine="printer")
+    again = devices.save_print_file("cube.gcode", b"G28\n", machine="printer")
+    assert again.id == cube.id and again.uploaded_at > cube.uploaded_at
+    assert [f.id for f in devices.print_files()] == [cube.id, other.id]
+    assert devices.print_file(cube.id) == again
+    assert len(list(devices.prints_dir().glob("*.gcode"))) == 2
+    for name, data, machine in [
+        ("cube.gcode", b"G28\n", "router"),
+        ("cube.gcode", b"G28\n", None),
+        ("cube.gcode", b"G28\nG1 X5\n", "printer"),
+    ]:
+        assert devices.save_print_file(name, data, machine=machine).id != cube.id
+    assert len(devices.print_files()) == 5
+
+
 def test_print_job_streams_pauses_resumes_and_polls_between_lines(fake_arduino_cli, scripted_links):
     port = "/dev/ttyFAKE1"
     kept = devices.save_print_file("small.gcode", SMALL_PRINT.encode(), machine="printer")

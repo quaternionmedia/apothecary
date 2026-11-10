@@ -1363,12 +1363,21 @@ def _print_file_path(file_id: str) -> Path:
 
 def save_print_file(name: str, data: bytes, machine: Optional[str] = None) -> PrintFile:
     """Keep an uploaded file for a kind of machine (``machine``) and say what it holds;
-    ``problems`` says why it may not be sent."""
+    ``problems`` says why it may not be sent. The same bytes under the same name for the
+    same kind are the file already kept, kept again now: a toolpath or slice written
+    twice, or a file chosen twice, is one file, the newest."""
     if machine is not None and machine not in dialects.BY_MACHINE:
         raise ValueError(f"no kind of machine is called {machine!r}")
+    at = datetime.now(timezone.utc)
+    digest = hashlib.sha256(data).hexdigest()
+    shown = Path(name).name[:120]
+    for same in print_files():
+        if shown and (same.sha256, same.name, same.machine) == (digest, shown, machine):
+            same = same.model_copy(update={"uploaded_at": at})
+            state_folder.write_whole(_print_meta_path(same.id), same.model_dump_json(indent=2))
+            return same
     text = data.decode("utf-8", "replace")
     total, problems = dialects.by_machine(machine).check_file(text)
-    at = datetime.now(timezone.utc)
     stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", Path(name).name).strip("_.") or "print"
     stem = re.sub(r"\.(gcode|gco|g|txt)$", "", stem, flags=re.IGNORECASE)[:60]
     # Its own id, though another file of the same name was kept in the same millisecond.
@@ -1377,9 +1386,9 @@ def save_print_file(name: str, data: bytes, machine: Optional[str] = None) -> Pr
     kept.write_text(text, encoding="utf-8")
     meta = PrintFile(
         id=file_id,
-        name=Path(name).name[:120] or file_id,
+        name=shown or file_id,
         size=len(data),
-        sha256=hashlib.sha256(data).hexdigest(),
+        sha256=digest,
         lines=total,
         uploaded_at=at,
         problems=problems,
