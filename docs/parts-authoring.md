@@ -356,7 +356,7 @@ shape again only if it still stands where it was made.
 ## Checking a part
 
 ```bash
-uv run apothecary parts list                 # found, and by which module
+uv run apothecary parts list                 # found, by which module, and whether it loads
 uv run apothecary parts info my_part         # metadata, bounds, readme, stl_params
 uv run apothecary parts generate-stl my_part # build the STL the viewer serves
 uv run apothecary parts verify my_part       # declared bounds against the rendered geometry

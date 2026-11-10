@@ -14,7 +14,13 @@ from ..meshes import UNIT_SCALES, MeshError, bounds, read_mesh, transform, write
 from ..projects.parts.base import BasePart
 from ..projects.parts.skeleton import ROOT
 from ..projects.parts.stl_renderer import read_params_sidecar
-from ..projects.registry import ProjectInfo, _sanitize_module_name, load_part, scan_projects
+from ..projects.registry import (
+    ProjectInfo,
+    _sanitize_module_name,
+    load_part,
+    load_parts,
+    scan_projects,
+)
 from ..templates import TemplateRenderer
 from . import status
 from .utils import (
@@ -69,15 +75,23 @@ def parts_list(json_out: bool):
     A part is a folder under parts/ holding a SCAD named after it, at any depth
     of category folders (parts/boards/arduino_uno). Its description is a
     part.json beside the SCAD, or a Python wrapper module, or None; a part.json
-    tagged stub is marked as one.
+    tagged stub is marked as one, and a part that does not load as one.
     """
     items = [p for p in scan_projects(ROOT) if p.kind == "part"]
+    failed = {f.name: f.error for f in load_parts(ROOT).failed}
     if json_out:
-        click.echo(json.dumps([p.to_json() for p in items], indent=2))
+        listed = [
+            {**p.to_json(), "loads": p.name not in failed, "load_error": failed.get(p.name)}
+            for p in items
+        ]
+        click.echo(json.dumps(listed, indent=2))
         return
     for p in items:
         described_by = "part.json" if p.sidecar else f"wrapper={p.wrapper}"
-        click.echo(f"{p.name} ({described_by})" + (" -- a stub" if _is_stub(p) else ""))
+        marks = " -- a stub" if _is_stub(p) else ""
+        if p.name in failed:
+            marks += " -- does not load (apothecary problems --detail)"
+        click.echo(f"{p.name} ({described_by}){marks}")
 
 
 FIELD_OF_USE = ("-NC", "-ND", "NonCommercial", "NoDerivatives", "personal")

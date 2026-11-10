@@ -523,9 +523,20 @@ def render_scene(scene: Scene):
 
 
 @app.get("/parts")
-def list_parts():
-    names = _available_part_names()
-    return [_part_metadata(_load_part_wrapper(name)) for name in names]
+def list_parts(response: Response):
+    """Every registered part that loads. One that does not -- a part.json refused,
+    a wrapper that raises, a SCAD that is not there -- is left out and named in
+    ``X-Parts-Not-Loaded``; ``GET /parts/{name}`` says why, as does ``apothecary
+    problems``."""
+    listed, not_loaded = [], []
+    for name in _available_part_names():
+        try:
+            listed.append(_part_metadata(_load_part_wrapper(name)))
+        except HTTPException:
+            not_loaded.append(name)
+    if not_loaded:
+        response.headers["X-Parts-Not-Loaded"] = ", ".join(not_loaded)
+    return listed
 
 
 @app.get("/parts/{name}")
