@@ -22,6 +22,7 @@ from .album import Album, Built, Provenance
 from .compose import ScaleUnknown, build, picture_to_site
 from .finder import ShapeFinder, UnknownFinderError, get, names, register
 from .models import FoundShape, Picture, ScaleReference, ShapeKind
+from .outline import OutlineFinder
 from .plain import PlainFinder
 from .stated import MissingDescriptionError, StatedFinder
 
@@ -33,6 +34,7 @@ __all__ = [
     "Picture",
     "PlainFinder",
     "MissingDescriptionError",
+    "OutlineFinder",
     "ScaleReference",
     "ScaleUnknown",
     "ShapeFinder",

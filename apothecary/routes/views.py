@@ -380,7 +380,8 @@ def find_in(site_name: str, view_id: str, finder: str = "plain") -> View:
 
 def finders_for(picture: str) -> List[str]:
     """The finders that can read a picture under the root: every one, except a
-    finder that reads a description beside the picture when there is none.
+    finder that reads a description beside the picture when there is none, and a
+    finder that says the picture is not its kind (``reads``).
     What the ring's Find shapes offers, so it is offered only where it can do
     something."""
     from ..api import _picture_root, _picture_within_root
@@ -397,6 +398,9 @@ def finders_for(picture: str) -> List[str]:
         seer = get_finder(name)
         described = getattr(seer, "description_path", None)
         if described is not None and not described(where).is_file():
+            continue
+        its_kind = getattr(seer, "reads", None)
+        if its_kind is not None and not its_kind(where):
             continue
         readable.append(name)
     return readable

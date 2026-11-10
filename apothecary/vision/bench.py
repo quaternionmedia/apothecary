@@ -5,8 +5,9 @@ number in a document must have been measured rather than asserted. This is the
 meter for "the plain finder works well enough".
 
 It draws pictures whose answers are known — varying position, size, rotation,
-speckle and how many shapes are present — then asks a finder what it sees and
-scores the reply. Everything is drawn from a fixed starting number, so the same
+speckle and how many shapes are present, filled in or drawn in outline as a
+marker draws on a whiteboard, under a shadow, a glare or a smear, framed by a
+wall, with notes beside — then asks a finder what it sees and scores the reply. Everything is drawn from a fixed starting number, so the same
 run gives the same score on any machine, and a change to the finder shows up as
 a change to the number rather than as an argument.
 
@@ -122,6 +123,13 @@ def draw_cases(
     smallest: float = 0.14,
     largest: float = 0.26,
     crowd: int = 4,
+    stroke: float = 0.0,
+    gap: int = 0,
+    shadow: float = 0.0,
+    glare: bool = False,
+    smear: bool = False,
+    framed: bool = False,
+    notes: bool = False,
 ) -> List[Case]:
     """Draw a set of pictures with known answers.
 
@@ -131,8 +139,17 @@ def draw_cases(
     background colour, and ``smallest``/``largest``/``crowd`` control how small
     and how many the shapes get. Each one makes the job harder in a different
     way, so a drop in the score says which way.
+
+    ``stroke`` above zero draws each shape in outline, a marker's line that share
+    of the picture's short side wide, and the rest are a whiteboard's troubles:
+    ``gap`` leaves each outline open by that many pixels, ``shadow`` from 0 to 1
+    darkens the picture from one side to the other, ``glare`` lays a soft bright
+    patch over it, ``smear`` a few soft grey ones, ``notes`` draws a dimension
+    line and some writing beside the shapes, which are not shapes, and
+    ``framed`` stands the whole on a darker wall with a frame round it and a
+    tray under it.
     """
-    from PIL import Image, ImageDraw, ImageFilter
+    from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
     dice = random.Random(seed)
     into.mkdir(parents=True, exist_ok=True)
@@ -159,7 +176,13 @@ def draw_cases(
             cx, cy = placed
             taken.append((cx, cy, span))
             angle = dice.uniform(0, 90) if turned else 0.0
-            _paint(pen, kind, cx, cy, span, angle, ink)
+            line = max(2, round(stroke * min(width, height))) if stroke > 0 else 0
+            _paint(pen, kind, cx, cy, span, angle, ink, line)
+            if line and gap > 0:
+                # The middle of the lower side is on every family's outline.
+                gx, gy = _turn(0, span / 2, angle, cx, cy)
+                reach = gap / 2 + line
+                pen.rectangle((gx - gap / 2, gy - reach, gx + gap / 2, gy + reach), fill=245)
             truth.append(TrueShape(kind, (cx / width, cy / height), angle))
 
         if speckled:
@@ -168,8 +191,68 @@ def draw_cases(
                 sy = dice.randint(0, height - 3)
                 pen.rectangle((sx, sy, sx + 2, sy + 2), fill=min(255, ink + 15))
 
+        if notes:
+            for _ in range(2):
+                span = 0.2 * min(width, height)
+                placed = _free_spot(dice, width, height, span, taken)
+                if placed is None:
+                    continue
+                nx, ny = placed
+                taken.append((nx, ny, span))
+                pen.line((nx - span / 2, ny, nx + span / 2, ny), fill=ink, width=2)
+                for tick in range(5):
+                    tx = nx - span / 4 + tick * span / 8
+                    pen.line((tx, ny + 6, tx + span / 12, ny + 14), fill=ink, width=2)
+
+        if smear:
+            smudges = Image.new("L", (width, height), 255)
+            smudge = ImageDraw.Draw(smudges)
+            for _ in range(4):
+                sx, sy = dice.uniform(0, width), dice.uniform(0, height)
+                reach = dice.uniform(0.08, 0.2) * min(width, height)
+                smudge.ellipse((sx - reach, sy - reach / 2, sx + reach, sy + reach / 2), fill=205)
+            image = ImageChops.multiply(image, smudges.filter(ImageFilter.GaussianBlur(8)))
+
+        if glare:
+            bright = Image.new("L", (width, height), 0)
+            gx, gy = dice.uniform(0, width), dice.uniform(0, height)
+            reach = 0.3 * min(width, height)
+            ImageDraw.Draw(bright).ellipse(
+                (gx - reach, gy - reach, gx + reach, gy + reach), fill=200
+            )
+            image = ImageChops.screen(image, bright.filter(ImageFilter.GaussianBlur(reach / 3)))
+
+        if shadow > 0:
+            ramp = Image.linear_gradient("L").rotate(90).resize((width, height))
+            image = ImageChops.multiply(image, ramp.point(lambda v: round(255 - shadow * v)))
+
         if blur > 0:
             image = image.filter(ImageFilter.GaussianBlur(blur))
+
+        if framed:
+            edge = round(0.15 * min(width, height))
+            wall = Image.new("L", (width + 2 * edge, height + 2 * edge), 60)
+            wall.paste(image, (edge, edge))
+            round_it = ImageDraw.Draw(wall)
+            round_it.rectangle(
+                (edge - 4, edge - 4, edge + width + 3, edge + height + 3), outline=150, width=4
+            )
+            round_it.rectangle(
+                (edge + width // 4, edge + height + 4, edge + 3 * width // 4, edge + height + 12),
+                fill=120,
+            )
+            truth = [
+                TrueShape(
+                    shape.kind,
+                    (
+                        (shape.centre[0] * width + edge) / wall.width,
+                        (shape.centre[1] * height + edge) / wall.height,
+                    ),
+                    shape.turned_degrees,
+                )
+                for shape in truth
+            ]
+            image = wall
 
         path = into / f"case_{index:02d}.png"
         image.save(path)
@@ -188,17 +271,19 @@ def _free_spot(dice, width, height, span, taken):
     return None
 
 
-def _paint(pen, kind: ShapeKind, cx, cy, span, angle, ink: int = 25) -> None:
+def _paint(pen, kind: ShapeKind, cx, cy, span, angle, ink: int = 25, line: int = 0) -> None:
+    """One shape, filled in, or in outline ``line`` pixels wide."""
     half = span / 2
+    how = {"outline": ink, "width": line} if line else {"fill": ink}
     if kind is ShapeKind.DISC:
         # A circle looks the same however it is turned, so the angle is ignored.
-        pen.ellipse((cx - half, cy - half, cx + half, cy + half), fill=ink)
+        pen.ellipse((cx - half, cy - half, cx + half, cy + half), **how)
         return
     if kind is ShapeKind.RECT:
         corners = [(-half, -half), (half, -half), (half, half), (-half, half)]
     else:
         corners = [(0, -half), (half, half), (-half, half)]
-    pen.polygon([_turn(x, y, angle, cx, cy) for x, y in corners], fill=ink)
+    pen.polygon([_turn(x, y, angle, cx, cy) for x, y in corners], **how)
 
 
 def _turn(x: float, y: float, angle: float, cx: float, cy: float) -> Tuple[float, float]:

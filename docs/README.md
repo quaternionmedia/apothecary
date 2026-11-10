@@ -8,8 +8,8 @@ at `/README.md`, and every page's bar links it. The HTTP API is described at `/o
 ## The walkthrough
 
 `walkthrough/` is the path through this repository. Pages 01 to 06, 18, 26 and 27 are
-written by the browser tests that walk them; page 00, pages 07 to 17 and pages
-19 to 23 are doctests, run by `pytest walkthrough`. Start there, at page 00.
+written by the browser tests that walk them; page 00, pages 07 to 17, pages
+19 to 23 and page 28 are doctests, run by `pytest walkthrough`. Start there, at page 00.
 
 | Page | |
 |---|---|
@@ -39,6 +39,7 @@ written by the browser tests that walk them; page 00, pages 07 to 17 and pages
 | [23 — A procedure](../walkthrough/23-a-procedure.md) | What the family fires: the steps that bring a site's blueprint into working order, each waiting for GO and the evidence it names, a person's own, a member's refusal, a page's read and a member that is not there, and what the log keeps |
 | [26 — The Stream Deck +](../walkthrough/26-the-stream-deck.md) | An Elgato Stream Deck + at the garage's bench: its piece opens the Deck window, a program draws its eight keys and strip, and a simulated deck is pressed, turned and tapped, each event listed and kept; written by the browser suite |
 | [27 — The deck jogging the machines](../walkthrough/27-the-deck-jogging-the-machines.md) | The Stream Deck +'s knobs jog the router through the control latch: its layout drawn, a turn disarmed moving nothing, an armed jog read back on the X key, the step key, and the stop key stopping a spinning spindle; written by the browser suite |
+| [28 — A whiteboard to a model](../walkthrough/28-a-whiteboard-to-a-model.md) | A drawing in marker read by the `outline` finder: the whiteboard as the ground, each closed stroke the shape of what it encloses, named, placed and sized, with what the `plain` finder makes of the same picture |
 
 ## The checklists
 
@@ -101,6 +102,7 @@ Open plans: each says what is decided and what is not built.
 
 | Page | |
 |---|---|
+| [A whiteboard to a model, and round again](plans/whiteboard-loop-2026-11-09.md) | A drawing in marker as a way in: the path from a whiteboard's photograph to pieces with names, sizes and cuts, and round again as the drawing changes; what a drawing read as before it, and the featureset in slices -- strokes read as shapes (built: the `outline` finder and [walkthrough 28](../walkthrough/28-a-whiteboard-to-a-model.md)), a stroke inside a stroke a cut, the whiteboard squared and its width said once, a second photograph proposing changes to the pieces made, and the path's place in the page and the demo |
 | [Integrating the local stacks](plans/integration-2026-11-07.md) | Every local stack cut from `main` that evening -- testing, the fixes, standardize, homing, family, streamdeck -- finished, merged in landing order into one tree, tested once as a whole by the integration checklist, its owed fixes taken home, and landed on the owner's word: the phases, the conflicts found and each one's resolution, and what only the bench shows |
 | [One way of doing each thing](plans/standardization-2026-11-07.md) | What the package does two ways and the one standard each folds into: a dialect's rules in its own module, one module for the state folder, one finder for every bought engine, a board by its part, a kind of machine from its dialect; in slices, three of them removals with the owner's yes; what is left, named with its reason |
 | [The family's journeys through the viewer](plans/family-journeys-2026-11-07.md) | The page shaped round the paths through the family's work: the sentences telling a person what to do gone, a control surfacing when what it needs holds, a procedure's step and a member each a door to the window its work is in, and the family one focused system with a view of its own; in four slices, each a branch |

@@ -4,9 +4,10 @@ The connection is the deliverable, not any particular finder. This copies the
 pattern already used by ``apothecary/models/blackbox.py``: a checkable
 protocol, a plain stand-in, and a field recording where the answer came from.
 
-Two finders ship. That is on purpose — one implementation is an interface with
-a single caller wearing a disguise, and it proves nothing about whether the
-connection is real.
+Three finders ship: one reads a description a person wrote, one gathers dark
+pixels into blobs, one reads what a drawing's strokes enclose. More than one is
+on purpose — one implementation is an interface with a single caller wearing a
+disguise, and it proves nothing about whether the connection is real.
 
 Every finder must work with the network switched off
 (``apothecary/stays_local.py``).
@@ -33,6 +34,9 @@ class ShapeFinder(Protocol):
     def look(self, image: Path) -> Picture:
         """Look at one picture file and report what was found."""
         ...
+
+    # A finder for one kind of picture may also have ``reads(image) -> bool``:
+    # Find shapes offers it only for a picture it answers True for.
 
 
 class UnknownFinderError(KeyError):
@@ -63,11 +67,13 @@ def get(name: str) -> ShapeFinder:
 
 
 def _register_built_ins() -> None:
+    from .outline import OutlineFinder
     from .plain import PlainFinder
     from .stated import StatedFinder
 
     register("stated", StatedFinder)
     register("plain", PlainFinder)
+    register("outline", OutlineFinder)
 
 
 _register_built_ins()

@@ -273,6 +273,15 @@ def check(finder: str, count: int):
         ("small", dict(smallest=0.05, largest=0.10)),
         ("very small", dict(smallest=0.03, largest=0.06)),
         ("crowded", dict(crowd=8, smallest=0.08, largest=0.14)),
+        ("in outline", dict(stroke=0.012)),
+        ("outline, turned", dict(stroke=0.012, turn=True)),
+        ("outline, a gap", dict(stroke=0.012, gap=3)),
+        ("outline, faint", dict(stroke=0.012, faintness=0.6)),
+        ("outline, shadowed", dict(stroke=0.012, shadow=0.4)),
+        ("outline, glare", dict(stroke=0.012, glare=True)),
+        ("outline, smeared", dict(stroke=0.012, smear=True)),
+        ("outline, with notes", dict(stroke=0.012, notes=True)),
+        ("outline, framed", dict(stroke=0.012, framed=True)),
     ]
 
     click.echo(f"measuring the {finder!r} finder on {count} pictures per row")
