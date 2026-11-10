@@ -29,7 +29,6 @@ from apothecary.projects.parts.stl_renderer import (
     get_renderer,
     has_summary,
     read_params_sidecar,
-    render_part,
     scad_dependencies,
     scad_literal,
     write_params_sidecar,
@@ -220,35 +219,22 @@ class TestBuildStl:
         assert result.error_message == "needs a newer OpenSCAD"
         assert fake.calls == [] and not (tmp_path / "block.stl").exists()
 
-    @pytest.mark.parametrize(
-        "rotation", [Vector3D(), Vector3D(x=90, y=0, z=0)], ids=["upright", "rotated"]
-    )
-    def test_the_scad_gets_the_parts_translation_and_the_sidecar_the_params(
-        self, tmp_path, rotation
-    ):
+    def test_the_scad_gets_the_parts_translation_and_the_sidecar_the_params(self, tmp_path):
         class Renamed(BasePart):
             def scad_overrides(self, params):
                 return {f"size_{name}": value for name, value in params.items()}
 
         scad = tmp_path / "block.scad"
         scad.write_text("size_x = 10;\ncube([size_x, 20, 30]);\n")
-        part = Renamed(name="block", source_file=scad, params_model=Size, display_rotation=rotation)
+        part = Renamed(name="block", source_file=scad, params_model=Size)
         fake = FakeRenderer()
         assert build_stl(part, {"x": 12}, renderer=fake).success
         assert fake.calls[0] == (scad, {"size_x": 12})
         assert read_params_sidecar(part.get_stl_output_path())["params"] == {"x": 12}
         assert build_stl(part, {"x": 12}, renderer=fake).skipped == "fresh"
 
-    @pytest.mark.parametrize(
-        "rotation", [Vector3D(), Vector3D(x=90, y=0, z=0)], ids=["upright", "rotated"]
-    )
-    def test_python_geometry_is_what_renders(self, tmp_path, rotation):
-        part = _Built(
-            name="block",
-            source_file=_part(tmp_path).source_file,
-            params_model=Size,
-            display_rotation=rotation,
-        )
+    def test_python_geometry_is_what_renders(self, tmp_path):
+        part = _Built(name="block", source_file=_part(tmp_path).source_file, params_model=Size)
         seen = []
 
         class Reading(FakeRenderer):
@@ -288,19 +274,6 @@ class TestBuildStl:
         assert build_stl(part, renderer=Reading()).success
         assert f'import("{(tmp_path / "mesh.stl").as_posix()}"' in seen[0]
 
-    @needs_openscad
-    def test_python_geometry_is_turned_by_display_rotation(self, tmp_path):
-        part = _Built(
-            name="block",
-            source_file=_part(tmp_path).source_file,
-            params_model=Size,
-            display_rotation=Vector3D(x=90, y=0, z=0),
-        )
-        result = build_stl(part, {"x": 12})
-        assert result.success, result.error_message
-        lo, hi = bounds(read_mesh(result.stl_path))
-        assert [round(hi[axis] - lo[axis], 3) for axis in range(3)] == [12, 30, 40]
-
     def test_a_default_build_clears_a_variants_sidecar(self, tmp_path):
         part, fake = _part(tmp_path), FakeRenderer()
         build_stl(part, {"x": 12}, renderer=fake)
@@ -308,17 +281,6 @@ class TestBuildStl:
         assert read_params_sidecar(stl)["params"] == {"x": 12}
         build_stl(part, renderer=fake)
         assert read_params_sidecar(stl) is None
-
-    @needs_openscad
-    def test_display_rotation_is_applied(self, tmp_path):
-        part = _part(tmp_path, display_rotation=Vector3D(x=90, y=0, z=0))
-        result = build_stl(part)
-        assert result.success, result.error_message
-        lo, hi = bounds(read_mesh(result.stl_path))
-        size = [round(hi[axis] - lo[axis], 3) for axis in range(3)]
-        assert size == [10, 30, 20]  # 10 x 20 x 30, turned about X
-        # The upright render and its wrapper live in a scratch directory.
-        assert sorted(p.name for p in tmp_path.iterdir()) == ["block.scad", "block.stl"]
 
     @needs_openscad
     def test_the_footpedal_is_built_as_its_scad_lays_it(self, tmp_path):
@@ -412,13 +374,8 @@ class TestBuildStl:
         assert sorted(declared) == ["fifel", "footpedal", "solderfan"]
         assert offered == {}
 
-    def test_no_part_of_the_library_is_turned(self):
-        """Each part's SCAD lays it the way up it prints, which its STL is: none sets
-        ``display_rotation`` (docs/parts-authoring.md#how-it-rests)."""
-        turned = {p.name: p.display_rotation.to_list() for p in _library()}
-        assert {name: turn for name, turn in turned.items() if any(turn)} == {}
-
     def test_the_rest_definitions_reach_the_scad_beside_the_parameters(self, tmp_path):
+        (tmp_path / "block.scad").write_text("x = 10;\nstanding = false;\ncube([x, 20, 30]);\n")
         part, fake = _part(tmp_path, rest={"standing": True}), FakeRenderer()
         rests = build_stl(part, {"x": 12}, renderer=fake, pose="rest")
         assert rests.success and rests.stl_path == tmp_path / "block.rest.stl"
@@ -548,27 +505,6 @@ class TestStoppingARender:
         result = OpenSCADRenderer(str(exe)).render_stl(scad, tmp_path / "p.stl", cancel=cancel)
         assert result.cancelled and _renders(exe) == []
 
-    def test_a_turned_part_does_not_start_its_second_run_once_cancelled(self, tmp_path):
-        exe = _scripted_openscad(tmp_path / "bin" / "openscad", "2021.01")
-        cancel = Cancellation()
-
-        class CancelledAfterOne(OpenSCADRenderer):
-            def render_stl(self, *args, **kwargs):
-                result = super().render_stl(*args, **kwargs)
-                cancel.cancel()
-                return result
-
-        result = render_part(
-            _part(tmp_path),
-            tmp_path / "out.stl",
-            renderer=CancelledAfterOne(str(exe)),
-            rotation=[90, 0, 0],
-            cancel=cancel,
-        )
-        assert result.cancelled
-        assert len(_renders(exe)) == 1
-        assert not (tmp_path / "out.stl").exists()
-
 
 class TestMeasuredBounds:
     """The bounding box OpenSCAD measured, where its summary says it."""
@@ -591,26 +527,6 @@ class TestMeasuredBounds:
         result = OpenSCADRenderer(str(exe)).render_stl(scad, tmp_path / "part.stl")
         assert result.success and result.measured is None
         assert "--summary" not in _renders(exe)[0]
-
-    def test_a_turned_part_keeps_the_upright_measurement(self, tmp_path):
-        """Declared bounds are the upright SCAD's (`apothecary parts verify`)."""
-        exe = _scripted_openscad(
-            tmp_path / "bin" / "openscad",
-            "2026.09.27",
-            # The turning run measures something else, which is not kept.
-            'case "$*" in *rotate.scad*) for arg in "$@"; do case "$arg" in '
-            '--summary-file=*) printf \'{"geometry":{"bounding_box":{"min":[0,0,0],'
-            '"max":[1,1,1],"size":[1,1,1]}}}\' > "${arg#--summary-file=}";; esac; done; '
-            'printf "solid t\\nendsolid t\\n" > "$2"; exit 0;; esac',
-        )
-        result = render_part(
-            _part(tmp_path),
-            tmp_path / "out.stl",
-            renderer=OpenSCADRenderer(str(exe)),
-            rotation=[90, 0, 0],
-        )
-        assert result.success
-        assert result.measured["size"] == [10, 20, 3]
 
     @needs_openscad
     def test_the_installed_openscad_measures_a_cube_where_it_can(self, tmp_path):

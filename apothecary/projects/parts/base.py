@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Type
 
-from pydantic import BaseModel, Field, computed_field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from apothecary.core import OpenSCADObject
 from apothecary.models import (
@@ -12,7 +12,6 @@ from apothecary.models import (
     BoundingBox3D,
     Color,
     PrintSettings,
-    Vector3D,
 )
 
 from .stl_renderer import find_openscad, openscad_meets, parse_openscad_version, scad_definitions
@@ -30,6 +29,15 @@ class ContestedValue(BaseModel):
     value: float
     source: str
     note: str = ""
+
+
+# A part is never turned after it renders: a wrapper or a part.json that says
+# display_rotation is refused when the part loads, saying what to do instead.
+TURN_REFUSED = (
+    "display_rotation turns nothing: a part's SCAD lays it the way up it prints, which is "
+    "its STL. Lay it so in the SCAD, and declare rest, the -D definitions that draw it as "
+    "it stands in use, for how it rests (docs/parts-authoring.md#how-it-rests)"
+)
 
 
 def scad_variables(path: Path, text: Optional[str] = None) -> Set[str]:
@@ -63,10 +71,6 @@ class BasePart(BaseModel):
     preview_color: Color = Field(default_factory=lambda: GRAY)
     print_settings: Optional[PrintSettings] = None
 
-    # Display orientation: rotation [rx, ry, rz] in degrees to apply
-    # for preferred "up" orientation (Z-up, sitting on ground plane)
-    display_rotation: Vector3D = Field(default_factory=Vector3D)
-
     # How it rests, where that is not how it prints: the -D definitions that make
     # its SCAD draw it as it stands in use (the footpedal's {"print": False}). The
     # world draws that; its STL, what is sliced, stays the print pose. None: it
@@ -80,6 +84,13 @@ class BasePart(BaseModel):
     # The oldest OpenSCAD that renders the part, as `openscad --version` numbers
     # it (2021.01, or a snapshot's 2025.03.15); None when any will do.
     openscad_min_version: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _not_turned(cls, data: Any) -> Any:
+        if isinstance(data, Mapping) and "display_rotation" in data:
+            raise ValueError(TURN_REFUSED)
+        return data
 
     @field_validator("openscad_min_version")
     @classmethod
@@ -97,6 +108,20 @@ class BasePart(BaseModel):
             except (TypeError, ValueError) as exc:
                 raise ValueError(f"rest: {exc}") from None
         return value
+
+    @model_validator(mode="after")
+    def _rests_by_its_own_names(self) -> "BasePart":
+        # A -D name the SCAD does not assign draws nothing, so a rest that names one
+        # would rest as it prints and say nothing: it is refused with what is assigned.
+        if self.rest and self.source_file.exists():
+            assigned = scad_variables(self.source_file)
+            unknown = sorted(set(self.rest) - assigned)
+            if unknown:
+                raise ValueError(
+                    f"rest: {', '.join(unknown)} is not assigned in {self.source_file.name}, "
+                    "so it would draw nothing; rest names the SCAD's own variables"
+                )
+        return self
 
     @property
     def exists(self) -> bool:
@@ -161,6 +186,12 @@ class BasePart(BaseModel):
         """
         if not params:
             return {}
+        resting = sorted(set(params) & set(self.rest or {}))
+        if resting:
+            raise ValueError(
+                f"{', '.join(resting)} says how {self.name} rests, in its rest, and is no "
+                "parameter: set by hand, it would turn what a slice reads"
+            )
         if self.params_model is None:
             # No Python model: the SCAD's own top-level variables are what -D reaches.
             if scad_text is not None:

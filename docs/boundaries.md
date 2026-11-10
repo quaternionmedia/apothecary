@@ -84,10 +84,10 @@ What crosses between the stages of each loop, where its form is stated, and what
 
 | From, to | What crosses | Stated in | Held by |
 |---|---|---|---|
-| a part, its STL | `build_stl` in `apothecary/projects/parts/stl_renderer.py`: the STL beside the SCAD, its parameters in a sidecar beside it | `apothecary/projects/parts/base.py`, `apothecary/projects/parts/stl_renderer.py` | `tests/test_stl_renderer.py::test_display_rotation_is_applied` |
-| a change, a variant | `apothecary/projects/parts/variants.py`: an STL in the cache under its key, and `measured`, the STL's box with the part's turn undone | its module docstring | `tests/test_part_variants.py` |
+| a part, its STL | `build_stl` in `apothecary/projects/parts/stl_renderer.py`: the SCAD's own render beside it, never turned, its parameters in a sidecar beside it; asked for, its rest pose beside that, `<name>.rest.stl` | `apothecary/projects/parts/base.py`, `apothecary/projects/parts/stl_renderer.py` | `tests/test_stl_renderer.py::test_a_part_turned_to_rest_prints_as_its_scad_lays_it` |
+| a change, a variant | `apothecary/projects/parts/variants.py`: an STL in the cache under its key, and `measured`, the STL's box | its module docstring | `tests/test_part_variants.py` |
 | a variant, git | `apothecary/projects/parts/saved.py`: the SCAD's text as a ref under `refs/apothecary/variants/`, in the repository `APOTHECARY_VARIANTS_REPO` names | its module docstring | `tests/test_saved_variants.py` |
-| an STL, a slice | `apothecary/slicer/service.py` copies it into the slice's work folder; `apothecary/slicer/modules/orcaslicer.py` slices it as it is turned (`--orient 0`), with the printer's profile, `parts/ender3/slicer.json` | [Slicing](slicer.md) | `tests/test_slicer.py` |
+| an STL, a slice | `apothecary/slicer/service.py` copies it into the slice's work folder; `apothecary/slicer/modules/orcaslicer.py` slices it as its SCAD lays it (`--orient 0`), with the printer's profile, `parts/ender3/slicer.json` | [Slicing](slicer.md) | `tests/test_slicer.py` |
 | a slice, a job | the G-code kept by `save_print_file` in `apothecary/firmware/devices.py`, the slice's record beside it; a job names it by its file id while it is kept | `apothecary/jobs.py` | `tests/test_jobs.py` |
 | a job, the printer | the lines streamed in Marlin's dialect, on the port pinned to the printer's node by its board's identity | [Firmware](firmware.md) | `tests/test_firmware_gcode.py` |
 
@@ -125,13 +125,16 @@ What crosses between the stages of each loop, where its form is stated, and what
 | a picture, a frame | `apothecary/evidence/frames.py` keeps it with the poll it was taken beside, under a budget | [The Working space](working-space.md) | `walkthrough/18-the-working-space.md` |
 | the log, the page | `apothecary/evidence/view.py`, at `GET /sites/{site}/evidence` | [The Working space](working-space.md) | `tests/test_evidence.py` |
 
-### One frame for a part
+### Two poses for a part
 
-A part's STL is its SCAD turned by its `display_rotation`. The slicer prints that STL as
-it is turned, and a site draws it in that frame, z up, since a node carries no turn of
-its own: a part stands in a site the way up it prints, and its turn is both. `measured`,
-the Selected window's Footprint and the readiness check undo the turn to compare with
-the declared bounds, which are in the SCAD's own frame. The z-up turn into three.js's
-frame is written in five places: the page's `sceneAt` and `applyScadAxisTurn`,
-`apothecary/static/machine_marks.js`, `apothecary/static/lighting.js` and
-`apothecary/static/picture_marks.js`.
+A part's STL is its SCAD's own render, never turned: the way up it prints, which
+the slicer prints as it lies and a download is. A part that stands otherwise in use
+declares its rest pose, `rest`, the `-D` definitions that make its SCAD draw it so
+([How it rests](parts-authoring.md#how-it-rests)), and a part that says
+`display_rotation` is refused when it loads. The page draws a part as it rests,
+asking for `?pose=rest`, and a site draws it in that frame, z up, since a node
+carries no turn of its own. The bounds a part declares, `measured`, the readiness
+check and the slicer stay in the print pose, the SCAD's own frame. The z-up turn
+into three.js's frame is written in five places: the page's `sceneAt` and
+`applyScadAxisTurn`, `apothecary/static/machine_marks.js`,
+`apothecary/static/lighting.js` and `apothecary/static/picture_marks.js`.

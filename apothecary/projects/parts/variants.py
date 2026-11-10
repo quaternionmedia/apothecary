@@ -5,7 +5,7 @@ key computed from everything that decides the mesh: the SCAD and every file
 it includes, uses or imports (or, for a part built by Python geometry, the
 SCAD that geometry writes; or a draft of the part's SCAD, its text standing
 in for the file's), the parameters and the ``-D`` definitions they
-become, the part's display rotation and rest pose, the OpenSCAD that
+become, the part's rest pose, the OpenSCAD that
 renders it (its version line) and the backend it uses. The same request is
 the same key, so it is rendered once; a different request is a different
 file, so two tabs applying different values never write the same file. A
@@ -14,7 +14,7 @@ changed include is a different key, never a stale hit.
 Layout, under ``$APOTHECARY_CACHE_DIR/part_stl`` (by default the checkout's
 ignored ``.cache``)::
 
-    <part>/<key>.stl    the mesh, display rotation applied, binary STL
+    <part>/<key>.stl    the mesh, binary STL
                         (``--export-format=binstl``, else turned binary here)
     <part>/<key>.json   what made it: params, OpenSCAD, backend, when, how
                         long, the bounding box OpenSCAD measured, and what
@@ -59,7 +59,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import os
 import re
 import shutil
@@ -111,7 +110,7 @@ from .stl_renderer import (
 PART_VARIANTS_KEEP = 64
 
 # Bumped when what goes into a key changes, so an old entry is never a hit.
-KEY_SCHEME = "apothecary-part-variant-1"
+KEY_SCHEME = "apothecary-part-variant-2"
 
 KEY_PATTERN = re.compile(r"^[0-9a-f]{24}$")
 
@@ -181,23 +180,9 @@ FROM_SUMMARY = "summary"
 FROM_STL = "stl"
 
 
-def _unturned(point: Tuple[float, float, float], rotation: List[float]):
-    """``point`` turned back by OpenSCAD's ``rotate(rotation)``: that turns about
-    x, then y, then z, so this undoes z, then y, then x."""
-    x, y, z = point
-    rx, ry, rz = (math.radians(-angle) for angle in rotation)
-    x, y = x * math.cos(rz) - y * math.sin(rz), x * math.sin(rz) + y * math.cos(rz)
-    x, z = x * math.cos(ry) + z * math.sin(ry), -x * math.sin(ry) + z * math.cos(ry)
-    y, z = y * math.cos(rx) - z * math.sin(rx), y * math.sin(rx) + z * math.cos(rx)
-    return (x, y, z)
-
-
 @lru_cache(maxsize=256)
-def _measured(path: str, size: int, mtime_ns: int, rotation: Tuple[float, ...]):
-    triangles = read_mesh(Path(path))
-    if any(rotation):
-        triangles = [tuple(_unturned(c, list(rotation)) for c in t) for t in triangles]
-    lo, hi = mesh_bounds(triangles)
+def _measured(path: str, size: int, mtime_ns: int):
+    lo, hi = mesh_bounds(read_mesh(Path(path)))
     clean = [[round(v, 6) + 0.0 for v in side] for side in (lo, hi)]
     return {
         "min": clean[0],
@@ -206,15 +191,12 @@ def _measured(path: str, size: int, mtime_ns: int, rotation: Tuple[float, ...]):
     }
 
 
-def measure_stl(stl: Path, rotation: Optional[List[float]] = None) -> Optional[Dict[str, Any]]:
-    """An STL's bounding box in the frame a part's bounds are declared in: the
-    part's display rotation turned back, as OpenSCAD's summary of the upright
-    render would say it. None when there is no STL or no mesh in it."""
+def measure_stl(stl: Path) -> Optional[Dict[str, Any]]:
+    """An STL's bounding box, as OpenSCAD's summary of its render would say it.
+    None when there is no STL or no mesh in it."""
     try:
         stat = Path(stl).stat()
-        return _measured(
-            str(stl), stat.st_size, stat.st_mtime_ns, tuple(float(a) for a in rotation or ())
-        )
+        return _measured(str(stl), stat.st_size, stat.st_mtime_ns)
     except (OSError, MeshError):
         return None
 
@@ -284,7 +266,6 @@ def variant_key(
     except TypeError as exc:  # a value -D cannot carry: the request's fault
         raise ValueError(str(exc)) from None
     add("params", json.dumps(dict(params), sort_keys=True, default=_recordable))
-    add("rotation", json.dumps(part.display_rotation.to_list()))
     if part.rest:
         add("rest", json.dumps(part.rest, sort_keys=True, default=_recordable))
     add("openscad", openscad_of(renderer) or "none")
@@ -496,12 +477,12 @@ class Made:
     def success(self) -> bool:
         return self.failure is None
 
-    def measure(self, measured: Optional[Dict[str, Any]], rotation: List[float]) -> None:
+    def measure(self, measured: Optional[Dict[str, Any]]) -> None:
         """``measured`` as OpenSCAD's summary said it, else read off the STL."""
         if measured:
             self.measured, self.measured_from = measured, FROM_SUMMARY
             return
-        self.measured = measure_stl(self.stl_path, rotation) if self.stl_path else None
+        self.measured = measure_stl(self.stl_path) if self.stl_path else None
         self.measured_from = FROM_STL if self.measured else None
 
 
@@ -625,7 +606,6 @@ def _printed(
     """``make_variant``'s request in the print pose, its ``params`` and ``draft``
     as it read them; ``chosen`` the OpenSCAD the caller named, if any."""
     canonical = part.get_stl_output_path()
-    rotation = part.display_rotation.to_list()
     holds_default = place and draft is None and read_params_sidecar(canonical) is None
     key = variant_key(part, params, renderer, draft=draft)
     stl, record_path = variant_paths(part, key, cache)
@@ -650,7 +630,7 @@ def _printed(
         if record is None and not force and draft is None and _is_fresh(part, canonical, params):
             # The part's own STL answers it; it was not rendered by this cache.
             made.stl_path, made.saved = canonical, True
-            made.measure(None, rotation)
+            made.measure(None)
             return made
         if record is None:
             # As build_stl asks: of the OpenSCAD the caller chose, else of
@@ -665,7 +645,7 @@ def _printed(
             compiled = None if force else compiled_for(part, params, renderer, draft, cancel)
             twin_key = compiled_key(part, compiled, renderer) if compiled else None
             if twin_key is not None and _same_render(
-                part, key, twin_key, made, draft, compiled, rotation, cache
+                part, key, twin_key, made, draft, compiled, cache
             ):
                 return _finished(part, made, params, holds_default, force, canonical, draft, stl)
             # Rendered outside the cache, and moved into it only once nothing
@@ -675,7 +655,7 @@ def _printed(
             work.parent.mkdir(parents=True, exist_ok=True)
             with _written(part, draft) as scad:
                 result = render_part(
-                    part, work, params, timeout, renderer, rotation, cancel, scad, binary=True
+                    part, work, params, timeout, renderer, cancel, scad, binary=True
                 )
                 made.messages = _messages_of(part, result, scad)
             made.rendered, made.result = True, result
@@ -699,7 +679,7 @@ def _printed(
                         file=error.file if error else None,
                         line=error.line if error else None,
                     )
-                    measured = result.measured or measure_stl(work, rotation)
+                    measured = result.measured or measure_stl(work)
                     made.partial.measured = measured
                     made.partial.measured_from = (
                         (FROM_SUMMARY if result.measured else FROM_STL) if measured else None
@@ -712,7 +692,7 @@ def _printed(
             binary_stl(work)
             os.replace(work, stl)
             made.key, made.stl_path = key, stl
-            made.measure(result.measured, rotation)
+            made.measure(result.measured)
             record = {
                 "part": part.name,
                 "key": key,
@@ -744,7 +724,7 @@ def _printed(
             if record.get("measured") and record.get("measured_from"):
                 made.measured, made.measured_from = record["measured"], record["measured_from"]
             else:
-                made.measure(None, rotation)
+                made.measure(None)
         return _finished(part, made, params, holds_default, force, canonical, draft, stl)
 
 
@@ -779,7 +759,7 @@ def _rested(part, made, params, force, timeout, chosen, renderer, cancel, cache,
             return
         made.stl_path, made.rendered = result.stl_path, made.rendered or result.skipped is None
         made.render_time_seconds += result.render_time_seconds
-        made.measure(result.measured, [])
+        made.measure(result.measured)
         return
     key = made.key
     stl, record_path = variant_paths(part, key, cache, REST)
@@ -845,7 +825,7 @@ def _rested(part, made, params, force, timeout, chosen, renderer, cancel, cache,
     if record.get("measured") and record.get("measured_from"):
         made.measured, made.measured_from = record["measured"], record["measured_from"]
     else:
-        made.measure(None, [])
+        made.measure(None)
 
 
 def _rest_of_twin(part: BasePart, key: str, compiled: str, cache: Optional[Path]) -> Optional[dict]:
@@ -958,7 +938,7 @@ def compiled_for(
 
 def compiled_key(part: BasePart, compiled, renderer, pose: str = PRINT) -> Optional[str]:
     """Where a compiled tree's render is filed: the tree, and what else decides
-    the mesh -- the OpenSCAD and backend, the display rotation and rest pose,
+    the mesh -- the OpenSCAD and backend, the rest pose,
     and the files the SCAD imports that are not SCAD (a mesh, a drawing), by
     their bytes; with ``pose`` rest, the pose too, so a rest pose's compile is
     never taken for a print pose's.
@@ -970,7 +950,6 @@ def compiled_key(part: BasePart, compiled, renderer, pose: str = PRINT) -> Optio
         ("scheme", KEY_SCHEME + "-compiled"),
         ("part", part.name),
         ("csg", compiled.digest),
-        ("rotation", json.dumps(part.display_rotation.to_list())),
         ("openscad", openscad_of(renderer) or "none"),
         ("backend", backend_of(renderer)),
     ):
@@ -1000,7 +979,6 @@ def _same_render(
     made: Made,
     draft: Optional[str],
     compile_said,
-    rotation,
     cache: Optional[Path],
 ) -> bool:
     """Whether a variant compiled the same is in the cache; if so it is filed
@@ -1034,7 +1012,7 @@ def _same_render(
     if record.get("measured") and record.get("measured_from"):
         made.measured, made.measured_from = record["measured"], record["measured_from"]
     else:
-        made.measure(None, rotation)
+        made.measure(None)
     mine = {
         **record,
         "key": key,
@@ -1181,7 +1159,7 @@ def part_state(part: BasePart, url_name: Optional[str] = None, pose: str = PRINT
         measured = measure_stl(drawn) if drawn is not None else None
         url = f"{url}?pose={REST}" if drawn is not None else None
     else:
-        measured = measure_stl(canonical, part.display_rotation.to_list()) if exists else None
+        measured = measure_stl(canonical) if exists else None
         url = url if exists else None
     return PartState(
         part=part.name,
@@ -1238,7 +1216,7 @@ def variant_record(
     measured, source = shown.get("measured"), shown.get("measured_from")
     if not (measured and source):
         stl, _ = variant_paths(part, key, pose=pose)
-        measured = measure_stl(stl, part.display_rotation.to_list() if pose == PRINT else None)
+        measured = measure_stl(stl)
         source = FROM_STL if measured else None
     params = dict(record.get("params") or {})
     draft = record.get("draft")

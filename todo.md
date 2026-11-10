@@ -168,12 +168,9 @@ here: run `apothecary problems`.
     the node's build volume (the Machine card's volume is the Ender's until `where`
     answers), and the controller's own `$130`-`$132` are read by the table probe
     alone.
-  - A part's turn is its print orientation and its place in a site both, and a
-    node has no turn of its own. footpedal's SCAD lies on its button face;
-    solderfan's turn stands its tray on edge, 47 mm through the garage's floor;
-    fifel's lays the fife down, against its own comment. A variant is drawn on its
-    `measured` box, off its envelope for a SCAD whose origin is not its corner. The
-    fake OrcaSlicer ignores the model, so only the slicer's argv is tested.
+  - A variant is drawn on its `measured` box, off its envelope for a SCAD whose
+    origin is not its corner. The fake OrcaSlicer ignores the model, so only the
+    slicer's argv is tested.
   - A part's own STL: a slice of the part rebuilds it at its defaults and drops a
     CLI variant's sidecar, and `GET /parts/{name}/stl` does not say which
     parameters the file it serves holds.
@@ -199,6 +196,12 @@ here: run `apothecary problems`.
   - A cut asked for by port alone keeps its file under the port's name;
     `apothecary/cam/api.py` tells a `SlicerError` by its class's name; a node's path
     and a variant's key are matched by patterns written in three places.
+- A part.json and a wrapper drop a key they do not know, unread, so a misspelt
+  `display_rotation` (`displayRotation`) is ignored where the spelled one is
+  refused; `extra="forbid"` on `Description`, `Provenance` and `BasePart` would
+  refuse it, and no part.json in parts/ has a key they do not know. pydantic's
+  calls that skip validators (`model_construct`, `model_copy`) and a subclass
+  that declares the field get past it too.
 
 ## Next round
 

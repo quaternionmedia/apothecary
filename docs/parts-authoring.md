@@ -78,15 +78,15 @@ DEFAULT = create(ROOT)
 `DEFAULT` is what the CLI, the API and the viewer import. A part with no
 parameters passes no `params_model` and states its envelope as
 `default_bounds=BoundingBox3D(...)` instead of overriding `get_bounds`.
-`display_rotation`, `rest` ([below](#how-it-rests)), `print_settings` and
-`contested` are further `BasePart` fields; [Geometry models](models.md)
-describes the types.
+`rest` ([below](#how-it-rests)), `print_settings` and `contested` are
+further `BasePart` fields; [Geometry models](models.md) describes the
+types.
 
 ## A sidecar instead of a wrapper
 
 A folder whose SCAD has a `part.json` beside it and no Python module is a
 *described* part: the sidecar says what the wrapper would (description,
-category, tags, colour, rotation, rest pose, bounds, provenance). See
+category, tags, colour, rest pose, bounds, provenance). See
 [Described parts](geometry-from-elsewhere.md#described-parts);
 `apothecary parts import` writes one for a mesh made elsewhere. A described
 part has no `Params` model, so its overrides are checked against the SCAD
@@ -94,9 +94,8 @@ file's own top-level variables.
 
 ## How it rests
 
-A part's STL is the way up it prints: its SCAD's render, turned by
-`display_rotation` where it has one, and no part in the library has one. That
-is what a slice and a download read. A part that stands otherwise in use
+A part's STL is the way up it prints: its SCAD's own render, never turned.
+That is what a slice and a download read. A part that stands otherwise in use
 declares its rest pose, `rest`: the `-D` definitions that make its SCAD draw it
 as it rests. `footpedal.scad` lays the wedge on its button face unless `print`
 is false, so its wrapper says `rest={"print": False}`; `fifel.py` says the
@@ -104,15 +103,27 @@ same of the fife, which its SCAD stands on its head unless `print` is false;
 and `solderfan`, a described part, says it in its `part.json` as
 `"rest": {"print": false}`. Each SCAD assigns its `print` after
 `/* [Hidden] */`, so neither the part's controls nor OpenSCAD's customizer
-offer it: set by hand, it would change which way up a slice is.
+offer it, and a `-p` override or a variant's parameters that name it are
+refused: set by hand, it would change which way up a slice is. A `rest` that
+names a variable its SCAD does not assign would draw nothing, and is refused
+when the part loads.
+
+A wrapper or a `part.json` that says `display_rotation` is refused when the
+part loads, with what to do instead: lay the part in its SCAD the way up it
+prints, and declare `rest` for how it stands in use. A refused described part
+is left off the library's grid; `apothecary problems` reports it broken, and
+its `--detail` is those words; `apothecary check` says its part.json does not
+load; `GET /parts/{name}` answers 500 with the words; `apothecary parts list`
+still lists its folder.
 
 The rest pose is the same SCAD, those definitions given beside the part's
-parameters, and never turned, so it follows every parameter and every edit of
-the SCAD: the footpedal stands on its base, its button face tilted by `theta`,
-whatever `theta` is, and the fife lies on the floor whatever its `bore`. It is rendered only when it is asked for, into a file of
-its own: `<name>.rest.stl` beside the part's STL, with its own freshness and
-params sidecar, and a variant's beside the variant in the cache, under the
-variant's key, kept as long as the variant is.
+parameters, so it follows every parameter and every edit of the SCAD: the
+footpedal stands on its base, its button face tilted by `theta`, whatever
+`theta` is, and the fife lies on the floor whatever its `bore`. It is rendered
+only when it is asked for, into a file of its own: `<name>.rest.stl` beside
+the part's STL, with its own freshness and params sidecar, and a variant's
+beside the variant in the cache, under the variant's key, kept as long as the
+variant is.
 
 The page draws a part as it rests, asking for it with `?pose=rest`:
 `GET /parts/{name}/stl` and `/parts/{name}/state`, a variant's

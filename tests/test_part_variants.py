@@ -162,20 +162,14 @@ BOX = [((0, 0, 0), (10, 0, 0), (10, 20, 30)), ((0, 0, 0), (0, 20, 30), (10, 20, 
 
 
 class TestMeasuringAnSTL:
-    def test_an_stl_is_measured_in_the_frame_its_bounds_are_declared_in(self, tmp_path):
-        upright = tmp_path / "upright.stl"
-        write_stl(BOX, upright)
-        assert measure_stl(upright) == {
+    def test_an_stl_is_measured_as_it_lies(self, tmp_path):
+        stl = tmp_path / "box.stl"
+        write_stl(BOX, stl)
+        assert measure_stl(stl) == {
             "min": [0, 0, 0],
             "max": [10, 20, 30],
             "size": [10, 20, 30],
         }
-        # The same box turned by rotate([90, 0, 0]), as a part's display rotation turns it:
-        # (x, y, z) -> (x, -z, y). Measured, it is turned back.
-        turned = tmp_path / "turned.stl"
-        write_stl([tuple((x, -z, y) for x, y, z in t) for t in BOX], turned)
-        assert measure_stl(turned)["size"] == [10, 30, 20]
-        assert measure_stl(turned, [90, 0, 0]) == measure_stl(upright)
 
     def test_nothing_to_measure_is_none(self, tmp_path):
         empty = tmp_path / "empty.stl"
@@ -477,6 +471,35 @@ class TestTheGenerateRoute:
 
         again = _generate(client, {"size": 12}).json()
         assert again["regenerated"] is False and again["variant"] == body["variant"]
+
+    def test_no_answer_says_how_a_part_is_turned(self, cube, openscad):
+        """A part is never turned after it renders: the parts, a part, its state and a
+        variant's record name no rotation, at any depth of their JSON."""
+        openscad()
+        client = TestClient(app)
+        key = _generate(client, {"size": 12}).json()["variant"]
+
+        def turns(found, at=""):
+            if isinstance(found, dict):
+                for name, value in found.items():
+                    if "rotation" in name.lower():
+                        yield f"{at}/{name}"
+                    yield from turns(value, f"{at}/{name}")
+            elif isinstance(found, list):
+                for i, value in enumerate(found):
+                    yield from turns(value, f"{at}[{i}]")
+
+        for url in (
+            "/parts",
+            "/parts/calibration_cube",
+            "/parts/calibration_cube/state",
+            f"/parts/calibration_cube/variants/{key}",
+            "/parts/solderfan",
+            "/parts/footpedal/state",
+        ):
+            answer = client.get(url)
+            assert answer.status_code == 200, (url, answer.text)
+            assert list(turns(answer.json())) == [], url
 
     def test_a_variant_is_described_by_its_key(self, cube, openscad):
         """What a reloaded tab, which has only the key, starts from."""

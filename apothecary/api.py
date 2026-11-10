@@ -1153,7 +1153,7 @@ def drawn_variant(part: BasePart, key: str):
     if not measured:
         from .projects.parts.variants import measure_stl
 
-        measured = measure_stl(stl, part.display_rotation.to_list())
+        measured = measure_stl(stl)
     return Drawn(
         key=key,
         stl=stl,

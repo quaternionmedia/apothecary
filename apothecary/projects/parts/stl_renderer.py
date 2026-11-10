@@ -62,9 +62,9 @@ def scad_literal(value: object) -> str:
 
 
 # The two ways up a part is had (docs/parts-authoring.md#how-it-rests): as it
-# prints, its STL turned by display_rotation, what is sliced and downloaded; and
-# as it rests, what the world draws: its SCAD with the part's ``rest`` definitions,
-# unturned. A part that declares no rest pose rests as it prints.
+# prints, its STL, its SCAD's own render, what is sliced and downloaded; and as it
+# rests, what the world draws: its SCAD with the part's ``rest`` definitions. A
+# part that declares no rest pose rests as it prints.
 PRINT, REST = "print", "rest"
 Pose = Literal["print", "rest"]
 
@@ -991,8 +991,8 @@ def scad_dependencies(scad: Path, text: Optional[str] = None) -> Dict[str, Optio
 def _sources(part: BasePart) -> List[Path]:
     """What a part's STL is built from: its SCAD and every file the SCAD
     includes, uses or imports, its part.json when it has one, and each loaded
-    wrapper module whose DEFAULT is this part; either sets its rotation and
-    output path. A part built by Python geometry is also built from its code:
+    wrapper module whose DEFAULT is this part; either sets its output path and
+    how it rests. A part built by Python geometry is also built from its code:
     the module that defines its class, and every module of a wrapper that is
     a package."""
     python = part.geometry({}) is not None
@@ -1063,56 +1063,12 @@ def _cancelling(
     return found
 
 
-def _render_rotated(
-    renderer: OpenSCADRenderer,
-    scad_path: Path,
-    stl_path: Path,
-    rotation: List[float],
-    timeout: float,
-    params: dict,
-    cancel: Optional[Cancellation] = None,
-    binary: bool = False,
-) -> RenderResult:
-    """Render upright into a scratch directory, then turn it with a one-line wrapper.
-
-    Nothing is written beside the source, and each render has a scratch
-    directory of its own, so two renders of one part cannot collide. What
-    OpenSCAD said is both runs' stderr; what it measured is the upright run's,
-    the frame a part's declared bounds are in (``apothecary parts verify``).
-    """
-    with _scratch_beside(stl_path) as tmp:
-        upright = Path(tmp) / "upright.stl"
-        first = renderer.render_stl(
-            scad_path,
-            upright,
-            timeout,
-            params=params or None,
-            **_cancelling(renderer, cancel, binary),
-        )
-        if not first.success:
-            return first
-        wrapper = Path(tmp) / "rotate.scad"
-        wrapper.write_text(
-            f'rotate({scad_literal(rotation)}) import("{upright.name}");\n', encoding="utf-8"
-        )
-        second = renderer.render_stl(
-            wrapper, stl_path, timeout, **_cancelling(renderer, cancel, binary)
-        )
-    second.render_time_seconds += first.render_time_seconds
-    second.queued_seconds += first.queued_seconds
-    second.dropped = first.dropped + second.dropped
-    second.stderr = (first.stderr or "") + (second.stderr or "")
-    second.measured = first.measured
-    return second
-
-
 def render_part(
     part: BasePart,
     stl_path: Path,
     params: Optional[dict] = None,
     timeout: float = 120.0,
     renderer: Optional[OpenSCADRenderer] = None,
-    rotation: Optional[List[float]] = None,
     cancel: Optional[Cancellation] = None,
     scad: Optional[Path] = None,
     binary: bool = False,
@@ -1124,8 +1080,8 @@ def render_part(
     is rendered from that geometry's SCAD, written to a scratch file beside
     ``stl_path``; any other from its SCAD file, or from ``scad`` standing in
     for it (a draft written beside it), the params reaching it through
-    ``part.scad_overrides``. ``rotation`` turns the result; ``renderer``
-    defaults to the OpenSCAD the part asks for; ``cancel`` can stop it.
+    ``part.scad_overrides``. ``renderer`` defaults to the OpenSCAD the part
+    asks for; ``cancel`` can stop it.
     ``pose`` ``rest`` adds the part's rest definitions to the ``-D`` it gets."""
     if renderer is None:
         renderer = part_renderer(part)
@@ -1139,10 +1095,6 @@ def render_part(
             scad.write_text(text, encoding="utf-8")
         if posed(part, pose) == REST:
             definitions = {**definitions, **part.rest}
-        if rotation and any(rotation):
-            return _render_rotated(
-                renderer, scad, stl_path, rotation, timeout, definitions, cancel, binary
-            )
         return renderer.render_stl(
             scad,
             stl_path,
@@ -1168,14 +1120,14 @@ def build_stl(
 ) -> RenderResult:
     """Build a part's STL at the part's own output path; with ``pose`` ``rest``,
     for a part that declares a rest pose, the STL of it beside that
-    (``posed_path``), its own freshness and sidecar, never turned.
+    (``posed_path``), its own freshness and sidecar.
 
     Overrides are checked against the part's ``params_model`` (ValueError on a
     bad one). The STL on disk is kept (``skipped="fresh"``) unless ``force``, a
     newer SCAD, file the SCAD reads, wrapper or geometry code, or different
     recorded parameters say otherwise. A part that cannot be built here is refused
-    (``skipped="refused"``). It is rendered as ``render_part`` renders it,
-    turned by ``display_rotation``; non-default parameters are
+    (``skipped="refused"``). It is rendered as ``render_part`` renders it;
+    non-default parameters are
     recorded in the params sidecar as validated, not as ``scad_overrides``
     translates them, and a default build removes it. ``renderer`` overrides
     the OpenSCAD the part would choose for itself, and is the one checked
@@ -1191,8 +1143,7 @@ def build_stl(
     if not can_build:
         return RenderResult(success=False, error_message=reason, skipped="refused")
 
-    rotation = part.display_rotation.to_list() if pose == PRINT else None
-    result = render_part(part, stl_path, params, timeout, renderer, rotation, pose=pose)
+    result = render_part(part, stl_path, params, timeout, renderer, pose=pose)
 
     if result.success:
         if params:

@@ -19,8 +19,8 @@ from .utils import _safe_echo
 
 
 def _parts():
-    """(name, part) for every registered part; part is None where its wrapper
-    does not import."""
+    """(name, part) for every registered part; for one that does not load, the
+    PartLoadError in its place."""
     found = []
     for item in scan_projects(ROOT):
         if item.kind != "part":
@@ -30,15 +30,17 @@ def _parts():
             continue
         try:
             found.append((item.name, load_part(item)))
-        except PartLoadError:
-            found.append((item.name, None))
+        except PartLoadError as exc:
+            found.append((item.name, exc))
     return sorted(found, key=lambda pair: pair[0])
 
 
 def _openscad_for(name: str, part) -> str:
     """One line: the OpenSCAD this part renders with and whether it has Manifold,
     or why it cannot be built here."""
-    if part is None:
+    if isinstance(part, PartLoadError):
+        if part.source.endswith(".json"):
+            return f"  ✗ {name}: its part.json does not load (apothecary problems --detail)"
         return f"  ✗ {name}: its wrapper does not import"
     can_build, reason = part.can_generate_stl()
     if not can_build:

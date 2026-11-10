@@ -12,14 +12,12 @@ from apothecary.cli.main import cli
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.registry import part_named
 
-# name: (description, category, tags, preview colour hex, bounds min/max, display rotation,
-# rest pose)
+# name: (description, category, tags, preview colour hex, bounds min/max, rest pose)
 RECORDED = {
     "contranot": (
         "Contra-notation accessory",
         "misc",
         ["contra", "notation"],
-        None,
         None,
         None,
         None,
@@ -31,7 +29,6 @@ RECORDED = {
         "#8B4513",
         ((-76.2, 0, 0), (76.2, 101.6, 50.8)),
         None,
-        None,
     ),
     "dryerknob": (
         "Dryer knob replacement",
@@ -40,13 +37,11 @@ RECORDED = {
         "#FFFFFF",
         ((-16.5, -16.5, 0), (16.5, 16.5, 20)),
         None,
-        None,
     ),
     "matboard_cutter_mount": (
         "Matboard cutter mount",
         "tooling",
         ["matboard", "cutter", "mount"],
-        None,
         None,
         None,
         None,
@@ -58,13 +53,11 @@ RECORDED = {
         "#FFD700",
         ((-12.135, -14.266, 0), (15, 14.266, 3)),
         None,
-        None,
     ),
     "solderfan": (
         "Soldering fan mount",
         "electronics",
         ["fan", "mount", "soldering"],
-        None,
         None,
         None,
         {"print": False},
@@ -76,14 +69,13 @@ RECORDED = {
         None,
         None,
         None,
-        None,
     ),
 }
 
 
 @pytest.mark.parametrize("name", sorted(RECORDED))
 def test_a_part_json_says_what_its_module_said(name):
-    description, category, tags, color, bounds, rotation, rest = RECORDED[name]
+    description, category, tags, color, bounds, rest = RECORDED[name]
     part = part_named(name, ROOT)
     assert (part.description, part.category, part.tags) == (description, category, tags)
     assert part.readme_path == ROOT / "parts" / "README.md"
@@ -94,13 +86,6 @@ def test_a_part_json_says_what_its_module_said(name):
     else:
         lo, hi = part.default_bounds.min_point, part.default_bounds.max_point
         assert ((lo.x, lo.y, lo.z), (hi.x, hi.y, hi.z)) == bounds
-    if rotation is None:
-        assert not any(
-            (part.display_rotation.x, part.display_rotation.y, part.display_rotation.z)
-        )
-    else:
-        r = part.display_rotation
-        assert (r.x, r.y, r.z) == rotation
     assert part.rest == rest
 
 
