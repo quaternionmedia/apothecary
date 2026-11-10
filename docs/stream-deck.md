@@ -76,8 +76,12 @@ POST /firmware/decks/{id}/release              → let go of the device
 The **Deck** window (⊞ Windows › Deck, the ring's Panels › Machine › Knobs › Deck, or **Open Deck** on the
 `stream_deck` piece of the garage) shows the first deck found: its eight keys and its
 strip as the images last sent to them, `–` where nothing has been drawn from here, its
-four knobs, and the events it has heard, newest first. It follows the deck every second
-and a half while it is in front, which opens the deck. A simulated deck is pressed from
+four knobs, and the events it has heard, newest first, in a list that scrolls. It follows
+the deck every second and a half while it is in front, which opens the deck, and asks for
+its events four times a second between, so what is heard is shown where it happened as it
+happens: a key or a knob held is marked for as long as it is down, and a press, the way a
+knob turned and the place the strip was touched are each lit for a moment. A real deck's
+keys and strip are drawn as bright as a simulated one's. A simulated deck is pressed from
 it -- a key, a knob turned a step either way or pressed, the strip tapped -- each the
 event a real deck reports, posted to the deck's routes; a real deck is pressed by hand
 and the window's controls are off.

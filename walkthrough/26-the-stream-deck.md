@@ -35,6 +35,12 @@ Key 3 pressed, knob 1 turned two steps clockwise, knob 0 one step the other way,
 
 ![A key pressed, knobs turned and pressed, the strip tapped](screenshots/26-03-a-key-pressed-knobs-turned-and-pressed-the-strip-t.png)
 
+## 4. A key held down is marked in the window
+
+Key 5 is down and not yet let go: its picture is outlined for as long as it is held, as a knob pressed is. A press, a turn's direction and a touch's place on the strip are each lit for a moment as they are heard, so the window answers a hand on the deck as well as listing it.
+
+![A key held down is marked in the window](screenshots/26-04-a-key-held-down-is-marked-in-the-window.png)
+
 ## What this page does not show
 
 - **A real deck.** What only a deck shows -- its screen, its knobs' feel, the udev rule -- is section J of the bench checklist (docs/bench-checklist.md).

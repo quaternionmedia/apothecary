@@ -138,6 +138,7 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     deck.locator(".deck-key[data-key='1']").click()
     expect(deck.locator(".deck-events")).to_contain_text("key 1 released", timeout=10000)
     assert _drawn(url)["strip_drawn"]["text"] == "cnc_router · disarmed"
+    expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # lit a moment
     story.shows(
         "The deck's layout, drawn by the server, with the router chosen",
         "The top row's keys choose the machine and cycle the step; the bottom row holds the "
@@ -153,6 +154,7 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     state = _control(url)
     assert state["sent"] == [] and "disarmed" in state["said"], state
     assert _router(url)["position"] == before
+    expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # lit a moment
     story.shows(
         "Disarmed, three turns of knob one move nothing",
         "Control is armed in the Machine window, or by two long presses of the machine's "
@@ -175,6 +177,7 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
         in _drawn(url)["strip_drawn"]["small"],
         "the strip shows where the tool is",
     )
+    expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # lit a moment
     story.shows(
         "Armed, three turns jog X by 3 mm and the X key shows where the tool is",
         "Each click is one `$J=G91 G21 X1 F1000`, GRBL's own jog line, sent through the "
@@ -204,6 +207,7 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     assert _control(url)["armed_s"] == 0
     assert _drawn(url)["strip_drawn"]["text"] == "cnc_router · disarmed"
     assert "STOP sent to cnc_router" in _drawn(url)["strip_drawn"]["small"]
+    expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # lit a moment
     story.shows(
         "The router's stop key stops it and disarms it",
         "The step key made the last click 10 mm. The router's own stop key, the bottom "

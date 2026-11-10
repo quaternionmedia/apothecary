@@ -3,7 +3,9 @@
  * deck cannot be asked what it shows; its four knobs and the events heard are listed
  * under them. A simulated deck is pressed, turned and tapped from here, each a
  * POST of the event a real deck would report; a real deck is pressed by hand, and
- * its controls are off.
+ * its controls are off. What is heard is shown where it happened as well as listed: a
+ * key or a knob held is marked for as long as it is down, and a press, a turn's
+ * direction and a touch's place on the strip are lit for a moment after each.
  *
  * Its knobs, the layout that jogs the garage's machines, are the server's (deck_knobs.js):
  * the window starts and stops them and chooses the machine they move and their step,
@@ -11,14 +13,15 @@
  *
  * mountDeck(root, { base, log }) renders into `root` and returns { shown(), close(),
  * load(), state(), destroy() }. shown() loads the first deck found and follows it
- * every 1.5 s while the window is in front; close() stops. Listing a deck opens
+ * every 1.5 s while the window is in front, asking for its events four times a second;
+ * close() stops. Listing a deck opens
  * nothing (GET /firmware/decks); following one opens it (GET /firmware/decks/{id}).
  */
 
 import { esc } from "/static/board_text.js";
 import { armedWords, choose, knobsOf, turn } from "/static/deck_knobs.js";
 
-const KEYS = 8, KNOBS = 4, STRIP = [800, 100], EVERY_MS = 1500;
+const KEYS = 8, KNOBS = 4, STRIP = [800, 100], EVERY_MS = 1500, HEAR_MS = 250, LIT_MS = 1200, KEPT = 200;
 
 const MARKUP = `
 <div class="deck-ui">
@@ -43,7 +46,7 @@ const heard = (e) => {
 export function mountDeck(root, { base = "", log = null } = {}) {
     root.innerHTML = MARKUP;
     const $ = (sel) => root.querySelector(sel);
-    let alive = true, timer = null, deck = null, last = 0, drawn = null, lines = [], problem = null, knobs = null;
+    let alive = true, timer = null, ear = null, deck = null, last = 0, drawn = null, lines = [], problem = null, knobs = null;
     const say = (text, kind = "") => { if (log) log(text, kind); };
 
     async function api(path, opts = {}) {
@@ -56,9 +59,45 @@ export function mountDeck(root, { base = "", log = null } = {}) {
 
     $(".deck-keys").innerHTML = Array.from({ length: KEYS }, (_, i) =>
         `<button type="button" class="deck-key" data-key="${i}" title="Key ${i}: pressed and released as a deck reports it"><img alt="" hidden><span class="deck-none">–</span></button>`).join("");
-    $(".deck-strip").innerHTML = `<button type="button" class="deck-strip-tap" title="The touch strip: tapped where it is pressed"><img alt="" hidden><span class="deck-none">–</span></button>`;
+    $(".deck-strip").innerHTML = `<button type="button" class="deck-strip-tap" title="The touch strip: tapped where it is pressed"><img alt="" hidden><span class="deck-none">–</span><span class="deck-touch" hidden></span></button>`;
     $(".deck-knobs").innerHTML = Array.from({ length: KNOBS }, (_, i) =>
         `<div class="deck-knob" data-knob="${i}">${[-1, 1].map((d) => `<button type="button" class="deck-turn" data-dir="${d}" title="Knob ${i} turned one step ${d > 0 ? "clockwise" : "counter-clockwise"}">${d > 0 ? "↻" : "↺"}</button>`).join("")}<button type="button" class="deck-press" title="Knob ${i} pressed and released">●</button></div>`).join("");
+
+    // What was heard, shown where it happened. An event older than a few seconds (the
+    // history a window opened late is given) marks what is still held and lights nothing.
+    function lit(el) {
+        el.classList.add("deck-heard");
+        clearTimeout(el.litTimer);
+        el.litTimer = setTimeout(() => { el.classList.remove("deck-heard"); if (el.classList.contains("deck-touch")) el.hidden = true; }, LIT_MS);
+    }
+    function show(e) {
+        const fresh = Date.now() / 1000 - e.at < 3, v = e.value;
+        if (e.kind === "touch") {
+            if (!fresh) return;
+            const dot = $(".deck-touch"), to = v.x_out != null ? v.x_out : v.x;
+            dot.style.left = `${Math.min(v.x, to) / STRIP[0] * 100}%`;
+            dot.style.top = `${v.y / STRIP[1] * 100}%`;
+            dot.style.width = v.x_out != null ? `${Math.abs(to - v.x) / STRIP[0] * 100}%` : "";
+            dot.hidden = false;
+            lit(dot);
+            return;
+        }
+        const el = e.kind === "key"
+            ? root.querySelector(`.deck-key[data-key="${e.index}"]`)
+            : root.querySelector(`.deck-knob[data-knob="${e.index}"] ${e.kind === "knob-press" ? ".deck-press" : `.deck-turn[data-dir="${v > 0 ? 1 : -1}"]`}`);
+        if (!el) return;
+        if (e.kind !== "knob-turn") el.classList.toggle("deck-down", !!v);
+        if (fresh) lit(el);
+    }
+    function take(news) {
+        let any = false;
+        for (const e of news.events) if (e.seq > last) { lines = [heard(e), ...lines].slice(0, KEPT); show(e); any = true; }
+        last = Math.max(last, news.last);
+        return any;
+    }
+    function renderHeard() {
+        $(".deck-events").innerHTML = lines.length ? lines.map((t) => `<li>${esc(t)}</li>`).join("") : '<li class="empty">nothing heard yet</li>';
+    }
 
     function picture(button, url, drawnNow) {
         const img = button.querySelector("img");
@@ -97,7 +136,7 @@ export function mountDeck(root, { base = "", log = null } = {}) {
             : inputs
             ? "a simulated deck: press a key, turn or press a knob, tap the strip; each is the event a real deck reports"
             : "a real deck is pressed by hand; what it shows is what was last sent to it from here";
-        $(".deck-events").innerHTML = lines.length ? lines.map((t) => `<li>${esc(t)}</li>`).join("") : '<li class="empty">nothing heard yet</li>';
+        renderHeard();
     }
 
     // One refresh at a time: a second asked for while one is under way runs once more when
@@ -125,9 +164,7 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         try {
             drawn = await api(`/firmware/decks/${encodeURIComponent(deck.id)}`);
             deck = { ...deck, serial: drawn.serial };
-            const news = await api(`/firmware/decks/${encodeURIComponent(deck.id)}/events?since=${last}`);
-            for (const e of news.events) if (e.seq > last) lines = [heard(e), ...lines].slice(0, 12);
-            last = Math.max(last, news.last);
+            take(await api(`/firmware/decks/${encodeURIComponent(deck.id)}/events?since=${last}`));
             knobs = await knobsOf(base, deck.id);
             problem = null;
         } catch (e) {
@@ -140,6 +177,18 @@ export function mountDeck(root, { base = "", log = null } = {}) {
     }
 
     const schedule = () => { clearTimeout(timer); if (alive) timer = setTimeout(async () => { try { await load(); } catch (e) { /* the next beat tries again */ } schedule(); }, EVERY_MS); };
+
+    // Between refreshes the events alone are asked for, so a press shows as it is made.
+    const hear = () => {
+        clearTimeout(ear);
+        if (alive) ear = setTimeout(async () => {
+            if (deck && !problem && !busy) {
+                try { if (take(await api(`/firmware/decks/${encodeURIComponent(deck.id)}/events?since=${last}`))) renderHeard(); }
+                catch (e) { /* the next refresh says what is wrong */ }
+            }
+            hear();
+        }, HEAR_MS);
+    };
 
     async function give(kind, index, value) {
         try { await post(`/firmware/decks/${encodeURIComponent(deck.id)}/events`, { kind, index, value }); }
@@ -172,8 +221,8 @@ export function mountDeck(root, { base = "", log = null } = {}) {
 
     return {
         load, state: () => ({ deck, drawn, last }),
-        shown() { alive = true; load().catch((e) => { $(".deck-name").textContent = e.message; }); schedule(); },
-        close() { clearTimeout(timer); },
-        destroy() { alive = false; clearTimeout(timer); root.innerHTML = ""; },
+        shown() { alive = true; load().catch((e) => { $(".deck-name").textContent = e.message; }); schedule(); hear(); },
+        close() { clearTimeout(timer); clearTimeout(ear); },
+        destroy() { alive = false; clearTimeout(timer); clearTimeout(ear); root.innerHTML = ""; },
     };
 }

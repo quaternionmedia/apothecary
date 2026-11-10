@@ -20,7 +20,15 @@
 }
 .deck-ui button:disabled { opacity: 0.55; cursor: not-allowed; }
 .deck-ui button:not(:disabled):hover { border-color: var(--ink-3); }
-.deck-ui ol { list-style: none; margin: 0; padding: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; }
+/* A real deck's keys and strip are its picture, not a control that is off. */
+.deck-ui .deck-key:disabled, .deck-ui .deck-strip-tap:disabled { opacity: 1; cursor: default; }
+/* What was heard: held for as long as it is down, lit for a moment after each event. */
+.deck-ui .deck-key.deck-heard, .deck-ui .deck-key.deck-down { border-color: var(--ok); box-shadow: 0 0 0 2px var(--ok); }
+.deck-ui .deck-key.deck-down img { transform: scale(0.9); }
+.deck-ui .deck-turn.deck-heard, .deck-ui .deck-press.deck-heard, .deck-ui .deck-press.deck-down { opacity: 1; background: var(--ok); border-color: var(--ok); color: #101214; }
+.deck-ui .deck-touch { position: absolute; min-width: 0.6rem; height: 0.6rem; margin: -0.3rem 0 0 -0.3rem; border-radius: 0.3rem; background: var(--ok); box-shadow: 0 0 0 2px #101214; pointer-events: none; }
+.deck-ui .deck-touch[hidden] { display: none; }
+.deck-ui ol { list-style: none; margin: 0; padding: 0; max-height: 13.2em; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; }
 /* The knobs: on or off, the machine they move and their step, the chosen one pressed. */
 .deck-ui .deck-control .row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
 .deck-ui .deck-run, .deck-ui .deck-machine, .deck-ui .deck-step {

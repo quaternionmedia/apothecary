@@ -127,6 +127,7 @@ def test_the_deck_is_drawn_from_here_and_what_it_hears_is_listed(page: Page, url
     deck.locator(".deck-knob[data-knob='0'] .deck-turn[data-dir='-1']").click()
     deck.locator(".deck-knob[data-knob='2'] .deck-press").click()
     deck.locator(".deck-strip-tap").click()  # its middle
+    expect(deck.locator(".deck-touch")).to_be_visible(timeout=5000)  # where it was tapped
     events = deck.locator(".deck-events li")
     expect(events).to_have_count(8, timeout=10000)  # 2 + 2 + 1 + 2 + 1
     heard = _heard(url)
@@ -146,6 +147,7 @@ def test_the_deck_is_drawn_from_here_and_what_it_hears_is_listed(page: Page, url
     expect(deck.locator(".deck-events")).to_contain_text("key 3 pressed")
     expect(deck.locator(".deck-events")).to_contain_text("knob 1 turned +1")
     expect(deck.locator(".deck-events")).to_contain_text("knob 0 turned −1")
+    expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # each lit a moment
     story.shows(
         "A key pressed, knobs turned and pressed, the strip tapped",
         "Key 3 pressed, knob 1 turned two steps clockwise, knob 0 one step the other way, "
@@ -154,6 +156,26 @@ def test_the_deck_is_drawn_from_here_and_what_it_hears_is_listed(page: Page, url
         "`GET /firmware/decks/{id}/events`. The strip's tap carries its position in the "
         "strip's own pixels, 800 across.",
     )
+
+    # 4. A key held is marked where it is, for as long as it is down.
+    events_url = f"{url}/firmware/decks/{DECK_ID}/events"
+    held = httpx.post(events_url, json={"kind": "key", "index": 5, "value": True})
+    assert held.status_code == 201, held.text
+    key = deck.locator(".deck-key[data-key='5']")
+    expect(key).to_have_class(re.compile(r"\bdeck-down\b"), timeout=5000)
+    expect(events.first).to_contain_text("key 5 pressed")
+    expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)
+    expect(deck.locator(".deck-down")).to_have_count(1)
+    story.shows(
+        "A key held down is marked in the window",
+        "Key 5 is down and not yet let go: its picture is outlined for as long as it is "
+        "held, as a knob pressed is. A press, a turn's direction and a touch's place on "
+        "the strip are each lit for a moment as they are heard, so the window answers a "
+        "hand on the deck as well as listing it.",
+    )
+    let_go = httpx.post(events_url, json={"kind": "key", "index": 5, "value": False})
+    assert let_go.status_code == 201, let_go.text
+    expect(deck.locator(".deck-down")).to_have_count(0, timeout=5000)
     assert windows.state(page, "deck")["open"]
 
 
