@@ -22,7 +22,11 @@ this.panels.register('gather', {
 
 - `title` is its tab (`tab` a shorter one, the title then its tooltip); `hint`
   the tooltip where it is listed; `group` its heading in ⊞ Windows and a
-  stack's +.
+  stack's +, and its colour: a group's colour is one variable of
+  `apothecary/static/tokens.css`, `--group-<name>`, with the rule beside it that
+  gives it to whatever carries `data-group`, which a window's tab, the window and
+  its row in each list do. A new group gets both lines there;
+  `tests/test_group_colours.py` fails while a registered group has none.
 - `body` is an element the window adopts, or a function given the slot the
   first time the window is in front of a person.
 - `home` is where it opens when it is not in the layout: `"column"`, the one

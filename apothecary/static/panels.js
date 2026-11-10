@@ -142,6 +142,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         const markTab = (tab) => {
             if (!tab || !tab.element) return;
             tab.element.dataset.panel = id;
+            wearGroup(tab.element, r.group);
             tab.element.classList.toggle("loud", r.loud);
             tab.element.classList.toggle("empty", r.empty);
             if (r.flag) tab.element.classList.add(r.flag);
@@ -154,6 +155,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         };
         markTab(container.tab);
         container.on("tab", markTab);
+        wearGroup(container.element, r.group);
         container.element.classList.toggle("loud", r.loud);
         const shown = () => {
             if (r.mount && r.registered) { const mount = r.mount; r.mount = null; mount(r.slot); r.filled = true; return; }
@@ -499,11 +501,16 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         }
         return groups;
     }
+    // Whose a thing is: its group's colour is tokens.css's, read from data-group.
+    function wearGroup(el, group) {
+        if (group) el.dataset.group = group; else delete el.dataset.group;
+    }
     function windowButton(r, into) {
         const b = document.createElement("button");
         b.type = "button";
         b.className = "window-item";
         b.dataset.window = r.id;
+        wearGroup(b, r.group);
         const open = !!item(r.id);
         b.classList.toggle("open", open);
         b.textContent = (open ? "● " : "○ ") + (r.tab || r.title);
@@ -520,6 +527,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             const head = document.createElement("div");
             head.className = "spawn-group";
             head.textContent = group;
+            wearGroup(head, group);
             list.append(head);
             for (const r of rs) {
                 const b = windowButton(r, true);
@@ -603,6 +611,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             const head = document.createElement("div");
             head.className = "spawn-group";
             head.textContent = group;
+            wearGroup(head, group);
             into.append(head);
             for (const r of rs) {
                 const b = windowButton(r, false);
@@ -637,6 +646,8 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             if (ci) {
                 ci.setTitle(r.tab || r.title);
                 r.container?.tab && (r.container.tab.element.title = r.hint || r.title);
+                if (r.container?.tab) wearGroup(r.container.tab.element, r.group);
+                if (r.container) wearGroup(r.container.element, r.group);
                 r.container?.element.classList.toggle("loud", r.loud);
                 if (r.container?.visible && r.mount) { const mount = r.mount; r.mount = null; mount(r.slot); r.filled = true; }
             } else if (open && (!fromMemory || TRANSIENT.has(id) || !rememberedPanels.has(id))) {

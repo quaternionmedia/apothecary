@@ -329,6 +329,12 @@ it is. The header's **⊞ Windows** (⊞ alone on a narrow page) lists the same,
 at its place, and above them the **views**: windows laid out together for one
 kind of work, each also a cell of Panels › Windows.
 
+Each group has a colour of its own, and a window wears its group's wherever it
+is shown: a line under its tab, fainter while another tab of its stack is in
+front, a line under its header, its heading in ⊞ Windows and a stack's +, and
+the edge of its row there. The line over a tab still says which stack has the
+focus, and a loud window stays loud.
+
 The column beside the world is the one place a window opens by default, and it
 holds four stacks at most: a window opened there while it has fewer is a stack
 of its own, right under the window it follows; once it has four, a tab -- beside
