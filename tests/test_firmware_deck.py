@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import io
 import sys
+import time
 import types
 
 import pytest
@@ -359,8 +360,10 @@ def test_a_real_deck_is_opened_by_what_acts_on_it_and_its_reports_are_events(rea
     plus.callbacks["key"](plus, 5, True)
     plus.callbacks["dial"](plus, 2, _Event(name="TURN"), -2)
     plus.callbacks["dial"](plus, 2, _Event(name="PUSH"), True)
-    plus.callbacks["touch"](plus, _Event(name="SHORT"), (400, 50))
-    plus.callbacks["touch"](plus, _Event(name="DRAG"), (10, 20, 300, 25))
+    plus.callbacks["touch"](plus, _Event(name="SHORT"), {"x": 400, "y": 50})
+    plus.callbacks["touch"](
+        plus, _Event(name="DRAG"), {"x": 10, "y": 20, "x_out": 300, "y_out": 25}
+    )
     assert [(e.kind, e.index, e.value) for e in one.events()] == [
         ("key", 5, True),
         ("knob-turn", 2, -2),
@@ -420,3 +423,37 @@ def test_the_real_library_drives_the_adapter_over_its_own_dummy_transport(monkey
     one.set_brightness(50)
     assert one.events() == []  # the dummy reads zeros: no key, knob or touch
     assert deck.get_decks().release(found[0].id)
+
+
+def test_a_touch_the_real_library_reads_is_an_event_and_the_reader_goes_on(monkeypatch):
+    """The strip's reports as the device sends them, parsed by the library's own reader
+    thread: a tap, a drag, then a key, which is only heard if the touches left the
+    reader running."""
+    pytest.importorskip("StreamDeck")
+    from StreamDeck.DeviceManager import DeviceManager
+
+    monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "pyserial")
+    monkeypatch.setattr(deck, "_manager", lambda: DeviceManager(transport="dummy"))
+    one = deck.get_decks().get(deck.get_decks().list()[0].id)
+
+    def touch(kind, x, y, x_out=0, y_out=0):
+        words = b"".join(n.to_bytes(2, "little") for n in (x, y, x_out, y_out))
+        return bytes([0x01, 0x02, 0, 0, kind, 0]) + words
+
+    reports = [
+        touch(1, 400, 50),
+        touch(3, 10, 20, 300, 25),
+        bytes([0x01, 0x00, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]),
+    ]
+    monkeypatch.setattr(
+        one.link.device.device, "read", lambda length: reports.pop(0) if reports else None
+    )
+    deadline = time.monotonic() + 5
+    while len(one.events()) < 3 and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert [(e.kind, e.index, e.value) for e in one.events()] == [
+        ("touch", 0, {"kind": "short", "x": 400, "y": 50}),
+        ("touch", 0, {"kind": "drag", "x": 10, "y": 20, "x_out": 300, "y_out": 25}),
+        ("key", 5, True),
+    ]
+    assert deck.get_decks().release(one.info.id)

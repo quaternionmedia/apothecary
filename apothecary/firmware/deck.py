@@ -236,8 +236,9 @@ class HidLink:
     def _touch(self, deck, event, value) -> None:
         name = getattr(event, "name", str(event)).lower()
         kind = {"short": "short", "long": "long", "drag": "drag"}.get(name, name)
-        point = dict(zip(("x", "y", "x_out", "y_out"), (value or ()), strict=False))
-        self.report(TOUCH, 0, {"kind": kind, **{k: int(v) for k, v in point.items()}})
+        # The library's value is a dict: x and y, and x_out and y_out for a drag.
+        point = {k: int(value[k]) for k in ("x", "y", "x_out", "y_out") if k in (value or {})}
+        self.report(TOUCH, 0, {"kind": kind, **point})
 
     def set_key(self, index: int, jpeg: bytes) -> None:
         with self.device:
