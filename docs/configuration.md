@@ -13,7 +13,7 @@ needed: each has a default.
 | `APOTHECARY_CACHE_DIR` | The render cache -- a node's STLs, a part's variants -- and the demo's state folder | `.cache` in the checkout | [parts-authoring.md](parts-authoring.md) |
 | `APOTHECARY_PICTURE_ROOT` | The one folder pictures are read from; never a home folder or anything above one, or the state folder | The folder `serve` was started in | [pictures.md](pictures.md#where-pictures-live) |
 | `APOTHECARY_MARKS_TABLE` | A fitted table of the thresholds that sort a whiteboard's marks, as `apothecary photo fit --out` writes one | The packaged thresholds | [pictures.md](pictures.md#a-whiteboards-marks) |
-| `APOTHECARY_LOOKSATWORDS` | Where `apothecary photo notes --send` sends a whiteboard's words; refused unless it is on this machine | `http://127.0.0.1:1414` | [pictures.md](pictures.md#a-whiteboards-notes) |
+| `APOTHECARY_LOOKSATWORDS` | Where `apothecary photo notes --send` sends a whiteboard's words; refused unless it is on this machine | looksatwords' own port on this machine | [pictures.md](pictures.md#a-whiteboards-notes) |
 | `APOTHECARY_OPENSCAD` | The OpenSCAD every render uses, and the only one tried | The search order | [openscad.md](openscad.md#which-openscad-a-render-uses) |
 | `APOTHECARY_OPENSCAD_RUNS` | How many OpenSCAD runs go at once | Two, or one on a single core | [openscad.md](openscad.md#how-many-run-at-once) |
 | `APOTHECARY_SKIP_STL_GENERATION` | `1`, `true` or `yes`: `serve` builds no missing STL as it starts | Unset: it builds them in the background | [README](../README.md) |

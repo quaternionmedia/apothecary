@@ -175,7 +175,7 @@ each saying so when what it reaches is not there:
 
 | Flag | Sends | To |
 |---|---|---|
-| `--send` | The whiteboard's words in reading order, a line a note, as one transcript | looksatwords, at `APOTHECARY_LOOKSATWORDS` or `http://127.0.0.1:1414`, which says what the words are about |
+| `--send` | The whiteboard's words in reading order, a line a note, as one transcript | looksatwords on this machine, at `APOTHECARY_LOOKSATWORDS` or its own port (`LOOKSATWORDS` in `apothecary/finders/words.py`), which says what the words are about |
 | `--ask --among WORD...` | The region of each note nobody has typed | qmcp ([the models checklist](models-checklist.md)), which says which of the given words it holds; its answer is kept beside a person's words and never over them |
 
 qmcp's vision contract answers a label among words it is given, so a note is not
