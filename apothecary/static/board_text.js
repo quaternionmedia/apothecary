@@ -105,9 +105,10 @@ export function spindleText(st) {
 
 // One board, summed up for the drawers that show it small: the badges and
 // Selected's line. `board` is boards.js's board (device, status, expected,
-// observed). Answers { kind, icon, state, short, line, cls, title }: for a G-code
-// machine, the kind's icon, its state word, one reading (a printer's temperatures,
-// a router's spindle), the job's progress, and the class the state word wears.
+// observed, armedUntil). Answers { kind, icon, state, armed, short, line, cls, title }:
+// for a G-code machine, the kind's icon, its state word, the time its arm has left
+// ("4:32") or null, one reading (a printer's temperatures, a router's spindle), the
+// job's progress, and the class the state word wears.
 export function boardSummary(board) {
     const d = board && board.device;
     if (!d) return { kind: "none", icon: "⌁", state: "off", short: "not connected", line: "not connected", cls: "off", title: "not connected" };
@@ -121,15 +122,18 @@ export function boardSummary(board) {
         if (kind === "printer" && st && st.sd_printing && st.sd_progress != null) parts.push(`${(st.sd_progress * 100).toFixed(0)}%`);
         if (st && st.job) parts.push(st.job.kind === words.job ? `${st.job.kind} ${(st.job.progress * 100).toFixed(0)}%` : `${st.job.kind}: ${st.job.stage}`);
         const line = kind === "router" ? routerLine(st) : printerLine(st);
+        // Armed from anywhere, the time its arm has left (boards.js follows it).
+        const left = board.armedUntil ? Math.max(0, Math.round((board.armedUntil - Date.now()) / 1000)) : 0;
+        const armed = left > 0 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : null;
         return {
-            kind, icon: words.icon, state: word || "not polled",
+            kind, icon: words.icon, state: word || "not polled", armed,
             readings: st && !offline ? (kind === "router" ? spindleText(st) : readingsText(st)) : null,
             temps: kind === "printer" && st && !offline ? tempsText(st) : null,
             extra: parts, job: !!(st && st.job),
             short: st ? (offline ? "offline" : word) : "not polled yet",
             line,
             cls: STATE_CLS[word] || "",
-            title: `${label} on ${d.port} — ${line}`,
+            title: `${label} on ${d.port} — ${line}${armed ? ` — armed, ${armed} left: it can heat and move` : ""}`,
         };
     }
     const words = sketchWords(board.expected, board.observed);

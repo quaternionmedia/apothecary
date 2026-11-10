@@ -440,6 +440,10 @@
         .world-badge.cluster .cluster-row.selected { color: #9cd2ff; }
         .world-badge .state { color: #8fc78f; }
         .world-badge.printing { border-color: #7a5a1a; color: var(--warn); background: rgba(42, 36, 16, 0.92); }
+        /* Armed, however it was armed: red, as the loud window's tab, over any other state. */
+        .world-badge.armed { border-color: #ff6b6b; color: #ffe1e1; background: rgba(90, 31, 31, 0.92); }
+        .world-badge .armed { font-weight: 600; }
+        .contents-item .dev-badge.armed { background: #5a1f1f; color: #ffe1e1; border-color: #ff6b6b; }
         .world-badge.printing::after { border-top-color: #7a5a1a; }
         .world-badge.offline { color: #b08a8a; border-color: #3f2f2f; }
         .world-badge.mismatch { color: #ff9b9b; }
@@ -7296,7 +7300,7 @@
                     this.followJobs(st);
                     return;
                 }
-                if (['device', 'observed', 'info', 'error', 'live'].includes(d.what)) {
+                if (['device', 'observed', 'info', 'error', 'live', 'control'].includes(d.what)) {
                     if (!Object.values(this.bindings).some((row) => row.device && row.device.port === d.port)) return;
                     this.updateDeviceViews();
                     this.syncWorldMarks();
@@ -8286,7 +8290,9 @@
                 if (GCODE_KINDS.includes(sum.kind)) {
                     // The icon, then what is most worth a glance: its reading, else its job, else its state.
                     const said = sum.readings ? `${sum.readings}${sum.extra.length ? ' ' + sum.extra[0] : ''}` : (sum.extra[0] || sum.state);
-                    span.textContent = `${sum.icon} ${said}`;
+                    // Armed, however it was armed, that first, with its time left.
+                    span.textContent = sum.armed ? `${sum.icon} 🔓 armed ${sum.armed}` : `${sum.icon} ${said}`;
+                    if (sum.armed) span.classList.add('armed');
                 } else {
                     span.textContent = sum.icon;
                 }

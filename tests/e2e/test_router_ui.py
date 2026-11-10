@@ -406,6 +406,36 @@ def test_the_router_s_machine_has_a_router_s_cards_and_pad(page: Page, url: str)
 
 
 @pytest.mark.e2e
+def test_a_router_armed_with_no_machine_open_says_so_on_its_badge_and_its_row(page: Page, url: str):
+    """Armed with its Machine not open -- by the deck's two long presses, or here the
+    latch's own route, which they arm -- the router's badge in the world and its row in
+    Site say it is armed and the time it has left; disarmed, they say it no more."""
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    badge = page.locator(".world-badge[data-path='cnc_router']")
+    row = page.locator("#contents-list .contents-item[data-path='cnc_router'] .dev-badge")
+    expect(badge).to_contain_text("idle", timeout=WITHIN_A_POLL)
+    expect(badge).not_to_contain_text("armed")
+    httpx.post(
+        f"{url}/firmware/printers/control", json={"port": ROUTER, "armed": True}, timeout=15.0
+    ).raise_for_status()
+    expect(badge).to_contain_text(re.compile(r"🔓 armed [45]:\d\d"), timeout=5000)
+    expect(badge).to_have_class(re.compile(r"\barmed\b"))
+    expect(row).to_have_text(re.compile(r"^🪚 🔓 armed [45]:\d\d$"))
+    expect(row).to_have_class(re.compile(r"\barmed\b"))
+    # The time left counts down between the asks.
+    left = re.search(r"armed (\d:\d\d)", row.inner_text()).group(1)
+    expect(row).not_to_have_text(re.compile(f"armed {left}$"), timeout=3000)
+    expect(windows.tab(page, "machine")).to_have_count(0)
+    httpx.post(
+        f"{url}/firmware/printers/control", json={"port": ROUTER, "armed": False}, timeout=15.0
+    ).raise_for_status()
+    expect(badge).not_to_contain_text("armed", timeout=5000)
+    expect(badge).not_to_have_class(re.compile(r"\barmed\b"))
+    expect(row).not_to_have_class(re.compile(r"\barmed\b"))
+
+
+@pytest.mark.e2e
 def test_each_axis_of_the_router_homes_alone_and_only_while_armed(page: Page, url: str):
     """Home X, Home Y and Home Z each send `$HX`, `$HY` or `$HZ` and no other line, and
     only that axis goes back to its switch; disarmed, the pad is not there and the

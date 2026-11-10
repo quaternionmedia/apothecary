@@ -363,6 +363,14 @@ async def firmware_printer_control_state(port: Port):
     return _control_state(port)
 
 
+@router.get("/printers/armed")
+async def firmware_printers_armed():
+    """Every port whose control is armed now, and its seconds left, however it was armed:
+    its Machine, the deck's long presses, another browser. A page follows it to show a
+    machine armed when its Machine is not open."""
+    return {"armed": gcode.get_printer_links().control.armed_ports()}
+
+
 @router.post("/printers/command")
 def firmware_printer_command(body: PrinterControlRequest):
     """Send one allowlisted control line -- a printer's heaters, fan, homing, bounded

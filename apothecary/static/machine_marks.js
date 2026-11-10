@@ -338,12 +338,13 @@ export function makeBoardBadge(anchors, key, boardPath, { point, selected }) {
 }
 
 /* What a board's badge says, from the board model's summary (board_text.js): a
- * printer's state, readings and job, a devkit's label and sketch, and under them
- * the board and its port. */
+ * printer's state, readings and job, and the time its arm has left while it is armed,
+ * however it was armed; a devkit's label and sketch; and under them the board and its
+ * port. */
 export function sayBoard(anchors, key, sum, device) {
     const badge = anchors.get(key);
     if (!badge) return;
-    badge.classList.remove("printing", "offline", "job", "mismatch", "heating");
+    badge.classList.remove("printing", "offline", "job", "mismatch", "heating", "armed");
     let line;
     if (sum.kind === "devkit") {
         line = `${sum.icon} ${esc(device.label)} · <span class="state">${esc(sum.short)}</span>`;
@@ -351,8 +352,10 @@ export function sayBoard(anchors, key, sum, device) {
         const parts = [`${sum.icon} <span class="state">${esc(sum.state)}</span>`];
         if (sum.readings) parts.push(sum.readings);
         parts.push(...sum.extra.map(esc));
+        if (sum.armed) parts.push(`<span class="armed">🔓 armed ${esc(sum.armed)}</span>`);
         line = parts.join(" · ");
         if (sum.job) badge.classList.add("job");
+        if (sum.armed) badge.classList.add("armed");
     }
     if (sum.cls) badge.classList.add(sum.cls);
     anchors.say(key, { icon: "⚡", words: `<div>${line}</div><div class="sub">${esc(device.port)} — click to open its Machine</div>` });

@@ -28,11 +28,18 @@
  * in its event as `asked`; a host that changes something a poll reports (the
  * Machine's control latch) takes a number too (tick()), and knows an answer
  * asked for before its change is stale.
+ *
+ * Every port armed, however it was armed -- its Machine, the deck's long presses,
+ * another browser -- is asked for every few seconds while the page is in front
+ * (GET /firmware/printers/armed): a board's `armedUntil` is when its arm lapses, 0
+ * when it is not armed, and the model says `control` for a board armed or let go,
+ * and each second while it is armed, so what shows the time left counts down.
  */
 
 const LOG_MAX = 5000;
 const RETRY_MS = 5000;          // a stream that stopped is opened again this long after
 const LOOK_AGAIN_MS = 10000;    // a watched board gone quiet is looked for at most this often
+const ARMED_MS = 2000;          // the ports armed are asked for this often
 const HELLO = /apothecary\s+([A-Za-z0-9_.\-]+):\s*hello/;
 
 export function mountBoards({ base = "", site = () => null } = {}) {
@@ -59,6 +66,7 @@ export function mountBoards({ base = "", site = () => null } = {}) {
                 port, device: null, expected: null, status: null, info: null, observed: null, error: null,
                 log: [], logNext: 0, logChain: Promise.resolve(),
                 watchers: new Map(), timer: null, gen: 0, polling: null, stream: null, retry: null, live: false,
+                armedUntil: 0,
             };
             all.set(port, b);
         }
@@ -378,8 +386,37 @@ export function mountBoards({ base = "", site = () => null } = {}) {
         model.rows = {}; model.devices = []; model.problem = null; model.loaded = false;
     }
 
+    // --- the latch, wherever it was armed ------------------------------------------------------
+    let armedTimer = null, armedSecond = null, following = true;
+    async function followArmed() {
+        clearTimeout(armedTimer); armedTimer = null;
+        if (!following || document.hidden) return;
+        let armed = null;
+        try { armed = (await api("/firmware/printers/armed")).armed; } catch (e) { armed = null; }
+        if (!following) return;
+        if (armed) {
+            const now = Date.now();
+            for (const b of all.values()) {
+                const was = !!b.armedUntil;
+                b.armedUntil = armed[b.port] ? now + armed[b.port] * 1000 : 0;
+                if (was !== !!b.armedUntil) emit(b.port, "control");
+            }
+        }
+        if (!armedSecond && [...all.values()].some((b) => b.armedUntil)) armedSecond = setInterval(countSecond, 1000);
+        armedTimer = setTimeout(followArmed, ARMED_MS);
+    }
+    function countSecond() {
+        for (const b of all.values()) {
+            if (!b.armedUntil) continue;
+            if (b.armedUntil <= Date.now()) b.armedUntil = 0;
+            emit(b.port, "control");
+        }
+        if (![...all.values()].some((b) => b.armedUntil)) { clearInterval(armedSecond); armedSecond = null; }
+    }
+    followArmed();
+
     // --- the page itself ---------------------------------------------------------------------------
-    function onVisibility() { for (const b of all.values()) schedule(b); }
+    function onVisibility() { for (const b of all.values()) schedule(b); if (!armedTimer) followArmed(); }
     document.addEventListener("visibilitychange", onVisibility);
     function onUnload() { for (const b of all.values()) { b.gen++; clearTimeout(b.timer); closeStream(b); } }
     window.addEventListener("beforeunload", onUnload);
@@ -392,6 +429,7 @@ export function mountBoards({ base = "", site = () => null } = {}) {
         isHeld: (port) => model.links.has(port),
         destroy() {
             onUnload();
+            following = false; clearTimeout(armedTimer); clearInterval(armedSecond);
             document.removeEventListener("visibilitychange", onVisibility);
             window.removeEventListener("beforeunload", onUnload);
             all.clear();

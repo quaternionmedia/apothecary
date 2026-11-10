@@ -1414,6 +1414,15 @@ class ControlLatch:
         if self.armed(port):
             self.arm(port, ttl)
 
+    def armed_ports(self) -> Dict[str, float]:
+        """Every port armed now, and its seconds left; the lapsed ones are let go."""
+        _read_port_list()
+        with self._lock:
+            now = time.monotonic()
+            for port in [p for p, until in self._until.items() if until <= now]:
+                del self._until[port]
+            return {port: round(until - now, 1) for port, until in self._until.items()}
+
 
 class LinkBusy(PortHeld):
     """The link is held by a long exchange and the caller would not wait."""

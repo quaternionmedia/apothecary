@@ -112,8 +112,9 @@ or why it did nothing.
   second, of the same key, within 5 s of the first being let go, arms it for the latch's own
   five minutes through the same `ControlLatch`. One long press alone, a second after the
   window, a short press, another key or a knob turned between them, or a long press of the
-  other machine's key arms nothing. A turn while disarmed sends nothing and the strip says
-  *disarmed*;
+  other machine's key arms nothing. Armed this way, the machine's badge in the world and
+  its row in Site say so with the time left, its Machine open or not. A turn while
+  disarmed sends nothing and the strip says *disarmed*;
 - the line is normalised in the port's dialect and refused outside its bounds before it
   reaches the port: a router's jog is `$J=G91 G21 X.. F1000` and at most 600 mm, a
   printer's is `G91`, `G1 X.. F3000` and `G90`, at most 300 mm, with the return to

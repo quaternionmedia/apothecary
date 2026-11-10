@@ -1135,6 +1135,20 @@ def test_control_latch_arms_renews_and_lapses(monkeypatch):
     assert not latch.armed("/dev/x")
 
 
+def test_the_armed_route_lists_every_port_armed_and_its_time_left(fake_arduino_cli, scripted_links):
+    """However a port was armed, the route lists it with its seconds left, and a lapsed
+    one no more."""
+    c = TestClient(app)
+    port = "/dev/ttyFAKE1"
+    assert c.get("/firmware/printers/armed").json() == {"armed": {}}
+    scripted_links.control.arm(port, ttl=60)
+    armed = c.get("/firmware/printers/armed").json()["armed"]
+    assert list(armed) == [port] and 55 <= armed[port] <= 60
+    scripted_links.control.arm(port, ttl=0.01)
+    time.sleep(0.05)
+    assert c.get("/firmware/printers/armed").json() == {"armed": {}}
+
+
 def test_control_route_requires_the_latch(fake_arduino_cli, fresh_task_runner, scripted_links):
     c = TestClient(app)
     port = "/dev/ttyFAKE1"

@@ -172,7 +172,7 @@ while their thing is selected; three or more that overlap fold into one,
 |---|---|---|
 | ▣ | a picture lying where it was pinned: its host or the floor, the file, its shapes | selects the host, or the floor |
 | 📷 | a camera: its device, its lens, where its next picture lands | selects the camera |
-| ⚡ or 🖨 | a pinned board: a devkit's state, or a printer's state and readings | selects the machine and opens its Machine |
+| ⚡ or 🖨 | a pinned board: a devkit's state, or a printer's state and readings; armed, red, with the time its arm has left, however it was armed | selects the machine and opens its Machine |
 
 A badge passes the right button to what it stands for: a still right-click on
 it re-centres the view there, and Ctrl+right-click opens that piece's ring (the

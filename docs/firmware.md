@@ -594,6 +594,11 @@ goes. The pad goes with its Machine -- closed by its ✕, another board's Machin
 in its place, another site loaded, or the board unpinned or gone from the site -- so
 the board is disarmed then, and the status bar says so.
 
+However it was armed -- its Machine, the deck's two long presses, another browser -- and
+whether or not its Machine is open, an armed machine says so on its badge in the world
+and its row in Site, red, with the time its arm has left: the page asks for every port
+armed every two seconds while it is in front (`GET /firmware/printers/armed`).
+
 What can be sent is a bounded allowlist, `firmware.gcode.CONTROL_CODES`
 (heaters and fan, homing, moves, extrude and retract, motors off, SD start,
 pause and abort, mesh on and off, probing, break wait, quickstop), with heater,
@@ -619,6 +624,7 @@ hotend's temperature before sending the line.
 ```
 POST /firmware/printers/control  {"port": …, "armed": true, "ttl_s": 300}
 GET  /firmware/printers/control?port=…                               → armed, and the seconds left
+GET  /firmware/printers/armed                                        → every port armed, and its seconds left
 POST /firmware/printers/command  {"port": …, "command": "M140 S60"}   → 409 unless armed
 ```
 
