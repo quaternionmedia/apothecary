@@ -194,4 +194,5 @@ glare and a smear, with notes beside the shapes, and framed by a wall.
 - **The page.** Find shapes on a host's ring offers `outline` beside `plain` for a
   picture that holds a drawing (`tests/test_outline_finder.py`); no browser test walks
   a drawing through it.
-- **Round again.** A second photograph of a changed drawing makes its pieces anew.
+- **Round again.** [Page 29](29-a-whiteboard-round-twice.md) goes round twice: a second
+  photograph of a changed drawing, what changed proposed, and a row taken.

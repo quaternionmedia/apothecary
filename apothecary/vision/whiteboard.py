@@ -25,7 +25,7 @@ from typing import List, Optional, Sequence, Tuple
 from pydantic import BaseModel
 
 from .geometry import edge_points, outline
-from .outline import read_strokes
+from .outline import WIDER_BY, read_strokes
 
 FORMAT = "apothecary.corners/1"
 
@@ -78,6 +78,18 @@ def find(image: Path) -> Corners:
         max(hull, key=lambda p: p[0] - p[1]),
         max(hull, key=lambda p: p[0] + p[1]),
         min(hull, key=lambda p: p[0] - p[1]),
+    ]
+    # The surface is read short of its own edge by what a stroke is widened by,
+    # the wall's edge being read as one: each corner goes that far back out.
+    out = WIDER_BY - 0.5
+    middle_x = sum(x for x, _ in picked) / 4
+    middle_y = sum(y for _, y in picked) / 4
+    picked = [
+        (
+            min(max(x + (out if x > middle_x else -out), 0), wide),
+            min(max(y + (out if y > middle_y else -out), 0), high),
+        )
+        for x, y in picked
     ]
     found = [(round(x / wide, 4), round(y / high, 4)) for x, y in picked]
     near = 2 / max(wide, high)

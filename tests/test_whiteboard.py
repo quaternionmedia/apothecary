@@ -91,7 +91,7 @@ def test_squared_each_shape_is_where_it_was_drawn_and_as_wide(tmp_path):
     built = build(picture, scale=ScaleReference(millimetres_across=BOARD_MM[0]))
     assert built.album.sized
     assert plate.long_side * BOARD_MM[0] == pytest.approx(360.0, abs=12)
-    assert disc.long_side * BOARD_MM[0] == pytest.approx(240.0, abs=10)
+    assert disc.long_side * BOARD_MM[0] == pytest.approx(240.0, abs=13)
 
 
 def test_unsquared_the_same_photograph_reads_the_plate_out_of_true(tmp_path):

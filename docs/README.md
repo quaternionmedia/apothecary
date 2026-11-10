@@ -9,7 +9,7 @@ at `/README.md`, and every page's bar links it. The HTTP API is described at `/o
 
 `walkthrough/` is the path through this repository. Pages 01 to 06, 18, 26 and 27 are
 written by the browser tests that walk them; page 00, pages 07 to 17, pages
-19 to 23 and page 28 are doctests, run by `pytest walkthrough`. Start there, at page 00.
+19 to 23 and pages 28 and 29 are doctests, run by `pytest walkthrough`. Start there, at page 00.
 
 | Page | |
 |---|---|
@@ -40,6 +40,7 @@ written by the browser tests that walk them; page 00, pages 07 to 17, pages
 | [26 — The Stream Deck +](../walkthrough/26-the-stream-deck.md) | An Elgato Stream Deck + at the garage's bench: its piece opens the Deck window, a program draws its eight keys and strip, and a simulated deck is pressed, turned and tapped, each event listed and kept; written by the browser suite |
 | [27 — The deck jogging the machines](../walkthrough/27-the-deck-jogging-the-machines.md) | The Stream Deck +'s knobs jog the router through the control latch: its layout drawn, a turn disarmed moving nothing, an armed jog read back on the X key, the step key, and the stop key stopping a spinning spindle; written by the browser suite |
 | [28 — A whiteboard to a model](../walkthrough/28-a-whiteboard-to-a-model.md) | A drawing in marker read by the `outline` finder: the whiteboard as the ground, each closed stroke the shape of what it encloses, named, placed and sized, with what the `plain` finder makes of the same picture |
+| [29 — A whiteboard, round twice](../walkthrough/29-a-whiteboard-round-twice.md) | The whiteboard loop by its commands: a photograph squared to its whiteboard, its marks sorted and a person's word kept, its note typed and its size offered, a plate made with its cut, then the drawing changed and photographed again, what changed proposed and one row taken |
 
 ## The checklists
 

@@ -290,18 +290,18 @@ def shapes_of(
         if stroke.outer != region or (keep is not None and not keep(stroke)):
             continue
         whole = _filled(stroke.blob, width)
-        covered = _describe(whole, width, height)
+        covered = _described(whole, width, height)
         if not stroke.closed and len(stroke.holes) <= 1:
             # A mark filled in: no hole, or one as dark as the mark, which is the
             # middle of a filled shape wider than the whiteboard is looked for round
             # a pixel. It is read as narrow as it was drawn.
-            drawn = _describe(_narrowed(whole, width), width, height)
+            drawn = _described(_narrowed(whole, width), width, height)
             if drawn is not None and (stroke.holes or _a_filled_shape(drawn, stroke.blob, width)):
                 found.append((len(stroke.blob), drawn, False, stroke.index))
             continue
         for hole in stroke.holes:
             inside = _filled(reading.regions[hole - 1], width)
-            shape = _describe(inside, width, height)
+            shape = _described(inside, width, height)
             if shape is None:
                 continue
             if len(stroke.holes) == 1 and covered is not None:
@@ -334,6 +334,12 @@ def _small_family(blob: List[int], width: int) -> Optional[ShapeKind]:
         ((kind, abs(fullness - ideal)) for kind, ideal in _SMALL_FAMILIES), key=lambda one: one[1]
     )
     return family if gap <= 0.12 else None
+
+
+def _described(blob: List[int], width: int, height: int) -> Optional[FoundShape]:
+    """A blob as the plain finder describes one, and nothing for a blob narrowed
+    away to no pixels."""
+    return _describe(blob, width, height) if blob else None
 
 
 def _a_filled_shape(mark: FoundShape, blob: List[int], width: int) -> bool:

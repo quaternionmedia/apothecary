@@ -13,7 +13,10 @@ two readings compared and the rows a person takes applied
 ([pictures.md](../pictures.md#a-whiteboard-photographed-again)). Not built of
 those: the marks, the corners, the cuts, the notes and the rows shown and
 refined in the page, a note's changed writing asked for again, and the
-whiteboard as a part. Each slice
+whiteboard as a part. Of slice 7, the loop by its commands is
+[walkthrough 29](../../walkthrough/29-a-whiteboard-round-twice.md); the loop
+through the page, page 00's fifth loop and the demo's whiteboard are not
+built. Each slice
 is one branch of a short stack, built in the order listed once the owner says
 yes to it.*
 

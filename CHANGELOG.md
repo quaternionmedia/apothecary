@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- Walkthrough page 29, *A whiteboard, round twice*: the whiteboard loop by its commands, from a photograph squared to its whiteboard to a second photograph's changes proposed and one row taken. ([page](walkthrough/29-a-whiteboard-round-twice.md))
 - `apothecary photo again` reads two pictures of one whiteboard and lists what changed as rows -- moved, resized, new, gone -- each saying by how much; nothing changes until a row is taken, and a shape whose sides a person stated is not proposed over. ([doc](docs/pictures.md#a-whiteboard-photographed-again))
 - A whiteboard's writing is kept as notes, each with what it is about: `apothecary photo notes` lists them and takes a person's words for one, offers a size typed beside a line as that line's length with the picture's width that follows, sends the words to looksatwords as a transcript (`--send`) and asks qmcp which of some words a note holds (`--ask --among`), each over loopback. ([doc](docs/pictures.md#a-whiteboards-notes))
 - A closed stroke drawn inside a shape on a whiteboard is a cut through it: the shape carries its cuts, and the piece made of it has each taken out where it was drawn. ([doc](docs/pictures.md#finders))
