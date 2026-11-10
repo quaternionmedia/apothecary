@@ -19,7 +19,11 @@ poll of a port no pin names is kept as a sighting, `usb:<its identity>`.
 Only what changed is written: a word when it changes, a number past its
 tolerance, the board's `present` at least once a minute while polled, and
 every value at least every few hours. The poll an observation rests on is
-written beside it with every line the printer sent.
+written beside it with every line the printer sent. A value holds until a
+poll changes it: it is current while its board answers, and once the board
+has not answered within `HEARD_S` (`apothecary/evidence/view.py`) it is last
+known at the board's last answer, which said it again, not at the poll that
+last changed it.
 
 A frame the Working space keeps with a poll is kept under the picture root's
 `captures/`, as any camera's frame is, and recorded beside that poll. It is

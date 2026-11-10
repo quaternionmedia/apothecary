@@ -10,7 +10,8 @@ or socket. For a space, a moment ``at`` and a span from ``since``:
   kept, neither is the state), or ``unknown``;
 - ``current``: whether a property's source is still heard. A poll's value
   holds until a poll changes it, and is current while its board has answered
-  within ``HEARD_S``; past that it is *last known at* its moment;
+  within ``HEARD_S``; past that it is *last known at* ``heard_at``, the board's
+  last answer, and its own ``at`` is when it last changed;
 - ``transitions``: in the span, each word that changed (a printer's state, a
   board present or not), with the evidence on either side;
 - ``series``: in the span, each number as it moved, for a timeline's strips,

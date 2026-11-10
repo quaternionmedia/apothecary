@@ -21,6 +21,7 @@ cameras, as the bench plan has the Ender's three: the bed, the head, the room.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta
 
 import httpx
 import pytest
@@ -375,6 +376,39 @@ def test_closed_it_keeps_no_frame_whoever_polls_the_printer(page, url):
         PRINTER,
     )
     assert page.evaluate("() => window.framesAsked") == []
+
+
+@pytest.mark.e2e
+def test_a_value_no_longer_heard_is_last_known_at_its_board_s_last_answer(page, url):
+    """A printer whose board has not answered lately is last heard, and each of its
+    values last known, at the board's last answer, not at the poll that last changed
+    the value. The site's document is given a printer_1 not heard for ten minutes
+    whose state last changed two hours ago."""
+    moments: dict = {}
+
+    def unheard(route):
+        doc = route.fetch().json()
+        at = datetime.fromisoformat(doc["at"])
+        moments["changed"] = (at - timedelta(hours=2)).isoformat()
+        moments["answered"] = (at - timedelta(minutes=10)).isoformat()
+        for subject in doc["subjects"]:
+            for p in subject["properties"]:
+                if subject["subject"] == "garage:printer_1" and p["property"] == "state":
+                    p.update(current=False, at=moments["changed"], heard_at=moments["answered"])
+        route.fulfill(json=doc)
+
+    page.route(re.compile(r"/sites/garage/evidence(\?.*)?$"), unheard)
+    open_garage(page, url)
+    windows.from_the_windows_menu(page, "working")
+    window = page.locator(WINDOW)
+    expect(window.locator(".ws-printer[data-printer='printer_1']")).to_contain_text("last heard")
+    hhmm = "iso => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })"
+    answered = page.evaluate(hhmm, moments["answered"])
+    expect(window.locator(".ws-printer[data-printer='printer_1']")).to_contain_text(
+        f"last heard {answered}"
+    )
+    state = window.locator("tr.ws-property", has=page.locator("td", has_text=re.compile("^state$")))
+    expect(state.locator("td").nth(3)).to_have_text(f"last known {answered}")
 
 
 @pytest.mark.e2e

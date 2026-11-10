@@ -219,7 +219,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
                 if (!t || t.value == null) return "";
                 return line.unit === "°C" ? `${line.name} ${degrees(t.value)} °C` : `${line.name} ${esc(t.value)} ${line.unit}`;
             }).filter(Boolean).join(" · ") : "";
-            const heard = st ? (st.current ? "answering now" : `last heard ${hhmm(st.at)}`) : pr.port ? "not polled yet" : "its board is not answering";
+            const heard = st ? (st.current ? "answering now" : `last heard ${hhmm(st.heard_at || st.at)}`) : pr.port ? "not polled yet" : "its board is not answering";
             const cams = pr.cameras.length ? `${pr.cameras.length} camera${pr.cameras.length === 1 ? "" : "s"}` : "no camera";
             return `<div class="ws-printer" data-printer="${esc(pr.path)}"><strong>${esc(pr.path)}</strong> <span>${st ? esc(st.value) : ""}${heat ? ` · ${heat}` : ""}</span> <span class="muted">${heard} · ${cams}</span> <button type="button" class="ws-hour" data-do="hour" data-path="${esc(pr.path)}">${esc(pr.path)}'s hour ›</button></div>`;
         }).join("");
@@ -295,7 +295,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
         q(".ws-subjects thead").innerHTML = shown.length ? "<tr><th>what</th><th>value</th><th>how it is known</th><th>when</th></tr>" : "";
         return shown.map((e) => `<tr class="ws-subject" title="${esc(e.subject)}"><th colspan="4">${esc(named(e.subject))}</th></tr>` + e.properties.map((p) => {
             const poll = (p.evidence || []).find((r) => r.kind === "poll");
-            const heard = p.current ? "now" : `last known ${hhmm(p.at)}`;
+            const heard = p.current ? "now" : `last known ${hhmm(p.heard_at || p.at)}`;
             return `<tr class="ws-property${p.current ? "" : " ws-stale"}"${poll ? ` data-poll="${esc(poll.id)}"` : ""} title="${esc(p.origin.kind)} by ${esc(p.origin.by.name)}${poll ? ": click for the poll's lines" : ""}"><td>${esc(p.property)}</td><td>${value(p)}</td><td>${known(p)}</td><td>${heard}</td></tr>`;
         }).join("")).join("") || `<tr><td class="muted">nothing is said of ${esc(s ? state.path : site())} yet: a machine pinned here says it once it is polled</td></tr>`;
     }

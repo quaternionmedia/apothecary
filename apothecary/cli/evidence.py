@@ -57,7 +57,7 @@ def show(space: str, as_json: bool):
     for subject in document["subjects"]:
         click.echo(subject["subject"])
         for prop in subject["properties"]:
-            heard = "" if prop["current"] else f", last known at {prop['at']}"
+            heard = "" if prop["current"] else f", last known at {prop['heard_at'] or prop['at']}"
             how = f"{prop['origin']['kind']}, {prop['standing']}"
             click.echo(f"  {prop['property']:<12} {_value(prop):<28} {how}{heard}")
     if document["unreadable"]:

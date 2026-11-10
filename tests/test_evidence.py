@@ -138,6 +138,34 @@ def test_the_view_says_how_each_value_is_known_and_what_changed(state_dir):
     assert state["value"] == "idle" and not state["current"]
 
 
+def test_a_value_no_longer_heard_is_last_known_at_its_board_s_last_answer(state_dir):
+    """Past HEARD_S a value is last known at its board's last answer, which said it
+    again, and not at the poll that last changed it: `evidence show` says so."""
+    from click.testing import CliRunner
+
+    from apothecary.cli import cli
+
+    now = datetime.now(timezone.utc)
+    changed, answered = now - timedelta(minutes=10), now - timedelta(minutes=5)
+    collector = printers.Collector()
+    collector.take(poll(changed), [PIN], "A106ZTEU")
+    collector.take(poll(answered), [PIN], "A106ZTEU")
+    seen = log.document("garage", at=now)
+    state = next(
+        p
+        for s in seen["subjects"]
+        if s["subject"] == "garage:printer_1"
+        for p in s["properties"]
+        if p["property"] == "state"
+    )
+    assert not state["current"]
+    assert (state["at"], state["heard_at"]) == (changed.isoformat(), answered.isoformat())
+    shown = CliRunner().invoke(cli, ["evidence", "show", "--site", "garage"])
+    assert shown.exit_code == 0, shown.output
+    [line] = [ln for ln in shown.output.splitlines() if ln.split()[:1] == ["state"]]
+    assert line.endswith(f"last known at {answered.isoformat()}")
+
+
 def test_two_kinds_of_source_agree_or_disagree():
     def obs(kind, value):
         return Observation(
