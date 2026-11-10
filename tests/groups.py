@@ -87,6 +87,7 @@ GROUPS = {
             "test_rust_installer.py",
             "test_state_folder.py",
             "test_stream_deck_part.py",
+            "test_whiteboard_part.py",
             "test_demo.py",
         ),
     },
