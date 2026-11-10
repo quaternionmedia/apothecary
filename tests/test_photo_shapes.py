@@ -82,7 +82,7 @@ def test_both_finders_satisfy_the_connection():
 
 
 def test_both_finders_are_registered():
-    assert names() == ["plain", "stated"]
+    assert names() == ["outline", "plain", "stated"]
     assert get("plain").name() == "plain"
     assert get("stated").name() == "stated"
 
@@ -381,7 +381,7 @@ def test_words_lists_the_vocabulary():
 def test_finders_lists_both():
     result = CliRunner().invoke(cli, ["photo", "finders"])
     assert result.exit_code == 0
-    assert result.output.split() == ["plain", "stated"]
+    assert result.output.split() == ["outline", "plain", "stated"]
 
 
 # ---------------------------------------------------------------- turned pieces

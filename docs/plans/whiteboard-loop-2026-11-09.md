@@ -1,7 +1,10 @@
 # A whiteboard to a model, and round again: a plan
 
-*A plan, dated. Nothing of it is built. Each slice is one branch of a short
-stack, built in the order listed once the owner says yes to it.*
+*A plan, dated. Built: slice 1, the `outline` finder
+([pictures.md](../pictures.md#finders),
+[walkthrough 28](../../walkthrough/28-a-whiteboard-to-a-model.md)). Each slice
+is one branch of a short stack, built in the order listed once the owner says
+yes to it.*
 
 ## What this plans
 
@@ -61,11 +64,10 @@ devkit, a printer's mainboard) and *sketch* is firmware, so the drawing is a
 - A picture's ways in: dropped or pasted on the page, added from disk, put in
   the picture folder, taken by a camera of the site.
 
-## What a drawing reads as today
+## What a drawing reads as to the plain finder
 
 Three pictures drawn to order, each a rectangle, a circle and a triangle on a
-light ground, read by `apothecary photo find` at the commit this plan is
-written on:
+light ground, read by `apothecary photo find --finder plain`:
 
 | The picture | What `photo find` says |
 |---|---|
@@ -122,14 +124,26 @@ A third finder, `outline`, registered beside `plain` and `stated`:
   a shadow or a glare across the whiteboard moves no stroke to the wrong side;
 - a closed stroke is the shape of what it encloses, named by the rule the plain
   finder names a filled shape by, and no surer than the plain finder is;
-- a stroke that does not close is a `line`, reported and never made;
+- a mark filled in is the shape it covers;
+- a stroke that neither closes nor fills a shape, a dimension line, an arrow or
+  writing, is not reported, and neither is a stroke inside a shape, which
+  slice 2 reads;
+- a gap in a stroke a few pixels of the working picture wide is closed, and a
+  wider one leaves the stroke open;
 - Pillow alone, with the network off, as every finder is.
 
-`apothecary photo check` gains drawn whiteboards whose answers are known: a
-stroke's width, a gap in a stroke, a shadow's gradient, a glare, a frame and a
-tray, a smear. The page's Find shapes offers `outline` where it reads the
-picture, as it offers any finder. Held by `tests/test_outline_finder.py` and
-the bench; the hermetic half of the path's page is written here.
+`apothecary photo check` draws whiteboards whose answers are known: in
+outline, turned, faint, a gap in a stroke, a shadow's gradient, a glare, a
+smear, notes beside the shapes, a wall, a frame and a tray. The page's Find
+shapes offers `outline` beside `plain` for a picture that holds a drawing, a
+closed stroke at least, and stays one press for any other. Held by
+`tests/test_outline_finder.py`, whose floors are the bench's; the hermetic half
+of the path's page is
+[walkthrough 28](../../walkthrough/28-a-whiteboard-to-a-model.md).
+
+Not in it: a shadow with a hard edge, which, where it is dark enough to read
+as a stroke, loses a shape it crosses; a shape filled in faintly, which it
+misses; and a real photograph.
 
 ### 2. A stroke inside a stroke is a cut
 
@@ -172,10 +186,10 @@ test that goes round twice.
 
 ### 5. The path, promoted
 
-- **Its page**: `walkthrough/NN-a-whiteboard-to-a-model.md`, the next number
-  free when it lands, written by the browser test that walks the path twice
-  round, with the command line's half as its opening steps; a row of the
-  README's map, held by `tests/test_readme_map.py`.
+- **Its page**: a runtime-bound page beside
+  [walkthrough 28](../../walkthrough/28-a-whiteboard-to-a-model.md), the next
+  number free when it lands, written by the browser test that walks the path
+  twice round; a row of the README's map, held by `tests/test_readme_map.py`.
 - **In the demo**: `apothecary serve --demo`'s picture folder holds a drawn
   whiteboard, so the path is a drop and three cells away for a newcomer, and
   page 00's table of loops names it.
@@ -187,9 +201,9 @@ test that goes round twice.
 
 | Slice | Page | Written by |
 |---|---|---|
-| 1 | the path's page, hermetic: a drawn whiteboard read, named, placed and sized | its own doctests |
-| 2 | the same page gains a piece with a cut | the same |
-| 3 to 5 | the page becomes runtime-bound, or a second page beside it is: the photograph dropped, squared, sized, found, made, adjusted, and round again | a browser test, its pictures recorded and never compared |
+| 1 | 28, *A whiteboard to a model*, hermetic: a drawn whiteboard read, named, placed and sized | its own doctests |
+| 2 | 28 gains a piece with a cut | the same |
+| 3 to 5 | a runtime-bound page beside it: the photograph dropped, squared, sized, found, made, adjusted, and round again | a browser test, its pictures recorded and never compared |
 
 ## Questions the owner decides
 

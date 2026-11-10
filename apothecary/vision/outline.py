@@ -1,0 +1,314 @@
+"""A finder that reads a drawing: marker strokes on a whiteboard.
+
+Where the plain finder gathers dark pixels into blobs, this one reads what a
+stroke encloses. A pixel is a stroke's when it is darker than the whiteboard
+near it, so a shadow or a glare across the whiteboard moves no stroke to the
+wrong side, and a smear is not a stroke. The ground is the largest light region the strokes leave, whatever runs
+round the picture's edge, and is never a shape. A stroke lying on the ground
+that closes is the shape of what it encloses, named by the plain finder's rule
+and no surer than the plain finder is. A mark filled in is the shape it covers.
+A stroke that neither closes nor fills a shape -- a dimension line, an arrow,
+writing -- is not reported, and neither is a stroke inside a shape.
+
+Find shapes offers it for a picture that holds a drawing, one closed stroke
+at least (``reads``), so a picture of filled shapes keeps its one finder.
+
+Pillow and plain Python, with the network switched off. Every shape is marked
+``outline``.
+
+A prototype: no ratified record governs it.
+"""
+
+from __future__ import annotations
+
+import functools
+from array import array
+from pathlib import Path
+from typing import List, Set, Tuple
+
+from .models import FoundShape, Picture, ShapeKind
+from .plain import (
+    _FLIP,
+    MIN_BLOB_PIXELS,
+    WORKING_EDGE,
+    PictureLibraryMissing,
+    _blobs,
+    _describe,
+    _split_point,
+)
+
+# How far round a pixel the whiteboard's own brightness is looked for, as a share
+# of the working edge: the lightest there is taken as the whiteboard's. Wider than
+# any stroke, narrower than a shadow's soft edge.
+SURROUND = 1 / 32
+
+# A pixel is a stroke's when it is darker than the whiteboard near it by this
+# share of the whiteboard's brightness. A share, not a count: a stroke under a
+# shadow is as much darker than the shadowed whiteboard as one in the light is
+# than the lit. A smear is darker by less.
+DARKER_BY = 0.25
+
+# How many pixels a stroke is widened by on every side before it is read.
+WIDER_BY = 2
+
+# A mark with no hole is a shape filled in when some of it lies this many pixels
+# from its own edge: more than half a marker's line, however the line turns.
+FILLED_FROM = 8
+
+# Where a stroke's upper neighbour is the picture's own edge.
+_OUTSIDE = -1
+
+# What a mark with no hole is reported as: a filled shape, never a line or a scribble.
+_FILLED = (ShapeKind.RECT, ShapeKind.DISC, ShapeKind.TRI)
+
+
+class OutlineFinder:
+    """Finds what a drawing's strokes enclose, using only Pillow and plain Python."""
+
+    def __init__(self, working_edge: int = WORKING_EDGE) -> None:
+        self.working_edge = working_edge
+
+    def name(self) -> str:
+        return "outline"
+
+    def look(self, image: Path) -> Picture:
+        return self._look(Path(image))[0]
+
+    def reads(self, image: Path) -> bool:
+        """Whether a picture holds a drawing: a closed stroke lying on its ground."""
+        from .cache import picture_hash
+
+        return _closed_strokes(picture_hash(Path(image)), Path(image), self.working_edge) > 0
+
+    def _look(self, image: Path) -> Tuple[Picture, int]:
+        """The picture as read, and how many of its shapes a closed stroke made."""
+        try:
+            from PIL import Image, ImageFilter, ImageOps
+        except ImportError as exc:  # pragma: no cover - depends on install
+            raise PictureLibraryMissing(
+                "the outline finder needs Pillow; install it or use the stated finder"
+            ) from exc
+
+        with Image.open(image) as opened:
+            upright = ImageOps.exif_transpose(opened)
+            full_width, full_height = upright.size
+            if upright.mode in ("RGBA", "LA") or "transparency" in upright.info:
+                filled = Image.new("RGBA", upright.size, (255, 255, 255, 255))
+                filled.paste(upright.convert("RGBA"), mask=upright.convert("RGBA"))
+                upright = filled
+            grey = upright.convert("L")
+            scale = self.working_edge / max(grey.size)
+            grey = grey.resize(
+                (max(1, round(grey.width * scale)), max(1, round(grey.height * scale)))
+            )
+            width, height = grey.size
+            # The lightest within reach, four pixels further at each pass.
+            around = grey
+            for _ in range(max(1, round(self.working_edge * SURROUND / 4))):
+                around = around.filter(ImageFilter.MaxFilter(9))
+            around = around.filter(ImageFilter.BoxBlur(4))
+            pixels = grey.tobytes()
+            marked = bytes(
+                1 if value < near - near * DARKER_BY else 0
+                for value, near in zip(pixels, around.tobytes(), strict=True)
+            )
+            # Wider all round: a stroke a pixel thin on a slant holds together, and
+            # a gap in one no wider than twice this closes.
+            stroke_mask = (
+                Image.frombytes("L", (width, height), marked)
+                .filter(ImageFilter.MaxFilter(2 * WIDER_BY + 1))
+                .tobytes()
+            )
+            light_from = _split_point(grey.histogram())
+
+        strokes = _blobs(stroke_mask, width, height, MIN_BLOB_PIXELS)
+        regions = _blobs(stroke_mask.translate(_FLIP), width, height, MIN_BLOB_PIXELS)
+        read = _read(strokes, regions, pixels, light_from, width, height)
+        picture = Picture(
+            name=image.stem,
+            pixel_width=full_width,
+            pixel_height=full_height,
+            shapes=[shape for shape, _ in read],
+            finder=self.name(),
+        )
+        return picture, sum(1 for _, closed in read if closed)
+
+
+@functools.lru_cache(maxsize=256)
+def _closed_strokes(digest: str, image: Path, working_edge: int) -> int:
+    """How many closed strokes a picture holds, read once for its bytes' hash."""
+    try:
+        return OutlineFinder(working_edge)._look(image)[1]
+    except (OSError, ValueError):
+        return 0
+
+
+def _read(
+    strokes: List[List[int]],
+    regions: List[List[int]],
+    pixels: bytes,
+    light_from: int,
+    width: int,
+    height: int,
+) -> List[Tuple[FoundShape, bool]]:
+    """The shapes the strokes on the ground make, largest first, each with whether
+    a closed stroke made it (a mark filled in did not)."""
+    if not regions:
+        return []
+    # A region's label is its place in the list, from 1; a stroke's pixel, and a
+    # speck too small to be either, is 0.
+    labels = array("i", bytes(4 * width * height))
+    for label, region in enumerate(regions, start=1):
+        for index in region:
+            labels[index] = label
+    ground = _ground(regions, pixels, light_from)
+
+    found: List[Tuple[int, FoundShape, bool]] = []
+    for stroke in strokes:
+        top = min(stroke)
+        outer = labels[top - width] if top >= width else _OUTSIDE
+        if outer != ground:
+            continue
+        holes = _touching(stroke, labels, width, height) - {outer, 0}
+        whole = _filled(stroke, width)
+        covered = _describe(whole, width, height)
+        if not holes or (
+            len(holes) == 1 and not _light(regions[min(holes) - 1], pixels, light_from)
+        ):
+            # A mark filled in: no hole, or one as dark as the mark, which is the
+            # middle of a filled shape wider than the whiteboard is looked for round
+            # a pixel. It is read as narrow as it was drawn.
+            drawn = _describe(_narrowed(whole, width), width, height)
+            if drawn is not None and (holes or _a_filled_shape(drawn, stroke, width)):
+                found.append((len(stroke), drawn, False))
+            continue
+        for hole in sorted(holes):
+            inside = _filled(regions[hole - 1], width)
+            shape = _describe(inside, width, height)
+            if shape is None:
+                continue
+            if len(holes) == 1 and covered is not None:
+                # A marker's line has a width, and the drawing means its middle:
+                # halfway between what the stroke encloses and what it covers.
+                shape = _between(shape, covered)
+            found.append((len(inside), shape, True))
+    found.sort(key=lambda one: one[0], reverse=True)
+    return [(shape.model_copy(update={"origin": "outline"}), closed) for _, shape, closed in found]
+
+
+def _a_filled_shape(mark: FoundShape, blob: List[int], width: int) -> bool:
+    """Whether a mark with no hole is a shape filled in: one of the families, and
+    deeper than a marker's line is wide."""
+    if mark.kind not in _FILLED:
+        return False
+    from PIL import ImageFilter
+
+    box, _, _ = _boxed(blob, width, margin=FILLED_FROM)
+    for _ in range(FILLED_FROM // 2):
+        box = box.filter(ImageFilter.MinFilter(5))
+    return box.getbbox() is not None
+
+
+def _light(region: List[int], pixels: bytes, light_from: int) -> bool:
+    """Whether a region is on the light side of the picture's split of light from dark."""
+    sample = region[:: max(1, len(region) // 500)]
+    return sum(pixels[index] for index in sample) / len(sample) > light_from
+
+
+def _ground(regions: List[List[int]], pixels: bytes, light_from: int) -> int:
+    """The label of the whiteboard's own surface: the largest light region, or the
+    largest of all when none is light."""
+    for label, region in enumerate(regions, start=1):
+        if _light(region, pixels, light_from):
+            return label
+    return 1
+
+
+def _touching(stroke: List[int], labels: array, width: int, height: int) -> Set[int]:
+    """The labels of every region a stroke's pixels sit against."""
+    last = width * height
+    beside: Set[int] = set()
+    for index in stroke:
+        column = index % width
+        if column:
+            beside.add(labels[index - 1])
+        if column < width - 1:
+            beside.add(labels[index + 1])
+        if index >= width:
+            beside.add(labels[index - width])
+        if index + width < last:
+            beside.add(labels[index + width])
+    return beside
+
+
+def _filled(blob: List[int], width: int) -> List[int]:
+    """A blob with everything it encloses: each pixel its own box holds that the
+    box's edge cannot reach without crossing the blob."""
+    from PIL import ImageDraw
+
+    box, left, top = _boxed(blob, width, margin=1)
+    wide = box.width
+    ImageDraw.floodfill(box, (0, 0), 128)
+    return [
+        (top + offset // wide) * width + left + offset % wide
+        for offset, value in enumerate(box.tobytes())
+        if value != 128
+    ]
+
+
+def _narrowed(blob: List[int], width: int) -> List[int]:
+    """A blob less what its strokes were widened by."""
+    from PIL import ImageFilter
+
+    box, left, top = _boxed(blob, width, margin=1)
+    wide = box.width
+    box = box.filter(ImageFilter.MinFilter(2 * WIDER_BY + 1))
+    return [
+        (top + offset // wide) * width + left + offset % wide
+        for offset, value in enumerate(box.tobytes())
+        if value
+    ]
+
+
+def _boxed(blob: List[int], width: int, margin: int):
+    """A blob drawn alone, white on black, ``margin`` pixels of black round it,
+    with where the drawing's left and top are in the picture."""
+    from PIL import Image
+
+    xs = [index % width for index in blob]
+    ys = [index // width for index in blob]
+    left, top = min(xs) - margin, min(ys) - margin
+    wide, high = max(xs) - left + margin + 1, max(ys) - top + margin + 1
+    cells = bytearray(wide * high)
+    for x, y in zip(xs, ys, strict=True):
+        cells[(y - top) * wide + (x - left)] = 255
+    return Image.frombytes("L", (wide, high), bytes(cells)), left, top
+
+
+def _between(inner: FoundShape, outer: FoundShape) -> FoundShape:
+    """The inner shape, its place and sides moved halfway to the outer one's."""
+
+    def half(a: float, b: float) -> float:
+        return (a + b) / 2
+
+    return inner.model_copy(
+        update={
+            "min_point": inner.min_point.model_copy(
+                update={
+                    "x": half(inner.min_point.x, outer.min_point.x),
+                    "y": half(inner.min_point.y, outer.min_point.y),
+                }
+            ),
+            "max_point": inner.max_point.model_copy(
+                update={
+                    "x": half(inner.max_point.x, outer.max_point.x),
+                    "y": half(inner.max_point.y, outer.max_point.y),
+                }
+            ),
+            "long_side": half(inner.long_side, outer.long_side),
+            "short_side": half(inner.short_side, outer.short_side),
+        }
+    )
+
+
+__all__ = ["DARKER_BY", "FILLED_FROM", "SURROUND", "WIDER_BY", "OutlineFinder"]

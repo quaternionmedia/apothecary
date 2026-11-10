@@ -80,7 +80,8 @@ On a host's ring, **Picture** holds:
 | Unpin | Takes the view off its place; the picture stays |
 | Forget | Forgets a kept picture (chosen twice) |
 
-Pinning finds nothing: Find shapes is a step of its own. A view a camera took
+Pinning finds nothing: Find shapes is a step of its own, and its finder is one of
+[the finders](#finders). A view a camera took
 keeps where the camera stood and how it was aimed at that moment, so moving
 the camera after does not move it, and its picture lands through a pinhole. A
 view no camera took is flat on its place, a width across. Pinned at a
@@ -97,6 +98,28 @@ taken of, not a part. Once it has a width, a shape whose footprint lies over
 something resting on the structure is flagged: its area filled in warning red,
 and the place's badge, Find shapes and Size name what it lies over. Make still
 makes it, and the layout check then names the piece.
+
+## Finders
+
+A finder reads a picture and reports flat shapes, each with its family, where it is
+as fractions of the picture, how sure the finder is and which finder it was. Find
+shapes is one press where one finder can read the picture, and a cell for each
+where several can: `stated` where a description lies beside it, `outline` where it
+holds a drawing, a closed stroke at least; `apothecary photo find --finder` takes one by name.
+
+| Finder | Reads | For |
+|---|---|---|
+| `plain` | Light split from dark once for the picture, touching dark pixels gathered into blobs, a blob's family from how much of its tightest box it fills | A thing lying on a plain surface, or a shape filled in |
+| `outline` | Strokes darker than the whiteboard near them; each closed stroke lying on the whiteboard is the shape of what it encloses, as wide as the stroke's middle | A drawing in marker on a whiteboard ([walkthrough 28](../walkthrough/28-a-whiteboard-to-a-model.md)) |
+| `stated` | A description a person wrote beside the picture, `name.shapes.json` | A picture whose shapes somebody knows |
+
+To `outline` the whiteboard is the ground, whatever runs round the picture's edge,
+and never a shape. A shadow or a glare across it moves no stroke, and a smear is not
+one. A stroke left open, a dimension line, an arrow and writing are not shapes; a
+mark filled in is the shape it covers; a stroke inside a shape is left out. A gap
+in a stroke a few pixels of the working picture wide is closed, a wider one leaves
+the stroke open. `apothecary photo check --finder` measures a finder on drawn
+pictures whose answers are known, filled in and in outline.
 
 ## Pieces
 
