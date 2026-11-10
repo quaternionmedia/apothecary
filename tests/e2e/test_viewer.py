@@ -80,12 +80,13 @@ def test_viewer_shows_contents_for_the_loaded_site(page: Page, base_url: str):
     """Test that the garage site's top-level structures appear in Contents:
     the workbench and its printer, plus the building shell, utility
     fixture stubs, storage, the CNC router, the stand it sits on and the coupon
-    on its table, and the boards on the bench the firmware seam binds to (a
-    devkit, the footpedal, an Uno, a Pi, a Teensy).
+    on its table, the boards on the bench the firmware seam binds to (a
+    devkit, the footpedal, an Uno, a Pi, a Teensy), the Stream Deck + and the
+    whiteboard on the wall.
     """
     _open(page, f"{base_url}/viewer/sites/garage")
 
-    expect(page.locator("#contents-list .contents-item")).to_have_count(17)
+    expect(page.locator("#contents-list .contents-item")).to_have_count(18)
     contents = page.locator("#contents-list")
     for name in (
         "workbench",
@@ -105,6 +106,7 @@ def test_viewer_shows_contents_for_the_loaded_site(page: Page, base_url: str):
         "raspberry_pi_4",
         "teensy_40",
         "stream_deck",
+        "whiteboard",
     ):
         expect(contents).to_contain_text(name)
 

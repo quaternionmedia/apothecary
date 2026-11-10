@@ -5,8 +5,8 @@ are yours to run, in order, from a fresh clone.
 
 Four steps take a fresh clone to a viewer with a bench it can drive and no
 hardware plugged in: install, see what this machine has, put a fast OpenSCAD
-in place, and serve the demo. Then the four loops through the page, each with
-what it needs, and the installs only some of them want. Page 07 onward is the
+in place, and serve the demo. Then the five loops, each with what it needs,
+and the installs only some of them want. Page 07 onward is the
 library's tour.
 
 ## 1. Install
@@ -93,10 +93,11 @@ ring, `m` or Ctrl+right-click, which holds every verb of what it opens on, the
 digits pressed to reach one its address. A right-click alone is the camera's.
 [The viewer](../docs/viewer.md) describes each of its controls.
 
-## 5. The four loops
+## 5. The five loops
 
-Each loop is a path through the page that goes round twice, and each has a
-page the browser test that walks it writes as it goes.
+Four loops are paths through the page that go round twice, each with a page the
+browser test that walks it writes as it goes. The fifth, a whiteboard to a
+model, goes round by its commands, with its marks refined in the page.
 
 | Loop | Page | Needs | Under `serve --demo` |
 |---|---|---|---|
@@ -104,6 +105,7 @@ page the browser test that walks it writes as it goes.
 | Editing a part's SCAD, kept as a variant in git | [06](06-editing-a-parts-scad.md) | nothing but OpenSCAD | the same |
 | A picture to a print: a camera's picture, a piece made from it, sliced and printed | [03](03-a-picture-to-a-print.md) | a printer pinned to printer_1's mainboard, OrcaSlicer, and a camera or a picture | the simulated Ender, OrcaSlicer if installed |
 | Firmware: a sketch built, flashed and heard saying hello | [05](05-firmware.md) | an ESP32 devkit and a toolchain | the simulated devkit and the scripted tools |
+| A whiteboard to a model: a drawing photographed, its marks sorted and refined, pieces made, and round again as the drawing changes | [29](29-a-whiteboard-round-twice.md), with [28](28-a-whiteboard-to-a-model.md) | a photograph of a drawing | `whiteboard.png`, a drawn one, among its pictures |
 
     >>> from apothecary.projects.parts.skeleton import ROOT
     >>> loops = sorted((ROOT / "walkthrough").glob("0[3-6]-*.md"))
@@ -127,6 +129,10 @@ Where each starts:
 - **Firmware** starts at the Bench, a tab beside Pictures, or the canvas ring's
   Panels › Bench › Bench: the sketches under `parts/`, each named with its
   toolchain.
+- **A whiteboard to a model** starts at a photograph: `apothecary photo marks`
+  on it, or, in the page, the bench's Picture › Folder to pin it, Picture ›
+  Find shapes › outline, and ⊞ Windows › Marks for what each mark is. The
+  garage's whiteboard hangs on its south wall, beside the door.
 
 One made thing goes round all four. The footpedal on the garage's bench is a
 part with a sketch of its own: its ring's Part › Edit for its sizes and its
@@ -188,7 +194,7 @@ above:
                                        parts OpenSCAD 2021.01 is too old to build
       3. apothecary serve --demo       the viewer at http://127.0.0.1:6283/viewer,
                                        with a simulated printer and board
-    walkthrough/00-getting-started.md says each step, then the four loops through the page.
+    walkthrough/00-getting-started.md says each step, then the five loops.
     <BLANKLINE>
     The dev loop, once it runs:
       apothecary serve --reload        a saved .py file restarts the server

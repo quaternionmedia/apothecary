@@ -709,6 +709,10 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("pictures", "Pictures"),
     ("models", "Models"),
     ("gather", "Gather"),
+    # Marks: a whiteboard's marks sorted, and a person's word on any (widgets/marks.js),
+    # a tab beside Models registered at start and closed until asked for. Its verbs
+    # are a ring of their own under its cell (_marks), seated last under Pictures.
+    ("marks", "Marks"),
     ("machine", "Machine"),
     # The Bench: the toolchain, the sketches, compile and upload, raw flash and
     # the task log, a tab beside Pictures, registered at start and shown when
@@ -744,12 +748,15 @@ PANEL_GROUPS = {
     "pictures": "Pictures",
     "models": "Pictures",
     "gather": "Pictures",
+    "marks": "Pictures",
     "machine": "Machine",
     "bench": "Tools",
     "settings": "Tools",
     "deck": "Tools",
     "airgap": "Airgap",
 }
+# What a person may say a whiteboard's mark is (apothecary/vision/marks.py's Kind).
+MARK_KINDS = ("diagram", "writing", "unsure", "nothing")
 # The views: each focused system's windows laid out together (systems.py), a cell
 # of Panels › Windows after the layout's own two and an entry of the header's
 # ⊞ Windows. The page defines each from the same entry; a view's windows the page
@@ -764,7 +771,8 @@ _RINGS = {
     "site": ("site", "problems", "pinned", "jobs", "scad", "working", "procedure"),
     # Models before Gather, so Models keeps its address when Gather goes
     # (docs/plans/ui-coordination-2026-10-31.md).
-    "pictures": ("pictures", "models", "gather"),
+    # Marks last, so Models and Gather keep their addresses.
+    "pictures": ("pictures", "models", "gather", "marks"),
 }
 
 
@@ -803,6 +811,8 @@ def _panels() -> Option:
             children=[
                 _models(toggle(each, labels[each]))
                 if each == "models"
+                else _marks(toggle(each, labels[each]))
+                if each == "marks"
                 else _procedure(toggle(each, labels[each]))
                 if each == "procedure"
                 else toggle(each, labels[each])
@@ -981,6 +991,24 @@ def _models(toggle: Option) -> Option:
                 children=_listed(
                     "models:material", [(f"models:say:material:{w}", w) for w in MATERIALS]
                 ),
+            ),
+        ],
+    )
+
+
+def _marks(toggle: Option) -> Option:
+    """Panels › Pictures › Marks: the window, then a person's word on the mark chosen
+    in it, which the page hands to it (widgets/marks.js): a diagram's, writing, unsure,
+    or nothing. Seated after the window's own cell."""
+    return Option(
+        id="panels:marks",
+        label="Marks",
+        group=PANEL_GROUPS["marks"],
+        children=[
+            toggle,
+            *(
+                Option(id=f"marks:say:{kind}", label=kind.capitalize(), action=f"marks:say:{kind}")
+                for kind in MARK_KINDS
             ),
         ],
     )
@@ -1997,6 +2025,9 @@ CARRIED_BY: Dict[str, Carries] = {
     # Models' verbs: the page carries each to the window (widgets/models.js), which
     # asks the server about the shape chosen on a mat.
     "models": Carries.VIEWER,
+    # Marks' verbs: the page carries each to the window (widgets/marks.js), which
+    # tells the server a person's word on the mark chosen there.
+    "marks": Carries.VIEWER,
     # A camera's verbs: which of this browser's cameras it is (and Allow, to name
     # them), live, a picture taken and made its view, and the gathering's report
     # -- the page's: only the browser can open a camera, and the device and

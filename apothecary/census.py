@@ -490,6 +490,30 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a box per property for a person's word, said with Enter, over every guess",
     ),
+    # ---- Marks, apothecary/static/widgets/marks.js -------------------------
+    # A whiteboard's marks sorted: the picture whose marks are listed, a mark chosen,
+    # a person's word on what one is, and what a note says. A mark's kind is Panels ›
+    # Pictures › Marks too (RING_BACKED), on the mark chosen here.
+    "marks-view": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of the pictures pinned in the site: the one whose marks are listed",
+    ),
+    "marks-choose": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button per mark that chooses it, for the ring's Marks cells to say what it is",
+    ),
+    "marks-kind": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a drop-down per mark for a person's word on what it is, over the sorter's",
+    ),
+    "marks-words": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a box per note for what its writing says, typed and said with Enter",
+    ),
     # Selected: the one width a view is sized by (a chosen shape's long side
     # when one is chosen). A number the ring cannot type; Size puts the cursor in it.
     "view-width": (WIDGET, WHAT_IS_THERE, "a box for how wide a picture is, or one shape's side"),
@@ -655,6 +679,9 @@ RING_BACKED: Dict[str, str] = {
     "models-ask": "models:ask",
     "models:click:closest": "models:ask",
     "models-word": "models:say:colour:red",
+    # A mark's kind is a cell of Panels › Pictures › Marks, on the mark chosen there
+    "marks-kind": "marks:say:diagram",
+    "marks:change:closest": "marks:say:diagram",
     "models:keydown:closest": "models:say:colour:red",
     # GO and Start over are the cells of Panels › Site › Procedure; a step's node opens
     # the window its ring's Device › Open does
@@ -1194,6 +1221,13 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "models:click:closest": (WIDGET, WHAT_IS_THERE, "Ask, about the shape chosen on a mat"),
     "models:change:closest": (WIDGET, WHAT_IS_THERE, "an origin's tick-box, switching it"),
     "models:keydown:closest": (WIDGET, WHAT_IS_THERE, "Enter in a person's word, saying it"),
+    "marks:change:closest": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a mark's kind chosen, a person's word on it; or another picture's marks listed",
+    ),
+    "marks:click:closest": (WIDGET, WHAT_YOU_SEE, "a mark chosen, for the ring's Marks cells"),
+    "marks:keydown:closest": (WIDGET, WHAT_IS_THERE, "Enter in a note's box, saying what it says"),
     "?:click:open": (
         WIDGET,
         WHAT_YOU_SEE,

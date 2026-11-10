@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -70,6 +71,7 @@ DEVKIT = "/dev/ttyFAKE2"  # the scripted bench's devkit
 ROUTER = "/dev/ttyFAKE3"  # the scripted bench's router controller: the simulated Grbl_ESP32
 CONTROLLER = "cnc_router.frame_system.controller"
 DECK = "DEMODECK"  # the simulated Stream Deck +
+WHITEBOARD = "whiteboard.png"  # the drawn whiteboard among the demo's pictures
 CONSOLE_HZ = 10  # the simulated console's levels a second, as `lighting simulate` sends them
 
 log = logging.getLogger(__name__)
@@ -181,6 +183,11 @@ def prepare(root: Optional[Path] = None) -> Demo:
     for folder in folders.values():
         folder.mkdir(parents=True, exist_ok=True)
     bench = folders["bench"]
+    # A drawn whiteboard in the demo's pictures, where a checkout has one: the
+    # picture the Marks window and Find shapes › outline have something to read in.
+    drawn = ROOT / "examples" / "pictures" / WHITEBOARD
+    if drawn.is_file() and not (folders["pictures"] / WHITEBOARD).exists():
+        shutil.copyfile(drawn, folders["pictures"] / WHITEBOARD)
     env = {
         DEMO_ENV: str(root),
         "APOTHECARY_STATE_DIR": str(folders["state"]),

@@ -11,12 +11,16 @@ taken out of the piece; slice 5, notes with a person's words, a size offered
 and the way out ([pictures.md](../pictures.md#a-whiteboards-notes)); slice 6,
 two readings compared and the rows a person takes applied
 ([pictures.md](../pictures.md#a-whiteboard-photographed-again)). Not built of
-those: the marks, the corners, the cuts, the notes and the rows shown and
-refined in the page, a note's changed writing asked for again, and the
-whiteboard as a part. Of slice 7, the loop by its commands is
-[walkthrough 29](../../walkthrough/29-a-whiteboard-round-twice.md); the loop
-through the page, page 00's fifth loop and the demo's whiteboard are not
-built. Each slice
+those: the corners dragged, a cut listed in Part › Edit and the rows of a
+second photograph in the page, a note's changed writing asked for again, and
+a picture standing on the whiteboard's own face, a view lying flat on its
+place's top. Built in the page: the whiteboard as a part on the garage's wall,
+and the Marks window, where a picture's marks and notes are listed and a
+person's word on one is read back by the picture's shapes
+([pictures.md](../pictures.md#the-marks-window)). Of slice 7, the loop by its
+commands is [walkthrough 29](../../walkthrough/29-a-whiteboard-round-twice.md);
+page 00 names it the fifth loop, and the demo has a drawn whiteboard among its
+pictures; a page that walks it round twice through the browser is not built. Each slice
 is one branch of a short stack, built in the order listed once the owner says
 yes to it.*
 

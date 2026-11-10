@@ -58,7 +58,7 @@ from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder
 from .projects.parts import anolex_4060_evo_ultra_2 as anolex
-from .projects.parts import ender3, stream_deck_plus
+from .projects.parts import ender3, stream_deck_plus, whiteboard
 from .transforms import Translate
 
 # Bench dimensions (mm)
@@ -179,6 +179,15 @@ BENCH_BOARDS = [
 GARAGE_MIN = Vector3D(x=-500.0, y=-500.0, z=0.0)
 GARAGE_MAX = Vector3D(x=5500.0, y=5500.0, z=2600.0)
 WALL_THICKNESS = 100.0
+# The whiteboard (parts/whiteboard) on the south wall's inner face, between the door
+# and the east wall: its back against the wall, its face to the room, its lower edge
+# at a standing person's waist. The far wall as the garage is first seen, so it
+# stands in front of nothing. What a drawing is made on and a photograph of one is
+# squared to (docs/pictures.md).
+WHITEBOARD_SIZE = whiteboard.OVERALL
+WHITEBOARD_POSITION = Vector3D(
+    x=3950.0, y=GARAGE_MAX.y - WALL_THICKNESS - whiteboard.OVERALL.y, z=900.0
+)
 
 DOOR_WIDTH = 2400.0
 DOOR_HEIGHT = 2100.0
@@ -879,7 +888,9 @@ def _build_router_coupon() -> Assembly:
         name="router_coupon",
         role="structure",
         position=ROUTER_COUPON_POSITION,
-        base=Cube(size=ROUTER_COUPON_SIZE, comment="router coupon envelope (real STL in the viewer)"),
+        base=Cube(
+            size=ROUTER_COUPON_SIZE, comment="router coupon envelope (real STL in the viewer)"
+        ),
         footprint=BoundingBox3D(min_point=Vector3D(), max_point=ROUTER_COUPON_SIZE),
         category="structure",
         part_ref="router_coupon",
@@ -916,6 +927,18 @@ def _build_stream_deck() -> Assembly:
     )
 
 
+def _build_whiteboard() -> Assembly:
+    """The whiteboard on the south wall, drawn as the part is."""
+    return Assembly(
+        name="whiteboard",
+        role="structure",
+        position=WHITEBOARD_POSITION,
+        footprint=BoundingBox3D(min_point=Vector3D(), max_point=WHITEBOARD_SIZE),
+        category="furniture",
+        part_ref="whiteboard",
+    )
+
+
 def create_example_site() -> Assembly:
     """A garage: a workbench with a printer on top of it, inside its
     own building shell, alongside abstract utility fixtures, storage, the
@@ -947,6 +970,7 @@ def create_example_site() -> Assembly:
             _build_footpedal(),
             *(_build_bench_board(*board) for board in BENCH_BOARDS),
             _build_stream_deck(),
+            _build_whiteboard(),
         ],
     )
 

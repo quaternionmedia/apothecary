@@ -36,7 +36,7 @@ Start here:
                                    parts OpenSCAD 2021.01 is too old to build
   3. apothecary serve --demo       the viewer at http://127.0.0.1:{DEFAULT_PORT}/viewer,
                                    with a simulated printer and board
-walkthrough/00-getting-started.md says each step, then the four loops through the page.
+walkthrough/00-getting-started.md says each step, then the five loops.
 
 \b
 The dev loop, once it runs:

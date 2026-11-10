@@ -13,7 +13,7 @@ written by the browser tests that walk them; page 00, pages 07 to 17, pages
 
 | Page | |
 |---|---|
-| [00 — Getting started](../walkthrough/00-getting-started.md) | Install, `apothecary check`, `apothecary openscad install`, `apothecary serve --demo`; the four loops and what each needs; the optional installs |
+| [00 — Getting started](../walkthrough/00-getting-started.md) | Install, `apothecary check`, `apothecary openscad install`, `apothecary serve --demo`; the five loops and what each needs; the optional installs |
 | [01 — Photographs into pieces](../walkthrough/01-photographs-into-pieces.md) | A photograph becomes named, placed pieces in the viewer; written by its own run |
 | [02 — The bench as it is](../walkthrough/02-the-bench-as-it-is.md) | Geometry from elsewhere, the printer and boards drawn as they are, a camera added above the bench; written by its own run |
 | [03 — A picture to a print](../walkthrough/03-a-picture-to-a-print.md) | A camera's picture, its shapes, a piece made and adjusted, sliced for printer_1, and a print job for it there, twice round through the page; written by the browser suite |

@@ -1,0 +1,17 @@
+/* Marks (widgets/marks.js): a whiteboard's marks and notes, and a person's word on
+ * any. Scoped to .marks-ui, so the page's own rules are left alone. */
+.marks-ui { font-size: 0.8rem; color: #c8d0c8; display: flex; flex-direction: column; gap: 0.35rem; }
+.marks-ui .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #7a867a; margin-top: 0.45rem; }
+.marks-ui .row { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+.marks-ui .grow { flex: 1; min-width: 0; }
+.marks-ui select, .marks-ui input { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; font: inherit; padding: 0.12rem 0.3rem; }
+.marks-ui .marks-view { width: 100%; }
+.marks-ui ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.marks-ui li { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.marks-ui li.empty, .marks-ui .note { color: var(--ink-3); }
+.marks-ui .meta { color: var(--ink-2); font-size: 0.72rem; }
+.marks-ui .origin { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.marks-ui .swatch { width: 0.7rem; height: 0.7rem; border-radius: 2px; border: 1px solid var(--line); display: inline-block; }
+.marks-ui .marks-choose { background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 4px; font: 0.74rem ui-monospace, SFMono-Regular, Menlo, monospace; padding: 0.05rem 0.35rem; cursor: pointer; }
+.marks-ui .marks-row.chosen .marks-choose { border-color: var(--group); background: color-mix(in srgb, var(--group) 22%, var(--bg)); }
+.marks-ui .marks-offer { flex-basis: 100%; }

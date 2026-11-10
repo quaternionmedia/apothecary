@@ -817,6 +817,7 @@
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/deck.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/airgap.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/models.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/marks.css">
     <script type="importmap">
     {
         "imports": {
@@ -862,6 +863,7 @@
         import { mountDeck } from '/static/widgets/deck.js';
         import { mountPictureList } from '/static/widgets/picture_list.js';
         import { mountModels } from '/static/widgets/models.js';
+        import { mountMarks } from '/static/widgets/marks.js';
         import { mountToolchain } from '/static/widgets/toolchain.js';
         import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
         import { mountTasks } from '/static/widgets/tasks.js';
@@ -1673,6 +1675,34 @@
                         window.apothecaryModels = this.modelsWidget;
                     },
                     onOpen: () => { if (this.modelsWidget) { this.modelsWidget.load(); this.modelsWidget.follow(); } },
+                });
+                // Marks: a whiteboard's marks sorted, and a person's word on any
+                // (widgets/marks.js) -- a tab beside Models, closed until asked for. It
+                // lists the marks of a picture pinned in this site, the one drawn at the
+                // selected place first, and a word on a mark draws the views again.
+                this.marksWidget = null;
+                this.panels.register('marks', {
+                    title: 'Marks', group: 'Pictures',
+                    hint: "A whiteboard's marks, each a diagram's, writing or unsure, and a person's word on any; what its writing says",
+                    home: 'models', open: false,
+                    body: (slot) => {
+                        this.marksWidget = mountMarks(slot, {
+                            base: BASE_URL,
+                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                            world: {
+                                siteName: () => this.siteName,
+                                views: () => {
+                                    const all = [...((this.pictureMarks.attached() || {}).views || [])].reverse();
+                                    const drawn = (v) => v.host !== null && (this.pictureMarks.drawnAt(v.host) || {}).id === v.id;
+                                    return [...all.filter(drawn), ...all.filter((v) => !drawn(v))]
+                                        .map((v) => ({ id: v.id, picture: v.picture, host: v.host, finder: v.finder }));
+                                },
+                                changed: () => this.pictureMarks.refresh(),
+                            },
+                        });
+                        window.apothecaryMarks = this.marksWidget;
+                    },
+                    onOpen: () => { if (this.marksWidget) this.marksWidget.load(); },
                 });
                 // The Bench: the toolchain, the sketches built and uploaded, raw flash
                 // and the task log (widgets/toolchain.js, sketches.js, tasks.js) -- a
@@ -9203,6 +9233,11 @@
                 }
                 // A Models verb: the window shown, and the verb done on the shape chosen
                 // on a mat; what it asked or said, or refused, is the window's own last word.
+                if (action.startsWith('marks:')) {
+                    viewer.panels.open('marks');
+                    if (viewer.marksWidget) viewer.marksWidget.act(action.slice('marks:'.length));
+                    return;
+                }
                 if (action.startsWith('models:')) {
                     viewer.panels.open('models');
                     viewer.setStatus(`${intent.label}${tail}`, 'success');

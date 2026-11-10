@@ -711,6 +711,22 @@ class Views:
             self._views[new_id] = another
             return another.model_copy(deep=True)
 
+    def read_again(
+        self, site: str, view_id: str, *, shapes: List[FoundShape], left_out: int, at: datetime
+    ) -> View:
+        """A view's shapes as its finder reads them now that a person has said what
+        some of its marks are: the view's own shapes replaced, and the words a person
+        gave the shapes it had let go, a shape's place in the list being another's now."""
+        with self._lock:
+            view = self._views.get(view_id)
+            if view is None or view.site != site:
+                raise ViewNotFound(f"no view {view_id!r} in site {site!r}")
+            view.shapes = list(shapes)
+            view.left_out = left_out
+            view.found_at = at.isoformat()
+            view.words = {}
+            return view.model_copy(deep=True)
+
     def set_word(self, site: str, view_id: str, index: int, word: str) -> View:
         with self._lock:
             found = self._views.get(view_id)
