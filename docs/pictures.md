@@ -115,11 +115,43 @@ holds a drawing, a closed stroke at least; `apothecary photo find --finder` take
 
 To `outline` the whiteboard is the ground, whatever runs round the picture's edge,
 and never a shape. A shadow or a glare across it moves no stroke, and a smear is not
-one. A stroke left open, a dimension line, an arrow and writing are not shapes; a
-mark filled in is the shape it covers; a stroke inside a shape is left out. A gap
+one. It reads the shapes of [a diagram's marks](#a-whiteboards-marks) alone: a
+stroke left open, a dimension line, an arrow and writing are not shapes; a mark
+filled in is the shape it covers; a stroke inside a shape is left out. A gap
 in a stroke a few pixels of the working picture wide is closed, a wider one leaves
 the stroke open. `apothecary photo check --finder` measures a finder on drawn
 pictures whose answers are known, filled in and in outline.
+
+## A whiteboard's marks
+
+Before a whiteboard's strokes are read as shapes they are gathered into marks and
+sorted (`apothecary/vision/marks.py`). A mark is the strokes that belong together:
+a closed stroke, a line, or small strokes in a row, which is how writing lies.
+
+| Kind | Is | Becomes |
+|---|---|---|
+| `diagram` | A closed stroke the size of a shape, a mark filled in, a long straight line | A shape, where it closes or is filled |
+| `writing` | Small strokes in a row, or one stroke of letters run together | Nothing yet; it is never a shape |
+| `unsure` | What the sorter cannot place: a small closed stroke alone, a large open one | Nothing, until a person says |
+| `nothing` | A person's word alone: a smear, a magnet, a reflection | Nothing |
+
+Each mark says why it is what it is, how sure the sorter is, the mark it lies
+inside where it lies inside a closed stroke, and its colour, which is read and
+kept and decides nothing. *Unsure* is an answer.
+
+`apothecary photo marks PICTURE` lists them. `--say m3=writing` is a person's word
+on one: it wins, says who decided, and is kept as an example -- where the mark is,
+its features, what the sorter said, what the person said -- in the file `--answers`
+names, or beside the picture as `NAME.marks.json`. A reading of a picture takes the
+words that lie beside it, so the finder's shapes follow them.
+
+`apothecary photo fit FILE...` reads examples and fits the sorter's thresholds to
+them, moving as few as it can. It prints the table, or writes it where `--out`
+names, and refuses a fit that sorts the drawn whiteboards worse than the table in
+use. The sorter reads the table `APOTHECARY_MARKS_TABLE` names, so a fit is used
+only where a person points to it, and the same picture gives the same answer.
+`apothecary photo check --finder outline` scores the sorting on drawn whiteboards
+with writing beside their shapes.
 
 ## Pieces
 

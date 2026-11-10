@@ -224,6 +224,7 @@ GROUPS = {
             "test_gathering_accuracy.py",
             "test_made_part.py",
             "test_made_piece_geometry.py",
+            "test_marks.py",
             "test_outline_finder.py",
             "test_photo_hard_cases.py",
             "test_photo_in_the_viewer.py",

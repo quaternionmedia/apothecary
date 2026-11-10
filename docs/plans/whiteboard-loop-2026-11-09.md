@@ -2,7 +2,10 @@
 
 *A plan, dated. Built: slice 1, the `outline` finder
 ([pictures.md](../pictures.md#finders),
-[walkthrough 28](../../walkthrough/28-a-whiteboard-to-a-model.md)). Each slice
+[walkthrough 28](../../walkthrough/28-a-whiteboard-to-a-model.md)), and of
+slice 2 the sorter, a person's word from the command line, the examples and
+the fit ([pictures.md](../pictures.md#a-whiteboards-marks)); its marks are not
+yet shown or refined in the page. Each slice
 is one branch of a short stack, built in the order listed once the owner says
 yes to it.*
 

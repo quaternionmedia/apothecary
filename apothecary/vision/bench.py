@@ -30,6 +30,18 @@ from typing import List, Optional, Tuple
 from .finder import ShapeFinder
 from .models import ShapeKind
 
+# What the generator writes beside its shapes: sizes, names, a remark.
+WORDS = (
+    "120 mm",
+    "lid, 3 off",
+    "M3 x 4",
+    "top plate",
+    "check the fit",
+    "6 mm ply",
+    "R 20",
+    "this side up",
+)
+
 # The families the generator can draw, and therefore the ones scored.
 DRAWABLE = (ShapeKind.RECT, ShapeKind.DISC, ShapeKind.TRI)
 
@@ -52,6 +64,8 @@ class Case:
     truth: List[TrueShape]
     turned: bool
     speckled: bool
+    # Where each line of writing drawn beside the shapes is, by its middle.
+    writing: List[Tuple[float, float]] = field(default_factory=list)
 
 
 @dataclass
@@ -130,6 +144,7 @@ def draw_cases(
     smear: bool = False,
     framed: bool = False,
     notes: bool = False,
+    writing: int = 0,
 ) -> List[Case]:
     """Draw a set of pictures with known answers.
 
@@ -147,7 +162,8 @@ def draw_cases(
     patch over it, ``smear`` a few soft grey ones, ``notes`` draws a dimension
     line and some writing beside the shapes, which are not shapes, and
     ``framed`` stands the whole on a darker wall with a frame round it and a
-    tray under it.
+    tray under it. ``writing`` draws that many lines of words beside the shapes,
+    in the picture library's own letters, which a sorter of marks is scored on.
     """
     from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
@@ -190,6 +206,28 @@ def draw_cases(
                 sx = dice.randint(0, width - 3)
                 sy = dice.randint(0, height - 3)
                 pen.rectangle((sx, sy, sx + 2, sy + 2), fill=min(255, ink + 15))
+
+        written: List[Tuple[float, float]] = []
+        for _ in range(writing):
+            from PIL import ImageFont
+
+            words = dice.choice(WORDS)
+            tall = dice.uniform(0.045, 0.07) * min(width, height)
+            letters = ImageFont.load_default(size=tall)
+            left, top, right, bottom = pen.textbbox((0, 0), words, font=letters)
+            span = max(right - left, bottom - top)
+            placed = _free_spot(dice, width, height, span, taken)
+            if placed is None:
+                continue
+            wx, wy = placed
+            taken.append((wx, wy, span))
+            pen.text(
+                (wx - (right - left) / 2, wy - (bottom - top) / 2 - top),
+                words,
+                fill=ink,
+                font=letters,
+            )
+            written.append((wx / width, wy / height))
 
         if notes:
             for _ in range(2):
@@ -252,11 +290,15 @@ def draw_cases(
                 )
                 for shape in truth
             ]
+            written = [
+                ((x * width + edge) / wall.width, (y * height + edge) / wall.height)
+                for x, y in written
+            ]
             image = wall
 
         path = into / f"case_{index:02d}.png"
         image.save(path)
-        cases.append(Case(path.stem, path, truth, turned, speckled))
+        cases.append(Case(path.stem, path, truth, turned, speckled, written))
 
     return cases
 
@@ -330,6 +372,78 @@ def score(finder: ShapeFinder, cases: List[Case], *, near: float = 0.12) -> Scor
                     f"{case.name}: a {truth.kind.value}{turn} was called a {best.kind.value}"
                 )
     return result
+
+
+@dataclass
+class Sorting:
+    """How a sorter of marks did on one run of cases."""
+
+    diagrams: int = 0
+    writing: int = 0
+    diagrams_right: int = 0
+    writing_right: int = 0
+    unsure: int = 0
+    # Writing read as a diagram's makes a piece nobody drew; a diagram read as
+    # writing loses one. Counted apart.
+    writing_as_diagram: int = 0
+    diagram_as_writing: int = 0
+    missed: int = 0
+
+    @property
+    def right_rate(self) -> float:
+        drawn = self.diagrams + self.writing
+        return (self.diagrams_right + self.writing_right) / drawn if drawn else 1.0
+
+
+def score_sorting(cases: List[Case], thresholds=None) -> Sorting:
+    """Sort each picture's marks and compare with what was drawn: each drawn shape
+    and each line of writing is looked for by its middle."""
+    from . import marks as sorter
+    from .outline import read_strokes
+
+    result = Sorting()
+    for case in cases:
+        found = sorter.sort(read_strokes(case.path), thresholds)
+        drawn = [("diagram", shape.centre) for shape in case.truth]
+        drawn += [("writing", middle) for middle in case.writing]
+        for kind, (x, y) in drawn:
+            over = [
+                mark
+                for mark in found
+                if mark.min_point.x <= x <= mark.max_point.x
+                and mark.min_point.y <= y <= mark.max_point.y
+            ]
+            said = (
+                min(over, key=lambda m: m.max_point.x - m.min_point.x).kind.value if over else None
+            )
+            if kind == "diagram":
+                result.diagrams += 1
+            else:
+                result.writing += 1
+            if said is None:
+                result.missed += 1
+            elif said == kind:
+                if kind == "diagram":
+                    result.diagrams_right += 1
+                else:
+                    result.writing_right += 1
+            elif said == "unsure":
+                result.unsure += 1
+            elif kind == "writing":
+                result.writing_as_diagram += 1
+            else:
+                result.diagram_as_writing += 1
+    return result
+
+
+def run_sorting(count: int = 20, thresholds=None, **drawing) -> Sorting:
+    """Draw whiteboards with writing on them and score the sorter, in a scratch
+    folder cleared away after."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="apothecary-bench-") as scratch:
+        cases = draw_cases(Path(scratch), count=count, **{"stroke": 0.012, "writing": 2, **drawing})
+        return score_sorting(cases, thresholds)
 
 
 def run(
