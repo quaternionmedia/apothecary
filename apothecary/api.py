@@ -118,6 +118,7 @@ from .routes.evidence import router as evidence_router
 from .routes.jobs import router as jobs_router
 from .routes.lighting import router as lighting_router
 from .routes.machines import router as machines_router
+from .routes.marks import router as marks_router
 from .routes.part_edits import router as part_edits_router
 from .routes.pictures import router as pictures_router
 from .routes.procedures import router as procedures_router
@@ -283,6 +284,7 @@ app.include_router(readme_router)
 app.include_router(pictures_router)
 # Views: a picture pinned at a place in a site, and the pieces made from its shapes.
 app.include_router(views_router)
+app.include_router(marks_router)
 # Cameras: a camera part added to a site, aimed, told its device, removed.
 app.include_router(cameras_router)
 # Jobs: what the machines ran, of every kind; each is started by its machine's own route.

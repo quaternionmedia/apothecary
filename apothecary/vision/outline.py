@@ -95,15 +95,21 @@ class OutlineFinder:
 
         return marks.digest(Path(image))
 
-    def _look(self, image: Path) -> Tuple[Picture, int]:
+    def look_with(self, image: Path, answers) -> Picture:
+        """The picture as read with a person's words on its marks given, over any
+        that lie beside it: what a page that keeps the words itself reads by."""
+        return self._look(Path(image), answers)[0]
+
+    def _look(self, image: Path, answers=None) -> Tuple[Picture, int]:
         """The picture as read, and how many of its shapes a closed stroke made:
         the shapes of the marks sorted as a diagram's (``apothecary.vision.marks``),
-        by the sorter or by a person's word beside the picture."""
+        by the sorter or by a person's word, beside the picture or given."""
         from . import marks
 
         image = Path(image)
         reading = read_strokes(image, self.working_edge)
         sorted_marks = marks.apply(marks.sort(reading), marks.answers_beside(image))
+        sorted_marks = marks.apply(sorted_marks, answers)
         drawn = marks.diagram_strokes(sorted_marks)
         read = shapes_of(reading, keep=lambda stroke: stroke.index in drawn)
         by_index = {stroke.index: stroke for stroke in reading.strokes}
