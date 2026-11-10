@@ -35,8 +35,8 @@ uv run apothecary openscad install   # an OpenSCAD with Manifold, before the fir
 uv run apothecary serve --demo       # the viewer, with a simulated printer and board
 ```
 
-and the four loops through the page -- designing a part, editing its SCAD, a picture to a
-print, firmware -- with what each needs. `uv run apothecary --help` ends with the same three
+and the five loops -- designing a part, editing its SCAD, a picture to a print, firmware,
+a whiteboard to a model -- with what each needs. `uv run apothecary --help` ends with the same three
 steps.
 
 ## What it does, and how to see it

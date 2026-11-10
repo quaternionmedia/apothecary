@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- A whiteboard to a model is the fifth loop of walkthrough page 00, and `apothecary serve --demo` has a drawn whiteboard, `examples/pictures/whiteboard.png`, among its pictures. ([page](walkthrough/00-getting-started.md#5-the-five-loops))
 - The Marks window lists the marks and notes of a picture pinned in the site: a mark's drop-down, or the ring's Panels › Pictures › Marks cells on the mark chosen, is a person's word on what it is, read back at once by the picture's shapes, and a note's box takes what it says. ([doc](docs/pictures.md#the-marks-window))
 - A whiteboard is a part, a panel in a frame with a tray whose width and height are its writing surface's, and hangs on the garage's north wall beside the bench. ([part](parts/whiteboard/README.md))
 - Walkthrough page 29, *A whiteboard, round twice*: the whiteboard loop by its commands, from a photograph squared to its whiteboard to a second photograph's changes proposed and one row taken. ([page](walkthrough/29-a-whiteboard-round-twice.md))

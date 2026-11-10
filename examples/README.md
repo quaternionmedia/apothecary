@@ -40,6 +40,7 @@ A script builds a `Scene` from `apothecary`'s objects and prints `scene.render()
 | | |
 |---|---|
 | `shapes.png` | Three shapes on a grey ground, 640 × 480: what the finder reads in [walkthrough page 01](../walkthrough/01-photographs-into-pieces.md) and `apothecary photo view` |
+| `whiteboard.png` | A whiteboard on a wall, drawn to order: a plate with a ring in it, a disc and a wedge in outline, a dimension line with its size, and a remark. What `apothecary photo marks`, `photo square` and the `outline` finder read ([docs/pictures.md](../docs/pictures.md#a-whiteboards-marks)); `apothecary serve --demo` puts it among its pictures |
 
 ## theatre-rig/
 

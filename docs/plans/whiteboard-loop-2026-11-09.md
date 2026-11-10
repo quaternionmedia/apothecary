@@ -19,8 +19,8 @@ and the Marks window, where a picture's marks and notes are listed and a
 person's word on one is read back by the picture's shapes
 ([pictures.md](../pictures.md#the-marks-window)). Of slice 7, the loop by its
 commands is [walkthrough 29](../../walkthrough/29-a-whiteboard-round-twice.md);
-a page that walks it through the browser and page 00's fifth loop are not
-built. Each slice
+page 00 names it the fifth loop, and the demo has a drawn whiteboard among its
+pictures; a page that walks it round twice through the browser is not built. Each slice
 is one branch of a short stack, built in the order listed once the owner says
 yes to it.*
 

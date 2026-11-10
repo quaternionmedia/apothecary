@@ -81,6 +81,18 @@ def test_the_demo_runs_on_a_folder_of_its_own(person):
     assert sorted(p.name for p in person["cache"].iterdir()) == ["demo"]
 
 
+def test_the_demo_has_a_drawn_whiteboard_among_its_pictures_and_leaves_a_changed_one(person):
+    """The examples' drawn whiteboard is copied in once, and a person's own picture
+    of that name is left as it is on the next run."""
+    made = demo.prepare()
+    there = Path(made.env["APOTHECARY_PICTURE_ROOT"]) / demo.WHITEBOARD
+    drawn = demo.ROOT / "examples" / "pictures" / demo.WHITEBOARD
+    assert there.read_bytes() == drawn.read_bytes()
+    there.write_bytes(b"a person's own")
+    demo.prepare()
+    assert there.read_bytes() == b"a person's own"
+
+
 def test_the_demo_is_kept_between_runs(person):
     first = demo.prepare()
     kept = Path(first.env["APOTHECARY_PICTURE_ROOT"]) / "captures" / "a.png"
