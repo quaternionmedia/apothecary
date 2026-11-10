@@ -503,7 +503,7 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
             wanted.add(key);
             let badge = anchors.get(key);
             if (!badge) {
-                badge = anchors.badge(key, () => placePoint(host), { className: "place-mark", selected: () => isSelected(host) });
+                badge = anchors.badge(key, () => placePoint(host), { className: "place-mark", group: "Pictures", selected: () => isSelected(host) });
                 badge.dataset.host = host;
                 badge.setAttribute("aria-label", host === FLOOR ? "Select the floor" : `Select ${host}`);
                 badge.addEventListener("click", () => onSelect(host));
@@ -516,7 +516,7 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
             wanted.add(key);
             let badge = anchors.get(key);
             if (!badge) {
-                badge = anchors.badge(key, () => cameraPoint(cam.name), { className: "camera-mark", selected: () => isSelected(cam.name) });
+                badge = anchors.badge(key, () => cameraPoint(cam.name), { className: "camera-mark", group: "Pictures", selected: () => isSelected(cam.name) });
                 badge.dataset.camera = cam.name;
                 badge.setAttribute("aria-label", `Select ${cam.name}`);
                 badge.addEventListener("click", () => onSelect(cam.name));

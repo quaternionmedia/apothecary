@@ -295,6 +295,7 @@ GROUPS = {
             "test_menu_routes.py",
             "test_readiness.py",
             "test_stays_local.py",
+            "test_group_colours.py",
             "test_systems.py",
             "test_theatre_site.py",
             "test_viewer_assets.py",

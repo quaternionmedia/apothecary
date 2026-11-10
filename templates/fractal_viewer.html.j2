@@ -166,6 +166,12 @@
         .lm_header .lm_tab:hover { color: #eee; background: #262626; }
         .lm_header .lm_tab.lm_active { color: #eee; background: #1e1e1e; font-weight: 600; box-shadow: inset 0 2px 0 #4a4a4a; }
         .lm_header .lm_tab.lm_active.lm_focused { background-color: #1e1e1e; box-shadow: inset 0 2px 0 #6fb3e8; }
+        /* Whose a tab is: tinted with its group's colour (tokens.css), the colour itself
+           under it; fainter behind. */
+        .lm_header .lm_tab[data-group] { background: color-mix(in srgb, var(--group) 9%, #1a1a1a); box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--group) 65%, #1a1a1a); }
+        .lm_header .lm_tab[data-group]:hover { background: color-mix(in srgb, var(--group) 16%, #262626); }
+        .lm_header .lm_tab[data-group].lm_active { background: color-mix(in srgb, var(--group) 20%, #1e1e1e); box-shadow: inset 0 2px 0 #4a4a4a, inset 0 -3px 0 var(--group); }
+        .lm_header .lm_tab[data-group].lm_active.lm_focused { background: color-mix(in srgb, var(--group) 20%, #1e1e1e); box-shadow: inset 0 2px 0 #6fb3e8, inset 0 -3px 0 var(--group); }
         .lm_header .lm_tab .lm_close_tab { top: 6px; }
         .lm_header .lm_tab:not(.lm_active) { padding-right: 8px; }
         /* A stack's own ✕ is not drawn: a window is closed by its tab's, and the room
@@ -200,6 +206,8 @@
             .lm_header .lm_tab:not(.lm_active) { padding-right: 6px; }
         }
         .spawn-group { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: #7a808a; padding: 0.45rem 0.7rem 0.15rem; }
+        .spawn-group[data-group] { color: var(--group); }
+        .window-item[data-group] { box-shadow: inset 3px 0 0 var(--group); background: color-mix(in srgb, var(--group) 8%, transparent); }
         .window-item {
             display: block; width: 100%; text-align: left; background: none; border: 0; color: #a8adb5;
             font: inherit; font-size: 0.8rem; padding: 0.22rem 0.8rem; cursor: pointer; border-radius: 3px;
@@ -219,6 +227,7 @@
         .lm_header .lm_tab.loud.lm_active { background: #6e2222; box-shadow: inset 0 2px 0 #ff6b6b; }
         /* A window with nothing to show: its tab dimmed, its stack minimised among empty ones. */
         .lm_header .lm_tab.empty .lm_title { opacity: 0.55; font-style: italic; }
+        .panel-window[data-group] { box-shadow: inset 0 2px 0 color-mix(in srgb, var(--group) 70%, #1a1a1a); }
         .panel-window.loud { box-shadow: inset 0 0 0 2px #ff6b6b, inset 0 0 18px rgba(255, 107, 107, 0.35); }
         .panel-window.loud > .panel { background: #22191a; }
         .panel-window.loud.alert { animation: loud-alert 0.9s ease-out 2; }
@@ -415,6 +424,8 @@
         .world-badge.open { z-index: 3; opacity: 1; }
         .world-badge.open .badge-words { display: block; }
         .world-badge.selected { border-color: #9cd2ff; }
+        /* Whose a badge is: its group's colour under it, selected or not (tokens.css). */
+        .world-badge[data-group] { border-bottom: 2px solid var(--group); background: color-mix(in srgb, var(--group) 22%, rgb(20, 28, 20)); }
         /* A part drawn from a variant this tab applied, not the saved part: a small
            amber dot over it, the size it is at any framing; its words on hover. */
         .world-badge.variant-mark { min-width: 0; width: 12px; height: 12px; padding: 0; border-radius: 50%;
