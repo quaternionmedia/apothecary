@@ -15,24 +15,26 @@ are not built.
 
 A whiteboard on a darker wall, a frame round it. On it, in marker: a plate with a hole
 drawn in it, a disc and a wedge, each in outline; under the plate a dimension line with
-its two ticks, and some writing.
+its two ticks and its size written under it, a remark, and a small ring alone.
 
     >>> import tempfile
     >>> from pathlib import Path
-    >>> from PIL import Image, ImageDraw
+    >>> from PIL import Image, ImageDraw, ImageFont
     >>> photograph = Path(tempfile.mkdtemp()) / "whiteboard.png"
-    >>> image = Image.new("L", (1600, 1200), 60)
+    >>> image = Image.new("RGB", (1600, 1200), (60, 60, 64))
     >>> pen = ImageDraw.Draw(image)
-    >>> pen.rectangle((80, 80, 1520, 1120), fill=238, outline=150, width=14)
-    >>> pen.rectangle((250, 250, 700, 520), outline=30, width=9)
-    >>> pen.ellipse((400, 340, 470, 410), outline=30, width=7)
-    >>> pen.ellipse((900, 250, 1200, 550), outline=30, width=9)
-    >>> pen.polygon(((350, 950), (650, 950), (500, 700)), outline=30, width=9)
-    >>> pen.line((250, 590, 700, 590), fill=30, width=5)
+    >>> blue, red, black = (20, 30, 120), (160, 20, 20), (10, 10, 10)
+    >>> pen.rectangle((80, 80, 1520, 1120), fill=(238, 238, 236), outline=(150, 150, 150), width=14)
+    >>> pen.rectangle((250, 250, 700, 520), outline=blue, width=9)
+    >>> pen.ellipse((400, 340, 470, 410), outline=blue, width=7)
+    >>> pen.ellipse((900, 250, 1200, 550), outline=blue, width=9)
+    >>> pen.polygon(((350, 950), (650, 950), (500, 700)), outline=red, width=9)
+    >>> pen.line((250, 590, 700, 590), fill=black, width=5)
     >>> for x in (250, 700):
-    ...     pen.line((x, 575, x, 605), fill=30, width=5)
-    >>> for letter in range(6):
-    ...     pen.line((400 + letter * 30, 615, 412 + letter * 30, 655), fill=30, width=5)
+    ...     pen.line((x, 575, x, 605), fill=black, width=5)
+    >>> pen.text((400, 612), "120 mm", fill=black, font=ImageFont.load_default(size=44))
+    >>> pen.text((800, 800), "check the fit before cutting", fill=black, font=ImageFont.load_default(size=40))
+    >>> pen.ellipse((1290, 950, 1370, 1030), outline=black, width=6)
     >>> image.save(photograph)
 
 ## Read as blobs
@@ -47,12 +49,59 @@ it reports, most of the picture across.
     >>> whole.max_point.x - whole.min_point.x > 0.85
     True
 
+## Sorted first
+
+Before anything is read as a shape, every mark on the whiteboard is sorted: a diagram's,
+writing, or unsure. A mark is the strokes that belong together: a closed stroke, a line,
+or small strokes in a row, which is how writing lies. Each says why, and how sure it is.
+
+    >>> from apothecary.vision import marks
+    >>> found = marks.marks_in(photograph)
+    >>> for mark in found:
+    ...     print(mark.id, mark.kind.value, "--", mark.why)
+    m1 diagram -- a closed stroke this size is a shape
+    m2 diagram -- a closed stroke this size is a shape
+    m3 diagram -- a closed stroke alone inside a shape is a cut
+    m4 diagram -- a long straight stroke is a line
+    m5 writing -- small strokes in a row are writing
+    m6 diagram -- a closed stroke this size is a shape
+    m7 writing -- small strokes in a row are writing
+    m8 unsure -- a small closed stroke alone: a letter, or a hole
+
+*Unsure* is an answer. The ring alone is a small closed stroke: a letter, or a shape
+too small to tell. The ring drawn inside the plate is taken for a cut through it. A
+mark inside a closed stroke says which, and each mark's colour is read and kept,
+deciding nothing.
+
+    >>> found[2].inside, found[7].inside
+    ('m1', None)
+    >>> found[5].colour, found[0].colour == found[1].colour
+    ('red', True)
+
+## A person's word
+
+A person says what a mark is, and their word wins and says who decided. It is kept as
+an example: where the mark is, its features, what the sorter said and what the person
+said. Examples are what the sorter's thresholds are fitted to (`apothecary photo fit`).
+
+    >>> example = marks.say(found, "m8", marks.Kind.DIAGRAM, picture="this whiteboard")
+    >>> example.guess.value, example.word.value, example.by
+    ('unsure', 'diagram', 'you')
+    >>> said = marks.apply(found, marks.Answers(examples=[example]))
+    >>> said[7].kind.value, said[7].why, said[7].guess.value
+    ('diagram', 'you said so', 'unsure')
+
+From the command line `apothecary photo marks PICTURE --say m8=diagram` keeps the word
+in a file beside the picture, and a reading of the picture takes the words that lie
+beside it.
+
 ## Read as a drawing
 
 The outline finder takes the whiteboard as the ground, whatever runs round it, and
-reads each closed stroke lying on it as the shape of what it encloses. The plate, the
-disc and the wedge are found, largest first; the wall, the frame, the dimension line and
-the writing are not shapes. The stroke inside the plate is not a piece of its own.
+reads each closed stroke of a diagram's mark as the shape of what it encloses. The
+plate, the disc and the wedge are found, largest first; the wall, the frame, the
+dimension line, the writing and the ring nobody has spoken for are not shapes. The
+ring inside the plate is not a shape of its own: it is the plate's cut.
 
     >>> drawing = get("outline").look(photograph)
     >>> [shape.kind.value for shape in drawing.shapes]
@@ -94,6 +143,19 @@ across, so a pixel of it is a millimetre.
     >>> {piece.finder for piece in built.album.provenance.values()}
     {'outline'}
 
+The plate is made with its cut through it, where the ring was drawn from the plate's
+middle, and about as wide as the middle of the ring's stroke, 63 pixels: a working
+picture's pixel is three of this one's.
+
+    >>> (cut,) = drawing.shapes[0].cuts
+    >>> cut.kind.value, abs(cut.long_side * 1600 - 63) < 6
+    ('disc', True)
+    >>> plate_piece = built.site.children[0]
+    >>> type(plate_piece.base).__name__, "1 cut(s) through it" in plate_piece.comment
+    ('Difference', True)
+    >>> [bool(shape.cuts) for shape in drawing.shapes]
+    [True, False, False]
+
 A drawing is flat, so a piece's thickness is a guess until a person gives one.
 
     >>> all(piece.thickness_guessed for piece in built.album.provenance.values())
@@ -123,10 +185,14 @@ glare and a smear, with notes beside the shapes, and framed by a wall.
 
 - **A real photograph.** The whiteboard here is drawn to order, which is how the answers
   are known.
-- **A cut.** The stroke inside the plate is left out, not cut through it.
-- **A whiteboard seen from one side.** The picture is read as it lies, and its width is
-  the picture's, not the whiteboard's.
+- **A cut inside a cut.** What is drawn inside a cut is not read.
+- **The writing read.** A line of writing is sorted as writing, and what it says is
+  not read.
+- **A whiteboard seen from one side.** This one is drawn square on.
+  `apothecary photo square` finds a leaning whiteboard's corners and redraws the
+  photograph square, as wide as the whiteboard (`tests/test_whiteboard.py`).
 - **The page.** Find shapes on a host's ring offers `outline` beside `plain` for a
   picture that holds a drawing (`tests/test_outline_finder.py`); no browser test walks
   a drawing through it.
-- **Round again.** A second photograph of a changed drawing makes its pieces anew.
+- **Round again.** [Page 29](29-a-whiteboard-round-twice.md) goes round twice: a second
+  photograph of a changed drawing, what changed proposed, and a row taken.

@@ -115,11 +115,103 @@ holds a drawing, a closed stroke at least; `apothecary photo find --finder` take
 
 To `outline` the whiteboard is the ground, whatever runs round the picture's edge,
 and never a shape. A shadow or a glare across it moves no stroke, and a smear is not
-one. A stroke left open, a dimension line, an arrow and writing are not shapes; a
-mark filled in is the shape it covers; a stroke inside a shape is left out. A gap
+one. It reads the shapes of [a diagram's marks](#a-whiteboards-marks) alone: a
+stroke left open, a dimension line, an arrow and writing are not shapes; a mark
+filled in is the shape it covers. A closed stroke of a diagram drawn inside a
+shape is a cut through it: the shape carries it (`cuts`), and the piece made of
+the shape has it taken out where it was drawn, round for a circle and
+square-cornered of its two sides for anything else. What is drawn inside a cut
+is not read. A gap
 in a stroke a few pixels of the working picture wide is closed, a wider one leaves
 the stroke open. `apothecary photo check --finder` measures a finder on drawn
 pictures whose answers are known, filled in and in outline.
+
+## A whiteboard's marks
+
+Before a whiteboard's strokes are read as shapes they are gathered into marks and
+sorted (`apothecary/vision/marks.py`). A mark is the strokes that belong together:
+a closed stroke, a line, or small strokes in a row, which is how writing lies.
+
+| Kind | Is | Becomes |
+|---|---|---|
+| `diagram` | A closed stroke the size of a shape, a small closed stroke alone inside one, a mark filled in, a long straight line | A shape where it closes or is filled, or a cut through the shape it lies in |
+| `writing` | Small strokes in a row, or one stroke of letters run together | Nothing yet; it is never a shape |
+| `unsure` | What the sorter cannot place: a small closed stroke alone, a large open one | Nothing, until a person says |
+| `nothing` | A person's word alone: a smear, a magnet, a reflection | Nothing |
+
+Each mark says why it is what it is, how sure the sorter is, the mark it lies
+inside where it lies inside a closed stroke, and its colour, which is read and
+kept and decides nothing. *Unsure* is an answer.
+
+`apothecary photo marks PICTURE` lists them. `--say m3=writing` is a person's word
+on one: it wins, says who decided, and is kept as an example -- where the mark is,
+its features, what the sorter said, what the person said -- in the file `--answers`
+names, or beside the picture as `NAME.marks.json`. A reading of a picture takes the
+words that lie beside it, so the finder's shapes follow them.
+
+`apothecary photo fit FILE...` reads examples and fits the sorter's thresholds to
+them, moving as few as it can. It prints the table, or writes it where `--out`
+names, and refuses a fit that sorts the drawn whiteboards worse than the table in
+use. The sorter reads the table `APOTHECARY_MARKS_TABLE` names, so a fit is used
+only where a person points to it, and the same picture gives the same answer.
+`apothecary photo check --finder outline` scores the sorting on drawn whiteboards
+with writing beside their shapes.
+
+## A whiteboard's notes
+
+A note is a mark sorted as writing, kept with what it is about: the mark it lies
+inside, or the nearest diagram's mark within reach (`apothecary/vision/notes.py`).
+Apothecary reads no handwriting. `apothecary photo notes PICTURE` lists the
+notes, and `--say m5="120 mm"` is a person typing what one says, kept with their
+words on the marks.
+
+A note that begins with a size -- a number and `mm`, `cm`, `m`, `in` or `"` --
+and lies beside a line states that line's length. The command then says how wide
+the whole picture is if so, and the `photo build --width-mm` that takes it;
+nothing is sized until a person runs it.
+
+The way out is two flags (`apothecary/finders/words.py`), each over loopback and
+each saying so when what it reaches is not there:
+
+| Flag | Sends | To |
+|---|---|---|
+| `--send` | The whiteboard's words in reading order, a line a note, as one transcript | looksatwords on this machine, at `APOTHECARY_LOOKSATWORDS` or its own port (`LOOKSATWORDS` in `apothecary/finders/words.py`), which says what the words are about |
+| `--ask --among WORD...` | The region of each note nobody has typed | qmcp ([the models checklist](models-checklist.md)), which says which of the given words it holds; its answer is kept beside a person's words and never over them |
+
+qmcp's vision contract answers a label among words it is given, so a note is not
+read freely: the words it may be are named.
+
+## A whiteboard squared
+
+A photograph taken from one side shows a whiteboard leaning.
+`apothecary photo square PHOTOGRAPH --out PICTURE` finds its four corners, from
+the outline of the surface its strokes lie on, and redraws the photograph as the
+whiteboard seen square on (`apothecary/vision/whiteboard.py`). The squared
+picture is as wide as the whiteboard, so the whiteboard's own width, given to
+`photo build --width-mm`, sizes everything drawn on it, and `photo marks` and
+`photo find` read it as any picture.
+
+`--size-mm 1200x900` gives the whiteboard's proportions; without it they are read
+from its sides in the photograph, which a far side shortens. `--corner
+top-left=0.08,0.11` is a person's word on one corner, as fractions of the
+photograph: it wins, and is kept beside the photograph as `NAME.corners.json`
+with where the finder put the corners. A whiteboard that fills the photograph has
+the photograph's corners, and says so; a photograph whose lightest surface is
+under a sixth of it is refused.
+
+## A whiteboard photographed again
+
+`apothecary photo again BEFORE AFTER` reads two pictures of one whiteboard, each
+squared to it, and lists what the later proposes of the earlier's shapes
+(`apothecary/vision/again.py`): one that moved, one that changed size or gained
+or lost a cut, one that is new, one that is gone. A shape that matches and has not
+changed has no row. Each row says by how much.
+
+Nothing changes until a row is taken: `--take 2` takes one, and what is built,
+with `--width-mm`, is the earlier picture's shapes with the rows taken. A shape
+whose sides a person stated is not proposed over when the drawing resizes it: its
+row says the two disagree, and cannot be taken. `--answers FILE` keeps the rows
+and which were taken.
 
 ## Pieces
 

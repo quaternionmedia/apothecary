@@ -18,16 +18,18 @@ import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Tuple
 
+from ..booleans import Difference
 from ..hierarchy import Assembly, Site
 from ..models.bounds import BoundingBox3D
 from ..models.vectors import Vector3D
+from ..primitives import Cube, Cylinder
 from ..transforms import Rotate, Translate
 from .album import Album, Built, Provenance
-from .models import Picture, ScaleReference
+from .models import Picture, ScaleReference, ShapeKind
 
 if TYPE_CHECKING:  # pragma: no cover - for readers and type checkers only
     from ..vocabulary import WordList, WordShape
-    from .models import FoundShape
+    from .models import Cut, FoundShape
     from .projection import Laid
 
 # How thick a flat shape is assumed to be, as a fraction of its shorter side.
@@ -262,6 +264,17 @@ def piece_from_shape(
                 children=[piece.base],
             )
 
+    # Each closed stroke drawn inside the shape is cut through the piece, where it
+    # lies from the shape's middle, as the picture has it.
+    if piece.base is not None and shape.cuts:
+        across = (laid.width / shape.long_side) if laid is not None and shape.long_side else factor
+        piece.base = Difference(
+            children=[
+                piece.base,
+                *(_cut_solid(cut, shape, across, tallness, thickness) for cut in shape.cuts),
+            ]
+        )
+
     centre = shape.centre
     if laid is not None:
         piece.position = Vector3D(x=laid.centre[0], y=laid.centre[1], z=0.0)
@@ -292,6 +305,7 @@ def piece_from_shape(
             else "sides and thickness as a person gave them"
         )
         + ("" if sized else "; no real-world size was supplied")
+        + (f"; {len(shape.cuts)} cut(s) through it, as drawn inside it" if shape.cuts else "")
     )
     about = Provenance(
         word=word,
@@ -304,6 +318,34 @@ def piece_from_shape(
         thickness_guessed=guessed,
     )
     return piece, about
+
+
+def _cut_solid(cut: "Cut", shape: "FoundShape", across: float, tallness: float, thickness: float):
+    """One cut as the solid taken out of a piece standing on its own middle: a
+    round one for a circle, a square-cornered one of its two sides for anything
+    else, through the whole thickness and a little past each face. ``across`` is
+    what one width of the picture is in the piece's units, and ``tallness`` the
+    picture's height over its width."""
+    through = thickness * 1.2 + 0.002
+    if cut.kind is ShapeKind.DISC:
+        solid = Cylinder(h=through, r=cut.long_side * across / 2)
+    else:
+        wide, deep = cut.long_side * across, cut.short_side * across
+        solid = Translate(
+            v=Vector3D(x=-wide / 2, y=-deep / 2, z=0.0),
+            children=[Cube(size=Vector3D(x=wide, y=deep, z=through))],
+        )
+        if cut.turned_degrees:
+            solid = Rotate(a=Vector3D(x=0.0, y=0.0, z=-cut.turned_degrees), children=[solid])
+    return Translate(
+        v=Vector3D(
+            x=(cut.centre.x - shape.centre.x) * across,
+            # Down the picture is towards the front of a build.
+            y=(shape.centre.y - cut.centre.y) * tallness * across,
+            z=-thickness * 0.1 - 0.001,
+        ),
+        children=[solid],
+    )
 
 
 __all__ = [

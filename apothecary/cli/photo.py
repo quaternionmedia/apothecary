@@ -239,6 +239,365 @@ def words(as_json: bool):
         click.echo(f"  {word.name:8} {word.describes}{tags}")
 
 
+@photo.command("marks")
+@click.argument("image", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--say",
+    "said",
+    multiple=True,
+    metavar="MARK=KIND",
+    help="A person's word on one mark: m3=writing, m5=diagram, m2=nothing or m4=unsure. Repeatable.",
+)
+@click.option(
+    "--answers",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="The file the words are kept in. Beside the picture, as NAME.marks.json, unless named; "
+    "a reading of the picture takes the words that lie beside it.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Print the marks as JSON.")
+def marks_of(image: Path, said: tuple, answers: Optional[Path], as_json: bool):
+    """A whiteboard's marks, each a diagram's, writing or unsure, and a person's word on any.
+
+    Only a diagram's marks are read as shapes. A word given with --say wins over
+    the sorter's, and is kept as an example of what the sorter said and what the
+    person said, which `photo fit` reads.
+    """
+    from ..vision import marks
+    from ..vision.cache import picture_hash
+
+    try:
+        kept = marks.load(answers) if answers and answers.is_file() else None
+        found = marks.marks_in(image, kept)
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(f"{image} could not be read: {exc}") from None
+
+    if said:
+        where = answers or marks.answers_path(image)
+        held = kept or marks.answers_beside(image) or marks.Answers()
+        digest = picture_hash(image)
+        for each in said:
+            mark_id, _, word = each.partition("=")
+            try:
+                kind = marks.Kind(word.strip())
+                held.examples.append(marks.say(found, mark_id.strip(), kind, digest))
+            except ValueError:
+                raise click.ClickException(
+                    f"{each!r}: a word is one of {', '.join(k.value for k in marks.Kind)}"
+                ) from None
+            except KeyError as missing:
+                raise click.ClickException(str(missing).strip('"')) from None
+        marks.save(where, held)
+        found = marks.marks_in(image, held)
+        click.echo(f"{len(said)} word(s) kept in {where}", err=True)
+
+    if as_json:
+        click.echo(json.dumps([mark.model_dump(mode="json") for mark in found], indent=2))
+        return
+    click.echo(f"{image.stem}: {len(found)} mark(s)")
+    if not found:
+        click.echo("nothing drawn on it that a marker's stroke would be")
+        return
+    click.echo("")
+    click.echo(f"{'mark':5} {'kind':8} {'sure':>5}  {'colour':7} {'by':7} where, and why")
+    for mark in found:
+        where = (
+            f"{mark.min_point.x:.2f},{mark.min_point.y:.2f} "
+            f"to {mark.max_point.x:.2f},{mark.max_point.y:.2f}"
+        )
+        inside = f", inside {mark.inside}" if mark.inside else ""
+        click.echo(
+            f"{mark.id:5} {mark.kind.value:8} {mark.sure:5.2f}  {mark.colour:7} {mark.by:7} "
+            f"{where}{inside}: {mark.why}"
+        )
+
+
+@photo.command("notes")
+@click.argument("image", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--say",
+    "said",
+    multiple=True,
+    metavar="MARK=WORDS",
+    help='What one note says, as a person reads it: m5="120 mm". Repeatable.',
+)
+@click.option(
+    "--answers",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="The file the words are kept in. Beside the picture, as NAME.marks.json, unless named.",
+)
+@click.option(
+    "--send",
+    is_flag=True,
+    help="Send the whiteboard's words to looksatwords on this machine, as one transcript.",
+)
+@click.option(
+    "--ask",
+    is_flag=True,
+    help="Ask qmcp which of the --among words each note nobody has typed holds.",
+)
+@click.option("--among", multiple=True, help="A word a note may hold, for --ask. Repeatable.")
+@click.option("--json", "as_json", is_flag=True, help="Print the notes as JSON.")
+def notes_of_whiteboard(
+    image: Path,
+    said: tuple,
+    answers: Optional[Path],
+    send: bool,
+    ask: bool,
+    among: tuple,
+    as_json: bool,
+):
+    """A whiteboard's notes: its writing, what each is about, and what each says.
+
+    Apothecary reads no handwriting: a person types a note's words with --say. A
+    size typed for a note beside a line is offered as that line's length, with the
+    picture's width that follows. --send hands the words to looksatwords and --ask
+    a note's region to qmcp, each over loopback, and each says so when it is not there.
+    """
+    from PIL import Image, ImageOps
+
+    from ..finders import words
+    from ..vision import marks, notes
+
+    try:
+        kept = marks.load(answers) if answers and answers.is_file() else None
+        held = kept or marks.answers_beside(image) or marks.Answers()
+        found = marks.marks_in(image, kept)
+        with Image.open(image) as opened:
+            wide, high = ImageOps.exif_transpose(opened).size
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(f"{image} could not be read: {exc}") from None
+
+    if said:
+        for each in said:
+            mark_id, _, text = each.partition("=")
+            try:
+                held.words.append(notes.say(found, mark_id.strip(), text))
+            except (KeyError, ValueError) as refused:
+                raise click.ClickException(str(refused).strip('"')) from None
+        where = answers or marks.answers_path(image)
+        marks.save(where, held)
+        click.echo(f"{len(said)} note(s) kept in {where}", err=True)
+
+    listed = notes.notes_of(found, held, tallness=high / wide)
+    if ask:
+        try:
+            listed, happened = words.ask_qmcp(image, listed, among)
+        except ValueError as refused:
+            raise click.ClickException(str(refused)) from None
+        click.echo(happened, err=True)
+    if send:
+        try:
+            base, answer = words.send_to_looksatwords(listed, title=image.stem)
+        except (ValueError, words.NotServing) as refused:
+            raise click.ClickException(str(refused)) from None
+        named = answer.get("conversation_id", "")
+        click.echo(f"sent to looksatwords at {base}: conversation {named}", err=True)
+
+    if as_json:
+        click.echo(json.dumps([note.model_dump(mode="json") for note in listed], indent=2))
+        return
+    click.echo(f"{image.stem}: {len(listed)} note(s)")
+    for note in listed:
+        about = f"{note.lies} {note.about}" if note.about else "about nothing near it"
+        words = (
+            f'"{note.words}", typed by {note.by}'
+            if note.words
+            else (f'"{note.read}", as a model read it' if note.read else "not typed")
+        )
+        click.echo(f"{note.id:5} {about:14} {words}")
+        if note.offer:
+            click.echo(
+                f"      if {note.offer.of} is {note.offer.millimetres:g} mm long, the picture is "
+                f"{note.offer.picture_mm:g} mm across: photo build --width-mm {note.offer.picture_mm:g}"
+            )
+
+
+@photo.command("again")
+@click.argument("before", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument("after", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--finder", default="outline", show_default=True, help="Which shape finder to use.")
+@click.option(
+    "--take", "took", multiple=True, type=int, help="A row to take, by its number. Repeatable."
+)
+@click.option("--width-mm", type=float, help="How wide the picture is, to build what was taken.")
+@click.option(
+    "--answers",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Keep the rows, and which were taken, in this file.",
+)
+@click.option(
+    "--out",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the drawing instructions of what was taken to this file.",
+)
+def round_again(
+    before: Path,
+    after: Path,
+    finder: str,
+    took: tuple,
+    width_mm: Optional[float],
+    answers: Optional[Path],
+    out: Optional[Path],
+):
+    """A whiteboard photographed again: what changed, as rows to take or leave.
+
+    BEFORE and AFTER are two pictures of one whiteboard, each squared to it
+    (`photo square`). Nothing changes until a row is taken with --take; what is
+    built is the earlier picture's shapes with the rows taken.
+    """
+    from ..vision import again
+
+    earlier = _look_or_explain(finder, before)
+    later = _look_or_explain(finder, after)
+    rows = again.compare(earlier, later)
+    click.echo(f"{before.stem} then {after.stem}: {len(rows)} change(s) proposed")
+    for row in rows:
+        mark = "taken" if row.number in took else ("left" if row.takeable else "stands")
+        click.echo(f"{row.number:3}  {row.change.value:9} {row.kind:5} {mark:6} {row.says}")
+    try:
+        kept = again.taken_from(earlier, later, rows, took)
+    except (KeyError, ValueError) as refused:
+        raise click.ClickException(str(refused).strip('"')) from None
+    if answers:
+        answers.write_text(
+            again.Taken(rows=rows, taken=sorted(took)).model_dump_json(indent=2) + "\n",
+            encoding="utf-8",
+        )
+        click.echo(f"rows kept in {answers}", err=True)
+    if not took:
+        click.echo("nothing taken, so nothing changed: --take N takes a row")
+        return
+    scale = _scale_or_explain(millimetres_across=width_mm) if width_mm is not None else None
+    built = build_arrangement(kept, name=after.stem, scale=scale)
+    click.echo(f"{len(built.site.children)} piece(s) after {len(took)} row(s) taken")
+    if out:
+        out.write_text(built.site.render(), encoding="utf-8")
+        click.echo(f"written to {out}")
+
+
+@photo.command("square")
+@click.argument("image", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Where the squared picture is written.",
+)
+@click.option(
+    "--corner",
+    "moved",
+    multiple=True,
+    metavar="NAME=X,Y",
+    help="A person's word on one corner, as fractions of the photograph: top-left=0.08,0.11. "
+    "Repeatable; kept beside the photograph as NAME.corners.json.",
+)
+@click.option(
+    "--size-mm",
+    metavar="WIDExHIGH",
+    help="The whiteboard's own size, 1200x900, for its proportions. Without it they are read "
+    "from its sides in the photograph.",
+)
+def square_to_whiteboard(image: Path, out: Path, moved: tuple, size_mm: Optional[str]):
+    """Redraw a photograph as its whiteboard seen square on.
+
+    The squared picture is as wide as the whiteboard, so `photo build --width-mm`
+    with the whiteboard's width sizes everything drawn on it, and `photo marks`
+    and `photo find` read it as any picture.
+    """
+    from ..vision import whiteboard
+
+    ratio = None
+    if size_mm:
+        try:
+            wide, high = (float(part) for part in size_mm.lower().split("x"))
+            ratio = wide / high
+        except (ValueError, ZeroDivisionError):
+            raise click.ClickException(
+                f"--size-mm {size_mm!r}: a size is WIDExHIGH in millimetres, as 1200x900"
+            ) from None
+    try:
+        found = whiteboard.with_word(image, whiteboard.find(image))
+        if moved:
+            words = []
+            for each in moved:
+                name, _, where = each.partition("=")
+                try:
+                    x, y = (float(part) for part in where.split(","))
+                except ValueError:
+                    raise click.ClickException(
+                        f"{each!r}: a corner is NAME=X,Y, as top-left=0.08,0.11"
+                    ) from None
+                words.append((name.strip(), (x, y)))
+            found = whiteboard.say(image, found, words)
+        used, size = whiteboard.square(image, out, found, ratio)
+    except whiteboard.NoWhiteboard as none:
+        raise click.ClickException(str(none)) from None
+    except KeyError as missing:
+        raise click.ClickException(str(missing).strip('"')) from None
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(f"{image} could not be squared: {exc}") from None
+
+    if used.fills:
+        click.echo("the whiteboard fills the photograph: its corners are the photograph's")
+    for name, (x, y) in zip(whiteboard.NAMES, used.corners, strict=True):
+        click.echo(f"{name:13} {x:.3f}, {y:.3f}")
+    click.echo(f"corners by {used.by}; squared to {size[0]} by {size[1]} pixels in {out}")
+
+
+@photo.command("fit")
+@click.argument(
+    "examples",
+    nargs=-1,
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--out",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the fitted table here. Without it the table is printed and nothing is written.",
+)
+@click.option(
+    "--count", default=20, show_default=True, help="Drawn whiteboards the fit is held to."
+)
+def fit_marks(examples: tuple, out: Optional[Path], count: int):
+    """Fit the sorter's thresholds to a person's words on marks.
+
+    Reads the files `photo marks --say` keeps, searches the thresholds for the ones
+    that sort the most examples as their person did, and refuses a fit that sorts
+    the drawn whiteboards worse than the table in use does. The table is read
+    from APOTHECARY_MARKS_TABLE, so a fit is used only where a person points to it.
+    """
+    from ..vision import marks
+    from ..vision.bench import run_sorting
+
+    gathered = []
+    for path in examples:
+        try:
+            gathered.extend(marks.load(path).examples)
+        except (OSError, ValueError) as exc:
+            raise click.ClickException(f"{path} could not be read: {exc}") from None
+    if not gathered:
+        raise click.ClickException("no examples in those files: `photo marks --say` keeps them")
+
+    fitted, before, after = marks.fit(gathered)
+    drawn_before = run_sorting(count=count).right_rate
+    drawn_after = run_sorting(count=count, thresholds=fitted).right_rate
+    click.echo(
+        f"{len(gathered)} example(s): {before:.0%} sorted as their person did, {after:.0%} fitted"
+    )
+    click.echo(f"drawn whiteboards: {drawn_before:.0%} sorted right, {drawn_after:.0%} fitted")
+    if drawn_after < drawn_before:
+        raise click.ClickException(
+            "the fit sorts the drawn whiteboards worse than the table in use; nothing is written"
+        )
+    text = json.dumps(fitted, indent=2, sort_keys=True)
+    if out is None:
+        click.echo(text)
+        return
+    out.write_text(text + "\n", encoding="utf-8")
+    click.echo(f"written to {out}; set {marks.TABLE_ENV} to it to use it")
+
+
 @photo.command("finders")
 def finders():
     """List the shape finders available."""
@@ -301,6 +660,35 @@ def check(finder: str, count: int):
     click.echo("made up — shapes reported that were never drawn; should always be zero")
     click.echo("honest  — how much less sure it is when wrong; positive means the")
     click.echo("          confidence can be trusted to flag its own bad guesses")
+
+    if finder != "outline":
+        return
+    from ..vision.bench import run_sorting
+
+    click.echo("")
+    click.echo("its marks sorted, on whiteboards with writing beside the shapes")
+    click.echo("")
+    click.echo(
+        f"{'condition':22} {'right':>6} {'unsure':>7} {'w as d':>7} {'d as w':>7} {'missed':>7}"
+    )
+    for label, drawing in [
+        ("writing beside", {}),
+        ("turned", dict(turn=True)),
+        ("shadowed", dict(shadow=0.4)),
+        ("smeared", dict(smear=True)),
+        ("framed", dict(framed=True)),
+    ]:
+        sorting = run_sorting(count=count, **drawing)
+        click.echo(
+            f"{label:22} {sorting.right_rate:6.0%} {sorting.unsure:7d} "
+            f"{sorting.writing_as_diagram:7d} {sorting.diagram_as_writing:7d} {sorting.missed:7d}"
+        )
+    click.echo("")
+    click.echo(
+        "right  — of the shapes and lines of writing drawn, how many were sorted as they are"
+    )
+    click.echo("w as d — writing sorted as a diagram's, which makes a piece nobody drew")
+    click.echo("d as w — a diagram's stroke sorted as writing, which loses a piece")
 
 
 @photo.command("view")
