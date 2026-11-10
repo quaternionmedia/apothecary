@@ -233,6 +233,16 @@ AREAS = {
         ),
         "tests": ("test_procedure_doors.py", "test_procedure_window.py"),
     },
+    "marks": {
+        "sources": (
+            "apothecary/vision/marks.py",
+            "apothecary/vision/notes.py",
+            "apothecary/vision/outline.py",
+            "apothecary/routes/marks.py",
+            "apothecary/static/widgets/marks.*",
+        ),
+        "tests": ("test_marks_window.py",),
+    },
     "models": {
         "sources": (
             "apothecary/finders/*",

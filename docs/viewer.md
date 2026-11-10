@@ -254,7 +254,8 @@ expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
 - **Panels** › Site › Site, Problems, Pinned, Jobs, SCAD and Workspace (the
   Working space, [working-space.md](working-space.md)); Selected;
   Pictures › Pictures, Models (the Models window, then Ask and a person's Colour
-  and Material, [models-checklist.md](models-checklist.md)) and Gather; Machine › Machine (the selected board's),
+  and Material, [models-checklist.md](models-checklist.md)), Gather and Marks (the Marks window, then a person's
+  word on the mark chosen in it, [pictures.md](pictures.md#the-marks-window)); Machine › Machine (the selected board's),
   Control pad (an armed printer's pad in a loud window of its own or back in its
   Machine, as the pad's ⧉ Pop out and ⇥ Put back) and Knobs (the Stream Deck +'s:
   On / off, Machine, Step, Here and the Deck window, [stream-deck.md](stream-deck.md)); Windows › World alone (as

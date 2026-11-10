@@ -569,6 +569,8 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
         "gather",
         # The Models window, beside the world, closed until asked for.
         "models",
+        # The Marks window, a tab beside it, closed until asked for.
+        "marks",
         # The Part's sections, then the Airgap and its sections, each a window of its
         # own closed until asked for (apothecary/systems.py).
         *(f"part-{sid}" for sid in windows.PART_SECTIONS),

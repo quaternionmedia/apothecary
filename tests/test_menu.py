@@ -1191,8 +1191,21 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         # material, each a word of the family's lists.
         ("Models", None, 6),
         ("Gather", "panel:toggle:gather", 2),
+        # Marks, last, so Models and Gather keep their addresses: the window, then a
+        # person's word on the mark chosen in it.
+        ("Marks", None, 4),
     ]
     assert address_of(root, "panel:pictures") == "428"
+    marks = next(c for c in pictures.children if c.label == "Marks")
+    assert [(c.label, c.action) for c in marks.children] == [
+        ("Marks", "panel:toggle:marks"),
+        ("Diagram", "marks:say:diagram"),
+        ("Writing", "marks:say:writing"),
+        ("Unsure", "marks:say:unsure"),
+        ("Nothing", "marks:say:nothing"),
+    ]
+    assert carried_by("marks:say:writing").name == "VIEWER"
+    assert address_of(root, "panel:marks") == "4248"
     models = next(c for c in pictures.children if c.label == "Models")
     assert [(c.label, c.action) for c in models.children] == [
         ("Models", "panel:toggle:models"),

@@ -157,6 +157,22 @@ only where a person points to it, and the same picture gives the same answer.
 `apothecary photo check --finder outline` scores the sorting on drawn whiteboards
 with writing beside their shapes.
 
+### The Marks window
+
+In the page, ⊞ Windows › Marks (Panels › Pictures › Marks on the ring) lists the
+marks of a picture pinned in the site, the one drawn at the selected place first.
+Each mark has its colour, a drop-down of what it is, and why; choosing in the
+drop-down is a person's word. A view the outline finder searched is read again
+with it, so the shapes on the picture where it lies follow at once. A mark's
+number chooses it, and the ring's cells under Marks -- Diagram, Writing, Unsure,
+Nothing -- then say what the chosen mark is. Under the marks are the notes: each
+with what it is about and a box for what it says, typed and said with Enter, and
+the size it states for its line where it states one.
+
+The words given in the page are kept with the views, in the server's memory, and
+go when it stops (`GET` and `PUT /sites/{site}/views/{view}/marks`,
+`PUT .../notes/{mark}`).
+
 ## A whiteboard's notes
 
 A note is a mark sorted as writing, kept with what it is about: the mark it lies
