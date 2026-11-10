@@ -3,9 +3,9 @@
  * Three parts, top to bottom. qmcp: whether it is configured and answering, in
  * one sentence (GET /vision, asked again each time the window is shown and after
  * each Ask). Origins: the plain reader and each of qmcp's models, each with its
- * switch (PUT /vision/origins/{origin}); a model is "not checked" until
- * `apothecary vision check` has passed for it, and a guess from one is shown and
- * used for nothing. Ask: the shape chosen on a picture's mat (POST
+ * switch (PUT /vision/origins/{origin}); a model is "not checked" -- checking one
+ * is not built (docs/plans/image-models-through-qmcp-2026-10-30.md) -- and a guess
+ * from one is shown and used for nothing. Ask: the shape chosen on a picture's mat (POST
  * .../shapes/{i}/ask) -- the plain reader's colour read off its pixels, and each
  * model's colour, material and label beside it, with whether they agree -- and a
  * person's word on each property, typed or picked from its words and said with
@@ -61,7 +61,7 @@ export function mountModels(root, { base = "", world = null, log = null } = {}) 
         "not reachable": "Nothing is asked of it; apothecary reads without it.",
         "not answering": "Nothing is asked of it; apothecary reads without it. It is asked again each time this window is shown, and after each Ask.",
         "no model": "qmcp is up and has no vision model: every guess comes back unread.",
-        "answering": "Its models answer only when asked here, and every guess is a guess: none is trusted until apothecary vision check has passed for it.",
+        "answering": "Its models answer only when asked here, and every guess is a guess: checking a model is not built, so none is trusted.",
     };
 
     function renderStatus() {

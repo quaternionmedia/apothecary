@@ -34,8 +34,7 @@ status bar said, word for word.
       Models**, opens a window of its own beside the world, the height of the
       page, with the world still in view. Its first line has a green dot and
       says *the simulated qmcp is answering: simulated-vlm 0*, with a sentence
-      under it saying no guess is trusted until `apothecary vision check` has
-      passed for it.
+      under it saying checking a model is not built, so none is trusted.
 - [ ] **Origins** lists `plain/colour`, the plain reader, and
       `qmcp/simulated-vlm@0`, which says what it answers and *not checked*.
       Each has its switch, ticked.
@@ -151,8 +150,9 @@ pixels, and nothing else in the viewer changes.
 ## What this does not cover yet
 
 - A real qmcp, over MCP: it waits on qmcp's own server speaking MCP.
-- Trust: no `apothecary vision check` yet, so every guess is *not checked*
-  and used for nothing.
+- Trust: checking a model is not built
+  ([the plan](plans/image-models-through-qmcp-2026-10-30.md#how-each-is-measured-before-anything-trusts-it)),
+  so every guess is *not checked* and used for nothing.
 - The `qmcp` finder in **Picture › Find shapes**, and asking about a rig's face.
 - A site's own words mapped onto the colour and material lists.
 - Keeping what was asked: it lasts as long as the server, and a restart forgets

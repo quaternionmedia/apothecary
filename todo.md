@@ -43,9 +43,6 @@ here: run `apothecary problems`.
   still found by its port's name; a family home step on a port another board's record names is refused
   once, with nothing sent, and works on the next try; two identical converters swapped in
   one socket read as one board. None of it has met the real router or the real state file.
-- The Models window says none is trusted until `apothecary vision check` has passed
-  (`apothecary/static/widgets/models.js`, quoted in `docs/models-checklist.md`);
-  `apothecary vision` has `ask`, `off`, `on` and `status`.
 - `tests/e2e/durations.json` has no times for the browser tests the view banner added or
   renamed, so `--shard` balances without them until `apothecary test all --record-durations`.
 - hearth's `web.router` declares GET and HEAD on one route, so FastAPI warns of duplicate
@@ -202,6 +199,11 @@ here: run `apothecary problems`.
   refuse it, and no part.json in parts/ has a key they do not know. pydantic's
   calls that skip validators (`model_construct`, `model_copy`) and a subclass
   that declares the field get past it too.
+- What `tests/test_cli_guidance.py` does not read: a wrong first word in prose
+  ("until apothecary verify has passed"), the package's Python strings, a code
+  span led by `python -m`, `.venv/bin/` or `$ `, AGENTS.md, `templates/*.md`, the
+  tests' READMEs and the changelog, words after a command that takes none, a
+  command joined from JS strings, and a word run on into `_` or `:`.
 
 ## Next round
 
