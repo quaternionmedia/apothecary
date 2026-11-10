@@ -63,3 +63,52 @@ def test_a_tab_a_window_and_each_list_wear_their_group():
         ".panel-window[data-group]",
     ):
         assert rule in TEMPLATE, rule
+
+
+def _panel_groups_on_the_page() -> dict[str, str]:
+    """Panel id -> group, as the page registers each: each focused system's main
+    window, then its markup's sections and its script's registrations, which a
+    window the markup holds keeps."""
+    found = {system.main: system.group for system in systems.SYSTEMS}
+    found |= dict(re.findall(r'data-panel="([a-z-]+)"[^>]*?data-group="([^"]+)"', TEMPLATE))
+    found |= dict(
+        re.findall(r"register\('([a-z-]+)',\s*\{[^}]*?group: '([^']+)'", TEMPLATE, flags=re.S)
+    )
+    return found
+
+
+def test_a_panels_cell_wears_the_group_its_window_is_registered_under():
+    from apothecary.menu import PANEL_GROUPS, PANELS
+
+    on_the_page = _panel_groups_on_the_page()
+    assert {"site", "selected", "pictures", "bench", "procedure"} <= set(on_the_page)
+    for panel, _ in PANELS:
+        assert panel in PANEL_GROUPS, f"{panel} has a cell and no group"
+        if panel in on_the_page:
+            assert PANEL_GROUPS[panel] == on_the_page[panel], panel
+
+
+def test_every_ring_cell_that_wears_a_group_wears_one_with_a_colour():
+    from apothecary.menu import Option, _panels
+
+    def groups(options):
+        for option in options or []:
+            if option.group:
+                yield option.group
+            yield from groups(option.children)
+
+    worn = set(groups([_panels()]))
+    assert {"Site", "Selected", "Pictures", "Machine", "Tools", "Family", "Airgap", "Part"} <= worn
+    assert worn <= set(_coloured())
+    assert Option(id="x", label="X", action="x").group is None
+
+
+def test_the_ring_and_the_worlds_badges_draw_the_group():
+    ring = (ROOT / "apothecary" / "static" / "ring.js").read_text(encoding="utf-8")
+    anchors = (ROOT / "apothecary" / "static" / "anchors.js").read_text(encoding="utf-8")
+    assert 'class="rim" data-group="${esc(option.group)}"' in ring
+    assert "if (group) el.dataset.group = group;" in anchors
+    assert ".world-badge[data-group]" in TEMPLATE
+    marks = (ROOT / "apothecary" / "static" / "machine_marks.js").read_text(encoding="utf-8")
+    pictures = (ROOT / "apothecary" / "static" / "picture_marks.js").read_text(encoding="utf-8")
+    assert 'group: "Machine"' in marks and pictures.count('group: "Pictures"') == 2

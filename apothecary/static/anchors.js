@@ -333,10 +333,12 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
         },
         /* A badge: an element of class `world-badge` (and `className`) holding
          * its icon and its words, bound as add() binds one. The caller listens
-         * to it and says what it says (say). */
-        badge(key, point, { className = "", title = "", ...options } = {}) {
+         * to it and says what it says (say). `group` is the group of windows its
+         * thing's work is in, whose colour it wears (tokens.css). */
+        badge(key, point, { className = "", title = "", group = "", ...options } = {}) {
             const el = document.createElement("div");
             el.className = `world-badge${className ? ` ${className}` : ""}`;
+            if (group) el.dataset.group = group;
             if (title) el.title = title;
             el.innerHTML = '<span class="badge-icon"></span><div class="badge-words"></div>';
             return this.add(key, el, point, options);

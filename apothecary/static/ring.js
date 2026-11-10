@@ -202,6 +202,7 @@ const STYLE = `
 .apothecary-ring .wedge.marked.hot { fill: #33557a; }
 .apothecary-ring .wedge.armed, .apothecary-ring .wedge.armed.hot { fill: #8a3a1a; stroke: #ffb27a; }
 .apothecary-ring .label.armed { fill: #ffe0c8; font-weight: 600; }
+.apothecary-ring .rim { fill: var(--group); pointer-events: none; }
 .apothecary-ring .hub { fill: #141614; stroke: #3a443a; stroke-width: 1.5; cursor: pointer; }
 .apothecary-ring text { fill: #d8e0d8; pointer-events: none; user-select: none; }
 .apothecary-ring .label { font-size: 12px; text-anchor: middle; }
@@ -363,6 +364,8 @@ class RingInstance {
                 + ` aria-label="${option ? esc(armed ? `again to ${option.label.toLowerCase()}` : option.label) : "empty"}"`
                 + (option && option.marked ? ' aria-current="true"' : "")
                 + `${option ? "" : ' aria-disabled="true"'} d="${wedgePath(slot, r0, r1)}"></path>`
+                // Whose it is: its group's colour along its outer edge (tokens.css).
+                + (option && option.group ? `<path class="rim" data-group="${esc(option.group)}" d="${wedgePath(slot, r1 - 4, r1)}"></path>` : "")
                 + (option ? words : "")
                 + `<circle class="digit-key${option ? "" : " empty-digit"}" cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="8.5"></circle>`
                 + `<text class="digit${option ? "" : " empty-digit"}" x="${dx.toFixed(1)}" y="${(dy + 4).toFixed(1)}">${cell}</text>`
