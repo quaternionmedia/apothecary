@@ -311,6 +311,75 @@ def marks_of(image: Path, said: tuple, answers: Optional[Path], as_json: bool):
         )
 
 
+@photo.command("square")
+@click.argument("image", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Where the squared picture is written.",
+)
+@click.option(
+    "--corner",
+    "moved",
+    multiple=True,
+    metavar="NAME=X,Y",
+    help="A person's word on one corner, as fractions of the photograph: top-left=0.08,0.11. "
+    "Repeatable; kept beside the photograph as NAME.corners.json.",
+)
+@click.option(
+    "--size-mm",
+    metavar="WIDExHIGH",
+    help="The whiteboard's own size, 1200x900, for its proportions. Without it they are read "
+    "from its sides in the photograph.",
+)
+def square_to_whiteboard(image: Path, out: Path, moved: tuple, size_mm: Optional[str]):
+    """Redraw a photograph as its whiteboard seen square on.
+
+    The squared picture is as wide as the whiteboard, so `photo build --width-mm`
+    with the whiteboard's width sizes everything drawn on it, and `photo marks`
+    and `photo find` read it as any picture.
+    """
+    from ..vision import whiteboard
+
+    ratio = None
+    if size_mm:
+        try:
+            wide, high = (float(part) for part in size_mm.lower().split("x"))
+            ratio = wide / high
+        except (ValueError, ZeroDivisionError):
+            raise click.ClickException(
+                f"--size-mm {size_mm!r}: a size is WIDExHIGH in millimetres, as 1200x900"
+            ) from None
+    try:
+        found = whiteboard.with_word(image, whiteboard.find(image))
+        if moved:
+            words = []
+            for each in moved:
+                name, _, where = each.partition("=")
+                try:
+                    x, y = (float(part) for part in where.split(","))
+                except ValueError:
+                    raise click.ClickException(
+                        f"{each!r}: a corner is NAME=X,Y, as top-left=0.08,0.11"
+                    ) from None
+                words.append((name.strip(), (x, y)))
+            found = whiteboard.say(image, found, words)
+        used, size = whiteboard.square(image, out, found, ratio)
+    except whiteboard.NoWhiteboard as none:
+        raise click.ClickException(str(none)) from None
+    except KeyError as missing:
+        raise click.ClickException(str(missing).strip('"')) from None
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(f"{image} could not be squared: {exc}") from None
+
+    if used.fills:
+        click.echo("the whiteboard fills the photograph: its corners are the photograph's")
+    for name, (x, y) in zip(whiteboard.NAMES, used.corners, strict=True):
+        click.echo(f"{name:13} {x:.3f}, {y:.3f}")
+    click.echo(f"corners by {used.by}; squared to {size[0]} by {size[1]} pixels in {out}")
+
+
 @photo.command("fit")
 @click.argument(
     "examples",

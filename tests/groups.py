@@ -233,6 +233,7 @@ GROUPS = {
             "test_projection.py",
             "test_switches.py",
             "test_views_api.py",
+            "test_whiteboard.py",
             "test_vision_through_qmcp.py",
             "test_working_together.py",
         ),

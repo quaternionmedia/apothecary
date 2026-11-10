@@ -173,8 +173,9 @@ glare and a smear, with notes beside the shapes, and framed by a wall.
 - **A cut.** The ring inside the plate is left unsure, not cut through it.
 - **The writing read.** A line of writing is sorted as writing, and what it says is
   not read.
-- **A whiteboard seen from one side.** The picture is read as it lies, and its width is
-  the picture's, not the whiteboard's.
+- **A whiteboard seen from one side.** This one is drawn square on.
+  `apothecary photo square` finds a leaning whiteboard's corners and redraws the
+  photograph square, as wide as the whiteboard (`tests/test_whiteboard.py`).
 - **The page.** Find shapes on a host's ring offers `outline` beside `plain` for a
   picture that holds a drawing (`tests/test_outline_finder.py`); no browser test walks
   a drawing through it.

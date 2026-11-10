@@ -153,6 +153,24 @@ only where a person points to it, and the same picture gives the same answer.
 `apothecary photo check --finder outline` scores the sorting on drawn whiteboards
 with writing beside their shapes.
 
+## A whiteboard squared
+
+A photograph taken from one side shows a whiteboard leaning.
+`apothecary photo square PHOTOGRAPH --out PICTURE` finds its four corners, from
+the outline of the surface its strokes lie on, and redraws the photograph as the
+whiteboard seen square on (`apothecary/vision/whiteboard.py`). The squared
+picture is as wide as the whiteboard, so the whiteboard's own width, given to
+`photo build --width-mm`, sizes everything drawn on it, and `photo marks` and
+`photo find` read it as any picture.
+
+`--size-mm 1200x900` gives the whiteboard's proportions; without it they are read
+from its sides in the photograph, which a far side shortens. `--corner
+top-left=0.08,0.11` is a person's word on one corner, as fractions of the
+photograph: it wins, and is kept beside the photograph as `NAME.corners.json`
+with where the finder put the corners. A whiteboard that fills the photograph has
+the photograph's corners, and says so; a photograph whose lightest surface is
+under a sixth of it is refused.
+
 ## Pieces
 
 A shape made into a piece is a root structure of the same site, standing where

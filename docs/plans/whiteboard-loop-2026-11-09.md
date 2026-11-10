@@ -4,8 +4,11 @@
 ([pictures.md](../pictures.md#finders),
 [walkthrough 28](../../walkthrough/28-a-whiteboard-to-a-model.md)), and of
 slice 2 the sorter, a person's word from the command line, the examples and
-the fit ([pictures.md](../pictures.md#a-whiteboards-marks)); its marks are not
-yet shown or refined in the page. Each slice
+the fit ([pictures.md](../pictures.md#a-whiteboards-marks)); of slice 3 the
+corners found, a person's word on one and the photograph squared
+([pictures.md](../pictures.md#a-whiteboard-squared)). Not built of those: the
+marks and the corners shown and refined in the page, and the whiteboard as a
+part. Each slice
 is one branch of a short stack, built in the order listed once the owner says
 yes to it.*
 
