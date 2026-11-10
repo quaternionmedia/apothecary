@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- A whiteboard's writing is kept as notes, each with what it is about: `apothecary photo notes` lists them and takes a person's words for one, offers a size typed beside a line as that line's length with the picture's width that follows, sends the words to looksatwords as a transcript (`--send`) and asks qmcp which of some words a note holds (`--ask --among`), each over loopback. ([doc](docs/pictures.md#a-whiteboards-notes))
 - A closed stroke drawn inside a shape on a whiteboard is a cut through it: the shape carries its cuts, and the piece made of it has each taken out where it was drawn. ([doc](docs/pictures.md#finders))
 - `apothecary photo square` finds a whiteboard's corners in a photograph taken from one side and redraws it square, as wide as the whiteboard, so the whiteboard's width sizes what is drawn on it; a person's word on a corner wins and is kept beside the photograph. ([doc](docs/pictures.md#a-whiteboard-squared))
 - A whiteboard's marks are sorted before they are read: each is a diagram's, writing or unsure, saying why and how sure, and only a diagram's become shapes; `apothecary photo marks` lists them and takes a person's word on any (`--say m3=writing`), kept as an example beside the picture, and `apothecary photo fit` fits the sorter's thresholds to examples, refusing a fit that sorts the drawn whiteboards worse. ([doc](docs/pictures.md#a-whiteboards-marks))

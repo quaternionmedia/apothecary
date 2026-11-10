@@ -157,6 +157,30 @@ only where a person points to it, and the same picture gives the same answer.
 `apothecary photo check --finder outline` scores the sorting on drawn whiteboards
 with writing beside their shapes.
 
+## A whiteboard's notes
+
+A note is a mark sorted as writing, kept with what it is about: the mark it lies
+inside, or the nearest diagram's mark within reach (`apothecary/vision/notes.py`).
+Apothecary reads no handwriting. `apothecary photo notes PICTURE` lists the
+notes, and `--say m5="120 mm"` is a person typing what one says, kept with their
+words on the marks.
+
+A note that begins with a size -- a number and `mm`, `cm`, `m`, `in` or `"` --
+and lies beside a line states that line's length. The command then says how wide
+the whole picture is if so, and the `photo build --width-mm` that takes it;
+nothing is sized until a person runs it.
+
+The way out is two flags (`apothecary/finders/words.py`), each over loopback and
+each saying so when what it reaches is not there:
+
+| Flag | Sends | To |
+|---|---|---|
+| `--send` | The whiteboard's words in reading order, a line a note, as one transcript | looksatwords, at `APOTHECARY_LOOKSATWORDS` or `http://127.0.0.1:1414`, which says what the words are about |
+| `--ask --among WORD...` | The region of each note nobody has typed | qmcp ([the models checklist](models-checklist.md)), which says which of the given words it holds; its answer is kept beside a person's words and never over them |
+
+qmcp's vision contract answers a label among words it is given, so a note is not
+read freely: the words it may be are named.
+
 ## A whiteboard squared
 
 A photograph taken from one side shows a whiteboard leaning.

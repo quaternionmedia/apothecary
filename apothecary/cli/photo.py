@@ -311,6 +311,107 @@ def marks_of(image: Path, said: tuple, answers: Optional[Path], as_json: bool):
         )
 
 
+@photo.command("notes")
+@click.argument("image", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--say",
+    "said",
+    multiple=True,
+    metavar="MARK=WORDS",
+    help='What one note says, as a person reads it: m5="120 mm". Repeatable.',
+)
+@click.option(
+    "--answers",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="The file the words are kept in. Beside the picture, as NAME.marks.json, unless named.",
+)
+@click.option(
+    "--send",
+    is_flag=True,
+    help="Send the whiteboard's words to looksatwords on this machine, as one transcript.",
+)
+@click.option(
+    "--ask",
+    is_flag=True,
+    help="Ask qmcp which of the --among words each note nobody has typed holds.",
+)
+@click.option("--among", multiple=True, help="A word a note may hold, for --ask. Repeatable.")
+@click.option("--json", "as_json", is_flag=True, help="Print the notes as JSON.")
+def notes_of_whiteboard(
+    image: Path,
+    said: tuple,
+    answers: Optional[Path],
+    send: bool,
+    ask: bool,
+    among: tuple,
+    as_json: bool,
+):
+    """A whiteboard's notes: its writing, what each is about, and what each says.
+
+    Apothecary reads no handwriting: a person types a note's words with --say. A
+    size typed for a note beside a line is offered as that line's length, with the
+    picture's width that follows. --send hands the words to looksatwords and --ask
+    a note's region to qmcp, each over loopback, and each says so when it is not there.
+    """
+    from PIL import Image, ImageOps
+
+    from ..finders import words
+    from ..vision import marks, notes
+
+    try:
+        kept = marks.load(answers) if answers and answers.is_file() else None
+        held = kept or marks.answers_beside(image) or marks.Answers()
+        found = marks.marks_in(image, kept)
+        with Image.open(image) as opened:
+            wide, high = ImageOps.exif_transpose(opened).size
+    except (OSError, ValueError) as exc:
+        raise click.ClickException(f"{image} could not be read: {exc}") from None
+
+    if said:
+        for each in said:
+            mark_id, _, text = each.partition("=")
+            try:
+                held.words.append(notes.say(found, mark_id.strip(), text))
+            except (KeyError, ValueError) as refused:
+                raise click.ClickException(str(refused).strip('"')) from None
+        where = answers or marks.answers_path(image)
+        marks.save(where, held)
+        click.echo(f"{len(said)} note(s) kept in {where}", err=True)
+
+    listed = notes.notes_of(found, held, tallness=high / wide)
+    if ask:
+        try:
+            listed, happened = words.ask_qmcp(image, listed, among)
+        except ValueError as refused:
+            raise click.ClickException(str(refused)) from None
+        click.echo(happened, err=True)
+    if send:
+        try:
+            base, answer = words.send_to_looksatwords(listed, title=image.stem)
+        except (ValueError, words.NotServing) as refused:
+            raise click.ClickException(str(refused)) from None
+        named = answer.get("conversation_id", "")
+        click.echo(f"sent to looksatwords at {base}: conversation {named}", err=True)
+
+    if as_json:
+        click.echo(json.dumps([note.model_dump(mode="json") for note in listed], indent=2))
+        return
+    click.echo(f"{image.stem}: {len(listed)} note(s)")
+    for note in listed:
+        about = f"{note.lies} {note.about}" if note.about else "about nothing near it"
+        words = (
+            f'"{note.words}", typed by {note.by}'
+            if note.words
+            else (f'"{note.read}", as a model read it' if note.read else "not typed")
+        )
+        click.echo(f"{note.id:5} {about:14} {words}")
+        if note.offer:
+            click.echo(
+                f"      if {note.offer.of} is {note.offer.millimetres:g} mm long, the picture is "
+                f"{note.offer.picture_mm:g} mm across: photo build --width-mm {note.offer.picture_mm:g}"
+            )
+
+
 @photo.command("square")
 @click.argument("image", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option(

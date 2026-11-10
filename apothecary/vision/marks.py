@@ -59,6 +59,8 @@ DEFAULTS: Dict[str, float] = {
 # working picture's longer edge for each unit of its length.
 LINE_THICK = 0.0175
 
+A_LINE = "a long straight stroke is a line"
+
 TABLE_ENV = "APOTHECARY_MARKS_TABLE"
 TABLE = Path(__file__).with_name("marks_table.json")
 
@@ -89,6 +91,8 @@ class Mark(BaseModel):
     inside: Optional[str] = None
     # Whether a closed stroke makes it, so it may be a shape.
     closed: bool = False
+    # Whether it is one long straight stroke: a dimension line, an edge, an arrow's shaft.
+    line: bool = False
     colour: str = ""
     rgb: str = ""
     features: Dict[str, float] = Field(default_factory=dict)
@@ -115,11 +119,22 @@ class Example(BaseModel):
     features: Dict[str, float] = Field(default_factory=dict)
 
 
+class Words(BaseModel):
+    """What a mark of writing says, as a person typed it."""
+
+    min: Tuple[float, float]
+    max: Tuple[float, float]
+    text: str
+    by: str = "you"
+
+
 class Answers(BaseModel):
-    """A person's words on a picture's marks, as a file holds them."""
+    """A person's words on a picture's marks, as a file holds them: what each mark
+    is, and what the writing says."""
 
     format: str = FORMAT
     examples: List[Example] = Field(default_factory=list)
+    words: List[Words] = Field(default_factory=list)
 
 
 def table() -> Dict[str, float]:
@@ -182,7 +197,7 @@ def sort(reading: Reading, thresholds: Optional[Dict[str, float]] = None) -> Lis
         if reading.ground in stroke.holes:
             continue
         if _a_line(f, held):
-            drafts.append(([stroke], Kind.DIAGRAM, 0.7, "a long straight stroke is a line"))
+            drafts.append(([stroke], Kind.DIAGRAM, 0.7, A_LINE))
         elif f["tall"] < held["small"] and not (
             stroke.closed and f["wide"] >= 2 * held["small"] and f["full"] < 0.5
         ):
@@ -240,6 +255,7 @@ def sort(reading: Reading, thresholds: Optional[Dict[str, float]] = None) -> Lis
             strokes=[s.index for s in strokes],
             closed=len(strokes) == 1
             and (strokes[0].closed or bool(strokes[0].holes) or first["full"] > 0.45),
+            line=why == A_LINE,
             colour=word,
             rgb=rgb,
             features={**first, "strokes": float(len(strokes))},
@@ -298,19 +314,32 @@ def _runs(strokes: Sequence[Stroke], gap: float) -> List[List[Stroke]]:
     return [sorted(row, key=lambda s: s.box[0]) for row in rows.values()]
 
 
-def _overlap(mark: Mark, example: Example) -> float:
-    """How much of what a mark's box and an example's cover between them the two
-    share: one for the same box, little for a mark and one drawn inside it."""
-    left = max(mark.min_point.x, example.min[0])
-    top = max(mark.min_point.y, example.min[1])
-    right = min(mark.max_point.x, example.max[0])
-    bottom = min(mark.max_point.y, example.max[1])
+def _overlap_of(
+    a_min: Tuple[float, float],
+    a_max: Tuple[float, float],
+    b_min: Tuple[float, float],
+    b_max: Tuple[float, float],
+) -> float:
+    """How much of what two boxes cover between them the two share: one for the
+    same box, little for a box and one drawn inside it."""
+    left, top = max(a_min[0], b_min[0]), max(a_min[1], b_min[1])
+    right, bottom = min(a_max[0], b_max[0]), min(a_max[1], b_max[1])
     if right <= left or bottom <= top:
         return 0.0
-    ours = (mark.max_point.x - mark.min_point.x) * (mark.max_point.y - mark.min_point.y)
-    theirs = (example.max[0] - example.min[0]) * (example.max[1] - example.min[1])
+    ours = (a_max[0] - a_min[0]) * (a_max[1] - a_min[1])
+    theirs = (b_max[0] - b_min[0]) * (b_max[1] - b_min[1])
     shared = (right - left) * (bottom - top)
     return shared / max(ours + theirs - shared, 1e-9)
+
+
+def _overlap(mark: Mark, example: Example) -> float:
+    """How nearly a mark's box is an example's."""
+    return _overlap_of(
+        (mark.min_point.x, mark.min_point.y),
+        (mark.max_point.x, mark.max_point.y),
+        example.min,
+        example.max,
+    )
 
 
 def apply(marks: List[Mark], answers: Optional[Answers]) -> List[Mark]:
@@ -457,6 +486,7 @@ __all__ = [
     "FORMAT",
     "Kind",
     "Mark",
+    "Words",
     "answers_beside",
     "answers_path",
     "apply",

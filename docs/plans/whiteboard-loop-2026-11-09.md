@@ -7,8 +7,10 @@ slice 2 the sorter, a person's word from the command line, the examples and
 the fit ([pictures.md](../pictures.md#a-whiteboards-marks)); of slice 3 the
 corners found, a person's word on one and the photograph squared
 ([pictures.md](../pictures.md#a-whiteboard-squared)); slice 4, a cut read and
-taken out of the piece. Not built of those: the marks, the corners and the
-cuts shown and refined in the page, and the whiteboard as a part. Each slice
+taken out of the piece; slice 5, notes with a person's words, a size offered
+and the way out ([pictures.md](../pictures.md#a-whiteboards-notes)). Not built
+of those: the marks, the corners, the cuts and the notes shown and refined in
+the page, and the whiteboard as a part. Each slice
 is one branch of a short stack, built in the order listed once the owner says
 yes to it.*
 
@@ -260,12 +262,13 @@ vocabulary's.
 - **Typed.** A person types what a note says. Typed beside a dimension line, a
   number with a unit is offered as that side's size, and taken only on a
   person's yes.
-- **Sent.** One action on a whiteboard's notes: to qmcp, a note's region for an
-  image model to read
+- **Sent.** One action on a whiteboard's notes: to qmcp, a note's region, for
+  which of some given words it holds
   ([image-models-through-qmcp-2026-10-30.md](image-models-through-qmcp-2026-10-30.md)),
-  the reading kept beside the person's word; to looksatwords, the whiteboard's
-  words in reading order as one transcript, and its answer opened in a tab of
-  its own. Both are on this machine and reached over loopback
+  the answer kept beside the person's word; to looksatwords, the whiteboard's
+  words in reading order as one transcript. qmcp's vision contract asks a label
+  among words, so a note read freely waits on a property of that contract, which
+  is qmcp's to add. Both are on this machine and reached over loopback
   (`apothecary/stays_local.py`); each that is not serving is said so, with the
   command that starts it.
 
