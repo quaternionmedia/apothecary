@@ -416,3 +416,47 @@ def test_another_site_loaded_is_the_one_it_shows(page, url):
     page.evaluate("() => window.fractalViewer.loadSite('theatre')")
     windows.show(page, "working")
     expect(page.locator(f"{WINDOW} .ws-title")).to_have_text("theatre")
+
+
+@pytest.mark.e2e
+def test_a_list_reads_as_its_items_and_an_empty_one_as_none(page, url):
+    """A value that is a list -- a router's pins, from its poll's `Pn:` -- reads as its
+    items, and an empty one as none, as the Machine's Status card shows them. The
+    simulated router reports no pins, so the site's document is given a router's."""
+    pins: list = ["X", "Z"]
+
+    def with_a_router_s_pins(route):
+        doc = route.fetch().json()
+        doc["subjects"].append(
+            {
+                "subject": "garage:cnc_router",
+                "properties": [
+                    {
+                        "property": "pins",
+                        "value": list(pins),
+                        "unit": None,
+                        "why": None,
+                        "confidence": None,
+                        "origin": {"kind": "measured", "by": {"name": "router poll: ?, $G"}},
+                        "at": doc["at"],
+                        "evidence": [],
+                        "standing": "one kind",
+                        "current": True,
+                        "heard_at": doc["at"],
+                        "sources": [],
+                    }
+                ],
+            }
+        )
+        route.fulfill(json=doc)
+
+    page.route(re.compile(r"/sites/garage/evidence(\?.*)?$"), with_a_router_s_pins)
+    open_garage(page, url)
+    windows.from_the_windows_menu(page, "working")
+    row = page.locator(
+        f"{WINDOW} tr.ws-property", has=page.locator("td", has_text=re.compile("^pins$"))
+    )
+    expect(row.locator("td").nth(1)).to_have_text("X · Z")
+    pins.clear()
+    page.evaluate("() => window.apothecaryWorkingSpace.refresh()")
+    expect(row.locator("td").nth(1)).to_have_text("none")

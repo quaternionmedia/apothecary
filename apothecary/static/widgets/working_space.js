@@ -166,6 +166,8 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
         if (p.value === null || p.value === undefined) return `unread: ${esc(p.why)}`;
         if (p.value === true) return "yes";
         if (p.value === false) return "no";
+        // A list, a router's pins: its items, as the Machine's Status card shows them.
+        if (Array.isArray(p.value)) return p.value.length ? p.value.map(esc).join(" · ") : "none";
         if (typeof p.value === "object") return Object.entries(p.value).map(([k, v]) => `${esc(k)} ${esc(v)}`).join(" · ");
         if (p.unit === "fraction") return `${Math.round(p.value * 100)} %`;
         if (p.unit === "°C") return `${degrees(p.value)} °C`;
