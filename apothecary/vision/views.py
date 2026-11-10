@@ -253,6 +253,29 @@ def laid_of(record: Made) -> Optional[Laid]:
     return lay(as_matrix(record.homography), record.shape, record.tallness)
 
 
+def cuts_of(record: Made) -> List[Dict[str, object]]:
+    """A made piece's cuts as built: each one's family, its two sides, and where it
+    lies from the piece's middle before the piece is turned, in mm (``x`` across the
+    picture, ``y`` towards the back). A cut keeps its place and size as drawn when a
+    person changes the piece's sides."""
+    from .compose import cut_place, cut_scale
+
+    across = cut_scale(record.shape, laid_of(record), record.mm_across)
+    held = []
+    for cut in record.shape.cuts:
+        place = cut_place(cut, record.shape, across, record.tallness)
+        held.append(
+            {
+                "kind": cut.kind.value,
+                "long": round(place.long, 1),
+                "short": round(place.short, 1),
+                "x": round(place.x, 1),
+                "y": round(place.y, 1),
+            }
+        )
+    return held
+
+
 def found_size(record: Made) -> Dict[str, float]:
     """The sides the finder found for a made piece, read through the mapping its
     provenance records, and the thickness guessed from them: what

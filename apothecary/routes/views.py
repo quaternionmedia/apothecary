@@ -202,6 +202,7 @@ def made_answer(record: Made, pinned: bool) -> Dict[str, object]:
     answer["shape"] = shape_answer(record.shape)
     answer["view_pinned"] = pinned
     answer["found"] = viewing.found_size(record)
+    answer["cuts"] = viewing.cuts_of(record)
     return answer
 
 

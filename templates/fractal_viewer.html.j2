@@ -3848,6 +3848,14 @@
                 if (this.isCameraNode(this.renderNodeByKey[host])) return this.cameraSectionHtml(host);
                 const made = pm.madeRecord(host);
                 const where = (h) => (h === '' ? 'the floor' : h);
+                // A cut, as Selected says it: its family and size, and where it lies
+                // from the piece's middle before the piece is turned.
+                const cutSaid = (c, mm) => {
+                    const size = c.kind === 'disc' ? `a circle ${mm(c.long)} mm across` : `${mm(c.long)} × ${mm(c.short)} mm`;
+                    const side = (v, plus, minus) => (Math.abs(v) < 0.5 ? '' : `${mm(Math.abs(v))} mm ${v > 0 ? plus : minus}`);
+                    const at = [side(c.x, 'right', 'left'), side(c.y, 'back', 'front')].filter(Boolean).join(' and ');
+                    return `${size}, ${at || 'at its middle'}`;
+                };
                 if (made) {
                     // Whose the size is: a person's, or as found, with the found size
                     // beside a person's; the thickness is a guess until a person states
@@ -3865,7 +3873,8 @@
                         From a picture: ${esc(made.picture)}${made.picture_forgotten ? ' (forgotten)' : ''}, shape ${made.shape_index} of a view at ${esc(where(made.host))}${made.view_pinned ? '' : ' (no longer pinned)'}<br>
                         A ${esc(made.word)} because ${esc(made.reason)}${made.word_stated ? ' (a person said so)' : ''}; found by ${esc(made.finder)}, confidence ${Number(made.confidence).toFixed(2)}<br>
                         Scale: ${Number(made.mm_across).toFixed(0)} mm across the picture<br>
-                        Size: ${size}
+                        Size: ${size}${(made.cuts || []).length ? `<br>
+                        ${made.cuts.length === 1 ? 'A cut' : `${made.cuts.length} cuts`} through it, as drawn inside its shape: ${made.cuts.map((c) => cutSaid(c, mm)).join('; ')}` : ''}
                     </div>`;
                 }
                 const views = pm.viewsAt(host);

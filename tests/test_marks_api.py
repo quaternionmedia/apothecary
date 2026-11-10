@@ -101,3 +101,34 @@ def test_what_is_not_there_and_what_is_not_writing_are_refused(pinned):
     )
     assert refused.status_code == 400 and "not writing" in refused.json()["detail"]
     assert client.get("/sites/garage/views/view_none/marks").status_code == 404
+
+
+def test_a_made_pieces_cuts_are_said_where_they_lie_from_its_middle(tmp_path, monkeypatch):
+    """A plate with a ring drawn in it, made: its answer lists the cut, a circle, as
+    far left of the plate's middle and towards the front as it was drawn, a
+    millimetre a pixel here."""
+    image = Image.new("RGB", (1600, 1200), (238, 238, 236))
+    pen = ImageDraw.Draw(image)
+    pen.rectangle((250, 250, 700, 520), outline=BLUE, width=9)
+    pen.ellipse((300, 420, 370, 490), outline=BLUE, width=7)
+    image.save(tmp_path / "holed.png")
+    monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(tmp_path))
+    client = TestClient(app)
+    view = client.post(
+        "/sites/garage/views", json={"host": "workbench", "picture": "holed.png", "mm_across": 1600}
+    ).json()["id"]
+    try:
+        client.post(
+            f"/sites/garage/views/{view}/find", json={"finder": "outline"}
+        ).raise_for_status()
+        made = client.post(f"/sites/garage/views/{view}/make", json={"all": True})
+        assert made.status_code == 200, made.text
+        records = client.get("/sites/garage/attached").json()["made"]
+        (record,) = [r for r in records.values() if r["view"] == view]
+        (cut,) = record["cuts"]
+        assert cut["kind"] == "disc" and cut["long"] == pytest.approx(63, abs=6)
+        # The plate's middle is at (475, 385), the ring's at (335, 455).
+        assert cut["x"] == pytest.approx(-140, abs=6) and cut["y"] == pytest.approx(-70, abs=6)
+    finally:
+        client.delete(f"/sites/garage/views/{view}")
+        client.post("/sites/garage/reset")

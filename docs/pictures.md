@@ -121,7 +121,9 @@ filled in is the shape it covers. A closed stroke of a diagram drawn inside a
 shape is a cut through it: the shape carries it (`cuts`), and the piece made of
 the shape has it taken out where it was drawn, round for a circle and
 square-cornered of its two sides for anything else. What is drawn inside a cut
-is not read. A gap
+is not read. A made piece's Selected lists each cut beside its sides: its family, its
+size, and where it lies from the piece's middle. A cut keeps its place and size
+as drawn when a person changes the piece's sides in Part › Edit. A gap
 in a stroke a few pixels of the working picture wide is closed, a wider one leaves
 the stroke open. `apothecary photo check --finder` measures a finder on drawn
 pictures whose answers are known, filled in and in outline.
