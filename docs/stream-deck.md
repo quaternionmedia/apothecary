@@ -94,7 +94,9 @@ The knobs jog the garage's two machines. `apothecary/firmware/deck_control.py` r
 layout on a deck:
 
 - **The top row's keys**: 0 **PRINTER** and 1 **ROUTER** choose the machine (held twice,
-  they arm its control, below), 2 **STEP** cycles 0.1, 1 and 10 mm.
+  they arm its control, below), 2 **STEP** cycles 0.1, 1 and 10 mm, and 3 **DISARM** lets go
+  of every machine's control at one press, blue while any is armed and grey when none is.
+  It stops nothing -- a move under way finishes -- and the stop keys are the stops.
 - **The bottom row's keys** are the stops, two classes of them: 4 **STOP printer_1** and
   5 **STOP cnc_router**, dark red, each stopping that machine alone, and 7 **STOP ALL**,
   bright red and last, nearest a hand resting on the knobs, stopping every machine, each

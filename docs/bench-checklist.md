@@ -409,7 +409,8 @@ clear and the tool clear of stock. Start the layout with
 `POST /firmware/decks/{id}/control` `{"on": true}` (or `APOTHECARY_DECK_CONTROL=1`).
 Keep a hand on each machine's own power switch: it is faster than the deck's stop keys.
 
-- [ ] The top row shows **PRINTER**, **ROUTER**, **STEP**; the bottom row **STOP**
+- [ ] The top row shows **PRINTER**, **ROUTER**, **STEP**, **DISARM** (grey, *nothing
+      armed*); the bottom row **STOP**
       (printer_1), **STOP** (cnc_router), a dark key and a bright red **STOP ALL** last,
       under the right hand; the strip says *printer_1 · disarmed* and the printer's X, Y,
       Z. **ROUTER** turns the second key green and the strip says *cnc_router*.
@@ -420,6 +421,11 @@ Keep a hand on each machine's own power switch: it is faster than the deck's sto
       6 s, hold it again: still disarmed. Hold it twice within 5 s: the strip says
       *armed* with the minutes left, and the Machine's pad pops out red as ⚙ Control's
       does. A short press, **STEP** or a knob between the two holds breaks the pair.
+      The second hold counts from when it is begun: held three seconds, it still arms.
+- [ ] Armed, **DISARM** is blue and says *every machine*. Press it: the strip says
+      *disarmed*, the key goes grey, the Machine's pad goes back, and a knob turned moves
+      nothing. It stops nothing: press it while a jog of 50 mm is under way and the jog
+      finishes.
 - [ ] With the router armed (from the deck or the Machine's ⚙ Control). **STEP** to 1 mm, then knob 1
       one click clockwise: X moves 1 mm toward +X and the X key shows the new position
       within a poll (on the strip); counter-clockwise, back. Knobs 2 and 3 the same on Y and Z. At

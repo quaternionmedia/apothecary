@@ -60,6 +60,11 @@ def test_the_layout_is_drawn_and_sends_nothing(bench):
     assert [one.keys[i]["text"] for i in (0, 1, 2)] == ["PRINTER", "ROUTER", "STEP"]
     # Two classes of stop: one per machine, and one for everything that looks different
     # and stands last on the bottom row, nearest a hand on the knobs.
+    assert (one.keys[3]["text"], one.keys[3]["small"], one.keys[3]["colour"]) == (
+        "DISARM",
+        "nothing armed",
+        "grey",
+    )
     assert [one.keys[i]["text"] for i in (4, 5, 7)] == ["STOP", "STOP", "STOP ALL"]
     assert [one.keys[i]["small"] for i in (4, 5, 7)] == ["printer_1", "cnc_router", "every machine"]
     assert one.keys[7]["colour"] == deck_control.STOP_ALL_COLOUR != one.keys[4]["colour"]
@@ -568,3 +573,45 @@ def test_a_key_or_a_knob_reads_the_newest_scan_and_starts_none(bench, monkeypatc
     monkeypatch.setattr(deck_control.devices, "detected_devices", detected)
     assert deck_control.pinned_port(deck_control.MACHINES[1]) == ROUTER
     assert asked and all(kwargs.get("any_age") is True for kwargs in asked), asked
+
+
+# --- disarming: one press of its own key ------------------------------------------------
+
+
+def test_the_disarm_key_lets_go_of_every_machines_control_and_is_lit_while_any_is_armed(bench):
+    controller, one, links = bench
+    links.control.arm(PRINTER)
+    ended = _held(controller, 1, 100.0, 1.0)
+    _held(controller, 1, ended + 1.0, 1.0)  # the router's, armed from the deck
+    assert links.control.armed(ROUTER) and links.control.armed(PRINTER)
+    assert (one.keys[3]["colour"], one.keys[3]["small"]) == ("blue", "every machine")
+    _press(one, 3)
+    assert not links.control.armed(ROUTER) and not links.control.armed(PRINTER)
+    assert (one.keys[3]["colour"], one.keys[3]["small"]) == ("grey", "nothing armed")
+    assert (
+        "disarmed" in one.strip["text"] and "printer_1, cnc_router disarmed" in one.strip["small"]
+    )
+    before = _router(links)
+    _turn(one, 0, 1)  # and a turn moves nothing again
+    assert _router(links) == before and controller.sent == []
+
+
+def test_the_disarm_key_with_nothing_armed_says_so_and_sends_nothing(bench):
+    controller, one, links = bench
+    _press(one, 3)
+    assert "nothing was armed" in one.strip["small"] and controller.sent == []
+
+
+def test_the_disarm_key_is_acted_on_at_once_and_what_was_turned_before_it_is_not_sent(slow):
+    controller, gate, polling, sent = slow
+    let_go = []
+    controller.disarm = let_go.append
+    controller.armed = lambda port: 0.0 if let_go else 300.0
+    controller.hear(_event("knob-turn", 0, 5))
+    assert polling.wait(5)  # a jog taken up, the machine not yet answering
+    controller.hear(_event("knob-turn", 1, 5))
+    controller.hear(_event("key", 3, True))
+    assert let_go == ["/dev/slow", "/dev/slow"]  # each machine's port, here the same one
+    gate.set()
+    assert controller.settle(10)
+    assert sent == []

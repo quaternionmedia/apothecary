@@ -2,8 +2,9 @@
 
 One layout, on every deck it is started for (``Deck`` in ``firmware/deck.py``):
 
-- the top row's keys choose the machine (0 printer_1, 1 cnc_router) and cycle the jog
-  step through 0.1, 1 and 10 mm (2);
+- the top row's keys choose the machine (0 printer_1, 1 cnc_router), cycle the jog
+  step through 0.1, 1 and 10 mm (2), and disarm every machine's control (3), lit while
+  any is armed;
 - the bottom row holds the stops: 4 stops printer_1 and 5 cnc_router, each by its own
   dialect's stop, and 7, bright red and last, nearest a hand on the knobs, stops every
   machine, each by its own; none needs control armed, and each disarms the machine it
@@ -34,7 +35,8 @@ hands an event over (``hear``); a thread of the layout's own acts on them in ord
 (``handle``), so a machine's answer or a redrawn strip never holds up the next report or
 the time it is stamped with. Turns of one knob that arrive while an earlier one is being
 sent go as one jog of their sum. A stop key is the exception to the order: it is sent
-from ``hear`` itself, ahead of everything waiting, and what was waiting is dropped. No
+from ``hear`` itself, ahead of everything waiting, and what was waiting is dropped; the
+disarm key is acted on the same way. No
 key or knob starts a scan for ports (two seconds): the newest scan is read however old,
 and the layout's tick looks for a board that is not found.
 
@@ -69,6 +71,8 @@ KEY_STEP = 2
 KEY_STOP_MACHINE = (4, 5)  # printer_1's and cnc_router's, in MACHINES' order
 KEY_STOP_ALL = 7
 STOP_KEYS = (*KEY_STOP_MACHINE, KEY_STOP_ALL)
+KEY_DISARM = 3  # every machine's control let go: what two long presses armed, one press undoes
+AT_ONCE_KEYS = (*STOP_KEYS, KEY_DISARM)  # acted on ahead of whatever is waiting
 STOP_ALL_COLOUR, STOP_ONE_COLOUR = "red", "#7a2a22"
 KNOB_FOURTH = 3
 FEED = {"printer": 3000, "router": 1000}  # the page's jog feeds (machine_words.js)
@@ -132,7 +136,7 @@ def _mm(value: float) -> str:
 
 class DeckController:
     """The layout on one deck: its events in, its keys and strip out, a machine's
-    control lines between. The seams (``resolve``, ``send``, ``poll``, ``armed``) are
+    control lines between. The seams (``resolve``, ``send``, ``poll``, ``armed``, ``disarm``) are
     what the machines' own functions are, so a test can stand its own in their place."""
 
     def __init__(
@@ -142,6 +146,7 @@ class DeckController:
         send: Optional[Callable[[str, str], object]] = None,
         poll: Optional[Callable[[str], object]] = None,
         armed: Optional[Callable[[str], float]] = None,
+        disarm: Optional[Callable[[str], None]] = None,
     ):
         self.deck = deck
         self.resolve = resolve
@@ -149,6 +154,7 @@ class DeckController:
         self.poll = poll or (lambda port: devices.printer_status(port))
         # Seconds of control left on a port, 0 when it is not armed.
         self.armed = armed or (lambda port: gcode.get_printer_links().control.seconds_left(port))
+        self.disarm = disarm or (lambda port: gcode.get_printer_links().control.disarm(port))
         self.machine = MACHINES[0]
         self.step = 1  # an index into STEPS_MM
         self.said: Tuple[str, str] = ("ready", "grey")
@@ -228,8 +234,9 @@ class DeckController:
     def hear(self, event: decks.DeckEvent) -> None:
         """An event as the deck's reader reports it, on the reader's own thread: handed
         over, and the reader is free for the next. A stop key is sent from here, before
-        anything waiting, and what was waiting is not sent after it."""
-        if event.kind == decks.KEY and event.value and event.index in STOP_KEYS:
+        anything waiting, and what was waiting is not sent after it; the disarm key the
+        same."""
+        if event.kind == decks.KEY and event.value and event.index in AT_ONCE_KEYS:
             with self._turn:
                 self._waiting.clear()
                 self._stops += 1
@@ -389,6 +396,27 @@ class DeckController:
         gcode.get_printer_links().control.arm(port)
         self.said = (f"{self.machine.name} control armed", "green")
 
+    def _armed_machines(self) -> List[Tuple[Machine, str]]:
+        """Each machine whose control is armed now, with the port its board is on."""
+        found = []
+        for machine in MACHINES:
+            try:
+                port = self.resolve(machine)
+            except Exception:  # noqa: BLE001 -- nothing pinned has nothing armed
+                port = None
+            if port is not None and self.armed(port) > 0:
+                found.append((machine, port))
+        return found
+
+    def _disarm(self) -> None:
+        """Every machine's control disarmed, as the Machine's Disarm does for its own. It
+        stops nothing: a move under way finishes, and the stop keys are the stops."""
+        were = self._armed_machines()
+        for _, port in were:
+            self.disarm(port)
+        names = ", ".join(machine.name for machine, _ in were)
+        self.said = (f"{names} disarmed" if were else "nothing was armed", "grey")
+
     def _key(self, index: int) -> None:
         if index == KEY_STEP:
             self.step = (self.step + 1) % len(STEPS_MM)
@@ -397,6 +425,8 @@ class DeckController:
             self._stop([MACHINES[KEY_STOP_MACHINE.index(index)]])
         elif index == KEY_STOP_ALL:
             self._stop(list(MACHINES))
+        elif index == KEY_DISARM:
+            self._disarm()
 
     # -- what is sent -----------------------------------------------------------------
 
@@ -557,7 +587,13 @@ class DeckController:
             for index, machine in zip(KEY_STOP_MACHINE, MACHINES, strict=True):
                 self._put(index, "STOP", STOP_ONE_COLOUR, machine.name)
             self._put(KEY_STOP_ALL, "STOP ALL", STOP_ALL_COLOUR, "every machine")
-            self._put(3, "", "black", None)
+            any_armed = bool(self._armed_machines())
+            self._put(
+                KEY_DISARM,
+                "DISARM",
+                "blue" if any_armed else "grey",
+                "every machine" if any_armed else "nothing armed",
+            )
             self._put(6, "", "black", None)
             name, small = self._fourth_readout()
             readout = (
