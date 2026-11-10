@@ -509,6 +509,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a drop-down per mark for a person's word on what it is, over the sorter's",
     ),
+    "marks-corner": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a handle per corner of a whiteboard on its photograph, dragged or nudged with the "
+        "arrow keys and set with Enter: a person's word on where the whiteboard is",
+    ),
     "marks-words": (
         WIDGET,
         WHAT_IS_THERE,
@@ -1227,7 +1233,26 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "a mark's kind chosen, a person's word on it; or another picture's marks listed",
     ),
     "marks:click:closest": (WIDGET, WHAT_YOU_SEE, "a mark chosen, for the ring's Marks cells"),
-    "marks:keydown:closest": (WIDGET, WHAT_IS_THERE, "Enter in a note's box, saying what it says"),
+    "marks:pointerdown:grabCorner": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a whiteboard's corner taken hold of on its photograph",
+    ),
+    "marks:pointermove:dragCorner": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a whiteboard's corner dragged on its photograph",
+    ),
+    "marks:pointerup:dropCorner": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a whiteboard's corner let go: its photograph squared again with it",
+    ),
+    "marks:keydown:closest": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "Enter in a note's box, saying what it says; an arrow key or Enter on a whiteboard's corner",
+    ),
     "?:click:open": (
         WIDGET,
         WHAT_YOU_SEE,

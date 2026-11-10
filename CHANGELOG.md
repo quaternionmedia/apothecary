@@ -9,6 +9,8 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- A made piece's Selected lists each cut through it: its family, its size, and where it lies from the piece's middle. ([doc](docs/pictures.md#finders))
+- A photograph pinned at a whiteboard is squared to it, sized by its surface with no width typed, and laid flat on the floor in front of it, where its shapes are made; the Marks window shows the photograph with the whiteboard's corners as handles, and a corner dragged or nudged squares it again. ([doc](docs/pictures.md#pinned-at-a-whiteboard))
 - A whiteboard to a model is the fifth loop of walkthrough page 00, and `apothecary serve --demo` has a drawn whiteboard, `examples/pictures/whiteboard.png`, among its pictures. ([page](walkthrough/00-getting-started.md#5-the-five-loops))
 - The Marks window lists the marks and notes of a picture pinned in the site: a mark's drop-down, or the ring's Panels › Pictures › Marks cells on the mark chosen, is a person's word on what it is, read back at once by the picture's shapes, and a note's box takes what it says. ([doc](docs/pictures.md#the-marks-window))
 - A whiteboard is a part, a panel in a frame with a tray whose width and height are its writing surface's, and hangs on the garage's south wall beside the door, facing the room. ([part](parts/whiteboard/README.md))

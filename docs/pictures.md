@@ -217,6 +217,24 @@ with where the finder put the corners. A whiteboard that fills the photograph ha
 the photograph's corners, and says so; a photograph whose lightest surface is
 under a sixth of it is refused.
 
+### Pinned at a whiteboard
+
+A photograph pinned at a whiteboard of the site -- a structure that is the part
+`whiteboard`, as the garage's on its south wall -- is squared to it as it is
+pinned: its corners are found, the photograph redrawn square on, and kept under the
+picture root in `squared/`, a folder Pictures does not list. The view's picture is
+the squared one; it is as wide as the whiteboard's writing surface, with no width
+typed, and lies flat on the floor in front of the whiteboard, its top towards the
+wall, a step out from it. Its shapes are made there, on the floor, at full size. A
+photograph with nothing light enough in it to be a whiteboard is refused.
+
+The Marks window shows such a photograph under Corners, the whiteboard's four
+corners as handles on it. A handle dragged, or nudged with the arrow keys and set
+with Enter, is a person's word: the photograph is squared again with it and, where
+the outline finder had searched it, searched again (`GET` and
+`PUT /sites/{site}/views/{view}/corners`). Corners are fixed once a piece is made
+from the picture; dropping the pieces frees them.
+
 ## A whiteboard photographed again
 
 `apothecary photo again BEFORE AFTER` reads two pictures of one whiteboard, each

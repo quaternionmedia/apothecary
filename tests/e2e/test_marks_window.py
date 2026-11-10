@@ -118,3 +118,61 @@ def test_a_persons_word_on_a_mark_is_read_back_in_the_world_and_a_note_is_typed(
     expect(marks.locator(".marks-offer")).to_contain_text("is 120 mm long, this picture is")
     expect(marks.locator(".marks-words")).to_have_value("120 mm")
     assert errors == []
+
+
+@pytest.fixture(scope="module")
+def leaning(base_url, start_server, tmp_path_factory):
+    """This module's second server: a whiteboard photographed from one side, pinned
+    at the garage's whiteboard and searched by the outline finder."""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from test_whiteboard import _photograph
+
+    folder = tmp_path_factory.mktemp("leaning_pictures")
+    _photograph(folder / "leaning.png")
+    url = start_server({"APOTHECARY_PICTURE_ROOT": str(folder)})
+    with httpx.Client(base_url=url, timeout=30.0) as http:
+        view = http.post(
+            "/sites/garage/views", json={"host": "whiteboard", "picture": "leaning.png"}
+        )
+        view.raise_for_status()
+        http.post(
+            f"/sites/garage/views/{view.json()['id']}/find", json={"finder": "outline"}
+        ).raise_for_status()
+    return url
+
+
+@pytest.mark.e2e
+def test_a_whiteboards_corner_nudged_squares_its_photograph_again(page, leaning):
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    open_garage(page, leaning)
+    page.wait_for_function(
+        "() => window.apothecaryPictures.state().some((e) => e.host === 'whiteboard' && e.mat)"
+    )
+    windows.from_the_windows_menu(page, "marks")
+    marks = windows.panel(page, "marks")
+    expect(marks.locator(".marks-view")).to_contain_text("· whiteboard")
+    # The photograph it was squared from, its four corners on it, found.
+    expect(marks.locator(".marks-corner")).to_have_count(4)
+    expect(marks.locator(".marks-corners-said")).to_contain_text("found; drag a corner")
+    before = page.evaluate("() => window.apothecaryPictures.drawnAt('whiteboard').picture")
+
+    # The top-right corner nudged left with the arrow keys, and set with Enter.
+    corner = marks.locator(".marks-corner[data-handle='1']")
+    left_before = corner.evaluate("(e) => parseFloat(e.style.left)")
+    corner.focus()
+    for _ in range(5):
+        page.keyboard.press("ArrowLeft")
+    assert corner.evaluate("(e) => parseFloat(e.style.left)") == pytest.approx(
+        left_before - 1.0, abs=0.01
+    )
+    page.keyboard.press("Enter")
+    said(page, "the whiteboard squared again with your corners: 3 shapes found in it")
+    page.wait_for_function(
+        "(was) => window.apothecaryPictures.drawnAt('whiteboard').picture !== was", arg=before
+    )
+    expect(marks.locator(".marks-corners-said")).to_contain_text("placed by you")
+    assert errors == []

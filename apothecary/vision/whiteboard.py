@@ -25,12 +25,21 @@ from typing import List, Optional, Sequence, Tuple
 from pydantic import BaseModel
 
 from .geometry import edge_points, outline
-from .outline import WIDER_BY, read_strokes
+from .outline import WIDER_BY, _light, read_strokes
 
 FORMAT = "apothecary.corners/1"
 
+# A whiteboard's surface is at least this bright, of 255, where it is lightest in
+# the picture: under it, nothing in the picture is a whiteboard.
+DARKEST_GROUND = 100
+
 # A squared picture's longer edge, in pixels.
 SQUARED_EDGE = 1600
+
+# The part a whiteboard of a site is, and the folder under the picture root its
+# squared pictures are kept in: made from a photograph, never listed as one.
+PART = "whiteboard"
+SQUARED_FOLDER = "squared"
 
 Corner = Tuple[float, float]
 # The order corners are named, read and kept in.
@@ -67,6 +76,10 @@ def find(image: Path) -> Corners:
     if not reading.regions or not reading.ground:
         raise NoWhiteboard(f"{Path(image).name}: nothing in it is a whiteboard's surface")
     ground = reading.regions[reading.ground - 1]
+    sample = ground[:: max(1, len(ground) // 500)]
+    brightness = sum(reading.grey[i] for i in sample) / len(sample)
+    if not _light(ground, reading.grey, reading.light_from) or brightness < DARKEST_GROUND:
+        raise NoWhiteboard(f"{Path(image).name}: nothing in it is light enough to be a whiteboard")
     if len(ground) < 0.15 * reading.width * reading.height:
         raise NoWhiteboard(
             f"{Path(image).name}: its lightest surface is under a sixth of it, too small to square"
@@ -211,13 +224,71 @@ def _from_square(corners: Sequence[Corner], size: Tuple[int, int]) -> Tuple[floa
     )
 
 
+def is_whiteboard(node) -> bool:
+    """Whether a site's structure is a whiteboard: the part ``PART``."""
+    return getattr(node, "part_ref", None) == PART
+
+
+def surface_of(node) -> Tuple[float, float]:
+    """A whiteboard's writing surface, width and height in mm: its part's, at the
+    sizes the part is drawn at."""
+    from ..projects.parts.whiteboard import surface
+
+    size = surface()
+    return size.x, size.z
+
+
+def squared_name(source: Path, corners: Corners) -> str:
+    """The name a squared picture is kept under: its photograph's, and a digest of
+    the photograph and the corners, so other corners are another picture."""
+    import hashlib
+
+    from .cache import picture_hash
+
+    held = picture_hash(source) + json.dumps(
+        [[round(x, 4), round(y, 4)] for x, y in corners.corners]
+    )
+    return f"{source.stem}-{hashlib.sha256(held.encode()).hexdigest()[:12]}.png"
+
+
+def square_kept(
+    source: Path, root: Path, corners: Corners, wide_over_tall: float
+) -> Tuple[str, Tuple[int, int]]:
+    """A photograph squared to its whiteboard and kept under the picture root, in
+    ``SQUARED_FOLDER``, the person's alone: its path there, and its size."""
+    import os
+
+    folder = root / SQUARED_FOLDER
+    if folder.is_symlink():
+        raise OSError(f"{SQUARED_FOLDER}/ is a link elsewhere; nothing is kept there")
+    folder.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(folder, 0o700)
+    except OSError:
+        pass
+    out = folder / squared_name(source, corners)
+    if not out.is_file():
+        square(source, out, corners, wide_over_tall)
+    from PIL import Image
+
+    with Image.open(out) as kept:
+        size = kept.size
+    return out.relative_to(root).as_posix(), size
+
+
 __all__ = [
     "Corners",
     "FORMAT",
     "NAMES",
     "NoWhiteboard",
     "SQUARED_EDGE",
+    "PART",
+    "SQUARED_FOLDER",
     "corners_path",
+    "is_whiteboard",
+    "square_kept",
+    "squared_name",
+    "surface_of",
     "find",
     "proportions",
     "say",

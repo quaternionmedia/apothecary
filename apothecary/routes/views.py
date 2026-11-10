@@ -68,7 +68,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from ..hierarchy import Assembly
 from ..projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
 from ..projects.parts.stl_renderer import geometry_scad
-from ..vision import cameras
+from ..vision import cameras, whiteboard
 from ..vision import views as viewing
 from ..vision.models import FoundShape, ScaleReference
 from ..vision.piece import SIDES, MadePart
@@ -170,6 +170,8 @@ def view_answer(view: View, site: Optional[Assembly], made: Dict[str, Made]) -> 
             else None
         ),
         "shapes": shapes,
+        "squared": view.squared.model_dump(mode="json") if view.squared is not None else None,
+        "in_front": view.in_front,
     }
 
 
@@ -282,6 +284,9 @@ def pin_picture(
     site = check_host(site_name, host)
     root = _picture_root()
     where = _picture_at(picture)
+    node = next((c for c in site.children if c.name == host), None)
+    if node is not None and whiteboard.is_whiteboard(node):
+        return _pin_at_whiteboard(site_name, node, where, root)
     width, height = _picture_size(where)
     at = datetime.now(timezone.utc)
     offset, fit_width = (
@@ -306,6 +311,47 @@ def pin_picture(
         ),
         offset=offset,
         fit_width=fit_width,
+    )
+    return viewing.store().pin(view)
+
+
+def _square(source: Path, root: Path, corners, node) -> Tuple[str, Tuple[int, int]]:
+    """A photograph squared to a whiteboard and kept, or refused with the reason."""
+    wide, high = whiteboard.surface_of(node)
+    try:
+        return whiteboard.square_kept(source, root, corners, wide / high)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400, detail=f"{source.name} could not be squared: {exc}"
+        ) from None
+
+
+def _pin_at_whiteboard(site_name: str, node: Assembly, source: Path, root: Path) -> View:
+    """A photograph of a whiteboard pinned at it: its corners found, squared to it,
+    as wide as its surface, and laid flat on the floor in front of it. Finding
+    nothing in it: Find shapes is the step that does."""
+    try:
+        corners = whiteboard.find(source)
+    except whiteboard.NoWhiteboard as none:
+        raise HTTPException(status_code=400, detail=str(none)) from None
+    picture, (width, height) = _square(source, root, corners, node)
+    wide, _ = whiteboard.surface_of(node)
+    at = datetime.now(timezone.utc)
+    view = View(
+        id=viewing.new_view_id(at),
+        site=site_name,
+        host=node.name,
+        picture=picture,
+        taken_at=at.isoformat(),
+        mm_across=wide,
+        pixel_width=width,
+        pixel_height=height,
+        offset=(0.0, 0.0),
+        fit_width=wide,
+        squared=viewing.Squared(
+            source=source.relative_to(root).as_posix(), corners=list(corners.corners)
+        ),
+        in_front=True,
     )
     return viewing.store().pin(view)
 
@@ -462,6 +508,85 @@ def find_shapes(site_name: str, view_id: str, body: Optional[FindBody] = None):
     finder's shapes, which is the newest at its host."""
     found = find_in(site_name, view_id, (body or FindBody()).finder)
     return _answer(site_name, found)
+
+
+class CornersBody(BaseModel):
+    """A whiteboard's four corners in its photograph, as fractions of it: top-left,
+    top-right, bottom-right, bottom-left."""
+
+    corners: List[Tuple[float, float]] = Field(min_length=4, max_length=4)
+
+    @field_validator("corners")
+    @classmethod
+    def _inside(cls, corners):
+        for x, y in corners:
+            if not (0 <= x <= 1 and 0 <= y <= 1):
+                raise ValueError(f"{x}, {y}: a corner is a fraction of the photograph, 0 to 1")
+        return corners
+
+
+def _squared_view(site_name: str, view_id: str) -> View:
+    view = _view_or_404(site_name, view_id)
+    if view.squared is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{view_id} is not a photograph of a whiteboard: it has no corners",
+        )
+    return view
+
+
+@router.get("/sites/{site_name}/views/{view_id}/corners")
+def view_corners(site_name: str, view_id: str):
+    """A whiteboard's photograph and its corners in it, as fractions of it, with who
+    placed them and, moved by a person, where the finder had put them."""
+    view = _squared_view(site_name, view_id)
+    width, height = _picture_size(_picture_at(view.squared.source))
+    return {
+        **view.squared.model_dump(mode="json"),
+        "pixel_width": width,
+        "pixel_height": height,
+        "made": len(view.made),
+    }
+
+
+@router.put("/sites/{site_name}/views/{view_id}/corners")
+def move_corners(site_name: str, view_id: str, body: CornersBody):
+    """A person's word on a whiteboard's corners: its photograph squared again with
+    them. A view the outline finder had searched is searched again. Refused once a
+    piece is made from it."""
+    from ..api import _picture_root
+
+    view = _squared_view(site_name, view_id)
+    site = _site(site_name)
+    node = next((c for c in site.children if c.name == view.host), None)
+    if node is None:
+        raise HTTPException(status_code=404, detail=f"{view.host} is no longer in {site_name}")
+    root = _picture_root()
+    source = _picture_at(view.squared.source)
+    corners = whiteboard.Corners(corners=list(body.corners), by="you")
+    picture, (width, height) = _square(source, root, corners, node)
+    squared = view.squared.model_copy(
+        update={
+            "corners": list(body.corners),
+            "by": "you",
+            "guess": view.squared.guess or view.squared.corners,
+        }
+    )
+    searched = view.finder
+    try:
+        moved = viewing.store().resquared(
+            site_name,
+            view_id,
+            picture=picture,
+            pixel_width=width,
+            pixel_height=height,
+            squared=squared,
+        )
+    except viewing.CannotMake as refused:
+        raise HTTPException(status_code=409, detail=str(refused)) from None
+    if searched == "outline":
+        moved = find_in(site_name, view_id, "outline")
+    return _answer(site_name, moved)
 
 
 class ScaleBody(BaseModel):

@@ -1697,7 +1697,7 @@
                                     const all = [...((this.pictureMarks.attached() || {}).views || [])].reverse();
                                     const drawn = (v) => v.host !== null && (this.pictureMarks.drawnAt(v.host) || {}).id === v.id;
                                     return [...all.filter(drawn), ...all.filter((v) => !drawn(v))]
-                                        .map((v) => ({ id: v.id, picture: v.picture, host: v.host, finder: v.finder }));
+                                        .map((v) => ({ id: v.id, picture: v.picture, host: v.host, finder: v.finder, squared: !!v.squared }));
                                 },
                                 changed: () => this.pictureMarks.refresh(),
                             },

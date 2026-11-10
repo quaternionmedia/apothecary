@@ -101,6 +101,9 @@ FLOOR_MARGIN_MM = 200.0
 
 FLOOR = ""
 
+# How far in front of a whiteboard the near edge of a picture of it is laid, mm.
+IN_FRONT_GAP_MM = 300.0
+
 # The reason recorded when a person, not the table, chose a shape's word.
 STATED_REASON = "a person said so"
 
@@ -146,6 +149,18 @@ class Taken(BaseModel):
     fov: float
 
 
+class Squared(BaseModel):
+    """A photograph of a whiteboard squared to it: the photograph it was squared
+    from, under the picture root, and the whiteboard's corners in it as fractions
+    of it -- top-left, top-right, bottom-right, bottom-left -- with who placed them
+    and, where a person moved them, where the finder had put them."""
+
+    source: str
+    corners: List[Tuple[float, float]]
+    by: str = "finder"
+    guess: Optional[List[Tuple[float, float]]] = None
+
+
 class View(BaseModel):
     """One picture lying on one place, and what a finder saw in it, once one has.
 
@@ -176,6 +191,10 @@ class View(BaseModel):
     # it fits there clear of what rests on the top (free_space.fit).
     offset: Optional[Tuple[float, float]] = None
     fit_width: Optional[float] = None
+    # A photograph of a whiteboard: squared to it (its picture is the squared one),
+    # sized by its surface's width, and laid flat on the floor in front of it.
+    squared: Optional[Squared] = None
+    in_front: bool = False
 
     @property
     def tallness(self) -> float:
@@ -426,7 +445,22 @@ def frame_origin(view: View, site: Assembly) -> Optional[Vector3D]:
     node = next((c for c in site.children if c.name == view.host), None)
     if node is None or node.world_bounds() is None:
         return None
+    if view.in_front:
+        return in_front_of(node, mat_depth(view) or 0.0)
     return top_centre(node)
+
+
+def in_front_of(node: Assembly, depth: float) -> Vector3D:
+    """Where the middle of a picture ``depth`` deep lies on the floor in front of a
+    whiteboard: across its middle, its near edge ``IN_FRONT_GAP_MM`` out from the
+    whiteboard's front, which faces the room at its least Y."""
+    b = node.world_bounds()
+    assert b is not None
+    return Vector3D(
+        x=(b.min_point.x + b.max_point.x) / 2,
+        y=b.min_point.y - IN_FRONT_GAP_MM - depth / 2,
+        z=0.0,
+    )
 
 
 def in_site(view: View, site: Assembly) -> Optional[Matrix]:
@@ -475,7 +509,7 @@ def overlaps_of(view: View, site: Assembly) -> Dict[int, List[str]]:
     a made piece is the pictures', and a shape already made says so. Empty for a
     view with no width, at the floor, or whose host is gone."""
     matrix = in_site(view, site)
-    if matrix is None or view.at_floor:
+    if matrix is None or view.at_floor or view.in_front:
         return {}
     standing = resting_on(site, view.host, added_roots(view.site))
     flagged: Dict[int, List[str]] = {}
@@ -733,6 +767,35 @@ class Views:
             )
             self._views[new_id] = another
             return another.model_copy(deep=True)
+
+    def resquared(
+        self,
+        site: str,
+        view_id: str,
+        *,
+        picture: str,
+        pixel_width: int,
+        pixel_height: int,
+        squared: Squared,
+    ) -> View:
+        """A whiteboard's view squared again from its photograph with other corners:
+        its picture is the new squared one, and what was found in the old is gone.
+        Refused (``CannotMake``) once a piece is made from it."""
+        with self._lock:
+            view = self._views.get(view_id)
+            if view is None or view.site != site:
+                raise ViewNotFound(f"no view {view_id!r} in site {site!r}")
+            if view.made:
+                raise CannotMake(
+                    f"{len(view.made)} piece(s) are made from this picture as it was squared: "
+                    "drop them first, and then move its corners"
+                )
+            view.picture = picture
+            view.pixel_width, view.pixel_height = pixel_width, pixel_height
+            view.squared = squared
+            view.finder, view.found_at, view.shapes, view.left_out = None, None, [], 0
+            view.words = {}
+            return view.model_copy(deep=True)
 
     def read_again(
         self, site: str, view_id: str, *, shapes: List[FoundShape], left_out: int, at: datetime

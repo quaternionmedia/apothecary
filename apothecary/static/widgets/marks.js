@@ -9,11 +9,17 @@
  * typed for a note beside a line is offered as the line's length. Nothing here
  * reads handwriting.
  *
+ * A photograph of a whiteboard (a view pinned at one, squared to it) shows under
+ * Corners with the whiteboard's four corners as handles on it (GET .../corners). A
+ * handle dragged, or nudged with the arrow keys and set with Enter, is a person's
+ * word on that corner (PUT .../corners): the photograph is squared again, and the
+ * view searched again, until a piece is made from it.
+ *
  * A mark's kind is the canvas ring's Panels › Pictures › Marks too (Diagram,
  * Writing, Unsure, Nothing), on the mark chosen here: the page hands each to act().
  *
  * mountMarks(root, { base, world, log }) renders into root; `world` is what the
- * page offers: siteName(), views() -- each { id, picture, host, finder }, the one
+ * page offers: siteName(), views() -- each { id, picture, host, finder, squared }, the one
  * drawn at the selected place first -- and changed(), called after a word that
  * moved a view's shapes. log(text, kind) is the page's status bar. load() reads
  * the views and the chosen view's marks again; act("say:<kind>") says the chosen
@@ -24,6 +30,7 @@ const MARKUP = `
 <div class="marks-ui">
     <div class="row"><select class="marks-view" aria-label="The picture whose marks are listed"></select></div>
     <div class="marks-said note"></div>
+    <div class="marks-corners"></div>
     <div class="k">Marks</div>
     <ul class="marks-list"><li class="empty">–</li></ul>
     <div class="k">Notes</div>
@@ -31,6 +38,9 @@ const MARKUP = `
 </div>`;
 
 const KINDS = ["diagram", "writing", "unsure", "nothing"];
+const CORNERS = ["top-left", "top-right", "bottom-right", "bottom-left"];
+// How far one press of an arrow key moves a corner, as a fraction of the photograph.
+const NUDGE = 0.002;
 
 export function mountMarks(root, { base = "", world = null, log = null } = {}) {
     root.innerHTML = MARKUP;
@@ -38,6 +48,7 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const say = (text, kind = "") => { if (log) log(text, kind); };
     let views = [], viewId = null, read = null, chosen = null, alive = true;
+    let corners = null, dragging = null;
 
     async function api(path, opts = {}) {
         const r = await fetch(base + path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -81,12 +92,52 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
         </li>`).join("") : '<li class="empty">no writing on it</li>';
     }
 
+    // The whiteboard's photograph with its corners as handles; the quadrilateral
+    // between them is what is squared.
+    function renderCorners() {
+        const held = $(".marks-corners");
+        if (!corners) { held.innerHTML = ""; return; }
+        const src = `${base}/photos/pictures/file?path=${encodeURIComponent(corners.source)}&px=768`;
+        const pts = corners.corners.map(([x, y]) => `${(x * 100).toFixed(2)},${(y * 100).toFixed(2)}`).join(" ");
+        const said = corners.made
+            ? `${corners.made} piece(s) are made from it as squared: drop them to move its corners`
+            : corners.by === "you" ? "placed by you; drag a corner, or nudge it with the arrow keys and Enter" : "found; drag a corner the finder got wrong, or nudge it with the arrow keys and Enter";
+        held.innerHTML = `<div class="k">Corners</div>
+            <div class="marks-photo" style="aspect-ratio:${corners.pixel_width} / ${corners.pixel_height}">
+                <img src="${esc(src)}" alt="The photograph the picture was squared from">
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="${pts}"></polygon></svg>
+                ${corners.corners.map(([x, y], i) => `<button type="button" class="marks-corner" data-handle="${i}" style="left:${(x * 100).toFixed(2)}%;top:${(y * 100).toFixed(2)}%" aria-label="The whiteboard's ${CORNERS[i]} corner"${corners.made ? " disabled" : ""}></button>`).join("")}
+            </div>
+            <div class="note marks-corners-said">${esc(said)}</div>`;
+    }
+
+    async function loadCorners() {
+        const view = views.find((v) => v.id === viewId);
+        corners = null;
+        if (view && view.squared) {
+            try { corners = await api(`${viewUrl()}/corners`); }
+            catch (e) { say(`its corners could not be read: ${e.message}`, "bad"); }
+        }
+        renderCorners();
+    }
+
+    async function setCorners() {
+        try {
+            const seen = await api(`${viewUrl()}/corners`, { method: "PUT", body: JSON.stringify({ corners: corners.corners }) });
+            say(`the whiteboard squared again with your corners${seen.finder ? `: ${seen.shapes.length} shape${seen.shapes.length === 1 ? "" : "s"} found in it` : ""}`);
+            // A new picture: the views, the marks and the corners read again.
+            if (world && world.changed) await world.changed();
+            load();
+        } catch (e) { say(`its corners: ${e.message}`, "bad"); loadCorners(); }
+    }
+
     async function load() {
         if (!alive) return;
         views = world ? world.views() : [];
         if (!views.some((v) => v.id === viewId)) viewId = views.length ? views[0].id : null;
         renderViews();
-        if (!viewId) { read = null; render(); return; }
+        if (!viewId) { read = null; corners = null; render(); renderCorners(); return; }
+        loadCorners();
         try { read = await api(`${viewUrl()}/marks`); }
         catch (e) { read = null; say(`its marks could not be read: ${e.message}`, "bad"); }
         if (read && !read.marks.some((m) => m.id === chosen)) chosen = null;
@@ -126,12 +177,53 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
         render();
     });
     marks.addEventListener("keydown", (ev) => {
+        const corner = ev.target.closest(".marks-corner");
+        if (corner) { nudgeCorner(corner, ev); return; }
         const words = ev.target.closest(".marks-words");
         if (!words || ev.key !== "Enter") return;
         ev.preventDefault();
         const text = words.value.trim();
         if (text) sayWords(words.dataset.mark, text);
     });
+
+    // A corner dragged on the photograph: where the pointer is, as a fraction of it.
+    function placeCorner(i, x, y) {
+        corners.corners[i] = [Math.min(1, Math.max(0, x)), Math.min(1, Math.max(0, y))];
+        const handle = root.querySelector(`.marks-corner[data-handle="${i}"]`);
+        if (handle) { handle.style.left = `${(corners.corners[i][0] * 100).toFixed(2)}%`; handle.style.top = `${(corners.corners[i][1] * 100).toFixed(2)}%`; }
+        const outline = root.querySelector(".marks-photo polygon");
+        if (outline) outline.setAttribute("points", corners.corners.map(([cx, cy]) => `${(cx * 100).toFixed(2)},${(cy * 100).toFixed(2)}`).join(" "));
+    }
+    function grabCorner(ev) {
+        const handle = ev.target.closest(".marks-corner");
+        if (!handle || handle.disabled || !corners) return;
+        ev.preventDefault();
+        dragging = Number(handle.dataset.handle);
+        handle.setPointerCapture(ev.pointerId);
+    }
+    function dragCorner(ev) {
+        if (dragging === null) return;
+        const box = root.querySelector(".marks-photo").getBoundingClientRect();
+        placeCorner(dragging, (ev.clientX - box.left) / box.width, (ev.clientY - box.top) / box.height);
+    }
+    function dropCorner() {
+        if (dragging === null) return;
+        dragging = null;
+        setCorners();
+    }
+    function nudgeCorner(handle, ev) {
+        if (!corners || handle.disabled) return;
+        const steps = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+        const i = Number(handle.dataset.handle);
+        if (ev.key === "Enter") { ev.preventDefault(); setCorners(); return; }
+        if (!steps[ev.key]) return;
+        ev.preventDefault();
+        const [dx, dy] = steps[ev.key];
+        placeCorner(i, corners.corners[i][0] + dx * NUDGE, corners.corners[i][1] + dy * NUDGE);
+    }
+    marks.addEventListener("pointerdown", grabCorner);
+    marks.addEventListener("pointermove", dragCorner);
+    marks.addEventListener("pointerup", dropCorner);
 
     // Read as it is mounted: the first time the window is in front of a person.
     load();
