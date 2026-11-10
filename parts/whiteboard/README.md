@@ -2,8 +2,8 @@
 
 A whiteboard as a workshop model, built in OpenSCAD: a flat panel in a thin
 frame with a tray under its lower edge, hung on a wall. The garage hangs it on
-its north wall, the node `whiteboard`, where a person at the bench turns to
-draw.
+its south wall beside the door, the node `whiteboard`, facing the room. Its back
+is at its greatest Y, so it hangs on a wall whose inner face looks toward -Y.
 
 It is what a drawing is made on and what a photograph of one is squared to
 (`apothecary photo square`, [docs/pictures.md](../../docs/pictures.md#a-whiteboard-squared)):

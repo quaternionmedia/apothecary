@@ -60,8 +60,8 @@ class Params(BaseModel):
 
 
 def overall(params: Optional[Dict] = None) -> Vector3D:
-    """The whole part's size, frame and tray included: along the wall, out from
-    it, and up."""
+    """The whole part's size, frame and tray included: along the wall, from the
+    front of its tray back to the wall, and up."""
     held = Params(**(params or {}))
     return Vector3D(
         x=held.width + 2 * held.frame,

@@ -1,5 +1,5 @@
 """The whiteboard as a part: its writing surface's size is its parameters, the frame
-and the tray stand outside it, and the garage hangs it on its north wall clear of
+and the tray stand outside it, and the garage hangs it on its south wall clear of
 everything else (docs/plans/whiteboard-loop-2026-11-09.md, slice 3)."""
 
 from __future__ import annotations
@@ -9,7 +9,8 @@ from pydantic import ValidationError
 
 from apothecary.example_hierarchy import (
     BENCH_MOUNTED_STRUCTURES,
-    BENCH_WIDTH,
+    DOOR_WIDTH,
+    GARAGE_MAX,
     GARAGE_MIN,
     WALL_THICKNESS,
     WHITEBOARD_POSITION,
@@ -41,17 +42,19 @@ def test_it_is_tagged_as_what_a_drawing_is_made_on():
     assert DEFAULT.source_file.is_file()
 
 
-def test_the_garage_hangs_it_on_the_north_wall_clear_of_everything():
-    """Its back against the north wall's inner face, beside the bench and not over
-    it, overlapping no other structure; the site's one overlap stays the router's
-    coupon on its table."""
+def test_the_garage_hangs_it_on_the_south_wall_clear_of_everything():
+    """Its back against the south wall's inner face, between the door's opening and
+    the east wall, overlapping no other structure; the site's one overlap stays the
+    router's coupon on its table."""
     site = create_example_site()
     hung = next(s for s in site.children if s.name == "whiteboard")
     assert hung.part_ref == "whiteboard" and hung.category == "furniture"
     assert "whiteboard" not in BENCH_MOUNTED_STRUCTURES
     bounds = hung.world_bounds()
-    assert bounds.min_point.y == GARAGE_MIN.y + WALL_THICKNESS == WHITEBOARD_POSITION.y
-    assert bounds.min_point.x > BENCH_WIDTH, "beside the bench, not over it"
+    assert bounds.max_point.y == GARAGE_MAX.y - WALL_THICKNESS
+    door_ends = GARAGE_MIN.x + (GARAGE_MAX.x - GARAGE_MIN.x + DOOR_WIDTH) / 2
+    assert bounds.min_point.x > door_ends, "beside the door's opening, not across it"
+    assert bounds.max_point.x < GARAGE_MAX.x - WALL_THICKNESS
     assert bounds.max_point.to_list() == [
         WHITEBOARD_POSITION.x + OVERALL.x,
         WHITEBOARD_POSITION.y + OVERALL.y,

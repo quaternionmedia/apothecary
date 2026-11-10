@@ -142,12 +142,6 @@ FOOTPEDAL_POSITION = Vector3D(x=1620.0, y=20.0, z=BENCH_TOP_Z)
 # the site tests ask a person to see.
 STREAM_DECK_SIZE = stream_deck_plus.OVERALL
 STREAM_DECK_POSITION = Vector3D(x=1650.0, y=440.0, z=BENCH_TOP_Z)
-# The whiteboard (parts/whiteboard) on the north wall's inner face, to the right of
-# the bench as a person at it turns: its back against the wall, its lower edge at
-# a standing person's waist. What a drawing is made on and a photograph of one is
-# squared to (docs/pictures.md).
-WHITEBOARD_SIZE = whiteboard.OVERALL
-WHITEBOARD_POSITION = Vector3D(x=2400.0, y=-400.0, z=900.0)
 BENCH_BOARDS = [
     # (node name, part, position on the bench, footprint the model fits in)
     (
@@ -185,6 +179,15 @@ BENCH_BOARDS = [
 GARAGE_MIN = Vector3D(x=-500.0, y=-500.0, z=0.0)
 GARAGE_MAX = Vector3D(x=5500.0, y=5500.0, z=2600.0)
 WALL_THICKNESS = 100.0
+# The whiteboard (parts/whiteboard) on the south wall's inner face, between the door
+# and the east wall: its back against the wall, its face to the room, its lower edge
+# at a standing person's waist. The far wall as the garage is first seen, so it
+# stands in front of nothing. What a drawing is made on and a photograph of one is
+# squared to (docs/pictures.md).
+WHITEBOARD_SIZE = whiteboard.OVERALL
+WHITEBOARD_POSITION = Vector3D(
+    x=3950.0, y=GARAGE_MAX.y - WALL_THICKNESS - whiteboard.OVERALL.y, z=900.0
+)
 
 DOOR_WIDTH = 2400.0
 DOOR_HEIGHT = 2100.0
@@ -925,7 +928,7 @@ def _build_stream_deck() -> Assembly:
 
 
 def _build_whiteboard() -> Assembly:
-    """The whiteboard on the north wall, drawn as the part is."""
+    """The whiteboard on the south wall, drawn as the part is."""
     return Assembly(
         name="whiteboard",
         role="structure",

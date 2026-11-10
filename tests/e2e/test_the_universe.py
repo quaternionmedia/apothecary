@@ -43,14 +43,21 @@ LEVEL = """async () => {
 }"""
 
 # Where on the page a click in the world lands on `key`, nothing in front of it.
+# A point of the canvas over a piece: of those a grid finds, the one nearest their
+# middle, so the piece is still under it once a first click has selected it and it
+# wears its handles. A point at the piece's edge is not.
 ON_PIECE = """(key) => {
     const v = window.fractalViewer, r = v.canvas.getBoundingClientRect();
-    for (let i = 1; i < 32; i++) for (let j = 1; j < 32; j++) {
-        const at = { clientX: r.left + (r.width * i) / 32, clientY: r.top + (r.height * j) / 32 };
+    const over = [];
+    for (let i = 1; i < 64; i++) for (let j = 1; j < 64; j++) {
+        const at = { clientX: r.left + (r.width * i) / 64, clientY: r.top + (r.height * j) / 64 };
         if (document.elementFromPoint(at.clientX, at.clientY) !== v.canvas) continue;
-        if (v.raycastChild(at) === key) return { x: at.clientX, y: at.clientY };
+        if (v.raycastChild(at) === key) over.push({ x: at.clientX, y: at.clientY });
     }
-    return null;
+    if (!over.length) return null;
+    const mx = over.reduce((sum, p) => sum + p.x, 0) / over.length;
+    const my = over.reduce((sum, p) => sum + p.y, 0) / over.length;
+    return over.reduce((best, p) => (Math.hypot(p.x - mx, p.y - my) < Math.hypot(best.x - mx, best.y - my) ? p : best));
 }"""
 
 

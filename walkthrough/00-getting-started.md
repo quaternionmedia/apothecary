@@ -132,7 +132,7 @@ Where each starts:
 - **A whiteboard to a model** starts at a photograph: `apothecary photo marks`
   on it, or, in the page, the bench's Picture › Folder to pin it, Picture ›
   Find shapes › outline, and ⊞ Windows › Marks for what each mark is. The
-  garage's whiteboard hangs on its north wall, beside the bench.
+  garage's whiteboard hangs on its south wall, beside the door.
 
 One made thing goes round all four. The footpedal on the garage's bench is a
 part with a sketch of its own: its ring's Part › Edit for its sizes and its
