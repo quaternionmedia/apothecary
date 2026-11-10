@@ -1370,7 +1370,8 @@ class ControlLatch:
     """Per-port arm state: control commands go through only while armed.
 
     Arming is an explicit act with a lifetime; every accepted command
-    renews it, silence lets it lapse. It exists so the control overlay of a
+    renews it, silence lets it lapse, and a stop disarms it
+    (``devices.printer_control``). It exists so the control overlay of a
     printer's Machine cannot heat or move a machine from a stray click.
     Its lifetime runs on the monotonic clock, so a step of the wall clock (NTP,
     a suspend) neither ends an armed window nor lengthens one.

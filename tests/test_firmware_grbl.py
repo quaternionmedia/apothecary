@@ -8,6 +8,7 @@ and Grbl_ESP32's report code, not a recording of the garage's router
 (test_firmware_gcode.py) run against a recording of a real board.
 """
 
+import dataclasses
 import threading
 import time
 
@@ -372,6 +373,34 @@ def test_control_needs_the_latch_and_the_reset_does_not(fake_arduino_cli, router
     said = devices.printer_control(PORT, "M112")
     assert said.command == "RESET" and any(ln.startswith("Grbl") for ln in said.lines)
     assert not devices.printer_status(PORT).spindle.on
+
+
+def test_the_reset_disarms_the_router_it_stops(fake_arduino_cli, router_links):
+    router_links.control.arm(PORT)
+    devices.printer_control(PORT, "m3 s8000")
+    assert devices.printer_control(PORT, "RESET").command == "RESET"
+    assert not router_links.control.armed(PORT)
+    assert not devices.printer_status(PORT).spindle.on
+    with pytest.raises(gcode.ControlNotArmed):
+        devices.printer_control(PORT, "$J=G91 G21 X1 F1000")
+
+
+def test_a_reset_that_fails_still_disarms(fake_arduino_cli, router_links, monkeypatch):
+    router_links.control.arm(PORT)
+    devices.printer_control(PORT, "$H")
+    real = devices.dialect_for
+
+    def fails(link, cmd):
+        raise ToolchainError("the port went away")
+
+    monkeypatch.setattr(
+        devices,
+        "dialect_for",
+        lambda port, state=None: dataclasses.replace(real(port, state), control=fails),
+    )
+    with pytest.raises(ToolchainError, match="went away"):
+        devices.printer_control(PORT, "RESET")
+    assert not router_links.control.armed(PORT)
 
 
 def test_a_cut_streams_and_is_a_job_of_the_router(fake_arduino_cli, router_links):

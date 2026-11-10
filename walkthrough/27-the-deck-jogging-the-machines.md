@@ -35,11 +35,11 @@ Each click is one `$J=G91 G21 X1 F1000`, GRBL's own jog line, sent through the s
 
 ![Armed, three turns jog X by 3 mm and the X key shows where the tool is](screenshots/27-03-armed-three-turns-jog-x-by-3-mm-and-the-x-key-show.png)
 
-## 4. The router's stop key stops it whatever the latch says
+## 4. The router's stop key stops it and disarms it
 
-The step key made the last click 10 mm. The router's own stop key, the bottom row's second, then sent its soft reset with the latch disarmed: the spindle that was turning is off. The machine's own red button is faster, and stays the stop to reach for.
+The step key made the last click 10 mm. The router's own stop key, the bottom row's second, sends its soft reset whatever the latch says, and disarms the router: the spindle that was turning is off, and the next turn moves nothing until its control is armed again. The machine's own red button is faster, and stays the stop to reach for.
 
-![The router's stop key stops it whatever the latch says](screenshots/27-04-the-router-s-stop-key-stops-it-whatever-the-latch-.png)
+![The router's stop key stops it and disarms it](screenshots/27-04-the-router-s-stop-key-stops-it-and-disarms-it.png)
 
 ## What this page does not show
 

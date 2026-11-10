@@ -579,7 +579,9 @@ ahead of any exchange in flight (a homing, a bed probe), waiting for no `ok`:
 a printer's "Printer halted" or a router's banner is its answer. A router's
 reset is a realtime byte it acts on at once; a printer halts until it is
 reset -- as soon as it reads the line when its firmware parses M112 early
-(Marlin's `EMERGENCY_PARSER`), else after the moves it has queued.
+(Marlin's `EMERGENCY_PARSER`), else after the moves it has queued. It disarms the
+port's control as it goes, whether or not the line arrives, and the log says so:
+what moves the machine next is armed again by a person.
 
 Armed, the Machine's control pad -- heaters, motion, the SD print, leveling --
 pops out into a loud window of its own beside the world: its tab and frame red,

@@ -186,6 +186,22 @@ def test_the_printers_own_stop_key_halts_the_printer_and_leaves_the_router_be(be
     assert _printer_halted(links) and _spindle_on(links)
 
 
+def test_a_stop_key_disarms_the_machine_it_stops_and_the_next_turn_moves_nothing(bench):
+    controller, one, links = bench
+    _choose_router(one)
+    links.control.arm(ROUTER)
+    links.control.arm(PRINTER)
+    _press(one, 5)  # cnc_router's
+    assert not links.control.armed(ROUTER) and links.control.armed(PRINTER)
+    assert one.strip["text"] == "cnc_router · disarmed"
+    before = _router(links)
+    _turn(one, 0, 1)
+    assert controller.sent == ["stop cnc_router"] and _router(links) == before
+    assert "disarmed" in one.strip["small"]
+    _press(one, 7)  # every machine's
+    assert not links.control.armed(PRINTER)
+
+
 def test_the_everything_key_reaches_each_machines_own_stop(bench):
     controller, one, links = bench
     _both_going(links)

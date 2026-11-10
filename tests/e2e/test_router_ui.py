@@ -335,7 +335,8 @@ def test_the_router_s_machine_has_a_router_s_cards_and_pad(page: Page, url: str)
     """The badge says the router's state; its Machine is a router's: $I, the controller's
     word, both positions, the spindle, the pins, and no hotend, bed or Slice. Armed, the
     pad has the router's groups; Home sends $H, a jog $J=, the spindle M3 S; E-STOP is the
-    soft reset, which answers with the banner; a printer's line typed is refused."""
+    soft reset, which answers with the banner and disarms the router, its pad gone; a
+    printer's line typed is refused."""
     open_garage(page, url, settle=False)
     wears(page, "cnc_router")
     badge = page.locator(".world-badge[data-path='cnc_router']")
@@ -398,6 +399,9 @@ def test_the_router_s_machine_has_a_router_s_cards_and_pad(page: Page, url: str)
     machine.locator("#estop").click()
     expect(_log(page)).to_contain_text("> RESET", timeout=5000)
     expect(_log(page)).to_contain_text("Grbl 1.3a ['$' for help]")
+    expect(_log(page)).to_contain_text("control disarmed by the stop")
+    expect(pad).to_be_hidden(timeout=5000)
+    expect(windows.tab(page, "control")).to_have_count(0)
     expect(machine.locator("#c-state")).to_have_text("idle", timeout=WITHIN_A_POLL)
 
 

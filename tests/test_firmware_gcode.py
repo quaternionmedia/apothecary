@@ -1181,6 +1181,27 @@ def test_control_route_requires_the_latch(fake_arduino_cli, fresh_task_runner, s
     )
 
 
+def test_the_stop_disarms_the_latch(fake_arduino_cli, fresh_task_runner, scripted_links):
+    """A stop goes whatever the latch says, and an armed latch goes down with it, said in
+    the log: what moves the machine next is armed again by a person."""
+    c = TestClient(app)
+    port = "/dev/ttyFAKE1"
+    c.post("/firmware/printers/control", json={"port": port, "armed": True}).raise_for_status()
+    r = c.post("/firmware/printers/command", json={"port": port, "command": "M104 S200"})
+    assert r.status_code == 200 and r.json()["control"]["armed"] is True
+    ScriptedTransport.instances[0].replies = {
+        **REPLIES,
+        "M112": ["Error:Printer halted. kill() called!"],
+    }
+    r = c.post("/firmware/printers/command", json={"port": port, "command": "M112"})
+    assert r.status_code == 200, r.text
+    assert r.json()["control"]["armed"] is False
+    log = scripted_links.log_for(port).since(0)["entries"]
+    assert any(e["kind"] == "sys" and e["text"] == "control disarmed by the stop" for e in log)
+    r = c.post("/firmware/printers/command", json={"port": port, "command": "M104 S0"})
+    assert r.status_code == 409 and "not armed" in r.json()["detail"]
+
+
 def test_the_emergency_stop_is_written_ahead_of_an_exchange_in_flight():
     """M112 waits for no exchange: sent while a homing holds the link, waiting for its
     `ok`, it is on the wire at once, and the homing ends with the board's halt line."""

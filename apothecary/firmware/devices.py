@@ -1050,8 +1050,9 @@ def printer_control(
     """One allowlisted control line, only while the port's latch is armed; the stop
     always, as the stop of whatever is on the port.
 
-    Renews the latch on success. The link is opened (and the port
-    identified) on first use like a poll would.
+    Renews the latch on success. A stop disarms it first, whatever then becomes of
+    the line, so what moves the machine next is armed again by a person. The link is
+    opened (and the port identified) on first use like a poll would.
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
@@ -1066,6 +1067,9 @@ def printer_control(
         if stop
         else normalise_control(port, command, state)
     )
+    if stop and links.control.armed(port):
+        links.control.disarm(port)
+        links.log_for(port).add("sys", "control disarmed by the stop", "control")
     if not stop and not links.control.armed(port):
         raise gcode.ControlNotArmed(f"{port}: control is not armed -- arm it first")
     held = links.get(port)
@@ -1083,7 +1087,8 @@ def printer_control(
         if running and running.finished is None:
             running.cancel(quiet=True)  # the board halts; nothing more is sent
     lines = dialect.control(link, cmd)
-    links.control.renew(port)
+    if not stop:
+        links.control.renew(port)
     return PrinterQueryResult(
         port=port, command=cmd, lines=lines, queried_at=datetime.now(timezone.utc)
     )

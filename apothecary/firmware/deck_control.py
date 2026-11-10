@@ -6,7 +6,8 @@ One layout, on every deck it is started for (``Deck`` in ``firmware/deck.py``):
   step through 0.1, 1 and 10 mm (2);
 - the bottom row holds the stops: 4 stops printer_1 and 5 cnc_router, each by its own
   dialect's stop, and 7, bright red and last, nearest a hand on the knobs, stops every
-  machine, each by its own; none needs control armed;
+  machine, each by its own; none needs control armed, and each disarms the machine it
+  stops;
 - the strip says which machine, whether its control is armed and for how long, the
   chosen machine's last poll (X, Y, Z and the fourth quantity), the step, and what the
   last turn did or why it did nothing;

@@ -126,7 +126,8 @@ or why it did nothing.
   kind checked before a line goes;
 - a stop key sends the port's dialect's own stop, `devices.emergency_stop_for(port)`: a
   printer's `M112`, a router's soft reset. It goes whatever the latch says, as the pad's
-  E-STOP does, and waits on no poll. The everything key sends each machine's own, one
+  E-STOP does, waits on no poll, and disarms the machine it stops: the next turn moves
+  nothing until its control is armed again. The everything key sends each machine's own, one
   after another, and goes on to the next when one cannot be reached; the strip names
   which it reached.
 

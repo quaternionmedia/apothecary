@@ -1,7 +1,7 @@
 """The Stream Deck +'s knobs jogging the garage's machines, through the page: the layout
 drawn on the deck, a turn while control is disarmed moving nothing, the router jogged once
 its control is armed in the Machine's own way, the step key changing the size of a jog,
-and the stop key stopping a spinning spindle with the latch disarmed.
+and the stop key stopping a spinning spindle and disarming the router.
 
 This module is a walkthrough page too: `walkthrough/27-the-deck-jogging-the-machines.md`
 is what its first test writes. The browser suite alone writes it.
@@ -95,8 +95,8 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     """The layout is drawn on the deck by the server; from the Deck window the router is
     chosen and its knobs turned: disarmed, nothing moves and the strip says so; armed in
     the Machine's way, three clicks of knob one move X 3 mm and the X key shows where the
-    tool is; the step key makes a click 10 mm; the stop key stops a spinning spindle with
-    the latch disarmed. Walkthrough 27 is what it writes."""
+    tool is; the step key makes a click 10 mm; the stop key stops a spinning spindle and
+    disarms the router. Walkthrough 27 is what it writes."""
     story = walkthrough(
         ordinal="27",
         slug="the-deck-jogging-the-machines",
@@ -192,22 +192,24 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     _until(lambda: _at_rest(url), "the router came to rest")
     assert _router(url)["position"]["y"] == pytest.approx(after["y"] - 10)
 
-    # 5. The stop key, with the latch disarmed.
+    # 5. The stop key, armed: the router stopped, and disarmed.
     httpx.post(
         f"{url}/firmware/printers/command", json={"port": ROUTER, "command": "M3 S8000"}, timeout=15
     ).raise_for_status()
     assert _router(url)["spindle"]["on"] is True
-    _arm(url, False)
     deck.locator(".deck-key[data-key='5']").click()  # cnc_router's own stop
     expect(deck.locator(".deck-events")).to_contain_text("key 5 released", timeout=10000)
     assert _control(url)["sent"][-1] == "stop cnc_router"
     assert _router(url)["spindle"]["on"] is False
+    assert _control(url)["armed_s"] == 0
+    assert _drawn(url)["strip_drawn"]["text"] == "cnc_router · disarmed"
     assert "STOP sent to cnc_router" in _drawn(url)["strip_drawn"]["small"]
     story.shows(
-        "The router's stop key stops it whatever the latch says",
+        "The router's stop key stops it and disarms it",
         "The step key made the last click 10 mm. The router's own stop key, the bottom "
-        "row's second, then sent its soft reset with the latch disarmed: the spindle that was turning is "
-        "off. The machine's own red button is faster, and stays the stop to reach for.",
+        "row's second, sends its soft reset whatever the latch says, and disarms the router: "
+        "the spindle that was turning is off, and the next turn moves nothing until its control "
+        "is armed again. The machine's own red button is faster, and stays the stop to reach for.",
     )
 
 
