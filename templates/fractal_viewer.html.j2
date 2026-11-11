@@ -311,6 +311,8 @@
            the anchor layer sets when the thing is out of view. */
         .world-badge.place-mark { border-color: #7a5a1a; color: var(--warn); }
         .world-badge.place-mark::after { border-top-color: #7a5a1a; }
+        /* A note on a whiteboard's picture: where its writing is, its words on its card. */
+        .world-badge.note-mark { color: #c3a2ec; font-size: 12px; }
         .world-badge.camera-mark { border-color: #3d5a7a; color: #9cd2ff; }
         .world-badge.camera-mark::after { border-top-color: #3d5a7a; }
         .picture-facts .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #777; margin-top: 0.3rem; }
@@ -1570,6 +1572,8 @@
                     floorPoint: (made) => this.floorPoint(made),
                     onSelect: (path) => this.selectPlace(path),
                     isSelected: (path) => this.selectedName === (path === '' ? FLOOR_KEY : path),
+                    // A note's ✎ in the world: Marks opened on it, its box in front.
+                    onNote: (view, mark) => { this.panels.open('marks'); if (this.marksWidget) this.marksWidget.focusNote(view, mark); },
                     onChange: () => {
                         this.listsChanged();
                         // A camera's body is drawn aimed as its record says.
@@ -1701,6 +1705,7 @@
                                 },
                                 changed: () => this.pictureMarks.refresh(),
                                 draw: (host, viewId) => this.pictureMarks.draw(host, viewId),
+                                overlay: (viewId, read) => this.pictureMarks.overlay(viewId, read),
                                 // The place selected in the world, where a moment is placed:
                                 // a structure, "" for the floor, null for nowhere a picture lies.
                                 place: () => (this.selectedName === null || this.selectedName === undefined ? null : this.placeFor(this.selectedName)),

@@ -34,7 +34,9 @@
  * drawn at the selected place first -- changed(), called after a word that moved a
  * view's shapes, draw(host, view), which draws a view at its place, and place(), the
  * place selected in the world (a structure, or "" for the floor). log(text, kind) is
- * the page's status bar. load() reads the views and the chosen view's marks again;
+ * the page's status bar. Every read of a view's marks is handed to overlay(view,
+ * read), which the page wears over its picture in the world. load() reads the views
+ * and the chosen view's marks again; focusNote(view, mark) brings a note's box in front;
  * act("say:<kind>") says the chosen mark is that kind; act("earlier"), act("later")
  * and act("place") are the slider's steps and Place.
  */
@@ -84,6 +86,7 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
     }
 
     function render() {
+        wear();
         const list = $(".marks-list"), notes = $(".marks-notes");
         if (!read) {
             list.innerHTML = notes.innerHTML = '<li class="empty">–</li>';
@@ -218,6 +221,9 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
         if (read && !read.marks.some((m) => m.id === chosen)) chosen = null;
         render();
     }
+
+    // What is read of a view's marks is worn over its picture in the world too.
+    function wear() { if (world && world.overlay && viewId) world.overlay(viewId, read); }
 
     function step(by) {
         if (!line || !line.events.length) { say("no whiteboard's history here: choose a photograph of a whiteboard in Marks", "bad"); return false; }
@@ -382,6 +388,14 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
     return {
         load,
         chosen: () => chosen,
+        /* A note's box in front, a note's badge in the world having been pressed:
+         * its picture's marks listed, if another's were. */
+        async focusNote(view, markId) {
+            if (view !== viewId) { viewId = view; when = STEPS; await load(); }
+            const box = root.querySelector(`.marks-words[data-mark="${markId}"]`);
+            if (box) { box.focus(); box.scrollIntoView({ block: "nearest" }); }
+            say(`${markId}: type what it says, and Enter`);
+        },
         act(verb) {
             if (verb === "earlier") return step(-1);
             if (verb === "later") return step(1);

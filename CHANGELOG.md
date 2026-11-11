@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- A picture's marks and notes are worn over it in the world as the Marks window reads them: each mark's box in its kind's colour, and each note a ✎ badge where it is written, saying its words and opening it in Marks when pressed. ([doc](docs/pictures.md#the-marks-window))
 - The Marks window scrubs a whiteboard's history: a slider over a strip of its photographs, words and pieces draws the whiteboard as it stood at a moment, lists what changed since the photograph before with Take on each row, and places the moment at the selected place; Earlier, Later and Place are ring cells. ([doc](docs/pictures.md#the-marks-window))
 - A whiteboard's history: its photographs, the words given on them and the pieces made from them are one timeline, the whiteboard can be read as it stood at any moment, what changed between two photographs is proposed row by row and only the rows taken change anything, and a moment can be placed elsewhere with its words. ([doc](docs/pictures.md#a-whiteboards-history))
 - A made piece's Selected lists each cut through it: its family, its size, and where it lies from the piece's middle. ([doc](docs/pictures.md#finders))

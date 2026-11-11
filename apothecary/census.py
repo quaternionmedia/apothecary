@@ -1151,6 +1151,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "picking the place a badge stands at: a structure, or the floor",
     ),
+    # A note's badge, where its writing is on a whiteboard's picture (picture_marks.js).
+    "badge:click:onNote": (
+        LIST,
+        WHAT_YOU_SEE,
+        "opening the note a badge stands at in Marks, its box in front to type what it says",
+    ),
     # ---- pictures in the world: a drop, a paste, Selected's width and rows --
     "canvas:dragover:(nothing)": (
         GESTURE,

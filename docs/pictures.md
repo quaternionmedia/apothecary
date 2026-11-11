@@ -171,6 +171,13 @@ Nothing -- then say what the chosen mark is. Under the marks are the notes: each
 with what it is about and a box for what it says, typed and said with Enter, and
 the size it states for its line where it states one.
 
+What the window reads of a picture's marks is worn over the picture where it lies
+in the world, a heads-up layer on it: each mark's box in its kind's colour -- a
+diagram's blue, writing violet, an unsure mark amber and dashed, a mark said to be
+nothing not drawn -- and each note a ✎ badge where it is written, its card saying
+its words, or that they are still to be typed. A note's ✎ pressed opens Marks with
+its box in front.
+
 The words given in the page are kept with the views, in the server's memory, and
 go when it stops (`GET` and `PUT /sites/{site}/views/{view}/marks`,
 `PUT .../notes/{mark}`).

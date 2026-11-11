@@ -12,6 +12,7 @@ alone, a line and its size, pinned at the workbench and read by the outline find
 from __future__ import annotations
 
 import io
+import re
 
 import httpx
 import pytest
@@ -82,6 +83,17 @@ def test_a_persons_word_on_a_mark_is_read_back_in_the_world_and_a_note_is_typed(
         "unsure",
         "writing",
     ]
+    # Worn over the picture in the world: each mark's box in its kind's colour, and
+    # the note's ✎ where it is written.
+    page.wait_for_function(
+        "() => (window.apothecaryPictures.state().find((e) => e.host === 'workbench') || {}).marks?.length === 4"
+    )
+    worn = page.evaluate(
+        "() => window.apothecaryPictures.state().find((e) => e.host === 'workbench').marks"
+    )
+    assert sorted(m["kind"] for m in worn) == ["diagram", "diagram", "unsure", "writing"]
+    assert {m["colour"] for m in worn if m["kind"] == "writing"} == {0xC3A2EC}
+    expect(page.locator(".world-badge.note-mark")).to_have_count(1)
     ring = marks.locator(".marks-row").filter(has_text="a letter, or a hole")
     expect(ring).to_have_count(1)
     ring_id = ring.get_attribute("data-mark")
@@ -108,15 +120,21 @@ def test_a_persons_word_on_a_mark_is_read_back_in_the_world_and_a_note_is_typed(
     assert page.evaluate("() => window.apothecaryMarks.act('say:diagram')") is False
     expect(status(page)).to_contain_text("choose a mark in Marks first")
 
-    # The note typed, with Enter: what it says, and the size it states for its line.
+    # The note's ✎ in the world brings its box in front; typed, with Enter: what it
+    # says, and the size it states for its line.
     note = marks.locator(".marks-note-row")
     expect(note).to_have_count(1)
+    page.locator(".world-badge.note-mark").dispatch_event("click")
+    expect(note.locator(".marks-words")).to_be_focused()
     expect(note).to_contain_text("beside")
     note.locator(".marks-words").fill("120 mm")
     note.locator(".marks-words").press("Enter")
     said(page, 'says "120 mm", as you typed')
     expect(marks.locator(".marks-offer")).to_contain_text("is 120 mm long, this picture is")
     expect(marks.locator(".marks-words")).to_have_value("120 mm")
+    expect(page.locator(".world-badge.note-mark")).to_have_attribute(
+        "aria-label", re.compile(r"says 120 mm$")
+    )
     assert errors == []
 
 
