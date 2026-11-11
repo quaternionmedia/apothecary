@@ -79,6 +79,33 @@ def test_the_trail_reads_from_the_universe_down_to_the_level_in_view(page: Page,
 
 
 @pytest.mark.e2e
+def test_a_crumb_says_what_it_stepped_out_of_and_where_to(page: Page, base_url: str):
+    """Page Up says what it stepped out of; a crumb says that too, and where it went."""
+    _at(page, base_url, query="?focus=cnc_router.frame_system")
+    trail = page.locator("#breadcrumb .crumb")
+    # The level in view's own crumb goes nowhere, and says so.
+    trail.filter(has_text="frame_system").click()
+    said(page, "Already at cnc_router.frame_system's own level")
+    assert _focus(page) == "cnc_router.frame_system"
+    trail.filter(has_text="cnc_router").click()
+    said(page, "Stepped out of cnc_router.frame_system to cnc_router (its crumb)")
+    page.locator("#site-level").click()
+    said(page, "Stepped out of cnc_router to garage (its crumb)")
+    # Two levels at once: the whole way it came.
+    page.evaluate("() => window.fractalViewer.stepIn('cnc_router.frame_system')")
+    said(page, "Stepped into cnc_router.frame_system")
+    page.locator("#site-level").click()
+    said(page, "Stepped out of cnc_router.frame_system to garage (its crumb)")
+    assert _focus(page) == ""
+    # In the universe, the first crumb is the way up to its own level.
+    _at(page, base_url, UNIVERSE)
+    row(page, "calibration_cube").dblclick()
+    said(page, "Stepped into calibration_cube")
+    page.locator("#universe-crumb").click()
+    said(page, "Stepped out of calibration_cube to Apothecary (the first crumb)")
+
+
+@pytest.mark.e2e
 def test_at_the_universe_the_trail_is_its_crumb_alone(page: Page, base_url: str):
     _at(page, base_url, UNIVERSE)
     assert crumbs(page) == [FIRST]

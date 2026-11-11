@@ -36,7 +36,8 @@ Left to right, one row:
     site's focus, Machine and variants stay with it. At the site's own level
     its name opens the same list.
   - **Each piece stepped into** follows. A crumb steps out to its level; Page
-    Up or Backspace steps out one. This part alone gives way on a narrow
+    Up or Backspace steps out one. The status line says what was stepped out
+    of, and a crumb says where to. This part alone gives way on a narrow
     page: its start is cut, and the level in view stays.
 
   The first two crumbs are links, so a new tab opens from either. The banner,

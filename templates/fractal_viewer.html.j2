@@ -2505,12 +2505,22 @@
                 this.acted();
             }
 
-            // A crumb of the trail: up to its level. One level up is the "-1" control
-            // itself (zoomOut) -- a crumb, Backspace and the ring's Up all
-            // land on the node just left; further up, nothing is selected.
-            goUpTo(depth) {
+            // A crumb of the trail: up to its level, said as a step out is, with where
+            // it went. One level up is the "-1" control itself (zoomOut) -- a crumb,
+            // Backspace and the ring's Up all land on the node just left; further up,
+            // nothing is selected. The crumb of the level in view goes nowhere.
+            goUpTo(depth, how = '') {
+                const left = this.focusPath.join('.');
+                if (depth >= this.focusPath.length) {
+                    this.jumpTo(depth);
+                    this.setStatus(`Already at ${left}'s own level`, 'success');
+                    return;
+                }
+                const to = depth ? this.focusPath.slice(0, depth).join('.')
+                    : this.siteName === UNIVERSE ? UNIVERSE_SHOWN : this.siteName;
                 if (depth === this.focusPath.length - 1) this.zoomOut();
                 else this.jumpTo(depth);
+                this.setStatus(`Stepped out of ${left} to ${to}${how ? ` (${how})` : ''}`, 'success');
             }
 
             // Each direct child of focus renders collapsed (its own single
@@ -3076,7 +3086,7 @@
                     const crumb = document.createElement('span');
                     crumb.className = 'crumb';
                     crumb.textContent = name;
-                    crumb.addEventListener('click', () => this.goUpTo(i + 1));
+                    crumb.addEventListener('click', () => this.goUpTo(i + 1, 'its crumb'));
                     trail.appendChild(crumb);
                 });
             }
@@ -3105,7 +3115,7 @@
             toUniverse(how = '', event = null) {
                 if (!this.crumbIsOurs(event)) return null;
                 if (this.siteName !== UNIVERSE) return this.leaveSite(how);
-                if (this.focusPath.length) this.goUpTo(0);
+                if (this.focusPath.length) this.goUpTo(0, how);
                 else this.setStatus(`Already at ${UNIVERSE_SHOWN}'s own level`, 'success');
                 return null;
             }
@@ -3114,7 +3124,7 @@
             // nowhere up to go, and it opens the other sites, as its ▾ does.
             toSiteLevel(event = null) {
                 if (!this.crumbIsOurs(event)) return;
-                if (this.focusPath.length) this.goUpTo(0);
+                if (this.focusPath.length) this.goUpTo(0, 'its crumb');
                 else this.siteMenuEl.open = !this.siteMenuEl.open;
             }
 
