@@ -635,3 +635,35 @@ def test_a_lost_deck_is_found_again_by_the_layout_and_goes_on_being_heard(bench)
     before = _router(links)
     _turn(one, 0, 1)  # the layout still listens, and a knob still jogs
     assert _router(links)["x"] == pytest.approx(before["x"] + 1)
+
+
+# --- a router in alarm: the deck's own way out ------------------------------------------
+
+
+def test_the_unlock_key_is_there_while_the_router_is_in_alarm_and_unlocks_it(bench):
+    controller, one, links = bench
+    _choose_router(one)
+    assert (one.keys[6]["text"], one.keys[6]["colour"]) == ("", "black")
+    sim = links.get(ROUTER)._t
+    sim.state, sim.alarm = "Alarm", 1  # a limit switch touched
+    devices.printer_status(ROUTER)
+    links.control.arm(ROUTER)
+    _turn(one, 0, 1)  # locked out, and the strip says what to press
+    assert "in alarm: UNLOCK it" in one.strip["small"] and controller.sent == []
+    assert (one.keys[6]["text"], one.keys[6]["colour"]) == ("UNLOCK", "amber")
+    _press(one, 6)
+    assert controller.sent == ["$X"] and devices.printer_status(ROUTER).state == "idle"
+    assert (one.keys[6]["text"], one.keys[6]["colour"]) == ("", "black")
+    before = _router(links)
+    _turn(one, 0, 1)
+    assert _router(links)["x"] == pytest.approx(before["x"] + 1)
+
+
+def test_the_unlock_key_needs_control_armed_as_any_line_but_a_stop_does(bench):
+    controller, one, links = bench
+    _choose_router(one)
+    sim = links.get(ROUTER)._t
+    sim.state, sim.alarm = "Alarm", 1
+    devices.printer_status(ROUTER)
+    _press(one, 6)
+    assert controller.sent == [] and devices.printer_status(ROUTER).state == "alarm"

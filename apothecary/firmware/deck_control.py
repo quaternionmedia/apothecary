@@ -5,6 +5,8 @@ One layout, on every deck it is started for (``Deck`` in ``firmware/deck.py``):
 - the top row's keys choose the machine (0 printer_1, 1 cnc_router), cycle the jog
   step through 0.1, 1 and 10 mm (2), and disarm every machine's control (3), lit while
   any is armed;
+- key 6 is UNLOCK while the chosen router is in alarm, and dark otherwise: it sends the
+  router's ``$X`` through the latch, and a turn refused in alarm says to press it;
 - the bottom row holds the stops: 4 stops printer_1 and 5 cnc_router, each by its own
   dialect's stop, and 7, bright red and last, nearest a hand on the knobs, stops every
   machine, each by its own; none needs control armed, and each disarms the machine it
@@ -72,6 +74,7 @@ KEY_STOP_MACHINE = (4, 5)  # printer_1's and cnc_router's, in MACHINES' order
 KEY_STOP_ALL = 7
 STOP_KEYS = (*KEY_STOP_MACHINE, KEY_STOP_ALL)
 KEY_DISARM = 3  # every machine's control let go: what two long presses armed, one press undoes
+KEY_UNLOCK = 6  # the chosen router out of its alarm ($X): there only while it is in one
 AT_ONCE_KEYS = (*STOP_KEYS, KEY_DISARM)  # acted on ahead of whatever is waiting
 STOP_ALL_COLOUR, STOP_ONE_COLOUR = "red", "#7a2a22"
 KNOB_FOURTH = 3
@@ -434,6 +437,25 @@ class DeckController:
         names = ", ".join(machine.name for machine, _ in were)
         self.said = (f"{names} disarmed" if were else "nothing was armed", "grey")
 
+    def _alarmed(self) -> bool:
+        """Whether the chosen machine's last poll, this layout's or anyone's, had it in alarm."""
+        status = self.last or devices.last_statuses().get(self._port_quiet() or "")
+        return getattr(status, "state", None) == "alarm"
+
+    def _unlock(self) -> None:
+        """The chosen router unlocked from its alarm (``$X``), as the Machine's Unlock does:
+        it moves nothing, keeps the position the controller believes, and needs control
+        armed as any line but a stop does."""
+        if self.machine.kind != "router":
+            self.said = (f"{self.machine.name} has no alarm to unlock", "grey")
+            return
+        port = self._port()
+        if port is None or not self._ready(port):
+            return
+        if self._lines(port, ["$X"]):
+            self.said = (f"{self.machine.name} unlocked", "grey")
+            self._after(port)
+
     def _key(self, index: int) -> None:
         if index == KEY_STEP:
             self.step = (self.step + 1) % len(STEPS_MM)
@@ -444,6 +466,8 @@ class DeckController:
             self._stop(list(MACHINES))
         elif index == KEY_DISARM:
             self._disarm()
+        elif index == KEY_UNLOCK:
+            self._unlock()
 
     # -- what is sent -----------------------------------------------------------------
 
@@ -489,6 +513,8 @@ class DeckController:
             self.said = (str(exc), "red")
         except (ValueError, ToolchainError) as exc:
             self.said = (f"refused: {exc}", "red")
+            if self._alarmed() or "error:8" in str(exc) or "error:9" in str(exc):
+                self.said = (f"{self.machine.name} is in alarm: UNLOCK it, then turn", "red")
         finally:
             if went and last is not None and self._stops == self._epoch:
                 try:
@@ -611,7 +637,10 @@ class DeckController:
                 "blue" if any_armed else "grey",
                 "every machine" if any_armed else "nothing armed",
             )
-            self._put(6, "", "black", None)
+            if self.machine.kind == "router" and self._alarmed():
+                self._put(KEY_UNLOCK, "UNLOCK", "amber", self.machine.name)
+            else:
+                self._put(KEY_UNLOCK, "", "black", None)
             name, small = self._fourth_readout()
             readout = (
                 "  ".join(f"{axis} {self._readout(axis)}" for axis in AXES) + f"  {name} {small}"

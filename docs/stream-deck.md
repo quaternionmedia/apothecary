@@ -108,10 +108,13 @@ layout on a deck:
   they arm its control, below), 2 **STEP** cycles 0.1, 1 and 10 mm, and 3 **DISARM** lets go
   of every machine's control at one press, blue while any is armed and grey when none is.
   It stops nothing -- a move under way finishes -- and the stop keys are the stops.
+- **Key 6** is **UNLOCK**, amber, while the chosen router is in alarm, and dark otherwise:
+  it sends the router's `$X` through the latch, moves nothing, and keeps the position the
+  controller believes. A knob turned while the router is in alarm says to press it.
 - **The bottom row's keys** are the stops, two classes of them: 4 **STOP printer_1** and
   5 **STOP cnc_router**, dark red, each stopping that machine alone, and 7 **STOP ALL**,
   bright red and last, nearest a hand resting on the knobs, stopping every machine, each
-  by its own dialect's stop. Key 6 is dark.
+  by its own dialect's stop.
 - **The knobs**: one to three jog X, Y and Z by their steps of the chosen size; the fourth
   turns the router's spindle speed in steps of 1000 rpm, or extrudes 1 mm a step on the
   printer.
