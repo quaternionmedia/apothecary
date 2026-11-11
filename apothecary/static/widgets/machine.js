@@ -1086,7 +1086,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const st = state.status;
         const p = st && st.position ? { ...st.position } : { x: 0, y: 0, z: 0 };
         p[axis.toLowerCase()] = (p[axis.toLowerCase()] || 0) + Number(d);
-        emit("apothecary:position", { position: toolPosition({ ...(st || {}), position: p }), source: "jog", port: state.port });
+        const k = axis.toLowerCase();
+        const ahead = st && st.tool_position ? { ...st.tool_position, [k]: (st.tool_position[k] || 0) + Number(d) } : null;
+        emit("apothecary:position", { position: toolPosition({ ...(st || {}), position: p, tool_position: ahead }), source: "jog", port: state.port });
         const f = Number($("h-feed").value) || words().feedDefault;
         if (state.kind === "router") {
             // GRBL's jog: one line, relative, in mm, with its own feed; it never changes the

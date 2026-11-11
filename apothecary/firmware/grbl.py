@@ -654,7 +654,7 @@ class SimulatedRouter:
         self.probe: Optional[dict] = None
         self.settings = {
             0: 10, 1: 255, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 10: 1, 11: 0.010, 12: 0.002,
-            13: 0, 20: 1, 21: 0, 22: 1, 23: 3, 24: 200.000, 25: 2000.000, 26: 250,
+            13: 0, 20: 1, 21: 0, 22: 1, 23: 0, 24: 200.000, 25: 2000.000, 26: 250,
             27: 3.000, 30: 24000, 31: 0, 32: 0, 100: 800.000, 101: 800.000, 102: 800.000,
             110: 4000.000, 111: 4000.000, 112: 2000.000, 120: 200.000, 121: 200.000,
             122: 100.000, 130: 400.000, 131: 600.000, 132: 80.000,
@@ -1091,6 +1091,9 @@ def poll_router(link: GcodeLink, wait: Optional[float] = None) -> PrinterStatus:
         raw=raw,
         todo=todo_of(mstate, alarm),
         homing=homing_now(link, mstate),
+        tool_position=in_volume(status["mpos"], proof_of(link).settings),
+        work_origin=in_volume(status["wco"], proof_of(link).settings),
+        travel=travel_of(proof_of(link).settings or {}),
     )
 
 
@@ -1211,6 +1214,23 @@ def homing_now(link: GcodeLink, mstate: str) -> Optional[List[dict]]:
     if not proof.settings or HOMING_DIR not in proof.settings:
         return None
     return homing_from(proof.settings, proof)
+
+
+def in_volume(where: Optional[dict], settings: Optional[Dict[int, float]]) -> Optional[dict]:
+    """A machine position as a place in the working volume, each axis counted up from its
+    low end. An axis that homes toward its maximum counts down from that switch, so it
+    is at its position plus its travel; one that homes toward its minimum (its bit of
+    ``$23`` set) counts up from that switch, and is where it says it is. The AnoleX's X
+    is of the second kind and its Y and Z of the first. None without the settings."""
+    if not where or not settings or HOMING_DIR not in settings:
+        return None
+    mask, out = int(settings[HOMING_DIR]), {}
+    for bit, axis in enumerate("xyz"):
+        travel = settings.get(TRAVEL_OF_AXIS[axis.upper()])
+        if travel is None or where.get(axis) is None:
+            return None
+        out[axis] = round(where[axis] + (0.0 if mask & (1 << bit) else travel), 3)
+    return out
 
 
 def todo_of(mstate: str, alarm: Optional[int]) -> List[str]:

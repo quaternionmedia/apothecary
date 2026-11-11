@@ -982,6 +982,9 @@ def printer_status(
         if status.state == "idle":
             status.state = busy_word(job["kind"])  # the card is idle; the host is not
     status.refused = refused(port, links)
+    if status.tool_position is None and status.dialect != grbl.DIALECT and status.position:
+        # A printer's position is in its bed's coordinates already.
+        status.tool_position = {k: status.position[k] for k in "xyz" if k in status.position}
     return notify_status(status)
 
 

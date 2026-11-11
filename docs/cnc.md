@@ -67,11 +67,18 @@ and released exactly as a printer's is.
 | A streamed job | a print, from the slicer's G-code | a cut, from a CAM post's `.nc`, `.ngc`, `.gcode` or `.tap`, refused for a `$` line, a tool change (`M6`), a stop (`M0`, `M1`), a spindle over the cap, a code GRBL does not take (a printer's `M117`, `G29`), or a dwell over a minute (`G4 P` is seconds to GRBL, milliseconds to Marlin); kept for a router, and sent to nothing else; a pause holds the controller (`!`) so it stops where it is, a cancel holds and resets; a line is answered when queued, so the host counts the planner's room from the status report (`Bf:`) and never blocks the port on a full one, and the cut is done when the controller is idle again after its last line (`finishing`) |
 | Its job's word | `print`, the node `printing` | `cut`, the node `running` (`apothecary/jobs.py`) |
 
-Machine coordinates on a Grbl machine run negative from the home corner --
-the back right and the top of Z, where the switches are -- so after homing
-the tool is at (0, 0, 0) there and the working area is `mpos + travel`
-inside it. A poll carries both the machine position and the work position
-the person's zero gives.
+Machine coordinates on a Grbl machine count from the switches it homes to, axis by
+axis: an axis that homes toward its maximum counts down from that switch, and is at
+`mpos + travel` in the working volume; one that homes toward its minimum (its bit of
+`$23` set) counts up from that switch, and is where it says it is. The AnoleX's X is
+of the second kind -- homed, it reads X 0.9 -- and its Y and Z of the first. A poll
+carries the machine position, the work position the person's zero gives, and
+`tool_position`, the tool in the working volume each axis counted up from its low end,
+worked out from the controller's own `$23` and `$130` to `$132` (`grbl.in_volume`);
+`work_origin` is the work zero in the same volume, and `travel` the volume. The world
+and the Machine place the tool, and a file's zero, by those. They mean the table only
+once the machine has been homed: before that the controller counts from wherever it
+stood at power on.
 
 The same routes serve both: `POST /firmware/devices/identify`,
 `GET /firmware/printers/status`, `/printers/control`, `/printers/command`,

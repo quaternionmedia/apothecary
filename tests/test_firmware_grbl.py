@@ -913,3 +913,34 @@ def test_the_work_position_is_known_between_the_reports_that_carry_the_offset():
     assert after["wco"] == {"x": 168.074, "y": -126.1, "z": -73.265}
     moved = grbl.parse_status("<Idle|MPos:170.074,-127.100,-68.765,0.000|FS:0,0|Pn:0>")
     assert grbl.with_offset(link, moved)["wpos"]["x"] == 2.0
+
+
+# --- where the tool is in the machine's volume -------------------------------------------
+
+
+def test_an_axis_is_counted_the_way_its_controller_homes_it():
+    """The AnoleX's own settings and a homed position: X homes to its minimum and counts
+    up from it, Y and Z home to their maximum and count down from it."""
+    anolex = {23: 1, 130: 400.0, 131: 600.0, 132: 130.0}
+    homed = {"x": 0.9, "y": -1.1, "z": -1.1}
+    assert grbl.in_volume(homed, anolex) == {"x": 0.9, "y": 598.9, "z": 128.9}
+    at_work = {"x": 168.074, "y": -126.1, "z": -73.266}
+    assert grbl.in_volume(at_work, anolex) == {"x": 168.074, "y": 473.9, "z": 56.734}
+    every_axis_from_its_maximum = {**anolex, 23: 0}
+    assert grbl.in_volume(homed, every_axis_from_its_maximum)["x"] == 400.9
+    assert grbl.in_volume(homed, None) is None and grbl.in_volume(None, anolex) is None
+    assert grbl.in_volume(homed, {23: 1, 130: 400.0}) is None  # a travel it does not say
+
+
+def test_a_poll_says_where_the_tool_and_the_work_zero_stand_in_the_volume(
+    fake_arduino_cli, router_links
+):
+    status = devices.printer_status(PORT)
+    # The simulated router homes every axis to its maximum, and starts mid-table.
+    assert status.travel == {"x": 400.0, "y": 600.0, "z": 80.0}
+    assert status.tool_position == {
+        axis: status.position[axis] + status.travel[axis] for axis in "xyz"
+    }
+    assert status.work_origin == {
+        axis: status.work_offset[axis] + status.travel[axis] for axis in "xyz"
+    }

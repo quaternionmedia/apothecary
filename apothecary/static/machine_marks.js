@@ -42,6 +42,7 @@ export const toScene = (p) => new THREE.Vector3(p.x, p.z, -p.y);
 // at mpos + travel, as below).
 export function fileOrigin(st, volume) {
     if (!st || st.dialect !== "grbl") return { x: 0, y: 0, z: 0 };
+    if (st.work_origin) return st.work_origin;  // the server's, by the way each axis homes
     const [vx, vy, vz] = volume || [0, 0, 0];
     const w = st.work_offset || { x: 0, y: 0, z: 0 };
     return { x: w.x + vx, y: w.y + vy, z: w.z + vz };
@@ -54,6 +55,9 @@ export function fileOrigin(st, volume) {
 export function toolPosition(st, volume) {
     const p = st && st.position;
     if (!p) return null;
+    // The server's word first: it has the controller's settings, so each axis is
+    // counted the way that controller homes it. What follows is for a poll without it.
+    if (st.tool_position) return st.tool_position;
     if (st.dialect !== "grbl") return p;
     const [vx, vy, vz] = volume || [0, 0, 0];
     return { x: p.x + vx, y: p.y + vy, z: p.z + vz };

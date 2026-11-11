@@ -545,6 +545,15 @@ class PrinterStatus(BaseModel):
     refused: Optional[dict] = None
     todo: List[str] = Field(default_factory=list)
     homing: Optional[List[dict]] = None
+    # Where the tool is in the machine's own working volume, each axis counted up from
+    # its low end: what a scene places the tool by. A printer's is its position; a
+    # router's is worked out from its machine position, each axis by the way its
+    # controller says it homes and how far it travels (grbl.in_volume). ``work_origin``
+    # is where a router's work zero stands in the same volume, and ``travel`` the volume
+    # as the controller has it. None while a router's settings have not been read.
+    tool_position: Optional[dict] = None
+    work_origin: Optional[dict] = None
+    travel: Optional[dict] = None
 
     @property
     def heating(self) -> bool:
