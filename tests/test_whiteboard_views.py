@@ -7,7 +7,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
-from test_whiteboard import LEANING, WIDE, _photograph
+from whiteboards_helpers import LEANING, WIDE
+from whiteboards_helpers import photograph as _photograph
 
 from apothecary.api import app
 from apothecary.example_hierarchy import WHITEBOARD_POSITION, WHITEBOARD_SIZE

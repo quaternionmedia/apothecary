@@ -13,18 +13,13 @@ drawn here (tests/test_whiteboard_history.py's whiteboard on a wall).
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 import rings
 import windows
 from doc_capture import moments
 from garage import open_garage, said, select, status
 from playwright.sync_api import Page, expect
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from test_whiteboard_history import _drawing  # noqa: E402
+from whiteboards_helpers import drawing as _drawing
 
 MARKS = ".panel[data-panel='marks']"
 WITHIN = 20_000
@@ -60,6 +55,7 @@ def _settled(page: Page) -> None:
     page.wait_for_timeout(400)
 
 
+@pytest.mark.e2e
 def test_a_whiteboard_to_a_model_round_twice(page: Page, url: str, walkthrough):
     """Walkthrough page 30: the whiteboard loop through the page, twice round."""
     story = walkthrough(

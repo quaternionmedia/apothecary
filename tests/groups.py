@@ -233,6 +233,7 @@ GROUPS = {
             "examples/pictures/*",
             "examples/llms_own/*",
             "tests/views_helpers.py",
+            "tests/whiteboards_helpers.py",
         ),
         "tests": (
             "test_again.py",

@@ -142,11 +142,7 @@ def test_a_persons_word_on_a_mark_is_read_back_in_the_world_and_a_note_is_typed(
 def leaning(base_url, start_server, tmp_path_factory):
     """This module's second server: a whiteboard photographed from one side, pinned
     at the garage's whiteboard and searched by the outline finder."""
-    import sys
-    from pathlib import Path
-
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from test_whiteboard import _photograph
+    from whiteboards_helpers import photograph as _photograph
 
     folder = tmp_path_factory.mktemp("leaning_pictures")
     _photograph(folder / "leaning.png")
@@ -200,11 +196,7 @@ def test_a_whiteboards_corner_nudged_squares_its_photograph_again(page, leaning)
 def twice(base_url, start_server, tmp_path_factory):
     """This module's third server: two photographs of the garage's whiteboard, the
     second with the drawing changed, the first's shapes made and its note typed."""
-    import sys
-    from pathlib import Path
-
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from test_whiteboard_history import _drawing
+    from whiteboards_helpers import drawing as _drawing
 
     folder = tmp_path_factory.mktemp("twice_pictures")
     _drawing(folder / "monday.png")
@@ -265,7 +257,10 @@ def test_a_whiteboards_history_is_scrubbed_a_change_taken_and_a_moment_placed(pa
     for _ in range(8):
         if "photograph 1 of 2" in marks.locator(".marks-when-said").inner_text():
             break
+        was = marks.locator(".marks-when-said").inner_text()
         assert page.evaluate("() => window.apothecaryMarks.act('earlier')") is True
+        expect(marks.locator(".marks-when-said")).not_to_have_text(was)
+        expect(status(page)).to_contain_text("the whiteboard as of")
     expect(marks.locator(".marks-when-said")).to_contain_text("photograph 1 of 2")
     page.wait_for_function(
         "(was) => window.apothecaryPictures.drawnAt('whiteboard').id !== was", arg=second

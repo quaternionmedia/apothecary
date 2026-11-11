@@ -6,36 +6,15 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from PIL import Image, ImageDraw, ImageFont
+from whiteboards_helpers import drawing
 
 from apothecary.api import app
-
-INK, BLACK = (20, 30, 120), (10, 10, 10)
-
-
-def _drawing(
-    path, *, plate=(250, 250, 700, 520), disc=(900, 250, 1200, 550), wedge=True, words=True
-):
-    """A whiteboard on a wall, square on: a plate, a disc, a wedge, and writing."""
-    image = Image.new("RGB", (1800, 1400), (60, 60, 64))
-    pen = ImageDraw.Draw(image)
-    pen.rectangle((100, 100, 1700, 1300), fill=(238, 238, 236))
-    shift = (100, 100)
-    move = lambda box: tuple(v + shift[i % 2] for i, v in enumerate(box))  # noqa: E731
-    pen.rectangle(move(plate), outline=INK, width=9)
-    if disc:
-        pen.ellipse(move(disc), outline=INK, width=9)
-    if wedge:
-        pen.polygon(((450, 1050), (750, 1050), (600, 800)), outline=INK, width=9)
-    if words:
-        pen.text((1000, 900), "lid, 3 off", fill=BLACK, font=ImageFont.load_default(size=44))
-    image.save(path)
 
 
 @pytest.fixture
 def board(tmp_path, monkeypatch):
-    _drawing(tmp_path / "monday.png")
-    _drawing(
+    drawing(tmp_path / "monday.png")
+    drawing(
         tmp_path / "tuesday.png",
         plate=(250, 250, 800, 520),
         disc=(960, 250, 1260, 550),

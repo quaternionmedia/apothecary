@@ -113,4 +113,4 @@ def test_the_ring_and_the_worlds_badges_draw_the_group():
     assert ".world-badge[data-group]" in TEMPLATE
     marks = (ROOT / "apothecary" / "static" / "machine_marks.js").read_text(encoding="utf-8")
     pictures = (ROOT / "apothecary" / "static" / "picture_marks.js").read_text(encoding="utf-8")
-    assert 'group: "Machine"' in marks and pictures.count('group: "Pictures"') == 2
+    assert 'group: "Machine"' in marks and pictures.count('group: "Pictures"') == 3

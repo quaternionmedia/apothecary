@@ -141,8 +141,10 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
     const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     // The moment the slider stands at: null at its end, which is now.
     function moment() {
-        if (!line || !line.since || when >= STEPS) return null;
+        if (!line || !line.since) return null;
+        // An event's own moment, though the slider rounds it to its end.
         if (exactly) return exactly;
+        if (when >= STEPS) return null;
         const t0 = ms(line.since), t1 = ms(line.until);
         return new Date(t0 + ((t1 - t0) * when) / STEPS).toISOString();
     }
