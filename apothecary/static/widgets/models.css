@@ -27,6 +27,16 @@
 .models-ui .models-table thead th { color: #7a867a; font-weight: normal; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; border-top: none; }
 .models-ui .models-table tbody th { color: #aab4aa; font-weight: normal; white-space: nowrap; }
 .models-ui .models-table input { width: 100%; min-width: 5rem; box-sizing: border-box; }
+/* A narrow window reads the table down: each property, then Read, Guessed and A person
+ * each on a line of its own, named by its column, so nothing is reached by a scroll across. */
+.models-ui .models-rows { container-type: inline-size; }
+@container (max-width: 24rem) {
+    .models-ui .models-table thead { display: none; }
+    .models-ui .models-table, .models-ui .models-table tbody, .models-ui .models-table tr,
+    .models-ui .models-table tbody th, .models-ui .models-table td { display: block; }
+    .models-ui .models-table td { border-top: none; padding: 0.1rem 0.3rem 0.25rem 0.8rem; }
+    .models-ui .models-table td::before { content: attr(data-label); display: block; color: #7a867a; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; }
+}
 .models-ui .unread { color: #a89a7a; font-style: italic; }
 .models-ui .overruled { text-decoration: line-through; color: #7a867a; }
 .models-ui .swatch { display: inline-block; width: 0.7rem; height: 0.7rem; border: 1px solid #555; border-radius: 2px; margin-right: 0.3rem; vertical-align: -0.1rem; }

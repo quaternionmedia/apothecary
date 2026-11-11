@@ -153,3 +153,64 @@ def test_the_models_window_asks_about_a_shape_and_a_person_overrules_it(page, ur
     _switch(models, MODEL).check()
     said(page, f"{MODEL} is switched on")
     assert errors == []
+
+
+# Each row's cells, as laid out: where each starts and how wide it is, and the name
+# its column gives it in front of it, if any.
+LAID_OUT = """(row) => [...row.querySelectorAll('td')].map((td) => {
+    const b = td.getBoundingClientRect(), named = getComputedStyle(td, '::before').content;
+    return { left: Math.round(b.left), top: Math.round(b.top), bottom: Math.round(b.bottom),
+             width: Math.round(b.width), named: named === 'none' ? null : named.replace(/"/g, '') };
+})"""
+
+# Anything from the table up to the window's body that is wider than it shows.
+ACROSS = """(table) => {
+    const panel = table.closest('.panel'), wide = [];
+    for (let el = table; el && el !== panel.parentElement; el = el.parentElement)
+        if (el.scrollWidth > el.clientWidth + 1) wide.push(el.className || el.tagName);
+    return wide;
+}"""
+
+
+@pytest.mark.e2e
+def test_a_narrow_models_window_reads_down_and_a_wide_one_is_a_table(page, url):
+    """Beside the world on a page 1024 px wide, the table reads down: each property,
+    then Read, Guessed and A person each on a line of its own, named, and nothing is
+    reached by a scroll across. Widened, it is a table again."""
+    page.set_viewport_size({"width": 1024, "height": 768})
+    open_garage(page, url)
+    page.wait_for_function(
+        "() => window.apothecaryPictures.state().some((e) => e.host === 'workbench' && e.mat)"
+    )
+    windows.from_the_windows_menu(page, "models")
+    models = windows.panel(page, "models")
+    page.evaluate(LOOK_DOWN, drawn(page, "workbench")["mat"]["centre"])
+    settled(page, frames=OCCLUSION_TESTED)
+    shape = SHAPES[COIN]
+    page.mouse.click(*page.evaluate(ON_THE_SHAPE, [COIN, shape["min"], shape["max"]]))
+    models.locator(".models-ask").click()
+    # Answered, so the rows measured are the ones Ask drew last.
+    expect(models.locator(".models-said")).to_contain_text("the simulated qmcp answered")
+    expect(models.locator(".models-table tbody tr")).to_have_count(len(ASKED))
+    table = models.locator(".models-table")
+
+    expect(table.locator("thead")).to_be_hidden()
+    for prop in ASKED:
+        row = models.locator(f"tr[data-property='{prop}']")
+        cells = row.evaluate(LAID_OUT)
+        assert [c["named"] for c in cells] == ["Read", "Guessed", "A person"], prop
+        for above, below in zip(cells, cells[1:], strict=False):
+            assert below["top"] >= above["bottom"] - 1, (prop, cells)
+        width = table.evaluate("(t) => t.getBoundingClientRect().width")
+        assert all(c["width"] >= width * 0.9 for c in cells), (prop, width, cells)
+    assert table.evaluate(ACROSS) == []
+    word = models.locator("tr[data-property='label'] input.models-word").bounding_box()
+    right = models.evaluate("(p) => p.getBoundingClientRect().right")
+    assert word and word["x"] + word["width"] <= right, (word, right)
+
+    # Wide, the table is a table: its head shown, a row's cells side by side, unnamed.
+    page.set_viewport_size({"width": 1920, "height": 1080})
+    expect(table.locator("thead")).to_be_visible()
+    cells = models.locator("tr[data-property='label']").evaluate(LAID_OUT)
+    assert len({c["top"] for c in cells}) == 1, cells
+    assert [c["named"] for c in cells] == [None, None, None]

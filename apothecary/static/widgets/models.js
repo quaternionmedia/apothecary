@@ -129,9 +129,9 @@ export function mountModels(root, { base = "", world = null, log = null } = {}) 
             const hidden = row.hidden ? `<div class="meta">${row.hidden === 1 ? "1 guess" : `${row.hidden} guesses`} not shown: switched off</div>` : "";
             return `<tr data-property="${row.property}">
                 <th>${esc(row.property)}</th>
-                <td>${cell(row.reading)}</td>
-                <td>${guesses}${hidden}</td>
-                <td>${row.person ? `<div>${cell(row.person)}</div>` : ""}<div>${sayer(row)}</div></td>
+                <td data-label="Read">${cell(row.reading)}</td>
+                <td data-label="Guessed">${guesses}${hidden}</td>
+                <td data-label="A person">${row.person ? `<div>${cell(row.person)}</div>` : ""}<div>${sayer(row)}</div></td>
             </tr>`;
         }).join("");
         $(".models-rows").innerHTML = `<table class="models-table"><thead><tr><th></th><th title="Read off the shape's own pixels, on this machine">Read</th><th title="Each model's guess, with how sure it says it is; its model is in its tooltip">Guessed</th><th title="A person's word comes first, over every guess">A person</th></tr></thead><tbody>${body}</tbody></table>`;

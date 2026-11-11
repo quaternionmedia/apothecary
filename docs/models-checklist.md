@@ -62,6 +62,10 @@ status bar said, word for word.
   - [ ] **label:** *unread: the model answered 'block'* (or *'bar'*)
         *, which is outside the words asked among*. A word outside the list
         is shown, and used for nothing.
+- [ ] Narrow the window, or open it on a page 1024 px wide: the table reads
+      down, each property and then *Read*, *Guessed* and *A person* each on
+      a line of its own, named, with nothing reached by a scroll across.
+      Widened, it is a table again.
 - [ ] **Ask** on the black disc: the reading says *black*, and the guess
       names another colour and says *disagrees* in red; the reading stays as
       read. The plain reader takes the median of the disc's box, which is the
