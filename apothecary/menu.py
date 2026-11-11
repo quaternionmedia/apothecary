@@ -1925,6 +1925,7 @@ def router_control_options(device: Device) -> List[Option]:
                 Option(id="control:go-zero", label="Go to zero", action="control:go-zero"),
                 Option(id="control:top-z", label="Top of Z", action="control:top-z"),
                 Option(id="control:probe-z", label="Probe Z", action="control:probe-z"),
+                Option(id="control:probe-plate", label="Probe plate", action="control:probe-plate"),
             ],
         ),
         # The cut, whichever is running: a hold and a resume reach the controller at

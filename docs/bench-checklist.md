@@ -358,6 +358,14 @@ only with the table clear and no tool in the collet until the last box.
 - [ ] **XYZ zero here**, then jog away and **Go to zero**: the tool returns.
       **Z zero here** with the plate under the collet, then **Probe Z** 25 mm:
       the touch is in the log (`[PRB:…:1]`) and `$#` says where.
+- [ ] **The plate's thickness.** Measure the touch plate with calipers, put the figure in
+      **plate**: it is there after a reload. Clip the lead to the bit and touch
+      the clip to the plate by hand: **Pins on** shows *probe*. Plate on the stock under
+      the bit, **Probe Z to plate**: the bit comes down, touches, lifts 5 mm; the work Z
+      reads the thickness plus 5, and `$#` has it in G54 with G92 at zero. E-STOP, Unlock:
+      the work Z is still there. With the clip off, **Probe Z to plate** from 60 mm up
+      with a depth of 10: it touches nothing, says so, sets nothing, and the controller
+      is in alarm.
 - [ ] **▦ Probe table** in the Table map card, the probe's lead closing at
       every point of the grid (clipped to the table, or the plate under the
       whole grid): the question in the router's words, the spindle off and a

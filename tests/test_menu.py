@@ -789,6 +789,7 @@ def test_a_router_s_control_ring_is_its_own():
         "control:go-zero",
         "control:top-z",
         "control:probe-z",
+        "control:probe-plate",
         "control:job-resume",
         "control:job-hold",
         "control:job-abort",

@@ -784,3 +784,89 @@ def test_a_poll_says_each_axis_s_homing_and_what_it_has_shown(fake_arduino_cli, 
     z = next(one for one in devices.printer_status(PORT).homing if one["axis"] == "Z")
     assert z["switch_seen"] and z["jogged"] and z["ready"]
     assert _sent(link).count("$$") == 1  # the settings are asked for once, not at every poll
+
+
+# --- the touch plate: Z zero from a touch, called the plate's thickness -----------------
+
+
+def test_probe_z_to_plate_calls_the_touch_the_plates_thickness_and_lifts_off(
+    fake_arduino_cli, router_links
+):
+    router_links.control.arm(PORT)
+    before = devices.printer_status(PORT)
+    said = devices.printer_control(PORT, "probe-plate z19.08 d50 f100").lines
+    assert any(line.endswith(":1]") and line.startswith("[PRB:") for line in said)
+    after = devices.printer_status(PORT)
+    plate_top = before.position["z"] - grbl.SimulatedRouter.PLATE
+    assert after.position["z"] == pytest.approx(plate_top + grbl.PLATE_RETRACT_MM)
+    # Work Z is the plate's thickness at the touch, so 5 mm above it after the lift.
+    assert after.work_position["z"] == pytest.approx(19.08 + grbl.PLATE_RETRACT_MM)
+    assert "G90" in " ".join(after.raw)  # and the parser is back in absolute moves
+    sent = _sent(router_links.get(PORT))
+    assert "G10 L20 P1 Z19.08" in sent and not any(line.startswith("G92") for line in sent)
+
+
+def test_a_probe_that_touches_nothing_sets_no_zero_and_says_so(fake_arduino_cli, router_links):
+    router_links.control.arm(PORT)
+    offset = devices.printer_status(PORT).work_offset
+    with pytest.raises(ToolchainError, match="touched nothing within 10 mm, and no zero was set"):
+        devices.printer_control(PORT, "PROBE-PLATE Z19.08 D10 F100")  # the plate is 20 mm down
+    status = devices.printer_status(PORT)
+    assert status.work_offset == offset and status.state == "alarm"
+    assert "G10 L20 P1 Z19.08" not in _sent(router_links.get(PORT))
+    assert "touched nothing" in status.refused["said"]
+
+
+def test_the_plate_probe_is_bounded_and_needs_the_latch(fake_arduino_cli, router_links):
+    with pytest.raises(gcode.ControlNotArmed):
+        devices.printer_control(PORT, "PROBE-PLATE Z19 D50 F100")
+    router_links.control.arm(PORT)
+    for line, why in (
+        ("PROBE-PLATE Z60 D50 F100", "a plate of 60 mm"),
+        ("PROBE-PLATE Z19 D90 F100", "probe deeper than"),
+        ("PROBE-PLATE Z19 D50 F900", "probe feed above"),
+    ):
+        with pytest.raises(ValueError, match=why):
+            devices.printer_control(PORT, line)
+    with pytest.raises(ValueError, match="not an allowed GRBL control"):
+        devices.printer_control(PORT, "PROBE-PLATE Z19 D50 F100 G92")
+
+
+def test_a_plates_thickness_is_the_makers_nominal_until_one_is_measured_and_kept(
+    fake_arduino_cli, router_links
+):
+    client = TestClient(app)
+    first = client.get("/firmware/printers/plate", params={"port": PORT}).json()
+    assert (first["thickness_mm"], first["measured"]) == (grbl.PLATE_NOMINAL_MM, False)
+    assert "manual.json" in first["source"]
+    kept = client.put("/firmware/printers/plate", json={"port": PORT, "thickness_mm": 19.08})
+    assert kept.status_code == 200 and kept.json()["measured"] is True
+    again = client.get("/firmware/printers/plate", params={"port": PORT}).json()
+    assert again["thickness_mm"] == 19.08
+    for wrong in (0, 51):
+        refused = client.put("/firmware/printers/plate", json={"port": PORT, "thickness_mm": wrong})
+        assert refused.status_code == 422
+
+
+def test_probe_z_goes_down_its_depth_wherever_the_work_zero_is(fake_arduino_cli, router_links):
+    """As on the bench: the tool 100 mm below the work zero and Probe Z asked for 3 mm. In
+    absolute moves that is work Z -3, 97 mm up; it is sent as a distance, and goes down."""
+    router_links.control.arm(PORT)
+    start = devices.printer_status(PORT).position["z"]
+    sim = router_links.get(PORT)._t
+    sim.wco["z"] = start + 100.0  # the work zero 100 mm above the tool
+    assert devices.printer_status(PORT).work_position["z"] == pytest.approx(-100.0)
+    with pytest.raises(
+        ToolchainError, match="ALARM:5"
+    ):  # nothing within 3 mm: the plate is 20 down
+        devices.printer_control(PORT, "G38.2 Z-3 F100")
+    assert devices.printer_status(PORT).position["z"] == pytest.approx(start - 3.0)  # down, not up
+    devices.printer_control(PORT, "$X")
+    said = devices.printer_control(PORT, "G38.2 Z-25 F100").lines
+    assert any(line.startswith("[PRB:") and line.endswith(":1]") for line in said)
+    after = devices.printer_status(PORT)
+    assert after.position["z"] == pytest.approx(start - 3.0 - grbl.SimulatedRouter.PLATE)
+    assert "G90" in " ".join(after.raw)
+    sent = _sent(router_links.get(PORT))
+    at = sent.index("G38.2 Z-3.00 F100")
+    assert sent[at - 1] == "G91" and sent[at + 1] == "G90"

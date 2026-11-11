@@ -300,6 +300,17 @@ const CONTROL = `
             <div class="row"><button type="button" data-cmd="G10 L20 P1 X0 Y0 Z0" title="The work zero (G54) is where the tool is now, in X, Y and Z">XYZ zero here</button><button type="button" data-cmd="G10 L20 P1 Z0" title="The work Z zero is where the tool is now">Z zero here</button>
                 · probe down <input type="number" id="r-probe" min="1" max="80" step="1" value="25"> mm
                 <button type="button" data-cmd="G38.2 Z-{r-probe} F100" title="Probe down this far at 100 mm/min until the plate is touched (G38.2); the touch is in the log, and $# says where">Probe Z</button></div>
+            <div class="row plate">plate <input type="number" id="r-plate" min="0.01" max="50" step="0.01" value="19" title="The touch plate's thickness as you measured it with calipers, in mm, kept for this machine's board as it is changed: the maker's nominal is 19, and its manual's own example measures 19.08"> mm
+                <button type="button" data-cmd="PROBE-PLATE Z{r-plate} D{r-probe} F100" title="The bit comes down at 100 mm/min, the probe depth at most, until it touches the plate; the touch is called Z = the plate's thickness, so Z 0 is the stock's top under it; the bit lifts 5 mm. Written to the work zero (G54), where Z zero here writes it. A probe that touches nothing sets nothing. Moves the machine: control must be armed">Probe Z to plate</button>
+                <span class="s" id="r-plate-s"></span></div>
+            <details class="how plate-how"><summary>How to zero Z with the touch plate</summary><ol>
+                <li>Measure the plate's thickness with calipers and put it in <b>plate</b>: it is kept for this machine's board. The maker's nominal is 19 mm; a plate measures a little off it.</li>
+                <li>Jog X and Y to where the work's zero is, and <b>XYZ zero here</b> or zero X and Y as the job needs.</li>
+                <li>Stand the plate on the stock under the bit and clip its lead to the bit. Touch the clip to the plate by hand: <b>Pins on</b> shows <i>probe</i>. If it does not, do not probe: the bit would not stop.</li>
+                <li>Jog the bit to within the probe depth above the plate, spindle off.</li>
+                <li><b>Probe Z to plate</b>: the bit comes down until it touches, that point is called Z = the plate's thickness, and the bit lifts 5 mm. Z 0 is now the stock's top.</li>
+                <li>Take the clip off the bit and the plate off the stock before anything turns.</li>
+            </ol><div class="s">From the maker's manual, the Z probe (page 27), as parts/anolex_4060_evo_ultra_2/manual.json keeps it. The manual's sender sets the touch with G92, which a reset forgets; here it is written to the work zero.</div></details>
         </div>
         <div class="grp router-only">
             <div class="k">Cut</div>
@@ -345,6 +356,7 @@ const ROUTER_LINES = {
     "control:go-zero": () => "G0 X0 Y0",
     "control:top-z": () => "G53 G0 Z0",
     "control:probe-z": (m) => m.fillTemplate("G38.2 Z-{r-probe} F100"),
+    "control:probe-plate": (m) => m.fillTemplate("PROBE-PLATE Z{r-plate} D{r-probe} F100"),
     "control:jog-cancel": () => "JOG-CANCEL",
     "control:job-resume": () => "RESUME",
     "control:job-hold": () => "HOLD",
@@ -368,7 +380,7 @@ const BY_CMD = {
     "M410": "control:quickstop", "M108": "control:break-wait", "M420 S1": "control:mesh-on", "M420 S0": "control:mesh-off",
     "$X": "control:unlock", "M3 S{r-rpm}": "control:spindle-on", "M5": "control:spindle-off",
     "G10 L20 P1 X0 Y0 Z0": "control:zero-xyz", "G10 L20 P1 Z0": "control:zero-z", "G0 X0 Y0": "control:go-zero", "G53 G0 Z0": "control:top-z",
-    "G38.2 Z-{r-probe} F100": "control:probe-z", "JOG-CANCEL": "control:jog-cancel", "RESUME": "control:job-resume", "HOLD": "control:job-hold", "RESET": "control:job-abort",
+    "G38.2 Z-{r-probe} F100": "control:probe-z", "PROBE-PLATE Z{r-plate} D{r-probe} F100": "control:probe-plate", "JOG-CANCEL": "control:jog-cancel", "RESUME": "control:job-resume", "HOLD": "control:job-hold", "RESET": "control:job-abort",
 };
 // The words of each kind are machine_words.js's (KINDS): applyKind writes them into
 // the markup, which carries none of its own.
@@ -568,7 +580,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // line the port refused or its board objected to, until one goes.
     function renderNeeds(st) {
         const rows = [];
-        for (const t of (st && st.todo) || []) rows.push(`<div class="need warn">${esc(t)}</div>`);
+        const unlock = st && st.dialect === "grbl" && st.state === "alarm"
+            ? ' <button type="button" class="needs-unlock" title="Unlock ($X): the controller moves again, where it believes it is. Moves nothing. Control must be armed">Unlock</button>' : "";
+        for (const t of (st && st.todo) || []) rows.push(`<div class="need warn">${esc(t)}${unlock}</div>`);
         const r = st && st.refused;
         if (r) {
             const at = r.at ? new Date(r.at).toLocaleTimeString() : "";
@@ -577,6 +591,30 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("c-needs").innerHTML = rows.join("");
         $("c-needs-card").hidden = !rows.length;
     }
+
+    // The touch plate's thickness: kept by the server for this machine's board, the
+    // maker's nominal until one has been measured.
+    let plateFor = null;
+    async function loadPlate() {
+        if (!state.port || state.kind !== "router" || plateFor === state.port) return;
+        try {
+            const p = await api(`/firmware/printers/plate?port=${encodeURIComponent(state.port)}`);
+            plateFor = state.port;
+            $("r-plate").value = p.thickness_mm;
+            $("r-plate-s").textContent = p.measured ? "as measured" : `the maker's nominal ${p.nominal_mm} mm: measure yours`;
+        } catch (e) { /* asked again at the next poll */ }
+    }
+    async function keepPlate() {
+        try {
+            const p = await api("/firmware/printers/plate", { method: "PUT", body: JSON.stringify({ port: state.port, thickness_mm: Number($("r-plate").value) }) });
+            $("r-plate").value = p.thickness_mm; $("r-plate-s").textContent = "as measured";
+        } catch (e) { refuse(`plate: ${e.message}`); }
+    }
+
+    $("r-plate").addEventListener("change", () => keepPlate());
+    $("c-needs").addEventListener("click", (ev) => {
+        if (ev.target.closest(".needs-unlock")) sendControl("$X");
+    });
 
     // Each axis's home, beside the buttons that ask for it: which way it will seek, and
     // the two things the port must have shown first. A home not proved is refused by the
@@ -609,7 +647,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const bd = state.port ? b() : null;
         const st = bd && bd.status, d = bd && bd.device, pr = d && d.printer;
         $("ident").innerHTML = identLine(bd, d, pr);
-        renderNeeds(st); renderHoming(st);
+        renderNeeds(st); renderHoming(st); loadPlate();
         if (!st) { $("c-state").textContent = "—"; $("c-state-s").textContent = ""; renderBoard(); return; }
         const offline = st.state === "offline";
         $("dot").className = "dot " + (offline ? "bad" : "on");

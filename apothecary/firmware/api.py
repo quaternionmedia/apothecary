@@ -38,6 +38,7 @@ from .models import (
     LibraryInstallRequest,
     ListenRequest,
     ModuleInstallRequest,
+    PlateRequest,
     Port,
     PrinterControlArmRequest,
     PrinterControlRequest,
@@ -382,6 +383,26 @@ def firmware_printer_command(body: PrinterControlRequest):
     data = devices.printer_control(body.port, body.command).model_dump(mode="json")
     data["control"] = _control_state(body.port)
     return data
+
+
+# -- the touch plate ---------------------------------------------------------------
+
+
+@router.get("/printers/plate")
+def firmware_printer_plate(port: Port):
+    """The touch plate of the router on ``port``: its thickness as measured and kept for
+    that board, else the maker's nominal figure, and where the figure is from."""
+    return devices.plate(port)
+
+
+@router.put("/printers/plate")
+def firmware_printer_plate_set(body: PlateRequest):
+    """Keep the plate's thickness as measured, for the board on ``port``: what Probe Z to
+    plate calls the touch."""
+    try:
+        return devices.set_plate(body.port, body.thickness_mm)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 # -- bed leveling ------------------------------------------------------------------

@@ -564,6 +564,12 @@ class PrinterControlRequest(ProbeRequest):
     command: str = Field(min_length=2, max_length=80)
 
 
+class PlateRequest(ProbeRequest):
+    """A touch plate's thickness as measured, in mm (grbl.PLATE_MAX_MM at most)."""
+
+    thickness_mm: float = Field(gt=0, le=50)
+
+
 class PrinterQueryResult(BaseModel):
     port: str
     command: str

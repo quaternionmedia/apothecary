@@ -241,7 +241,7 @@
     {"what": "Z travel", "manual": "130 mm (work area, sheet 3)", "controller": "$132=130", "here": "docs and the probe's bound say 80: the manual and the controller agree with each other"},
     {"what": "maximum speed", "manual": "3000 mm/min", "controller": "$110 to $112 = 3000", "here": "the feed cap is 4000"},
     {"what": "spindle speed", "manual": "the dial on the trim router, 8000 to 24000 rpm in six steps", "controller": "$30=10000, and Candle's own maximum is 10000", "here": "the page shows the speed asked of the controller, which the trim router does not follow"},
-    {"what": "the probe plate", "manual": "about 19 mm, measured (19.08 in its example), touch set with G92", "controller": "no setting: the thickness is the sender's", "here": "Probe Z probes down a depth and sets no thickness"},
+    {"what": "the probe plate", "manual": "about 19 mm, measured (19.08 in its example), touch set with G92", "controller": "no setting: the thickness is the sender's", "here": "Probe Z to plate calls the touch the kept thickness, written to the work zero (G10 L20 P1) where the manual uses G92: docs/cnc.md, the plate's thickness"},
     {"what": "the Macro button", "manual": "homes the machine as shipped ($H)", "controller": "its input shows in the status report's pins as 0", "here": "a home from the box's own button is the controller's alone: nothing here stands between it and the axis"},
     {"what": "a limit switch touched", "manual": "Alarm, then Unlock and jog off it", "controller": "ALARM:1 with $21=1", "here": "the Needs you card says the same"}
   ]

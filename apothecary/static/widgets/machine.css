@@ -185,3 +185,9 @@
 #ctl-homing .home-axis, #ctl-homing .why { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
 #ctl-homing .home-axis.unproved { border-left: 2px solid var(--warn); padding-left: 0.4rem; }
 #control button.unproved { border-color: var(--warn); color: var(--warn); }
+/* The touch plate: its thickness, and how to zero Z with it. */
+#control .plate input { width: 4.6rem; }
+#control details.how { font-size: 0.76rem; color: var(--ink-2); white-space: normal; }
+#control details.how summary { cursor: pointer; color: var(--ink); }
+#control details.how ol { margin: 0.3rem 0; padding-left: 1.2rem; }
+#control details.how li { margin: 0.15rem 0; }

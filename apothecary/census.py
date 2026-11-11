@@ -355,6 +355,21 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "cmd:G10 L20 P1 Z0": (WIDGET, WHAT_IS_THERE, "a button that makes this height the work Z zero"),
     "r-probe": (WIDGET, WHAT_YOU_SEE, "a box for how far down to probe"),
     "cmd:G38.2 Z-{r-probe} F100": (WIDGET, WHAT_IS_THERE, "a button that probes down to the plate"),
+    "r-plate": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a box for the touch plate's thickness, kept as it is changed",
+    ),
+    "cmd:PROBE-PLATE Z{r-plate} D{r-probe} F100": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that probes down to the plate and makes the touch its thickness in the work zero",
+    ),
+    "needs-unlock": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button in the Needs you card that unlocks the controller",
+    ),
     "cmd:RESUME": (WIDGET, WHAT_IS_THERE, "a button that resumes the held controller and the cut"),
     "cmd:HOLD": (WIDGET, WHAT_IS_THERE, "a button that holds the controller where it is"),
     "cmd:RESET": (WIDGET, WHAT_IS_THERE, "a button that abandons the cut with the soft reset"),
@@ -790,6 +805,8 @@ RING_BACKED: Dict[str, str] = {
     "cmd:G10 L20 P1 X0 Y0 Z0": "control:zero-xyz",
     "cmd:G10 L20 P1 Z0": "control:zero-z",
     "cmd:G38.2 Z-{r-probe} F100": "control:probe-z",
+    "cmd:PROBE-PLATE Z{r-plate} D{r-probe} F100": "control:probe-plate",
+    "needs-unlock": "control:unlock",
     "cmd:RESUME": "control:job-resume",
     "cmd:HOLD": "control:job-hold",
     "cmd:RESET": "control:job-abort",
@@ -974,6 +991,17 @@ BY_SHAPE: Sequence[Tuple[re.Pattern, str]] = (
 # The third part is load-bearing: without it two buttons in the same row of a
 # list are one entry, and a new control can be added to that row unnoticed.
 LISTENING: Dict[str, Tuple[str, str, str]] = {
+    # the Machine: what its state asks of a person, and the touch plate
+    "r-plate:change:keepPlate": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "changing the plate's thickness keeps it for the machine's board",
+    ),
+    "c-needs:click:closest": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "the Needs you card's Unlock, sent as the pad's own",
+    ),
     # taking hold of the thing itself
     "transformControls:dragging-changed:noteDragStart": (
         DRAG,

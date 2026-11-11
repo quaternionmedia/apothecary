@@ -373,6 +373,12 @@ FEED_MAX = 4000
 SPINDLE_MAX_RPM = 24000  # the trim router's: what M3 may ask, typed or in a file
 PROBE_MAX_MM = 80
 PROBE_FEED_MAX = 500
+# The touch plate: a puck the bit comes down on, whose thickness is what the touch is
+# called. The maker's nominal figure, which its manual has a person measure and replace
+# (parts/anolex_4060_evo_ultra_2/manual.json, the Z probe, page 27).
+PLATE_NOMINAL_MM = 19.0
+PLATE_MAX_MM = 50.0
+PLATE_RETRACT_MM = 5.0
 _AXES = r"(?: [XYZ]-?\d{1,3}(?:\.\d{1,3})?)"
 CONTROL_CODES: List[tuple] = [
     (re.compile(r"^\$H(?:[XYZ])?$"), "home all, or one axis"),
@@ -390,6 +396,10 @@ CONTROL_CODES: List[tuple] = [
     (re.compile(r"^M5$"), "spindle off"),
     (re.compile(r"^G10 L20 P1(?: [XYZ]0){1,3}$"), "work zero here, for the named axes"),
     (re.compile(r"^G38\.2 Z-\d{1,3}(?:\.\d{1,2})? F\d{1,4}$"), "probe down to the plate"),
+    (
+        re.compile(r"^PROBE-PLATE Z\d{1,2}(?:\.\d{1,2})? D\d{1,2} F\d{1,3}$"),
+        "probe down to the plate and call the touch the plate's thickness",
+    ),
 ]
 
 
@@ -901,7 +911,9 @@ class SimulatedRouter:
         elif code == "G38.2":
             # The plate is PLATE mm below where the tool stands, or the move ends short.
             here = self._end_of_queue()
-            depth = float(args.get("Z", 0))
+            # A probe's Z is a distance in G91 and a place in the work zero in G90, as
+            # any move's is: in G90 a probe "down 25" from below work Z -25 goes up.
+            depth = self._target(args, self.relative)["z"] - here["z"]
             plate = here["z"] - self.PLATE
             touched = here["z"] + depth <= plate
             z = plate if touched else here["z"] + depth
@@ -1241,9 +1253,69 @@ def control_router(link: GcodeLink, command: str, timeout: float = 60.0) -> List
         )
     if cmd.startswith("$H"):
         check_home(link, cmd)
+    if cmd.startswith("PROBE-PLATE"):
+        thickness, depth, feed = (float(word[1:]) for word in cmd.split()[1:])
+        return probe_plate(link, thickness, depth, int(feed))
+    if cmd.startswith("G38.2 Z-"):
+        depth, feed = (float(word[1:]) for word in cmd.split()[1:])
+        return probe_down(link, -depth, int(feed))
     answer = link.command(cmd, timeout=timeout, origin="control")
     proof_of(link).jog(cmd, answer)
     return answer
+
+
+def probe_down(link: GcodeLink, depth: float, feed: int) -> List[str]:
+    """One probe down ``depth`` mm from where the tool stands, at ``feed``, and what the
+    controller said. The Z of a probe is a place in the work zero while the parser is in
+    absolute moves, so "down 25" sent as it stands goes to work Z -25 from wherever the
+    tool is -- up, from below it. It is sent as a distance (``G91``), and the parser is
+    put back in absolute moves whatever comes of it. The probe's own lines are returned."""
+    link.command("G91", timeout=10.0, origin="control")
+    try:
+        return link.command(
+            f"G38.2 Z-{depth:.2f} F{feed}",
+            timeout=depth / feed * 60.0 * 2 + 30.0,
+            origin="control",
+        )
+    finally:
+        try:
+            link.command("G90", timeout=10.0, origin="control")
+        except (ToolchainError, LinkBusy):
+            pass  # in alarm the controller keeps its parser; the alarm is what is said
+
+
+def probe_plate(link: GcodeLink, thickness: float, depth: float, feed: int) -> List[str]:
+    """The work Z zero set from the touch plate, as the maker's manual has a sender do it
+    (page 27): the bit comes down ``depth`` mm at most at ``feed`` until it touches the
+    plate standing on the stock, the touch is called Z = ``thickness`` -- so Z 0 is the
+    stock's top under the plate -- and the bit lifts ``PLATE_RETRACT_MM`` off it.
+
+    The zero is written to the work offset (``G10 L20 P1``), where Z zero here writes
+    it, and not as the manual's ``G92``, which a soft reset forgets: a stop would take
+    the zero with it. A probe that does not touch sets nothing and says so; the
+    controller is then in alarm, as it is after any probe that finds nothing."""
+    if not 0 < thickness <= PLATE_MAX_MM:
+        raise OutOfBounds(f"a plate of {thickness:g} mm: 0 to {PLATE_MAX_MM:g} mm")
+    if not 0 < depth <= PROBE_MAX_MM:
+        raise OutOfBounds(f"probe deeper than {PROBE_MAX_MM} mm: {depth:g}")
+    if not 0 < feed <= PROBE_FEED_MAX:
+        raise OutOfBounds(f"probe feed above {PROBE_FEED_MAX}: {feed}")
+    nothing = (
+        f"{link.port}: the probe touched nothing within {depth:g} mm, and no zero was "
+        "set: is the lead clipped to the bit, and the plate under it?"
+    )
+    try:
+        lines = probe_down(link, depth, feed)
+    except ToolchainError as exc:  # the controller's own ALARM:4 or ALARM:5
+        raise ToolchainError(f"{nothing} ({exc})") from exc
+    touch = parse_probe(lines)
+    if touch is None or not touch["touched"]:
+        raise ToolchainError(nothing)
+    lines += link.command(f"G10 L20 P1 Z{thickness:.2f}", timeout=10.0, origin="control")
+    lines += link.command(
+        f"$J=G91 G21 Z{PLATE_RETRACT_MM:g} F{max(feed, 300)}", timeout=30.0, origin="control"
+    )
+    return lines
 
 
 def query_router(link: GcodeLink, command: str, timeout: float = 15.0) -> List[str]:
@@ -1351,7 +1423,8 @@ def probe_table(
                 lines += control_router(
                     link, f"G53 G0 X{point['x']:.3f} Y{point['y']:.3f}", timeout=120.0
                 )
-                said = control_router(link, probe_line, timeout=probe_timeout)
+                # Sent as it stands: the map holds the parser in G91 for all its probes.
+                said = link.command(probe_line, timeout=probe_timeout, origin="control")
                 lines += said
                 touch = parse_probe(said)
                 if touch is None or not touch["touched"]:

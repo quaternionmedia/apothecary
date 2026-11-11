@@ -292,6 +292,7 @@ class FirmwareState:
         data.setdefault("devices", {})
         data.setdefault("seen", {})
         data.setdefault("bindings", [])
+        data.setdefault("plates", {})
         # A pin kept under a name its site had before is that site's pin: read under
         # the name the site has now, and written under it at the next write.
         for binding in data["bindings"]:
@@ -301,6 +302,17 @@ class FirmwareState:
 
     def _save(self, data: dict) -> None:
         state_folder.write_whole(self.path, json.dumps(data, indent=2, default=str))
+
+    def plate(self, board: str) -> Optional[float]:
+        """The touch plate's thickness kept for ``board``, in mm; None when none is."""
+        value = self._load()["plates"].get(board)
+        return float(value) if value is not None else None
+
+    def set_plate(self, board: str, mm: float) -> None:
+        with self._lock:
+            data = self._load()
+            data["plates"][board] = round(float(mm), 2)
+            self._save(data)
 
     def record_flash(self, record: FlashRecord) -> None:
         with self._lock:
@@ -1041,6 +1053,43 @@ def printer_reset(
     if link is None:
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
     return link.reset()  # refused by the link itself while a job holds it
+
+
+def _plate_board(port: str, state: FirmwareState) -> str:
+    """What a plate's thickness is kept under: the board on ``port`` by its serial number,
+    else its bridge's make, as a pin is; the port's name for a board nothing is known of."""
+    device = known_device(port, state)
+    if device is not None and device.serial_number:
+        return device.serial_number
+    if device is not None and device.vid and device.pid:
+        return (
+            f"usb:{device.vid.lower().removeprefix('0x')}:{device.pid.lower().removeprefix('0x')}"
+        )
+    return port
+
+
+def plate(port: str, state: Optional[FirmwareState] = None) -> dict:
+    """The touch plate of the router on ``port``: its thickness as measured and kept, else
+    the maker's nominal figure, and which of the two it is."""
+    state = state or get_state()
+    kept = state.plate(_plate_board(port, state))
+    return {
+        "port": port,
+        "thickness_mm": kept if kept is not None else grbl.PLATE_NOMINAL_MM,
+        "measured": kept is not None,
+        "nominal_mm": grbl.PLATE_NOMINAL_MM,
+        "max_mm": grbl.PLATE_MAX_MM,
+        "source": "parts/anolex_4060_evo_ultra_2/manual.json, the Z probe (the maker's manual, page 27)",
+    }
+
+
+def set_plate(port: str, mm: float, state: Optional[FirmwareState] = None) -> dict:
+    """Keep the plate's measured thickness for the board on ``port``."""
+    if not 0 < mm <= grbl.PLATE_MAX_MM:
+        raise ValueError(f"a plate of {mm:g} mm: more than 0 and at most {grbl.PLATE_MAX_MM:g} mm")
+    state = state or get_state()
+    state.set_plate(_plate_board(port, state), mm)
+    return plate(port, state)
 
 
 # The last control line each port refused, or its board objected to, kept until one

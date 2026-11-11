@@ -82,7 +82,7 @@ def test_the_machine_says_what_it_needs_and_what_did_not_go(page: Page, url: str
 
     # 4. Unlock: nothing is asked of the person any more, and the line that went clears
     #    the one that did not.
-    pad.locator("button[data-cmd='$X']").click()
+    needs.locator(".needs-unlock").click()  # the card's own Unlock: where it says so
     expect(needs).to_be_hidden(timeout=WITHIN_A_POLL)
 
     # 5. A home not proved does not go, and the card says why in the controller's figures.

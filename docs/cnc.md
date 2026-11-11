@@ -130,6 +130,26 @@ card, there only while there is something, and the third beside the Home buttons
 axis with what to do first; a Home not yet proved is outlined. `refused` is a printer's
 too.
 
+### The plate's thickness
+
+The touch plate is a puck the bit comes down on, and the touch is called the plate's
+thickness, so that Z 0 is the stock's top under it. The thickness is a person's to
+measure: the maker's nominal figure is 19 mm and its manual's own example measures 19.08
+([manual.json](../parts/anolex_4060_evo_ultra_2/manual.json), the Z probe). It is kept
+for the machine's board (`GET` and `PUT /firmware/printers/plate`), the nominal until one
+is kept, and the pad's **plate** field holds it.
+
+**Probe Z to plate** is one control line, `PROBE-PLATE Z<thickness> D<depth> F<feed>`,
+bounded as a probe is and by a plate of 50 mm at most: the bit comes down the depth at
+most until it touches, the touch is written to the work zero as the plate's thickness
+(`G10 L20 P1 Z<thickness>`), and the bit lifts 5 mm. The manual's sender sets the touch
+with `G92`, which a soft reset forgets; a stop here is a soft reset, so the zero is
+written where **Z zero here** writes it and a stop does not take it. A probe that touches
+nothing sets nothing and says so, with the controller in alarm as after any probe that
+finds nothing. The pad's *How to zero Z with the touch plate* is the manual's procedure
+with one step added: the clip touched to the plate by hand first, to see **Pins on** show
+the probe before the bit is trusted to stop on it.
+
 ## Simulated
 
 `APOTHECARY_SERIAL_ENGINE=simulated` answers every port as the simulated
