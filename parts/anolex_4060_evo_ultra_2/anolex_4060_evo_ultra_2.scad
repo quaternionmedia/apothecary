@@ -1,18 +1,21 @@
 // AnoleX 4060-Evo Ultra 2, a desktop CNC router, as a workshop model.
 //
-// Built from published dimensions, not from anyone's mesh: a moving-gantry
+// Built from published dimensions, not from anyone's mesh: a moving-table
 // router cutting 400 x 600 x 80 mm, on a base of two aluminium side beams
-// carrying the Y rails, a fixed T-slot table between them, a gantry of two
-// plates and a cross beam riding the Y rails, the X carriage on the beam's
-// front face, the Z plate on the carriage, and an 800 W trim router in a
-// 65 mm clamp on the Z plate. The control box sits at the back of the base,
+// carrying the Y rails, the T-slot table riding them between the beams, a
+// gantry of two plates and a cross beam standing on the beams, the X carriage
+// on the beam's front face, the Z plate on the carriage, and an 800 W trim
+// router in a 65 mm clamp on the Z plate. The table carries the work under the
+// tool along Y, as the maker's manual has it (parts/anolex_4060_evo_ultra_2/
+// manual.json: the gantry is fixed to the Y-axis base, page 05). The control box sits at the back of the base,
 // between the beams, its sockets facing the rear.
 //
 // The origin is the front-left bottom corner of the base frame; X runs right,
 // Y runs back, Z runs up -- the site's machine convention. The table top is at
-// table_top_z; the 400 x 600 working area sits centred on the table, so the
-// tool's (0, 0) is at the working area's front-left corner when the gantry is
-// at its front stop.
+// table_top_z; the 400 x 600 working area sits centred on the table, and the
+// tool stands over the middle of the table's travel, y_rest along it: the
+// table is moved back and forth under it, so at y_axis = 0 the working area's
+// front edge is under the tool and at y_axis = 600 its back edge is.
 //
 // Every dimension that is a published specification is named as such; the
 // rest are taken from the maker's listed footprint or chosen to look right,
@@ -21,7 +24,7 @@
 
 // Customizer parameters (where the axes are shown standing)
 x_axis = 200;   // [0:1:400] Where the tool stands along X, in work coordinates (mm)
-y_axis = 300;   // [0:1:600] Where the gantry stands along Y, in work coordinates (mm)
+y_axis = 300;   // [0:1:600] Where the table stands along Y, in work coordinates: the work's Y under the tool (mm)
 z_axis = 40;    // [0:1:80] Tool tip height above the table (mm)
 with_router = true;   // Draw the trim router in its clamp
 
@@ -62,9 +65,13 @@ control_box = [200, 100, 90];  // the controller's enclosure at the back, betwee
 function work_x0() = (frame_w - work_x) / 2;
 function table_y0() = (frame_d - table[1]) / 2;
 function work_y0() = table_y0() + (table[1] - work_y) / 2;
+// the tool stands still along Y, over the middle of the table's travel; the
+// table is moved by how far the work's Y under the tool is from there
+y_rest = work_y / 2;
+function table_dy() = y_rest - y_axis;
 // where the tool stands in the frame, for the axes as set
 function tool_x() = work_x0() + x_axis;
-function tool_y() = work_y0() + y_axis;
+function tool_y() = work_y0() + y_rest;
 function tool_z() = table_top_z + z_axis;
 // the gantry's legs and beam stand behind the tool: from the tool back, the
 // clamp's bore to its centre, the clamp's back half, the Z plate, the X
@@ -99,8 +106,8 @@ module anolex_base() {
     // the front and rear cross plates between the beams, sunk into them
     for (y = [0, frame_d - cross_t]) translate([beam[0] - eps, y, 0])
         color("silver") cube([frame_w - 2 * beam[0] + 2 * eps, cross_t, beam[1] - 20]);
-    // the table on four supports, standing on the cross plates' level
-    translate([(frame_w - table[0]) / 2, table_y0(), 0]) {
+    // the table on four supports, carried along Y over the cross plates' level
+    translate([(frame_w - table[0]) / 2, table_y0() + table_dy(), 0]) {
         color("darkgray") translate([0, 0, table_top_z - table[2]]) cube([table[0], table[1], table[2]]);
         color("silver") for (x = [20, table[0] - 60]) for (y = [20, table[1] - 60])
             translate([x, y, beam[1] - 20 - eps]) cube([40, 40, table_top_z - table[2] - (beam[1] - 20) + 2 * eps]);
@@ -127,7 +134,7 @@ module anolex_control_box() {
 
 module anolex_gantry() {
     by = beam_y();
-    // each leg stands on its Y block, straddling the rail on the beam
+    // each leg stands on a foot block bolted to its side beam (the gantry does not move)
     for (x = [0, frame_w - beam[0]]) translate([x + (beam[0] - rail_w) / 2, by - leg[1] / 2, beam[1] - eps]) {
         hgh15_block();
         translate([-(block[0] - rail_w) / 2 + (block[0] - leg[0]) / 2, 0, block[2] - eps]) color("silver") cube(leg);

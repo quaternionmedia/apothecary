@@ -13,7 +13,7 @@ describes.
 ## The machine
 
 [`parts/anolex_4060_evo_ultra_2`](../parts/anolex_4060_evo_ultra_2/README.md)
-is the router as a part: a moving-gantry machine cutting 400 x 600 x 80 mm,
+is the router as a part: a moving-table machine cutting 400 x 600 x 80 mm,
 HGH15 linear rails and 1204 ball screws on each axis, NEMA 23 closed-loop
 steppers, an 800 W trim router (8,000 to 24,000 rpm, set by a dial on the
 router, started and stopped by the controller) in a 65 mm clamp on the Z
@@ -76,7 +76,14 @@ carries the machine position, the work position the person's zero gives, and
 `tool_position`, the tool in the working volume each axis counted up from its low end,
 worked out from the controller's own `$23` and `$130` to `$132` (`grbl.in_volume`);
 `work_origin` is the work zero in the same volume, and `travel` the volume. The world
-and the Machine place the tool, and a file's zero, by those. They mean the table only
+and the Machine place the tool, and a file's zero, by those. The AnoleX's table carries
+Y (the part's `bed_moves_y`, as the Ender's bed does): the tool's mark stands still
+along Y and the working volume, the table map and a file's path ride under it. Once a
+poll the page hears says the machine is idle, the world draws the router -- and the
+printer -- rendered at that pose, its table and carriage where its axes are
+(`POST /parts/{ref}/stl/generate` with its axes, each within the part's range): a pose
+at rest, a second or so behind it, while the mark follows the move. A page hears the
+polls its own Machine window makes. They mean the table only
 once the machine has been homed: before that the controller counts from wherever it
 stood at power on.
 

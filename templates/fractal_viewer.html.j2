@@ -1359,6 +1359,11 @@
                 // (?variant=part:key) so a reload or a link draws the same; and its record.
                 this.variantByPart = {};
                 this.variantRecords = {};
+                // A machine drawn where its axes last came to rest (poseMachine): by part,
+                // the variant that pose renders, and what was asked last.
+                this.poseByPart = {};
+                this.posing = {};
+                this.poseSpecs = {};
                 this.variantsRead = this.readVariantsFromAddress();
                 // part name -> { name, variant }: the variant drawn when it was saved as `name`.
                 this.savedAs = (() => { try { return JSON.parse(sessionStorage.getItem(SAVED_AS_KEY)) || {}; } catch (e) { return {}; } })();
@@ -2330,6 +2335,8 @@
             forgetVariants() {
                 this.variantByPart = {};
                 this.variantRecords = {};
+                this.poseByPart = {};
+                this.posing = {};
             }
 
             async loadSite(name, focusPathStr = '') {
@@ -8092,6 +8099,7 @@
                 if (have && have.plan) { have.marks?.destroy(); delete this.marks[path]; have = null; }
                 if (have) {
                     if (have.marks && st && st.position) have.marks.setPosition(this.toolPosition(st, have.where));
+                    if (have.marks && st) this.poseMachine(path, st);
                     if (have.marks) this.refreshReading(path);
                     return;
                 }
@@ -8113,6 +8121,7 @@
                     this.scene.add(marks.group);
                     const first = this.bindings[row.path] && this.bindings[row.path].printer_status;
                     if (first && first.position) marks.setPosition(this.toolPosition(first, where), { immediate: true });
+                    if (first) this.poseMachine(path, first);
                     // The kind of machine the board answered as: a bed reading is a printer's.
                     const kind = (row.device.printer && row.device.printer.machine) || null;
                     this.marks[path] = { marks, port, where, kind, readingAt: 0, readingId: null };
@@ -8120,6 +8129,52 @@
                     if (toolpath) marks.setToolpath(toolpath.preview, toolpath);
                     this.refreshReading(path);
                 });
+            }
+
+            // A machine drawn where its axes came to rest: once a poll says it is idle and
+            // where its tool is in its volume (the server's tool_position), the part is
+            // rendered with its axes there (POST /parts/{ref}/stl/generate, its own range
+            // for each, from GET /parts/{ref}/params) and every piece drawn from it loads
+            // that. A render takes a second or so, so it is a pose at rest, never a film of
+            // the move; the tool's mark follows the move. A part this tab is editing is left
+            // to the editor, and one pose is asked at a time.
+            async poseMachine(path, st) {
+                const node = this.nodeByPath(path), ref = node && node.part_ref;
+                if (!ref || !st.tool_position || st.state !== 'idle' || this.variantByPart[ref]) return;
+                const was = this.posing[ref];
+                if (was && was.busy) return;
+                if (this.poseSpecs[ref] === undefined) {
+                    this.poseSpecs[ref] = fetch(`${BASE_URL}/parts/${encodeURIComponent(ref)}/params`)
+                        .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+                }
+                const spec = await this.poseSpecs[ref];
+                const field = (name) => spec && (spec.fields || []).find((f) => f.name === name);
+                const params = {};
+                for (const [axis, name] of [['x', 'x_axis'], ['y', 'y_axis'], ['z', 'z_axis']]) {
+                    const f = field(name), at = st.tool_position[axis];
+                    if (!f || typeof at !== 'number') return;
+                    params[name] = Math.round(Math.min(f.max ?? at, Math.max(f.min ?? at, at)));
+                }
+                const key = JSON.stringify(params);
+                if (was && was.key === key) return;
+                this.posing[ref] = { key, busy: true };
+                try {
+                    const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(ref)}/stl/generate?page=${encodeURIComponent(PAGE_ID + '-pose')}`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ params }),
+                    });
+                    const body = await response.json().catch(() => ({}));
+                    if (!response.ok || this.variantByPart[ref]) { this.posing[ref] = { key, busy: false }; return; }
+                    if (body.variant) this.poseByPart[ref] = { variant: body.variant, measured: body.measured, params };
+                    else delete this.poseByPart[ref];  // the part's own STL is that pose
+                    const reloads = Object.values(this.renderNodeByKey)
+                        .filter((n) => n.part_ref === ref && this.meshByName[nodeKey(n)]
+                            && this.effectiveDetailFor(n, nodeKey(n)) === DETAIL_FULL)
+                        .map((n) => this.loadAndUpgrade(n, this.loadGeneration));
+                    await this.addToWave(Promise.all(reloads));
+                    this.posing[ref] = { key, busy: false, drawn: params };
+                } catch (error) {
+                    this.posing[ref] = { key, busy: false };
+                }
             }
 
             // Where a poll puts the tool in the machine's volume (machine_marks.js).
@@ -9006,6 +9061,18 @@
                     } catch (error) {
                         console.warn(`${ref}'s variant ${variant} is no longer kept:`, error);
                         this.forgetVariant(ref);
+                    }
+                }
+                // A machine is drawn where its axes last came to rest, when it has been.
+                const pose = this.poseByPart[ref];
+                if (pose) {
+                    try {
+                        const mesh = await this.loadSTLMesh(node, this.variantUrl(ref, pose.variant), pose.measured);
+                        mesh.userData.pose = pose.variant;
+                        return mesh;
+                    } catch (error) {
+                        delete this.poseByPart[ref];
+                        delete this.posing[ref];
                     }
                 }
                 const stlUrl = `${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/stl?${AS_IT_RESTS}`;

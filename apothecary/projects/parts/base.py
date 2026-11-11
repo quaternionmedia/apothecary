@@ -62,6 +62,10 @@ class BasePart(BaseModel):
     # machine of that kind, and can be planned before a board is pinned to it
     # (apothecary/machine_plans.py).
     machine: Optional[str] = None
+    # A machine whose bed (or table) carries the work along Y under a tool that stands
+    # still along Y: how far into its volume, along Y, the tool stands. None: the tool
+    # moves along Y over a bed that stays (a gantry machine), or the part is no machine.
+    bed_moves_y: Optional[float] = None
     tags: List[str] = Field(default_factory=list)
     readme_path: Optional[Path] = None
     module_name: Optional[str] = None

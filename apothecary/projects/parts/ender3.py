@@ -69,6 +69,7 @@ def create(root: Path) -> BasePart:
         params_model=Params,
         category="machine",
         machine="printer",
+        bed_moves_y=0.0,  # the bed carries Y; the nozzle stands at the build area's front edge
         tags=["printer", "ender3", "creality", "fdm"],
         readme_path=root / "parts" / "ender3" / "README.md",
         preview_color=Color(r=0.75, g=0.75, b=0.78),

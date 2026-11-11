@@ -1,12 +1,13 @@
 # AnoleX 4060-Evo Ultra 2
 
 An AnoleX 4060-Evo Ultra 2, a desktop CNC router, as a workshop model, built
-in OpenSCAD from published dimensions: a moving-gantry machine cutting
-400 x 600 x 80 mm, HGH15 linear rails and 1204 ball screws on each axis,
+in OpenSCAD from published dimensions: a moving-table machine cutting
+400 x 600 x 80 mm -- the table carries the work along Y under a gantry that
+stands on the base, as the maker's manual has it -- HGH15 linear rails and 1204 ball screws on each axis,
 NEMA 23 closed-loop steppers, an 800 W trim router in a 65 mm clamp on the
 Z plate, the control box at the back of the base. The axes (`x_axis`,
 `y_axis`, `z_axis`) are parameters, so the garage draws its router,
-cnc_router, with its tool where the last poll said.
+cnc_router, with its table and tool where its axes last came to rest.
 
 `anolex_4060_evo_ultra_2.scad` says which numbers are the maker's
 specifications and which are taken from its listed footprint or chosen to

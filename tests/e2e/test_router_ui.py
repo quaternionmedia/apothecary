@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 
 import doc_capture
 import httpx
@@ -730,3 +731,70 @@ def test_a_printer_s_reading_under_the_router_s_port_is_never_laid_over_its_tabl
     # A router's marks ask, for the router's own table maps (test_router_table_map.py);
     # what they are answered here is a printer's, and is not theirs.
     assert asked and all("ttyFAKE3" in url for url in asked)
+
+
+def _poll_at_rest(url: str) -> dict:
+    """Polls until the router's moves are done and it reports itself idle."""
+    for _ in range(60):
+        st = httpx.get(f"{url}/firmware/printers/status", params={"port": ROUTER}, timeout=15.0)
+        if st.json().get("machine_state") == "Idle":
+            return st.json()
+        time.sleep(0.25)
+    raise AssertionError("the router never came to rest")
+
+
+@pytest.mark.e2e
+def test_the_router_is_drawn_where_its_axes_came_to_rest_its_table_carrying_y(page: Page, url: str):
+    """Jogged and at rest, the router is drawn with its axes where its controller says:
+    the part rendered at that pose, every piece drawn from it loading it. Its table
+    carries Y, so the tool's mark stands still along Y and the table's marks move under
+    it by the jog. Jogged back, it is drawn as it was."""
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    page.wait_for_function(
+        "() => { const m = window.fractalViewer.marks['cnc_router']; return m && m.marks; }",
+        timeout=WITHIN_A_POLL,
+    )
+    # Its Machine open, polling: the world follows a machine through the page's polls.
+    _select(page, "cnc_router")
+    page.locator("#selected-body .device-section .dev-open").click()
+    windows.machine_ready(page, "router")
+    ref = "anolex_4060_evo_ultra_2"
+    httpx.post(
+        f"{url}/firmware/printers/control", json={"port": ROUTER, "armed": True}, timeout=15.0
+    ).raise_for_status()
+    start = _poll_at_rest(url)["tool_position"]  # wherever the tests before left it
+    dx, dy = (-10, -25) if start["x"] >= 10 and start["y"] >= 25 else (10, 25)
+    for line in (f"$J=G91 G21 X{dx} F1000", f"$J=G91 G21 Y{dy} F1000"):
+        _command(url, line)
+    _poll_at_rest(url)
+    want = {"x_axis": round(start["x"] + dx), "y_axis": round(start["y"] + dy)}
+    page.wait_for_function(
+        "([ref, want]) => { const v = window.fractalViewer, p = v.poseByPart[ref],"
+        " m = v.meshByName['cnc_router'];"
+        " return p && p.params.x_axis === want.x_axis && p.params.y_axis === want.y_axis"
+        " && m && m.userData.pose === p.variant; }",
+        arg=[ref, want],
+        timeout=60000,
+    )
+    bed = page.evaluate("() => window.fractalViewer.marks['cnc_router'].marks.bedOffset()")
+    # The table stands moved by the Y it carries: how far the work's Y under the tool is
+    # from where the tool rests along Y.
+    assert bed == pytest.approx(300.0 - (start["y"] + dy), abs=0.5), bed
+    for line in (f"$J=G91 G21 X{-dx} F1000", f"$J=G91 G21 Y{-dy} F1000"):
+        _command(url, line)
+    _poll_at_rest(url)
+    page.wait_for_function(
+        "([ref, want]) => { const v = window.fractalViewer, p = v.poseByPart[ref],"
+        " m = v.meshByName['cnc_router'];"
+        " return !(p && p.params.x_axis === want.x_axis && p.params.y_axis === want.y_axis)"
+        " && m && m.userData.pose === (p ? p.variant : undefined); }",
+        arg=[ref, want],
+        timeout=60000,
+    )
+
+
+def _command(url: str, line: str) -> None:
+    httpx.post(
+        f"{url}/firmware/printers/command", json={"port": ROUTER, "command": line}, timeout=15.0
+    ).raise_for_status()

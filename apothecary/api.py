@@ -2249,7 +2249,21 @@ def _describe_for_view(
             if getattr(n, "build_origin", None)
             else (_base_height(n) if is_printer else 0.0)
         ),
+        # The part it is drawn from, and whether its bed carries Y (the part's
+        # ``bed_moves_y``): the marks move the bed, not the tool, along Y.
+        "part_ref": getattr(n, "part_ref", None),
+        "bed_moves_y": _bed_moves_y(n),
     }
+
+
+def _bed_moves_y(n: Assembly) -> Optional[float]:
+    ref = getattr(n, "part_ref", None)
+    if not ref:
+        return None
+    try:
+        return _load_part_wrapper(ref).bed_moves_y
+    except HTTPException:
+        return None
 
 
 @app.get("/firmware/printers/where", tags=["firmware"])

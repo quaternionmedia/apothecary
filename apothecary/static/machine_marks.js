@@ -91,6 +91,12 @@ export function meshExaggeration(range) {
 export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
     const note = (text, key) => { if (onNote) onNote(text, key); };
     const group = new THREE.Group();
+    // What the bed carries -- its plane, the reading's relief, a file's path -- in a group
+    // of its own: on a machine whose bed carries Y (`bed_moves_y`, the Ender's bed and the
+    // AnoleX's table), it is the bed that moves along Y, and the tool stands still there.
+    const bedGroup = new THREE.Group();
+    group.add(bedGroup);
+    const bedMovesY = printer && typeof printer.bed_moves_y === "number" ? printer.bed_moves_y : null;
     const hasVolume = !!(printer && printer.build_volume && (printer.footprint || printer.build_origin));
     let volumeOrigin = { x: 0, y: 0, z: 0 };
     if (hasVolume) {
@@ -111,12 +117,12 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
             const volume = new THREE.LineSegments(new THREE.EdgesGeometry(box), new THREE.LineBasicMaterial({ color: VOLUME_COLOR, transparent: true, opacity: 0.6 }));
             box.dispose();
             volume.position.copy(toScene({ x: volumeOrigin.x + vx / 2, y: volumeOrigin.y + vy / 2, z: volumeOrigin.z + vz / 2 }));
-            group.add(volume);
+            bedGroup.add(volume);  // the working volume rides with what carries the work
         }
         const bed = new THREE.Mesh(new THREE.PlaneGeometry(vx, vy), new THREE.MeshBasicMaterial({ color: BED_COLOR, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }));
         bed.rotation.x = -Math.PI / 2;
         bed.position.copy(toScene({ x: volumeOrigin.x + vx / 2, y: volumeOrigin.y + vy / 2, z: volumeOrigin.z + 0.2 }));
-        group.add(bed);
+        bedGroup.add(bed);
     }
 
     // The nozzle: a small cone pointing down, plus a crosshair on the bed.
@@ -141,7 +147,10 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
     const current = { x: 0, y: 0, z: 0 };
     const target = { x: 0, y: 0, z: 0 };
     function place() {
-        nozzle.position.copy(toScene({ x: volumeOrigin.x + current.x, y: volumeOrigin.y + current.y, z: volumeOrigin.z + current.z }));
+        // A bed that carries Y is moved so the work's Y under the tool is the poll's.
+        const y = bedMovesY === null ? current.y : bedMovesY;
+        nozzle.position.copy(toScene({ x: volumeOrigin.x + current.x, y: volumeOrigin.y + y, z: volumeOrigin.z + current.z }));
+        if (bedMovesY !== null) bedGroup.position.copy(toScene({ x: 0, y: bedMovesY - current.y, z: 0 }));
         cross.position.y = -current.z; // the crosshair stays on the bed
     }
     place();
@@ -152,7 +161,7 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
     let meshDrawn = null;
     function clearMesh() {
         if (meshGroup) {
-            group.remove(meshGroup);
+            bedGroup.remove(meshGroup);
             meshGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
             meshGroup = null;
         }
@@ -216,7 +225,7 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
             posts.push(new THREE.Vector3(positions[k], bedY, positions[k + 2]), new THREE.Vector3(positions[k], positions[k + 1], positions[k + 2]));
         }
         meshGroup.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(posts), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 })));
-        group.add(meshGroup);
+        bedGroup.add(meshGroup);
         meshDrawn = {
             rows: nRows, cols: nCols, range, exaggeration, bounds,
             z: { min: volumeOrigin.z + 0.4, max: volumeOrigin.z + 0.4 + range * exaggeration },
@@ -231,7 +240,7 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
     let path = null, pathOf = null, pathOrigin = null;
     function clearPath() {
         if (!path) return;
-        group.remove(path);
+        bedGroup.remove(path);
         path.geometry.dispose();
         path.material.dispose();
         path = pathOf = pathOrigin = null;
@@ -257,7 +266,7 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
             path = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true }));
             path.raycast = () => {};
             path.renderOrder = 2;
-            group.add(path);
+            bedGroup.add(path);
             pathOf = preview;
         }
         if (upto !== null) path.geometry.setDrawRange(0, upto * 2);
@@ -303,6 +312,8 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
             return moved;
         },
         position() { return { ...current }; },
+        // How far the bed stands moved along Y from where it rests (0 for a bed that stays).
+        bedOffset() { return bedMovesY === null ? 0 : bedMovesY - current.y; },
         target() { return { ...target }; },
         setMesh,
         mesh() { return meshDrawn ? JSON.parse(JSON.stringify(meshDrawn)) : null; },

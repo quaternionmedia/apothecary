@@ -510,6 +510,9 @@ def test_a_router_poll_drives_cnc_router_and_is_kept_as_evidence(
     assert where["board"]["path"] == CONTROLLER and where["printer"]["path"] == "cnc_router"
     assert where["printer"]["build_volume"] == [400.0, 600.0, 80.0]
     assert where["printer"]["build_origin"] == [115.0, 165.0, 100.0]
+    # The part it is drawn from, whose table carries Y under a tool standing still there.
+    assert where["printer"]["part_ref"] == "anolex_4060_evo_ultra_2"
+    assert where["printer"]["bed_moves_y"] == 300.0
     # A router is no printer: nothing is sliced or printed on it.
     assert printers_in("garage") == []
     # The queries the page offers for this port are the dialect's.
