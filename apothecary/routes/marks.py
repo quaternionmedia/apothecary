@@ -97,7 +97,9 @@ def view_marks(site_name: str, view_id: str, as_of: Optional[str] = None):
         try:
             datetime.fromisoformat(as_of)
         except ValueError:
-            raise HTTPException(status_code=422, detail=f"{as_of!r} is not a moment, ISO 8601") from None
+            raise HTTPException(
+                status_code=422, detail=f"{as_of!r} is not a moment, ISO 8601"
+            ) from None
     return _said(site_name, view_id, as_of)
 
 

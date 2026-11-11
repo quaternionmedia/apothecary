@@ -126,7 +126,9 @@ def put_site_lighting_state(name: str, body: LevelsIn) -> dict:
                 raise ValueError(f"universe {universe}: more than {DMX_CHANNELS} slots")
             state.apply_universe(universe, slots)
     except KeyError as exc:
-        raise HTTPException(status_code=400, detail=f"channel {exc.args[0]} is not in this rig") from None
+        raise HTTPException(
+            status_code=400, detail=f"channel {exc.args[0]} is not in this rig"
+        ) from None
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     return state.snapshot()

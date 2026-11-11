@@ -172,6 +172,7 @@ def view_answer(view: View, site: Optional[Assembly], made: Dict[str, Made]) -> 
         "shapes": shapes,
         "squared": view.squared.model_dump(mode="json") if view.squared is not None else None,
         "in_front": view.in_front,
+        "shown_as": view.shown_as,
     }
 
 

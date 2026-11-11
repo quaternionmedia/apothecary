@@ -268,7 +268,8 @@ and which were taken.
 ## A whiteboard's history
 
 Every photograph pinned at a whiteboard, every word a person gives on one of its
-marks or notes, and every piece made from one, is an event on one timeline, kept in
+marks or notes, every piece made from one, and every such piece dropped, is an event
+on one timeline, kept in
 the server's memory with the views (`apothecary/vision/history.py`,
 `apothecary/routes/whiteboards.py`). A moment of it is the whiteboard as it stood
 then: the newest photograph pinned by then, with the words given by then.
@@ -293,7 +294,11 @@ was, rubbed out, or new, asks for its words and is not taken.
 A moment placed elsewhere is its picture pinned at another place -- a structure's
 top or the floor, never another whiteboard -- as wide as it was, searched by the
 same finder, with the words given up to that moment: a drawing of last Tuesday laid
-on the bench beside today's pieces.
+on the bench beside today's pieces. It is named, wherever it is listed, for the
+photograph it was squared from, as a whiteboard's own photograph is.
+
+[Walkthrough 30](../walkthrough/30-a-whiteboard-round-twice-through-the-page.md) goes
+round twice through the page, a picture at each step.
 
 ## Pieces
 

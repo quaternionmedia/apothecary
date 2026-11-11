@@ -710,7 +710,7 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("models", "Models"),
     ("gather", "Gather"),
     # Marks: a whiteboard's marks sorted, and a person's word on any (widgets/marks.js),
-    # a tab beside Models registered at start and closed until asked for. Its verbs
+    # a stack beside the world registered at start and closed until asked for. Its verbs
     # are a ring of their own under its cell (_marks), seated last under Pictures.
     ("marks", "Marks"),
     ("machine", "Machine"),

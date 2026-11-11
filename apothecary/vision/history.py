@@ -26,7 +26,8 @@ class Event(BaseModel):
     """One thing that happened to a whiteboard."""
 
     at: str
-    # "photograph", "word" (a mark's kind), "note" (what writing says) or "made".
+    # "photograph", "word" (a mark's kind), "note" (what writing says), "made" or
+    # "dropped".
     kind: str
     view: str
     says: str
@@ -41,11 +42,14 @@ def photographs(views: Sequence[View], host: str) -> List[View]:
 
 
 def timeline(
-    pictures: Sequence[View], kept: Dict[str, Answers], made: Dict[str, Made]
+    pictures: Sequence[View],
+    kept: Dict[str, Answers],
+    made: Dict[str, Made],
+    dropped: Sequence[Made] = (),
 ) -> List[Event]:
     """Every event of a whiteboard's photographs, oldest first: each pinned, each
-    word given on it, each piece made from it. A word kept with no time is left
-    off, since it has no place on the line."""
+    word given on it, each piece made from it, and each of those dropped since. A
+    word kept with no time is left off, since it has no place on the line."""
     ids = {view.id for view in pictures}
     found: List[Event] = []
     for number, view in enumerate(pictures, start=1):
@@ -77,7 +81,7 @@ def timeline(
                         at=words.at, kind="note", view=view.id, says=f'a note says "{words.text}"'
                     )
                 )
-    for record in made.values():
+    for record in [*made.values(), *dropped]:
         if record.view in ids and record.made_at:
             found.append(
                 Event(
@@ -85,6 +89,15 @@ def timeline(
                     kind="made",
                     view=record.view,
                     says=f"{record.piece} made, a {record.word}",
+                )
+            )
+        if record.view in ids and record.dropped_at:
+            found.append(
+                Event(
+                    at=record.dropped_at,
+                    kind="dropped",
+                    view=record.view,
+                    says=f"{record.piece} dropped",
                 )
             )
     found.sort(key=lambda e: datetime.fromisoformat(e.at))

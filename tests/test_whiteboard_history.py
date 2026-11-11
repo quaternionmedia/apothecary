@@ -154,6 +154,10 @@ def test_only_the_rows_taken_change_anything(board):
     assert (
         board.get(f"/sites/garage/views/{second}/marks").json()["notes"][0]["words"] == "lid, 3 off"
     )
+    # The history keeps the pieces dropped: made from Monday, and dropped since.
+    events = board.get("/sites/garage/whiteboards/whiteboard/timeline").json()["events"]
+    assert sum(1 for e in events if e["kind"] == "made" and e["view"] == first) == 3
+    assert sum(1 for e in events if e["kind"] == "dropped") == 2
     refused = board.post(f"/sites/garage/views/{second}/again", json={"since": first, "take": [99]})
     assert refused.status_code == 404
 

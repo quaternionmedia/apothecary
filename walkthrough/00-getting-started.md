@@ -95,9 +95,8 @@ digits pressed to reach one its address. A right-click alone is the camera's.
 
 ## 5. The five loops
 
-Four loops are paths through the page that go round twice, each with a page the
-browser test that walks it writes as it goes. The fifth, a whiteboard to a
-model, goes round by its commands, with its marks refined in the page.
+Each loop is a path through the page that goes round twice, and each has a
+page the browser test that walks it writes as it goes.
 
 | Loop | Page | Needs | Under `serve --demo` |
 |---|---|---|---|
@@ -105,12 +104,12 @@ model, goes round by its commands, with its marks refined in the page.
 | Editing a part's SCAD, kept as a variant in git | [06](06-editing-a-parts-scad.md) | nothing but OpenSCAD | the same |
 | A picture to a print: a camera's picture, a piece made from it, sliced and printed | [03](03-a-picture-to-a-print.md) | a printer pinned to printer_1's mainboard, OrcaSlicer, and a camera or a picture | the simulated Ender, OrcaSlicer if installed |
 | Firmware: a sketch built, flashed and heard saying hello | [05](05-firmware.md) | an ESP32 devkit and a toolchain | the simulated devkit and the scripted tools |
-| A whiteboard to a model: a drawing photographed, its marks sorted and refined, pieces made, and round again as the drawing changes | [29](29-a-whiteboard-round-twice.md), with [28](28-a-whiteboard-to-a-model.md) | a photograph of a drawing | `whiteboard.png`, a drawn one, among its pictures |
+| A whiteboard to a model: a drawing photographed, its marks sorted and refined, pieces made, and round again as the drawing changes | [30](30-a-whiteboard-round-twice-through-the-page.md), by its commands [29](29-a-whiteboard-round-twice.md) | a photograph of a drawing | `whiteboard.png`, a drawn one, among its pictures |
 
     >>> from apothecary.projects.parts.skeleton import ROOT
-    >>> loops = sorted((ROOT / "walkthrough").glob("0[3-6]-*.md"))
+    >>> loops = sorted((ROOT / "walkthrough").glob("0[3-6]-*.md")) + sorted((ROOT / "walkthrough").glob("30-*.md"))
     >>> [page.name for page in loops]
-    ['03-a-picture-to-a-print.md', '04-designing-a-part.md', '05-firmware.md', '06-editing-a-parts-scad.md']
+    ['03-a-picture-to-a-print.md', '04-designing-a-part.md', '05-firmware.md', '06-editing-a-parts-scad.md', '30-a-whiteboard-round-twice-through-the-page.md']
     >>> all("rewritten by every run of the browser suite" in page.read_text(encoding="utf-8")
     ...     for page in loops)
     True
@@ -129,10 +128,11 @@ Where each starts:
 - **Firmware** starts at the Bench, a tab beside Pictures, or the canvas ring's
   Panels › Bench › Bench: the sketches under `parts/`, each named with its
   toolchain.
-- **A whiteboard to a model** starts at a photograph: `apothecary photo marks`
-  on it, or, in the page, the bench's Picture › Folder to pin it, Picture ›
-  Find shapes › outline, and ⊞ Windows › Marks for what each mark is. The
-  garage's whiteboard hangs on its south wall, beside the door.
+- **A whiteboard to a model** starts at the garage's whiteboard, on its south
+  wall beside the door: its ring's Picture › Folder pins a photograph of it,
+  squared and laid in front of it; Picture › Find shapes › outline, then
+  ⊞ Windows › Marks for what each mark is and the whiteboard's history. From
+  the command line, `apothecary photo marks` on a photograph.
 
 One made thing goes round all four. The footpedal on the garage's bench is a
 part with a sketch of its own: its ring's Part › Edit for its sizes and its

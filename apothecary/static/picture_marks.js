@@ -480,7 +480,8 @@ export function mountPictureMarks({ scene, anchors, base = "", hostBounds, hostI
         const by = view.camera ? ` · by ${view.camera}` : "";
         const flagged = overShapes(view);
         const over = flagged.length ? ` · ${flagged.length} over ${[...new Set(flagged.flatMap((s) => s.overlaps))].join(", ")}` : "";
-        return `${host === FLOOR ? "floor" : host} · ${view.picture.split("/").pop()} · ${shapes}${over}${view.mat && view.mat.width ? "" : " · unsized"}${by}`;
+        const name = (view.shown_as || view.picture).split("/").pop();
+        return `${host === FLOOR ? "floor" : host} · ${name} · ${shapes}${over}${view.mat && view.mat.width ? "" : " · unsized"}${by}`;
     }
     // The place's own spot: the drawn picture's top-left corner, or with none
     // drawn, the same corner of the host's top.

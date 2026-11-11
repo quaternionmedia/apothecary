@@ -86,7 +86,8 @@ def whiteboard_timeline(site_name: str, name: str, at: Optional[str] = None):
     when = _moment(at)
     pictures = _photographs(site_name, name)
     kept = {view.id: kept_for(site_name, view.id) for view in pictures}
-    events = history.timeline(pictures, kept, viewing.store().made_at(site_name))
+    store = viewing.store()
+    events = history.timeline(pictures, kept, store.made_at(site_name), store.dropped_at(site_name))
     layer = history.layer_at(pictures, when)
     return {
         "whiteboard": name,
@@ -252,6 +253,7 @@ def place_moment(site_name: str, view_id: str, body: Place):
             status_code=409, detail=f"{view_id} has no width yet, so it has no size to place"
         )
     placed = pin_picture(site_name, body.host, source.picture, mm_across=source.mm_across)
+    placed = viewing.store().placed_from(site_name, placed.id, source.shown_as)
     words = marks.as_of(kept_for(site_name, view_id), when) or marks.Answers()
     keep(site_name, placed.id, words)
     if source.found and source.finder:

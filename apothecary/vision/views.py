@@ -195,6 +195,16 @@ class View(BaseModel):
     # sized by its surface's width, and laid flat on the floor in front of it.
     squared: Optional[Squared] = None
     in_front: bool = False
+    # A moment of a whiteboard placed here: the photograph it was squared from, by
+    # name, under the picture root.
+    placed_from: Optional[str] = None
+
+    @property
+    def shown_as(self) -> str:
+        """The picture's name as a person knows it: a squared photograph's own."""
+        if self.squared is not None:
+            return self.squared.source
+        return self.placed_from or self.picture
 
     @property
     def tallness(self) -> float:
@@ -261,8 +271,9 @@ class Made(BaseModel):
     # re-scale, in the site's frame: a piece still standing there was not moved
     # by a person, so a re-scale may lay it on its shape again.
     placed_at: Vector3D = Field(default_factory=Vector3D)
-    # When it was made, ISO 8601.
+    # When it was made, and when it was dropped, ISO 8601.
     made_at: Optional[str] = None
+    dropped_at: Optional[str] = None
 
     @property
     def tallness(self) -> float:
@@ -640,6 +651,8 @@ class Views:
     def __init__(self) -> None:
         self._views: Dict[str, View] = {}
         self._made: Dict[Tuple[str, str], Made] = {}
+        # The pieces dropped, each with when: what a whiteboard's history keeps of them.
+        self._dropped: List[Made] = []
         self._forgotten: Set[str] = set()
         self._lock = threading.Lock()
 
@@ -776,6 +789,15 @@ class Views:
             self._views[new_id] = another
             return another.model_copy(deep=True)
 
+    def placed_from(self, site: str, view_id: str, name: str) -> View:
+        """A view a whiteboard's moment was placed as: named for its photograph."""
+        with self._lock:
+            view = self._views.get(view_id)
+            if view is None or view.site != site:
+                raise ViewNotFound(f"no view {view_id!r} in site {site!r}")
+            view.placed_from = name
+            return view.model_copy(deep=True)
+
     def resquared(
         self,
         site: str,
@@ -881,7 +903,13 @@ class Views:
             view = self._views.get(record.view)
             if view is not None and view.made.get(record.shape_index) == piece:
                 del view.made[record.shape_index]
+            self._dropped.append(record.model_copy(update={"dropped_at": _now().isoformat()}))
             return record
+
+    def dropped_at(self, site: str) -> List[Made]:
+        """The pieces dropped from a site since it was last reset, oldest first."""
+        with self._lock:
+            return [record.model_copy() for record in self._dropped if record.site == site]
 
     def forget_made(self, site: str) -> List[str]:
         """Every made piece of a site is gone (a reset): its records and its views' marks."""
@@ -889,6 +917,7 @@ class Views:
             gone = [piece for (s, piece) in self._made if s == site]
             for piece in gone:
                 del self._made[(site, piece)]
+            self._dropped = [record for record in self._dropped if record.site != site]
             for view in self._views.values():
                 if view.site == site:
                     view.made.clear()

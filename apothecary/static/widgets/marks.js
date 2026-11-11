@@ -68,6 +68,11 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
     // A whiteboard's history: its timeline, the slider's place on it (per mille of
     // its span; 1000 is now), and what changed since the photograph before.
     let line = null, when = 1000, rows = [], scrubbing = null;
+    // A photograph a person chose in the drop-down: the slider goes to its moment.
+    let chose = null;
+    // The moment an Earlier or Later stepped to, exactly: an event's own, which the
+    // slider's per mille rounds.
+    let exactly = null;
 
     async function api(path, opts = {}) {
         const r = await fetch(base + path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -137,6 +142,7 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
     // The moment the slider stands at: null at its end, which is now.
     function moment() {
         if (!line || !line.since || when >= STEPS) return null;
+        if (exactly) return exactly;
         const t0 = ms(line.since), t1 = ms(line.until);
         return new Date(t0 + ((t1 - t0) * when) / STEPS).toISOString();
     }
@@ -162,14 +168,14 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
         const count = (kind) => upto.filter((e) => e.kind === kind).length;
         const ticks = line.events.map((e) => {
             const x = stepOf(e.at);
-            const tall = e.kind === "photograph" ? 24 : e.kind === "made" ? 14 : 9;
+            const tall = e.kind === "photograph" ? 24 : e.kind === "made" || e.kind === "dropped" ? 14 : 9;
             return `<line class="tick ${esc(e.kind)}" x1="${x}" x2="${x}" y1="${24 - tall}" y2="24"><title>${esc(clock(e.at))}: ${esc(e.says)}</title></line>`;
         }).join("");
         const taking = rows.filter((r) => r.takeable);
         held.innerHTML = `<div class="k">When</div>
             <svg class="marks-strip" viewBox="0 0 ${STEPS} 24" preserveAspectRatio="none" aria-hidden="true">${ticks}<line class="now" x1="${when}" x2="${when}" y1="0" y2="24"></line></svg>
             <input type="range" class="marks-when" min="0" max="${STEPS}" step="1" value="${when}" aria-label="When: scrub the whiteboard's history">
-            <div class="note marks-when-said">${at ? `As of ${esc(clock(at))}` : "Now"}: photograph ${number} of ${line.photographs.length} · ${count("word") + count("note")} word(s) given · ${count("made")} piece(s) made</div>
+            <div class="note marks-when-said">${at ? `As of ${esc(clock(at))}` : "Now"}: photograph ${number} of ${line.photographs.length} · ${count("word") + count("note")} word(s) given · ${count("made")} piece(s) made${count("dropped") ? `, ${count("dropped")} dropped` : ""}</div>
             ${number > 1 ? `<div class="k">Since photograph ${number - 1}</div>
             <ul class="marks-rows">${rows.length ? rows.map((r) => `<li class="marks-change" data-row="${r.number}">
                 <span class="origin">${esc(r.change)}</span><span class="meta grow">${esc(r.kind)}: ${esc(r.says)}</span>
@@ -184,6 +190,20 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
         if (!view || !view.squared) { line = null; rows = []; renderTime(); return; }
         try { line = await api(`/sites/${encodeURIComponent(world.siteName())}/whiteboards/${encodeURIComponent(view.host)}/timeline`); }
         catch (e) { line = null; say(`its whiteboard's history could not be read: ${e.message}`, "bad"); }
+        if (line && line.photographs.length) {
+            // The slider at the moment of a photograph chosen in the drop-down; and the
+            // photograph listed is the one of the moment the slider stands at.
+            const picked = chose && line.photographs.find((p) => p.id === chose);
+            chose = null;
+            if (picked) when = picked === line.photographs[line.photographs.length - 1] ? STEPS : stepOf(picked.taken_at);
+            const layer = layerAt(moment());
+            if (layer && layer.id !== viewId) {
+                viewId = layer.id;
+                renderViews();
+                const shown = views.find((v) => v.id === viewId);
+                if (world && world.draw && shown) world.draw(shown.host, viewId);
+            }
+        }
         await loadRows();
         renderTime();
     }
@@ -199,8 +219,9 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
 
     // The slider moved: the photograph of that moment drawn and listed, and its
     // words as of then.
-    async function scrubTo(step) {
+    async function scrubTo(step, exact = null) {
         when = Math.max(0, Math.min(STEPS, step));
+        exactly = exact;
         const layer = layerAt(moment());
         if (layer && layer.id !== viewId) {
             viewId = layer.id;
@@ -208,6 +229,7 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
             const view = views.find((v) => v.id === viewId);
             if (world && world.draw && view) world.draw(view.host, viewId);
             await loadRows();
+            loadCorners();
         }
         renderTime();
         clearTimeout(scrubbing);
@@ -225,12 +247,17 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
     // What is read of a view's marks is worn over its picture in the world too.
     function wear() { if (world && world.overlay && viewId) world.overlay(viewId, read); }
 
+    // Earlier or Later: the slider to the event before or after the moment it stands
+    // at, by each event's own time; past the last, now.
     function step(by) {
         if (!line || !line.events.length) { say("no whiteboard's history here: choose a photograph of a whiteboard in Marks", "bad"); return false; }
-        const stops = [...new Set(line.events.map((e) => stepOf(e.at)))].sort((a, b) => a - b);
-        const next = by < 0 ? [...stops].reverse().find((s) => s < when) : stops.find((s) => s > when);
-        const to = next === undefined ? (by < 0 ? 0 : STEPS) : next;
-        scrubTo(to === stops[stops.length - 1] && by > 0 ? STEPS : to);
+        const times = [...new Set(line.events.map((e) => e.at))].sort((a, b) => ms(a) - ms(b));
+        const last = times[times.length - 1];
+        const here = ms(moment() || last);
+        const to = by < 0 ? [...times].reverse().find((t) => ms(t) < here) : times.find((t) => ms(t) > here);
+        if (by > 0 && (to === undefined || to === last)) scrubTo(STEPS);
+        else if (to === undefined) scrubTo(0, times[0]);
+        else scrubTo(stepOf(to), to);
         const at = moment();
         say(at ? `the whiteboard as of ${clock(at)}` : "the whiteboard now");
         return true;
@@ -285,8 +312,9 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
         if (!views.some((v) => v.id === viewId)) viewId = views.length ? views[0].id : null;
         renderViews();
         if (!viewId) { read = null; corners = null; line = null; render(); renderCorners(); renderTime(); return; }
-        loadCorners();
+        // The history first: it may list another photograph, the one of the slider's moment.
         await loadTime();
+        loadCorners();
         const at = moment();
         try { read = await api(`${viewUrl()}/marks${at ? `?as_of=${encodeURIComponent(at)}` : ""}`); }
         catch (e) { read = null; say(`its marks could not be read: ${e.message}`, "bad"); }
@@ -316,7 +344,7 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
     const marks = root;
     marks.addEventListener("change", (ev) => {
         const pick = ev.target.closest(".marks-view");
-        if (pick) { viewId = pick.value || null; chosen = null; when = STEPS; load(); return; }
+        if (pick) { viewId = pick.value || null; chose = viewId; chosen = null; when = STEPS; load(); return; }
         const kind = ev.target.closest(".marks-kind");
         if (kind) sayKind(kind.dataset.mark, kind.value);
     });

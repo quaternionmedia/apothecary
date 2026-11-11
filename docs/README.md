@@ -45,6 +45,7 @@ at page 00.
 | [27 — The deck jogging the machines](../walkthrough/27-the-deck-jogging-the-machines.md) | The Stream Deck +'s knobs jog the router through the control latch: its layout drawn, a turn disarmed moving nothing, an armed jog read back on the X key, the step key, and the stop key stopping a spinning spindle; written by the browser suite |
 | [28 — A whiteboard to a model](../walkthrough/28-a-whiteboard-to-a-model.md) | A drawing in marker read by the `outline` finder: the whiteboard as the ground, each closed stroke the shape of what it encloses, named, placed and sized, with what the `plain` finder makes of the same picture |
 | [29 — A whiteboard, round twice](../walkthrough/29-a-whiteboard-round-twice.md) | The whiteboard loop by its commands: a photograph squared to its whiteboard, its marks sorted and a person's word kept, its note typed and its size offered, a plate made with its cut, then the drawing changed and photographed again, what changed proposed and one row taken |
+| [30 — A whiteboard, round twice through the page](../walkthrough/30-a-whiteboard-round-twice-through-the-page.md) | A photograph pinned at the garage's whiteboard from its ring, squared and laid in front, its shapes found, its writing typed in Marks and its shapes made; a second photograph of the changed drawing, the whiteboard's history, a change taken, Earlier on the ring back to the first, and that moment placed on the bench; written by the browser suite |
 
 ## The checklists
 

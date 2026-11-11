@@ -254,9 +254,13 @@ AREAS = {
             "apothecary/vision/notes.py",
             "apothecary/vision/outline.py",
             "apothecary/routes/marks.py",
+            "apothecary/routes/whiteboards.py",
+            "apothecary/vision/history.py",
+            "apothecary/vision/whiteboard.py",
             "apothecary/static/widgets/marks.*",
+            "walkthrough/screenshots/30-*",
         ),
-        "tests": ("test_marks_window.py",),
+        "tests": ("test_marks_window.py", "test_whiteboard_round_twice.py"),
     },
     "models": {
         "sources": (

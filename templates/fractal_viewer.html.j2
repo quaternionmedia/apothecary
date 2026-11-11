@@ -1683,14 +1683,15 @@
                     onOpen: () => { if (this.modelsWidget) { this.modelsWidget.load(); this.modelsWidget.follow(); } },
                 });
                 // Marks: a whiteboard's marks sorted, and a person's word on any
-                // (widgets/marks.js) -- a tab beside Models, closed until asked for. It
+                // (widgets/marks.js) -- a stack beside the world, as Models is, closed until
+                // asked for, so the picture and its history are both in view. It
                 // lists the marks of a picture pinned in this site, the one drawn at the
                 // selected place first, and a word on a mark draws the views again.
                 this.marksWidget = null;
                 this.panels.register('marks', {
                     title: 'Marks', group: 'Pictures',
-                    hint: "A whiteboard's marks, each a diagram's, writing or unsure, and a person's word on any; what its writing says",
-                    home: 'models', open: false,
+                    hint: "A whiteboard's marks, each a diagram's, writing or unsure, and a person's word on any; what its writing says; its history",
+                    home: 'beside', open: false,
                     body: (slot) => {
                         this.marksWidget = mountMarks(slot, {
                             base: BASE_URL,
@@ -1701,7 +1702,7 @@
                                     const all = [...((this.pictureMarks.attached() || {}).views || [])].reverse();
                                     const drawn = (v) => v.host !== null && (this.pictureMarks.drawnAt(v.host) || {}).id === v.id;
                                     return [...all.filter(drawn), ...all.filter((v) => !drawn(v))]
-                                        .map((v) => ({ id: v.id, picture: v.picture, host: v.host, finder: v.finder, squared: !!v.squared, source: v.squared ? v.squared.source : null }));
+                                        .map((v) => ({ id: v.id, picture: v.picture, host: v.host, finder: v.finder, squared: !!v.squared, source: v.shown_as }));
                                 },
                                 changed: () => this.pictureMarks.refresh(),
                                 draw: (host, viewId) => this.pictureMarks.draw(host, viewId),
@@ -3903,7 +3904,7 @@
                         ? `shapes not found yet: ${ring('Picture › Find shapes')}`
                         : `${esc(view.finder)} · ${view.shapes.length} shape(s)${view.left_out ? ` (+${view.left_out} left out)` : ''}`;
                     const by = view.camera ? ` · by ${esc(view.camera)}` : '';
-                    rows.push(`<div class="view-row${view === drawn ? ' drawn' : ''}" data-host="${esc(host)}" data-view="${esc(view.id)}" title="Draw this view">${view === drawn ? '▸ ' : ''}${esc(view.picture)}${by} · ${shapes} · ${size}${madeCount ? ` · ${madeCount} made` : ''}</div>`);
+                    rows.push(`<div class="view-row${view === drawn ? ' drawn' : ''}" data-host="${esc(host)}" data-view="${esc(view.id)}" title="Draw this view">${view === drawn ? '▸ ' : ''}${esc(view.shown_as || view.picture)}${by} · ${shapes} · ${size}${madeCount ? ` · ${madeCount} made` : ''}</div>`);
                 }
                 const chosen = pm.chosen();
                 const view = chosen && views.find((v) => v.id === chosen.view);

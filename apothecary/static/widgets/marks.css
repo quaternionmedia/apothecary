@@ -28,6 +28,7 @@
 .marks-ui .marks-strip .tick { stroke-width: 3; vector-effect: non-scaling-stroke; }
 .marks-ui .marks-strip .tick.photograph { stroke: var(--group); stroke-width: 4; }
 .marks-ui .marks-strip .tick.made { stroke: var(--ok); }
+.marks-ui .marks-strip .tick.dropped { stroke: var(--bad); }
 .marks-ui .marks-strip .tick.word, .marks-ui .marks-strip .tick.note { stroke: var(--ink-2); }
 .marks-ui .marks-strip .now { stroke: var(--ink); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .marks-ui .marks-when { width: 100%; accent-color: var(--group); }
