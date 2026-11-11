@@ -809,7 +809,7 @@ class Views:
         squared: Squared,
     ) -> View:
         """A whiteboard's view squared again from its photograph with other corners:
-        its picture is the new squared one, and what was found in the old is gone.
+        its picture is the new squared one, with no shapes until it is searched again.
         Refused (``CannotMake``) once a piece is made from it."""
         with self._lock:
             view = self._views.get(view_id)
