@@ -192,10 +192,18 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         }, HEAR_MS);
     };
 
-    async function give(kind, index, value) {
-        try { await post(`/firmware/decks/${encodeURIComponent(deck.id)}/events`, { kind, index, value }); }
-        catch (e) { say(`Deck: ${e.message}`, "bad"); return; }
-        await load();
+    // What a simulated deck is given goes in the order it was clicked, one click's events
+    // together: a press and its release are never parted by the next click's.
+    let giving = Promise.resolve();
+    function give(...events) {
+        giving = giving.then(async () => {
+            for (const [kind, index, value] of events) {
+                try { await post(`/firmware/decks/${encodeURIComponent(deck.id)}/events`, { kind, index, value }); }
+                catch (e) { say(`Deck: ${e.message}`, "bad"); return; }
+            }
+            await load();
+        });
+        return giving;
     }
     // A choice of the knobs, made on the server; the deck, the Control pads and this window
     // all follow it.
@@ -212,12 +220,12 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         if (b && deck && b.classList.contains("deck-machine")) { await steer(() => choose(base, deck.id, { machine: b.dataset.machine })); return; }
         if (b && deck && b.classList.contains("deck-step")) { await steer(() => choose(base, deck.id, { step_mm: Number(b.dataset.mm) })); return; }
         if (!b || !deck || !deck.simulated) return;
-        if (b.classList.contains("deck-key")) { const i = +b.dataset.key; await give("key", i, true); await give("key", i, false); }
-        else if (b.classList.contains("deck-turn")) await give("knob-turn", +b.closest(".deck-knob").dataset.knob, +b.dataset.dir);
-        else if (b.classList.contains("deck-press")) { const i = +b.closest(".deck-knob").dataset.knob; await give("knob-press", i, true); await give("knob-press", i, false); }
+        if (b.classList.contains("deck-key")) { const i = +b.dataset.key; await give(["key", i, true], ["key", i, false]); }
+        else if (b.classList.contains("deck-turn")) await give(["knob-turn", +b.closest(".deck-knob").dataset.knob, +b.dataset.dir]);
+        else if (b.classList.contains("deck-press")) { const i = +b.closest(".deck-knob").dataset.knob; await give(["knob-press", i, true], ["knob-press", i, false]); }
         else if (b.classList.contains("deck-strip-tap")) {
             const box = b.getBoundingClientRect();
-            await give("touch", 0, { kind: "short", x: Math.round((ev.clientX - box.left) / box.width * STRIP[0]), y: Math.round((ev.clientY - box.top) / box.height * STRIP[1]) });
+            await give(["touch", 0, { kind: "short", x: Math.round((ev.clientX - box.left) / box.width * STRIP[0]), y: Math.round((ev.clientY - box.top) / box.height * STRIP[1]) }]);
         }
     });
 
