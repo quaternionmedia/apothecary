@@ -11,6 +11,7 @@ and Grbl_ESP32's report code, not a recording of the garage's router
 import dataclasses
 import threading
 import time
+import types
 
 import pytest
 from click.testing import CliRunner
@@ -895,3 +896,20 @@ def test_a_touch_is_read_from_a_controller_that_reports_a_fourth_axis(
     lines = devices.printer_control(PORT, "PROBE-PLATE Z19.08 D50 F100").lines
     assert any(line.endswith(",0.000:1]") for line in lines)
     assert "G10 L20 P1 Z19.08" in _sent(router_links.get(PORT))
+
+
+def test_the_work_position_is_known_between_the_reports_that_carry_the_offset():
+    """As the AnoleX reports: the offset in one report of ten, the machine position in all.
+    The bench's lines, a fourth axis and all."""
+    link = types.SimpleNamespace()
+    bare = grbl.parse_status("<Idle|MPos:168.074,-127.100,-68.765,0.000|FS:0,0|Pn:0>")
+    assert grbl.with_offset(link, dict(bare))["wpos"] is None  # no offset given yet
+    carrying = grbl.parse_status(
+        "<Idle|MPos:168.074,-127.100,-68.765,0.000|FS:0,0|Pn:0|WCO:168.074,-126.100,-73.265,0.000>"
+    )
+    assert grbl.with_offset(link, carrying)["wpos"] == {"x": 0.0, "y": -1.0, "z": 4.5}
+    after = grbl.with_offset(link, dict(bare))
+    assert after["wpos"] == {"x": 0.0, "y": -1.0, "z": 4.5}
+    assert after["wco"] == {"x": 168.074, "y": -126.1, "z": -73.265}
+    moved = grbl.parse_status("<Idle|MPos:170.074,-127.100,-68.765,0.000|FS:0,0|Pn:0>")
+    assert grbl.with_offset(link, moved)["wpos"]["x"] == 2.0

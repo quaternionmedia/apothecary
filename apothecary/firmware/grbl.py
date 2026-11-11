@@ -1030,7 +1030,26 @@ def report(
     status = next((parse_status(ln) for ln in reversed(lines) if is_status_line(ln)), None)
     if status is None:
         raise ToolchainError(f"{link.port}: no status report for `?` within {timeout:.0f}s")
-    return status, lines
+    return with_offset(link, status), lines
+
+
+def with_offset(link: GcodeLink, status: dict) -> dict:
+    """``status`` with the work offset the port last reported, when this report has none.
+    A controller says ``WCO`` once in every ten or thirty reports, and at once when it
+    changes, so between them the position it does not report -- the work position, with
+    ``$10=1`` -- is worked out from the last offset it gave; None until it has given one."""
+    if status["wco"]:
+        link.work_offset = status["wco"]
+        return status
+    last = getattr(link, "work_offset", None)
+    if not last:
+        return status
+    status["wco"] = last
+    if status["mpos"] and not status["wpos"]:
+        status["wpos"] = {k: round(status["mpos"][k] - last[k], 3) for k in "xyz"}
+    elif status["wpos"] and not status["mpos"]:
+        status["mpos"] = {k: round(status["wpos"][k] + last[k], 3) for k in "xyz"}
+    return status
 
 
 def poll_router(link: GcodeLink, wait: Optional[float] = None) -> PrinterStatus:
