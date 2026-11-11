@@ -60,7 +60,8 @@ gcode.OBJECTIONS.append(OBJECTION_RE)
 # Grbl 1.3a ['$' for help]
 BANNER_RE = re.compile(r"^Grbl (\S+) \[")
 # [PRB:-12.000,-20.000,-41.250:1]
-PRB_RE = re.compile(r"^\[PRB:(-?\d+\.?\d*),(-?\d+\.?\d*),(-?\d+\.?\d*):([01])\]$")
+# X, Y and Z, and whatever axes a build reports after them: Grbl_ESP32 says a fourth.
+PRB_RE = re.compile(r"^\[PRB:(-?\d+\.?\d*),(-?\d+\.?\d*),(-?\d+\.?\d*)(?:,-?\d+\.?\d*)*:([01])\]$")
 
 # The controller's state word, folded to the site's vocabulary
 # (example_hierarchy.ROUTER_STATUSES). Hold and Door are a machine stopped with

@@ -870,3 +870,28 @@ def test_probe_z_goes_down_its_depth_wherever_the_work_zero_is(fake_arduino_cli,
     sent = _sent(router_links.get(PORT))
     at = sent.index("G38.2 Z-3.00 F100")
     assert sent[at - 1] == "G91" and sent[at + 1] == "G90"
+
+
+def test_a_touch_is_read_from_a_controller_that_reports_a_fourth_axis(
+    fake_arduino_cli, router_links, monkeypatch
+):
+    """The AnoleX's Grbl_ESP32 answers a probe with four coordinates; the line is the
+    bench's own. Read as three, the touch was no touch, and Probe Z to plate set nothing."""
+    said = ["[PRB:168.074,-126.100,-78.175,0.000:1]", "ok"]
+    assert grbl.parse_probe(said) == {"x": 168.074, "y": -126.1, "z": -78.175, "touched": True}
+    assert grbl.parse_probe(["[PRB:0.000,0.000,-5.000,0.000:0]"])["touched"] is False
+    router_links.control.arm(PORT)
+    devices.printer_status(PORT)
+    sim = router_links.get(PORT)._t
+    three = sim._reply
+
+    def four(cmd):
+        return [
+            line.replace(":1]", ",0.000:1]") if line.startswith("[PRB:") else line
+            for line in three(cmd)
+        ]
+
+    monkeypatch.setattr(sim, "_reply", four)
+    lines = devices.printer_control(PORT, "PROBE-PLATE Z19.08 D50 F100").lines
+    assert any(line.endswith(",0.000:1]") for line in lines)
+    assert "G10 L20 P1 Z19.08" in _sent(router_links.get(PORT))
