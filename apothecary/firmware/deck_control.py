@@ -82,6 +82,7 @@ SPINDLE_RPM_PER_STEP = 1000
 TICK_S = 2.0
 LOOK_S = 10.0  # a board not found is looked for with a scan this often, by the tick alone
 SETTLE_S = 10.0  # the longest a simulated deck's event waits to have been acted on
+MEND_S = 0.5  # how often a deck is looked at, and a lost one looked for
 LONG_PRESS_S = 0.8  # a machine's key held this long is a long press
 ARM_WINDOW_S = 5.0  # the second long press of two must begin within this of the first let go
 
@@ -273,7 +274,9 @@ class DeckController:
         while True:
             with self._turn:
                 while not self._waiting and not self._redraw and not self._stopped.is_set():
-                    self._turn.wait(0.5)
+                    self._turn.wait(MEND_S)
+                    if not self._waiting and not self._redraw and not self.deck.alive():
+                        break  # the deck is lost: mend it, below
                 if self._stopped.is_set():
                     self._turn.notify_all()
                     return
@@ -281,6 +284,8 @@ class DeckController:
                 self._redraw = False
                 self._acting = True
             try:
+                if not self.deck.alive():
+                    self._mend()
                 if event is None:
                     self.draw()
                 elif not (event.kind == decks.KNOB_TURN and int(event.value) == 0):
@@ -291,6 +296,18 @@ class DeckController:
                 with self._turn:
                     self._acting = False
                     self._turn.notify_all()
+
+    def _mend(self) -> None:
+        """A deck lost from USB opened again as soon as it is back, drawn as it was. A key
+        held or a first long press when it went is forgotten: nothing is armed by half a
+        gesture."""
+        self._down.clear()
+        self._first_long = None
+        try:
+            if self.deck.mend():
+                self.said = ("the deck was lost on USB, and is back", "amber")
+        except decks.DeckUnavailable:
+            time.sleep(MEND_S)  # not back yet: looked for again on the next turn
 
     def settle(self, timeout: float = SETTLE_S) -> bool:
         """Returns when everything heard has been acted on; False if ``timeout`` came first."""
@@ -624,6 +641,8 @@ class DeckController:
                 "armed_s": self.armed(port) if port else 0.0,
                 "said": self.said[0],
                 "sent": list(self.sent[-20:]),
+                "deck_alive": self.deck.alive(),
+                "deck_mended": self.deck.mended,
             }
 
 

@@ -615,3 +615,23 @@ def test_the_disarm_key_is_acted_on_at_once_and_what_was_turned_before_it_is_not
     gate.set()
     assert controller.settle(10)
     assert sent == []
+
+
+# --- a deck lost from USB while the layout runs ------------------------------------------
+
+
+def test_a_lost_deck_is_found_again_by_the_layout_and_goes_on_being_heard(bench):
+    controller, one, links = bench
+    first = one.link
+    first.lost = True  # the deck gone from USB
+    deadline = time.monotonic() + 5
+    while one.link is first and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert one.link is not first and one.alive() and one.mended == 1
+    assert [what for what, _, _ in one.link.sent].count("key") == 8  # drawn again, every key
+    assert controller.state()["deck_alive"] and controller.state()["deck_mended"] == 1
+    links.control.arm(ROUTER)
+    _choose_router(one)
+    before = _router(links)
+    _turn(one, 0, 1)  # the layout still listens, and a knob still jogs
+    assert _router(links)["x"] == pytest.approx(before["x"] + 1)

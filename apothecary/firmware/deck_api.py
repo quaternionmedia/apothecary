@@ -50,8 +50,16 @@ class EventRequest(BaseModel):
 
 
 def _deck(deck_id: str):
+    """The deck, opened; one that was lost from USB is opened again when it is back, and
+    is still the deck -- what it was drawn as, and that it is lost -- while it is not."""
     try:
-        return decks.get_decks().get(deck_id)
+        deck = decks.get_decks().get(deck_id)
+        if not deck.alive():
+            try:
+                deck.mend()
+            except DeckUnavailable:
+                pass  # not back yet: its state says so, and a draw says why it cannot
+        return deck
     except KeyError:
         raise HTTPException(
             404, f"no deck {deck_id!r}: GET /firmware/decks lists what is found"
@@ -95,6 +103,8 @@ def set_key(deck_id: str, index: int, body: DrawRequest):
         deck.set_key(index, body.text, body.colour, body.small)
     except ValueError as exc:
         raise _said(exc) from exc
+    except DeckUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
     return deck.state()["keys_drawn"][str(index)]
 
 
@@ -105,13 +115,18 @@ def set_strip(deck_id: str, body: DrawRequest):
         deck.set_strip(body.text, body.colour, body.small)
     except ValueError as exc:
         raise _said(exc) from exc
+    except DeckUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
     return deck.state()["strip_drawn"]
 
 
 @router.put("/{deck_id}/brightness")
 def set_brightness(deck_id: str, body: BrightnessRequest):
     deck = _deck(deck_id)
-    deck.set_brightness(body.percent)
+    try:
+        deck.set_brightness(body.percent)
+    except DeckUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
     return {"brightness": deck.brightness}
 
 
@@ -168,7 +183,10 @@ def control(deck_id: str, body: ControlRequest):
     if not body.on:
         deck_control.stop(deck_id)
         return {"running": False}
-    return deck_control.start(deck_id).state()
+    try:
+        return deck_control.start(deck_id).state()
+    except DeckUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
 
 
 @router.put("/{deck_id}/control")

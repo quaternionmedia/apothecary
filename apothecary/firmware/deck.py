@@ -177,6 +177,7 @@ class Link(Protocol):
     def set_strip(self, jpeg: bytes) -> None: ...
     def set_brightness(self, percent: int) -> None: ...
     def serial(self) -> Optional[str]: ...
+    def alive(self) -> bool: ...
     def close(self) -> None: ...
 
 
@@ -190,6 +191,10 @@ class SimulatedLink:
         self.report = report
         self.brightness = 100
         self.sent: List[tuple] = []
+        self.lost = False  # a test's: the deck gone from USB, as a real one's lead pulled
+
+    def alive(self) -> bool:
+        return not self.lost
 
     def set_key(self, index: int, jpeg: bytes) -> None:
         self.sent.append(("key", index, len(jpeg)))
@@ -224,6 +229,11 @@ class HidLink:
         device.set_key_callback(self._key)
         device.set_dial_callback(self._dial)
         device.set_touchscreen_callback(self._touch)
+
+    def alive(self) -> bool:
+        """Whether the library's reader is still reading: it ends, and closes the device,
+        the first time the transport fails -- the deck gone from USB."""
+        return bool(getattr(self.device, "run_read_thread", True))
 
     def _key(self, deck, key, state) -> None:
         self.report(KEY, int(key), bool(state))
@@ -289,6 +299,10 @@ class Deck:
         self._listeners: List[Listener] = []
         self._settled: Dict[Listener, Callable[[], None]] = {}
         self._lock = threading.Lock()
+        self._make_link = make_link
+        self._mending = threading.Lock()
+        self.mended = 0  # times the deck was lost and opened again
+        self.lost_at: Optional[float] = None  # when it was last found lost, until mended
         self.link = make_link(self._heard)
         serial = self.link.serial()
         if serial:
@@ -303,7 +317,7 @@ class Deck:
                 f"no key {index}: a {self.info.model} has keys 0 to {self.info.keys - 1}"
             )
         jpeg = render_key(text, colour, small)
-        self.link.set_key(index, jpeg)
+        self._send(lambda link: link.set_key(index, jpeg))
         with self._lock:
             self.keys[index] = {"text": text, "small": small, "colour": colour, "jpeg": jpeg}
         return jpeg
@@ -312,7 +326,7 @@ class Deck:
         self, text: str, colour: Optional[str] = None, small: Optional[str] = None
     ) -> bytes:
         jpeg = render_strip(text, colour, small)
-        self.link.set_strip(jpeg)
+        self._send(lambda link: link.set_strip(jpeg))
         with self._lock:
             self.strip = {"text": text, "small": small, "colour": colour, "jpeg": jpeg}
         return jpeg
@@ -320,8 +334,68 @@ class Deck:
     def set_brightness(self, percent: int) -> None:
         if not 0 <= percent <= 100:
             raise ValueError("brightness is 0 to 100 per cent")
-        self.link.set_brightness(percent)
+        self._send(lambda link: link.set_brightness(percent))
         self.brightness = percent
+
+    # a deck lost and found: a lead knocked, a hub that dropped it for a moment
+    def alive(self) -> bool:
+        return self.link.alive()
+
+    def _send(self, write: Callable[[Link], None]) -> None:
+        """``write`` to the deck; a deck that will not take it is opened again and asked
+        once more, and ``DeckUnavailable`` says it is gone when that fails too."""
+        link = self.link
+        try:
+            if link.alive():
+                write(link)
+                return
+        except DeckUnavailable:
+            raise
+        except Exception:  # noqa: BLE001 -- the library's TransportError: the deck went away
+            pass
+        self.mend(failed=link)
+        try:
+            write(self.link)
+        except DeckUnavailable:
+            raise
+        except Exception as exc:  # noqa: BLE001 -- gone again between the two
+            raise DeckUnavailable(f"{self.info.id} is not answering on USB ({exc})") from exc
+
+    def mend(self, failed: Optional[Link] = None) -> bool:
+        """A deck whose link is lost opened again, and drawn as it was: every key, the
+        strip and its brightness sent afresh, its listeners kept. ``failed`` is a link a
+        write just failed on, lost whatever it says of itself. False when the link is
+        alive, or another thread has mended it since (nothing to do); ``DeckUnavailable``
+        while the deck is not back on USB."""
+        with self._mending:
+            if self.link.alive() and self.link is not failed:
+                return False
+            if self.lost_at is None:
+                self.lost_at = time.time()
+            try:
+                self.link.close()
+            except Exception:  # noqa: BLE001 -- already gone
+                pass
+            try:
+                link = self._make_link(self._heard)
+            except DeckUnavailable:
+                raise
+            except Exception as exc:  # noqa: BLE001 -- not back yet: KeyError, TransportError
+                raise DeckUnavailable(f"{self.info.id} is not back on USB yet ({exc})") from exc
+            self.link = link
+            with self._lock:
+                keys, strip = dict(self.keys), self.strip
+            try:
+                link.set_brightness(self.brightness)
+                for index, key in keys.items():
+                    link.set_key(index, key["jpeg"])
+                if strip is not None:
+                    link.set_strip(strip["jpeg"])
+            except Exception as exc:  # noqa: BLE001 -- lost again while being drawn
+                raise DeckUnavailable(f"{self.info.id} went away again ({exc})") from exc
+            self.mended += 1
+            self.lost_at = None
+            return True
 
     # hearing
     def _heard(self, kind: str, index: int, value: object) -> None:
@@ -390,6 +464,9 @@ class Deck:
                 if self.strip is None
                 else {k: v for k, v in self.strip.items() if k != "jpeg"},
                 "last_event": self._seq,
+                "alive": self.link.alive(),
+                "mended": self.mended,
+                "lost_at": self.lost_at,
             }
 
 
@@ -497,10 +574,18 @@ class Decks:
                     raise KeyError(deck_id)
                 deck = Deck(DeckInfo(id=deck_id, simulated=True), SimulatedLink)
             else:
-                device = next((d for info, d in _real_devices() if info.id == deck_id), None)
-                if device is None:
+                if not any(info.id == deck_id for info, _ in _real_devices()):
                     raise KeyError(deck_id)
-                deck = Deck(DeckInfo(id=deck_id), lambda report: HidLink(device, report))
+
+                def link(report: Report, deck_id: str = deck_id) -> HidLink:
+                    # Looked for afresh each time it is opened: a deck that left USB and
+                    # came back is another device to the library, at the same place.
+                    device = next((d for info, d in _real_devices() if info.id == deck_id), None)
+                    if device is None:
+                        raise DeckUnavailable(f"{deck_id} is not on USB")
+                    return HidLink(device, report)
+
+                deck = Deck(DeckInfo(id=deck_id), link)
             self._open[deck_id] = deck
             return deck
 

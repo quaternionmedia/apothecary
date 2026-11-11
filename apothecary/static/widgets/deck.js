@@ -124,7 +124,7 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         const inputs = !!(deck && deck.simulated);
         for (const b of root.querySelectorAll(".deck-key, .deck-strip-tap, .deck-turn, .deck-press")) b.disabled = !inputs;
         if (!deck) return;
-        $(".deck-name").textContent = `${deck.model} · ${deck.id} · ${deck.vid}:${deck.pid}${deck.simulated ? " · simulated" : ""}${deck.serial ? ` · S/N ${deck.serial}` : ""}`;
+        $(".deck-name").textContent = `${deck.model} · ${deck.id} · ${deck.vid}:${deck.pid}${deck.simulated ? " · simulated" : ""}${deck.serial ? ` · S/N ${deck.serial}` : ""}${drawn && drawn.mended ? ` · lost and found ${drawn.mended}×` : ""}`;
         const keys = (drawn && drawn.keys_drawn) || {};
         // An image is fetched again when what was drawn on it changes, whoever drew it.
         const stamp = (d) => (d ? encodeURIComponent([d.text, d.small, d.colour].join("|")) : "");
@@ -133,6 +133,8 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         picture($(".deck-strip-tap"), `${at}/strip/image?v=${stamp(drawn && drawn.strip_drawn)}`, !!(drawn && drawn.strip_drawn));
         $(".deck-note").textContent = problem
             ? problem
+            : drawn && drawn.alive === false
+            ? "the deck is not answering on USB: it is looked for, and drawn again as it was when it is back"
             : inputs
             ? "a simulated deck: press a key, turn or press a knob, tap the strip; each is the event a real deck reports"
             : "a real deck is pressed by hand; what it shows is what was last sent to it from here";

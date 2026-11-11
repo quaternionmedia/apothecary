@@ -461,3 +461,77 @@ def test_a_touch_the_real_library_reads_is_an_event_and_the_reader_goes_on(monke
         ("key", 5, True),
     ]
     assert deck.get_decks().release(one.info.id)
+
+
+# --- a deck lost from USB and found again ------------------------------------------------
+
+
+def test_a_real_deck_lost_is_opened_again_and_drawn_as_it_was(real):
+    plus, _ = real
+    one = deck.get_decks().get("path_one")
+    heard = []
+    one.listen(heard.append)
+    one.set_key(0, "X+", "blue")
+    one.set_strip("cnc_router")
+    one.set_brightness(40)
+    assert one.alive() and not one.mend()  # nothing lost, nothing done
+    plus.run_read_thread = False  # as the library leaves it when the transport fails
+    plus.images, plus.strip = {}, []
+    assert not one.alive() and one.state()["alive"] is False
+    assert one.mend() and one.alive() is False  # opened again: the stand-in still says lost
+    assert plus.opened == 2 and plus.closed == 1 and plus.brightness == 40
+    assert set(plus.images) == {0} and len(plus.strip) == 1  # drawn as it was
+    assert one.mended == 1 and one.lost_at is None
+    plus.callbacks["key"](plus, 3, True)  # and what listened still hears it
+    assert [(e.kind, e.index) for e in heard] == [("key", 3)]
+
+
+def test_a_write_that_fails_opens_the_deck_again_and_is_sent_once_more(real):
+    plus, _ = real
+    one = deck.get_decks().get("path_one")
+    one.set_key(0, "X+")
+    taking, fail = plus.set_key_image, [True]
+
+    def once(index, image):
+        if fail.pop() if fail else False:
+            raise RuntimeError("Failed to write out report (-1)")
+        taking(index, image)
+
+    plus.set_key_image = once
+    one.set_key(1, "Y+")  # refused once, the deck opened again, sent again
+    assert plus.opened == 2 and set(plus.images) == {0, 1} and one.mended == 1
+
+
+def test_a_deck_not_back_yet_says_so_and_is_found_when_it_is(real, monkeypatch):
+    plus, _ = real
+    one = deck.get_decks().get("path_one")
+    one.set_key(0, "X+")
+    plus.run_read_thread = False
+    gone = types.SimpleNamespace(enumerate=lambda: [])
+    monkeypatch.setattr(deck, "_manager", lambda: gone)
+    with pytest.raises(DeckUnavailable, match="not on USB"):
+        one.mend()
+    with pytest.raises(DeckUnavailable):
+        one.set_key(1, "Y+")
+    assert one.lost_at is not None and one.mended == 0
+    back = _Device("path/one")
+    monkeypatch.setattr(deck, "_manager", lambda: types.SimpleNamespace(enumerate=lambda: [back]))
+    assert one.mend() and one.alive() and back.opened == 1 and set(back.images) == {0}
+
+
+def test_the_routes_say_a_lost_deck_is_lost_and_draw_it_again_when_it_is_back(
+    real, client, monkeypatch
+):
+    plus, _ = real
+    assert client.put("/firmware/decks/path_one/keys/0", json={"text": "X+"}).status_code == 200
+    plus.run_read_thread = False
+    listed = types.SimpleNamespace(enumerate=lambda: [])
+    monkeypatch.setattr(deck, "_manager", lambda: listed)
+    state = client.get("/firmware/decks/path_one").json()
+    assert state["alive"] is False and state["keys_drawn"]["0"]["text"] == "X+"
+    refused = client.put("/firmware/decks/path_one/keys/1", json={"text": "Y+"})
+    assert refused.status_code == 503 and "USB" in refused.json()["detail"]
+    back = _Device("path/one")
+    monkeypatch.setattr(deck, "_manager", lambda: types.SimpleNamespace(enumerate=lambda: [back]))
+    state = client.get("/firmware/decks/path_one").json()  # looked at, it is found again
+    assert state["alive"] is True and state["mended"] == 1 and set(back.images) == {0}

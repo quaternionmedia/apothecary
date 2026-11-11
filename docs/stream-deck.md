@@ -71,6 +71,17 @@ POST /firmware/decks/{id}/events               a simulated deck's event, given (
 POST /firmware/decks/{id}/release              → let go of the device
 ```
 
+## A deck lost and found
+
+A deck that leaves USB for a moment -- a lead knocked, a hub that dropped it -- comes back
+as another device at the same place. `Deck.mend` opens it again and sends it every key,
+the strip and the brightness as they were last drawn, and what listened to it goes on
+listening. The layout looks at its deck twice a second and mends it as soon as it is back;
+a draw that fails mends and is sent once more; and `GET /firmware/decks/{id}` mends a deck
+no layout runs on. While it is gone the deck's state says `"alive": false` with when it was
+lost, a draw answers 503 in words, and the Deck window says the deck is not answering.
+`"mended"` counts the times. A key held, or a first long press, when it went is forgotten.
+
 ## In the page
 
 The **Deck** window (⊞ Windows › Deck, the ring's Panels › Machine › Knobs › Deck, or **Open Deck** on the
