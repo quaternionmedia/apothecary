@@ -1359,11 +1359,8 @@
                 // (?variant=part:key) so a reload or a link draws the same; and its record.
                 this.variantByPart = {};
                 this.variantRecords = {};
-                // A machine drawn where its axes last came to rest (poseMachine): by part,
-                // the variant that pose renders, and what was asked last.
-                this.poseByPart = {};
-                this.posing = {};
-                this.poseSpecs = {};
+                // What moves of each machine part, as its part says (loadKinematic), by part.
+                this.kinematicsByPart = {};
                 this.variantsRead = this.readVariantsFromAddress();
                 // part name -> { name, variant }: the variant drawn when it was saved as `name`.
                 this.savedAs = (() => { try { return JSON.parse(sessionStorage.getItem(SAVED_AS_KEY)) || {}; } catch (e) { return {}; } })();
@@ -2081,7 +2078,11 @@
                     c.quaternion.copy(this.cameraTurn);
                     aim.copy(this.cameraAim);
                 }
-                for (const m of Object.values(this.marks)) if (m.marks && m.marks.tick()) this.frameWanted = true;
+                for (const [path, m] of Object.entries(this.marks)) {
+                    if (!m.marks || !m.marks.tick()) continue;
+                    this.frameWanted = true;
+                    this.moveKinematic(this.meshByName[path], m.marks);  // a machine's pieces ride its tool
+                }
                 this.sizeCameraHandles();
                 if (this.frameWanted || this.sceneChanged()) {
                     this.frameWanted = false;
@@ -2335,8 +2336,6 @@
             forgetVariants() {
                 this.variantByPart = {};
                 this.variantRecords = {};
-                this.poseByPart = {};
-                this.posing = {};
             }
 
             async loadSite(name, focusPathStr = '') {
@@ -8099,7 +8098,6 @@
                 if (have && have.plan) { have.marks?.destroy(); delete this.marks[path]; have = null; }
                 if (have) {
                     if (have.marks && st && st.position) have.marks.setPosition(this.toolPosition(st, have.where));
-                    if (have.marks && st) this.poseMachine(path, st);
                     if (have.marks) this.refreshReading(path);
                     return;
                 }
@@ -8121,7 +8119,8 @@
                     this.scene.add(marks.group);
                     const first = this.bindings[row.path] && this.bindings[row.path].printer_status;
                     if (first && first.position) marks.setPosition(this.toolPosition(first, where), { immediate: true });
-                    if (first) this.poseMachine(path, first);
+                    const drawn = this.meshByName[path];
+                    if (drawn) this.moveKinematic(drawn, marks);
                     // The kind of machine the board answered as: a bed reading is a printer's.
                     const kind = (row.device.printer && row.device.printer.machine) || null;
                     this.marks[path] = { marks, port, where, kind, readingAt: 0, readingId: null };
@@ -8131,50 +8130,76 @@
                 });
             }
 
-            // A machine drawn where its axes came to rest: once a poll says it is idle and
-            // where its tool is in its volume (the server's tool_position), the part is
-            // rendered with its axes there (POST /parts/{ref}/stl/generate, its own range
-            // for each, from GET /parts/{ref}/params) and every piece drawn from it loads
-            // that. A render takes a second or so, so it is a pose at rest, never a film of
-            // the move; the tool's mark follows the move. A part this tab is editing is left
-            // to the editor, and one pose is asked at a time.
-            async poseMachine(path, st) {
-                const node = this.nodeByPath(path), ref = node && node.part_ref;
-                if (!ref || !st.tool_position || st.state !== 'idle' || this.variantByPart[ref]) return;
-                const was = this.posing[ref];
-                if (was && was.busy) return;
-                if (this.poseSpecs[ref] === undefined) {
-                    this.poseSpecs[ref] = fetch(`${BASE_URL}/parts/${encodeURIComponent(ref)}/params`)
-                        .then((r) => (r.ok ? r.json() : null)).catch(() => null);
-                }
-                const spec = await this.poseSpecs[ref];
-                const field = (name) => spec && (spec.fields || []).find((f) => f.name === name);
-                const params = {};
-                for (const [axis, name] of [['x', 'x_axis'], ['y', 'y_axis'], ['z', 'z_axis']]) {
-                    const f = field(name), at = st.tool_position[axis];
-                    if (!f || typeof at !== 'number') return;
-                    params[name] = Math.round(Math.min(f.max ?? at, Math.max(f.min ?? at, at)));
-                }
-                const key = JSON.stringify(params);
-                if (was && was.key === key) return;
-                this.posing[ref] = { key, busy: true };
-                try {
-                    const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(ref)}/stl/generate?page=${encodeURIComponent(PAGE_ID + '-pose')}`, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ params }),
+            // A machine part drawn as its pieces (the part's kinematics): what stands still,
+            // and each of what moves, every one rendered at the part's own axes
+            // (POST /parts/{ref}/stl/generate with the piece) and placed where it measures.
+            // The moving pieces hang from the still one, so the machine is one mesh to
+            // select, colour and swap; a click on a moving piece is a click on the machine.
+            async loadKinematic(node, ref, kinematics) {
+                const render = async (piece) => {
+                    const page = encodeURIComponent(`${PAGE_ID}-piece-${piece}`);
+                    const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(ref)}/stl/generate?page=${page}`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ params: { [kinematics.param]: piece } }),
                     });
-                    const body = await response.json().catch(() => ({}));
-                    if (!response.ok || this.variantByPart[ref]) { this.posing[ref] = { key, busy: false }; return; }
-                    if (body.variant) this.poseByPart[ref] = { variant: body.variant, measured: body.measured, params };
-                    else delete this.poseByPart[ref];  // the part's own STL is that pose
-                    const reloads = Object.values(this.renderNodeByKey)
-                        .filter((n) => n.part_ref === ref && this.meshByName[nodeKey(n)]
-                            && this.effectiveDetailFor(n, nodeKey(n)) === DETAIL_FULL)
-                        .map((n) => this.loadAndUpgrade(n, this.loadGeneration));
-                    await this.addToWave(Promise.all(reloads));
-                    this.posing[ref] = { key, busy: false, drawn: params };
+                    if (!response.ok) throw new Error(`${ref}'s ${piece}: ${response.status}`);
+                    const body = await response.json();
+                    const url = body.variant ? this.variantUrl(ref, body.variant) : `${BASE_URL}/parts/${encodeURIComponent(ref)}/stl`;
+                    return this.loadSTLMesh(node, url, body.measured);
+                };
+                try {
+                    const [still, ...moving] = await Promise.all([render(kinematics.fixed), ...kinematics.pieces.map((p) => render(p.piece))]);
+                    const edges = still.getObjectByName('edges');
+                    kinematics.pieces.forEach((p, k) => {
+                        const piece = moving[k];
+                        piece.position.sub(still.position);
+                        piece.material.dispose();
+                        piece.material = still.material;  // coloured, faded and selected with it
+                        const own = piece.getObjectByName('edges');
+                        if (own && edges) { own.material.dispose(); own.material = edges.material; }
+                        piece.userData.rest = piece.position.clone();
+                        piece.userData.follows = p.follows;
+                        piece.name = `piece:${p.piece}`;
+                        still.add(piece);
+                    });
+                    const hit = still.raycast.bind(still);
+                    still.raycast = (raycaster, hits) => {
+                        hit(raycaster, hits);
+                        for (const piece of moving) {
+                            const from = hits.length;
+                            THREE.Mesh.prototype.raycast.call(piece, raycaster, hits);
+                            for (let h = from; h < hits.length; h++) hits[h].object = still;
+                        }
+                    };
+                    still.userData.kinematics = { rest: kinematics.rest, range: kinematics.range || null, pieces: moving };
+                    const marks = this.marks[nodeKey(node)];
+                    if (marks && marks.marks) this.moveKinematic(still, marks.marks);
+                    return still;
                 } catch (error) {
-                    this.posing[ref] = { key, busy: false };
+                    console.warn(`${ref} could not be drawn as its pieces:`, error);
+                    return null;
                 }
+            }
+
+            // Each moving piece where the tool's mark stands now, as the mark tweens toward
+            // each poll: offset from where it was drawn by how far each axis stands from the
+            // part's own, within the part's range.
+            moveKinematic(mesh, marks) {
+                const k = mesh && mesh.userData.kinematics;
+                if (!k || !marks) return false;
+                const at = marks.position(), offset = {};
+                for (const axis of ['x', 'y', 'z']) {
+                    let v = at[axis];
+                    const r = k.range && k.range[axis];
+                    if (r) v = Math.min(r[1], Math.max(r[0], v));
+                    offset[axis] = v - k.rest[axis];
+                }
+                for (const piece of k.pieces) {
+                    const f = piece.userData.follows || {};
+                    const d = marksToScene({ x: (f.x || 0) * offset.x, y: (f.y || 0) * offset.y, z: (f.z || 0) * offset.z });
+                    piece.position.copy(piece.userData.rest).add(d);
+                }
+                return true;
             }
 
             // Where a poll puts the tool in the machine's volume (machine_marks.js).
@@ -9063,17 +9088,16 @@
                         this.forgetVariant(ref);
                     }
                 }
-                // A machine is drawn where its axes last came to rest, when it has been.
-                const pose = this.poseByPart[ref];
-                if (pose) {
-                    try {
-                        const mesh = await this.loadSTLMesh(node, this.variantUrl(ref, pose.variant), pose.measured);
-                        mesh.userData.pose = pose.variant;
-                        return mesh;
-                    } catch (error) {
-                        delete this.poseByPart[ref];
-                        delete this.posing[ref];
-                    }
+                // A machine is drawn as what stands still and what moves, each moved with
+                // its axes as its tool's mark moves (moveKinematic).
+                if (this.kinematicsByPart[ref] === undefined) {
+                    this.kinematicsByPart[ref] = fetch(`${BASE_URL}/parts/${encodeURIComponent(ref)}`)
+                        .then((r) => (r.ok ? r.json() : null)).then((p) => (p && p.kinematics) || null).catch(() => null);
+                }
+                const kinematics = await this.kinematicsByPart[ref];
+                if (kinematics) {
+                    const mesh = await this.loadKinematic(node, ref, kinematics);
+                    if (mesh) return mesh;
                 }
                 const stlUrl = `${BASE_URL}/parts/${encodeURIComponent(node.part_ref)}/stl?${AS_IT_RESTS}`;
                 try {

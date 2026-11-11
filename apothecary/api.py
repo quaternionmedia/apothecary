@@ -441,6 +441,7 @@ def _part_metadata(part) -> Dict[str, object]:
         "name": part.name,
         "description": part.description,
         "category": part.category,
+        "kinematics": part.kinematics,
         "tags": part.tags,
         "readme": (
             _repo_relative_path(part.readme_path)

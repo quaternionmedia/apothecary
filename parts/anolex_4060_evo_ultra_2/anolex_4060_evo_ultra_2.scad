@@ -27,6 +27,7 @@ x_axis = 200;   // [0:1:400] Where the tool stands along X, in work coordinates 
 y_axis = 300;   // [0:1:600] Where the table stands along Y, in work coordinates: the work's Y under the tool (mm)
 z_axis = 40;    // [0:1:80] Tool tip height above the table (mm)
 with_router = true;   // Draw the trim router in its clamp
+piece = "all";  // [all, fixed, table, x, z] What to draw: the whole machine, or one of what moves -- the table (Y), the X carriage with the Z motor (X), the Z slide with the clamp and the router (X and Z) -- or all that stands still
 
 /* [Hidden] */
 $fn = 24;
@@ -106,6 +107,9 @@ module anolex_base() {
     // the front and rear cross plates between the beams, sunk into them
     for (y = [0, frame_d - cross_t]) translate([beam[0] - eps, y, 0])
         color("silver") cube([frame_w - 2 * beam[0] + 2 * eps, cross_t, beam[1] - 20]);
+}
+
+module anolex_table() {
     // the table on four supports, carried along Y over the cross plates' level
     translate([(frame_w - table[0]) / 2, table_y0() + table_dy(), 0]) {
         color("darkgray") translate([0, 0, table_top_z - table[2]]) cube([table[0], table[1], table[2]]);
@@ -114,6 +118,9 @@ module anolex_base() {
         // the T-slots, as grooves along Y
         color("dimgray") for (i = [1 : 5]) translate([i * table[0] / 6 - 4, -1, table_top_z - 3]) cube([8, table[1] + 2, 3 + eps]);
     }
+}
+
+module anolex_base_fittings() {
     // the Y ball screw under the table's centre line, and its motor behind the rear plate
     color("gainsboro") translate([frame_w / 2, cross_t - eps, beam[1] - 30]) rotate([-90, 0, 0]) cylinder(d = screw_d, h = frame_d - 2 * cross_t + 2 * eps);
     translate([frame_w / 2 - nema / 2, frame_d - eps, beam[1] - 30 + nema / 2]) rotate([-90, 0, 0]) nema23();
@@ -145,12 +152,19 @@ module anolex_gantry() {
     // the two X rails on the beam's front face, the X carriage on their blocks
     bz = beam[1] + block[2] + leg[2] - beam_x[1];
     for (z = [bz + 20, bz + beam_x[1] - 20 - rail_h]) translate([beam[0], by - beam_x[0] / 2 - rail_h + eps, z]) rotate([90, 0, 0]) mirror([0, 0, 1]) hgh15_rail(frame_w - 2 * beam[0], along_y = false);
-    cx = tool_x() - carriage[0] / 2;
-    cy = by - beam_x[0] / 2 - block[2];
-    color("silver") translate([cx, cy - carriage[1] + eps, bz - 20]) cube([carriage[0], carriage[1], carriage[2]]);
     // the X motor on the right end of the beam, its screw along the beam's front
     translate([frame_w - eps, by - beam_x[0] / 2 + (beam_x[0] - nema) / 2, bz + (beam_x[1] - nema) / 2]) rotate([0, 90, 0]) nema23(60);
     color("gainsboro") translate([beam[0] - eps, by - beam_x[0] / 2 - 10, bz + beam_x[1] / 2]) rotate([0, 90, 0]) cylinder(d = screw_d, h = frame_w - 2 * beam[0] + 2 * eps);
+}
+
+module anolex_x_carriage() {
+    // the X carriage plate on the beam's X blocks, and the Z motor on its top
+    by = beam_y();
+    bz = beam[1] + block[2] + leg[2] - beam_x[1];
+    cx = tool_x() - carriage[0] / 2;
+    cy = by - beam_x[0] / 2 - block[2];
+    color("silver") translate([cx, cy - carriage[1] + eps, bz - 20]) cube([carriage[0], carriage[1], carriage[2]]);
+    translate([tool_x() - nema / 2, cy - carriage[1] - nema + 4, bz - 20 + carriage[2] - eps]) nema23(60);
 }
 
 module anolex_z_axis() {
@@ -162,8 +176,6 @@ module anolex_z_axis() {
     zy = cy - z_plate[1] + eps;
     zz = tool_z() + collet + clamp[2] + 10;   // the plate's bottom: above the clamp's top
     color("silver") translate([tool_x() - z_plate[0] / 2, zy, zz]) cube(z_plate);
-    // the Z motor on top of the carriage, its screw down behind the plate
-    translate([tool_x() - nema / 2, cy - nema + 4, bz - 20 + carriage[2] - eps]) nema23(60);
     // the clamp on the plate's front, holding the router's body above its collet
     color("dimgray") translate([tool_x() - clamp[0] / 2, zy - clamp[1] + eps, tool_z() + collet]) difference() {
         cube(clamp);
@@ -177,10 +189,16 @@ module anolex_z_axis() {
 }
 
 module anolex_4060_evo_ultra_2() {
-    anolex_base();
-    anolex_control_box();
-    anolex_gantry();
-    anolex_z_axis();
+    // a scene that moves the machine draws each of what moves on its own and moves it
+    if (piece == "all" || piece == "fixed") {
+        anolex_base();
+        anolex_base_fittings();
+        anolex_control_box();
+        anolex_gantry();
+    }
+    if (piece == "all" || piece == "table") anolex_table();
+    if (piece == "all" || piece == "x") anolex_x_carriage();
+    if (piece == "all" || piece == "z") anolex_z_axis();
 }
 
 anolex_4060_evo_ultra_2();

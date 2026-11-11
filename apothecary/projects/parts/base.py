@@ -66,6 +66,13 @@ class BasePart(BaseModel):
     # still along Y: how far into its volume, along Y, the tool stands. None: the tool
     # moves along Y over a bed that stays (a gantry machine), or the part is no machine.
     bed_moves_y: Optional[float] = None
+    # A machine drawn as what stands still and what moves, so a scene can move each with
+    # the axes rather than render a pose: the parameter that picks a piece, the value
+    # that draws all that stands still, where the axes stand when each piece is drawn
+    # (the part's defaults), and for each moving piece how far it moves along each
+    # axis of the part's frame per millimetre of each machine axis, e.g. a table that
+    # carries Y: {"piece": "table", "follows": {"y": -1}}. None: drawn as one.
+    kinematics: Optional[Dict[str, Any]] = None
     tags: List[str] = Field(default_factory=list)
     readme_path: Optional[Path] = None
     module_name: Optional[str] = None

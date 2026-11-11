@@ -14,7 +14,7 @@ draw the machine with its table and tool where the last poll said they were.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -76,6 +76,23 @@ LEG_Z = BEAM.z + BLOCK_HEIGHT  # a leg's foot: on its block, on the rail on the 
 GANTRY_Z = LEG_Z + LEG.z - CROSS_BEAM.z  # the cross beam's underside
 
 
+KINEMATICS = {
+    "param": "piece",
+    "fixed": "fixed",
+    "rest": {"x": AXES.x, "y": AXES.y, "z": AXES.z},
+    # Where the model's axes can stand (``Params``): a piece is moved no further.
+    "range": {"x": [0.0, WORK.x], "y": [0.0, WORK.y], "z": [0.0, WORK.z]},
+    "pieces": [
+        # The table carries the work along Y: the work's Y under the tool grows as it
+        # moves toward the front.
+        {"piece": "table", "follows": {"y": -1.0}},
+        {"piece": "x", "follows": {"x": 1.0}},
+        {"piece": "z", "follows": {"x": 1.0, "z": 1.0}},
+    ],
+}
+"""What moves with which axis, as the SCAD's ``piece`` draws them (``BasePart.kinematics``)."""
+
+
 class Params(BaseModel):
     """Where the axes stand, and whether the router is in its clamp."""
 
@@ -85,6 +102,12 @@ class Params(BaseModel):
     )
     z_axis: float = Field(40.0, ge=0, le=80, description="Tool tip height above the table (mm)")
     with_router: bool = Field(True, description="The trim router in its clamp")
+    piece: Literal["all", "fixed", "table", "x", "z"] = Field(
+        "all",
+        description="The whole machine, or one piece of it: what stands still, the table "
+        "(Y), the X carriage and the Z motor (X), the Z slide with the clamp and the router "
+        "(X and Z)",
+    )
 
 
 class Anolex4060EvoUltra2Part(BasePart):
@@ -110,6 +133,7 @@ def create(root: Path) -> BasePart:
         category="machine",
         machine="router",
         bed_moves_y=BED_MOVES_Y,
+        kinematics=KINEMATICS,
         tags=["router", "cnc", "anolex", "grbl"],
         readme_path=root / "parts" / "anolex_4060_evo_ultra_2" / "README.md",
         preview_color=Color(r=0.72, g=0.74, b=0.78),

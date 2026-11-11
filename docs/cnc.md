@@ -78,12 +78,14 @@ worked out from the controller's own `$23` and `$130` to `$132` (`grbl.in_volume
 `work_origin` is the work zero in the same volume, and `travel` the volume. The world
 and the Machine place the tool, and a file's zero, by those. The AnoleX's table carries
 Y (the part's `bed_moves_y`, as the Ender's bed does): the tool's mark stands still
-along Y and the working volume, the table map and a file's path ride under it. Once a
-poll the page hears says the machine is idle, the world draws the router -- and the
-printer -- rendered at that pose, its table and carriage where its axes are
-(`POST /parts/{ref}/stl/generate` with its axes, each within the part's range): a pose
-at rest, a second or so behind it, while the mark follows the move. A page hears the
-polls its own Machine window makes. They mean the table only
+along Y and the working volume, the table map and a file's path ride under it. The world
+draws the router -- and the printer -- as its pieces, as the part's `kinematics` says:
+what stands still, and each of what moves (the AnoleX's table, X carriage and Z slide;
+the Ender's bed, X gantry and hotend carriage), each rendered once at the part's own
+axes (`POST /parts/{ref}/stl/generate` with its `piece`). As the tool's mark tweens
+toward each poll, each piece is moved with it by how far its axes stand from the
+part's, within the part's range, so the machine moves as the real one does, a poll
+behind it. A page hears the polls its own Machine window makes. They mean the table only
 once the machine has been homed: before that the controller counts from wherever it
 stood at power on.
 

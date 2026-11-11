@@ -495,12 +495,16 @@ def test_board_inside_the_printer_drives_it(page: Page, printer_url: str):
 # A node's body as the world draws it, in apothecary's frame (z up), read back through the
 # viewer's own siteAt: the real geometry, centred on the node's envelope. None while the
 # placeholder box stands in for it.
+# A machine drawn as its pieces is its still piece and the moving ones hung from it.
 DRAWN_BODY = """(key) => {
     const v = window.fractalViewer, mesh = v.meshByName[key];
     if (!mesh || mesh.userData.isPlaceholder || mesh.userData.isDot) return null;
-    mesh.geometry.computeBoundingBox();
-    const b = mesh.geometry.boundingBox, p = mesh.position;
-    const [lo, hi] = [v.siteAt(b.min.clone().add(p)), v.siteAt(b.max.clone().add(p))];
+    const box = (m, at) => { m.geometry.computeBoundingBox();
+        return m.geometry.boundingBox.clone().translate(at); };
+    const b = box(mesh, mesh.position);
+    for (const piece of mesh.children.filter((c) => c.isMesh && c.name.startsWith('piece:')))
+        b.union(box(piece, mesh.position.clone().add(piece.position)));
+    const [lo, hi] = [v.siteAt(b.min.clone()), v.siteAt(b.max.clone())];
     const [x, y, z] = [0, 1, 2].map((i) => [Math.min(lo[i], hi[i]), Math.max(lo[i], hi[i])]);
     return { min: { x: x[0], y: y[0], z: z[0] }, max: { x: x[1], y: y[1], z: z[1] } };
 }"""

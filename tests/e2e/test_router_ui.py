@@ -744,54 +744,71 @@ def _poll_at_rest(url: str) -> dict:
 
 
 @pytest.mark.e2e
-def test_the_router_is_drawn_where_its_axes_came_to_rest_its_table_carrying_y(page: Page, url: str):
-    """Jogged and at rest, the router is drawn with its axes where its controller says:
-    the part rendered at that pose, every piece drawn from it loading it. Its table
-    carries Y, so the tool's mark stands still along Y and the table's marks move under
-    it by the jog. Jogged back, it is drawn as it was."""
+def test_the_router_is_drawn_as_its_pieces_and_they_ride_its_axes_as_it_moves(page: Page, url: str):
+    """The router is drawn as what stands still and what moves -- the table, the X
+    carriage, the Z slide -- and as its tool's mark moves toward each poll, each piece
+    moves with it: the table along Y by what the work's Y under the tool is, the carriage
+    along X, the Z slide along X and Z. The gantry never moves. A click on a moving piece
+    is a click on the machine."""
     open_garage(page, url, settle=False)
     wears(page, "cnc_router")
     page.wait_for_function(
-        "() => { const m = window.fractalViewer.marks['cnc_router']; return m && m.marks; }",
-        timeout=WITHIN_A_POLL,
+        "() => { const v = window.fractalViewer, m = v.meshByName['cnc_router'];"
+        " return m && m.userData.kinematics && v.marks['cnc_router'] && v.marks['cnc_router'].marks; }",
+        timeout=60000,
     )
+    pieces = page.evaluate(
+        "() => window.fractalViewer.meshByName['cnc_router'].children"
+        ".filter((c) => c.name.startsWith('piece:')).map((c) => c.name)"
+    )
+    assert pieces == ["piece:table", "piece:x", "piece:z"], pieces
     # Its Machine open, polling: the world follows a machine through the page's polls.
     _select(page, "cnc_router")
     page.locator("#selected-body .device-section .dev-open").click()
     windows.machine_ready(page, "router")
-    ref = "anolex_4060_evo_ultra_2"
     httpx.post(
         f"{url}/firmware/printers/control", json={"port": ROUTER, "armed": True}, timeout=15.0
     ).raise_for_status()
     start = _poll_at_rest(url)["tool_position"]  # wherever the tests before left it
+    read = (
+        "() => { const v = window.fractalViewer, m = v.meshByName['cnc_router'];"
+        " const at = (n) => { const p = m.getObjectByName(n).position; return [p.x, p.y, p.z]; };"
+        " return { table: at('piece:table'), x: at('piece:x'), z: at('piece:z'),"
+        " mark: v.marks['cnc_router'].marks.position() }; }"
+    )
+    page.wait_for_function(
+        "(s) => { const p = window.fractalViewer.marks['cnc_router'].marks.position();"
+        " return Math.abs(p.x - s.x) < 0.01 && Math.abs(p.y - s.y) < 0.01; }",
+        arg=start,
+        timeout=WITHIN_A_POLL,
+    )
+    before = page.evaluate(read)
     dx, dy = (-10, -25) if start["x"] >= 10 and start["y"] >= 25 else (10, 25)
     for line in (f"$J=G91 G21 X{dx} F1000", f"$J=G91 G21 Y{dy} F1000"):
         _command(url, line)
     _poll_at_rest(url)
-    want = {"x_axis": round(start["x"] + dx), "y_axis": round(start["y"] + dy)}
     page.wait_for_function(
-        "([ref, want]) => { const v = window.fractalViewer, p = v.poseByPart[ref],"
-        " m = v.meshByName['cnc_router'];"
-        " return p && p.params.x_axis === want.x_axis && p.params.y_axis === want.y_axis"
-        " && m && m.userData.pose === p.variant; }",
-        arg=[ref, want],
-        timeout=60000,
+        "([x, y]) => { const p = window.fractalViewer.marks['cnc_router'].marks.position();"
+        " return Math.abs(p.x - x) < 0.01 && Math.abs(p.y - y) < 0.01; }",
+        arg=[start["x"] + dx, start["y"] + dy],
+        timeout=WITHIN_A_POLL,
     )
-    bed = page.evaluate("() => window.fractalViewer.marks['cnc_router'].marks.bedOffset()")
-    # The table stands moved by the Y it carries: how far the work's Y under the tool is
-    # from where the tool rests along Y.
-    assert bed == pytest.approx(300.0 - (start["y"] + dy), abs=0.5), bed
+    after = page.evaluate(read)
+    moved = {
+        k: [round(a - b, 2) for a, b in zip(after[k], before[k], strict=True)]
+        for k in ("table", "x", "z")
+    }
+    # In the scene, X is X and the part's Y is -Z: the table moved along the part's Y by
+    # minus the jog, the carriage and the slide along X by the jog, and nothing else.
+    clamp = lambda v, lo, hi: min(hi, max(lo, v))  # noqa: E731 -- the part's range
+    want_x = clamp(start["x"] + dx, 0, 400) - clamp(start["x"], 0, 400)
+    want_y = clamp(start["y"] + dy, 0, 600) - clamp(start["y"], 0, 600)
+    assert moved["table"] == pytest.approx([0, 0, want_y], abs=0.05), moved
+    assert moved["x"] == pytest.approx([want_x, 0, 0], abs=0.05), moved
+    assert moved["z"] == pytest.approx([want_x, 0, 0], abs=0.05), moved
     for line in (f"$J=G91 G21 X{-dx} F1000", f"$J=G91 G21 Y{-dy} F1000"):
         _command(url, line)
     _poll_at_rest(url)
-    page.wait_for_function(
-        "([ref, want]) => { const v = window.fractalViewer, p = v.poseByPart[ref],"
-        " m = v.meshByName['cnc_router'];"
-        " return !(p && p.params.x_axis === want.x_axis && p.params.y_axis === want.y_axis)"
-        " && m && m.userData.pose === (p ? p.variant : undefined); }",
-        arg=[ref, want],
-        timeout=60000,
-    )
 
 
 def _command(url: str, line: str) -> None:
