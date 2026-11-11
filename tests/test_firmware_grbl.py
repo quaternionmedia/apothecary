@@ -596,3 +596,139 @@ def test_the_realtime_write_queues_behind_an_exchange_unless_told_now(router_lin
     t.join(5)
     assert answered[-1] == "ok"
     assert grbl.poll_router(link).machine_state == "Hold:0"
+
+
+# --- homing: proved before it is asked ---------------------------------------------------
+
+
+@pytest.fixture
+def unproved(router_links):
+    """A router's link held to what a real port is: nothing assumed of its switches."""
+    link = router_links.open(PORT, 115200)
+    grbl.proof_of(link).assumed = False
+    return link, link._t
+
+
+def _press(link, sim, pins):
+    """A switch held while a poll reads it, then let go and read again."""
+    sim.pins = pins
+    assert grbl.poll_router(link).pins == list(pins)
+    sim.pins = ""
+    grbl.poll_router(link)
+
+
+def _sent(link):
+    return [e["text"] for e in link.log.since(0)["entries"] if e["kind"] == "tx"]
+
+
+def test_a_simulated_routers_homes_are_held_to_no_proof(router_links):
+    link = router_links.open(PORT, 115200)
+    assert grbl.proof_of(link).assumed
+    assert grbl.control_router(link, "$HZ") == ["ok"]
+
+
+def test_a_home_is_refused_until_the_axis_has_shown_its_switch_and_which_way_it_goes(unproved):
+    link, sim = unproved
+    start = grbl.poll_router(link).position
+    with pytest.raises(grbl.NotProved) as refusal:
+        grbl.control_router(link, "$HZ")
+    said = str(refusal.value)
+    assert "Z will seek +Z at" in said and "for up to" in said  # the controller's own figures
+    assert "limit switch has not been seen" in said and "not been jogged 1 mm toward +Z" in said
+    assert "$HZ" not in _sent(link) and grbl.poll_router(link).position == start
+
+    _press(link, sim, "Z")
+    with pytest.raises(grbl.NotProved) as refusal:
+        grbl.control_router(link, "$HZ")
+    assert "limit switch" not in str(refusal.value) and "toward +Z" in str(refusal.value)
+
+    grbl.control_router(link, "$J=G91 G21 Z-1 F1000")  # the other way shows nothing of this one
+    grbl.control_router(link, "$J=G91 G21 Z0.5 F1000")  # and half a millimetre is not one
+    with pytest.raises(grbl.NotProved):
+        grbl.control_router(link, "$HZ")
+    grbl.control_router(link, "$J=G91 G21 Z0.5 F1000")  # two halves are
+    assert grbl.control_router(link, "$HZ") == ["ok"]
+    assert grbl.poll_router(link).position["z"] == -grbl.SimulatedRouter.PULL_OFF
+
+
+def test_a_switch_still_held_has_not_been_seen_and_another_axis_s_shows_nothing(unproved):
+    link, sim = unproved
+    grbl.control_router(link, "$J=G91 G21 Z1 F1000")
+    sim.pins = "Z"
+    grbl.poll_router(link)  # on, and never off: a switch stuck closed, or a pin held high
+    with pytest.raises(grbl.NotProved, match="limit switch has not been seen"):
+        grbl.control_router(link, "$HZ")
+    sim.pins = ""
+    grbl.poll_router(link)
+    assert grbl.control_router(link, "$HZ") == ["ok"]
+    _press(link, sim, "Y0")  # Y's, and an input that is no axis
+    grbl.control_router(link, "$J=G91 G21 X1 F1000")
+    with pytest.raises(grbl.NotProved, match="X will seek"):
+        grbl.control_router(link, "$HX")
+
+
+def test_the_way_an_axis_must_be_jogged_is_the_way_the_controller_says_it_homes(unproved):
+    link, sim = unproved
+    sim.settings[23] = 1  # X homes toward its minimum
+    _press(link, sim, "X")
+    grbl.control_router(link, "$J=G91 G21 X1 F1000")
+    with pytest.raises(grbl.NotProved, match=r"X will seek -X.*toward -X"):
+        grbl.control_router(link, "$HX")
+    grbl.control_router(link, "$J=G91 G21 X-1 F1000")
+    assert grbl.control_router(link, "$HX") == ["ok"]
+    del sim.settings[23]  # a controller that does not say which way: nothing can be shown
+    with pytest.raises(grbl.NotProved, match=r"does not say which way it homes"):
+        grbl.control_router(link, "$HX")
+
+
+def test_home_all_needs_every_axis_and_says_each_that_is_missing(unproved):
+    link, sim = unproved
+    way = {one["axis"]: one["way"].strip("+") for one in grbl.homing_of(link)}  # "" or "-"
+    _press(link, sim, "XZ")
+    grbl.control_router(link, f"$J=G91 G21 X{way['X']}1 Z{way['Z']}1 F1000")
+    with pytest.raises(grbl.NotProved) as refusal:
+        grbl.control_router(link, "$H")
+    said = str(refusal.value)
+    assert "Y will seek" in said and "X will seek" not in said and "Z will seek" not in said
+    _press(link, sim, "Y")
+    grbl.control_router(link, f"$J=G91 G21 Y{way['Y']}1 F1000")
+    assert grbl.control_router(link, "$H") == ["ok"]
+
+
+def test_what_a_port_showed_is_gone_when_it_is_opened_again(unproved, router_links):
+    link, sim = unproved
+    _press(link, sim, "Z")
+    grbl.control_router(link, "$J=G91 G21 Z1 F1000")
+    assert grbl.homing_of(link, "Z")[0]["switch_seen"] and grbl.homing_of(link, "Z")[0]["jogged"]
+    router_links.close(PORT)
+    again = router_links.open(PORT, 115200)
+    grbl.proof_of(again).assumed = False
+    assert not grbl.homing_of(again, "Z")[0]["switch_seen"]
+    assert not grbl.homing_of(again, "Z")[0]["jogged"]
+
+
+def test_a_jog_the_controller_refused_and_a_move_that_is_no_jog_show_nothing(unproved):
+    link, sim = unproved
+    proof = grbl.proof_of(link)
+    proof.jog("$J=G91 G21 Z5 F1000", ["error:15"])
+    proof.jog("G0 Z5", ["ok"])
+    proof.jog("$J=G90 G21 Z5 F1000", ["ok"])  # to a place, not a way
+    assert proof.jogged["Z"] == {"+": 0.0, "-": 0.0}
+    proof.jog("$J=G21 G91 Z5 F1000", ["ok"])
+    assert proof.jogged["Z"] == {"+": 5.0, "-": 0.0}
+
+
+def test_a_home_not_proved_is_refused_by_the_route_in_words_and_nothing_is_sent(
+    fake_arduino_cli, router_links
+):
+    client = TestClient(app)
+    router_links.control.arm(PORT)
+    assert devices.printer_status(PORT).state == "idle"  # the port opened and identified
+    link = router_links.get(PORT)
+    grbl.proof_of(link).assumed = False
+    answer = client.post("/firmware/printers/command", json={"port": PORT, "command": "$HZ"})
+    assert 400 <= answer.status_code < 500, answer.text
+    assert "home refused: Z will seek" in answer.json()["detail"]
+    assert "$HZ" not in _sent(link)
+    with pytest.raises(grbl.NotProved):  # and Probe table's own home is the same home
+        grbl.probe_table(link)

@@ -96,6 +96,27 @@ a stop goes. Its stop is then its own: a stop asked in either word goes as
 goes on cutting, is never what reaches it. The same holds the other way round:
 a printer on a port the router held is sent `M112` for a `RESET`.
 
+### A home is proved first
+
+A home drives an axis at the seek rate (`$25`) until its limit switch closes, for up to
+one and a half times its travel, and nothing else stops it: it goes toward the table if
+the axis is wired the other way round, and into its end stop if the switch says nothing.
+So `$H`, `$HX`, `$HY` and `$HZ` are sent only for axes the open port has shown two things
+of (`grbl.check_home`), whoever asks -- the pad, the ring, the deck, Probe table's own
+home:
+
+- **its switch**, reported on and then off again in the status report's pins: press it by
+  hand for two seconds while the Machine polls, and let go. With hard limits on (`$21=1`)
+  that puts the controller in alarm (`ALARM:1`), which Unlock or the home clears;
+- **which way it goes**: the axis jogged a millimetre the way the controller says it homes
+  (`$23`), with a person watching the tool. For Z that is the way it must rise.
+
+A home that is not proved is refused before the port, in words: which way the axis will
+seek, how fast and how far at most, from the controller's own settings, and which of the
+two is missing. What a port showed is kept while it is open and gone when it is opened
+again, a replug or the controller's power included. The simulated router has no switch
+for a hand to press, and its homes are held to none of this.
+
 ## Simulated
 
 `APOTHECARY_SERIAL_ENGINE=simulated` answers every port as the simulated

@@ -613,6 +613,7 @@ class SimulatedRouter:
         starts = os.environ.get("APOTHECARY_SIMULATED_ROUTER_STATE", "idle").strip().lower()
         self.state = "Alarm" if starts == "alarm" else "Idle"
         self.alarm: Optional[int] = None
+        self.pins = ""  # the input pins a report says are on (``Pn:``): a switch held, say
         self.homed = starts != "alarm"
         # Powered up: the banner, and in alarm the hint a real one prints with it.
         if starts == "alarm":
@@ -772,6 +773,8 @@ class SimulatedRouter:
         fields = [state, f"MPos:{mpos}", f"FS:{feed:.0f},{rpm:.0f}"]
         if self._current is not None or self._queue:
             fields.append(f"Bf:{self.PLANNER - len(self._queue)},127")
+        if self.pins:
+            fields.append(f"Pn:{self.pins}")
         fields.append("WCO:" + ",".join(f"{self.wco[k]:.3f}" for k in "xyz"))
         fields.append(f"Ov:{self.feed_override},100,100")
         if self.spindle_on:
@@ -1026,6 +1029,7 @@ def poll_router(link: GcodeLink, wait: Optional[float] = None) -> PrinterStatus:
     raw += gc_lines
     parser = parse_parser_state(gc_lines)
     mstate = status["machine_state"]
+    proof_of(link).pins(status["pins"])
     # The report says the controller is in alarm, not which: the link keeps the last
     # ALARM line it read. Out of alarm, that line is spent.
     if mstate == "Alarm":
@@ -1056,17 +1060,150 @@ def poll_router(link: GcodeLink, wait: Optional[float] = None) -> PrinterStatus:
     )
 
 
+# --- homing: proved before it is asked -------------------------------------------------------
+
+# A home drives an axis at the seek rate until its switch closes, with nothing else to stop
+# it: toward the table if the axis is wired the other way round, into its end stop if the
+# switch says nothing. So an axis is homed only once this port has shown both: its switch
+# reported on and off again (pressed by hand), and the axis jogged the way homing will seek
+# (a person watched which way that is). What was shown is kept with the open port, and is
+# gone when it is opened again.
+HOME_JOG_MM = 1.0  # jogged this far the way homing seeks, an axis has shown which way it is
+HOME_SEARCH = 1.5  # Grbl seeks this many times an axis's travel before ALARM:9
+HOMING_DIR, HOMING_SEEK, HARD_LIMITS = 23, 25, 21  # the settings a home is read from
+TRAVEL_OF_AXIS = {"X": 130, "Y": 131, "Z": 132}
+JOG_RE = re.compile(r"^\$J=(?=[^XYZ]*G91)[^XYZ]*?((?: [XYZ]-?\d+(?:\.\d+)?)+)")
+
+
+class NotProved(ValueError):
+    """A home asked of an axis that has not shown its switch, or which way it goes."""
+
+
+class HomingProof:
+    """What an open port has shown of each axis: its limit switch on and off again, and
+    how far it has been jogged each way. ``assumed`` is a simulated router's, which has
+    no switch for a hand to press: its homes are not held to any of it."""
+
+    def __init__(self, assumed: bool = False):
+        self.assumed = assumed
+        self.forget()
+
+    def forget(self) -> None:
+        self.on: set = set()  # axes whose switch the last report had on
+        self.seen: set = set()  # axes whose switch has been on and off again
+        self.jogged: Dict[str, Dict[str, float]] = {a: {"+": 0.0, "-": 0.0} for a in "XYZ"}
+
+    def pins(self, pins: List[str]) -> None:
+        """A status report's pins: a switch seen on, then off, has been seen."""
+        for axis in "XYZ":
+            if axis in pins:
+                self.on.add(axis)
+            elif axis in self.on:
+                self.on.discard(axis)
+                self.seen.add(axis)
+
+    def jog(self, cmd: str, answer: List[str]) -> None:
+        """A relative jog the controller took, added to what each axis has gone each way."""
+        m = JOG_RE.match(cmd)
+        if not m or any(line.startswith("error") for line in answer):
+            return
+        for axis, value in re.findall(r" ([XYZ])(-?\d+(?:\.\d+)?)", m.group(1)):
+            distance = float(value)
+            if distance:
+                self.jogged[axis]["+" if distance > 0 else "-"] += abs(distance)
+
+
+def proof_of(link: GcodeLink) -> HomingProof:
+    """What ``link``'s port has shown since it was opened."""
+    proof = getattr(link, "homing_proof", None)
+    if proof is None:
+        proof = HomingProof(assumed=isinstance(getattr(link, "_t", None), SimulatedRouter))
+        link.homing_proof = proof
+    return proof
+
+
+def homing_of(link: GcodeLink, axes: str = "XYZ") -> List[dict]:
+    """For each of ``axes``: which way a home will seek (``$23``), how fast (``$25``), how
+    far at most (``HOME_SEARCH`` times its travel), and whether this port has shown its
+    switch and jogged it that way. Read from the controller's own settings, now."""
+    settings = parse_settings(link.command("$$", timeout=15.0, origin="control"))
+    if HOMING_DIR not in settings:
+        raise NotProved(
+            f"home refused: {link.port} does not say which way it homes ($23), so no axis "
+            "can be shown to go that way first"
+        )
+    proof = proof_of(link)
+    mask = int(settings[HOMING_DIR])
+    out = []
+    for axis in axes:
+        way = "-" if mask & (1 << "XYZ".index(axis)) else "+"
+        travel = settings.get(TRAVEL_OF_AXIS[axis])
+        out.append(
+            {
+                "axis": axis,
+                "way": way,
+                "seek": settings.get(HOMING_SEEK),
+                "search": None if travel is None else HOME_SEARCH * travel,
+                "hard_limits": bool(settings.get(HARD_LIMITS)),
+                "switch_seen": proof.assumed or axis in proof.seen,
+                "jogged": proof.assumed or proof.jogged[axis][way] >= HOME_JOG_MM,
+            }
+        )
+    return out
+
+
+def check_home(link: GcodeLink, cmd: str) -> None:
+    """``NotProved``, saying what to do, unless every axis ``cmd`` homes has shown its
+    switch and been jogged the way it will seek."""
+    if proof_of(link).assumed:
+        return
+    said = []
+    for one in homing_of(link, cmd[2:] or "XYZ"):
+        axis, way = one["axis"], one["way"]
+        todo = []
+        if not one["switch_seen"]:
+            alarm = (
+                " With hard limits on ($21=1) that puts the controller in alarm (ALARM:1), "
+                "which Unlock or the home clears."
+                if one["hard_limits"]
+                else ""
+            )
+            todo.append(
+                f"its limit switch has not been seen: press it by hand for two seconds while "
+                f"the Machine polls, and let go (its pins show {axis}).{alarm}"
+            )
+        if not one["jogged"]:
+            todo.append(
+                f"it has not been jogged {HOME_JOG_MM:g} mm toward {way}{axis}: jog it that "
+                "way and watch which way the tool goes, since the home goes the same way."
+            )
+        if todo:
+            seek = "" if one["seek"] is None else f" at {one['seek']:g} mm/min ($25)"
+            far = "" if one["search"] is None else f" for up to {one['search']:g} mm"
+            said.append(
+                f"{axis} will seek {way}{axis}{seek}{far} until its switch closes, and "
+                + " And ".join(todo)
+            )
+    if said:
+        raise NotProved("home refused: " + " ".join(said))
+
+
 def control_router(link: GcodeLink, command: str, timeout: float = 60.0) -> List[str]:
     """Send one allowlisted control line, or a realtime character. The reset is
     written at once, ahead of the link's queue; a hold and a resume too, since
-    each is for a machine in motion."""
+    each is for a machine in motion. A home is sent only for axes this port has
+    shown (``check_home``)."""
     cmd = normalise_control(command)
     if cmd in REALTIME:
         settle = 1.0 if cmd == EMERGENCY_STOP else 0.3
         return link.realtime(
             REALTIME[cmd], until=None, timeout=settle, label=cmd, now=True, origin="control"
         )
-    return link.command(cmd, timeout=timeout, origin="control")
+    if cmd.startswith("$H"):
+        check_home(link, cmd)
+    answer = link.command(cmd, timeout=timeout, origin="control")
+    proof_of(link).jog(cmd, answer)
+    return answer
 
 
 def query_router(link: GcodeLink, command: str, timeout: float = 15.0) -> List[str]:

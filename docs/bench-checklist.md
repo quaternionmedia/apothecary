@@ -331,6 +331,12 @@ only with the table clear and no tool in the collet until the last box.
       `Alarm` with homing required on power-up), the tool's work and machine
       positions, the spindle off, no pins on. Press each limit switch by
       hand: its pin shows within one poll and goes when let go.
+- [ ] **A home is proved first.** Before any switch is pressed, **Home Z**: refused, and
+      the status line says which way Z will seek, how fast and how far, that its switch
+      has not been seen and that it has not been jogged that way. Jog Z 1 mm that way and
+      watch: the tool rises. Press Z's switch by hand for two seconds and let go: the
+      pins show `Z`, and with `$21=1` the controller is in alarm (`ALARM:1`). **Home Z**
+      now goes. The same for X and for Y, each the way it homes.
 - [ ] **⚙ Control**: the pad, headed *cnc_router armed: it can turn and move*.
       **Home** (`$H`): the gantry seeks its switches, the state card reads
       `running (Home)` and then `idle`, the machine position reads the
