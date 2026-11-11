@@ -1962,10 +1962,10 @@ def test_the_picture_group_offers_make_only_on_a_sized_view_and_forget_only_on_a
     assert [(c.label, c.cell) for c in picture.children] == [
         ("Add", 8),
         ("Folder", 6),
-        ("Make", 2),
-        ("Size", 4),
-        ("Unpin", 9),
-        ("Forget", 3),
+        ("Size", 2),
+        ("Unpin", 4),
+        ("Forget", 9),
+        ("Make", 3),
     ]
     # Make › Make all beside each found shape, by index.
     assert [(c.label, c.action) for c in _group(picture, "Make").children] == [
@@ -2031,7 +2031,7 @@ def test_find_shapes_is_the_step_after_a_view_is_pinned_and_appended_after_unpin
         Context(pointing=Pointing.NODE, targets=["workbench"]), _garage(), picture=searched
     )
     labels = [c.label for c in _group(ring, "Picture").children]
-    assert "Find shapes" not in labels and labels[-2:] == ["Unpin", "Forget"]
+    assert labels == ["Add", "Folder", "Size", "Unpin", "Forget", "Make"]
     # At the floor, the same step under Pictures › Floor › Picture.
     floor = resolve(Context(pointing=Pointing.CANVAS), _garage(), picture=unsearched)
     assert [
@@ -2040,6 +2040,46 @@ def test_find_shapes_is_the_step_after_a_view_is_pinned_and_appended_after_unpin
         "picture:find:plain:@floor",
         "picture:find:stated:@floor",
     ]
+
+
+def _picture_cells(views, *, floor=False) -> dict:
+    """The Picture ring's cells by label, the views given pinned here and the first
+    drawn, the plain finder the only one."""
+    told = _context(views=views, drawn=views[0].id)
+    told.finders = ["plain"]
+    if floor:
+        ring = resolve(Context(pointing=Pointing.CANVAS), _garage(), picture=told)
+        picture = _group(ring, "Pictures", "Floor", "Picture")
+    else:
+        where = Context(pointing=Pointing.NODE, targets=["workbench"])
+        picture = _group(resolve(where, _garage(), picture=told), "Picture")
+    return {c.label: c.cell for c in picture.children}
+
+
+@pytest.mark.parametrize("floor", [False, True], ids=["at-a-host", "at-the-floor"])
+@pytest.mark.parametrize("several", [False, True], ids=["one-view", "several-views"])
+@pytest.mark.parametrize("kept", [True, False], ids=["kept", "the-folders-own"])
+def test_the_picture_rings_cells_hold_still_through_a_pictures_steps(floor, several, kept):
+    """A picture pinned, its shapes found, then its width given: Add, Folder, Size,
+    Unpin and Forget keep their cells through every step, and so does Views; Make, the
+    step after Find shapes, takes the cell Find shapes had. A second picture pinned
+    here moves none of the first five."""
+    others = [_view("view_2", kept=kept)] if several else []
+    unsearched = _view(shapes=0, sized=False, kept=kept)
+    unsearched.finder = None
+    pinned = _picture_cells([unsearched, *others], floor=floor)
+    alone = _picture_cells([unsearched], floor=floor)
+    assert {k: v for k, v in pinned.items() if k in alone and k != "Find shapes"} == {
+        k: v for k, v in alone.items() if k != "Find shapes"
+    }
+    found = _picture_cells([_view(sized=False, kept=kept), *others], floor=floor)
+    sized = _picture_cells([_view(kept=kept), *others], floor=floor)
+    steady = [c for c in ("Add", "Folder", "Size", "Unpin", "Forget", "Views") if c in pinned]
+    assert ("Forget" in steady) is kept and ("Views" in steady) is several
+    for label in steady:
+        assert pinned[label] == found[label] == sized[label], (label, pinned, found, sized)
+    assert "Make" not in pinned and "Make" not in found and "Find shapes" not in sized
+    assert sized["Make"] == pinned["Find shapes"], (pinned, sized)
 
 
 def test_a_host_and_the_floor_add_a_camera_here_and_no_ring_there_pins_one():

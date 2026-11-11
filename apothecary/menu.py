@@ -1244,14 +1244,15 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
     Add), Folder › the seven newest pictures and, when there are more, Pin and
     the short name of the one chosen in Pictures when it is older than those,
     else More (the Pictures panel, where every picture is) -- the chosen one,
-    among the seven, is marked in its own cell; and with
-    a view drawn here, Views › the newest views, Make › Make all and each found
-    shape (once its shapes are found and it has a width), Size, Unpin, Forget for
-    a picture the browser kept, and Find shapes last: the step after a pin, with
+    among the seven, is marked in its own cell; and with a view drawn here, Size,
+    Unpin, Forget for a picture the browser kept, Views › the newest views (once
+    several are pinned here), Make › Make all and each found shape (once its shapes
+    are found and it has a width), and Find shapes last: the step after a pin, with
     the finder that can read the picture (or Find shapes › each, when several
-    can), and on a view already searched, Find shapes › the other finders. Last,
-    so Unpin and Forget keep their cells whether it is there or not. Eight at
-    the most."""
+    can), and on a view already searched, Find shapes › the other finders. The
+    cells a picture has from its pin on come first, so none moves as it is
+    searched and sized, and Make takes the cell Find shapes had. Eight at the
+    most."""
     tail = f":{FLOOR_MARK}" if floor else ""
     here = picture.here
     # The floor's Add is the canvas ring's Pictures › Add, one ring up: an action
@@ -1285,6 +1286,23 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
             Option(id=f"picture{tail}", label="Picture", group="Pictures", children=options)
             if options
             else None
+        )
+
+    # The cells it always has first, so none moves as a picture goes from pinned to
+    # found to sized: Size and Unpin, then Forget, which a kept picture has from its
+    # pin on. Then Views, from a second view pinned here on, and Make, which comes
+    # once its shapes are found and it has a width, in the cell Find shapes had.
+    options.append(Option(id=f"picture:size{tail}", label="Size", action=f"picture:size{tail}"))
+    options.append(Option(id=f"picture:unpin{tail}", label="Unpin", action=f"picture:unpin{tail}"))
+    if drawn.kept:
+        options.append(
+            Option(
+                id=f"picture:forget{tail}",
+                label="Forget",
+                action=f"picture:forget{tail}",
+                destructive=True,
+                twice=True,
+            )
         )
 
     if len(here.views) > 1:
@@ -1324,18 +1342,6 @@ def _picture_group(picture: PictureContext, floor: bool) -> Optional[Option]:
                     [(f"picture:make:{drawn.id}:{s.index}", f"{s.word} {s.index}") for s in found],
                     first=[make_all],
                 ),
-            )
-        )
-    options.append(Option(id=f"picture:size{tail}", label="Size", action=f"picture:size{tail}"))
-    options.append(Option(id=f"picture:unpin{tail}", label="Unpin", action=f"picture:unpin{tail}"))
-    if drawn.kept:
-        options.append(
-            Option(
-                id=f"picture:forget{tail}",
-                label="Forget",
-                action=f"picture:forget{tail}",
-                destructive=True,
-                twice=True,
             )
         )
     find = _find_shapes(drawn, picture.finders, tail)

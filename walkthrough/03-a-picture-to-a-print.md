@@ -62,7 +62,7 @@ The bench's ring, Picture › Make and the disc: disc_1 stands on its outline, s
 ![Make stands a shape up as a piece](screenshots/03-05-make-stands-a-shape-up-as-a-piece.png)
 
 ```
-disc 1: made disc_1: Part › Edit adjusts it, and a printer's Machine prints it (⌗322)
+disc 1: made disc_1: Part › Edit adjusts it, and a printer's Machine prints it (⌗332)
 ```
 
 ## 6. Part › Edit adjusts it in Parameters
