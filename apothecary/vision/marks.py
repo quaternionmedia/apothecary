@@ -117,6 +117,8 @@ class Example(BaseModel):
     by: str = "you"
     colour: str = ""
     features: Dict[str, float] = Field(default_factory=dict)
+    # When it was said, as ISO 8601; none for a word kept with no time.
+    at: Optional[str] = None
 
 
 class Words(BaseModel):
@@ -126,6 +128,7 @@ class Words(BaseModel):
     max: Tuple[float, float]
     text: str
     by: str = "you"
+    at: Optional[str] = None
 
 
 class Answers(BaseModel):
@@ -342,6 +345,26 @@ def _overlap(mark: Mark, example: Example) -> float:
     )
 
 
+def as_of(answers: Optional[Answers], when: Optional[str]) -> Optional[Answers]:
+    """The words given up to a moment, ISO 8601: a word kept with no time counts as
+    given before any. Every word when no moment is named."""
+    if answers is None or not when:
+        return answers
+    from datetime import datetime
+
+    until = datetime.fromisoformat(when)
+
+    def given(at: Optional[str]) -> bool:
+        return at is None or datetime.fromisoformat(at) <= until
+
+    return answers.model_copy(
+        update={
+            "examples": [e for e in answers.examples if given(e.at)],
+            "words": [w for w in answers.words if given(w.at)],
+        }
+    )
+
+
 def apply(marks: List[Mark], answers: Optional[Answers]) -> List[Mark]:
     """The marks with a person's words on them: each example's word given to the
     mark whose box is most nearly its own, by more than half. The last word on a mark wins."""
@@ -488,6 +511,7 @@ __all__ = [
     "Mark",
     "Words",
     "answers_beside",
+    "as_of",
     "answers_path",
     "apply",
     "diagram_strokes",

@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- A whiteboard's history: its photographs, the words given on them and the pieces made from them are one timeline, the whiteboard can be read as it stood at any moment, what changed between two photographs is proposed row by row and only the rows taken change anything, and a moment can be placed elsewhere with its words. ([doc](docs/pictures.md#a-whiteboards-history))
 - A made piece's Selected lists each cut through it: its family, its size, and where it lies from the piece's middle. ([doc](docs/pictures.md#finders))
 - A photograph pinned at a whiteboard is squared to it, sized by its surface with no width typed, and laid flat on the floor in front of it, where its shapes are made; the Marks window shows the photograph with the whiteboard's corners as handles, and a corner dragged or nudged squares it again. ([doc](docs/pictures.md#pinned-at-a-whiteboard))
 - A whiteboard to a model is the fifth loop of walkthrough page 00, and `apothecary serve --demo` has a drawn whiteboard, `examples/pictures/whiteboard.png`, among its pictures. ([page](walkthrough/00-getting-started.md#5-the-five-loops))

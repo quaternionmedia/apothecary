@@ -249,6 +249,36 @@ whose sides a person stated is not proposed over when the drawing resizes it: it
 row says the two disagree, and cannot be taken. `--answers FILE` keeps the rows
 and which were taken.
 
+## A whiteboard's history
+
+Every photograph pinned at a whiteboard, every word a person gives on one of its
+marks or notes, and every piece made from one, is an event on one timeline, kept in
+the server's memory with the views (`apothecary/vision/history.py`,
+`apothecary/routes/whiteboards.py`). A moment of it is the whiteboard as it stood
+then: the newest photograph pinned by then, with the words given by then.
+
+| Route | Is |
+|---|---|
+| `GET /sites/{site}/whiteboards` | The site's whiteboards, each with how many photographs it holds |
+| `GET /sites/{site}/whiteboards/{whiteboard}/timeline?at=` | Every event, oldest first, and the photograph the whiteboard stood as at `at` |
+| `GET /sites/{site}/views/{view}/marks?as_of=` | A photograph's marks and notes with the words given up to `as_of` |
+| `GET /sites/{site}/views/{later}/again?since={earlier}` | What a later photograph proposes of an earlier's shapes and notes |
+| `POST /sites/{site}/views/{later}/again` `{since, take}` | The rows named taken, and nothing else |
+| `POST /sites/{site}/views/{view}/place` `{host, as_of}` | A moment placed elsewhere |
+
+Between two photographs of one whiteboard, each row says what changed and by how
+much, and whether taking it changes anything. A moved or resized shape's row
+rebuilds the piece made from it out of the later shape, keeping a word a person
+gave; a new shape's row makes it; a gone shape's row drops its piece; a row of a
+shape nothing was made from changes nothing and cannot be taken. A note whose
+writing is the same carries its words when taken; writing rewritten where a note
+was, rubbed out, or new, asks for its words and is not taken.
+
+A moment placed elsewhere is its picture pinned at another place -- a structure's
+top or the floor, never another whiteboard -- as wide as it was, searched by the
+same finder, with the words given up to that moment: a drawing of last Tuesday laid
+on the bench beside today's pieces.
+
 ## Pieces
 
 A shape made into a piece is a root structure of the same site, standing where

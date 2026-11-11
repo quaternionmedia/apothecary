@@ -44,6 +44,11 @@ class Change(str, Enum):
     GONE = "gone"
     # The drawing changed a shape whose sides a person stated.
     DISAGREES = "disagrees"
+    # A note: the same writing, whose words carry; writing rewritten, rubbed out, or new.
+    NOTE_SAME = "note same"
+    NOTE_REWRITTEN = "note rewritten"
+    NOTE_GONE = "note gone"
+    NOTE_NEW = "note new"
 
 
 class Proposal(BaseModel):
@@ -57,6 +62,11 @@ class Proposal(BaseModel):
     kind: str
     says: str
     takeable: bool = True
+    # A note's row: its mark in the earlier picture and in the later, and the words
+    # a person gave it.
+    note_before: Optional[str] = None
+    note_after: Optional[str] = None
+    words: Optional[str] = None
 
 
 class Taken(BaseModel):
@@ -187,6 +197,84 @@ def taken_from(
     return after.model_copy(update={"shapes": [s for s in shapes if s is not None] + added})
 
 
+# Two notes are the same writing when their boxes share at least this much of
+# what they cover between them; they overlap less when the writing was rewritten.
+SAME_WRITING = 0.6
+# Two notes overlapping less than this are not about the same place.
+SAME_PLACE = 0.2
+
+
+def compare_notes(before, after, numbered_from: int = 1) -> List[Proposal]:
+    """What a later picture's writing proposes of an earlier's notes. ``before`` and
+    ``after`` are each picture's notes (``notes.Note``): the same writing with words
+    proposes carrying them, and is taken; rewritten writing asks for its words
+    again, writing rubbed out says so, and new writing asks for its words."""
+    from .marks import _overlap_of
+
+    rows: List[Tuple[Change, Optional[str], Optional[str], str, Optional[str], bool]] = []
+    matched: set = set()
+    for old in before:
+        best, share = None, 0.0
+        for new in after:
+            if new.id in matched:
+                continue
+            together = _overlap_of(old.min, old.max, new.min, new.max)
+            if together > share:
+                best, share = new, together
+        if best is None or share < SAME_PLACE:
+            if old.words:
+                rows.append(
+                    (Change.NOTE_GONE, old.id, None, "note", f'"{old.words}" is rubbed out', False)
+                )
+            continue
+        matched.add(best.id)
+        if not old.words or best.words:
+            continue
+        if share >= SAME_WRITING:
+            rows.append(
+                (
+                    Change.NOTE_SAME,
+                    old.id,
+                    best.id,
+                    "note",
+                    f'the same writing: carry "{old.words}"',
+                    True,
+                )
+            )
+        else:
+            rows.append(
+                (
+                    Change.NOTE_REWRITTEN,
+                    old.id,
+                    best.id,
+                    "note",
+                    f'rewritten where "{old.words}" was: type what it says now',
+                    False,
+                )
+            )
+    for new in after:
+        if new.id not in matched and not new.words:
+            rows.append(
+                (Change.NOTE_NEW, None, new.id, "note", "new writing: type what it says", False)
+            )
+    words = {old.id: old.words for old in before}
+    return [
+        Proposal(
+            number=n,
+            change=change,
+            kind=kind,
+            says=says,
+            takeable=takeable,
+            note_before=old_id,
+            note_after=new_id,
+            words=words.get(old_id) if old_id else None,
+        )
+        for n, (change, old_id, new_id, kind, says, takeable) in enumerate(
+            rows, start=numbered_from
+        )
+    ]
+
+
 __all__ = [
     "Change",
     "FORMAT",
@@ -195,6 +283,9 @@ __all__ = [
     "REACH",
     "RESIZED",
     "Taken",
+    "SAME_PLACE",
+    "SAME_WRITING",
     "compare",
+    "compare_notes",
     "taken_from",
 ]

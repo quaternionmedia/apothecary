@@ -136,6 +136,7 @@ from .routes.procedures import router as procedures_router
 from .routes.readme import router as readme_router
 from .routes.views import router as views_router
 from .routes.vision import router as vision_router
+from .routes.whiteboards import router as whiteboards_router
 from .routes.wiring import router as wiring_router
 from .scene import Scene
 from .site_names import FORMER, UNIVERSE
@@ -296,6 +297,7 @@ app.include_router(pictures_router)
 # Views: a picture pinned at a place in a site, and the pieces made from its shapes.
 app.include_router(views_router)
 app.include_router(marks_router)
+app.include_router(whiteboards_router)
 # Cameras: a camera part added to a site, aimed, told its device, removed.
 app.include_router(cameras_router)
 # Jobs: what the machines ran, of every kind; each is started by its machine's own route.

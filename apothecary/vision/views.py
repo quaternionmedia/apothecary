@@ -261,6 +261,8 @@ class Made(BaseModel):
     # re-scale, in the site's frame: a piece still standing there was not moved
     # by a person, so a re-scale may lay it on its shape again.
     placed_at: Vector3D = Field(default_factory=Vector3D)
+    # When it was made, ISO 8601.
+    made_at: Optional[str] = None
 
     @property
     def tallness(self) -> float:
@@ -617,6 +619,12 @@ def keep_the_most_sure(shapes: List[FoundShape]) -> Tuple[List[FoundShape], int]
     ranked = sorted(range(len(shapes)), key=lambda i: (-shapes[i].confidence, i))
     kept = sorted(ranked[:VIEW_SHAPES_MOST])
     return [shapes[i] for i in kept], len(shapes) - VIEW_SHAPES_MOST
+
+
+def _now() -> datetime:
+    from datetime import timezone
+
+    return datetime.now(timezone.utc)
 
 
 def new_view_id(at: datetime) -> str:
@@ -1065,6 +1073,7 @@ def make(site_name: str, site: Assembly, view_id: str, shape: Optional[int] = No
             homography=as_lists(matrix),
             parameters=_sides(laid),
             placed_at=piece.position.model_copy(),
+            made_at=_now().isoformat(),
         )
         if views.record_made(record):
             site.children.append(piece)
