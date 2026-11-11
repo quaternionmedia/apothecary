@@ -24,3 +24,13 @@ the trim router in its clamp, modelled from the Python wrapper's constants
 (`apothecary/projects/parts/anolex_4060_evo_ultra_2.py`) where
 `anolex_4060_evo_ultra_2.scad` draws them with its axes at their defaults.
 [docs/cnc.md](../../docs/cnc.md) says what Apothecary does with it.
+
+## The maker's manual
+
+[`manual.json`](manual.json) is what the maker's user manual says, as a profile: its
+figures, every command and setting it prints, and each procedure in this repository's
+words with the page it is on -- the first cut, the Z probe and its plate's thickness, the
+emergency stop, a limit switch touched, the Macro button, the WebUI. The manual is the
+maker's and is not kept here: the profile names it by its title, version and SHA-256. It
+is the 4030's manual, read for the 4060, and its last section sets what it says beside
+what this machine's controller says for itself.

@@ -1,0 +1,248 @@
+{
+  "about": "What the maker's user manual says, as a profile: its figures, every command and setting it prints, and each of its procedures in this repository's own words with the page it is on. The manual itself is the maker's and is not kept here; this file cites it. A figure or a command is the manual's own; a step is a summary of it, not its text.",
+  "source": {
+    "title": "User Manual, CNC Router 4030-Evo Ultra 2",
+    "version": "V5.8.6",
+    "publisher": "AnoleX",
+    "website": "www.anolexcnc.com",
+    "support": "support@anolexcnc.com",
+    "file": "User Manual_V5.8.6.pdf",
+    "sha256": "cdb17fb2b3a2c3be38f097d8b82324e932fbf4ee56865cde501c2b5c4b91c6f7",
+    "bytes": 73519470,
+    "pages": 40,
+    "created": "2025-10-09",
+    "pdf_title": "4030-Evo Ultra_2-586",
+    "page_numbers": "The manual numbers its pages 01 to 35 from the package list, the fifth sheet of the file: a page cited here is the manual's own number, and the sheet of the file is that number plus four. The cover, the welcome, the parameters and the catalog come before page 01 and are cited as sheets.",
+    "read": "2026-11-10, every sheet, as pictures: the file's text layer is unreadable for most pages (fonts without a character map), so nothing here was taken from it unchecked.",
+    "left_out": [
+      "the download link and its QR code (sheet 2): a shared link is not kept in this repository",
+      "the default password of the controller's own WiFi (page 31): a credential is not kept here, and the page is cited for it"
+    ]
+  },
+  "applies_to": {
+    "manual_is_for": "4030-Evo Ultra 2",
+    "this_part_is": "4060-Evo Ultra 2",
+    "note": "The manual is the 4030's. The two share the controller, the Z axis, the trim router, the probe and the software; the 4060's Y travel is longer. A figure below is the 4030's unless it says otherwise, and what this machine's controller says for itself ($$) is the word to trust for travel."
+  },
+  "parameters": {
+    "page": "sheet 3",
+    "model": "4030-Evo Ultra 2",
+    "work_area_mm": {"x": 400, "y": 300, "z": 130},
+    "overall_mm": {"length": 680, "width": 630, "height": 520},
+    "firmware": "Grbl 1.3a",
+    "mcu": "32-bit",
+    "max_speed_mm_min": 3000,
+    "lead_screw": "12 mm ball screw",
+    "linear_guides": "HGH-15",
+    "spindle": {"kind": "trim router", "power_w": 800, "max_rpm": 24000},
+    "steppers": "NEMA 23, 2.8 A, 1.2 N.m",
+    "microstep": 16,
+    "control_software": ["Candle", "UGS"],
+    "cam_software": ["Easel", "Fusion360"],
+    "power_input": "110 V / 220 V, switch selected"
+  },
+  "spindle_dial": {
+    "page": "08",
+    "note": "The trim router's speed is set by the dial on its body, and these are approximate. The controller switches it; it does not set its speed.",
+    "rpm_by_number": {"1": 8000, "2": 13500, "3": 18000, "4": 21000, "5": 23000, "6": 24000},
+    "cautions": [
+      "run long at low speed, the motor overloads",
+      "the dial turns from 1 to 6 and back and is not forced past either end",
+      "the chuck and the body are hot after running",
+      "check the tool's path clears the clamps"
+    ]
+  },
+  "connection": {
+    "pages": ["23", "24", "25"],
+    "usb_bridge": "CH340 (driver CH340SER.EXE on Windows)",
+    "baud": 115200,
+    "connected_banner": "Grbl 1.3a ['$' for help]",
+    "before_power": "the emergency stop turned clockwise so that it pops up, then USB, then the power switch"
+  },
+  "commands": [
+    {
+      "line": "G21G91G38.2Z-50F100;G92Z19;G91G0Z5;G90G54",
+      "page": "27",
+      "where": "Candle, Settings, Control, Probe commands: the default",
+      "does": "in millimetres and relative moves, probe down at most 50 mm at 100 mm/min until the plate is touched; call that point Z 19; lift 5 mm; back to absolute moves in G54"
+    },
+    {
+      "line": "G21G91G38.2Z-50F100;G92Z19.08;G91G0Z5;G90G54",
+      "page": "27",
+      "where": "the same setting, as the manual changes it",
+      "does": "the same, with the plate's thickness as measured (19.08 mm in the manual's example) in place of the nominal 19"
+    },
+    {
+      "line": "G90G21;G0Z10",
+      "page": "27",
+      "where": "Candle, Settings, Control, Safe position commands, as the settings picture shows them",
+      "does": "absolute moves in millimetres, then a rapid to work Z 10"
+    },
+    {
+      "line": "$User/Macro0=",
+      "page": "30",
+      "where": "sent from the control software's console",
+      "does": "assigns what the control box's Macro button does; what follows the equals sign is a command, or several joined by an ampersand, 250 characters at most"
+    },
+    {
+      "line": "$User/Macro0=$H",
+      "page": "30",
+      "where": "the manual's example, and the button's default",
+      "does": "the Macro button homes the machine"
+    },
+    {
+      "line": "$User/Macro0=M3 S10000",
+      "page": "30",
+      "where": "the manual's example",
+      "does": "the Macro button turns the spindle on"
+    },
+    {
+      "line": "$User/Macro0=G90&G53G0Z-1&G0X0Y0",
+      "page": "30",
+      "where": "the manual's example of several commands",
+      "does": "Z to machine -1, then to work X0 Y0"
+    },
+    {
+      "line": "$User/Macro0=$SD/Run=<file name>.nc",
+      "page": "30",
+      "where": "sent from the console",
+      "does": "the Macro button runs a file from the memory card (.nc, .tap, .txt, .gcode); the manual's example runs ANOLEX.nc"
+    },
+    {
+      "line": "$X",
+      "page": "30",
+      "where": "shown in the console pictures; the Unlock button sends it",
+      "does": "unlocks the controller after an alarm; the controller answers [MSG:Caution: Unlocked]"
+    },
+    {
+      "line": "$H",
+      "page": "25",
+      "where": "the Home button sends it; the banner after power-on names it with $X as what unlocks",
+      "does": "homes all axes"
+    }
+  ],
+  "settings_shown": {
+    "page": "34",
+    "note": "The WebUI's GRBL configuration page as pictured, which the manual recommends not changing. Read from a picture of a phone's screen: the first six only, and this machine's own $$ is the word to trust.",
+    "values": {"$0": 10, "$1": 254, "$2": 0, "$3": 2, "$4": 0, "$5": 1},
+    "candle_machine_information": {"page": "24", "note": "Candle's Settings as pictured, small in the picture and read as far as it can be", "status_query_period_ms": 30, "rapid_speed": 2000, "acceleration": 100, "spindle_speed_max": 10000}
+  },
+  "procedures": [
+    {
+      "name": "first cut",
+      "pages": ["23", "24", "25", "26"],
+      "steps": [
+        "release the emergency stop, connect USB, switch on",
+        "install the CH340 driver and find the serial port",
+        "open Candle, choose the port at 115200 baud",
+        "the console shows the Grbl 1.3a banner when connected",
+        "press Home: the spindle goes to its home position; if it fails, FAQ Q7",
+        "clamp the MDF",
+        "choose a step and a feed, and jog the bit down to the stock's surface until a sheet of paper is just gripped under it and can still be pulled through",
+        "set the origin there: Zero XY and Zero Z; switch the trim router on at its own switch and choose its speed; Send",
+        "finished"
+      ]
+    },
+    {
+      "name": "Z probe",
+      "pages": ["27"],
+      "steps": [
+        "measure the probe plate's thickness with calipers (19.08 mm in the manual's example)",
+        "put the measured thickness in the probe commands in place of the default Z19",
+        "clip the lead to the bit and stand the plate on the stock under the bit",
+        "Zero XY, then the Z-probe button: the bit goes down until it touches, the touch is given the plate's thickness as its Z, and the bit lifts 5 mm",
+        "take the probe off the bit and the stock before cutting"
+      ]
+    },
+    {
+      "name": "emergency stop",
+      "pages": ["28"],
+      "steps": [
+        "press it down when the machine misbehaves",
+        "USB drops, and the control software says it is not connected",
+        "turn it clockwise to release it"
+      ]
+    },
+    {
+      "name": "a limit switch touched",
+      "pages": ["29"],
+      "steps": [
+        "outside the working area the tool touches a red limit switch, the machine stops and its status is Alarm",
+        "Unlock, the status goes to Idle, then jog the other way, off the switch"
+      ]
+    },
+    {
+      "name": "the Macro button",
+      "pages": ["30"],
+      "steps": [
+        "the button on the control box homes the machine as shipped",
+        "$User/Macro0= followed by a command, or by commands joined with ampersands, gives it another",
+        "$User/Macro0=$SD/Run= followed by a file's name makes it run that file from the memory card"
+      ]
+    },
+    {
+      "name": "WiFi and the WebUI",
+      "pages": ["31", "32", "33", "34"],
+      "steps": [
+        "powered on, the controller is a WiFi access point of its own; its default password is on page 31",
+        "a captive page may open by itself and is cancelled",
+        "the WebUI (ESP3D for GRBL ESP32) is at the controller's address in a browser",
+        "its controls: a home for each axis and for all, jog rings in steps of 0.1, 1 and 10, a custom button, motors on and off, zero for each axis and for all, feeds for XY and for Z",
+        "its GRBL panel: unlock, feed and spindle overrides, spindle, flood (M08) and mist (M07), reset, the memory card's files with upload and send",
+        "its probe panel: maximum travel 40 mm, feed 100 mm/min, plate thickness 0.5 mm and retract 5 mm as pictured, and Start probe; the panel is switched on under Preferences when it is not shown",
+        "a console for commands; the GRBL configuration and the ESP3D settings, both recommended left alone"
+      ]
+    }
+  ],
+  "controller": {
+    "pages": ["20", "21"],
+    "front": ["Macro button", "USB", "memory card", "E-stop button"],
+    "back": {
+      "sockets": ["X-Motor", "X-CLM", "X-Limit", "Y1-Motor", "Y1-CLM", "Y-Limit", "Y2-Motor", "Y2-CLM", "Z-Motor", "Z-CLM", "Z-Limit", "A-Motor", "A-CLM", "A-Limit", "Probe", "Laser", "Laser / Spindle switch", "Offline Control", "M07", "M08"],
+      "other": ["antenna", "power switch and AC socket", "trim router cable socket (Spindle)", "fan"]
+    }
+  },
+  "package": {
+    "pages": ["01", "02"],
+    "assemblies": ["X-axis gantry", "Y-axis base", "Z-axis assembly", "controller", "trim router holder", "trim router with ER11 collet and nut"],
+    "cables": ["XYZ-axis stepper cable", "XYZ limit switch cable", "USB cable", "power cord", "trim router power cable", "cable wrap", "drag chain"],
+    "fasteners": {"M6x20 socket head cap bolt": 16, "M5x22 socket head cap bolt": 2, "M5x14 socket head cap bolt": 12, "M5x20 button head bolt": 2, "M3x8 button head bolt": 14, "M6x18 hex head bolt": 4, "M6 washer": 20, "M5 washer": 2, "M5 nut": 2, "M3 T-nut": 2, "cable clip": 10},
+    "tools_and_parts": ["spacer template tool", "CNC bits", "open end wrenches", "MDF test board x4", "Allen wrench set", "clamp x4", "Z-probe", "terminal blocks", "antenna", "zip ties", "drag chain bracket", "screwdriver", "card reader and SD card"],
+    "optional": {"page": "03", "items": ["1.5 kW spindle kit", "closed loop motor", "4th axis module", "laser module", "MDF spoil board"]}
+  },
+  "assembly": [
+    {"page": "04", "step": "remove the four acrylic blocks fixed to the aluminium profile"},
+    {"page": "05", "step": "gantry: space the nuts in the Y-axis profile with the spacer template tool; raise the gantry on two MDF boards, set its position with the tool, fix it with M6x20 bolts and washers on both sides"},
+    {"page": "06", "step": "Z axis: fix the Z-axis assembly to the gantry with M5x14 bolts, the top row of six loosely first, then the bottom row, set its height with the spacer template tool, then tighten all"},
+    {"page": "07", "step": "trim router holder: two M5x22 bolts, washers and nuts in its opening, left loose; four M6x18 hex bolts and washers hold it to the Z slider, each pressed into its hole by hand before the wrench"},
+    {"page": "08", "step": "trim router: the ER11 1/8 inch collet and nut come fitted; the router goes into the holder from above, and the two M5x22 bolts are tightened"},
+    {"page": "09", "step": "drag chain bracket: two M5x20 button head bolts hold it on the Z-axis assembly"},
+    {"page": "10", "step": "drag chain: one end to the gantry's black profile with two M3x8 bolts and T-nuts, the other to the bracket with two M3x8 bolts"},
+    {"page": "11", "step": "cable clips: M3x8 bolts hold them to the back of the Y-axis base, the gantry's side plate and the drag chain bracket"},
+    {"page": "13", "step": "clamps: before cutting, check the trim router will not hit a clamp's long screw, and use the short one if it would"},
+    {"page": "14", "step": "bit: unscrew the ER11 nut, put the bit in the collet, screw it back, tighten with two wrenches; the holes drilled in the nut are for balance"},
+    {"page": "15", "step": "wiring: open the drag chain's links with a screwdriver, lay the spindle cable, the Z limit switch cable and the Z motor cable in it"},
+    {"page": "16", "step": "close the links again"},
+    {"page": "17", "step": "connect each axis's motor and limit switch cable"},
+    {"page": "18", "step": "connect the trim router's cable and tie it"},
+    {"page": "19", "step": "bundle the trim router, limit switch and motor cables with zip ties and cable wrap"},
+    {"page": "20", "step": "plug every cable into the controller and fit the antenna"}
+  ],
+  "faq": [
+    {"q": "Q1", "page": "35", "about": "the PC does not see the serial port, or the machine will not move after power on", "answer": "check the CH340 driver, check whether the emergency stop or a limit switch is triggered, try another USB socket"},
+    {"q": "Q2", "page": "35", "about": "software", "answer": "CAM: Easel, Fusion 360, Carbide Create, VCarve Pro, MeshCAM, OpenBuilds CAM, Vectric Cut2D; control: Universal G-code Sender, OpenBuilds CONTROL, Candle; laser: LightBurn, LaserGRBL, Inkscape, LaserWeb 4"},
+    {"q": "Q3", "page": "35", "about": "materials", "answer": "6061 aluminium, copper, brass, vinyl, graphite, resin, sterling silver, nylon, gold, PCB, POM, PVC, wood, chipboard, MDF, laminates, veneers, cast acrylic, carbon fibre"},
+    {"q": "Q4", "page": "35", "about": "the machine moves and the trimmer does not turn", "answer": "check its cable, its own switch, and that the R/M switch on the control board is at R"},
+    {"q": "Q5", "page": "35", "about": "damaged parts", "answer": "the maker's support replaces them"},
+    {"q": "Q6", "page": "35", "about": "returns", "answer": "clean the machine, repack it, write to support"},
+    {"q": "Q7", "page": "35", "about": "Home failed", "answer": "check each axis's limit switch cable is in its own socket; check the emergency stop is released; a damaged switch, cable or driver, or changed configuration, is for support, with a video of the home. Alarm 8 in the console means a limit switch was already triggered when Home was pressed: release it first"}
+  ],
+  "against_this_machine": [
+    {"what": "Z travel", "manual": "130 mm (work area, sheet 3)", "controller": "$132=130", "here": "docs and the probe's bound say 80: the manual and the controller agree with each other"},
+    {"what": "maximum speed", "manual": "3000 mm/min", "controller": "$110 to $112 = 3000", "here": "the feed cap is 4000"},
+    {"what": "spindle speed", "manual": "the dial on the trim router, 8000 to 24000 rpm in six steps", "controller": "$30=10000, and Candle's own maximum is 10000", "here": "the page shows the speed asked of the controller, which the trim router does not follow"},
+    {"what": "the probe plate", "manual": "about 19 mm, measured (19.08 in its example), touch set with G92", "controller": "no setting: the thickness is the sender's", "here": "Probe Z probes down a depth and sets no thickness"},
+    {"what": "the Macro button", "manual": "homes the machine as shipped ($H)", "controller": "its input shows in the status report's pins as 0", "here": "a home from the box's own button is the controller's alone: nothing here stands between it and the axis"},
+    {"what": "a limit switch touched", "manual": "Alarm, then Unlock and jog off it", "controller": "ALARM:1 with $21=1", "here": "the Needs you card says the same"}
+  ]
+}
