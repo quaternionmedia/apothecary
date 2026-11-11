@@ -117,6 +117,19 @@ two is missing. What a port showed is kept while it is open and gone when it is 
 again, a replug or the controller's power included. The simulated router has no switch
 for a hand to press, and its homes are held to none of this.
 
+### What the state asks of a person
+
+What stops a person is in the machine's state, for the page, the deck and a program alike,
+and not only in a line of the log. A poll (`GET /firmware/printers/status`) carries
+`refused`, the last control line the port refused or its board objected to, with why and
+when, until a line goes; `todo`, what must be done before the machine moves again -- a
+controller in alarm takes no jog until Unlock (`$X`) or a home; and `homing`, for each
+axis which way a home will seek, how fast and how far, and whether its switch has been
+seen and the axis jogged that way. The Machine shows the first two in a **Needs you**
+card, there only while there is something, and the third beside the Home buttons, each
+axis with what to do first; a Home not yet proved is outlined. `refused` is a printer's
+too.
+
 ## Simulated
 
 `APOTHECARY_SERIAL_ENGINE=simulated` answers every port as the simulated

@@ -172,3 +172,16 @@
 /* A machine planned with no board connected: the head's link verbs, the control
    latch and E-STOP are its board's, and stand for nothing here. */
 .machine.planning .machine-head .cluster { display: none; }
+
+
+/* What the machine's state asks of a person: what it needs before it moves again, and the
+   last line that did not go. Shown only while there is something. */
+#c-needs-card[hidden] { display: none; }
+#c-needs-card { border-color: var(--warn); min-height: 0; }
+#c-needs .need { font-size: 0.8rem; padding: 0.15rem 0; }
+#c-needs .need .why, #ctl-homing .why { color: var(--ink-2); font-size: 0.74rem; overflow-wrap: anywhere; }
+/* Each axis's home beside its button: which way it seeks, and what the port has shown. */
+#ctl-homing { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.76rem; color: var(--ink-2); }
+#ctl-homing .home-axis, #ctl-homing .why { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+#ctl-homing .home-axis.unproved { border-left: 2px solid var(--warn); padding-left: 0.4rem; }
+#control button.unproved { border-color: var(--warn); color: var(--warn); }

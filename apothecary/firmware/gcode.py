@@ -899,6 +899,8 @@ class PrinterLinks:
     """Open links, one per port, released as a group before a task takes a port."""
 
     def __init__(self, factory: Optional[TransportFactory] = None):
+        # The last control line each port refused, until one goes (devices.printer_control).
+        self.refused: Dict[str, dict] = {}
         self._links: Dict[str, GcodeLink] = {}
         self._logs: Dict[str, CommsLog] = {}
         self._lock = threading.RLock()  # open() reaches log_for() while holding it

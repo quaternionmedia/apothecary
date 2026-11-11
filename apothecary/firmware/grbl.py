@@ -1057,6 +1057,8 @@ def poll_router(link: GcodeLink, wait: Optional[float] = None) -> PrinterStatus:
         alarm_text=alarm_text(alarm),
         overrides=status["overrides"],
         raw=raw,
+        todo=todo_of(mstate, alarm),
+        homing=homing_now(link, mstate),
     )
 
 
@@ -1072,6 +1074,9 @@ HOME_JOG_MM = 1.0  # jogged this far the way homing seeks, an axis has shown whi
 HOME_SEARCH = 1.5  # Grbl seeks this many times an axis's travel before ALARM:9
 HOMING_DIR, HOMING_SEEK, HARD_LIMITS = 23, 25, 21  # the settings a home is read from
 TRAVEL_OF_AXIS = {"X": 130, "Y": 131, "Z": 132}
+# Set, a simulated router's homes are held to the proof as a real one's are: how the
+# page's part of it is shown without a machine.
+UNPROVED_ENV = "APOTHECARY_SIMULATED_ROUTER_UNPROVED"
 JOG_RE = re.compile(r"^\$J=(?=[^XYZ]*G91)[^XYZ]*?((?: [XYZ]-?\d+(?:\.\d+)?)+)")
 
 
@@ -1089,6 +1094,7 @@ class HomingProof:
         self.forget()
 
     def forget(self) -> None:
+        self.settings: Optional[Dict[int, float]] = None  # ``$$`` as last read on this port
         self.on: set = set()  # axes whose switch the last report had on
         self.seen: set = set()  # axes whose switch has been on and off again
         self.jogged: Dict[str, Dict[str, float]] = {a: {"+": 0.0, "-": 0.0} for a in "XYZ"}
@@ -1117,7 +1123,8 @@ def proof_of(link: GcodeLink) -> HomingProof:
     """What ``link``'s port has shown since it was opened."""
     proof = getattr(link, "homing_proof", None)
     if proof is None:
-        proof = HomingProof(assumed=isinstance(getattr(link, "_t", None), SimulatedRouter))
+        simulated = isinstance(getattr(link, "_t", None), SimulatedRouter)
+        proof = HomingProof(assumed=simulated and not os.environ.get(UNPROVED_ENV))
         link.homing_proof = proof
     return proof
 
@@ -1126,13 +1133,18 @@ def homing_of(link: GcodeLink, axes: str = "XYZ") -> List[dict]:
     """For each of ``axes``: which way a home will seek (``$23``), how fast (``$25``), how
     far at most (``HOME_SEARCH`` times its travel), and whether this port has shown its
     switch and jogged it that way. Read from the controller's own settings, now."""
-    settings = parse_settings(link.command("$$", timeout=15.0, origin="control"))
-    if HOMING_DIR not in settings:
+    proof = proof_of(link)
+    proof.settings = parse_settings(link.command("$$", timeout=15.0, origin="control"))
+    if HOMING_DIR not in proof.settings:
         raise NotProved(
             f"home refused: {link.port} does not say which way it homes ($23), so no axis "
             "can be shown to go that way first"
         )
-    proof = proof_of(link)
+    return homing_from(proof.settings, proof, axes)
+
+
+def homing_from(settings: Dict[int, float], proof: HomingProof, axes: str = "XYZ") -> List[dict]:
+    """``homing_of`` from settings already read."""
     mask = int(settings[HOMING_DIR])
     out = []
     for axis in axes:
@@ -1149,7 +1161,35 @@ def homing_of(link: GcodeLink, axes: str = "XYZ") -> List[dict]:
                 "jogged": proof.assumed or proof.jogged[axis][way] >= HOME_JOG_MM,
             }
         )
+    for one in out:
+        one["ready"] = one["switch_seen"] and one["jogged"]
     return out
+
+
+def homing_now(link: GcodeLink, mstate: str) -> Optional[List[dict]]:
+    """Each axis's homing for a poll, from the settings this port last gave. They are
+    asked for once, while the controller is idle or in alarm and no job holds the port
+    (``$$`` is refused in motion); None until they have been read."""
+    proof = proof_of(link)
+    if proof.settings is None and mstate in ("Idle", "Alarm") and link.job is None:
+        try:
+            proof.settings = parse_settings(link.command("$$", timeout=5.0))
+        except ToolchainError:
+            return None
+    if not proof.settings or HOMING_DIR not in proof.settings:
+        return None
+    return homing_from(proof.settings, proof)
+
+
+def todo_of(mstate: str, alarm: Optional[int]) -> List[str]:
+    """What the controller's state asks of a person before the machine moves again."""
+    if mstate != "Alarm":
+        return []
+    why = f" {alarm} ({alarm_text(alarm)})" if alarm is not None else ""
+    return [
+        f"In alarm{why}: nothing moves, a jog included, until Unlock ($X) or a home. "
+        "Unlock keeps the position the controller believes; a home finds it again."
+    ]
 
 
 def check_home(link: GcodeLink, cmd: str) -> None:
@@ -1161,21 +1201,21 @@ def check_home(link: GcodeLink, cmd: str) -> None:
     for one in homing_of(link, cmd[2:] or "XYZ"):
         axis, way = one["axis"], one["way"]
         todo = []
+        if not one["jogged"]:
+            todo.append(
+                f"it has not been jogged {HOME_JOG_MM:g} mm toward {way}{axis}: jog it that "
+                "way and watch which way the tool goes, since the home goes the same way."
+            )
         if not one["switch_seen"]:
             alarm = (
                 " With hard limits on ($21=1) that puts the controller in alarm (ALARM:1), "
-                "which Unlock or the home clears."
+                "which Unlock or the home clears; a jog needs the Unlock."
                 if one["hard_limits"]
                 else ""
             )
             todo.append(
                 f"its limit switch has not been seen: press it by hand for two seconds while "
                 f"the Machine polls, and let go (its pins show {axis}).{alarm}"
-            )
-        if not one["jogged"]:
-            todo.append(
-                f"it has not been jogged {HOME_JOG_MM:g} mm toward {way}{axis}: jog it that "
-                "way and watch which way the tool goes, since the home goes the same way."
             )
         if todo:
             seek = "" if one["seek"] is None else f" at {one['seek']:g} mm/min ($25)"

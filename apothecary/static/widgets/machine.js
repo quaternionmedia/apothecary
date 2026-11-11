@@ -128,6 +128,7 @@ const HEAD = `
 const CARDS = `
 <div class="cards" id="cards">
     <div class="card printer-only gcode"><div class="k">State</div><div class="v" id="c-state">—</div><div class="s" id="c-state-s"></div></div>
+    <div class="card wide needs" id="c-needs-card" hidden><div class="k">Needs you</div><div class="needs-list" id="c-needs"></div></div>
     <div class="card wide"><div class="k">Board · link</div><div class="kv" id="c-board">—</div></div>
 </div>
 <div data-section="status">
@@ -276,6 +277,7 @@ const CONTROL = `
             <div class="row steps">step <button type="button" data-step="0.1">0.1</button><button type="button" data-step="1">1</button><button type="button" data-step="10" class="on">10</button><button type="button" data-step="50">50</button> mm
                 · F <input type="number" id="h-feed" min="10" max="12000" step="100" value="3000" title="How fast to jog, in mm/min"></div>
             <div class="row"><button type="button" data-cmd="HOME-X">Home X</button><button type="button" data-cmd="HOME-Y">Home Y</button><button type="button" data-cmd="HOME-Z">Home Z</button></div>
+            <div class="homing router-only" id="ctl-homing"></div>
             <div class="row printer-only"><button type="button" data-cmd="G28 X Y">Home XY</button><button type="button" data-cmd="M84">Motors off</button><button type="button" data-cmd="M410">Quickstop</button></div>
             <div class="row router-only"><button type="button" data-cmd="$X" title="Unlock after an alarm ($X): the controller moves again, where it believes it is">Unlock</button><button type="button" data-cmd="G53 G0 Z0" title="The tool to the top of its travel, in machine coordinates">Top of Z</button><button type="button" data-cmd="G0 X0 Y0" title="The tool over the work zero, at its height">Go to zero</button><button type="button" data-cmd="JOG-CANCEL" title="Stop a jog in flight">Stop jog</button></div>
         </div>
@@ -529,6 +531,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const st = bd && bd.status, d = bd && bd.device;
         const pr = d && d.printer;
         $("ident").innerHTML = identLine(bd, d, pr);
+        renderNeeds(st);
         if (!st) { $("c-state").textContent = "—"; $("c-state-s").textContent = ""; renderBoard(); return; }
         const offline = st.state === "offline";
         $("dot").className = "dot " + (offline ? "bad" : "on");
@@ -560,12 +563,53 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         return state.port ? (bd.info ? "not detected" : "connecting…") : "—";
     }
 
+    // What the machine's state asks of a person, read from the poll and not from the log:
+    // what must be done before it moves again (a router in alarm), and the last control
+    // line the port refused or its board objected to, until one goes.
+    function renderNeeds(st) {
+        const rows = [];
+        for (const t of (st && st.todo) || []) rows.push(`<div class="need warn">${esc(t)}</div>`);
+        const r = st && st.refused;
+        if (r) {
+            const at = r.at ? new Date(r.at).toLocaleTimeString() : "";
+            rows.push(`<div class="need bad"><b>${esc(r.command)}</b> did not go${at ? ` · ${esc(at)}` : ""}<div class="why">${esc(r.said)}</div></div>`);
+        }
+        $("c-needs").innerHTML = rows.join("");
+        $("c-needs-card").hidden = !rows.length;
+    }
+
+    // Each axis's home, beside the buttons that ask for it: which way it will seek, and
+    // the two things the port must have shown first. A home not proved is refused by the
+    // server; here it is said before it is asked.
+    function renderHoming(st) {
+        const box = $("ctl-homing"), pad = $("control");
+        const homing = (st && st.homing) || [];
+        for (const b of pad.querySelectorAll('button[data-cmd^="HOME-"]')) {
+            const one = homing.find((h) => h.axis === b.dataset.cmd.slice(-1));
+            b.classList.toggle("unproved", !!one && !one.ready);
+        }
+        const all = pad.querySelector('button[data-cmd="HOME"]');
+        if (all) all.classList.toggle("unproved", homing.some((h) => !h.ready));
+        const mark = (ok) => (ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>');
+        box.innerHTML = homing.map((h) => {
+            const far = h.search != null ? `up to ${h.search.toFixed(0)} mm` : "";
+            const fast = h.seek != null ? `at ${h.seek.toFixed(0)} mm/min` : "";
+            const need = [];
+            if (!h.jogged) need.push(`jog ${h.axis} 1 mm toward ${h.way}${h.axis} and watch which way it goes`);
+            if (!h.switch_seen) need.push(`press ${h.axis}'s limit switch by hand for two seconds and let go`);
+            return `<div class="home-axis${h.ready ? "" : " unproved"}" data-axis="${esc(h.axis)}" title="A home of ${esc(h.axis)} seeks ${esc(h.way)}${esc(h.axis)} ${fast} ${far} until its switch closes: it is sent once the switch has been seen on and off, and the axis jogged that way">`
+                + `<b>${esc(h.axis)}</b> seeks ${esc(h.way)}${esc(h.axis)} · switch ${mark(h.switch_seen)} · way ${mark(h.jogged)}`
+                + (need.length ? `<div class="why">first: ${esc(need.join("; then "))}</div>` : "") + `</div>`;
+        }).join("");
+    }
+
     // A router: its controller's state and word, the tool in the work zero and in machine
     // coordinates, the spindle, the feed and the overrides, the input pins on.
     function renderRouter() {
         const bd = state.port ? b() : null;
         const st = bd && bd.status, d = bd && bd.device, pr = d && d.printer;
         $("ident").innerHTML = identLine(bd, d, pr);
+        renderNeeds(st); renderHoming(st);
         if (!st) { $("c-state").textContent = "—"; $("c-state-s").textContent = ""; renderBoard(); return; }
         const offline = st.state === "offline";
         $("dot").className = "dot " + (offline ? "bad" : "on");

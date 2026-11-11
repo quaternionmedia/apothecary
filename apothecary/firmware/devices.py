@@ -969,6 +969,7 @@ def printer_status(
         status.job = job
         if status.state == "idle":
             status.state = busy_word(job["kind"])  # the card is idle; the host is not
+    status.refused = refused(port, links)
     return notify_status(status)
 
 
@@ -1000,6 +1001,7 @@ def _last_status_with(port: str, job: dict) -> gcode.PrinterStatus:
     )
     status.job = dict(job)
     status.synced = []
+    status.refused = refused(port)
     if job.get("kind") in STREAMED and status.state == "idle":
         status.state = busy_word(job["kind"])
     return status
@@ -1041,7 +1043,42 @@ def printer_reset(
     return link.reset()  # refused by the link itself while a job holds it
 
 
+# The last control line each port refused, or its board objected to, kept until one
+# goes: a poll carries it (``PrinterStatus.refused``), so what stopped a person is in the
+# machine's state for the page, the deck and a program alike, not only in a line of the
+# log. It is kept with the links (``PrinterLinks.refused``).
+
+
+def refused(port: str, links: Optional[gcode.PrinterLinks] = None) -> Optional[dict]:
+    """The last control line ``port`` refused, with why and when; None once one went."""
+    said = (links or gcode.get_printer_links()).refused.get(port)
+    return dict(said) if said else None
+
+
 def printer_control(
+    port: str,
+    command: str,
+    state: Optional[FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
+) -> PrinterQueryResult:
+    """``_control``, keeping what it refused: the latch not armed, a line out of its
+    bounds, a home not proved, a job holding the port, the board's own objection."""
+    kept = (links or gcode.get_printer_links()).refused
+    try:
+        result = _control(port, command, state, links)
+    except (ValueError, ToolchainError) as exc:
+        if not is_emergency_stop(command):
+            kept[port] = {
+                "command": " ".join(command.strip().upper().split()),
+                "said": str(exc),
+                "at": datetime.now(timezone.utc).isoformat(),
+            }
+        raise
+    kept.pop(port, None)
+    return result
+
+
+def _control(
     port: str,
     command: str,
     state: Optional[FirmwareState] = None,

@@ -732,3 +732,55 @@ def test_a_home_not_proved_is_refused_by_the_route_in_words_and_nothing_is_sent(
     assert "$HZ" not in _sent(link)
     with pytest.raises(grbl.NotProved):  # and Probe table's own home is the same home
         grbl.probe_table(link)
+
+
+# --- what stopped a person is in the machine's state ----------------------------------
+
+
+def test_a_refused_line_is_in_the_status_until_one_goes(fake_arduino_cli, router_links):
+    assert devices.printer_status(PORT).refused is None
+    with pytest.raises(gcode.ControlNotArmed):
+        devices.printer_control(PORT, "$J=G91 G21 X1 F1000")
+    said = devices.printer_status(PORT).refused
+    assert said["command"] == "$J=G91 G21 X1 F1000" and "not armed" in said["said"] and said["at"]
+    router_links.control.arm(PORT)
+    with pytest.raises(ValueError, match="spindle above"):
+        devices.printer_control(PORT, "M3 S30000")
+    assert "spindle above" in devices.printer_status(PORT).refused["said"]
+    devices.printer_control(PORT, "$J=G91 G21 X1 F1000")
+    assert devices.printer_status(PORT).refused is None
+    devices.printer_control(PORT, "M112")  # a stop is never what stopped a person
+    assert devices.printer_status(PORT).refused is None
+
+
+def test_the_boards_own_objection_is_in_the_status_with_what_the_alarm_asks(
+    fake_arduino_cli, router_links, monkeypatch
+):
+    monkeypatch.setenv("APOTHECARY_SIMULATED_ROUTER_STATE", "alarm")
+    router_links.control.arm(PORT)
+    status = devices.printer_status(PORT)
+    assert status.state == "alarm" and len(status.todo) == 1
+    assert "nothing moves, a jog included, until Unlock ($X) or a home" in status.todo[0]
+    with pytest.raises(ToolchainError):
+        devices.printer_control(PORT, "$J=G91 G21 Z1 F1000")  # locked out, as a real one is
+    status = devices.printer_status(PORT)
+    assert status.refused["command"] == "$J=G91 G21 Z1 F1000" and "error:" in status.refused["said"]
+    devices.printer_control(PORT, "$X")
+    status = devices.printer_status(PORT)
+    assert status.todo == [] and status.refused is None and status.state == "idle"
+
+
+def test_a_poll_says_each_axis_s_homing_and_what_it_has_shown(fake_arduino_cli, router_links):
+    devices.printer_status(PORT)
+    link = router_links.get(PORT)
+    assert all(one["ready"] for one in devices.printer_status(PORT).homing)  # simulated: assumed
+    grbl.proof_of(link).assumed = False
+    homing = {one["axis"]: one for one in devices.printer_status(PORT).homing}
+    assert set(homing) == {"X", "Y", "Z"} and not any(one["ready"] for one in homing.values())
+    assert homing["Z"]["way"] in "+-" and homing["Z"]["seek"] and homing["Z"]["search"]
+    _press(link, link._t, "Z")
+    router_links.control.arm(PORT)
+    devices.printer_control(PORT, f"$J=G91 G21 Z{homing['Z']['way'].strip('+')}1 F1000")
+    z = next(one for one in devices.printer_status(PORT).homing if one["axis"] == "Z")
+    assert z["switch_seen"] and z["jogged"] and z["ready"]
+    assert _sent(link).count("$$") == 1  # the settings are asked for once, not at every poll

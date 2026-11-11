@@ -536,6 +536,15 @@ class PrinterStatus(BaseModel):
     alarm: Optional[int] = None
     alarm_text: Optional[str] = None  # the alarm in the dialect's words
     overrides: Optional[dict] = None
+    # What the machine's state asks of a person, so it is read from the state and not
+    # from a line of the log. ``refused``: the last control line this port refused or its
+    # board objected to -- {"command", "said", "at"} -- until one goes. ``todo``: what must
+    # be done before the machine moves again, in the dialect's words (a router in alarm).
+    # ``homing``: for each axis of a router, which way a home will seek, how fast and how
+    # far, and whether its switch has been seen and the axis jogged that way (grbl.py).
+    refused: Optional[dict] = None
+    todo: List[str] = Field(default_factory=list)
+    homing: Optional[List[dict]] = None
 
     @property
     def heating(self) -> bool:
