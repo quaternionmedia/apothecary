@@ -999,7 +999,9 @@ def _models(toggle: Option) -> Option:
 def _marks(toggle: Option) -> Option:
     """Panels › Pictures › Marks: the window, then a person's word on the mark chosen
     in it, which the page hands to it (widgets/marks.js): a diagram's, writing, unsure,
-    or nothing. Seated after the window's own cell."""
+    or nothing; then a whiteboard's history, Earlier and Later stepping its slider to
+    the event before or after, and Place placing the moment at the selected place.
+    Seated after the window's own cell, the history's after the kinds."""
     return Option(
         id="panels:marks",
         label="Marks",
@@ -1010,6 +1012,9 @@ def _marks(toggle: Option) -> Option:
                 Option(id=f"marks:say:{kind}", label=kind.capitalize(), action=f"marks:say:{kind}")
                 for kind in MARK_KINDS
             ),
+            Option(id="marks:earlier", label="Earlier", action="marks:earlier"),
+            Option(id="marks:later", label="Later", action="marks:later"),
+            Option(id="marks:place", label="Place", action="marks:place"),
         ],
     )
 

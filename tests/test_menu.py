@@ -1203,6 +1203,10 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Writing", "marks:say:writing"),
         ("Unsure", "marks:say:unsure"),
         ("Nothing", "marks:say:nothing"),
+        # A whiteboard's history: its slider stepped, and the moment placed.
+        ("Earlier", "marks:earlier"),
+        ("Later", "marks:later"),
+        ("Place", "marks:place"),
     ]
     assert carried_by("marks:say:writing").name == "VIEWER"
     assert address_of(root, "panel:marks") == "4248"

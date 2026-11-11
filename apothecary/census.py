@@ -515,6 +515,24 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a handle per corner of a whiteboard on its photograph, dragged or nudged with the "
         "arrow keys and set with Enter: a person's word on where the whiteboard is",
     ),
+    "marks-when": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a slider over a whiteboard's history: the photograph of the moment it stands at "
+        "drawn, with the words given by then",
+    ),
+    "marks-take": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button per change since the photograph before that taking changes a piece or "
+        "carries a note's words",
+    ),
+    "marks-place": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that places the moment the slider stands at, with its words, at the "
+        "place selected in the world",
+    ),
     "marks-words": (
         WIDGET,
         WHAT_IS_THERE,
@@ -688,6 +706,10 @@ RING_BACKED: Dict[str, str] = {
     # A mark's kind is a cell of Panels › Pictures › Marks, on the mark chosen there
     "marks-kind": "marks:say:diagram",
     "marks:change:closest": "marks:say:diagram",
+    # The history's slider is Earlier and Later, and Place is Place, under Marks
+    "marks-when": "marks:later",
+    "marks:input:closest": "marks:later",
+    "marks-place": "marks:place",
     "models:keydown:closest": "models:say:colour:red",
     # GO and Start over are the cells of Panels › Site › Procedure; a step's node opens
     # the window its ring's Device › Open does
@@ -1233,6 +1255,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "a mark's kind chosen, a person's word on it; or another picture's marks listed",
     ),
     "marks:click:closest": (WIDGET, WHAT_YOU_SEE, "a mark chosen, for the ring's Marks cells"),
+    "marks:input:closest": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the history's slider moved: the whiteboard as it stood then",
+    ),
     "marks:pointerdown:grabCorner": (
         WIDGET,
         WHAT_YOU_SEE,

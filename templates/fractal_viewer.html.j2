@@ -1697,9 +1697,13 @@
                                     const all = [...((this.pictureMarks.attached() || {}).views || [])].reverse();
                                     const drawn = (v) => v.host !== null && (this.pictureMarks.drawnAt(v.host) || {}).id === v.id;
                                     return [...all.filter(drawn), ...all.filter((v) => !drawn(v))]
-                                        .map((v) => ({ id: v.id, picture: v.picture, host: v.host, finder: v.finder, squared: !!v.squared }));
+                                        .map((v) => ({ id: v.id, picture: v.picture, host: v.host, finder: v.finder, squared: !!v.squared, source: v.squared ? v.squared.source : null }));
                                 },
                                 changed: () => this.pictureMarks.refresh(),
+                                draw: (host, viewId) => this.pictureMarks.draw(host, viewId),
+                                // The place selected in the world, where a moment is placed:
+                                // a structure, "" for the floor, null for nowhere a picture lies.
+                                place: () => (this.selectedName === null || this.selectedName === undefined ? null : this.placeFor(this.selectedName)),
                             },
                         });
                         window.apothecaryMarks = this.marksWidget;

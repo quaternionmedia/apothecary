@@ -15,21 +15,35 @@
  * word on that corner (PUT .../corners): the photograph is squared again, and the
  * view searched again, until a piece is made from it.
  *
+ * A whiteboard's photograph has its whiteboard's history under When (GET
+ * /sites/{s}/whiteboards/{w}/timeline): every photograph, word and piece made as a
+ * tick on one strip, and a slider that scrubs it. A moment scrubbed to is the
+ * whiteboard as it stood then: the newest photograph pinned by then, drawn in the
+ * world, with the words given by then (?as_of=). Under it, what changed since the
+ * photograph before, a row each, and Take on each row that changes a piece or
+ * carries a note's words (POST .../again); and Place, which places the moment at
+ * the place selected in the world (POST .../place).
+ *
  * A mark's kind is the canvas ring's Panels › Pictures › Marks too (Diagram,
- * Writing, Unsure, Nothing), on the mark chosen here: the page hands each to act().
+ * Writing, Unsure, Nothing), on the mark chosen here, and so are Earlier and Later,
+ * which step the slider to the event before or after, and Place: the page hands
+ * each to act().
  *
  * mountMarks(root, { base, world, log }) renders into root; `world` is what the
- * page offers: siteName(), views() -- each { id, picture, host, finder, squared }, the one
- * drawn at the selected place first -- and changed(), called after a word that
- * moved a view's shapes. log(text, kind) is the page's status bar. load() reads
- * the views and the chosen view's marks again; act("say:<kind>") says the chosen
- * mark is that kind.
+ * page offers: siteName(), views() -- each { id, picture, host, finder, squared, source }, the one
+ * drawn at the selected place first -- changed(), called after a word that moved a
+ * view's shapes, draw(host, view), which draws a view at its place, and place(), the
+ * place selected in the world (a structure, or "" for the floor). log(text, kind) is
+ * the page's status bar. load() reads the views and the chosen view's marks again;
+ * act("say:<kind>") says the chosen mark is that kind; act("earlier"), act("later")
+ * and act("place") are the slider's steps and Place.
  */
 
 const MARKUP = `
 <div class="marks-ui">
     <div class="row"><select class="marks-view" aria-label="The picture whose marks are listed"></select></div>
     <div class="marks-said note"></div>
+    <div class="marks-time"></div>
     <div class="marks-corners"></div>
     <div class="k">Marks</div>
     <ul class="marks-list"><li class="empty">–</li></ul>
@@ -49,6 +63,9 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
     const say = (text, kind = "") => { if (log) log(text, kind); };
     let views = [], viewId = null, read = null, chosen = null, alive = true;
     let corners = null, dragging = null;
+    // A whiteboard's history: its timeline, the slider's place on it (per mille of
+    // its span; 1000 is now), and what changed since the photograph before.
+    let line = null, when = 1000, rows = [], scrubbing = null;
 
     async function api(path, opts = {}) {
         const r = await fetch(base + path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -61,7 +78,7 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
     function renderViews() {
         const pick = $(".marks-view");
         pick.innerHTML = views.length
-            ? views.map((v) => `<option value="${esc(v.id)}"${v.id === viewId ? " selected" : ""}>${esc(v.picture)} · ${esc(v.host === "" ? "the floor" : v.host ?? "nowhere")}</option>`).join("")
+            ? views.map((v) => `<option value="${esc(v.id)}"${v.id === viewId ? " selected" : ""}>${esc(v.source || v.picture)} · ${esc(v.host === "" ? "the floor" : v.host ?? "nowhere")}</option>`).join("")
             : '<option value="">no picture pinned here yet</option>';
         pick.disabled = !views.length;
     }
@@ -111,6 +128,131 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
             <div class="note marks-corners-said">${esc(said)}</div>`;
     }
 
+    const STEPS = 1000;
+    const ms = (iso) => new Date(iso).getTime();
+    const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    // The moment the slider stands at: null at its end, which is now.
+    function moment() {
+        if (!line || !line.since || when >= STEPS) return null;
+        const t0 = ms(line.since), t1 = ms(line.until);
+        return new Date(t0 + ((t1 - t0) * when) / STEPS).toISOString();
+    }
+    function stepOf(iso) {
+        const t0 = ms(line.since), t1 = ms(line.until);
+        return t1 > t0 ? Math.round(((ms(iso) - t0) / (t1 - t0)) * STEPS) : STEPS;
+    }
+    function layerAt(at) {
+        const shot = line.photographs;
+        if (!shot.length) return null;
+        if (!at) return shot[shot.length - 1];
+        const by = shot.filter((p) => ms(p.taken_at) <= ms(at));
+        return by.length ? by[by.length - 1] : shot[0];
+    }
+
+    function renderTime() {
+        const held = $(".marks-time");
+        if (!line || !line.events.length) { held.innerHTML = ""; return; }
+        const at = moment();
+        const layer = layerAt(at);
+        const number = line.photographs.findIndex((p) => p.id === layer.id) + 1;
+        const upto = line.events.filter((e) => !at || ms(e.at) <= ms(at));
+        const count = (kind) => upto.filter((e) => e.kind === kind).length;
+        const ticks = line.events.map((e) => {
+            const x = stepOf(e.at);
+            const tall = e.kind === "photograph" ? 24 : e.kind === "made" ? 14 : 9;
+            return `<line class="tick ${esc(e.kind)}" x1="${x}" x2="${x}" y1="${24 - tall}" y2="24"><title>${esc(clock(e.at))}: ${esc(e.says)}</title></line>`;
+        }).join("");
+        const taking = rows.filter((r) => r.takeable);
+        held.innerHTML = `<div class="k">When</div>
+            <svg class="marks-strip" viewBox="0 0 ${STEPS} 24" preserveAspectRatio="none" aria-hidden="true">${ticks}<line class="now" x1="${when}" x2="${when}" y1="0" y2="24"></line></svg>
+            <input type="range" class="marks-when" min="0" max="${STEPS}" step="1" value="${when}" aria-label="When: scrub the whiteboard's history">
+            <div class="note marks-when-said">${at ? `As of ${esc(clock(at))}` : "Now"}: photograph ${number} of ${line.photographs.length} · ${count("word") + count("note")} word(s) given · ${count("made")} piece(s) made</div>
+            ${number > 1 ? `<div class="k">Since photograph ${number - 1}</div>
+            <ul class="marks-rows">${rows.length ? rows.map((r) => `<li class="marks-change" data-row="${r.number}">
+                <span class="origin">${esc(r.change)}</span><span class="meta grow">${esc(r.kind)}: ${esc(r.says)}</span>
+                ${r.takeable ? `<button type="button" class="marks-take" data-row="${r.number}" title="Take this change: ${esc(r.says)}">Take</button>` : ""}
+            </li>`).join("") : '<li class="empty">nothing changed</li>'}</ul>
+            ${taking.length ? "" : '<div class="note">No row here changes a piece: make the earlier photograph\'s shapes first, and a change to them can be taken.</div>'}` : ""}
+            <div class="row"><button type="button" class="marks-place" title="Pin this moment's picture, with its words, at the place selected in the world">Place this moment at the selected place</button></div>`;
+    }
+
+    async function loadTime() {
+        const view = views.find((v) => v.id === viewId);
+        if (!view || !view.squared) { line = null; rows = []; renderTime(); return; }
+        try { line = await api(`/sites/${encodeURIComponent(world.siteName())}/whiteboards/${encodeURIComponent(view.host)}/timeline`); }
+        catch (e) { line = null; say(`its whiteboard's history could not be read: ${e.message}`, "bad"); }
+        await loadRows();
+        renderTime();
+    }
+
+    async function loadRows() {
+        rows = [];
+        if (!line) return;
+        const at = line.photographs.findIndex((p) => p.id === viewId);
+        if (at < 1) return;
+        try { rows = (await api(`${viewUrl()}/again?since=${encodeURIComponent(line.photographs[at - 1].id)}`)).rows; }
+        catch (e) { say(`what changed since the photograph before could not be read: ${e.message}`, "bad"); }
+    }
+
+    // The slider moved: the photograph of that moment drawn and listed, and its
+    // words as of then.
+    async function scrubTo(step) {
+        when = Math.max(0, Math.min(STEPS, step));
+        const layer = layerAt(moment());
+        if (layer && layer.id !== viewId) {
+            viewId = layer.id;
+            renderViews();
+            const view = views.find((v) => v.id === viewId);
+            if (world && world.draw && view) world.draw(view.host, viewId);
+            await loadRows();
+        }
+        renderTime();
+        clearTimeout(scrubbing);
+        scrubbing = setTimeout(readMarks, 120);
+    }
+
+    async function readMarks() {
+        const at = moment();
+        try { read = await api(`${viewUrl()}/marks${at ? `?as_of=${encodeURIComponent(at)}` : ""}`); }
+        catch (e) { read = null; say(`its marks could not be read: ${e.message}`, "bad"); }
+        if (read && !read.marks.some((m) => m.id === chosen)) chosen = null;
+        render();
+    }
+
+    function step(by) {
+        if (!line || !line.events.length) { say("no whiteboard's history here: choose a photograph of a whiteboard in Marks", "bad"); return false; }
+        const stops = [...new Set(line.events.map((e) => stepOf(e.at)))].sort((a, b) => a - b);
+        const next = by < 0 ? [...stops].reverse().find((s) => s < when) : stops.find((s) => s > when);
+        const to = next === undefined ? (by < 0 ? 0 : STEPS) : next;
+        scrubTo(to === stops[stops.length - 1] && by > 0 ? STEPS : to);
+        const at = moment();
+        say(at ? `the whiteboard as of ${clock(at)}` : "the whiteboard now");
+        return true;
+    }
+
+    async function take(number) {
+        const at = line.photographs.findIndex((p) => p.id === viewId);
+        try {
+            const done = await api(`${viewUrl()}/again`, { method: "POST", body: JSON.stringify({ since: line.photographs[at - 1].id, take: [number] }) });
+            say(`taken: ${done.made.length ? `${done.made.join(", ")} made` : ""}${done.made.length && done.dropped.length ? "; " : ""}${done.dropped.length ? `${done.dropped.join(", ")} dropped` : ""}${!done.made.length && !done.dropped.length ? "its words carried" : ""}`);
+            if (world && world.changed) await world.changed();
+            await loadTime();
+            readMarks();
+        } catch (e) { say(`row ${number}: ${e.message}`, "bad"); }
+    }
+
+    async function place() {
+        const host = world && world.place ? world.place() : null;
+        if (host === null || host === undefined) { say("select a place in the world first: a structure, or the floor", "bad"); return false; }
+        const at = moment();
+        try {
+            const placed = await api(`${viewUrl()}/place`, { method: "POST", body: JSON.stringify({ host, as_of: at }) });
+            say(`${at ? `the whiteboard as of ${clock(at)}` : "the whiteboard now"} placed at ${host === "" ? "the floor" : host}: ${placed.shapes.length} shape(s) there to make`);
+            if (world && world.changed) await world.changed();
+            return true;
+        } catch (e) { say(`placing it: ${e.message}`, "bad"); return false; }
+    }
+
     async function loadCorners() {
         const view = views.find((v) => v.id === viewId);
         corners = null;
@@ -136,9 +278,11 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
         views = world ? world.views() : [];
         if (!views.some((v) => v.id === viewId)) viewId = views.length ? views[0].id : null;
         renderViews();
-        if (!viewId) { read = null; corners = null; render(); renderCorners(); return; }
+        if (!viewId) { read = null; corners = null; line = null; render(); renderCorners(); renderTime(); return; }
         loadCorners();
-        try { read = await api(`${viewUrl()}/marks`); }
+        await loadTime();
+        const at = moment();
+        try { read = await api(`${viewUrl()}/marks${at ? `?as_of=${encodeURIComponent(at)}` : ""}`); }
         catch (e) { read = null; say(`its marks could not be read: ${e.message}`, "bad"); }
         if (read && !read.marks.some((m) => m.id === chosen)) chosen = null;
         render();
@@ -166,11 +310,14 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
     const marks = root;
     marks.addEventListener("change", (ev) => {
         const pick = ev.target.closest(".marks-view");
-        if (pick) { viewId = pick.value || null; chosen = null; load(); return; }
+        if (pick) { viewId = pick.value || null; chosen = null; when = STEPS; load(); return; }
         const kind = ev.target.closest(".marks-kind");
         if (kind) sayKind(kind.dataset.mark, kind.value);
     });
     marks.addEventListener("click", (ev) => {
+        const taking = ev.target.closest(".marks-take");
+        if (taking) { take(Number(taking.dataset.row)); return; }
+        if (ev.target.closest(".marks-place")) { place(); return; }
         const pick = ev.target.closest(".marks-choose");
         if (!pick) return;
         chosen = chosen === pick.dataset.mark ? null : pick.dataset.mark;
@@ -221,6 +368,10 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
         const [dx, dy] = steps[ev.key];
         placeCorner(i, corners.corners[i][0] + dx * NUDGE, corners.corners[i][1] + dy * NUDGE);
     }
+    marks.addEventListener("input", (ev) => {
+        const slider = ev.target.closest(".marks-when");
+        if (slider) scrubTo(Number(slider.value));
+    });
     marks.addEventListener("pointerdown", grabCorner);
     marks.addEventListener("pointermove", dragCorner);
     marks.addEventListener("pointerup", dropCorner);
@@ -232,6 +383,9 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
         load,
         chosen: () => chosen,
         act(verb) {
+            if (verb === "earlier") return step(-1);
+            if (verb === "later") return step(1);
+            if (verb === "place") { place(); return true; }
             if (!verb.startsWith("say:")) return false;
             const kind = verb.slice("say:".length);
             if (!KINDS.includes(kind)) return false;

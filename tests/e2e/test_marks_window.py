@@ -176,3 +176,96 @@ def test_a_whiteboards_corner_nudged_squares_its_photograph_again(page, leaning)
     )
     expect(marks.locator(".marks-corners-said")).to_contain_text("placed by you")
     assert errors == []
+
+
+@pytest.fixture(scope="module")
+def twice(base_url, start_server, tmp_path_factory):
+    """This module's third server: two photographs of the garage's whiteboard, the
+    second with the drawing changed, the first's shapes made and its note typed."""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from test_whiteboard_history import _drawing
+
+    folder = tmp_path_factory.mktemp("twice_pictures")
+    _drawing(folder / "monday.png")
+    _drawing(
+        folder / "tuesday.png", plate=(250, 250, 800, 520), disc=(960, 250, 1260, 550), wedge=False
+    )
+    url = start_server({"APOTHECARY_PICTURE_ROOT": str(folder)})
+    with httpx.Client(base_url=url, timeout=30.0) as http:
+        ids = []
+        for name in ("monday.png", "tuesday.png"):
+            view = http.post("/sites/garage/views", json={"host": "whiteboard", "picture": name})
+            view.raise_for_status()
+            ids.append(view.json()["id"])
+            http.post(
+                f"/sites/garage/views/{ids[-1]}/find", json={"finder": "outline"}
+            ).raise_for_status()
+            if name == "monday.png":
+                (note,) = http.get(f"/sites/garage/views/{ids[0]}/marks").json()["notes"]
+                http.put(
+                    f"/sites/garage/views/{ids[0]}/notes/{note['id']}", json={"text": "lid, 3 off"}
+                ).raise_for_status()
+                http.post(
+                    f"/sites/garage/views/{ids[0]}/make", json={"all": True}
+                ).raise_for_status()
+    return url
+
+
+@pytest.mark.e2e
+def test_a_whiteboards_history_is_scrubbed_a_change_taken_and_a_moment_placed(page, twice):
+    from garage import select
+
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    open_garage(page, twice)
+    page.wait_for_function(
+        "() => window.apothecaryPictures.state().some((e) => e.host === 'whiteboard' && e.mat)"
+    )
+    windows.from_the_windows_menu(page, "marks")
+    marks = windows.panel(page, "marks")
+
+    # Now: the second photograph, and what changed since the first, a row each.
+    expect(marks.locator(".marks-when-said")).to_contain_text("Now: photograph 2 of 2")
+    expect(marks.locator(".marks-strip .tick.photograph")).to_have_count(2)
+    expect(marks.locator(".marks-strip .tick.made")).to_have_count(3)
+    moved = marks.locator(".marks-change").filter(has_text="moved")
+    expect(moved.locator(".marks-take")).to_have_count(1)
+    second = page.evaluate("() => window.apothecaryPictures.drawnAt('whiteboard').id")
+
+    # Its Take rebuilds the disc's piece from the second photograph, and nothing else.
+    moved.locator(".marks-take").click()
+    said(page, "taken: ")
+    expect(status(page)).to_contain_text("made")
+    expect(status(page)).to_contain_text("dropped")
+    made = page.request.get(f"{twice}/sites/garage/attached").json()["made"]
+    assert sorted(r["view"] for r in made.values()).count(second) == 1
+
+    # Earlier, from the ring's cell: the first photograph drawn, its words as then.
+    for _ in range(8):
+        if "photograph 1 of 2" in marks.locator(".marks-when-said").inner_text():
+            break
+        assert page.evaluate("() => window.apothecaryMarks.act('earlier')") is True
+    expect(marks.locator(".marks-when-said")).to_contain_text("photograph 1 of 2")
+    page.wait_for_function(
+        "(was) => window.apothecaryPictures.drawnAt('whiteboard').id !== was", arg=second
+    )
+    expect(marks.locator(".marks-change")).to_have_count(0)
+
+    # The slider scrubbed back to now draws the second again.
+    marks.locator(".marks-when").fill("1000")
+    expect(marks.locator(".marks-when-said")).to_contain_text("Now: photograph 2 of 2")
+    page.wait_for_function(
+        "(id) => window.apothecaryPictures.drawnAt('whiteboard').id === id", arg=second
+    )
+
+    # Placed at the bench, selected in the world: the moment's picture lies there.
+    select(page, "workbench")
+    marks.locator(".marks-place").click()
+    said(page, "the whiteboard now placed at workbench: 2 shape(s) there to make")
+    page.wait_for_function(
+        "() => window.apothecaryPictures.state().some((e) => e.host === 'workbench' && e.mat)"
+    )
+    assert errors == []

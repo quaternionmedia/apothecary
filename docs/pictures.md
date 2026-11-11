@@ -235,6 +235,15 @@ the outline finder had searched it, searched again (`GET` and
 `PUT /sites/{site}/views/{view}/corners`). Corners are fixed once a piece is made
 from the picture; dropping the pieces frees them.
 
+Above the corners, under When, is the whiteboard's history: every photograph,
+word given and piece made a tick on one strip, and a slider that scrubs it. A moment
+scrubbed to is the whiteboard as it stood then -- its photograph drawn in the world
+in front of the whiteboard, and its marks and notes listed with the words given by
+then. Under the slider, what changed since the photograph before, a row each, with
+Take on every row that changes a piece or carries a note's words. Place places the
+moment at the place selected in the world. On the ring, Panels › Pictures › Marks ›
+Earlier and Later step the slider to the event before or after, and Place is Place.
+
 ## A whiteboard photographed again
 
 `apothecary photo again BEFORE AFTER` reads two pictures of one whiteboard, each
