@@ -110,7 +110,10 @@ layout on a deck:
   It stops nothing -- a move under way finishes -- and the stop keys are the stops.
 - **Key 6** is **UNLOCK**, amber, while the chosen router is in alarm, and dark otherwise:
   it sends the router's `$X` through the latch, moves nothing, and keeps the position the
-  controller believes. A knob turned while the router is in alarm says to press it.
+  controller believes. A knob turned while the router is in alarm says to press it. The
+  deck asks a machine nothing while its control is let go, and a stop lets it go, so after
+  a stop mid-move UNLOCK lights from the next poll by anyone: the router's Machine, a
+  program, or the deck once armed again.
 - **The bottom row's keys** are the stops, two classes of them: 4 **STOP printer_1** and
   5 **STOP cnc_router**, dark red, each stopping that machine alone, and 7 **STOP ALL**,
   bright red and last, nearest a hand resting on the knobs, stopping every machine, each
@@ -120,8 +123,8 @@ layout on a deck:
   printer.
 
 The strip says which machine, whether its control is armed and for how long, the chosen
-machine's last poll (X, Y, Z and the fourth quantity), the step, and what the last turn did
-or why it did nothing.
+machine's newest poll, the deck's own or anyone's (X, Y, Z and the fourth quantity), the
+step, and what the last turn did or why it did nothing.
 
 **Nothing the deck sends bypasses what bounds a person's jog.** Every line goes through
 `devices.printer_control`, the function behind `POST /firmware/printers/command`:

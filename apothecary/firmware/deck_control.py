@@ -12,7 +12,7 @@ One layout, on every deck it is started for (``Deck`` in ``firmware/deck.py``):
   machine, each by its own; none needs control armed, and each disarms the machine it
   stops;
 - the strip says which machine, whether its control is armed and for how long, the
-  chosen machine's last poll (X, Y, Z and the fourth quantity), the step, and what the
+  chosen machine's newest poll (X, Y, Z and the fourth quantity), the step, and what the
   last turn did or why it did nothing;
 - knobs one to three jog X, Y and Z by so many steps; the fourth turns the spindle's
   speed in steps of 1000 rpm (only while it turns) or extrudes 1 mm a step;
@@ -443,9 +443,21 @@ class DeckController:
         names = ", ".join(machine.name for machine, _ in were)
         self.said = (f"{names} disarmed" if were else "nothing was armed", "grey")
 
+    def _newest(self) -> Optional[object]:
+        """The chosen machine's newest poll, this layout's or anyone's. The layout asks
+        nothing while the machine's control is let go, and a stop lets it go, so what it
+        last asked can be older than what the machine's Machine or a program has asked
+        since: a reset mid-move leaves a router in alarm."""
+        mine = self.last
+        theirs = devices.last_statuses().get(self._port_quiet() or "")
+        if mine is None or theirs is None:
+            return mine or theirs
+        at = (getattr(theirs, "polled_at", None), getattr(mine, "polled_at", None))
+        return theirs if None not in at and at[0] > at[1] else mine
+
     def _alarmed(self) -> bool:
-        """Whether the chosen machine's last poll, this layout's or anyone's, had it in alarm."""
-        status = self.last or devices.last_statuses().get(self._port_quiet() or "")
+        """Whether the chosen machine's newest poll had it in alarm."""
+        status = self._newest()
         return getattr(status, "state", None) == "alarm"
 
     def _unlock(self) -> None:
@@ -597,7 +609,7 @@ class DeckController:
     # -- drawing ------------------------------------------------------------------------
 
     def _readout(self, axis: str) -> str:
-        status = self.last or devices.last_statuses().get(self._port_quiet() or "")
+        status = self._newest()
         where = getattr(status, "work_position", None) or getattr(status, "position", None) or {}
         value = where.get(axis.lower())
         return "-" if value is None else f"{value:.1f}"
@@ -611,7 +623,7 @@ class DeckController:
     def _fourth_readout(self) -> Tuple[str, str]:
         if self.machine.kind == "printer":
             return "E", "1 mm a step"
-        status = self.last or devices.last_statuses().get(self._port_quiet() or "")
+        status = self._newest()
         spindle = getattr(status, "spindle", None)
         return "S", (f"{spindle.rpm:.0f} rpm" if spindle is not None and spindle.on else "off")
 

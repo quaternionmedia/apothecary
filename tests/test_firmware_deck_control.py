@@ -669,6 +669,24 @@ def test_a_stopped_layout_leaves_no_thread_to_touch_the_bench(bench):
     assert not controller._ticker.is_alive() and not controller._worker.is_alive()
 
 
+def test_the_unlock_key_lights_from_the_newest_poll_after_a_stop_lets_the_router_go(bench):
+    """A stop lets the router's control go, and the layout asks nothing while it is let
+    go: after a stop mid-move the router is in alarm, and the next poll by anyone -- its
+    Machine, a program -- is newer than the layout's own, and is what UNLOCK reads."""
+    controller, one, links = bench
+    _choose_router(one)
+    links.control.arm(ROUTER)
+    _turn(one, 0, 1)  # armed, the layout polls the router as it jogs
+    assert controller.last is not None and controller.last.state != "alarm", controller.said
+    _press(one, 5)  # the router's own stop: its control let go
+    assert not links.control.armed(ROUTER)
+    sim = links.get(ROUTER)._t
+    sim.state, sim.alarm = "Alarm", 3  # as a reset mid-move leaves it
+    assert devices.printer_status(ROUTER).state == "alarm"  # its Machine's poll
+    controller.draw()  # the layout's next tick
+    assert (one.keys[6]["text"], one.keys[6]["colour"]) == ("UNLOCK", "amber")
+
+
 def test_the_unlock_key_needs_control_armed_as_any_line_but_a_stop_does(bench):
     controller, one, links = bench
     _choose_router(one)
