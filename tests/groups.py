@@ -327,6 +327,18 @@ GROUPS = {
             "test_viewer_assets.py",
         ),
     },
+    # The tour: the walkthrough's pages read back as its steps, and a person's word on
+    # each kept; a page changed is a step changed.
+    "tour": {
+        "sources": (
+            "apothecary/tour.py",
+            "apothecary/routes/tour.py",
+            "apothecary/cli/tour.py",
+            "apothecary/docs_site.py",
+            "walkthrough/*",
+        ),
+        "tests": ("test_tour.py",),
+    },
     "cli": {
         "sources": (
             "apothecary/cli/*",

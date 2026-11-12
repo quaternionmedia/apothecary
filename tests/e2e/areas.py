@@ -77,6 +77,7 @@ AREAS = {
         ),
         "tests": (
             "test_window_manager.py",
+            "test_windows_over_a_reload.py",
             "test_focused_systems.py",
             "test_ring.py",
             "test_site_panel.py",
@@ -271,6 +272,14 @@ AREAS = {
             "apothecary/static/widgets/models.*",
         ),
         "tests": ("test_models_window.py",),
+    },
+    "tour": {
+        "sources": (
+            "apothecary/tour.py",
+            "apothecary/routes/tour.py",
+            "apothecary/static/widgets/tour.*",
+        ),
+        "tests": ("test_tour.py",),
     },
 }
 
