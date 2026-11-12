@@ -95,7 +95,7 @@ At the command line, `apothecary tour --page 31`: each step answered, with what 
 ## What this page does not show
 
 - **Doing a step.** The tour shows a step's words and picture beside the page; doing what the words say is the person's, in the page beside it, and is each page's own test.
-- **What changes on every run.** Moments and the commit the server runs are blanked in the pictures and left out of the words.
+- **What changes on every run.** Moments and the commit the server runs are blanked in the pictures and left out of the words, and so is how many steps the tour holds, which any page added changes.
 
 Run it yourself:
 

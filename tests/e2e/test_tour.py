@@ -29,9 +29,11 @@ ROUTER = "31-what-the-router-needs.md"
 TOUR = ".panel[data-panel='tour']"
 NOTE = "Z's line ends past the pad's edge"
 # What changes on every run whatever the page does: the moments, and the commit the
-# server runs (and whether its tree has changes beside it).
+# server runs (and whether its tree has changes beside it); and what changes with any
+# page added to the walkthrough, how many steps the tour holds.
 COMMIT = r"against (?:[0-9a-f]{8}|an unknown commit)(?: with changes)?"
-CHANGING = ((TOUR, MOMENT), (TOUR, COMMIT), ("#status", MOMENT))
+STEPS = r"(?<=of )\d+(?= steps answered)"
+CHANGING = ((TOUR, MOMENT), (TOUR, COMMIT), (TOUR, STEPS), ("#status", MOMENT))
 
 
 def _words(text: str) -> str:
@@ -80,7 +82,8 @@ def test_the_tour_beside_the_page_keeps_a_person_s_word_on_each_step(
             "doing what the words say is the person's, in the page beside it, and is "
             "each page's own test.",
             "**What changes on every run.** Moments and the commit the server runs are "
-            "blanked in the pictures and left out of the words.",
+            "blanked in the pictures and left out of the words, and so is how many steps "
+            "the tour holds, which any page added changes.",
         ],
         browser_suite_only=True,
     )
