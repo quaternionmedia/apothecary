@@ -51,6 +51,12 @@ def url(start_server, state):
     return start_server({"APOTHECARY_STATE_DIR": str(state)})
 
 
+def _off_the_buttons(page) -> None:
+    """The mouse on the status line, so no button pressed last is drawn hovered in a
+    picture: whether it is depends on when the picture is taken."""
+    page.mouse.move(640, 700)
+
+
 def _answers(url: str) -> dict:
     stops = httpx.get(f"{url}/tour", timeout=15.0).json()["stops"]
     return next(s for s in stops if s["page"] == ROUTER)["answers"]
@@ -147,6 +153,7 @@ def test_the_tour_beside_the_page_keeps_a_person_s_word_on_each_step(
     expect(window.locator(".tour-said")).to_contain_text(
         re.compile(r"^1 of \d+ steps answered, 0 off")
     )
+    _off_the_buttons(page)
     story.shows(
         "✓ As shown keeps the word and goes to the next step",
         "✓ As shown: the server keeps it, with the moment and the commit it runs, and the "
@@ -179,6 +186,7 @@ def test_the_tour_beside_the_page_keeps_a_person_s_word_on_each_step(
     expect(lead).to_contain_text("Step 2 of 7 of page 31")
     expect(window.locator(".tour-answer")).to_contain_text(f"✗ Off: {NOTE} -- said ")
     expect(window.locator(".tour-stops option:checked")).to_contain_text("· 2/7 · 1 off")
+    _off_the_buttons(page)
     story.shows(
         "‹ Back shows the word kept on the step",
         "‹ Back to step 2: under its picture, what was said of it, when, and against which "
