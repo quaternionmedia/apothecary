@@ -539,6 +539,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
                         stack.addItem({ type: "component", componentType: r.id, id: r.id, title: r.tab || r.title });
                     }
                     api.open(r.id);
+                    chosen(r.id);
                 });
                 list.append(b);
             }
@@ -587,7 +588,21 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     spawnButtons();
     layout.on("stateChanged", spawnButtons);
 
-    function fillMenu(into, done, own) {
+    // A window a person chooses -- its tab pressed, or its entry in ⊞ Windows or a
+    // stack's + -- told to whoever asked (onChoose), after it is in front. A window the
+    // page brings forward itself is not chosen, and a tab's ✕ chooses nothing.
+    const choosers = [];
+    function chosen(id) { for (const fn of choosers) fn(id); }
+    host.addEventListener("pointerdown", (ev) => {
+        const tab = ev.target.closest(".lm_tab");
+        if (!tab || ev.target.closest(".lm_close_tab")) return;
+        for (const stack of stacksOf(layout.rootItem)) {
+            const found = (stack.header?.tabs || []).find((t) => t.element === tab);
+            if (found && found.componentItem) { const id = found.componentItem.id; setTimeout(() => chosen(id), 0); return; }
+        }
+    });
+
+    function fillMenu(into, done, own, journeys) {
         into.replaceChildren();
         const viewsHead = document.createElement("div");
         viewsHead.className = "spawn-group";
@@ -609,6 +624,25 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             b.addEventListener("click", () => { if (own) own.press(id); else api.applyView(id); if (done) done(); });
             into.append(b);
         }
+        // The page's journeys, each entered by its name: its view laid out, the rail of
+        // its steps in the header. The one entered now is marked.
+        if (journeys && journeys.list.length) {
+            const head = document.createElement("div");
+            head.className = "spawn-group";
+            head.textContent = "Journeys";
+            into.append(head);
+            for (const j of journeys.list) {
+                const b = document.createElement("button");
+                b.type = "button";
+                b.className = "window-item journey-item";
+                b.dataset.journey = j.id;
+                b.textContent = j.name;
+                b.title = j.title;
+                if (j.current) b.setAttribute("aria-current", "true");
+                b.addEventListener("click", () => { journeys.press(j.id); if (done) done(); });
+                into.append(b);
+            }
+        }
         for (const [group, rs] of windowsByGroup()) {
             const head = document.createElement("div");
             head.className = "spawn-group";
@@ -617,7 +651,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             into.append(head);
             for (const r of rs) {
                 const b = windowButton(r, false);
-                b.addEventListener("click", () => { api.open(r.id); if (done) done(); });
+                b.addEventListener("click", () => { api.open(r.id); chosen(r.id); if (done) done(); });
                 into.append(b);
             }
         }
@@ -825,8 +859,12 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
          * { refused, title }, press(id) } -- why the view cannot be laid out now (else
          * null) and what its entry says, and the press itself, which may open the window
          * the view needs and says what came of it. Without it a view is laid out by
-         * applyView, and one whose window the page has not got is disabled. */
-        fillMenu(into, { done = null, views: own = null } = {}) { fillMenu(into, done, own); },
+         * applyView, and one whose window the page has not got is disabled.
+         * `journeys`, the page's: { list: [{ id, name, title, current }], press(id) },
+         * listed after the views. */
+        fillMenu(into, { done = null, views: own = null, journeys = null } = {}) { fillMenu(into, done, own, journeys); },
+        /* `fn(id)` is told of each window a person chooses: its tab, ⊞ Windows, a +. */
+        onChoose(fn) { choosers.push(fn); },
         /* Up, down, Home and End along a list's buttons: the Windows menu's keys. */
         stepFocus,
         destroy() {

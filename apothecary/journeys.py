@@ -9,6 +9,12 @@ A view is written as a system's is (systems.py's ``Layout``): window ids, a
 ``stack`` of tabs, a ``row`` or ``column`` of them, the world's window as
 ``{"world": True}``. A window the page has not got when the view is laid out --
 a board's Machine while none is open -- is left out of it.
+
+A journey's steps are numbered on a rail in the header while it is entered, the step
+a person is on filled and Next naming the one after (codecartographer's step rail,
+after alfred's stage rail). A step brings its windows forward, the one it is about
+first; choosing a window it owns -- its tab, ⊞ Windows or a stack's + -- says a
+person is on it.
 """
 
 from __future__ import annotations
@@ -17,6 +23,23 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
 from .systems import Layout
+
+
+@dataclass(frozen=True)
+class Step:
+    id: str
+    # Its name on the rail, after its number.
+    label: str
+    # The rail's tooltip, and what Next says is coming.
+    hint: str
+    # The windows entering it brings forward, the one it is about first: that one is
+    # in front where two share a stack. A closed one is opened again.
+    forward: Tuple[str, ...]
+    # The windows that say a person is on it, when chosen. Each window is one step's.
+    owns: Tuple[str, ...] = ()
+    # Whether entering it draws the path of the file the machine has chosen, as the
+    # Machine view does.
+    draws: bool = False
 
 
 @dataclass(frozen=True)
@@ -32,6 +55,9 @@ class Journey:
     requires: str
     opened_by: str
     view: Layout
+    # What the rail and ⊞ Windows › Journeys call it.
+    name: str = ""
+    steps: Tuple[Step, ...] = ()
 
 
 # Make a thing on a machine: a part chosen in Site, its numbers in Parameters, the
@@ -66,6 +92,44 @@ MAKE = Journey(
             },
         ]
     },
+    name="Make a thing",
+    steps=(
+        Step(
+            "choose",
+            "Choose",
+            "the part, among the site's pieces",
+            forward=("site", "selected"),
+            owns=("site", "problems", "pinned", "scad"),
+        ),
+        Step(
+            "shape",
+            "Shape",
+            "its numbers, in Parameters",
+            forward=("part-parameters", "selected"),
+            owns=("selected", "part-parameters"),
+        ),
+        Step(
+            "slice",
+            "Slice",
+            "the machine's Print window: the part under makes, then Slice",
+            forward=("machine-print",),
+            owns=("machine-print",),
+        ),
+        Step(
+            "see",
+            "See",
+            "the chosen file's path, drawn on the machine",
+            forward=("machine-print",),
+            draws=True,
+        ),
+        Step(
+            "print",
+            "Print",
+            "control armed in the Machine, ▶ Print, the job in Jobs",
+            forward=("machine", "jobs"),
+            owns=("machine", "jobs"),
+        ),
+    ),
 )
 
 
@@ -88,6 +152,18 @@ def manifest(journeys: Tuple[Journey, ...] = JOURNEYS) -> List[Dict[str, Any]]:
             "requires": j.requires,
             "opened_by": j.opened_by,
             "view": j.view,
+            "name": j.name,
+            "steps": [
+                {
+                    "id": s.id,
+                    "label": s.label,
+                    "hint": s.hint,
+                    "forward": list(s.forward),
+                    "owns": list(s.owns),
+                    "draws": s.draws,
+                }
+                for s in j.steps
+            ],
         }
         for j in journeys
     ]

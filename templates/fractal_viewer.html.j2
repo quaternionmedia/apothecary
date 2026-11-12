@@ -46,6 +46,20 @@
         .site-crumb[hidden] { display: none; }
         .site-crumb #site-level { max-width: 11rem; overflow: hidden; text-overflow: ellipsis; }
         .view-menu.site-menu > summary { padding: 0 0.3rem; font-size: 0.75rem; line-height: 1.5; }
+        /* The rail of the journey entered (apothecary/journeys.py): its name, each step
+           numbered, the one a person is on filled, Next with the step after's number and
+           name, and ✕ to leave it. It gives way before the banner does, which it would
+           otherwise be drawn over; a narrow header shows the steps' numbers alone, and
+           no name: Next, the tooltips and the status line say it. */
+        .toolbar .journey-rail { display: flex; align-items: center; gap: 0.3rem; flex: 0 100 auto; min-width: 0; overflow: hidden; font-size: 0.8rem; color: #bbb; }
+        .toolbar .journey-rail[hidden] { display: none; }
+        .journey-rail .journey-name { color: #ddd; }
+        .journey-rail ol { display: flex; gap: 0.2rem; margin: 0; padding: 0; list-style: none; }
+        .toolbar .journey-rail button { padding: 0.2rem 0.45rem; font-size: 0.8rem; background: #333; color: #ccc; }
+        .toolbar .journey-rail button:hover { background: #484848; }
+        .toolbar .journey-rail button[aria-current="step"] { background: #2e6b4a; color: #fff; }
+        .journey-rail .journey-num { font-weight: 600; margin-right: 0.25rem; }
+        @media (max-width: 1100px) { .journey-rail .journey-name, .journey-rail .journey-steps .journey-label { display: none; } }
         .view-menu.site-menu > .view-menu-body { left: 0; right: auto; align-items: stretch; gap: 0; padding: 0.2rem 0; min-width: 11rem; max-height: 70vh; overflow-y: auto; }
         .toolbar button, .view-menu > summary {
             padding: 0.45rem 0.8rem; border-radius: 4px; cursor: pointer;
@@ -214,7 +228,8 @@
         }
         .window-item:hover, .window-item:focus-visible { background: #2a2f38; color: #fff; outline: none; }
         .window-item.open { color: #e8e8e8; }
-        .window-item.view-item { color: #9cd2ff; }
+        .window-item.view-item, .window-item.journey-item { color: #9cd2ff; }
+        .window-item.journey-item[aria-current]::before { content: "● "; }
         /* A view that cannot be laid out now is greyed, under the pointer too. */
         .window-item.missing, .window-item.missing:hover { color: #6b7078; background: none; cursor: default; }
         /* A stack maximised -- the world alone, or a panel's ☐ -- is all there is: the
@@ -725,6 +740,7 @@
                 <span id="breadcrumb" title="Where you are: a crumb steps out to its level (Page Up or Backspace steps out one)"></span>
                 {% if not site_names %}<span id="no-sites">No sites found</span>{% endif %}
             </nav>
+            <nav id="journey-rail" class="journey-rail" aria-label="Steps" hidden></nav>
             <div class="spacer"></div>
             <details id="view-menu" class="view-menu">
                 <summary title="How the world is drawn">⚙ View</summary>
@@ -1281,6 +1297,9 @@
                 this.siteMenuEl = document.getElementById('site-menu');
                 this.viewMenuEl = document.getElementById('view-menu');
                 this.windowsMenuEl = document.getElementById('windows-menu');
+                // The journey entered ({ id, step }), whose rail the header shows; null when none is.
+                this.journeyRailEl = document.getElementById('journey-rail');
+                this.journey = null;
                 this.snapToggle = document.getElementById('snap-toggle');
                 this.wallsToggle = document.getElementById('walls-toggle');
                 this.wallsSelectable = false;  // for the page's session: never remembered
@@ -1431,11 +1450,16 @@
                 if (panel) this.panels.open(panel);
                 if (INITIAL_FOCUS && this.partSection) this.systems.part.openLinked();
                 const port = DEEP_LINK.get('machine');
-                if (!port || !this.siteName) return;
-                await this.boards.scan();
-                if (this.openMachineFor(port)) {
-                    this.systems.machine.openLinked();
+                if (port && this.siteName) {
+                    await this.boards.scan();
+                    if (this.openMachineFor(port)) {
+                        this.systems.machine.openLinked();
+                    }
                 }
+                // A journey in the address: its rail at the step it names, the windows as
+                // this browser remembers them and that step's brought forward.
+                const journey = DEEP_LINK.get('journey');
+                if (journey && this.siteName) await this.enterJourney(journey, { stepId: DEEP_LINK.get('step'), fromAddress: true });
             }
 
             initThreeJS() {
@@ -1893,10 +1917,27 @@
                         done: () => { this.windowsMenuEl.open = false; },
                         // A view pressed here is the ring's Panels › Windows cell pressed.
                         views: { offer: (id) => this.viewOffer(id), press: (id) => this.openView(id) },
+                        journeys: {
+                            list: JOURNEYS.map((j) => ({
+                                id: j.id, name: j.name, current: this.journey?.id === j.id,
+                                title: `${j.name}: ${j.steps.map((s, i) => `${i + 1} ${s.label}`).join(', ')}, a step at a time on a rail in the header`,
+                            })),
+                            press: (id) => this.enterJourney(id),
+                        },
                     });
                     windowsBody.querySelector('button')?.focus();
                 });
                 windowsBody.addEventListener('keydown', (ev) => this.panels.stepFocus(windowsBody, ev));
+                this.panels.onChoose((id) => this.onWindowChosen(id));
+                // The rail: a step's button enters it, the step already on included; Next
+                // the step after; ✕ leaves the journey, its windows where they are.
+                this.journeyRailEl.addEventListener('click', (e) => {
+                    const b = e.target.closest('button');
+                    if (!b) return;
+                    if (b.dataset.step) this.enterStep(b.dataset.step, 'its step on the rail');
+                    else if (b.dataset.next) this.enterStep(b.dataset.next, 'Next');
+                    else if (b.classList.contains('journey-leave')) this.leaveJourney();
+                });
                 window.apothecarySettings = this.settings;
                 window.apothecaryPanels = this.panels;
                 this.onResize();
@@ -7825,6 +7866,123 @@
                 this.onResize();
                 this.frameBox(siteBox(box));
                 return { said: `${found.file}'s path is drawn on ${who} and framed, ${found.where}: the preview slider in its ${found.card} goes through each ${found.word}` };
+            }
+            // ---- journeys (apothecary/journeys.py) ----------------------------------
+            // A journey entered: its view laid out where it can be now, then its rail in
+            // the header at its first step, or at the one the address names. From the
+            // address the windows stay as this browser remembers them, and only the
+            // step's are brought forward. Its view needing a Machine none is open for
+            // is not laid out; the step that needs one says how it comes to be.
+            async enterJourney(id, { stepId = null, fromAddress = false } = {}) {
+                const journey = JOURNEYS.find((j) => j.id === id);
+                if (!journey) return false;
+                const step = journey.steps.find((s) => s.id === stepId) || journey.steps[0];
+                if (!fromAddress && !this.viewRefusal(id)) await this.openView(id, { label: journey.name });
+                this.journey = { id, step: step.id };
+                return this.enterStep(step.id, fromAddress ? 'the address' : `⊞ Windows › ${journey.name}`);
+            }
+            // A step entered, the one on included: the rail moves to it and its windows
+            // come forward, the one it is about in front; a window of a board's Machine
+            // with none open opens the selected machine's, else says how one is opened.
+            // A step that draws lands on the chosen file's path, as the Machine view does.
+            async enterStep(stepId, how) {
+                const journey = this.journey && JOURNEYS.find((j) => j.id === this.journey.id);
+                const step = journey && journey.steps.find((s) => s.id === stepId);
+                if (!step) return false;
+                this.journey.step = step.id;
+                this.renderRail();
+                this.keepJourneyInAddress();
+                const head = `${journey.name} › ${journey.steps.indexOf(step) + 1} ${step.label} (${how})`;
+                const machines = step.forward.filter((w) => w === 'machine' || w.startsWith('machine-'));
+                if (machines.length && !this.machine) {
+                    const subject = this.viewSubject();
+                    const opened = subject && this.bindingFor(subject).row?.device?.port && this.openMachine(subject);
+                    if (!opened) {
+                        for (const w of [...step.forward].reverse()) if (!machines.includes(w)) this.panels.open(w);
+                        this.setStatus(`${head}: no Machine is open: ${journey.opened_by} opens one`, 'error');
+                        return true;
+                    }
+                }
+                for (const w of [...step.forward].reverse()) this.panels.open(w);
+                const landed = step.draws ? await this.landOnPath() : null;
+                if (landed) this.setStatus(`${head}: ${landed.said}`, landed.refused ? 'error' : 'success');
+                else this.setStatus(`${head}: ${step.hint}`, 'success');
+                return true;
+            }
+            // The journey left: the rail goes, the windows stay where they are.
+            leaveJourney() {
+                const journey = this.journey && JOURNEYS.find((j) => j.id === this.journey.id);
+                if (!journey) return;
+                this.journey = null;
+                this.renderRail();
+                this.keepJourneyInAddress();
+                this.setStatus(`Left ${journey.name}: its windows stay where they are`, 'success');
+            }
+            // A window a person chose moves the rail to the step that owns it, and moves
+            // nothing else.
+            onWindowChosen(id) {
+                const journey = this.journey && JOURNEYS.find((j) => j.id === this.journey.id);
+                const step = journey && journey.steps.find((s) => s.owns.includes(id));
+                if (!step || step.id === this.journey.step) return;
+                this.journey.step = step.id;
+                this.renderRail();
+                this.keepJourneyInAddress();
+            }
+            // The rail as the journey stands: its name, each step a numbered button, the
+            // one a person is on marked as the current step, Next naming the one after
+            // (none on the last), and ✕.
+            renderRail() {
+                const rail = this.journeyRailEl;
+                const journey = this.journey && JOURNEYS.find((j) => j.id === this.journey.id);
+                rail.hidden = !journey;
+                rail.replaceChildren();
+                if (!journey) return;
+                const span = (className, text) => Object.assign(document.createElement('span'), { className, textContent: text });
+                const at = journey.steps.findIndex((s) => s.id === this.journey.step);
+                const list = document.createElement('ol');
+                list.className = 'journey-steps';
+                journey.steps.forEach((step, i) => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.dataset.step = step.id;
+                    b.title = `Step ${i + 1}: ${step.hint}`;
+                    if (i === at) b.setAttribute('aria-current', 'step');
+                    b.append(span('journey-num', String(i + 1)), span('journey-label', step.label));
+                    const li = document.createElement('li');
+                    li.append(b);
+                    list.append(li);
+                });
+                rail.append(span('journey-name', journey.name), list);
+                const next = journey.steps[at + 1];
+                if (next) {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'journey-next';
+                    b.dataset.next = next.id;
+                    b.title = `Step ${at + 2}: ${next.hint}`;
+                    b.append('Next ', span('journey-num', String(at + 2)), span('journey-label', next.label), ' →');
+                    rail.append(b);
+                }
+                const leave = document.createElement('button');
+                leave.type = 'button';
+                leave.className = 'journey-leave';
+                leave.textContent = '✕';
+                leave.title = `Leave ${journey.name}: the rail goes, the windows stay where they are`;
+                leave.setAttribute('aria-label', `Leave ${journey.name}`);
+                rail.append(leave);
+            }
+            // The journey and its step in the address, so a reload lands where a person
+            // left off; neither once it is left.
+            keepJourneyInAddress() {
+                const url = new URL(location.href);
+                if (this.journey) {
+                    url.searchParams.set('journey', this.journey.id);
+                    url.searchParams.set('step', this.journey.step);
+                } else {
+                    url.searchParams.delete('journey');
+                    url.searchParams.delete('step');
+                }
+                if (url.href !== location.href) history.replaceState(null, '', url);
             }
             // The Machine's panel, its body mounted when it is first in front of a
             // person. A board pinned inside a printer is the printer's, whatever it has

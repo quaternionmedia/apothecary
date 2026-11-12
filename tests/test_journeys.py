@@ -81,3 +81,29 @@ def test_the_page_is_given_the_journeys_and_defines_their_views_from_them_alone(
     module = SYSTEMS_JS.read_text(encoding="utf-8")
     assert "export function defineJourneyViews(" in module
     assert "panels.defineView(journey.id," in module
+
+
+def test_each_step_brings_forward_and_owns_windows_its_journeys_view_lays_out():
+    """A step's windows are its journey's: entering it brings forward windows the view
+    laid out, and a window chosen says one step at most."""
+    for journey in JOURNEYS:
+        named = _layout_windows(journey.view)
+        ids = [s.id for s in journey.steps]
+        assert journey.steps and len(ids) == len(set(ids)), journey.id
+        owned = [w for s in journey.steps for w in s.owns]
+        assert len(owned) == len(set(owned)), journey.id
+        for step in journey.steps:
+            assert re.fullmatch(r"[a-z][a-z0-9-]*", step.id)
+            assert 0 < len(step.label) <= 8, step.label  # on the rail, after its number
+            assert step.hint and step.forward, step.id
+            assert set(step.forward) | set(step.owns) <= named, (journey.id, step.id)
+
+
+def test_make_a_thing_goes_from_the_part_to_the_job():
+    make = by_id("make")
+    assert make.name == "Make a thing"
+    assert [s.label for s in make.steps] == ["Choose", "Shape", "Slice", "See", "Print"]
+    assert make.steps[0].forward[0] == "site"
+    assert make.steps[2].forward == ("machine-print",)
+    assert [s.id for s in make.steps if s.draws] == ["see"]
+    assert make.steps[-1].owns == ("machine", "jobs")

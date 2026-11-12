@@ -1382,6 +1382,12 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "the trail's crumb for the site: up to its own level, and there the other sites",
     ),
     "crumb:click:goUpTo": (LIST, WHAT_YOU_SEE, "a step on the trail"),
+    # the rail of the journey entered (apothecary/journeys.py)
+    "journeyRailEl:click:closest": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the journey's rail: a step entered, Next, or the journey left",
+    ),
     # how much to draw
     "detailModeEl:change:clear": (WIDGET, WHAT_YOU_SEE, "choosing how much to draw"),
     "overlayToggle:change:renderFocus": (WIDGET, WHAT_YOU_SEE, "the outlines tick-box"),

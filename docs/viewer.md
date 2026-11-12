@@ -45,10 +45,14 @@ Left to right, one row:
   of a site's own level, a link and Back are the only ways the site on screen
   changes: no other verb switches it as a side effect. A picture's view or a
   take-back in another site names that site and leaves the screen where it is.
+- **The rail of a journey**, beside the banner while one is entered: its name,
+  its steps numbered, the one a person is on filled, **Next** with the step
+  after's number and name, and ✕ to leave it ([below](#journeys)).
 - **⚙ View**: how the world is drawn ([below](#how-the-world-is-drawn)), and
   Settings ([below](#settings)).
-- **⊞ Windows**: the views, then every window by its group, ● open and ○
-  closed ([below](#the-windows)); a window chosen opens, or comes in front.
+- **⊞ Windows**: the views, the journeys, then every window by its group, ●
+  open and ○ closed ([below](#the-windows)); a window chosen opens, or comes in
+  front.
 - **Docs** opens the documentation in a new tab, the world left where it
   was: the guides, and from its bar the walkthrough's index (`/walkthrough`),
   its pages in order; the bar of every page links the README, served at `/README.md`. The ring's Panels › Docs opens the same.
@@ -400,6 +404,40 @@ with no file of that machine's kept, the status line says how one comes to be.
 A section for another kind of board is left out of it. A window a view leaves
 out is closed, and comes back by a + or ⊞ Windows; the views and the windows in
 them are remembered like any layout.
+
+### Journeys
+
+A journey is a path a person takes through the windows, a step at a time
+(`apothecary/journeys.py`; the plan is
+[journeys-2026-11-11.md](plans/journeys-2026-11-11.md)). ⊞ Windows › Journeys
+enters one: its view is laid out where it can be now, and its rail stands in the
+header at its first step.
+
+| | Step | Brings forward | Owns |
+|---|---|---|---|
+| 1 | **Choose** | Site, then Selected | Site, Problems, Pinned, SCAD |
+| 2 | **Shape** | Parameters, then Selected | Selected, Parameters |
+| 3 | **Slice** | the Machine's Print window | the Print window |
+| 4 | **See** | the Print window, the chosen file's path drawn in the world and framed | -- |
+| 5 | **Print** | the Machine, then Jobs | the Machine, Jobs |
+
+*Make a thing*, the first journey, goes from a part to the job that makes it.
+
+- **A step on the rail enters it**, the step already on included: its windows
+  come in front of their stacks, the one it is about first, and a closed one
+  opens again. **Next** enters the step after; the last step has none.
+- **A window of a board's Machine** with none open opens the selected machine's;
+  with none to open, the step's other windows come forward and the status line
+  says how a Machine is opened -- a machine's badge or its row in Site, or Slice
+  on a part's ring.
+- **A window chosen moves the rail** to the step that owns it -- its tab, ⊞
+  Windows or a stack's + -- and moves nothing else. A window the page brings
+  forward by itself moves nothing.
+- **The address keeps the journey and its step** (`?journey=make&step=slice`),
+  so a reload or a link lands on that step, the windows as the browser
+  remembers them and the step's brought forward.
+- **✕ leaves the journey**: the rail goes, the address forgets it, and the
+  windows stay where they are.
 
 - **Site**: its category chips and the **Contents** tree (a click selects a
   row, a double-click steps in, ⚠ marks a piece in a problem). Site's own
