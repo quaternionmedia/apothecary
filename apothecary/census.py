@@ -683,6 +683,26 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a line naming two ranges and the metric to map over them",
     ),
     "airgap-run": (WIDGET, WHAT_YOU_SEE, "a button that maps the metric the sweep line names"),
+    # ---- the Tour, apothecary/static/widgets/tour.js --------------------------
+    # The walkthrough a step at a time: a page chosen, Back and Next, a person's word
+    # on the step (Off with what its box says), and the page itself in a tab. All but
+    # the page's drop-down and the box are cells of Panels › Windows › Tour.
+    "tour-stops": (WIDGET, WHAT_YOU_SEE, "a drop-down of the walkthrough's pages, each a stop"),
+    "tour-note": (WIDGET, WHAT_YOU_SEE, "a box for what is off in the step shown"),
+    "tour-back": (WIDGET, WHAT_YOU_SEE, "a button that goes to the step before"),
+    "tour-as-shown": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that says the page does what the step shows, kept on the server",
+    ),
+    "tour-off": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that says the step is off, with what the box says, kept on the server",
+    ),
+    "tour-forward": (WIDGET, WHAT_YOU_SEE, "a button that goes to the next step"),
+    "tour-page": (WIDGET, WHAT_YOU_SEE, "a link to the walkthrough page the step is from"),
+    "tour-picture": (WIDGET, WHAT_YOU_SEE, "the step's picture, a link to it whole in a tab"),
     # ---- the Working space, apothecary/static/widgets/working_space.js ---------
     # Its first line's buttons take the step it names; a printer's hour has a row
     # per camera, a camera's device chosen there, and its frames' budget set.
@@ -714,6 +734,13 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
 RING_BACKED: Dict[str, str] = {
     # the header's Docs is the canvas ring's Panels › Docs
     "docs-link": "panel:docs",
+    # The Tour's buttons and its page's link are the cells of Panels › Windows › Tour
+    "tour-back": "tour:back",
+    "tour-as-shown": "tour:as-shown",
+    "tour-off": "tour:off",
+    "tour-forward": "tour:next",
+    "tour-page": "tour:page",
+    "tour-picture": "tour:picture",
     # Models' Ask and a person's word are the cells of Panels › Pictures › Models
     "models-ask": "models:ask",
     "models:click:closest": "models:ask",
@@ -1289,6 +1316,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "a mark's kind chosen, a person's word on it; or another picture's marks listed",
     ),
     "marks:click:closest": (WIDGET, WHAT_YOU_SEE, "a mark chosen, for the ring's Marks cells"),
+    "tourPages:change:go": (WIDGET, WHAT_YOU_SEE, "a walkthrough page chosen, its first step shown"),
     "marks:input:closest": (
         WIDGET,
         WHAT_YOU_SEE,

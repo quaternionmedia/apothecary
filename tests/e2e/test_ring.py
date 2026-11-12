@@ -586,6 +586,8 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
         "procedure",
         # The Deck, a stack of its own beside the world, closed until asked for.
         "deck",
+        # The Tour, a stack of its own beside the world, closed until asked for.
+        "tour",
     ]
     assert not any(windows.state(page, f"airgap-{s}")["open"] for s in windows.AIRGAP_SECTIONS)
     expect(page.locator(".lm_goldenlayout")).to_have_count(1)
@@ -662,8 +664,8 @@ def test_a_closed_window_stays_closed_and_the_ring_reopens_it(page: Page, ring_u
 
 @pytest.mark.e2e
 def test_the_rings_reset_layout_lays_the_pages_own_out_again(page: Page, ring_url: str):
-    """Panels › Windows holds the views, World alone and Reset layout; Reset layout lays
-    the page's own layout out again and says so. What a person moved, and what a reset
+    """Panels › Windows holds the views, World alone, Reset layout and the Tour; Reset
+    layout lays the page's own layout out again and says so. What a person moved, and what a reset
     does with it, are the window manager's (tests/e2e/test_window_manager.py)."""
     world = _open_panels(page, ring_url)
     page.evaluate("() => window.apothecaryPanels.applyView('part')")
@@ -672,7 +674,8 @@ def test_the_rings_reset_layout_lays_the_pages_own_out_again(page: Page, ring_ur
     inner = _panels_ring(page)
     page.keyboard.press(next(cell for cell, label in inner.items() if label == "Windows"))
     assert sorted(_wedges(page).values()) == [
-        "Airgap view", "Family view", "Machine view", "Part view", "Reset layout", "World alone",
+        "Airgap view", "Family view", "Machine view", "Part view", "Reset layout", "Tour",
+        "World alone",
     ]  # fmt: skip
     page.keyboard.press(
         next(cell for cell, label in _wedges(page).items() if label == "Reset layout")

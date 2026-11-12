@@ -49,6 +49,7 @@ at page 00.
 | [31 — What the router needs](../walkthrough/31-what-the-router-needs.md) | What stops a person at the router, in its Machine: a controller in alarm saying what clears it, a jog that did not go kept in Needs you, each axis's home beside its button, Unlock, a home not proved refused, an axis jogged the way it homes, and the router armed on its badge and its row; written by the browser suite |
 | [32 — A quiet board, and a router's pins](../walkthrough/32-a-quiet-board-and-a-router-s-pins.md) | Two values as the Working space's table reads them: a printer not heard for ten minutes, last heard and its state last known at its board's last answer, and a router's pins read as their items, then none; written by the browser suite |
 | [33 — Windows kept over a reload](../walkthrough/33-windows-kept-over-a-reload.md) | Models, Marks, the Working space and the Deck opened from ⊞ Windows, and the page reloaded: each open again in the stack it was in, the world as wide; written by the browser suite |
+| [34 — The tour](../walkthrough/34-the-tour.md) | The walkthrough a step at a time beside the live page: a page chosen, its step as its test recorded it, ✓ As shown and ✗ Off kept, Back showing the word kept, the ring's cells, a reload, and `apothecary tour` reading it back; written by the browser suite |
 
 ## The checklists
 
@@ -78,6 +79,7 @@ suites hold everything else.
 | [Borders and handoffs](boundaries.md) | Where apothecary ends and another repository begins, the package's layers and the imports that reach up one, and what crosses at each handoff of the loops, held by a test |
 | [Geometry models](models.md) | Vectors, bounds, colors, shapes and units |
 | [Geometry made elsewhere](geometry-from-elsewhere.md) | An STL or OBJ as a part (`apothecary parts import`), and a part described by a sidecar |
+| [The tour](tour.md) | The walkthrough a step at a time in the viewer, beside the live page: each step as its test recorded it, a person's word on it kept with the commit, and `apothecary tour` reading it back |
 | [The Working space](working-space.md) | A site as its evidence has it: a printer's polls kept as observations, the frames its cameras keep with them under a budget, the window that shows both, and the doors that read them |
 | [Pictures, cameras and pieces](pictures.md) | Where pictures live, a camera as a part of the site, a picture pinned as a view, its shapes made into pieces, what is taken back and how, the `photo` commands |
 | [The census](census.md) | What `apothecary census` counts of the viewer, how each control and listener is classified, ring-backed and taken back, and the ceiling and floor a change to the page keeps |

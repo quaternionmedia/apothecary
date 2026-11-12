@@ -817,6 +817,7 @@
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/working_space.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/procedure.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/deck.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/tour.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/airgap.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/models.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/marks.css">
@@ -863,6 +864,7 @@
         import { mountProcedure } from '/static/widgets/procedure.js';
         import { mountFamily } from '/static/widgets/family.js';
         import { mountDeck } from '/static/widgets/deck.js';
+        import { mountTour } from '/static/widgets/tour.js';
         import { mountPictureList } from '/static/widgets/picture_list.js';
         import { mountModels } from '/static/widgets/models.js';
         import { mountMarks } from '/static/widgets/marks.js';
@@ -1520,7 +1522,7 @@
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
                     defaultRoot: PAGE_LAYOUT,
-                    known: ['gather', 'models', 'marks', 'working', 'deck', ...knownWindows(SYSTEMS)],
+                    known: ['gather', 'models', 'marks', 'working', 'deck', 'tour', ...knownWindows(SYSTEMS)],
                     transient: ['control', 'lighting', ...transientWindows(SYSTEMS)],
                 });
                 // What the rail this layout replaced remembered: nothing reads it any more.
@@ -1858,6 +1860,24 @@
                     },
                     onOpen: () => this.deck?.shown(),
                     onClose: () => this.deck?.close(),
+                });
+                // Tour: the walkthrough a step at a time beside the live page, each step as
+                // its test recorded it, and a person's word on it kept (widgets/tour.js,
+                // apothecary/tour.py) -- a stack of its own beside the world, closed until
+                // asked for.
+                this.tour = null;
+                this.panels.register('tour', {
+                    title: 'Tour', group: 'Tools', home: 'beside', open: false,
+                    hint: 'The walkthrough a step at a time beside the live page: say whether the page does what each step shows',
+                    body: (slot) => {
+                        this.tour = mountTour(slot, {
+                            base: BASE_URL,
+                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                        });
+                        window.apothecaryTour = this.tour;
+                        this.tourOpened = this.tour.open();
+                    },
+                    onOpen: () => this.tour?.shown(),
                 });
                 // ⊞ Windows: drawn afresh each time it opens, so it says which are open.
                 const windowsBody = this.windowsMenuEl.querySelector('.windows-menu-body');
@@ -9453,6 +9473,12 @@
                 }
                 // A Models verb: the window shown, and the verb done on the shape chosen
                 // on a mat; what it asked or said, or refused, is the window's own last word.
+                // A Tour verb: the window shown, and the verb done on the step it shows.
+                if (action.startsWith('tour:')) {
+                    viewer.panels.open('tour');
+                    Promise.resolve(viewer.tourOpened).then(() => viewer.tour?.act(action.slice('tour:'.length)));
+                    return;
+                }
                 if (action.startsWith('marks:')) {
                     viewer.panels.open('marks');
                     if (viewer.marksWidget) viewer.marksWidget.act(action.slice('marks:'.length));

@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- The tour: ⊞ Windows › Tour, or the ring's Panels › Windows › Tour, takes the walkthrough a step at a time beside the live page, each step as the test that writes its page recorded it, and keeps a person's word on each, ✓ As shown or ✗ Off with what is off, with the commit the server ran; `apothecary tour` reads them back. Walkthrough page 34 goes through it. ([doc](docs/tour.md))
 - Walkthrough page 33, *Windows kept over a reload*: Models, Marks, the Working space and the Deck opened from ⊞ Windows, and the page reloaded, each open again in the stack it was in and the world as wide. ([page](walkthrough/33-windows-kept-over-a-reload.md))
 - Walkthrough page 32, *A quiet board, and a router's pins*: a printer not heard for ten minutes, last heard and its state last known at its board's last answer, and a router's pins read as their items, then none, in the Working space's table. ([page](walkthrough/32-a-quiet-board-and-a-router-s-pins.md))
 - Walkthrough page 27 goes on past the stop key: two long presses of the router's key arming it, DISARM letting go of every machine's control, and UNLOCK taking the router out of the alarm a stop mid-move leaves it in, each pictured from the Deck window. ([page](walkthrough/27-the-deck-jogging-the-machines.md))

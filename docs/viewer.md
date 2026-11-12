@@ -439,6 +439,10 @@ it: one opened from ⊞ Windows -- Models, Marks, the Working space, the Deck --
 open again after a reload, where it was, and the world as wide as it was
 ([walkthrough 33](../walkthrough/33-windows-kept-over-a-reload.md)).
 
+The **Tour** (⊞ Windows › Tour, or Panels › Windows › Tour) is the walkthrough a
+step at a time beside the page, and a person's word on each step
+([the tour](tour.md)).
+
 ## The part editor
 
 **Part › Edit** on a piece's ring opens its editor: Selected holds the piece
