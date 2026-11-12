@@ -46,6 +46,7 @@ at page 00.
 | [28 — A whiteboard to a model](../walkthrough/28-a-whiteboard-to-a-model.md) | A drawing in marker read by the `outline` finder: the whiteboard as the ground, each closed stroke the shape of what it encloses, named, placed and sized, with what the `plain` finder makes of the same picture |
 | [29 — A whiteboard, round twice](../walkthrough/29-a-whiteboard-round-twice.md) | The whiteboard loop by its commands: a photograph squared to its whiteboard, its marks sorted and a person's word kept, its note typed and its size offered, a plate made with its cut, then the drawing changed and photographed again, what changed proposed and one row taken |
 | [30 — A whiteboard, round twice through the page](../walkthrough/30-a-whiteboard-round-twice-through-the-page.md) | A photograph pinned at the garage's whiteboard from its ring, squared and laid in front, its shapes found, its writing typed in Marks and its shapes made; a second photograph of the changed drawing, the whiteboard's history, a change taken, Earlier on the ring back to the first, and that moment placed on the bench; written by the browser suite |
+| [31 — What the router needs](../walkthrough/31-what-the-router-needs.md) | What stops a person at the router, in its Machine: a controller in alarm saying what clears it, a jog that did not go kept in Needs you, each axis's home beside its button, Unlock, a home not proved refused, an axis jogged the way it homes, and the router armed on its badge and its row; written by the browser suite |
 
 ## The checklists
 

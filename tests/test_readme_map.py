@@ -111,7 +111,7 @@ def test_the_map_names_only_what_is_there_and_every_browser_test():
         ),
         (("`e2e/test_scad_loop.py`, ", ""), "walkthrough/06-editing-a-parts-scad.md is written by"),
         (
-            ("| [19](walkthrough/19-the-router.md) |", "| |"),
+            ("[19](walkthrough/19-the-router.md), ", ""),
             "walkthrough/19-the-router.md is in no row",
         ),
         (

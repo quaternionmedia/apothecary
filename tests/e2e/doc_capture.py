@@ -49,6 +49,10 @@ MOMENT = (
     r"|\b\d+h \d+m(?: \d+s)?\b|\b\d+m \d+s\b"
 )
 
+# The time an armed latch has left, as the Machine, its Control pad, a badge and a Site
+# row write it (``4:58``): minutes and seconds, never part of a moment's time of day.
+TIME_LEFT = r"(?<![\d:])\d+:\d\d(?![\d:])"
+
 # A temperature to its tenth beside its target (``210.2/210``), which wobbles round the
 # target from poll to poll.
 TEMPERATURE = r"\d{1,3}\.\d+(?=\s*/\s*\d)"

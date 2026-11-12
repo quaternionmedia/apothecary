@@ -92,7 +92,8 @@ def _log(page: Page):
 # --- walkthrough page 24: a cut from the card, as a person goes round it -----------------
 
 # What changes on every run whatever the page does: a moment, a count of lines or a
-# percentage as a cut streams, a position as the tool moves, the log and the bar.
+# percentage as a cut streams, a position as the tool moves, the time an armed latch has
+# left, the log and the bar.
 STREAMED = r"\d+/\d+ lines|\(\d+(?:\.\d+)?%\)|\b\d+%|\bG\d+(?: [A-Z][\d.-]+)*"
 POSITION = r"-?\d+\.\d+"
 CHANGING = (
@@ -108,6 +109,10 @@ CHANGING = (
         )
     ),
     *((f"{windows.MACHINE_WINDOWS} {part}", POSITION) for part in ("#c-pos", "#c-pos-s")),
+    *(
+        (where, doc_capture.TIME_LEFT)
+        for where in (windows.MACHINE_WINDOWS, "#control", ".world-badge", "#contents-list")
+    ),
     f"{windows.MACHINE_WINDOWS} #log",
     f"{windows.MACHINE_WINDOWS} #b-print",
 )

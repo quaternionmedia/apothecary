@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- Walkthrough page 31, *What the router needs*: the router in alarm saying what clears it, a jog that did not go kept in the Machine's Needs you card, each axis's home beside its button, Unlock, a home not proved refused, an axis jogged the way it homes, and the router armed on its badge and its row in Site. ([page](walkthrough/31-what-the-router-needs.md))
 - Walkthrough page 30, *A whiteboard, round twice through the page*: a photograph pinned at the garage's whiteboard from its ring, its shapes found, its writing typed and its shapes made; a second photograph of the changed drawing, a change taken, Earlier on the ring back to the first, and that moment placed on the bench, written by the browser test that goes through it. ([page](walkthrough/30-a-whiteboard-round-twice-through-the-page.md))
 - A picture's marks and notes are worn over it in the world as the Marks window reads them: each mark's box in its kind's colour, and each note a ✎ badge where it is written, saying its words and opening it in Marks when pressed. ([doc](docs/pictures.md#the-marks-window))
 - The Marks window scrubs a whiteboard's history: a slider over a strip of its photographs, words and pieces draws the whiteboard as it stood at a moment, lists what changed since the photograph before with Take on each row, and places the moment at the selected place; Earlier, Later and Place are ring cells. ([doc](docs/pictures.md#the-marks-window))
