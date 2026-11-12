@@ -86,6 +86,7 @@ TICK_S = 2.0
 LOOK_S = 10.0  # a board not found is looked for with a scan this often, by the tick alone
 SETTLE_S = 10.0  # the longest a simulated deck's event waits to have been acted on
 MEND_S = 0.5  # how often a deck is looked at, and a lost one looked for
+STOP_S = 15.0  # the longest stop waits for a tick's scan or an event's poll to end
 LONG_PRESS_S = 0.8  # a machine's key held this long is a long press
 ARM_WINDOW_S = 5.0  # the second long press of two must begin within this of the first let go
 
@@ -203,6 +204,11 @@ class DeckController:
         with self._turn:
             self._waiting.clear()
             self._turn.notify_all()
+        # Stopped is stopped: a tick part way through a scan or a poll, or an event being
+        # acted on, ends before this returns, and touches nothing after.
+        for thread in (self._ticker, self._worker):
+            if thread is not None and thread is not threading.current_thread():
+                thread.join(timeout=STOP_S)
 
     def _look(self) -> None:
         """A machine whose board is not found is looked for, here and nowhere else."""

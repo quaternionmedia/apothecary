@@ -659,6 +659,16 @@ def test_the_unlock_key_is_there_while_the_router_is_in_alarm_and_unlocks_it(ben
     assert _router(links)["x"] == pytest.approx(before["x"] + 1)
 
 
+def test_a_stopped_layout_leaves_no_thread_to_touch_the_bench(bench):
+    """Stopped is stopped: a tick part way through a scan, or an event being acted on,
+    has ended when stop returns, so nothing of the layout's scans the ports or polls a
+    machine after whoever stopped it has moved on."""
+    controller, one, links = bench
+    _turn(one, 0, 1)
+    controller.stop()
+    assert not controller._ticker.is_alive() and not controller._worker.is_alive()
+
+
 def test_the_unlock_key_needs_control_armed_as_any_line_but_a_stop_does(bench):
     controller, one, links = bench
     _choose_router(one)
