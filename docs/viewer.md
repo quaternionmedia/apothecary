@@ -436,7 +436,8 @@ them are remembered like any layout.
 A window the page makes for the moment -- a Machine and its sections, the pad --
 is left out of the layout this browser remembers. Every other window is kept in
 it: one opened from ⊞ Windows -- Models, Marks, the Working space, the Deck -- is
-open again after a reload, where it was, and the world as wide as it was.
+open again after a reload, where it was, and the world as wide as it was
+([walkthrough 33](../walkthrough/33-windows-kept-over-a-reload.md)).
 
 ## The part editor
 

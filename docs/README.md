@@ -48,6 +48,7 @@ at page 00.
 | [30 — A whiteboard, round twice through the page](../walkthrough/30-a-whiteboard-round-twice-through-the-page.md) | A photograph pinned at the garage's whiteboard from its ring, squared and laid in front, its shapes found, its writing typed in Marks and its shapes made; a second photograph of the changed drawing, the whiteboard's history, a change taken, Earlier on the ring back to the first, and that moment placed on the bench; written by the browser suite |
 | [31 — What the router needs](../walkthrough/31-what-the-router-needs.md) | What stops a person at the router, in its Machine: a controller in alarm saying what clears it, a jog that did not go kept in Needs you, each axis's home beside its button, Unlock, a home not proved refused, an axis jogged the way it homes, and the router armed on its badge and its row; written by the browser suite |
 | [32 — A quiet board, and a router's pins](../walkthrough/32-a-quiet-board-and-a-router-s-pins.md) | Two values as the Working space's table reads them: a printer not heard for ten minutes, last heard and its state last known at its board's last answer, and a router's pins read as their items, then none; written by the browser suite |
+| [33 — Windows kept over a reload](../walkthrough/33-windows-kept-over-a-reload.md) | Models, Marks, the Working space and the Deck opened from ⊞ Windows, and the page reloaded: each open again in the stack it was in, the world as wide; written by the browser suite |
 
 ## The checklists
 
