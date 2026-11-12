@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- Walkthrough page 27 goes on past the stop key: two long presses of the router's key arming it, DISARM letting go of every machine's control, and UNLOCK taking the router out of the alarm a stop mid-move leaves it in, each pictured from the Deck window. ([page](walkthrough/27-the-deck-jogging-the-machines.md))
 - Walkthrough page 31, *What the router needs*: the router in alarm saying what clears it, a jog that did not go kept in the Machine's Needs you card, each axis's home beside its button, Unlock, a home not proved refused, an axis jogged the way it homes, and the router armed on its badge and its row in Site. ([page](walkthrough/31-what-the-router-needs.md))
 - Walkthrough page 30, *A whiteboard, round twice through the page*: a photograph pinned at the garage's whiteboard from its ring, its shapes found, its writing typed and its shapes made; a second photograph of the changed drawing, a change taken, Earlier on the ring back to the first, and that moment placed on the bench, written by the browser test that goes through it. ([page](walkthrough/30-a-whiteboard-round-twice-through-the-page.md))
 - A picture's marks and notes are worn over it in the world as the Marks window reads them: each mark's box in its kind's colour, and each note a ✎ badge where it is written, saying its words and opening it in Marks when pressed. ([doc](docs/pictures.md#the-marks-window))
