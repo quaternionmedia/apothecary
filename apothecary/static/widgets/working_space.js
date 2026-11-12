@@ -78,7 +78,9 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const say = (text, kind = "") => { if (log) log(text, kind); };
     const state = {
-        path: null, watch: null, refused: null, printers: [], doc: null, last: null, next: "",
+        // printers: null until the site's machines are read, so none is not said of a site
+        // not read yet.
+        path: null, watch: null, refused: null, printers: null, doc: null, last: null, next: "",
         kept: { at: 0, state: null, step: null, cameras: "" }, timer: null, unwatch: null, keeping: false,
         turn: 0, closed: false,
     };
@@ -185,6 +187,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
     function lead() {
         const path = state.path;
         if (!path) {
+            if (!state.printers) return { text: `Reading the machines pinned in ${site()}…` };
             if (!state.printers.length) return { text: `No machine is pinned in ${site()} yet: a printer's or a router's Device, on its ring, pins its board, and its polls are kept from then.` };
             return { text: "Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on." };
         }
@@ -211,7 +214,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
     // --- the site: a row per printer ----------------------------------------------------------
     function printers(doc) {
         if (state.path) return "";
-        return state.printers.map((pr) => {
+        return (state.printers || []).map((pr) => {
             const s = pr.subject;
             const st = doc ? prop(doc, s, "state") : null;
             const heat = doc ? SERIES.map((line) => {
@@ -418,6 +421,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
         const turn = state.turn;
         state.closed = false;
         state.path = path; state.last = null; state.refused = null;
+        if (!path) state.printers = null;  // the site's, read again: another site's may be loaded
         state.kept = { at: 0, state: null, step: null, cameras: "" };
         q(".ws-evidence").innerHTML = "";
         q(".ws-timeline").innerHTML = "";

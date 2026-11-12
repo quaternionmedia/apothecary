@@ -50,7 +50,9 @@ each of its doors, written by the browser test that does it.
 Its first line, under the title, names the next step and carries the button
 that takes it, whichever door opened it: choose a printer; add a camera above
 it; choose a camera's device; or, with every camera this browser's, when
-frames are kept and Keep a set now. The status line says the same.
+frames are kept and Keep a set now. Opened on the site, it says it is reading
+the site's machines until it has read them, and only then whether any is
+pinned. The status line says the same.
 
 - **⊞ Windows › Working space**, or **Panels › Site › Workspace** on the
   canvas ring, opens it on the whole site: a row for each printer a board

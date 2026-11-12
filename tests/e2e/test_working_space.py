@@ -379,6 +379,25 @@ def test_closed_it_keeps_no_frame_whoever_polls_the_printer(page, url):
 
 
 @pytest.mark.e2e
+def test_before_its_first_read_it_says_it_is_reading_not_that_none_is_pinned(page, url):
+    """Opened on the site, the window says it is reading the site's machines until it
+    has read them, and never that no machine is pinned: printer_1 is pinned here. The
+    site's machines are held back until the first line has been looked at."""
+    open_garage(page, url)
+    held: list = []
+    machines = re.compile(r"/sites/garage/evidence/printers$")
+    page.route(machines, lambda route: held.append(route))
+    windows.from_the_windows_menu(page, "working")
+    lead = page.locator(f"{WINDOW} .ws-next")
+    expect(lead).to_have_text("Reading the machines pinned in garage…")
+    while held:
+        held.pop().continue_()
+    page.unroute(machines)
+    expect(lead).to_contain_text("Choose a machine to see its hour")
+    expect(page.locator(f"{WINDOW} .ws-printer[data-printer='printer_1']")).to_be_visible()
+
+
+@pytest.mark.e2e
 def test_opened_again_from_the_windows_menu_it_is_the_site_and_read_again(page, url):
     """⊞ Windows › Working space, after the window was closed on printer_1, opens it on
     the site, as it does the first time, and the site is read again on its timer."""
