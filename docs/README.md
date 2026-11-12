@@ -52,6 +52,8 @@ at page 00.
 | [34 — The tour](../walkthrough/34-the-tour.md) | The walkthrough a step at a time beside the live page: a page chosen, its step as its test recorded it, ✓ As shown and ✗ Off kept, Back showing the word kept, the ring's cells, a reload, and `apothecary tour` reading it back; written by the browser suite |
 | [35 — The Models window](../walkthrough/35-the-models-window.md) | Image models through the simulated qmcp: no guess trusted, a shape chosen on the bench's mat, Ask with each guess not checked, a person's word over the model's, the model switched off and still off after a reload; written by the browser suite |
 | [36 — The Models window, narrow and wide](../walkthrough/36-the-models-window-narrow-and-wide.md) | The Models table reading down beside the world on a narrow page, and a table on a wide one; written by the browser suite |
+| [37 — Marks worn in the world](../walkthrough/37-marks-worn-in-the-world.md) | A whiteboard's marks sorted in the Marks window and worn over its picture in the world, a person's word read back by its shapes, and a note's ✎ opening its box and offering the size it states; written by the browser suite |
+| [38 — A whiteboard's corners](../walkthrough/38-a-whiteboard-s-corners.md) | A photograph from one side with the whiteboard's corners found on it, a corner nudged with the arrow keys and the whiteboard squared again; written by the browser suite |
 
 ## The checklists
 

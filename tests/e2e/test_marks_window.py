@@ -3,7 +3,9 @@
 ⊞ Windows › Marks opens it beside Models: the picture pinned at the bench, each of
 its marks with its kind, and its note. A person's word on a mark -- its drop-down,
 or the ring's cell on the mark chosen -- is read back by the picture's shapes in
-the world, and a note typed offers the size it states for its line.
+the world, and a note typed offers the size it states for its line. A whiteboard
+photographed from one side has its corners nudged and is squared again. Walkthrough
+pages 37 and 38 are what the first two tests write.
 
 Its server is the module's own: a whiteboard drawn here, with a plate, a ring
 alone, a line and its size, pinned at the workbench and read by the outline finder.
@@ -17,11 +19,15 @@ import re
 import httpx
 import pytest
 import windows
-from garage import open_garage, said, status
+from doc_capture import moments
+from garage import look_down, open_garage, said, status
 from PIL import Image, ImageDraw, ImageFont
 from playwright.sync_api import expect
 
 BLUE, BLACK = (20, 30, 120), (10, 10, 10)
+MARKS = ".panel[data-panel='marks']"
+# What changes on every run whatever the page does: the moments.
+CHANGING = moments(MARKS, "#status")
 
 
 def _whiteboard() -> bytes:
@@ -61,9 +67,36 @@ def _shapes(page) -> int:
 
 
 @pytest.mark.e2e
-def test_a_persons_word_on_a_mark_is_read_back_in_the_world_and_a_note_is_typed(page, url):
+def test_a_persons_word_on_a_mark_is_read_back_in_the_world_and_a_note_is_typed(
+    page, url, walkthrough
+):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
+    story = walkthrough(
+        ordinal="37",
+        slug="marks-worn-in-the-world",
+        title="Marks worn in the world",
+        intro=(
+            "A whiteboard's marks as the Marks window sorts them, worn over its picture in "
+            "the world: each mark's box in its kind's colour and each note a ✎ where it is "
+            "written. A person's word on a mark is read back by the picture's shapes, and "
+            "a note typed offers the size it states for its line. "
+            "[docs/pictures.md](../docs/pictures.md#the-marks-window) is the reference; "
+            "[page 30](30-a-whiteboard-round-twice-through-the-page.md) is a whiteboard "
+            "round twice."
+        ),
+        runtime=(
+            "It drives a real browser against a real server of its own, a whiteboard drawn "
+            "here -- a plate, a ring alone, a line and its size -- pinned at the workbench "
+            "and read by the outline finder."
+        ),
+        does_not_show=[
+            "**A photograph.** The whiteboard is drawn by the test, square to the camera; "
+            "a photograph from one side is [page 38](38-a-whiteboard-s-corners.md).",
+            "**What changes on every run.** Moments are blanked in the pictures.",
+        ],
+        browser_suite_only=True,
+    )
     open_garage(page, url)
     page.wait_for_function(
         "() => window.apothecaryPictures.state().some((e) => e.host === 'workbench' && e.mat)"
@@ -98,6 +131,17 @@ def test_a_persons_word_on_a_mark_is_read_back_in_the_world_and_a_note_is_typed(
     expect(ring).to_have_count(1)
     ring_id = ring.get_attribute("data-mark")
     ring = marks.locator(f".marks-row[data-mark='{ring_id}']")
+    look_down(page, "workbench")
+    story.shows(
+        "⊞ Windows › Marks: four marks sorted, worn over the picture",
+        "The header's ⊞ Windows, Marks under Pictures: the whiteboard pinned at the "
+        "workbench, its four marks each with the kind the sorter gave it -- two "
+        "diagrams, writing, and the ring alone unsure -- and its one note. The camera "
+        "turned to look straight down on the workbench: each mark's box is worn over the "
+        "picture in its kind's colour, and the note is a ✎ where it is written.",
+        shown=marks.locator(".marks-said").inner_text(),
+        blank=CHANGING,
+    )
 
     # Its drop-down is a person's word: the ring a diagram's, and a second shape there.
     ring.locator(".marks-kind").select_option("diagram")
@@ -105,6 +149,13 @@ def test_a_persons_word_on_a_mark_is_read_back_in_the_world_and_a_note_is_typed(
     said(page, f"{ring_id} is diagram, as you said: 2 shapes in the picture now")
     page.wait_for_function(
         "() => window.apothecaryPictures.drawnAt('workbench').shapes.length === 2"
+    )
+    story.shows(
+        "A person's word: the ring is a diagram's, and a second shape there",
+        "The ring's drop-down, diagram: the row says a person said so and the sorter said "
+        "unsure, and the picture's shapes read it back, a second shape there now.",
+        shown=status(page).inner_text(),
+        blank=CHANGING,
     )
 
     # Chosen, the ring's Marks cells say what it is: nothing, and the shape is gone.
@@ -119,6 +170,14 @@ def test_a_persons_word_on_a_mark_is_read_back_in_the_world_and_a_note_is_typed(
     marks.locator(".marks-row.chosen .marks-choose").click()
     assert page.evaluate("() => window.apothecaryMarks.act('say:diagram')") is False
     expect(status(page)).to_contain_text("choose a mark in Marks first")
+    story.says(
+        "Chosen, the ring's Nothing takes the shape away",
+        "The ring's row chosen, and Nothing -- the cell of Panels › Pictures › Marks, its "
+        "verb handed to the window as the ring hands it: the ring is nothing, as a person "
+        "said, and its shape is gone. With no mark chosen the cell says to choose one, and "
+        "changes nothing.",
+        shown=status(page).inner_text(),
+    )
 
     # The note's ✎ in the world brings its box in front; typed, with Enter: what it
     # says, and the size it states for its line.
@@ -134,6 +193,14 @@ def test_a_persons_word_on_a_mark_is_read_back_in_the_world_and_a_note_is_typed(
     expect(marks.locator(".marks-words")).to_have_value("120 mm")
     expect(page.locator(".world-badge.note-mark")).to_have_attribute(
         "aria-label", re.compile(r"says 120 mm$")
+    )
+    story.shows(
+        "The note's ✎ opens its box; typed, it offers the size it states",
+        "The ✎ in the world pressed: the note's box in front in Marks. 120 mm typed and "
+        "Enter: the note says it, its ✎ says it, and Marks offers the size it states for "
+        "its line, this picture's width from it.",
+        shown=marks.locator(".marks-offer").inner_text(),
+        blank=CHANGING,
     )
     assert errors == []
 
@@ -159,9 +226,31 @@ def leaning(base_url, start_server, tmp_path_factory):
 
 
 @pytest.mark.e2e
-def test_a_whiteboards_corner_nudged_squares_its_photograph_again(page, leaning):
+def test_a_whiteboards_corner_nudged_squares_its_photograph_again(page, leaning, walkthrough):
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
+    story = walkthrough(
+        ordinal="38",
+        slug="a-whiteboard-s-corners",
+        title="A whiteboard's corners",
+        intro=(
+            "A photograph pinned at a whiteboard is squared to it from the whiteboard's "
+            "four corners, found on the photograph; the Marks window shows them as handles, "
+            "and a corner dragged or nudged squares it again. "
+            "[docs/pictures.md](../docs/pictures.md#pinned-at-a-whiteboard) is the reference."
+        ),
+        runtime=(
+            "It drives a real browser against a real server of its own: a whiteboard "
+            "photographed from one side, drawn by the test, pinned at the garage's "
+            "whiteboard and searched by the outline finder."
+        ),
+        does_not_show=[
+            "**A corner dragged.** The corner here is nudged with the arrow keys; a drag "
+            "sets it the same way, on release.",
+            "**What changes on every run.** Moments are blanked in the pictures.",
+        ],
+        browser_suite_only=True,
+    )
     open_garage(page, leaning)
     page.wait_for_function(
         "() => window.apothecaryPictures.state().some((e) => e.host === 'whiteboard' && e.mat)"
@@ -173,6 +262,13 @@ def test_a_whiteboards_corner_nudged_squares_its_photograph_again(page, leaning)
     expect(marks.locator(".marks-corner")).to_have_count(4)
     expect(marks.locator(".marks-corners-said")).to_contain_text("found; drag a corner")
     before = page.evaluate("() => window.apothecaryPictures.drawnAt('whiteboard').picture")
+    story.shows(
+        "⊞ Windows › Marks: the photograph it was squared from, its corners found",
+        "The header's ⊞ Windows, Marks: the photograph pinned at the whiteboard, as taken "
+        "from one side, with the whiteboard's four corners found on it as handles.",
+        shown=marks.locator(".marks-corners-said").inner_text(),
+        blank=CHANGING,
+    )
 
     # The top-right corner nudged left with the arrow keys, and set with Enter.
     corner = marks.locator(".marks-corner[data-handle='1']")
@@ -189,6 +285,14 @@ def test_a_whiteboards_corner_nudged_squares_its_photograph_again(page, leaning)
         "(was) => window.apothecaryPictures.drawnAt('whiteboard').picture !== was", arg=before
     )
     expect(marks.locator(".marks-corners-said")).to_contain_text("placed by you")
+    story.shows(
+        "A corner nudged and set: squared again with it",
+        "The top-right corner focused, the left arrow pressed five times and Enter: the "
+        "whiteboard is squared again with the corners as placed, its shapes found again, "
+        "and Marks says the corners were placed by you.",
+        shown=status(page).inner_text(),
+        blank=CHANGING,
+    )
     assert errors == []
 
 

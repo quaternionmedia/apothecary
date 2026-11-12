@@ -20,10 +20,9 @@ import httpx
 import pytest
 import windows
 from doc_capture import moments
-from garage import NAME, drawn, open_garage, said
+from garage import NAME, look_down, open_garage, said
 from garage import picture as stated_picture
 from playwright.sync_api import expect
-from viewer_ready import OCCLUSION_TESTED, settled
 from views_helpers import HIGH, SHAPES, WIDE
 
 MODEL = "qmcp/simulated-vlm@0"
@@ -32,14 +31,6 @@ ASKED = ("colour", "material", "label")
 MODELS = ".panel[data-panel='models']"
 # What changes on every run whatever the page does: the moments.
 CHANGING = moments(MODELS, "#status")
-
-# Straight down on the bench's mat from 1400 mm over its middle, a little in front.
-LOOK_DOWN = """([x, y, z]) => {
-    const v = window.fractalViewer;
-    v.orbitControls.target.copy(v.sceneAt(x, y, z));
-    v.camera.position.copy(v.sceneAt(x, y - 70, z + 1400));
-    v.orbitControls.update();
-}"""
 
 # A point of a shape on the page where a click chooses it, as the page's own pick
 # says, with nothing standing over the canvas there; null where none does.
@@ -157,8 +148,7 @@ def test_the_models_window_asks_about_a_shape_and_a_person_overrules_it(page, ur
     )
 
     # The coin clicked on the bench's mat is the shape Models asks about.
-    page.evaluate(LOOK_DOWN, drawn(page, "workbench")["mat"]["centre"])
-    settled(page, frames=OCCLUSION_TESTED)
+    look_down(page, "workbench")
     shape = SHAPES[COIN]
     at = page.evaluate(ON_THE_SHAPE, [COIN, shape["min"], shape["max"]])
     assert at, "no point of the coin is picked as the coin"
@@ -291,8 +281,7 @@ def test_a_narrow_models_window_reads_down_and_a_wide_one_is_a_table(page, narro
     )
     windows.from_the_windows_menu(page, "models")
     models = windows.panel(page, "models")
-    page.evaluate(LOOK_DOWN, drawn(page, "workbench")["mat"]["centre"])
-    settled(page, frames=OCCLUSION_TESTED)
+    look_down(page, "workbench")
     shape = SHAPES[COIN]
     page.mouse.click(*page.evaluate(ON_THE_SHAPE, [COIN, shape["min"], shape["max"]]))
     models.locator(".models-ask").click()

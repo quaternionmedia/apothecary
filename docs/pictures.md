@@ -161,6 +161,9 @@ with writing beside their shapes.
 
 ### The Marks window
 
+[Walkthrough 37](../walkthrough/37-marks-worn-in-the-world.md) goes through it, written by
+the browser test that does it.
+
 In the page, ⊞ Windows › Marks (Panels › Pictures › Marks on the ring) lists the
 marks of a picture pinned in the site, the one drawn at the selected place first.
 Each mark has its colour, a drop-down of what it is, and why; choosing in the
@@ -225,6 +228,9 @@ the photograph's corners, and says so; a photograph whose lightest surface is
 under a sixth of it is refused.
 
 ### Pinned at a whiteboard
+
+[Walkthrough 38](../walkthrough/38-a-whiteboard-s-corners.md) nudges a corner, written by the
+browser test that does it.
 
 A photograph pinned at a whiteboard of the site -- a structure that is the part
 `whiteboard`, as the garage's on its south wall -- is squared to it as it is
