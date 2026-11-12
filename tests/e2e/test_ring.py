@@ -674,7 +674,8 @@ def test_the_rings_reset_layout_lays_the_pages_own_out_again(page: Page, ring_ur
     inner = _panels_ring(page)
     page.keyboard.press(next(cell for cell, label in inner.items() if label == "Windows"))
     assert sorted(_wedges(page).values()) == [
-        "Airgap view", "Family view", "Machine view", "Part view", "Reset layout", "Tour",
+        "Airgap view", "Family view", "Machine view", "Make view", "Part view", "Reset layout",
+        "Tour",
         "World alone",
     ]  # fmt: skip
     page.keyboard.press(
@@ -718,7 +719,9 @@ def test_a_stacks_plus_opens_any_window_there_and_windows_lists_them_by_group(
     # ⊞ Windows: the views, then the windows; the first focused, the arrows moving.
     page.locator("#windows-menu > summary").click()
     body = page.locator(".windows-menu-body")
-    expect(body.locator(".view-item")).to_have_text(["Default", "Part", "Machine", "Airgap", "Family"])
+    expect(body.locator(".view-item")).to_have_text(
+        ["Default", "Part", "Machine", "Airgap", "Family", "Make"]
+    )
     expect(body.locator(".window-item[data-window='gather']")).to_have_text("● Gather")
     assert page.evaluate("() => document.activeElement.dataset.view") == "default"
     page.keyboard.press("ArrowDown")

@@ -268,7 +268,7 @@ expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
   Control pad (an armed printer's pad in a loud window of its own or back in its
   Machine, as the pad's ⧉ Pop out and ⇥ Put back) and Knobs (the Stream Deck +'s:
   On / off, Machine, Step, Here and the Deck window, [stream-deck.md](stream-deck.md)); Windows › World alone (as
-  `~`), Reset layout, Part view, Machine view, Airgap view and Family view; Bench › Bench (show it), Install (a cell per toolchain
+  `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Make view; Bench › Bench (show it), Install (a cell per toolchain
   module, then the slicer), Compile, Upload, Raw flash, Cancel, Cores,
   Libraries; Docs (the documentation in a new tab, as the header's Docs); and
   Airgap › Airgap (show it), Play, Sweep, To editor, From editor, Copy SCAD,
@@ -386,12 +386,14 @@ which the page, the ring and the tests all read.
 | Machine | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
 | Airgap | The Airgap and each of its sections in a window, the world among them |
 | Family | The world; the Procedure tall beside it; Members and Deliveries under it, with Jobs and Working space, and Selected, in the column |
+| Make | The windows a part is made through on a machine (`apothecary/journeys.py`): the world; beside it Site with Problems, Pinned, Jobs and SCAD, then Selected, Parameters, and the board's Machine sharing a stack with its Print window, Print in front, with Pictures, the Bench and Settings behind them |
 
-A view needs its main window. The Machine view opens the Machine of the machine
-selected, or else stepped into, when none is open; with none to open it is offered
-greyed, and asked for, from ⊞ Windows or the ring, it says why and leaves the layout
-as it was.
-Laid out, it lands on the file the machine would run: the path of the file its
+A view needs its main window. The Machine view, and the Make view, open the Machine
+of the machine selected, or else stepped into, when none is open; with none to open
+each is offered greyed, and asked for, from ⊞ Windows or the ring, it says why and
+leaves the layout as it was: a part chosen for Make, its Slice on the part's ring opens
+the printer's Machine.
+Laid out, either lands on the file the machine would run: the path of the file its
 Print or Cut has chosen drawn in the world, all of it, and framed, the slider
 that goes through it beside it ([toolpath-preview.md](toolpath-preview.md#in-the-page));
 with no file of that machine's kept, the status line says how one comes to be.

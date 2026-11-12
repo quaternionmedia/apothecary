@@ -70,6 +70,7 @@ AREAS = {
             "apothecary/static/twice.js",
             "apothecary/static/widgets/settings.js",
             "apothecary/systems.py",
+            "apothecary/journeys.py",
             "apothecary/menu.py",
             "apothecary/routes/menu.py",
             "apothecary/docs_site.py",
@@ -91,6 +92,7 @@ AREAS = {
             "test_docs_fractal_viewer.py",
             "test_the_universe.py",
             "test_view_banner.py",
+            "test_journeys.py",
         ),
     },
     "pictures": {

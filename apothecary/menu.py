@@ -34,6 +34,8 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .hierarchy import Assembly
+from .journeys import JOURNEYS
+from .journeys import by_id as journey_by_id
 from .site_names import UNIVERSE, UNIVERSE_SHOWN
 from .systems import SYSTEMS, by_id
 
@@ -762,11 +764,14 @@ PANEL_GROUPS = {
 }
 # What a person may say a whiteboard's mark is (apothecary/vision/marks.py's Kind).
 MARK_KINDS = ("diagram", "writing", "unsure", "nothing")
-# The views: each focused system's windows laid out together (systems.py), a cell
-# of Panels › Windows after the layout's own two and an entry of the header's
-# ⊞ Windows. The page defines each from the same entry; a view's windows the page
-# has not got are left out of it.
-VIEWS = tuple((system.id, system.cell) for system in SYSTEMS)
+# The views: each focused system's windows laid out together (systems.py), then each
+# journey's (journeys.py), a cell of Panels › Windows after the layout's own two and an
+# entry of the header's ⊞ Windows. The page defines each from the same entry; a view's
+# windows the page has not got are left out of it.
+VIEWS = tuple((system.id, system.cell) for system in SYSTEMS) + tuple(
+    (journey.id, journey.cell) for journey in JOURNEYS
+)
+JOURNEY_IDS = frozenset(journey.id for journey in JOURNEYS)
 # The panels seated before the windows' own cell (Panels › Windows, 49); a panel
 # registered after them is seated after it. Site's cell is a ring of Site and its
 # own windows, Pictures' a ring of Pictures and Gather, and Machine's a ring of the
@@ -846,7 +851,7 @@ def _panels() -> Option:
                     Option(
                         id=f"panel:view:{vid}",
                         label=label,
-                        group=by_id(vid).group,
+                        group=(journey_by_id(vid) if vid in JOURNEY_IDS else by_id(vid)).group,
                         action=f"panel:view:{vid}",
                     )
                     for vid, label in VIEWS

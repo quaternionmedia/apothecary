@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- The Make view lays out the windows a part is made through on a machine: the world beside Site, Selected, Parameters, and the board's Machine with its Print window in front; listed in ⊞ Windows and the ring's Panels › Windows, it opens the selected machine's Machine as the Machine view does. ([doc](docs/viewer.md#the-windows))
 - Walkthrough pages 37 and 38, *Marks worn in the world* and *A whiteboard's corners*: a whiteboard's marks worn over its picture, a person's word read back by its shapes, a note's ✎ offering the size it states, and a corner nudged squaring the whiteboard again. ([page](walkthrough/37-marks-worn-in-the-world.md))
 - Walkthrough pages 35 and 36, *The Models window* and *The Models window, narrow and wide*: no guess trusted, a shape chosen and asked about, a person's word over the model's, the model switched off across a reload, and the table reading down when the window is narrow. ([page](walkthrough/35-the-models-window.md))
 - The tour: ⊞ Windows › Tour, or the ring's Panels › Windows › Tour, takes the walkthrough a step at a time beside the live page, each step as the test that writes its page recorded it, and keeps a person's word on each, ✓ As shown or ✗ Off with what is off, with the commit the server ran; `apothecary tour` reads them back. Walkthrough page 34 goes through it. ([doc](docs/tour.md))

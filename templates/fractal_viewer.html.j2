@@ -842,8 +842,10 @@
         }
     }
     </script>
-    <!-- The focused systems (apothecary/systems.py): read by static/systems.js. -->
+    <!-- The focused systems (apothecary/systems.py) and the journeys (apothecary/journeys.py):
+         read by static/systems.js. -->
     <script type="application/json" id="apothecary-systems">{{ systems|tojson }}</script>
+    <script type="application/json" id="apothecary-journeys">{{ journeys|tojson }}</script>
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -872,7 +874,7 @@
         import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
         import { mountTasks } from '/static/widgets/tasks.js';
         import { mountAirgap } from '/static/widgets/airgap.js';
-        import { knownWindows, transientWindows, mountSystems, openFor } from '/static/systems.js';
+        import { knownWindows, transientWindows, mountSystems, defineJourneyViews, openFor } from '/static/systems.js';
         import { mountScadEditor, variantChoices, historyRows, trashRows } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
         import { parseAssignments, lastOf, literalText, writeValues } from '/static/widgets/assignments.js';
@@ -887,6 +889,8 @@
         const BASE_URL = {{ base_url | tojson }};
         // The focused systems, as apothecary/systems.py has them (the JSON above).
         const SYSTEMS = JSON.parse(document.getElementById('apothecary-systems').textContent);
+        // The journeys, as apothecary/journeys.py has them: each a view, after the systems'.
+        const JOURNEYS = JSON.parse(document.getElementById('apothecary-journeys').textContent);
         // The page's own layout, as Reset layout puts it: the world on the left, and
         // a column beside it of Site and its own windows, Selected, then Pictures, the
         // Bench and Settings.
@@ -1777,6 +1781,7 @@
                         shown: (widget) => widget.load(),
                     },
                 });
+                defineJourneyViews(this.panels, JOURNEYS);
                 // Settings: every shortcut and navigation setting, each with its default
                 // and a reset (widgets/settings.js) -- a tab beside Pictures, opened
                 // from ⚙ View › Settings and the canvas ring's View › Settings.
@@ -7746,7 +7751,7 @@
             viewRefusal(id) {
                 const missing = this.panels.viewMissing(id);
                 if (!missing) return null;
-                if (id !== 'machine') return `it lays out ${missing.title}'s windows: open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ''}`;
+                if (!this.viewOpensMachine(id)) return `it lays out ${missing.title}'s windows: open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ''}`;
                 const path = this.viewSubject();
                 // How its subject is opened, in the registry's words (systems.py).
                 const how = `select a machine with a board pinned to it, or open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ''}`;
@@ -7760,9 +7765,15 @@
             viewOffer(id) {
                 const refused = this.viewRefusal(id);
                 if (refused) return { refused: `Not now: ${refused}`, title: null };
-                if (id !== 'machine') return { refused: null, title: null };
+                if (!this.viewOpensMachine(id)) return { refused: null, title: null };
                 const lands = 'its windows laid out together, and its chosen file\'s path drawn in the world';
-                return { refused: null, title: this.machine ? `The Machine: ${lands}` : `Opens ${this.viewSubject()}'s Machine: ${lands}` };
+                const title = this.panels.views().find((v) => v.id === id).title;
+                return { refused: null, title: this.machine ? `${title}: ${lands}` : `Opens ${this.viewSubject()}'s Machine: ${lands}` };
+            }
+            // A view that lays out a board's Machine, which the page opens for a subject:
+            // the Machine view's own, and a journey's that needs one (journeys.py).
+            viewOpensMachine(id) {
+                return this.panels.views().find((v) => v.id === id)?.requires === 'machine';
             }
             // A view asked for, from ⊞ Windows or the ring's Panels › Windows: its windows
             // laid out together, and what came of it said. The Machine view opens the
@@ -7778,7 +7789,7 @@
                 const asked = label || (view ? `${view.title} view` : id);
                 const refused = view ? this.viewRefusal(id) : 'no such view';
                 if (refused) { this.setStatus(`${asked}: ${refused}${tail}`, 'error'); return false; }
-                if (id === 'machine' && !this.machine) this.openMachine(this.viewSubject());
+                if (this.viewOpensMachine(id) && !this.machine) this.openMachine(this.viewSubject());
                 const registered = () => this.panels.list().filter((w) => w.registered).length;
                 const had = registered();
                 let done = this.panels.applyView(id);
@@ -7788,7 +7799,7 @@
                 if (!done) { this.setStatus(`${asked}: its windows could not be laid out${tail}`, 'error'); return false; }
                 if (id === 'default') { this.setStatus(`The page's own layout again: the world, Site and Selected beside it, the tabs below them${tail}`, 'success'); return true; }
                 const laid = `The ${view.title} view: its windows laid out together`;
-                const landed = id === 'machine' ? await this.landOnPath() : null;
+                const landed = this.viewOpensMachine(id) ? await this.landOnPath() : null;
                 if (landed) this.setStatus(`${laid}. ${landed.said}${tail}`, landed.refused ? 'error' : 'success');
                 else this.setStatus(`${laid}; Panels › Windows › Reset layout puts the page's own back${tail}`, 'success');
                 return true;

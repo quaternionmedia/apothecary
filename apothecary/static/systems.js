@@ -28,6 +28,9 @@
  *   `without`, and takes away any other, as the subject turns out to be of a kind.
  *   setEmpty(id, empty) says a section has nothing to show (its stack gives its room
  *   away), and openLinked() opens the sections a link to the subject asks for.
+ * defineJourneyViews(panels, journeys) defines each journey's view (apothecary/journeys.py),
+ *   listed after the systems': the windows a path through the page passes, laid out
+ *   together, greyed until the window it `requires` is there.
  */
 
 export function knownWindows(systems) {
@@ -45,6 +48,12 @@ export function openFor(panels, systems, action) {
 
 export function transientWindows(systems) {
     return systems.filter((s) => s.transient).flatMap((s) => [s.main, ...s.sections.map((sec) => sec.window)]);
+}
+
+export function defineJourneyViews(panels, journeys) {
+    for (const journey of journeys) {
+        panels.defineView(journey.id, { title: journey.title, layout: journey.view, requires: journey.requires, hint: journey.opened_by });
+    }
 }
 
 export function mountSystems(panels, systems, hooks = {}) {

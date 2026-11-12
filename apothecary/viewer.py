@@ -10,6 +10,7 @@ from typing import List, Optional
 
 from jinja2 import Environment, FileSystemLoader
 
+from .journeys import manifest as journeys_manifest
 from .projects.parts.skeleton import ROOT
 from .site_names import UNIVERSE, UNIVERSE_SHOWN
 from .systems import manifest as systems_manifest
@@ -28,7 +29,8 @@ def render_fractal_viewer_page(
     """The viewer page, opened on ``default_site`` and, when ``focus_path`` names a
     node (``workbench.frame_system``), already zoomed to it. ``demo`` names the demo's
     folder when the server is ``apothecary serve --demo``: the page says so. The
-    focused systems (systems.py) are given to it whole, as the page registers them,
+    focused systems (systems.py) and the journeys (journeys.py) are given to it whole,
+    as the page registers them,
     and the universe's name (site_names.py), which a step out of a site goes to."""
     return _ENV.get_template("fractal_viewer.html.j2").render(
         site_names=site_names,
@@ -38,6 +40,7 @@ def render_fractal_viewer_page(
         three_is_vendored=three_is_vendored,
         demo=demo,
         systems=systems_manifest(),
+        journeys=journeys_manifest(),
         universe=UNIVERSE,
         universe_shown=UNIVERSE_SHOWN,
     )

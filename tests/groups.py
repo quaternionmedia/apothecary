@@ -323,6 +323,7 @@ GROUPS = {
             "test_stays_local.py",
             "test_group_colours.py",
             "test_systems.py",
+            "test_journeys.py",
             "test_theatre_site.py",
             "test_viewer_assets.py",
         ),
