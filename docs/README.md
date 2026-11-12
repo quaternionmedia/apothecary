@@ -50,6 +50,8 @@ at page 00.
 | [32 — A quiet board, and a router's pins](../walkthrough/32-a-quiet-board-and-a-router-s-pins.md) | Two values as the Working space's table reads them: a printer not heard for ten minutes, last heard and its state last known at its board's last answer, and a router's pins read as their items, then none; written by the browser suite |
 | [33 — Windows kept over a reload](../walkthrough/33-windows-kept-over-a-reload.md) | Models, Marks, the Working space and the Deck opened from ⊞ Windows, and the page reloaded: each open again in the stack it was in, the world as wide; written by the browser suite |
 | [34 — The tour](../walkthrough/34-the-tour.md) | The walkthrough a step at a time beside the live page: a page chosen, its step as its test recorded it, ✓ As shown and ✗ Off kept, Back showing the word kept, the ring's cells, a reload, and `apothecary tour` reading it back; written by the browser suite |
+| [35 — The Models window](../walkthrough/35-the-models-window.md) | Image models through the simulated qmcp: no guess trusted, a shape chosen on the bench's mat, Ask with each guess not checked, a person's word over the model's, the model switched off and still off after a reload; written by the browser suite |
+| [36 — The Models window, narrow and wide](../walkthrough/36-the-models-window-narrow-and-wide.md) | The Models table reading down beside the world on a narrow page, and a table on a wide one; written by the browser suite |
 
 ## The checklists
 

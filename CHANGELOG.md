@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- Walkthrough pages 35 and 36, *The Models window* and *The Models window, narrow and wide*: no guess trusted, a shape chosen and asked about, a person's word over the model's, the model switched off across a reload, and the table reading down when the window is narrow. ([page](walkthrough/35-the-models-window.md))
 - The tour: ⊞ Windows › Tour, or the ring's Panels › Windows › Tour, takes the walkthrough a step at a time beside the live page, each step as the test that writes its page recorded it, and keeps a person's word on each, ✓ As shown or ✗ Off with what is off, with the commit the server ran; `apothecary tour` reads them back. Walkthrough page 34 goes through it. ([doc](docs/tour.md))
 - Walkthrough page 33, *Windows kept over a reload*: Models, Marks, the Working space and the Deck opened from ⊞ Windows, and the page reloaded, each open again in the stack it was in and the world as wide. ([page](walkthrough/33-windows-kept-over-a-reload.md))
 - Walkthrough page 32, *A quiet board, and a router's pins*: a printer not heard for ten minutes, last heard and its state last known at its board's last answer, and a router's pins read as their items, then none, in the Working space's table. ([page](walkthrough/32-a-quiet-board-and-a-router-s-pins.md))
