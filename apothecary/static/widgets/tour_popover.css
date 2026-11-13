@@ -1,0 +1,28 @@
+/* The tour over the page (widgets/tour_popover.js): a journey's stages in a box above
+ * the windows, which no view or journey lays out or covers. A prototype. */
+.tour-pop { position: fixed; inset: auto; margin: 0; width: 22rem; max-width: calc(100vw - 1rem); padding: 0; border: 1px solid #4a9eff; border-radius: 8px; background: #16191d; color: #ddd; font-size: 13px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); }
+.tour-pop-head { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.5rem; background: #1d2732; border-radius: 8px 8px 0 0; cursor: grab; user-select: none; touch-action: none; }
+.tour-pop-head:active { cursor: grabbing; }
+.tour-pop-name { flex: 1; font-weight: 600; }
+.tour-pop button { cursor: pointer; padding: 0.2rem 0.5rem; font-size: 12px; background: #333; color: #ddd; border: 1px solid #484848; border-radius: 4px; }
+.tour-pop button:hover { background: #484848; }
+.tour-pop button:disabled { opacity: 0.45; cursor: default; }
+.tour-pop-body { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.5rem; }
+.tour-pop.folded .tour-pop-body { display: none; }
+.tour-pop.folded .tour-pop-head { border-radius: 8px; }
+.tour-pop-stages { display: flex; gap: 0.25rem; margin: 0; padding: 0; list-style: none; }
+.tour-pop-stages button { padding: 0.15rem 0.4rem; }
+.tour-pop-stages button[aria-current="step"] { background: #2e6b4a; color: #fff; border-color: #2e6b4a; }
+.tour-pop-stages .as-shown::after { content: " ✓"; color: #7fd49b; }
+.tour-pop-stages .off::after { content: " ✗"; color: #ff8d7a; }
+.tour-pop-stage { margin: 0; font-size: 14px; }
+.tour-pop-hint, .tour-pop-explore, .tour-pop-answer { margin: 0; line-height: 1.45; }
+.tour-pop-explore { color: #aab; }
+.tour-pop-did { margin: 0; padding: 0.35rem 0.5rem 0.35rem 1.4rem; background: #1a201a; border-left: 3px solid #2e6b4a; line-height: 1.45; }
+.tour-pop-did.refused { background: #241a1a; border-left-color: #b5534a; }
+.tour-pop-did:empty { display: none; }
+.tour-pop-note { width: 100%; box-sizing: border-box; background: #0f1113; color: #ddd; border: 1px solid #484848; border-radius: 4px; padding: 0.25rem 0.4rem; }
+.tour-pop-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
+.tour-pop-row .grow { flex: 1; }
+.tour-pop .tour-pop-put { background: #24507a; border-color: #4a9eff; color: #fff; }
+.toolbar #tour-pop-open[aria-pressed="true"] { background: #24507a; color: #fff; }

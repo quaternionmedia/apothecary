@@ -741,6 +741,7 @@
                 {% if not site_names %}<span id="no-sites">No sites found</span>{% endif %}
             </nav>
             <nav id="journey-rail" class="journey-rail" aria-label="Steps" hidden></nav>
+            <button type="button" id="tour-pop-open" aria-pressed="false" title="The tour over the page: a journey a stage at a time, the page put on each (a prototype)">Tour</button>
             <div class="spacer"></div>
             <details id="view-menu" class="view-menu">
                 <summary title="How the world is drawn">⚙ View</summary>
@@ -834,6 +835,7 @@
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/procedure.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/deck.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/tour.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/tour_popover.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/airgap.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/models.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/marks.css">
@@ -883,6 +885,9 @@
         import { mountFamily } from '/static/widgets/family.js';
         import { mountDeck } from '/static/widgets/deck.js';
         import { mountTour } from '/static/widgets/tour.js';
+        import { mountTourPopover } from '/static/widgets/tour_popover.js';
+        // Whether this is `apothecary serve --demo`: the one place the tour puts a stage on.
+        const IS_DEMO = {{ 'true' if demo else 'false' }};
         import { mountPictureList } from '/static/widgets/picture_list.js';
         import { mountModels } from '/static/widgets/models.js';
         import { mountMarks } from '/static/widgets/marks.js';
@@ -1938,6 +1943,17 @@
                     else if (b.dataset.next) this.enterStep(b.dataset.next, 'Next');
                     else if (b.classList.contains('journey-leave')) this.leaveJourney();
                 });
+                // The tour over the page (widgets/tour_popover.js), opened from the header.
+                const tourOpen = document.getElementById('tour-pop-open');
+                this.tourPop = mountTourPopover({
+                    base: BASE_URL,
+                    demo: IS_DEMO,
+                    stage: (journey, stage) => this.stageJourney(journey, stage),
+                    onShown: (open) => tourOpen.setAttribute('aria-pressed', String(open)),
+                });
+                window.apothecaryTourPop = this.tourPop;
+                tourOpen.addEventListener('click', () => this.tourPop.toggle());
+                if (this.tourPop.wasOpen()) this.tourPop.open();
                 window.apothecarySettings = this.settings;
                 window.apothecaryPanels = this.panels;
                 this.onResize();
@@ -7892,6 +7908,7 @@
                 this.journey.step = step.id;
                 this.renderRail();
                 this.keepJourneyInAddress();
+                this.tourPop?.follow(this.journey.id, step.id);
                 const head = `${journey.name} › ${journey.steps.indexOf(step) + 1} ${step.label} (${how})`;
                 const machines = step.forward.filter((w) => w === 'machine' || w.startsWith('machine-'));
                 if (machines.length && !this.machine) {
@@ -7908,6 +7925,60 @@
                 if (landed) this.setStatus(`${head}: ${landed.said}`, landed.refused ? 'error' : 'success');
                 else this.setStatus(`${head}: ${step.hint}`, 'success');
                 return true;
+            }
+            // A stage of a journey put on for the tour (widgets/tour_popover.js), on the
+            // demo: the machine it is staged on opened, its piece chosen, the journey's
+            // view laid out and the step entered, as a person would do each. It says
+            // what it did, then what the page said of the step.
+            async stageJourney(id, stepId) {
+                const journey = JOURNEYS.find((j) => j.id === id);
+                if (!journey) return { did: [], said: `There is no journey ${id}`, refused: true };
+                const on = journey.staged_on || {};
+                const did = [];
+                const until = async (test, ms) => {
+                    const end = Date.now() + ms;
+                    while (Date.now() < end) { if (test()) return true; await new Promise((r) => setTimeout(r, 150)); }
+                    return Boolean(test());
+                };
+                if (on.machine && !this.machine) {
+                    if (!this.renderNodeByKey[on.machine]) return { did, said: `${on.machine} is not in ${this.siteName}: the tour stages ${journey.name} on it`, refused: true };
+                    await until(() => this.bindingFor(on.machine).row?.device?.port, 15000);
+                    this.selectPath(on.machine);
+                    if (!this.openMachine(on.machine) || !(await until(() => this.machine, 10000))) {
+                        return { did, said: `${on.machine}'s Machine did not open: ${document.getElementById('status').textContent}`, refused: true };
+                    }
+                    did.push(`${on.machine}'s Machine opened`);
+                }
+                if (on.part && this.selectedName !== on.part) {
+                    if (!this.selectPath(on.part)) return { did, said: `${on.part} is not in ${this.siteName}`, refused: true };
+                    await until(() => this.selectedName === on.part, 5000);
+                    did.push(`${on.part} chosen`);
+                }
+                // A stage that draws a file's path needs one kept: with none, the stage
+                // before it is done here, the piece sliced for the machine and waited for.
+                const step = journey.steps.find((x) => x.id === stepId);
+                const print = this.machine?.handle?.print;
+                if (step?.draws && on.part && print?.slice) {
+                    const found = await print.show();
+                    if (found && !found.file) {
+                        const started = await print.slice(on.part);
+                        if (started.refused) return { did, said: `${on.part} was not sliced: ${started.refused}`, refused: true };
+                        await until(() => !print.slicing(), 180000);
+                        const kept = await print.show();
+                        if (!kept || !kept.file) {
+                            return { did, said: `${on.part}'s slice for ${on.machine} did not end in three minutes: its task is in the Print window`, refused: true };
+                        }
+                        did.push(`${on.part} sliced for ${on.machine}, as Slice does: ${kept.file}`);
+                    }
+                }
+                if (this.journey?.id !== id) {
+                    await this.enterJourney(id, { stepId });
+                    did.push(`${journey.name} entered, its windows laid out`);
+                } else {
+                    await this.enterStep(stepId, 'the tour');
+                }
+                const status = document.getElementById('status');
+                return { did, said: status.textContent, refused: status.classList.contains('error') };
             }
             // The journey left: the rail goes, the windows stay where they are.
             leaveJourney() {
@@ -7927,6 +7998,7 @@
                 this.journey.step = step.id;
                 this.renderRail();
                 this.keepJourneyInAddress();
+                this.tourPop?.follow(this.journey.id, step.id);
             }
             // The rail as the journey stands: its name, each step a numbered button, the
             // one a person is on marked as the current step, Next naming the one after

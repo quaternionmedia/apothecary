@@ -34,3 +34,27 @@ async def tour_verdict(body: Verdict):
         raise HTTPException(status_code=404, detail=str(e)) from None
     except tour.Refused as e:
         raise HTTPException(status_code=422, detail=str(e)) from None
+
+
+class StageVerdict(BaseModel):
+    journey: str
+    stage: str
+    verdict: str
+    note: str = ""
+
+
+@router.get("/tour/journeys")
+async def tour_journeys():
+    """Each journey's stages, each with a person's latest word on it."""
+    return tour.staged()
+
+
+@router.post("/tour/stages", status_code=201)
+async def tour_stage(body: StageVerdict):
+    """A person's word on one stage of a journey."""
+    try:
+        return tour.say_stage(body.journey, body.stage, body.verdict, body.note)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+    except tour.Refused as e:
+        raise HTTPException(status_code=422, detail=str(e)) from None

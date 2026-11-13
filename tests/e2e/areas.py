@@ -280,8 +280,9 @@ AREAS = {
             "apothecary/tour.py",
             "apothecary/routes/tour.py",
             "apothecary/static/widgets/tour.*",
+            "apothecary/static/widgets/tour_popover.*",
         ),
-        "tests": ("test_tour.py",),
+        "tests": ("test_tour.py", "test_tour_popover.py"),
     },
 }
 

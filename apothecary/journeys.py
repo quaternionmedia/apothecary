@@ -58,6 +58,9 @@ class Journey:
     # What the rail and ⊞ Windows › Journeys call it.
     name: str = ""
     steps: Tuple[Step, ...] = ()
+    # What the tour puts it on, on the demo: the machine whose window it opens and the
+    # piece it chooses (widgets/tour_popover.js). Empty where the tour cannot stage it.
+    staged_on: Tuple[Tuple[str, str], ...] = ()
 
 
 # Make a thing on a machine: a part chosen in Site, its numbers in Parameters, the
@@ -93,6 +96,7 @@ MAKE = Journey(
         ]
     },
     name="Make a thing",
+    staged_on=(("machine", "printer_1"), ("part", "footpedal")),
     steps=(
         Step(
             "choose",
@@ -153,6 +157,7 @@ def manifest(journeys: Tuple[Journey, ...] = JOURNEYS) -> List[Dict[str, Any]]:
             "opened_by": j.opened_by,
             "view": j.view,
             "name": j.name,
+            "staged_on": dict(j.staged_on),
             "steps": [
                 {
                     "id": s.id,

@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from . import journeys
 from .docs_site import WALKTHROUGH_ROOT
 from .projects.parts.skeleton import ROOT
 from .state_folder import private_folder, state_dir
@@ -214,3 +215,75 @@ def document(root: Path = WALKTHROUGH_ROOT) -> dict:
         }
         out.append(body)
     return {**running(), "stops": out}
+
+
+# --- a journey's stages -----------------------------------------------------------------
+# The tour over the page (widgets/tour_popover.js): a journey's steps as stages the page
+# is put on, and a person's word on each, kept in the same file as a step's.
+
+
+def say_stage(journey: str, stage: str, verdict: str, note: str = "") -> dict:
+    """Keep a person's word on ``journey``'s ``stage``."""
+    here = next((j for j in journeys.JOURNEYS if j.id == journey), None)
+    if here is None:
+        raise LookupError(f"no journey {journey}")
+    if verdict not in VERDICTS:
+        raise Refused(f"a verdict is one of {', '.join(VERDICTS)}, not {verdict!r}")
+    if stage not in {s.id for s in here.steps}:
+        raise Refused(f"{here.name} has no stage {stage}")
+    note = note.strip()
+    if verdict == "off" and not note:
+        raise Refused("say what is off")
+    record = {
+        "journey": journey,
+        "stage": stage,
+        "verdict": verdict,
+        "note": note,
+        "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        **running(),
+    }
+    path = verdicts_path()
+    private_folder(path.parent)
+    with path.open("a", encoding="utf-8") as out:
+        out.write(json.dumps(record) + "\n")
+    return record
+
+
+def stage_answers(path: Optional[Path] = None) -> Dict[Tuple[str, str], dict]:
+    """Each stage's answer: the latest word on it."""
+    path = path or verdicts_path()
+    latest: Dict[Tuple[str, str], dict] = {}
+    if not path.is_file():
+        return latest
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict) and {"journey", "stage", "verdict"} <= set(record):
+            latest[(record["journey"], record["stage"])] = record
+    return latest
+
+
+def staged() -> dict:
+    """The journeys as the tour over the page reads them: each stage with its answer."""
+    given = stage_answers()
+    out = []
+    for j in journeys.JOURNEYS:
+        out.append(
+            {
+                "id": j.id,
+                "name": j.name,
+                "staged_on": dict(j.staged_on),
+                "stages": [
+                    {
+                        "id": s.id,
+                        "label": s.label,
+                        "hint": s.hint,
+                        "answer": given.get((j.id, s.id)),
+                    }
+                    for s in j.steps
+                ],
+            }
+        )
+    return {**running(), "journeys": out}
