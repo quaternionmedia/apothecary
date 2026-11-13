@@ -887,7 +887,7 @@
         import { mountTour } from '/static/widgets/tour.js';
         import { mountTourPopover } from '/static/widgets/tour_popover.js';
         // Whether this is `apothecary serve --demo`: the one place the tour puts a stage on.
-        const IS_DEMO = {{ 'true' if demo else 'false' }};
+        const IS_DEMO = {{ (true if demo else false) | tojson }};
         import { mountPictureList } from '/static/widgets/picture_list.js';
         import { mountModels } from '/static/widgets/models.js';
         import { mountMarks } from '/static/widgets/marks.js';
