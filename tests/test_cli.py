@@ -151,3 +151,16 @@ def test_a_retired_name_is_no_command(name):
     assert "check" in listing and name not in {
         ln.split()[0] for ln in listing.splitlines() if ln.strip()
     }
+
+
+def test_serve_refuses_simulated_machines_on_a_persons_own_state_folder(uvicorn_runs, monkeypatch):
+    """The simulated engine named by hand has neither the demo's folder nor its banner:
+    it is served only on a state folder of its own."""
+    monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "simulated")
+    monkeypatch.delenv("APOTHECARY_STATE_DIR", raising=False)
+    result = CliRunner().invoke(cli, ["serve", "--port", "8126"])
+    assert result.exit_code != 0 and uvicorn_runs == []
+    assert "apothecary serve --demo" in result.output and "APOTHECARY_STATE_DIR" in result.output
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", "/nowhere/of/its/own")
+    result = CliRunner().invoke(cli, ["serve", "--port", "8126"])
+    assert result.exit_code == 0 and len(uvicorn_runs) == 1, result.output

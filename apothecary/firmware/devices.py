@@ -881,6 +881,30 @@ def known_device(port: str, state: Optional[FirmwareState] = None) -> Optional[D
         return None
 
 
+REPLACE_FLAG = "replace_machine_firmware"
+
+
+def not_a_machines_controller(
+    port: str, replace: bool = False, state: Optional[FirmwareState] = None
+) -> None:
+    """ValueError when the board on ``port`` answered as a printer or a router and
+    ``replace`` was not asked for: a sketch flashed to a machine's controller replaces
+    the firmware that runs the machine, and a router's is the very chip a devkit's
+    sketch is built for. Every flash from here -- a sketch uploaded, raw images
+    written, a procedure's flash -- asks first; replacing a machine's firmware is
+    asked for by name."""
+    known = (state or get_state()).cached_device(port)
+    kind = machine_kind(known)
+    if kind is None or replace:
+        return
+    firmware = known.printer.firmware_name or "its firmware"
+    raise ValueError(
+        f"{port} holds a {kind}'s controller ({firmware}): a flash replaces the firmware "
+        f"that runs the {kind}. Not flashed. To replace it on purpose, ask for it by "
+        f"name ({REPLACE_FLAG})"
+    )
+
+
 def machine_kind(device: Optional[DeviceInfo]) -> Optional[str]:
     """The kind of machine a board drives, as ``apothecary/jobs.py`` registers
     kinds: ``printer`` for one that answered as a Marlin printer, ``router`` for
@@ -2045,6 +2069,28 @@ _PRINTS: Dict[str, PrintJob] = {}
 # One start at a time: whether a job holds the port is asked and answered as one act,
 # so two starts at once are one job and one refusal, never two files on one port.
 _STARTING = threading.Lock()
+
+
+def at_work(links: Optional[gcode.PrinterLinks] = None) -> List[str]:
+    """What a machine here is doing, or is about to be asked to do, that a restart of
+    this server would cut into; empty when it would cut into nothing. A print or a
+    cut streaming, a bed reading or a table map under way, and each port whose control
+    is armed: a person armed it to move the machine, and a home or a jog sent by hand
+    is a line in flight with no job to show for it. What restarts a server for a
+    reason of its own asks this first (``GET /firmware/busy``)."""
+    links = links or gcode.get_printer_links()
+    said = [
+        f"{job.port}: a {job.op.kind} is {job.stage}"
+        for job in list(_PRINTS.values())
+        if job.finished is None
+    ]
+    said += [
+        f"{job.port}: {job.what} is {job.stage}"
+        for job in list(_LEVELING.values())
+        if job.finished is None
+    ]
+    said += [f"{port}: control is armed" for port in links.control.armed_ports()]
+    return said
 
 
 def stop_jobs(timeout: float = 20.0) -> List[str]:

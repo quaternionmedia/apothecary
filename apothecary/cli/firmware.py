@@ -321,7 +321,13 @@ def firmware_compile(sketch: str, fqbn: Optional[str]):
     default=None,
     help="Serial port (auto-detected when exactly one board is connected)",
 )
-def firmware_upload(sketch: str, fqbn: Optional[str], port: Optional[str]):
+@click.option(
+    "--replace-machine-firmware",
+    "replace",
+    is_flag=True,
+    help="Flash a port whose board answered as a printer or a router: replaces its firmware",
+)
+def firmware_upload(sketch: str, fqbn: Optional[str], port: Optional[str], replace: bool):
     """Compile and upload a sketch to a connected board (a Rust sketch: build, then espflash)."""
     s = _require_sketch(sketch)
     try:
@@ -329,6 +335,7 @@ def firmware_upload(sketch: str, fqbn: Optional[str], port: Optional[str]):
         if chosen:
             validate_fqbn(chosen)
         chosen_port = validate_port(service.resolve_port(port))
+        devices.not_a_machines_controller(chosen_port, replace)
         _run_plan(service.flash_plan(s, chosen, chosen_port))
     except (ToolchainError, ValueError) as exc:
         _die(exc)
@@ -344,7 +351,15 @@ def firmware_upload(sketch: str, fqbn: Optional[str], port: Optional[str]):
 )
 @click.option("--baud", default=460800, show_default=True, type=int)
 @click.option("--erase", is_flag=True, help="Erase flash first")
-def firmware_flash_bin(port: str, images: Tuple[str, ...], chip: str, baud: int, erase: bool):
+@click.option(
+    "--replace-machine-firmware",
+    "replace",
+    is_flag=True,
+    help="Flash a port whose board answered as a printer or a router: replaces its firmware",
+)
+def firmware_flash_bin(
+    port: str, images: Tuple[str, ...], chip: str, baud: int, erase: bool, replace: bool
+):
     """Flash raw binaries to an Espressif chip with esptool.
 
     IMAGES are OFFSET:FILE pairs, e.g. 0x1000:bootloader.bin 0x10000:firmware.bin
@@ -353,6 +368,7 @@ def firmware_flash_bin(port: str, images: Tuple[str, ...], chip: str, baud: int,
     pairs = []
     try:
         validate_port(port)
+        devices.not_a_machines_controller(port, replace)
         for item in images:
             if ":" not in item:
                 raise click.UsageError(f"image must be OFFSET:FILE, got {item!r}")

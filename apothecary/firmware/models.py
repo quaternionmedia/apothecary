@@ -310,6 +310,9 @@ class CompileRequest(BaseModel):
 
 class UploadRequest(CompileRequest):
     port: Port
+    # A port whose board answered as a printer or a router is flashed only when this
+    # asks for it: the flash replaces the firmware that runs the machine.
+    replace_machine_firmware: bool = False
 
 
 class FlashImage(BaseModel):
@@ -323,6 +326,7 @@ class EsptoolFlashRequest(BaseModel):
     baud: int = Field(460800, ge=9600, le=2000000)
     erase: bool = False
     images: List[FlashImage] = Field(min_length=1)
+    replace_machine_firmware: bool = False  # as UploadRequest's
 
     @field_validator("chip")
     @classmethod

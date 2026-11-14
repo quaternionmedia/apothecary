@@ -287,6 +287,11 @@ class Board(Hosted):
         except ValueError as exc:
             raise hearth.Refused(str(exc)) from None
         about["sketch"] = sketch.id
+        try:
+            # A step never replaces the firmware that runs a machine.
+            devices.not_a_machines_controller(device.port)
+        except ValueError as exc:
+            raise hearth.Refused(str(exc)) from None
         return self._then(verb, about, lambda: self._flash(sketch, fqbn, device.port))
 
     @staticmethod

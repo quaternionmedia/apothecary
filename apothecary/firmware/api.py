@@ -201,8 +201,11 @@ def _board(sketch, given):
     return service.resolve_board(sketch, given)
 
 
-def upload_sketch(sketch, board: str | None, port: str):
-    """Flash a sketch to ``port`` as the one task, recorded once it has succeeded."""
+def upload_sketch(sketch, board: str | None, port: str, replace: bool = False):
+    """Flash a sketch to ``port`` as the one task, recorded once it has succeeded. A
+    machine's controller is flashed only when ``replace`` asks for it
+    (``devices.not_a_machines_controller``)."""
+    devices.not_a_machines_controller(port, replace)
     plan = service.flash_plan(sketch, board, port)
 
     def remember(task, status):
@@ -225,12 +228,15 @@ async def firmware_compile(name: str, body: CompileRequest):
 @router.post("/sketches/{name}/upload", status_code=202)
 async def firmware_upload(name: str, body: UploadRequest):
     sketch = _sketch_or_404(name)
-    return upload_sketch(sketch, _board(sketch, body.fqbn), body.port)
+    return upload_sketch(
+        sketch, _board(sketch, body.fqbn), body.port, replace=body.replace_machine_firmware
+    )
 
 
 @router.post("/esptool/flash", status_code=202)
 async def firmware_esptool_flash(body: EsptoolFlashRequest):
     esptool = get_esptool()
+    devices.not_a_machines_controller(body.port, body.replace_machine_firmware)
     images = [(img.offset, service.resolve_image_path(img.path)) for img in body.images]
     steps = []
     if body.erase:
@@ -371,6 +377,28 @@ async def firmware_printers_armed():
     its Machine, the deck's long presses, another browser. A page follows it to show a
     machine armed when its Machine is not open."""
     return {"armed": gcode.get_printer_links().control.armed_ports()}
+
+
+@router.get("/busy")
+def firmware_busy():
+    """What a restart of this server would cut into, each in a line; ``busy`` is empty
+    when it would cut into nothing. A job streaming, a bed reading or a table map
+    under way, a port whose control is armed, a task writing to a board (a flash cut
+    off part way leaves a board with half a firmware), and work a member of the
+    family was handed and has not ended. For whatever restarts the server for a
+    reason of its own: it asks here, and a server that does not answer has not said
+    it is idle."""
+    from ..family import members
+
+    said = devices.at_work()
+    active = get_task_runner().active
+    if active is not None:
+        said.append(f"task {active.id} ({active.title}) is running")
+    for name in ("machine", "board"):
+        member = members.hosted(name)
+        for piece in member.state()["working"] if member is not None else []:
+            said.append(f"{name}: {piece.get('verb')} for step {piece['cue'].get('number')}")
+    return {"busy": said}
 
 
 @router.post("/printers/command")

@@ -118,6 +118,21 @@ def run_server(
     )
 
 
+def _simulated_keeps_its_own_state(demo: bool) -> None:
+    """Refuse simulated machines on a person's own state folder. The demo has a folder
+    of its own and a banner that says what it is; the simulated serial engine named by
+    hand has neither, so the jobs and readings of machines that do not exist would be
+    kept among the real ones, on a page that looks like the real one."""
+    simulated = os.environ.get("APOTHECARY_SERIAL_ENGINE", "").strip().lower() == "simulated"
+    if simulated and not demo and not os.environ.get("APOTHECARY_STATE_DIR", "").strip():
+        raise click.ClickException(
+            "APOTHECARY_SERIAL_ENGINE=simulated would keep simulated machines' jobs and "
+            "readings in your own state folder, on a page that does not say they are "
+            "simulated: run `apothecary serve --demo`, or name a state folder of its own "
+            "in APOTHECARY_STATE_DIR"
+        )
+
+
 DEMO_HELP = (
     "Serve the demo: every loop of the page with nothing real. printer_1's mainboard "
     "is pinned to a simulated Ender, idle; a simulated ESP32 devkit says the hello of "
@@ -204,6 +219,7 @@ def serve(
     docs/dev-loop.md is the loop: change, see, test, commit, integrate."""
     host = _loopback_or_die(host)
     _port_free_or_die(host, port)
+    _simulated_keeps_its_own_state(demo)
     if console_sacn:
         os.environ["APOTHECARY_CONSOLE_SACN"] = "1"
     if console_osc:

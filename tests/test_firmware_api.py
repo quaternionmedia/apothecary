@@ -1,6 +1,7 @@
 """``/firmware`` API and ``apothecary firmware`` CLI, driven against the fake arduino-cli."""
 
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -294,3 +295,79 @@ def test_cli_flash_bin_argument_parsing(fake_arduino_cli, tmp_path, monkeypatch)
     assert r.exit_code != 0
     r = runner.invoke(cli, ["firmware", "flash-bin", "bad-port", f"0x0:{img}"])
     assert r.exit_code != 0 and "serial port" in r.output
+
+
+def test_a_flash_of_a_machines_controller_is_asked_for_by_name(
+    fake_arduino_cli, fresh_task_runner, monkeypatch
+):
+    """A port whose board answered as a router is not flashed by a sketch's upload, by
+    raw images or from the command line, unless replacing its firmware is asked for."""
+    from apothecary.firmware import devices, gcode, grbl, toolchains
+
+    port, sketch = "/dev/ttyFAKE1", "esp32_blink@arduino"
+    monkeypatch.setenv("APOTHECARY_SIMULATED_SPEED", "0")
+    links = gcode.PrinterLinks(factory=grbl.SimulatedRouter)
+    monkeypatch.setattr(gcode, "_LINKS", links)
+    devices.identify_printer(port)
+    links.stop_all()
+    c = TestClient(app)
+    asked = {"fqbn": "esp32:esp32:esp32", "port": port}
+    r = c.post(f"/firmware/sketches/{sketch}/upload", json=asked)
+    assert r.status_code == 422 and "holds a router's controller (Grbl 1.3a)" in r.json()["detail"]
+    monkeypatch.setattr(
+        toolchains, "_ESPTOOL", toolchains.Esptool(argv_prefix=[str(fake_arduino_cli), "compile"])
+    )
+    raw = {"port": port, "images": [{"offset": "0x0", "path": "README.md"}]}
+    assert c.post("/firmware/esptool/flash", json=raw).status_code == 422
+    assert fresh_task_runner.active is None
+    assert not [c for c in fake_cli_calls(fake_arduino_cli) if c[0] in ("upload", "compile")]
+    said = CliRunner().invoke(cli, ["firmware", "upload", sketch, "--port", port])
+    assert said.exit_code != 0 and "holds a router's controller" in said.output
+    said = CliRunner().invoke(cli, ["firmware", "flash-bin", port, "0x0:README.md"])
+    assert said.exit_code != 0 and "holds a router's controller" in said.output
+    r = c.post(
+        f"/firmware/sketches/{sketch}/upload", json={**asked, "replace_machine_firmware": True}
+    )
+    assert r.status_code == 202
+    assert _wait_for(c, r.json()["id"])["status"] == "succeeded"
+
+
+def test_the_server_says_what_a_restart_would_cut_into(
+    fake_arduino_cli, fresh_task_runner, monkeypatch
+):
+    """Idle is said, never assumed: a table map under way with its latch lapsed, a
+    running task and an armed port are each a reason not to restart."""
+    from apothecary.firmware import devices, gcode, grbl
+
+    port = "/dev/ttyFAKE1"
+    monkeypatch.setenv("APOTHECARY_SIMULATED_SPEED", "0")
+    gate = threading.Event()
+
+    class SlowProbe(grbl.SimulatedRouter):
+        def write(self, data):
+            if b"G38.2" in data:
+                gate.wait(10)
+            super().write(data)
+
+    links = gcode.PrinterLinks(factory=SlowProbe)
+    monkeypatch.setattr(gcode, "_LINKS", links)
+    c = TestClient(app)
+    assert c.get("/firmware/busy").json() == {"busy": []}
+    links.control.arm(port)
+    assert c.get("/firmware/busy").json() == {"busy": [f"{port}: control is armed"]}
+    job = devices.start_leveling(port, probe=True)
+    for _ in range(500):
+        if job.stage == "probing":
+            break
+        time.sleep(0.01)
+    links.control.disarm(port)  # as five minutes of probing lets the latch lapse
+    assert c.get("/firmware/busy").json() == {"busy": [f"{port}: a table map is probing"]}
+    assert c.get("/firmware/printers/armed").json() == {"armed": {}}
+    assert not [j for j in c.get("/jobs").json() if j.get("outcome") == "running"]
+    gate.set()
+    job.thread.join(10)
+    assert c.get("/firmware/busy").json() == {"busy": []}
+    task = fresh_task_runner.run("upload", "a flash", [["/bin/sleep", "2"]], port="/dev/ttyUSB0")
+    assert c.get("/firmware/busy").json() == {"busy": [f"task {task.id} (a flash) is running"]}
+    fresh_task_runner.cancel(task.id)
+    links.stop_all()

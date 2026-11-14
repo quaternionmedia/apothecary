@@ -464,9 +464,14 @@ def test_upload_releases_only_its_own_printer_link(
     for port in ("/dev/ttyFAKE0", "/dev/ttyFAKE1"):
         c.post("/firmware/devices/identify", json={"port": port})
     assert sorted(scripted_links.open_ports) == ["/dev/ttyFAKE0", "/dev/ttyFAKE1"]
+    asked = {"fqbn": "arduino:avr:uno", "port": "/dev/ttyFAKE0"}
+    # A printer's mainboard: flashed only when replacing its firmware is asked for.
+    r = c.post("/firmware/sketches/footpedal/upload", json=asked)
+    assert r.status_code == 422 and "holds a printer's controller" in r.json()["detail"]
+    assert sorted(scripted_links.open_ports) == ["/dev/ttyFAKE0", "/dev/ttyFAKE1"]
+    assert fresh_task_runner.active is None
     r = c.post(
-        "/firmware/sketches/footpedal/upload",
-        json={"fqbn": "arduino:avr:uno", "port": "/dev/ttyFAKE0"},
+        "/firmware/sketches/footpedal/upload", json={**asked, "replace_machine_firmware": True}
     )
     assert r.status_code == 202
     assert scripted_links.open_ports == ["/dev/ttyFAKE1"]  # the other printer keeps running
@@ -1988,7 +1993,8 @@ def test_release_reconnect_reset_and_upload_are_refused_mid_print(
     r = c.post("/firmware/printers/command", json={"port": port, "command": "G28"})
     assert r.status_code == 409 and "print holds the port" in r.json()["detail"]
     r = c.post(
-        "/firmware/sketches/footpedal/upload", json={"fqbn": "arduino:avr:uno", "port": port}
+        "/firmware/sketches/footpedal/upload",
+        json={"fqbn": "arduino:avr:uno", "port": port, "replace_machine_firmware": True},
     )
     assert r.status_code == 409 and "print holds the port" in r.json()["detail"]
     # Pause needs no latch; resume does; cancel ends it and frees the port.

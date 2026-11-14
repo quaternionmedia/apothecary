@@ -184,3 +184,13 @@ def test_work_queued_behind_work_that_failed_for_the_same_machine_is_not_run(
     assert _ended("machine", other)["ok"] is True
     assert homed == [PRINTER, ROUTER]
     assert members.hosted("machine").state()["working"] == []
+
+
+def test_a_step_never_flashes_a_machines_controller(family_bench):
+    """The router's controller is the chip a devkit's sketch is built for: a flash
+    asked of its port is refused, and changes nothing."""
+    flash = {"port": ROUTER, "sketch": f"{SKETCH}@arduino"}
+    _, outcome = _deliver("board", {"flash": flash}, number="flash")
+    assert outcome["status"] == 422 and "holds a router's controller" in outcome["error"]
+    assert firmware_tasks.get_task_runner().active is None
+    assert members.hosted("board").state()["working"] == []
