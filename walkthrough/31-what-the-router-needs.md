@@ -35,11 +35,11 @@ Under the pad, each axis says which way its home will seek, whether its switch h
 
 ![Each axis's home, beside its button: not proved, and what to do first](screenshots/31-03-each-axis-s-home-beside-its-button-not-proved-and-.png)
 
-## 4. Unlock in the card: nothing is asked any more
+## 4. Unlock in the card: the alarm is cleared, and a cut still waits
 
-The card's own Unlock sends `$X`. The alarm is cleared, the line that went clears the one that did not, and the card is gone: nothing is asked of a person now.
+The card's own Unlock sends `$X`. The alarm is cleared and the line that went clears the one that did not. One line is left: no cut starts until each axis has been homed or given a work zero on this port, which an Unlock does not do.
 
-![Unlock in the card: nothing is asked any more](screenshots/31-04-unlock-in-the-card-nothing-is-asked-any-more.png)
+![Unlock in the card: the alarm is cleared, and a cut still waits](screenshots/31-04-unlock-in-the-card-the-alarm-is-cleared-and-a-cut-.png)
 
 ## 5. A home not proved does not go, and the card says why
 
@@ -49,7 +49,7 @@ Home Z pressed before Z has shown its switch or its way. Nothing is sent to the 
 
 ## 6. Jogged the way it homes, Z has shown its way
 
-Z+ pressed: the jog went, so the card is gone, and Z's line says its way is shown. Its switch is not, so its Home is still outlined; a switch is pressed by hand at the bench.
+Z+ pressed: the jog went, so the card no longer says a line did not go, and Z's line says its way is shown. Its switch is not, so its Home is still outlined; a switch is pressed by hand at the bench.
 
 ![Jogged the way it homes, Z has shown its way](screenshots/31-06-jogged-the-way-it-homes-z-has-shown-its-way.png)
 

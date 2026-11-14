@@ -111,6 +111,9 @@ def test_the_machine_says_what_it_needs_and_what_did_not_go(page: Page, url: str
     expect(needs).to_be_visible(timeout=WITHIN_A_POLL)
     expect(needs).to_contain_text("In alarm")
     expect(needs).to_contain_text("until Unlock ($X) or a home")
+    # And that no cut starts yet: no axis has been homed or given a work zero here.
+    expect(needs).to_contain_text("No cut yet: X, Y, Z have been neither homed nor given")
+    expect(needs.locator(".needs-unlock")).to_have_count(1)  # on the alarm's own line
     needs.scroll_into_view_if_needed()
     story.shows(
         "In alarm, Needs you says what clears it",
@@ -153,15 +156,18 @@ def test_the_machine_says_what_it_needs_and_what_did_not_go(page: Page, url: str
         blank=CHANGING,
     )
 
-    # 4. Unlock: nothing is asked of the person any more, and the line that went clears
-    #    the one that did not.
+    # 4. Unlock: the alarm is gone and the line that went clears the one that did not.
+    #    What is left is what a cut still waits for, which Unlock does not give.
     needs.locator(".needs-unlock").click()  # the card's own Unlock: where it says so
-    expect(needs).to_be_hidden(timeout=WITHIN_A_POLL)
+    expect(needs).not_to_contain_text("In alarm", timeout=WITHIN_A_POLL)
+    expect(needs.locator(".need")).to_have_count(1)
+    expect(needs).to_contain_text("No cut yet: X, Y, Z")
+    expect(needs.locator(".needs-unlock")).to_have_count(0)
     story.shows(
-        "Unlock in the card: nothing is asked any more",
-        "The card's own Unlock sends `$X`. The alarm is cleared, the line that went "
-        "clears the one that did not, and the card is gone: nothing is asked of a person "
-        "now.",
+        "Unlock in the card: the alarm is cleared, and a cut still waits",
+        "The card's own Unlock sends `$X`. The alarm is cleared and the line that went "
+        "clears the one that did not. One line is left: no cut starts until each axis "
+        "has been homed or given a work zero on this port, which an Unlock does not do.",
         blank=CHANGING,
     )
 
@@ -184,12 +190,12 @@ def test_the_machine_says_what_it_needs_and_what_did_not_go(page: Page, url: str
     # 6. Jogged the way it homes, the axis has shown its way; its switch is the bench's.
     pad.locator("button[data-jog='Z+']").click()
     expect(z).to_contain_text("switch ✗ · way ✓", timeout=WITHIN_A_POLL)
-    expect(needs).to_be_hidden(timeout=WITHIN_A_POLL)  # the jog went
+    expect(needs.locator(".need.bad")).to_have_count(0, timeout=WITHIN_A_POLL)  # the jog went
     expect(pad.locator("button[data-cmd='HOME-Z']")).to_have_class("unproved")
     story.shows(
         "Jogged the way it homes, Z has shown its way",
-        "Z+ pressed: the jog went, so the card is gone, and Z's line says its way is "
-        "shown. Its switch is not, so its Home is still outlined; a switch is pressed "
+        "Z+ pressed: the jog went, so the card no longer says a line did not go, and "
+        "Z's line says its way is shown. Its switch is not, so its Home is still outlined; a switch is pressed "
         "by hand at the bench.",
         blank=CHANGING,
     )

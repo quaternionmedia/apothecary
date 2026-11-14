@@ -230,6 +230,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Fixed
 
+- The Machine's page: Quickstop, Break wait, Stop jog, Hold and Resume queued behind the line in flight and greyed with the pad; a failed Disarm was drawn as disarmed; an open Machine did not show another hand's arming; the popped-out pad had no E-STOP; a status gone old said nothing of its age; a Machine kept its port's name when its board moved. ([doc](docs/firmware.md#control-behind-a-latch))
 - A cut paused while a line waited for room in the router's planner left that line out; the line now waits out the pause, and the cut sends every line or fails. ([doc](docs/cnc.md#what-a-cut-leaves))
 - A server that stopped under a print or a cut left its heaters or its spindle on: shutting down ends each job with its safe-off first, and a job a dead server left running is ended, and its machine made safe, when its port is next opened; `GET /firmware/busy` says what a restart would cut into. ([doc](docs/firmware.md#printing-without-an-sd-card))
 - A print's cancel waited behind a heat-and-wait; it breaks the wait first. Two starts at once on one port were two jobs; they are one job and one refusal. A board that restarted under a paused print went on being sent the file; the print fails on its boot banner. A reply that came late shifted every reply after it; it is read off first. ([doc](docs/firmware.md#printing-without-an-sd-card))

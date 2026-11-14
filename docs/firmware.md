@@ -606,6 +606,16 @@ goes. The pad goes with its Machine -- closed by its ✕, another board's Machin
 in its place, another site loaded, or the board unpinned or gone from the site -- so
 the board is disarmed then, and the status bar says so.
 
+Popped out, the pad has an **⏹ E-STOP** of its own in its head, the Machine's being in
+another window. What interrupts -- Quickstop, Break wait, Stop jog, Hold and Resume --
+is sent at once and its button is never greyed, while every other line waits its turn
+behind the one in flight. An arm or a disarm that failed is drawn as the server says
+the latch is, asked again, and never as what was asked for; with no answer the label is
+marked *not confirmed*. An open Machine follows its port's latch whoever armed it or
+let it go, with auto-poll off too. Once the status its cards are drawn from is more
+than a few seconds old, the State card says how old and the values dim. A Machine is
+its board's: its pinned board found on another port, it is opened again there.
+
 However it was armed -- its Machine, the deck's two long presses, another browser -- and
 whether or not its Machine is open, an armed machine says so on its badge in the world
 and its row in Site, red, with the time its arm has left: the page asks for every port

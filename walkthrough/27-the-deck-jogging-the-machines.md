@@ -61,7 +61,7 @@ The router sent 100 mm along X slowly and the router's stop key pressed while it
 
 ## 8. UNLOCK sends $X, and the next turn moves the router
 
-UNLOCK pressed: it sends the router's `$X` through the latch, the alarm is cleared and the key goes dark again, and the next turn of knob one jogs X.
+UNLOCK pressed: it sends the router's `$X` through the latch, the alarm is cleared and the key is STOP JOG again, and the next turn of knob one jogs X.
 
 ![UNLOCK sends $X, and the next turn moves the router](screenshots/27-08-unlock-sends-x-and-the-next-turn-moves-the-router.png)
 
