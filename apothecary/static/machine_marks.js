@@ -25,9 +25,10 @@ export const VOLUME_COLOR = 0x6fb3e8;
 export const NOZZLE_COLOR = 0xff8080;
 export const BED_COLOR = 0x2a302a;
 // What each kind of move is drawn in (apothecary/preview/process.py names them): what
-// makes the part stands out, a move through the air stays back. The page's ok, warn and
-// bad, as colours three.js can take (static/tokens.css).
-const MOVE_COLORS = { extrude: 0x6fdb75, cut: 0xffcc66, plunge: 0xff8080, travel: 0x4a564a, rapid: 0x4a564a };
+// makes the part in the page's ok, warn and bad, as colours three.js can take
+// (static/tokens.css), and a move through the air in a blue of its own, a step dimmer,
+// so it is told from the part at a glance. The Print and Cut card's key reads these.
+export const MOVE_COLORS = { extrude: 0x6fdb75, cut: 0xffcc66, plunge: 0xff8080, travel: 0x6c78c4, rapid: 0x6c78c4 };
 const MESH_LOW = [0x6f, 0xb3, 0xe8];   // the bed card's blue, below the mean
 const MESH_HIGH = [0xe8, 0xb0, 0x4a];  // its amber, above
 const MESH_INSET = 10;                 // Marlin's default MESH_INSET, mm from the probeable edge

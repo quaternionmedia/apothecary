@@ -64,8 +64,9 @@ The Print and Cut card has one slider, `preview`, there once a file is chosen
 router), and the ring's Control › Print or Cut ›
 Preview turns it on and off. At the left it is off, and nothing has been asked of the
 server. Moved off the left, the chosen file's path is drawn in the world on its machine:
-what makes the part in colour, moves through the air dim, through each layer or pass, all
-of it at the right. It follows the file chosen, and goes when the Machine closes.
+what makes the part in the page's green, amber and red, a move through the air in a
+dimmer blue, through each layer or pass, all of it at the right. The card says each
+kind's length in the colour it is drawn in, which is the path's key. It follows the file chosen, and goes when the Machine closes.
 
 A printer's file is in the bed's coordinates, so it stands at the bed. A router's counts
 from its work zero, so it stands where the controller's last poll says that is

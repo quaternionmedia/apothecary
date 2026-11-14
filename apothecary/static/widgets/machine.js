@@ -81,7 +81,7 @@
 
 import { mountBoards } from "/static/boards.js";
 import { esc, heaterText, boardLabel, sketchWords, xyz, xyzHtml } from "/static/board_text.js";
-import { toolPosition as toolPositionOf, fileOrigin } from "/static/machine_marks.js";
+import { toolPosition as toolPositionOf, fileOrigin, MOVE_COLORS } from "/static/machine_marks.js";
 import { KINDS, kindOf as kindOfBoard } from "/static/machine_words.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
@@ -1302,10 +1302,19 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             said.textContent = "this file moves nothing";
         } else {
             const at = Number($("print-preview").value), n = d.groups.length, group = d.groups[at - 1];
-            const sums = d.kinds.filter((k) => d.length_mm[k]).map((k) => `${k} ${inMetres(d.length_mm[k])}`).join(", ");
             const where = at >= n ? "all of it" : group.label;
             const zero = planning() && state.kind === "router" ? " · drawn on the working area's front-left corner, its deepest pass on the table: its zero is set at the machine" : "";
-            said.textContent = `${where} · the file: ${sums}, ${fmtDur(d.time_s)} at its feeds${d.within_mm ? ` · drawn to within ${d.within_mm} mm` : ""}${zero}`;
+            // Each kind's length in the colour its moves are drawn in: the path's key.
+            said.textContent = `${where} · the file: `;
+            for (const k of d.kinds.filter((k) => d.length_mm[k])) {
+                const key = document.createElement("span");
+                key.className = "move-key";
+                key.dataset.kind = k;
+                key.style.color = `#${MOVE_COLORS[k].toString(16).padStart(6, "0")}`;
+                key.textContent = `${k} ${inMetres(d.length_mm[k])}`;
+                said.append(key, ", ");
+            }
+            said.append(`${fmtDur(d.time_s)} at its feeds${d.within_mm ? ` · drawn to within ${d.within_mm} mm` : ""}${zero}`);
         }
         tellPreview();
     }

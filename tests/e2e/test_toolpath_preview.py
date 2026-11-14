@@ -169,6 +169,14 @@ def test_a_kept_file_s_path_is_drawn_and_scrubbed(page: Page, url: str, kind: st
     expect(slider).to_have_attribute("max", str(len(groups)), timeout=5000)
     expect(said).to_contain_text("all of it")
     expect(said).to_contain_text(machine.expected.kinds[0])
+    # The card's key: each kind's length in the colour its moves are drawn in, a move
+    # through the air told from what makes the part.
+    key = said.locator(".move-key").evaluate_all(
+        "els => els.map((e) => [e.dataset.kind, getComputedStyle(e).color])"
+    )
+    assert [kind for kind, _ in key][0] == expected.kinds[0]
+    assert {kind for kind, _ in key} <= set(expected.kinds)
+    assert len({colour for _, colour in key}) == len(key) > 1
     drawn = _drawn(page, machine.node)
     assert drawn["process"] == expected.process
     assert drawn["segments"] == drawn["drawn"] == len(expected.kind_of)
