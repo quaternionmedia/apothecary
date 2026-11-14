@@ -43,6 +43,7 @@ from .models import (
     PrinterControlArmRequest,
     PrinterControlRequest,
     PrinterIdentifyRequest,
+    PrinterJogRequest,
     PrinterQueryRequest,
     PrintRequest,
     ProbeRequest,
@@ -381,6 +382,18 @@ def firmware_printer_command(body: PrinterControlRequest):
     if not devices.is_emergency_stop(body.command):
         _busy_guard(body.port)
     data = devices.printer_control(body.port, body.command).model_dump(mode="json")
+    data["control"] = _control_state(body.port)
+    return data
+
+
+@router.post("/printers/jog")
+def firmware_printer_jog(body: PrinterJogRequest):
+    """One relative move of one axis, as one act on the port (latch required): a
+    router's jog line, or a printer's relative move with absolute positioning put
+    back whatever became of it, the link held from first line to last. What the
+    page's pad and the deck's knobs both send."""
+    _busy_guard(body.port)
+    data = devices.printer_jog(body.port, body.axis, body.mm, body.feed).model_dump(mode="json")
     data["control"] = _control_state(body.port)
     return data
 

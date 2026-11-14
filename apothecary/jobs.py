@@ -364,6 +364,23 @@ def list_jobs(
     return found
 
 
+def orphaned(machine: str, identity: Optional[str] = None) -> List[Job]:
+    """The jobs of the machine on a port that are kept as running and that no thread
+    here runs: a server stopped under them, and what ends a job -- a printer's heaters
+    off, a router's spindle off -- was never sent. As kept, still running, for the
+    one that opens the port next to end."""
+    folder = jobs_dir()
+    found: List[Job] = []
+    if folder.is_dir():
+        for path in sorted(folder.glob("*.json")):
+            job = _read(path)
+            if job is None or not job.running or job.id in _LIVE:
+                continue
+            if _same_machine(job, machine, identity):
+                found.append(job)
+    return found
+
+
 # --- print records, carried over as print jobs ---------------------------------------------
 
 

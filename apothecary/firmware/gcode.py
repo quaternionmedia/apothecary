@@ -37,6 +37,7 @@ import os
 import re
 import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Protocol, Tuple
 
@@ -584,7 +585,12 @@ class CommsLog:
 
 # --- link: one open port, request/response with a lock ------------------------------
 
+SOFT_RESET = b"\x18"  # GRBL's realtime reset, which its banner answers
 OK_RE = re.compile(r"^ok\b")
+# A board's first line as it boots: Marlin's `start`, Grbl's banner.
+BOOT_RE = re.compile(r"^(start$|Grbl \S+ \[)")
+RESET_ANSWER_S = 10.0  # a banner this soon after a reset written here answers it
+OWED_WAIT_S = 0.5  # how long an exchange waits for a reply owed to an earlier line
 # Marlin objects with `Error:` or `!!`. Every dialect's objection is in OBJECTIONS, each
 # dialect adding its own when it is imported (grbl.py: `error:N` and, out of turn,
 # `ALARM:N`): the link closes an exchange on any of them, since a board is asked in
@@ -618,6 +624,7 @@ class GcodeLink:
         # take the lock back the instant it let go. ``waiters`` counts the bounded ones.
         self._turn = threading.Lock()
         self.waiters = 0
+        self._holder: Optional[int] = None  # the thread holding the link ``together``
         self._buf = b""
         self.unsolicited: List[str] = []
         # The last `ALARM:N` the board said, whenever it said it: a GRBL status report
@@ -626,6 +633,17 @@ class GcodeLink:
         # Every byte read from the board since the link opened: unchanged across an
         # exchange, the board said nothing at all to it.
         self.heard = 0
+        # Boot banners heard since the link opened: a board that restarts under a
+        # job says so here (Marlin's `start`, Grbl's `Grbl 1.1h [`), and nowhere else.
+        self.restarts = 0
+        # Those of them nothing here asked for: a banner that does not follow a reset
+        # this link wrote is a board whose power was cycled, or its button pressed.
+        self.unasked_restarts = 0
+        self._asked_reset = float("-inf")
+        # Replies still to come for lines whose exchange is over: one written ahead
+        # of an exchange in flight (``ahead``), one whose `ok` did not come in time.
+        # The next exchange reads them off first, so its own reply is its own.
+        self._owed = 0
         self.opened_at = datetime.now(timezone.utc)
         self.log = log or CommsLog(port)
         self.engine = type(transport).__name__
@@ -646,7 +664,12 @@ class GcodeLink:
 
     def _acquire(self, wait: Optional[float]) -> bool:
         """The link's lock, waiting ``wait`` seconds at most (forever for None), through
-        the turnstile: exchanges take the lock in the order they asked for it."""
+        the turnstile: exchanges take the lock in the order they asked for it. The
+        thread that holds the link ``together`` goes straight in: the turnstile may
+        be held by one that is waiting for it to let go."""
+        if self._holder == threading.get_ident():
+            self._lock.acquire()
+            return True
         if wait is None:
             with self._turn:
                 self._lock.acquire()
@@ -678,7 +701,36 @@ class GcodeLink:
         text = line.decode("utf-8", "replace").rstrip("\r")
         if text.startswith("ALARM:"):
             self.alarm = text
+        if BOOT_RE.match(text):
+            self.restarts += 1
+            if time.monotonic() - self._asked_reset > RESET_ANSWER_S:
+                self.unasked_restarts += 1
+            self._owed = 0  # a board that restarted owes nothing it was asked before
         return text
+
+    def sweep(self) -> List[str]:
+        """What the board has said outside any exchange, read without waiting and
+        kept in ``unsolicited``: how a job between two lines learns its board has
+        restarted (``restarts``) before it sends the next. Nothing, when an exchange
+        is in flight: that exchange is reading."""
+        if not self._lock.acquire(blocking=False):
+            return []
+        try:
+            chunk = self._t.read(0.0)
+            if chunk:
+                self.heard += len(chunk)
+                self._buf += chunk
+            lines: List[str] = []
+            while b"\n" in self._buf:
+                line = self._read_line(0.0)
+                lines.append(line)
+                if OK_RE.match(line) and self._owed > 0:
+                    self._owed -= 1  # the late reply of a line whose exchange is over
+                self.log.add("rx", line, "unasked", note=self._note(line))
+            self.unsolicited.extend(lines)
+            return lines
+        finally:
+            self._lock.release()
 
     def drain(self, quiet: float = 0.3, limit: float = 5.0) -> List[str]:
         """Read until the board has been silent for ``quiet`` seconds (or ``limit``)."""
@@ -712,6 +764,9 @@ class GcodeLink:
         self.unsolicited.extend(lines)
         return lines
 
+    def _reset_asked(self) -> None:
+        self._asked_reset = time.monotonic()
+
     def reset(self, limit: float = 6.0) -> List[str]:
         """Reboot the board on purpose and return its boot banner. Refused while a
         job (a print, a bed reading) holds the link: rebooting under it leaves the
@@ -721,6 +776,7 @@ class GcodeLink:
         with self._lock:
             self._buf = b""
             self.log.add("sys", "reset: DTR pulse")
+            self._reset_asked()
             self._t.pulse_reset()
             return self.settle(first=3.0, quiet=0.6, limit=limit)
 
@@ -749,40 +805,112 @@ class GcodeLink:
                 f"{self.port}: the link is busy ({self.job['kind'] if self.job else 'an exchange'})"
             )
         try:
-            if not quiet:
-                self.log.add("tx", cmd, origin)
-            with self._write_lock:
-                self._t.write((cmd + "\n").encode())
-            lines: List[str] = []
-            end = time.monotonic() + timeout * self.time_scale
+            return self._exchange(cmd, timeout, origin, quiet)
+        finally:
+            self._lock.release()
+
+    def _read_owed(self) -> None:
+        """Read off the replies owed to earlier lines, each up to its ``ok``, so the
+        exchange about to begin reads its own. One that does not come within
+        ``OWED_WAIT_S`` is given up on: the board dropped the line, or is gone."""
+        while self._owed > 0:
+            end = time.monotonic() + OWED_WAIT_S * self.time_scale
             while True:
                 left = end - time.monotonic()
-                if left <= 0:
-                    self.log.add("sys", f"timeout: no `ok` for {cmd} within {timeout:.0f}s")
-                    raise ToolchainError(
-                        f"{self.port}: no `ok` for {cmd} within {timeout:.0f}s "
-                        f"({len(lines)} lines received)"
-                    )
-                line = self._read_line(left)
+                line = self._read_line(left) if left > 0 else None
                 if line is None:
-                    continue
-                lines.append(line)
-                objected = any(p.match(line) for p in OBJECTIONS) or RESEND_RE.match(line)
-                if not quiet or objected:
-                    if quiet:
-                        self.log.add("tx", cmd, origin)  # the line it objected to, for the record
-                    self.log.add("rx", line, origin, note=self._note(line))
-                if BUSY_RE.match(line):
-                    end = time.monotonic() + timeout * self.time_scale  # heating/homing
-                elif OK_RE.match(line):
-                    return lines
-                elif objected:
-                    # A refusal says the dialect's words for it, where it has them, so
-                    # a typed control and a job that stops both read as more than a code.
-                    note = self._note(line)
-                    words = f" ({note})" if note else ""
-                    raise ToolchainError(f"{self.port}: {cmd} -> {line}{words}")
+                    self._owed = 0
+                    return
+                self.log.add("rx", line, "late", note=self._note(line))
+                if OK_RE.match(line) or any(p.match(line) for p in OBJECTIONS):
+                    break
+            self._owed = max(0, self._owed - 1)
+
+    def _exchange(self, cmd: str, timeout: float, origin: str, quiet: bool) -> List[str]:
+        """``command``'s exchange, by a caller that holds the link."""
+        if self.stopped is not None:
+            raise ToolchainError(f"{self.port}: {self.stopped}: {cmd} is not sent")
+        self._read_owed()
+        if not quiet:
+            self.log.add("tx", cmd, origin)
+        with self._write_lock:
+            self._t.write((cmd + "\n").encode())
+        lines: List[str] = []
+        end = time.monotonic() + timeout * self.time_scale
+        while True:
+            left = end - time.monotonic()
+            if left <= 0:
+                self.log.add("sys", f"timeout: no `ok` for {cmd} within {timeout:.0f}s")
+                self._owed += 1  # if it comes late, it is not the next line's
+                raise ToolchainError(
+                    f"{self.port}: no `ok` for {cmd} within {timeout:.0f}s "
+                    f"({len(lines)} lines received)"
+                )
+            line = self._read_line(left)
+            if line is None:
+                continue
+            lines.append(line)
+            objected = any(p.match(line) for p in OBJECTIONS) or RESEND_RE.match(line)
+            booted = BOOT_RE.match(line)
+            if not quiet or objected or booted:
+                if quiet:
+                    self.log.add("tx", cmd, origin)  # the line it objected to, for the record
+                self.log.add("rx", line, origin, note=self._note(line))
+            if booted:
+                # A board that boots forgets what it was asked: this line's `ok`
+                # is not coming, and waiting its time out only holds the link.
+                raise ToolchainError(
+                    f"{self.port}: the board restarted before it answered {cmd} ({line})"
+                )
+            if BUSY_RE.match(line):
+                end = time.monotonic() + timeout * self.time_scale  # heating/homing
+            elif OK_RE.match(line):
+                return lines
+            elif objected:
+                # A refusal says the dialect's words for it, where it has them, so
+                # a typed control and a job that stops both read as more than a code.
+                note = self._note(line)
+                words = f" ({note})" if note else ""
+                raise ToolchainError(f"{self.port}: {cmd} -> {line}{words}")
+
+    def ahead(self, cmd: str, timeout: float = 5.0, origin: str = "control") -> List[str]:
+        """A line written at once, ahead of an exchange in flight: Marlin's break of
+        a heat-and-wait (``M108``) and its quickstop (``M410``), which are for a
+        board that is busy answering something else. With nothing in flight it is
+        an exchange like any other. With one in flight the line is written under
+        it and nothing is waited for: its ``ok`` comes after that exchange's own,
+        and the next exchange reads it off first."""
+        cmd = cmd.strip()
+        if not cmd or "\n" in cmd:
+            raise ValueError("one G-code command per call")
+        if self._lock.acquire(blocking=False):
+            try:
+                return self._exchange(cmd, timeout, origin, quiet=False)
+            finally:
+                self._lock.release()
+        self.log.add("tx", cmd, origin)
+        with self._write_lock:
+            self._t.write((cmd + "\n").encode())
+            self._owed += 1
+        return []
+
+    @contextmanager
+    def together(self, wait: Optional[float] = None):
+        """The link held across several exchanges, so no other caller's line goes
+        between them: a jog's ``G91``, its move and its ``G90``. The stop and a line
+        written ``ahead`` still go at once. ``LinkBusy`` when ``wait`` runs out."""
+        if not self._acquire(wait):
+            raise LinkBusy(
+                f"{self.port}: the link is busy ({self.job['kind'] if self.job else 'an exchange'})"
+            )
+        mine = self._holder != threading.get_ident()
+        if mine:
+            self._holder = threading.get_ident()
+        try:
+            yield self
         finally:
+            if mine:
+                self._holder = None
             self._lock.release()
 
     def realtime(
@@ -803,6 +931,8 @@ class GcodeLink:
         is for a machine in motion -- and then reads only if nothing else is;
         otherwise the write waits its turn, ``wait`` bounding the queueing."""
         name = label or data.decode("ascii", "backslashreplace")
+        if data == SOFT_RESET:
+            self._asked_reset = time.monotonic()
         if now:
             self.log.add("tx", name, origin)
             with self._write_lock:
@@ -873,6 +1003,11 @@ class GcodeLink:
     # as long as the firmware is blocked.
     job: Optional[dict] = None
 
+    # Why no line is sent just now, when a job that sends its lines through calls of
+    # its own (a bed reading) has been stopped under them: each is refused, said
+    # here, until the job has let go. The realtime characters and the stop still go.
+    stopped: Optional[str] = None
+
     def info(self) -> dict:
         return {
             "port": self.port,
@@ -922,11 +1057,12 @@ class PrinterLinks:
         with self._lock:
             return self._links.get(port)
 
-    def open(self, port: str, baud: int) -> GcodeLink:
+    def open(self, port: str, baud: int, settle: bool = True) -> GcodeLink:
         """The existing link for ``port`` at that baud, else a fresh one (resets the board).
 
         A link a job holds is never replaced: reopening at another baud would
-        drop the print under its own thread."""
+        drop the print under its own thread. ``settle`` waits out what the board
+        says as it is opened; a stop does not wait for it."""
         _read_port_list()
         with self._lock:
             link = self._links.get(port)
@@ -940,7 +1076,8 @@ class PrinterLinks:
                 link.close()
             link = GcodeLink(port, baud, self.factory(port, baud), log=self._log_for(port))
             self._links[port] = link
-        link.settle()
+        if settle:
+            link.settle()
         return link
 
     def close(self, port: str) -> bool:
@@ -1081,6 +1218,13 @@ CONTROL_CODES: List[tuple] = [
     (re.compile(r"^M410$"), "quickstop: abort planned moves"),
 ]
 EMERGENCY_STOP = "M112"  # always accepted, latch or not; halts the board until reset
+# Written ahead of an exchange in flight (``GcodeLink.ahead``): the lines Marlin acts
+# on as it reads them, where its firmware parses them early (EMERGENCY_PARSER).
+AHEAD = ("M108", "M410")
+# What only turns something off or stops it, and so goes with the latch down: a
+# heater's target to zero, the fan off, a wait broken, the planned moves dropped, the
+# card paused. A latch that lapsed never stands between a person and the off switch.
+ALWAYS = re.compile(r"^(M104 S0|M140 S0|M107|M108|M410|M25)$")
 
 
 # This dialect, as a board's ``PrinterInfo`` names it, and the kind of machine it
@@ -1504,10 +1648,14 @@ def poll_printer(
 
 def control_printer(link: GcodeLink, command: str, timeout: float = 30.0) -> List[str]:
     """Send one allowlisted control line (homing can take a while; ``busy`` extends the
-    wait). The emergency stop is written at once, ahead of the link's queue."""
+    wait). The emergency stop is written at once, ahead of the link's queue, and so
+    are the break of a heat-and-wait and the quickstop (``AHEAD``): each is for a
+    board that is busy with the line before it."""
     cmd = normalise_control(command)
     if cmd == EMERGENCY_STOP:
         return link.emergency_stop()
+    if cmd in AHEAD:
+        return link.ahead(cmd, timeout=timeout)
     return link.command(cmd, timeout=timeout, origin="control")
 
 

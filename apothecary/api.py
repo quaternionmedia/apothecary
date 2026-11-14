@@ -225,6 +225,9 @@ async def lifespan(app: FastAPI):
     deck_control.start_all()
     yield
     deck_control.stop_all()
+    # A job's thread dies with the process: what it turned on is turned off first.
+    for said in await asyncio.to_thread(firmware_devices.stop_jobs):
+        logger.warning("%s", said)
     wiring_routes.stop_following()
     family_hub.close()
     lighting_routes.stop_console_feeds()

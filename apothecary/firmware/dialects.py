@@ -31,6 +31,7 @@ class Dialect:
     query_codes: Dict[str, str]  # the report-only queries, each with what it reports
     line_timeout: Callable[[str], float]  # how long a streamed line may take
     job_allows: Pattern[str]  # what a person may send while a streamed job holds the port
+    always: Pattern[str]  # what only turns off or stops, and goes with the latch down
     # What a file kept for its kind of machine may carry: the lines it would send, and
     # every reason it may not be sent (gcode.check_file, with the dialect's objections).
     check_file: Callable[[str], Tuple[int, List[str]]]
@@ -55,6 +56,7 @@ MARLIN = Dialect(
     query_codes=gcode.QUERY_CODES,
     line_timeout=gcode.line_timeout,
     job_allows=gcode.JOB_ALLOWS,
+    always=gcode.ALWAYS,
     check_file=gcode.check_gcode,
     explain=None,
     bed_reading=gcode.read_bed,
@@ -73,6 +75,7 @@ GRBL = Dialect(
     query_codes=grbl.QUERY_CODES,
     line_timeout=grbl.line_timeout,
     job_allows=grbl.JOB_ALLOWS,
+    always=grbl.ALWAYS,
     check_file=grbl.check_gcode,
     explain=grbl.explain,
     bed_reading=grbl.probe_table,

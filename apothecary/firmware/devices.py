@@ -947,6 +947,7 @@ def printer_status(
     state = state or get_state()
     links = links or gcode.get_printer_links()
     link = links.get(port)
+    opened = link is None
     if link is None:
         cached = state.cached_device(port)
         rate = baud or (cached.printer.baud if cached and cached.printer else 115200)
@@ -981,6 +982,8 @@ def printer_status(
         status.job = job
         if status.state == "idle":
             status.state = busy_word(job["kind"])  # the card is idle; the host is not
+    if opened and status.state != "offline":
+        _end_orphans(port, link, status, state)
     status.refused = refused(port, links)
     if status.tool_position is None and status.dialect != grbl.DIALECT and status.position:
         # A printer's position is in its bed's coordinates already.
@@ -1156,14 +1159,19 @@ def _control(
         if stop
         else normalise_control(port, command, state)
     )
+    # What only turns something off or stops it goes with the latch down, as the
+    # stop does: a latch that lapsed is never between a person and the off switch.
+    off = not stop and turns_off(port, cmd, state)
     if stop and links.control.armed(port):
         links.control.disarm(port)
         links.log_for(port).add("sys", "control disarmed by the stop", "control")
-    if not stop and not links.control.armed(port):
+    if not stop and not off and not links.control.armed(port):
         raise gcode.ControlNotArmed(f"{port}: control is not armed -- arm it first")
     held = links.get(port)
     if held is not None and held.job is not None:
         _job_allows(held.job, cmd)
+    if stop and links.get(port) is None:
+        _open_for_stop(port, state, links)
     if links.get(port) is None:
         printer_status(port, state=state, links=links)
     link = links.get(port)
@@ -1171,16 +1179,103 @@ def _control(
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
     dialect = dialect_for(port, state)
     cmd = dialect.stop if stop else normalise_control(port, command, state)
+    running = _PRINTS.get(port)
+    streaming = running is not None and running.finished is None
     if stop:
-        running = _PRINTS.get(port)
-        if running and running.finished is None:
+        if streaming:
             running.cancel(quiet=True)  # the board halts; nothing more is sent
-    lines = dialect.control(link, cmd)
-    if not stop:
+        reading = _LEVELING.get(port)
+        if reading is not None and reading.finished is None:
+            reading.cancel(quiet=True)
+    if streaming and cmd in ("HOLD", "RESUME"):
+        # A hold typed at a cut is the cut's pause, and a resume its resume: the job
+        # that streams is told, so it neither feeds a held controller nor stays
+        # paused over one that runs again.
+        running.pause() if cmd == "HOLD" else running.resume()
+        lines: List[str] = []
+    else:
+        lines = dialect.control(link, cmd)
+    if not stop and not off:
         links.control.renew(port)
     return PrinterQueryResult(
         port=port, command=cmd, lines=lines, queried_at=datetime.now(timezone.utc)
     )
+
+
+def turns_off(port: str, cmd: str, state: Optional[FirmwareState] = None) -> bool:
+    """Whether the normalised ``cmd`` only turns something off or stops it, in the
+    port's dialect (``Dialect.always``); in either's, for a port nothing has
+    identified."""
+    dialect = dialect_of(port, state)
+    asked = [dialects.by_word(dialect)] if dialect else list(dialects.BY_WORD.values())
+    return any(d.always.match(cmd) for d in asked)
+
+
+def _open_for_stop(port: str, state: FirmwareState, links: gcode.PrinterLinks) -> None:
+    """The link of a port this server knows and does not hold, opened for a stop:
+    nothing is waited for and nothing asked first, so the stop is the first line the
+    board reads. A port nothing here has identified is left to be identified."""
+    cached = state.cached_device(port)
+    if cached is None or cached.printer is None:
+        return
+    get_streams().close(port)
+    try:
+        _annotated(links.open(port, cached.printer.baud, settle=False), cached.printer.dialect)
+    except (ToolchainError, OSError):
+        pass  # the ordinary way says why it could not be opened
+
+
+def printer_jog(
+    port: str,
+    axis: str,
+    mm: float,
+    feed: int,
+    state: Optional[FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
+) -> PrinterQueryResult:
+    """One relative move of ``axis`` by ``mm`` at ``feed``, as one act on the port,
+    in its dialect; needs the latch armed, and is bounded as its lines are.
+
+    A router's is GRBL's jog, one line that changes no modal state. A printer's is
+    three lines -- relative, the move, absolute -- sent with the link held from the
+    first to the last, so no other hand's line goes between them, and the last is
+    sent whatever became of the move: a jog never leaves the printer taking the
+    next absolute move as a distance, and two jogs at once never make one's
+    distance the other's coordinate. Every caller that jogs -- the page's pad, the
+    deck's knobs -- comes through here."""
+    state = state or get_state()
+    links = links or gcode.get_printer_links()
+    axis = axis.strip().upper()
+    if axis not in ("X", "Y", "Z"):
+        raise ValueError(f"a jog moves X, Y or Z, not {axis!r}")
+    distance = f"{round(float(mm), 2):g}"
+    if dialect_of(port, state) == grbl.DIALECT:
+        return printer_control(port, f"$J=G91 G21 {axis}{distance} F{int(feed)}", state, links)
+    move = normalise_control(port, f"G1 {axis}{distance} F{int(feed)}", state)  # bounded first
+    if not links.control.armed(port):
+        raise gcode.ControlNotArmed(f"{port}: control is not armed -- arm it first")
+    if links.get(port) is None:
+        printer_status(port, state=state, links=links)
+    link = links.get(port)
+    if link is None:
+        raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
+    if dialect_of(port, state) == grbl.DIALECT:  # identified just now, as a router
+        return printer_control(port, f"$J=G91 G21 {axis}{distance} F{int(feed)}", state, links)
+    with link.together(wait=JOG_WAIT_S):
+        printer_control(port, "G91", state, links)
+        try:
+            result = printer_control(port, move, state, links)
+        finally:
+            # Absolute again, latch or no latch, refusal or none: sent as the
+            # dialect's own line, since it moves nothing.
+            try:
+                dialects.MARLIN.control(link, "G90")
+            except ToolchainError as exc:
+                link.log.add("sys", f"G90 after a jog was not answered: {exc}", "control")
+    return result
+
+
+JOG_WAIT_S = 2.0  # how long a jog waits for the link behind another exchange
 
 
 # What a person may still send while a job holds the port: the stop always; while a
@@ -1325,6 +1420,7 @@ class LevelingJob:
         self.error: Optional[str] = None
         self.record: Optional[LevelingRecord] = None
         self.link: Optional[gcode.GcodeLink] = None
+        self._cancelled = False
         self.thread = threading.Thread(target=self._run, daemon=True, name=f"leveling-{port}")
 
     def snapshot(self) -> dict:
@@ -1342,7 +1438,30 @@ class LevelingJob:
             "running": self.finished is None,
         }
 
+    def cancel(self, quiet: bool = False) -> None:
+        """Send nothing more: the reading ends at its next step, failed. A router is
+        held and reset, which stops a probe where it is and turns the spindle off
+        (``quiet``: the stop already did). A printer's probe is its firmware's own
+        and runs out; nothing heats for it."""
+        if self.finished is not None or self._cancelled:
+            return
+        self._cancelled = True
+        link = self.links.get(self.port)
+        if link is not None:
+            link.stopped = f"{self.what} was stopped"  # until ``_run`` lets go
+        if link is None or quiet or self.dialect is not dialects.GRBL:
+            return
+        for name in ("HOLD", "RESET"):
+            try:
+                link.realtime(
+                    grbl.REALTIME[name], now=True, label=name, timeout=0.3, origin="control"
+                )
+            except ToolchainError:
+                pass
+
     def _stage(self, word: str, points: Optional[dict] = None) -> None:
+        if self._cancelled and word not in ("failed", "saved"):
+            raise ToolchainError(f"{self.port}: {self.what} was stopped")
         self.stage = word
         if points is not None:
             self.points = dict(points)
@@ -1372,6 +1491,7 @@ class LevelingJob:
         finally:
             self.finished = datetime.now(timezone.utc)
             link.job = None
+            link.stopped = None
 
 
 _LEVELING: Dict[str, LevelingJob] = {}
@@ -1400,6 +1520,18 @@ def start_leveling(
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
+    with _STARTING:
+        return _start_leveling(port, probe, note, state, links, grid)
+
+
+def _start_leveling(
+    port: str,
+    probe: bool,
+    note: Optional[str],
+    state: FirmwareState,
+    links: gcode.PrinterLinks,
+    grid: Optional[TableGrid],
+) -> LevelingJob:
     running = _LEVELING.get(port)
     if running and running.finished is None:
         raise PortHeld(f"{port}: {running.what} is already {running.stage}")
@@ -1730,6 +1862,17 @@ class PrintJob:
                     f"{grbl.JOB_MOVE_TIMEOUT_S:.0f}s: the cut is stopped there"
                 )
 
+    def _same_boot(self, link: gcode.GcodeLink, boots: int) -> None:
+        """ToolchainError once the board has said its boot banner since the job began:
+        it restarted, cold and with no position, and the rest of the file is not for
+        the board it now is."""
+        if link.restarts != boots and not self._stop.is_set():
+            raise ToolchainError(
+                f"{self.port}: the board restarted under the {self.op.kind} (its boot "
+                f"banner arrived after line {self.sent} of {self.total}): nothing more "
+                "of the file is sent"
+            )
+
     def cancel(self, quiet: bool = False) -> None:
         """Stop feeding; ``quiet`` skips the safe-off (the board is already halted)."""
         if self.finished is None:
@@ -1738,6 +1881,15 @@ class PrintJob:
             self._stop.set()
             self._go.set()  # a paused print must wake to notice
             self._announce()
+            link = self.links.get(self.port)
+            if not quiet and not self.grbl and link is not None:
+                # A printer waiting on its bed or nozzle answers nothing until it is
+                # hot: the wait is broken at once, so the safe-off is next and not
+                # minutes behind it. Harmless to a board that is not waiting.
+                try:
+                    link.ahead("M108", origin=self.op.kind)
+                except ToolchainError:
+                    pass  # the safe-off says what the board still answers
 
     def _announce(self) -> None:
         link = self.links.get(self.port)
@@ -1791,6 +1943,7 @@ class PrintJob:
             link.log.add("sys", f"{kind} started: {self.file.name} ({self.total} lines)", kind)
             self.stage = self.running_stage
             self._announce()
+            boots = link.restarts
             for raw in text.splitlines():
                 for said in split_comments(raw)[1]:
                     if OPERATION_COMMENT.match(said):
@@ -1802,10 +1955,13 @@ class PrintJob:
                 if not self._turn_for(link, cmd):
                     outcome = "cancelled"
                     break
+                link.sweep()
+                self._same_boot(link, boots)
                 self.current = cmd
                 lines = link.command(cmd, timeout=self._timeout(cmd), origin=kind, quiet=True)
                 tail = (tail + [f"> {cmd}", *lines])[-200:]
                 self.sent += 1
+                self._same_boot(link, boots)
                 if self.sent % PRINT_PROGRESS_EVERY == 0 or self.sent == self.total:
                     self._announce()
                 if self.sent % PRINT_LOG_EVERY == 0:
@@ -1838,29 +1994,16 @@ class PrintJob:
             if outcome == "cancelled":
                 self.stage = "cancelled"
         except (ToolchainError, ValueError, OSError) as exc:
-            outcome = "failed"
-            self.error = str(exc)
-            self.stage = "failed"
-        if outcome != "done" and not self._quiet:
-            if self.grbl:
-                # A hold stops the tool where it is; the reset empties the queue and
-                # turns the spindle off, and says so in the banner it answers with.
-                for name in ("HOLD", "RESET"):
-                    try:
-                        said = link.realtime(
-                            grbl.REALTIME[name], now=True, label=name, timeout=1.0, origin=kind
-                        )
-                        tail = (tail + [f"> {name}", *said])[-200:]
-                    except ToolchainError as exc:
-                        tail.append(f"({name} not answered: {exc})")
+            if self._stop.is_set():
+                # Stopped, and the line in flight ended with the stop: the board
+                # halted or reset under it, as it was asked to.
+                outcome, self.stage = "cancelled", "cancelled"
             else:
-                # Every line of the safe-off is tried: a hotend left on because the
-                # fan line before it timed out is the failure this exists to prevent.
-                for cmd in PRINT_SAFE_OFF:
-                    try:
-                        tail = (tail + link.command(cmd, timeout=10.0, origin=kind))[-200:]
-                    except ToolchainError as exc:
-                        tail.append(f"({cmd} not answered: {exc})")
+                outcome = "failed"
+                self.error = str(exc)
+                self.stage = "failed"
+        if outcome != "done" and not self._quiet:
+            tail = (tail + safe_off(link, self.op.machine, kind))[-200:]
         ended = self._end(outcome, tail).finished_at
         link.log.add(
             "sys",
@@ -1872,7 +2015,106 @@ class PrintJob:
         self.finished = ended  # last: a snapshot that says "not running" names the record
 
 
+def safe_off(link: gcode.GcodeLink, machine: str, origin: str) -> List[str]:
+    """What ends a job that did not end done, sent to its machine; what was said.
+    A router is held and reset: the hold stops the tool where it is, the reset
+    empties the queue and turns the spindle off, and says so in the banner it
+    answers with. A printer is sent ``PRINT_SAFE_OFF``, every line of it tried: a
+    hotend left on because the fan line before it timed out is the failure this
+    exists to prevent."""
+    said: List[str] = []
+    if machine == grbl.MACHINE:
+        for name in ("HOLD", "RESET"):
+            try:
+                heard = link.realtime(
+                    grbl.REALTIME[name], now=True, label=name, timeout=1.0, origin=origin
+                )
+                said += [f"> {name}", *heard]
+            except ToolchainError as exc:
+                said.append(f"({name} not answered: {exc})")
+    else:
+        for cmd in PRINT_SAFE_OFF:
+            try:
+                said += link.command(cmd, timeout=10.0, origin=origin)
+            except ToolchainError as exc:
+                said.append(f"({cmd} not answered: {exc})")
+    return said
+
+
 _PRINTS: Dict[str, PrintJob] = {}
+# One start at a time: whether a job holds the port is asked and answered as one act,
+# so two starts at once are one job and one refusal, never two files on one port.
+_STARTING = threading.Lock()
+
+
+def stop_jobs(timeout: float = 20.0) -> List[str]:
+    """Every job this process runs, ended as its own cancel ends it -- a printer's
+    heaters and fan off and its motors free, a router held and reset, its spindle
+    off -- and waited for; what was done, a line a job. For the server as it
+    stops: a job's thread dies with the process, and without this what the job
+    turned on stays on with nothing left to turn it off. A job still behind a line
+    its board has not answered when ``timeout`` runs out is sent the stop itself."""
+    said: List[str] = []
+    streaming = [job for job in list(_PRINTS.values()) if job.finished is None]
+    reading = [job for job in list(_LEVELING.values()) if job.finished is None]
+    for job in (*streaming, *reading):
+        job.cancel()
+    end = time.monotonic() + timeout
+    for job in (*streaming, *reading):
+        job.thread.join(max(0.0, end - time.monotonic()))
+        what = job.op.kind if isinstance(job, PrintJob) else job.what
+        if not job.thread.is_alive():
+            said.append(f"{job.port}: {what} stopped with the server, and made safe")
+            continue
+        try:
+            printer_control(job.port, emergency_stop_for(job.port))
+            said.append(f"{job.port}: {what} did not end in {timeout:.0f}s: the stop was sent")
+        except (ValueError, ToolchainError) as exc:
+            said.append(f"{job.port}: {what} did not end, and the stop was not sent: {exc}")
+    return said
+
+
+def _end_orphans(
+    port: str, link: gcode.GcodeLink, status: gcode.PrinterStatus, state: FirmwareState
+) -> None:
+    """The jobs kept as running on this machine that nothing runs (a server died under
+    them), ended as failed now that its port is open again, and the machine made
+    safe as their own end would have made it -- unless it is plainly doing something
+    else: a printer printing from its card is left alone, and a router that is not
+    idle is not reset under whatever moves it; an idle one's spindle is turned off."""
+    cached = state.cached_device(port)
+    for job in jobs.orphaned(port, cached.identity if cached is not None else None):
+        op = jobs.operation(job.kind)
+        did = "nothing was sent"
+        if op is not None and op.kind in STREAMED:
+            if op.machine == grbl.MACHINE:
+                if status.state == "idle":
+                    try:
+                        link.command("M5", timeout=10.0, origin=op.kind)
+                        did = "the spindle was turned off (M5)"
+                    except ToolchainError as exc:
+                        did = f"M5 was not answered: {exc}"
+                else:
+                    did = f"the router is {status.state} and was sent nothing"
+            elif status.sd_printing:
+                did = "the printer is printing from its card and was sent nothing"
+            else:
+                safe_off(link, op.machine, op.kind)
+                did = "heaters and fan were turned off and the motors freed"
+        said = f"{jobs.STOPPED}; when its port was next opened, {did}"
+        try:
+            jobs.end(
+                job.model_copy(
+                    update={
+                        "finished_at": datetime.now(timezone.utc),
+                        "outcome": "failed",
+                        "reason": said,
+                    }
+                )
+            )
+        except (OSError, ValueError):
+            pass
+        link.log.add("sys", f"{job.kind} {job.id}: {said}", job.kind)
 
 
 def print_job(port: str) -> Optional[PrintJob]:
@@ -1934,6 +2176,17 @@ def start_print(
     """
     state = state or get_state()
     links = links or gcode.get_printer_links()
+    with _STARTING:
+        return _start_print(port, file_id, part, state, links)
+
+
+def _start_print(
+    port: str,
+    file_id: str,
+    part: Optional[str],
+    state: FirmwareState,
+    links: gcode.PrinterLinks,
+) -> PrintJob:
     file = print_file(file_id)
     if file is None:
         raise ValueError(f"no such print file: {file_id}")
@@ -1961,6 +2214,10 @@ def start_print(
         raise PortHeld(f"{port}: the card is printing -- pause or abort that first")
     cached = state.cached_device(port)
     _file_fits(file, port, machine_kind(cached))
+    if machine_kind(cached) == grbl.MACHINE:
+        unplaced = grbl.not_placed(link)
+        if unplaced:
+            raise ValueError(f"{port}: {unplaced}")
     job = PrintJob(
         port,
         file,

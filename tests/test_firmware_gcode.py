@@ -1212,7 +1212,7 @@ def test_the_stop_disarms_the_latch(fake_arduino_cli, fresh_task_runner, scripte
     assert r.json()["control"]["armed"] is False
     log = scripted_links.log_for(port).since(0)["entries"]
     assert any(e["kind"] == "sys" and e["text"] == "control disarmed by the stop" for e in log)
-    r = c.post("/firmware/printers/command", json={"port": port, "command": "M104 S0"})
+    r = c.post("/firmware/printers/command", json={"port": port, "command": "M104 S200"})
     assert r.status_code == 409 and "not armed" in r.json()["detail"]
 
 
@@ -2328,3 +2328,341 @@ def test_a_print_on_a_printer_pinned_nowhere_is_a_job_of_no_site_and_names_no_pa
     record = jobs.get(job.job.id)
     assert (record.site, record.part, record.machine.path) == (None, None, None)
     assert record.outcome == "done" and record.input.name == "dot.gcode"
+
+
+# --- what a machine is left doing: off switches, stops, restarts, one act at a time ------
+
+
+def test_what_only_turns_something_off_goes_with_the_latch_down(fake_arduino_cli, scripted_links):
+    """A heater's target to zero, the fan off, a wait broken, the quickstop and the
+    card's pause go unarmed and arm nothing; what heats or moves is refused."""
+    port = "/dev/ttyFAKE1"
+    for line in ("M104 S0", "M140 S0", "M107", "M108", "M410", "M25"):
+        assert devices.printer_control(port, line, links=scripted_links).command == line
+        assert not scripted_links.control.armed(port)
+    for line in ("M104 S1", "M140 S60", "M106", "G28", "G1 X1 F600", "M24"):
+        with pytest.raises(gcode.ControlNotArmed):
+            devices.printer_control(port, line, links=scripted_links)
+    sent = ScriptedTransport.instances[0].sent
+    assert sent[-6:] == ["M104 S0", "M140 S0", "M107", "M108", "M410", "M25"]
+
+
+class WaitingTransport(ScriptedTransport):
+    """A board that answers ``waits_on`` only once ``M108`` has been written, as
+    Marlin answers a heat-and-wait it was broken out of; then ``M108`` itself."""
+
+    waits_on = "M190 S60"
+
+    def write(self, data):
+        cmd = data.decode().strip()
+        if cmd == self.waits_on:
+            self.sent.append(cmd)
+            return
+        super().write(data)
+        if cmd == "M108" and self.waits_on in self.sent:
+            # The wait's own `ok` first, then the one for M108, as the board sends them.
+            self.pending = b"ok\n" + self.pending
+
+
+def test_a_cancel_breaks_a_heat_and_wait_and_the_safe_off_follows_at_once(
+    fake_arduino_cli, scripted_links
+):
+    port = "/dev/ttyFAKE1"
+    kept = devices.save_print_file("hot.gcode", b"M190 S60\nG1 X1\n", machine="printer")
+    scripted_links.factory = WaitingTransport
+    scripted_links.control.arm(port)
+    job = devices.start_print(port, kept.id, links=scripted_links)
+    transport = ScriptedTransport.instances[0]
+    for _ in range(300):
+        if "M190 S60" in transport.sent:
+            break
+        time.sleep(0.01)
+    assert transport.sent[-1] == "M190 S60" and job.finished is None
+    job.cancel()
+    job.thread.join(5)
+    assert job.finished is not None and job.record.outcome == "cancelled"
+    after = transport.sent[transport.sent.index("M190 S60") :]
+    assert after == ["M190 S60", "M108", "M104 S0", "M140 S0", "M107", "M84"]
+    # Each line after read its own reply: the poll that follows is a poll's.
+    st = devices.printer_status(port, links=scripted_links)
+    assert (
+        st.state == "idle"
+        and st.bed is not None
+        and st.position
+        == {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "e": 0.0,
+        }
+    )
+
+
+def test_a_reply_that_comes_late_is_not_read_as_the_next_lines():
+    """A line whose `ok` did not come in time still owes it: when it comes, the next
+    exchange reads it off first and returns its own reply."""
+    transport = ScriptedTransport("/dev/ttyFAKE1", 115200, replies={**REPLIES, "M400": []})
+    link = gcode.GcodeLink("/dev/ttyFAKE1", 115200, transport)
+    with pytest.raises(ToolchainError, match="no `ok` for M400"):
+        link.command("M400", timeout=0.2)
+    transport.pending += b"ok\n"  # the board gets to it after all
+    assert link.command("M105") == REPLIES["M105"]
+    assert link.command("M114") == REPLIES["M114"]
+
+
+def test_a_printer_jog_is_one_act_and_always_ends_absolute(fake_arduino_cli, scripted_links):
+    """Relative, the move, absolute, with nothing of another jog between them; a move
+    the board refuses, or one the latch lapsed under, still ends absolute; a move out
+    of bounds sends nothing."""
+    port = "/dev/ttyFAKE1"
+
+    class SlowTransport(ScriptedTransport):
+        def write(self, data):
+            time.sleep(0.02)  # long enough for another thread's line to get between
+            super().write(data)
+
+    scripted_links.factory = SlowTransport
+    scripted_links.control.arm(port)
+    devices.printer_status(port, links=scripted_links)
+    transport = ScriptedTransport.instances[0]
+    start = len(transport.sent)
+    threads = [
+        threading.Thread(target=devices.printer_jog, args=(port, axis, mm, 3000))
+        for axis, mm in (("X", 5), ("Z", -1), ("Y", 2.5))
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+    jogs = transport.sent[start:]
+    assert len(jogs) == 9
+    for first in range(0, 9, 3):
+        assert jogs[first] == "G91" and jogs[first + 2] == "G90"
+        assert jogs[first + 1].startswith("G1 ")
+    assert sorted(jogs[1::3]) == ["G1 X5 F3000", "G1 Y2.5 F3000", "G1 Z-1 F3000"]
+    # Refused by the board: the refusal is the caller's, and absolute is put back.
+    transport.replies = {**REPLIES, "G1 X7 F3000": ["Error:Printer stopped"]}
+    start = len(transport.sent)
+    with pytest.raises(ToolchainError, match="Printer stopped"):
+        devices.printer_jog(port, "X", 7, 3000)
+    assert transport.sent[start:] == ["G91", "G1 X7 F3000", "G90"]
+
+    # The latch lets go between the first line and the move: absolute all the same.
+    class Lapsing(SlowTransport):
+        def write(self, data):
+            super().write(data)
+            if data.decode().strip() == "G91":
+                scripted_links.control.disarm(port)
+
+    transport.__class__ = Lapsing
+    scripted_links.control.arm(port)
+    start = len(transport.sent)
+    with pytest.raises(gcode.ControlNotArmed):
+        devices.printer_jog(port, "Y", 1, 3000)
+    assert transport.sent[start:] == ["G91", "G90"]
+    transport.__class__ = SlowTransport
+    scripted_links.control.arm(port)
+    start = len(transport.sent)
+    with pytest.raises(ValueError, match="beyond"):
+        devices.printer_jog(port, "X", 301, 3000)
+    with pytest.raises(ValueError, match="X, Y or Z"):
+        devices.printer_jog(port, "E", 1, 3000)
+    assert transport.sent[start:] == []
+    # The route: what the page's pad and the deck's knobs send.
+    c = TestClient(app)
+    r = c.post("/firmware/printers/jog", json={"port": port, "axis": "x", "mm": -2, "feed": 3000})
+    assert r.status_code == 200, r.text
+    assert r.json()["control"]["armed"] is True
+    assert transport.sent[-3:] == ["G91", "G1 X-2 F3000", "G90"]
+
+
+def test_two_starts_at_once_on_one_port_are_one_job_and_one_refusal(
+    fake_arduino_cli, scripted_links, monkeypatch
+):
+    port = "/dev/ttyFAKE1"
+    kept = devices.save_print_file("two.gcode", ("G1 X1\n" * 50).encode(), machine="printer")
+    scripted_links.control.arm(port)
+    devices.printer_status(port, links=scripted_links)
+    real = devices._sha256_of
+
+    def slow(file):
+        time.sleep(0.2)  # between "does a job hold the port" and "this job holds it"
+        return real(file)
+
+    monkeypatch.setattr(devices, "_sha256_of", slow)
+    outcomes: list = []
+
+    def start():
+        try:
+            outcomes.append(devices.start_print(port, kept.id, links=scripted_links))
+        except PortHeld as exc:
+            outcomes.append(exc)
+
+    threads = [threading.Thread(target=start) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+    started = [o for o in outcomes if isinstance(o, devices.PrintJob)]
+    assert len(started) == 1 and len(outcomes) == 2
+    started[0].thread.join(10)
+    sent = ScriptedTransport.instances[0].sent
+    assert sent.count("G1 X1") == 50
+
+
+def test_a_print_whose_board_restarts_while_paused_sends_no_more_of_the_file(
+    fake_arduino_cli, scripted_links
+):
+    """A board that boots under a print -- its power cycled while the print is paused,
+    say -- is cold and has no position: the print fails on its banner, and the next
+    line of the file is never sent to it."""
+    port = "/dev/ttyFAKE1"
+    kept = devices.save_print_file("p.gcode", ("G1 X1\n" * 400).encode(), machine="printer")
+
+    class SlowTransport(ScriptedTransport):
+        def write(self, data):
+            if data.decode().strip() == "G1 X1":
+                time.sleep(0.01)
+            super().write(data)
+
+    scripted_links.factory = SlowTransport
+    scripted_links.control.arm(port)
+    job = devices.start_print(port, kept.id, links=scripted_links)
+    time.sleep(0.15)
+    job.pause()
+    time.sleep(0.15)
+    transport = ScriptedTransport.instances[0]
+    moved = transport.sent.count("G1 X1")
+    assert job.stage == "paused" and 0 < moved < 400
+    transport.pending += "".join(line + "\n" for line in BOOT).encode()
+    job.resume()
+    job.thread.join(5)
+    assert job.record.outcome == "failed" and "restarted" in job.record.reason
+    assert transport.sent.count("G1 X1") == moved
+    assert transport.sent[-4:] == ["M104 S0", "M140 S0", "M107", "M84"]
+
+
+def test_a_server_that_stops_ends_its_jobs_and_makes_their_machines_safe(
+    fake_arduino_cli, scripted_links
+):
+    """``stop_jobs``, as the server's shutdown calls it: a print is cancelled and its
+    safe-off sent before the process goes; one stuck behind a line its board never
+    answers is sent the stop."""
+    port = "/dev/ttyFAKE1"
+    kept = devices.save_print_file("long.gcode", ("G1 X1\n" * 400).encode(), machine="printer")
+
+    class SlowTransport(ScriptedTransport):
+        def write(self, data):
+            if data.decode().strip() == "G1 X1":
+                time.sleep(0.01)
+            super().write(data)
+
+    scripted_links.factory = SlowTransport
+    scripted_links.control.arm(port)
+    job = devices.start_print(port, kept.id, links=scripted_links)
+    time.sleep(0.1)
+    said = devices.stop_jobs(timeout=5)
+    transport = ScriptedTransport.instances[0]
+    assert job.finished is not None and job.record.outcome == "cancelled"
+    assert transport.sent[-4:] == ["M104 S0", "M140 S0", "M107", "M84"]
+    assert said == [f"{port}: print stopped with the server, and made safe"]
+    assert devices.stop_jobs() == []  # nothing running: nothing sent, nothing said
+    # Behind a home the board never answers: the stop itself, which waits for nothing.
+    stuck = devices.save_print_file("home.gcode", b"G28\nG1 X1\n", machine="printer")
+    halt = "Error:Printer halted. kill() called!"
+    transport.replies = {**REPLIES, "G28": [], "M108": [], "M112": [halt]}
+    scripted_links.control.arm(port)
+    job = devices.start_print(port, stuck.id, links=scripted_links)
+    for _ in range(300):
+        if "G28" in transport.sent:
+            break
+        time.sleep(0.01)
+    said = devices.stop_jobs(timeout=0.3)
+    assert "M112" in transport.sent and "the stop was sent" in said[0]
+    job.thread.join(5)
+    assert job.finished is not None and "G1 X1" not in transport.sent[transport.sent.index("G28") :]
+
+
+def test_the_app_ends_its_jobs_as_it_shuts_down(fake_arduino_cli, scripted_links):
+    port = "/dev/ttyFAKE1"
+    kept = devices.save_print_file("long.gcode", ("G1 X1\n" * 400).encode(), machine="printer")
+
+    class SlowTransport(ScriptedTransport):
+        def write(self, data):
+            if data.decode().strip() == "G1 X1":
+                time.sleep(0.01)
+            super().write(data)
+
+    scripted_links.factory = SlowTransport
+    with TestClient(app) as c:
+        c.post("/firmware/printers/control", json={"port": port, "armed": True}).raise_for_status()
+        r = c.post("/firmware/printers/print", json={"port": port, "file_id": kept.id})
+        assert r.status_code == 202, r.text
+        time.sleep(0.1)
+        job = devices.print_job(port)
+        assert job.finished is None
+    assert job.finished is not None and job.record.outcome == "cancelled"
+    assert ScriptedTransport.instances[0].sent[-4:] == ["M104 S0", "M140 S0", "M107", "M84"]
+
+
+def _orphan(port: str, identity: str = "FAKESERIAL1") -> jobs.Job:
+    """A print kept as running that no thread runs: its server died under it."""
+    started = datetime.now(timezone.utc)
+    job = jobs.begin(
+        jobs.Job(
+            id=jobs.new_id(started, port),
+            kind="print",
+            machine=jobs.JobMachine(kind="printer", port=port, identity=identity),
+            input=jobs.JobInput(name="lost.gcode", size=1, sha256="0" * 64, file_id="x"),
+            started_at=started,
+        ),
+        live=lambda: None,
+    )
+    jobs._LIVE.pop(job.id)
+    return job
+
+
+def test_a_print_a_dead_server_left_running_is_made_safe_when_its_port_is_next_opened(
+    fake_arduino_cli, scripted_links
+):
+    port = "/dev/ttyFAKE1"
+    lost = _orphan(port)
+    assert jobs.orphaned(port, "FAKESERIAL1")[0].id == lost.id
+    devices.printer_status(port, links=scripted_links)
+    transport = ScriptedTransport.instances[0]
+    assert transport.sent[-4:] == ["M104 S0", "M140 S0", "M107", "M84"]
+    kept = jobs.get(lost.id)
+    assert kept.outcome == "failed" and "heaters and fan were turned off" in kept.reason
+    assert jobs.orphaned(port, "FAKESERIAL1") == []
+    log = scripted_links.log_for(port).since(0)["entries"]
+    assert any(e["kind"] == "sys" and lost.id in e["text"] for e in log)
+    # Once: the next poll, and the next open, send nothing of the kind.
+    sent = len(transport.sent)
+    devices.printer_status(port, links=scripted_links)
+    assert not set(transport.sent[sent:]) & set(devices.PRINT_SAFE_OFF)
+
+
+def test_a_printer_printing_from_its_card_is_not_turned_off_for_a_lost_print(
+    fake_arduino_cli, scripted_links
+):
+    port = "/dev/ttyFAKE1"
+    scripted_links.factory = lambda p, b: ScriptedTransport(p, b, replies=PRINTING)
+    lost = _orphan(port)
+    devices.printer_status(port, links=scripted_links)
+    assert not set(ScriptedTransport.instances[0].sent) & set(devices.PRINT_SAFE_OFF)
+    kept = jobs.get(lost.id)
+    assert kept.outcome == "failed" and "printing from its card" in kept.reason
+
+
+def test_a_stop_to_a_known_port_with_no_open_link_is_the_first_line_the_board_reads(
+    fake_arduino_cli, scripted_links
+):
+    port = "/dev/ttyFAKE1"
+    devices.printer_status(port, links=scripted_links)  # identified, and kept
+    scripted_links.close(port)
+    halt = "Error:Printer halted. kill() called!"
+    scripted_links.factory = lambda p, b: ScriptedTransport(
+        p, b, replies={**REPLIES, "M112": [halt]}
+    )
+    devices.printer_control(port, "M112", links=scripted_links)
+    assert ScriptedTransport.instances[-1].sent == ["M112"]

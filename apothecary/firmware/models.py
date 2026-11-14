@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 
 from pydantic import (
     AfterValidator,
@@ -571,6 +571,15 @@ class PrinterControlArmRequest(ProbeRequest):
 
 class PrinterControlRequest(ProbeRequest):
     command: str = Field(min_length=2, max_length=80)
+
+
+class PrinterJogRequest(ProbeRequest):
+    """One relative move of one axis: so many mm (signed) at a feed in mm/min. Bounded
+    again by the port's dialect, as the lines it becomes are."""
+
+    axis: Literal["X", "Y", "Z", "x", "y", "z"]
+    mm: float = Field(ge=-600, le=600)
+    feed: int = Field(ge=10, le=12000)
 
 
 class PlateRequest(ProbeRequest):

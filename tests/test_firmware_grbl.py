@@ -1031,3 +1031,148 @@ def test_a_cut_that_is_done_leaves_the_spindle_off(fake_arduino_cli, router_link
     job.thread.join(5)
     assert job.record.outcome == "done" and "> M5" in job.record.log
     assert not devices.printer_status(PORT).spindle.on
+
+
+# --- what a router is left doing: off switches, holds told to the cut, where the tool is --
+
+
+def test_a_routers_off_switches_go_with_the_latch_down(fake_arduino_cli, router_links):
+    """The spindle off, a hold and a jog cancelled go unarmed and arm nothing; what
+    turns or moves is refused."""
+    for line in ("M5", "HOLD", "JOG-CANCEL"):
+        assert devices.printer_control(PORT, line).command == line
+        assert not router_links.control.armed(PORT)
+    for line in ("M3 S9000", "RESUME", "$X", "$J=G91 G21 X1 F500"):
+        with pytest.raises(gcode.ControlNotArmed):
+            devices.printer_control(PORT, line)
+
+
+def test_a_hold_typed_at_a_cut_is_the_cuts_pause_and_a_resume_its_resume(
+    fake_arduino_cli, router_links, monkeypatch
+):
+    """HOLD and RESUME sent as control lines while a cut streams are told to the cut:
+    it stops feeding a held controller, and feeds again once it runs."""
+    monkeypatch.setenv("APOTHECARY_SIMULATED_SPEED", "0.2")
+    kept = devices.save_print_file("dwell.nc", ("G4 P1\n" * 30).encode(), machine="router")
+    router_links.control.arm(PORT)
+    job = devices.start_print(PORT, kept.id)
+    for _ in range(100):
+        if job.sent >= 2:
+            break
+        time.sleep(0.02)
+    devices.printer_control(PORT, "HOLD")
+    assert job.stage == "paused"
+    assert devices.printer_status(PORT).machine_state.startswith("Hold")
+    sent = job.sent
+    time.sleep(0.3)
+    assert job.sent == sent
+    devices.printer_control(PORT, "RESUME")
+    assert job.stage in ("running", "finishing")
+    time.sleep(0.3)
+    assert not devices.printer_status(PORT).machine_state.startswith("Hold")
+    job.cancel()
+    job.thread.join(5)
+
+
+def test_a_cut_needs_the_tool_placed_since_the_port_opened_or_the_controller_restarted(
+    fake_arduino_cli, router_links, monkeypatch
+):
+    """A cut is refused until each axis has been homed or given a work zero on this
+    port; a banner nothing here asked for, or a reset in motion, takes that away, and
+    this server's own reset of an idle controller does not."""
+    monkeypatch.setenv(grbl.UNPROVED_ENV, "1")
+    kept = devices.save_print_file("row.nc", b"G1 X-10 F800\nM5\n", machine="router")
+    router_links.control.arm(PORT)
+    with pytest.raises(ValueError, match="X, Y, Z have been neither homed nor given a work zero"):
+        devices.start_print(PORT, kept.id)
+    st = devices.printer_status(PORT)
+    assert any(
+        line.startswith("No cut yet: X, Y, Z") and "port was opened" in line for line in st.todo
+    )
+    devices.printer_control(PORT, "G10 L20 P1 X0 Y0")
+    with pytest.raises(ValueError, match="Z has been neither homed"):
+        devices.start_print(PORT, kept.id)
+    devices.printer_control(PORT, "G10 L20 P1 Z0")
+    assert not any(line.startswith("No cut yet") for line in devices.printer_status(PORT).todo)
+    job = devices.start_print(PORT, kept.id)
+    job.thread.join(5)
+    assert job.record.outcome == "done"
+    # This server's own reset, of a controller standing still: the place is kept.
+    devices.printer_control(PORT, "RESET")
+    router_links.control.arm(PORT)
+    job = devices.start_print(PORT, kept.id)
+    job.thread.join(5)
+    assert job.record.outcome == "done"
+    # A banner nobody asked for: its power was cycled, and it knows nothing.
+    link = router_links.get(PORT)
+    monkeypatch.setattr(link, "_asked_reset", float("-inf"))
+    link._t._pending += b"Grbl 1.3a ['$' for help]\n"
+    st = devices.printer_status(PORT)
+    assert any("its controller restarted" in line for line in st.todo)
+    with pytest.raises(ValueError, match="since its controller restarted"):
+        devices.start_print(PORT, kept.id)
+    # Reset while moving: the controller says so itself, and is believed.
+    devices.printer_control(PORT, "G10 L20 P1 X0 Y0 Z0")
+    link.alarm = "ALARM:3"
+    with pytest.raises(ValueError, match="reset while moving"):
+        devices.start_print(PORT, kept.id)
+
+
+def test_a_cut_a_dead_server_left_running_has_its_spindle_turned_off_when_idle(
+    fake_arduino_cli, router_links
+):
+    from datetime import datetime, timezone
+
+    devices.printer_status(PORT)  # identified, and kept as a router
+    router_links.close(PORT)
+    started = datetime.now(timezone.utc)
+    lost = jobs.begin(
+        jobs.Job(
+            id=jobs.new_id(started, PORT),
+            kind="cut",
+            machine=jobs.JobMachine(kind="router", port=PORT, identity="FAKESERIAL1"),
+            input=jobs.JobInput(name="lost.nc", size=1, sha256="0" * 64, file_id="x"),
+            started_at=started,
+        ),
+        live=lambda: None,
+    )
+    jobs._LIVE.pop(lost.id)
+    devices.printer_status(PORT)
+    kept = jobs.get(lost.id)
+    assert kept.outcome == "failed" and "the spindle was turned off (M5)" in kept.reason
+    log = router_links.log_for(PORT).since(0)["entries"]
+    assert any(e["kind"] == "tx" and e["text"] == "M5" and e["origin"] == "cut" for e in log)
+
+
+def test_a_stopping_server_holds_and_resets_a_router_under_a_table_map(
+    fake_arduino_cli, router_links
+):
+    """A table map stopped with the server sends no further point: the router is held
+    and reset under it, and the map ends failed."""
+    gate = threading.Event()
+
+    class SlowProbe(grbl.SimulatedRouter):
+        def write(self, data):
+            if b"G38.2" in data:
+                gate.wait(5)  # the first probe is on its way down
+            super().write(data)
+
+    router_links.factory = SlowProbe
+    router_links.control.arm(PORT)
+    job = devices.start_leveling(PORT, probe=True)
+    for _ in range(500):
+        if job.stage == "probing":
+            break
+        time.sleep(0.01)
+    assert job.stage == "probing"
+    said: list = []
+    stopping = threading.Thread(target=lambda: said.extend(devices.stop_jobs(timeout=10)))
+    stopping.start()
+    time.sleep(0.1)
+    gate.set()
+    stopping.join(15)
+    assert job.finished is not None and job.error and "stopped" in job.error
+    assert said == [f"{PORT}: a table map stopped with the server, and made safe"]
+    log = [e["text"] for e in router_links.log_for(PORT).since(0)["entries"] if e["kind"] == "tx"]
+    assert "HOLD" in log and log.count("RESET") == 1
+    assert [line for line in log if line.startswith("G53 G0 X")][1:] == []  # the first point only

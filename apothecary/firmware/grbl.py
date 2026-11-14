@@ -434,6 +434,9 @@ def normalise_control(command: str) -> str:
     raise ValueError(f"not an allowed GRBL control: {command!r}")
 
 
+# What only turns something off or stops it, and so goes with the latch down: the
+# spindle off, a hold, a jog cancelled.
+ALWAYS = re.compile(r"^(M5|HOLD|JOG-CANCEL)$")
 # What a person may still send while a cut holds the port: the hold, the resume and
 # the spindle; motion is the cut's.
 JOB_ALLOWS = re.compile(r"^(HOLD|RESUME|M5|M3 S\d+)$")
@@ -1073,6 +1076,7 @@ def poll_router(link: GcodeLink, wait: Optional[float] = None) -> PrinterStatus:
     parser = parse_parser_state(gc_lines)
     mstate = status["machine_state"]
     proof_of(link).pins(status["pins"])
+    proof_of(link).heard(link)
     # The report says the controller is in alarm, not which: the link keeps the last
     # ALARM line it read. Out of alarm, that line is spent.
     if mstate == "Alarm":
@@ -1100,7 +1104,8 @@ def poll_router(link: GcodeLink, wait: Optional[float] = None) -> PrinterStatus:
         alarm_text=alarm_text(alarm),
         overrides=status["overrides"],
         raw=raw,
-        todo=todo_of(mstate, alarm),
+        todo=todo_of(mstate, alarm)
+        + ([f"No cut yet: {said}."] if (said := not_placed(link)) else []),
         homing=homing_now(link, mstate),
         tool_position=in_volume(status["mpos"], proof_of(link).settings),
         work_origin=in_volume(status["wco"], proof_of(link).settings),
@@ -1144,6 +1149,34 @@ class HomingProof:
         self.on: set = set()  # axes whose switch the last report had on
         self.seen: set = set()  # axes whose switch has been on and off again
         self.jogged: Dict[str, Dict[str, float]] = {a: {"+": 0.0, "-": 0.0} for a in "XYZ"}
+        # Axes whose place this port has been given since it was opened and since its
+        # controller last lost it: homed, or its work zero set here.
+        self.placed: set = set()
+        self.lost = "this port was opened"  # why the others have no place
+        self._boots = 0
+
+    def place(self, cmd: str) -> None:
+        """A line the controller took that gives axes their place: a home (all, or the
+        one it names), a work zero set here, the touch plate's Z."""
+        if cmd.startswith("$H"):
+            self.placed |= set(cmd[2:] or "XYZ")
+        elif cmd.startswith("G10 L20 P1"):
+            self.placed |= set(re.findall(r" ([XYZ])0", cmd))
+        elif cmd.startswith("PROBE-PLATE"):
+            self.placed.add("Z")
+
+    def heard(self, link: GcodeLink) -> None:
+        """What the link has heard since the last look: a banner nothing here asked
+        for (its power cycled, its button pressed) or a reset in motion (``ALARM:3``)
+        is a controller that no longer knows where its tool is."""
+        if link.unasked_restarts != self._boots:
+            self._boots = link.unasked_restarts
+            self.placed, self.lost = set(), "its controller restarted"
+        if (link.alarm or "").strip() == "ALARM:3":
+            self.placed, self.lost = set(), "it was reset while moving (ALARM:3)"
+
+    def unplaced(self) -> List[str]:
+        return [] if self.assumed else [axis for axis in "XYZ" if axis not in self.placed]
 
     def pins(self, pins: List[str]) -> None:
         """A status report's pins: a switch seen on, then off, has been seen."""
@@ -1244,6 +1277,24 @@ def in_volume(where: Optional[dict], settings: Optional[Dict[int, float]]) -> Op
     return out
 
 
+def not_placed(link: GcodeLink) -> Optional[str]:
+    """Why a cut may not start on ``link``'s router, or None: an axis that has been
+    neither homed nor given a work zero here since the port was opened, or since its
+    controller restarted or was reset in motion. The machine position a controller
+    reports after its power was cycled is zero wherever the tool stands, and the work
+    zero it kept is an offset from that: a cut's coordinates are only as true as the
+    last home or the last zero set here."""
+    proof = proof_of(link)
+    proof.heard(link)
+    axes = proof.unplaced()
+    if not axes:
+        return None
+    return (
+        f"{', '.join(axes)} {'has' if len(axes) == 1 else 'have'} been neither homed nor "
+        f"given a work zero since {proof.lost}: home, or set work zero here, before a cut"
+    )
+
+
 def todo_of(mstate: str, alarm: Optional[int]) -> List[str]:
     """What the controller's state asks of a person before the machine moves again."""
     if mstate != "Alarm":
@@ -1306,12 +1357,17 @@ def control_router(link: GcodeLink, command: str, timeout: float = 60.0) -> List
         check_home(link, cmd)
     if cmd.startswith("PROBE-PLATE"):
         thickness, depth, feed = (float(word[1:]) for word in cmd.split()[1:])
-        return probe_plate(link, thickness, depth, int(feed))
+        answer = probe_plate(link, thickness, depth, int(feed))
+        proof_of(link).place(cmd)
+        return answer
     if cmd.startswith("G38.2 Z-"):
         depth, feed = (float(word[1:]) for word in cmd.split()[1:])
         return probe_down(link, -depth, int(feed))
     answer = link.command(cmd, timeout=timeout, origin="control")
     proof_of(link).jog(cmd, answer)
+    if cmd.startswith("$H"):
+        link.alarm = None  # a home is what an alarm asked for: it is spent
+    proof_of(link).place(cmd)
     return answer
 
 
