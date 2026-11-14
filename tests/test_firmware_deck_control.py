@@ -113,17 +113,25 @@ def test_a_jog_past_the_dialects_bound_is_refused_before_the_port(bench):
     assert "refused" in one.strip["small"] and "600" in one.strip["small"]
 
 
-def test_a_printer_jog_returns_to_absolute_positioning_even_when_the_move_is_refused(bench):
+def test_a_printer_jog_is_one_act_that_ends_absolute_and_one_out_of_bounds_sends_nothing(bench):
+    """The knobs jog a printer as the page's pad does (``devices.printer_jog``): relative,
+    the move and absolute as one act on the port."""
     controller, one, links = bench
     links.control.arm(PRINTER)
     start = _printer(links)
     _turn(one, 2, -1)
-    assert controller.sent == ["G91", "G1 Z-1 F3000", "G90"]
+    assert controller.sent == ["G1 Z-1 F3000"]
+    log = [e["text"] for e in links.log_for(PRINTER).since(0)["entries"] if e["kind"] == "tx"]
+    assert [line for line in log if line[0] == "G"][-3:] == ["G91", "G1 Z-1 F3000", "G90"]
     assert _printer(links)["z"] == pytest.approx(start["z"] - 1)
+    assert links.get(PRINTER)._t.relative is False
     controller.sent.clear()
+    before = links.log_for(PRINTER).next_index
     _press(one, 2)
-    _turn(one, 0, 40)  # 400 mm, over the printer's 300: G91 went, the move did not
-    assert controller.sent == ["G91", "G90"]
+    _turn(one, 0, 40)  # 400 mm, over the printer's 300: bounded before the port
+    assert controller.sent == [] and "beyond 300" in one.strip["small"]
+    after = links.log_for(PRINTER).since(before)["entries"]
+    assert not [e for e in after if e["kind"] == "tx" and e["text"] in ("G91", "G90")]
     assert links.get(PRINTER)._t.relative is False
     assert _printer(links)["x"] == start["x"]
 
@@ -150,8 +158,30 @@ def test_the_routers_fourth_knob_turns_the_spindle_only_while_it_turns_and_withi
     _turn(one, 3, 99)
     assert controller.sent[-1] == f"M3 S{grbl.SPINDLE_MAX_RPM}"
     _turn(one, 3, -99)
-    assert controller.sent[-1] == "M3 S0"
+    assert controller.sent[-1] == "M3 S1000"  # down to one step, never to nothing
+    assert _spindle_on(links)
     assert " S " in one.strip["small"]  # the fourth quantity is on the strip
+
+
+def test_the_spindle_is_not_turned_from_a_reading_that_is_old(bench):
+    """A cut holding the port answers a poll with its last reading: the knob turns the
+    spindle from what it reads now, or not at all."""
+    from datetime import timedelta
+
+    controller, one, links = bench
+    _choose_router(one)
+    links.control.arm(ROUTER)
+    devices.printer_control(ROUTER, "M3 S12000")
+    real = controller.poll
+
+    def old(port):
+        status = real(port)
+        return status.model_copy(update={"polled_at": status.polled_at - timedelta(seconds=30)})
+
+    controller.poll = old
+    _turn(one, 3, -5)
+    assert controller.sent == [] and "not read just now" in one.strip["small"]
+    assert grbl.poll_router(links.get(ROUTER)).spindle.target == 12000
 
 
 def _both_going(links):
@@ -232,9 +262,65 @@ def test_the_everything_key_goes_on_stopping_when_one_machine_cannot_be_reached(
     controller, one, links = bench
     _both_going(links)
     controller.resolve = lambda machine: ROUTER if machine.name == "cnc_router" else None
+    controller.others = lambda kind=None: []
     _press(one, 7)
     assert controller.sent == ["stop cnc_router"] and not _spindle_on(links)
     assert "not printer_1 (no board pinned)" in one.strip["small"]
+
+
+def test_a_stop_reaches_a_machine_that_is_pinned_somewhere_else(bench):
+    """The printer pinned to another site's node, as the bench's Ender is: its board is
+    the one printer this server knows, so the knobs find it; and were there no telling
+    it from another, its stop key and the everything key would still reach it, by its
+    kind."""
+    controller, one, links = bench
+    state = devices.get_state()
+    from apothecary.demo import BOARD, SITE
+
+    assert state.clear_binding(SITE, BOARD)
+    state.set_binding("apothecary", "creality_v422", devices.stable_identity(PRINTER))
+    assert deck_control.pinned_port(deck_control.MACHINES[0]) == PRINTER
+    assert deck_control.machine_ports("printer") == [PRINTER]
+    assert set(deck_control.machine_ports()) == {PRINTER, ROUTER}
+    _both_going(links)
+    _press(one, 4)  # the printer's own stop
+    assert controller.sent == ["stop printer_1"] and _printer_halted(links)
+    # Not told from another of its kind: every board of that kind is stopped.
+    controller.sent.clear()
+    controller.resolve = lambda machine: None
+    _press(one, 5)
+    assert controller.sent == [f"stop router on {ROUTER}"] and not _spindle_on(links)
+    controller.sent.clear()
+    _press(one, 7)
+    assert sorted(controller.sent) == [f"stop printer on {PRINTER}", f"stop router on {ROUTER}"]
+
+
+def test_the_everything_key_stops_a_machine_that_is_neither_of_the_decks_two(bench):
+    controller, one, links = bench
+    _both_going(links)
+    controller.resolve = lambda machine: PRINTER if machine.kind == "printer" else None
+    controller.others = lambda kind=None: [] if kind else [PRINTER, ROUTER]
+    _press(one, 7)
+    assert controller.sent == ["stop printer_1", f"stop the machine on {ROUTER}"]
+    assert not _spindle_on(links) and _printer_halted(links)
+
+
+def test_the_everything_key_does_not_wait_for_one_machine_to_reach_the_next(bench):
+    """Each stop goes on its own: a machine slow to answer its stop holds up no other's."""
+    controller, one, links = bench
+    _both_going(links)
+    real, reached = controller.send, threading.Event()
+
+    def printer_is_slow(port, line):
+        if port == PRINTER:
+            assert reached.wait(5), "the router's stop waited for the printer's"
+        else:
+            reached.set()
+        return real(port, line)
+
+    controller.send = printer_is_slow
+    _press(one, 7)
+    assert controller.sent == ["stop printer_1", "stop cnc_router"]
 
 
 def test_the_everything_key_goes_on_stopping_when_one_machine_refuses_its_stop(bench):
@@ -256,6 +342,7 @@ def test_the_everything_key_goes_on_stopping_when_one_machine_refuses_its_stop(b
 def test_a_stop_that_reaches_no_machine_says_so(bench):
     controller, one, links = bench
     controller.resolve = lambda machine: None
+    controller.others = lambda kind=None: []
     _press(one, 7)
     assert controller.sent == []
     assert one.strip["small"].startswith("STOP reached nothing; not printer_1 (no board pinned)")
@@ -271,10 +358,10 @@ def test_a_jog_on_a_port_another_holds_moves_nothing_and_says_who_holds_it(bench
     _choose_router(one)
     start = _router(links)
 
-    def held(port, line):
+    def held(port, axis, mm, feed):
         raise PortHeld(f"{port} is held by a print")
 
-    controller.send = held
+    controller.jog = held
     _turn(one, 0, 5)
     assert controller.sent == [] and _router(links) == start
     assert one.strip["small"].startswith(f"{ROUTER} is held by a print")  # not a refusal
@@ -501,6 +588,8 @@ def slow(bench, monkeypatch):
         send=lambda port, line: sent.append(line),
         poll=poll,
         armed=lambda port: 0.0,  # disarmed to the tick, so it asks the machine nothing
+        jog=lambda port, axis, mm, feed: sent.append(f"$J=G91 G21 {axis}{mm:g} F{feed}"),
+        others=lambda kind=None: [],
     )
     mine.machine = deck_control.MACHINES[1]
     mine.start()
@@ -643,7 +732,7 @@ def test_a_lost_deck_is_found_again_by_the_layout_and_goes_on_being_heard(bench)
 def test_the_unlock_key_is_there_while_the_router_is_in_alarm_and_unlocks_it(bench):
     controller, one, links = bench
     _choose_router(one)
-    assert (one.keys[6]["text"], one.keys[6]["colour"]) == ("", "black")
+    assert (one.keys[6]["text"], one.keys[6]["small"]) == ("STOP JOG", "cnc_router")
     sim = links.get(ROUTER)._t
     sim.state, sim.alarm = "Alarm", 1  # a limit switch touched
     devices.printer_status(ROUTER)
@@ -653,7 +742,7 @@ def test_the_unlock_key_is_there_while_the_router_is_in_alarm_and_unlocks_it(ben
     assert (one.keys[6]["text"], one.keys[6]["colour"]) == ("UNLOCK", "amber")
     _press(one, 6)
     assert controller.sent == ["$X"] and devices.printer_status(ROUTER).state == "idle"
-    assert (one.keys[6]["text"], one.keys[6]["colour"]) == ("", "black")
+    assert one.keys[6]["text"] == "STOP JOG"
     before = _router(links)
     _turn(one, 0, 1)
     assert _router(links)["x"] == pytest.approx(before["x"] + 1)
@@ -695,3 +784,61 @@ def test_the_unlock_key_needs_control_armed_as_any_line_but_a_stop_does(bench):
     devices.printer_status(ROUTER)
     _press(one, 6)
     assert controller.sent == [] and devices.printer_status(ROUTER).state == "alarm"
+
+
+# --- a turn is for the moment it was made in; a move under way has its own stop ----------
+
+
+def test_a_turn_that_waited_on_a_busy_machine_is_dropped_and_said(slow):
+    """Turned while the machine homes or probes, a knob's turn is not a jog when it is
+    done: it is dropped, with the turns summed onto it, and the strip says so."""
+    controller, gate, polling, sent = slow
+    controller.hear(deck.DeckEvent(1, "knob-turn", 0, 1))
+    assert polling.wait(5)  # the machine is busy answering something else
+    long_ago = time.time() - 60
+    controller.hear(deck.DeckEvent(2, "knob-turn", 1, 5, at=long_ago))
+    controller.hear(deck.DeckEvent(3, "knob-turn", 1, 5))  # summed onto the old one
+    gate.set()
+    assert controller.settle(10)
+    assert sent == ["$J=G91 G21 X1 F1000"]
+    assert controller.said[0].startswith("turn dropped: cnc_router was busy for")
+    controller.hear(_event("knob-turn", 1, 1))  # a turn made now is a turn again
+    assert controller.settle(10)
+    assert sent[-1] == "$J=G91 G21 Y1 F1000"
+
+
+def test_a_turn_taken_up_before_a_long_wait_is_dropped_when_the_wait_ends(slow, monkeypatch):
+    controller, gate, polling, sent = slow
+    monkeypatch.setattr(deck_control, "TURN_MAX_AGE_S", 0.2)
+    controller.hear(_event("knob-turn", 0, 5))
+    assert polling.wait(5)
+    time.sleep(0.4)  # the machine's answer took longer than a turn stays meant
+    gate.set()
+    assert controller.settle(10)
+    assert sent == [] and controller.said[0].startswith("turn dropped")
+
+
+def test_key_six_stops_the_move_under_way_at_once_and_needs_no_latch(bench):
+    controller, one, links = bench
+    assert (one.keys[6]["text"], one.keys[6]["small"]) == ("QUICKSTOP", "printer_1")
+    _press(one, 6)
+    assert controller.sent == ["M410"] and not links.control.armed(PRINTER)
+    assert "QUICKSTOP sent to printer_1" in one.strip["small"]
+    _choose_router(one)
+    assert one.keys[6]["text"] == "STOP JOG"
+    _press(one, 6)
+    assert controller.sent[-1] == "JOG-CANCEL" and not links.control.armed(ROUTER)
+    sent = [e["text"] for e in links.log_for(ROUTER).since(0)["entries"] if e["kind"] == "tx"]
+    assert sent[-1] == "JOG-CANCEL"
+
+
+def test_a_stop_of_the_move_is_sent_ahead_of_turns_that_wait_and_they_are_not_sent(slow):
+    controller, gate, polling, sent = slow
+    controller.hear(_event("knob-turn", 0, 5))
+    assert polling.wait(5)
+    controller.hear(_event("knob-turn", 1, 5))
+    controller.hear(_event("key", 6, True))
+    assert sent == ["JOG-CANCEL"]
+    gate.set()
+    assert controller.settle(10)
+    assert sent == ["JOG-CANCEL"], sent

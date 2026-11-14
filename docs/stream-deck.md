@@ -108,25 +108,40 @@ layout on a deck:
   they arm its control, below), 2 **STEP** cycles 0.1, 1 and 10 mm, and 3 **DISARM** lets go
   of every machine's control at one press, blue while any is armed and grey when none is.
   It stops nothing -- a move under way finishes -- and the stop keys are the stops.
-- **Key 6** is **UNLOCK**, amber, while the chosen router is in alarm, and dark otherwise:
+- **Key 6** is **UNLOCK**, amber, while the chosen router is in alarm:
   it sends the router's `$X` through the latch, moves nothing, and keeps the position the
   controller believes. A knob turned while the router is in alarm says to press it. The
   deck asks a machine nothing while its control is let go, and a stop lets it go, so after
   a stop mid-move UNLOCK lights from the next poll by anyone: the router's Machine, a
-  program, or the deck once armed again.
+  program, or the deck once armed again. Out of alarm the key stops the move under way
+  and no more: **STOP JOG** on the router (GRBL's jog cancel, which keeps the position)
+  and **QUICKSTOP** on the printer (`M410`). Neither needs control armed, and each is
+  sent at once, ahead of any turn still waiting, which is then not sent.
 - **The bottom row's keys** are the stops, two classes of them: 4 **STOP printer_1** and
   5 **STOP cnc_router**, dark red, each stopping that machine alone, and 7 **STOP ALL**,
-  bright red and last, nearest a hand resting on the knobs, stopping every machine, each
-  by its own dialect's stop.
+  bright red and last, nearest a hand resting on the knobs, stopping every machine this
+  server knows of, each by its own dialect's stop and all at once: the garage's two, and
+  any other board that answered as a printer or a router.
 - **The knobs**: one to three jog X, Y and Z by their steps of the chosen size; the fourth
   turns the router's spindle speed in steps of 1000 rpm, or extrudes 1 mm a step on the
-  printer.
+  printer. The spindle is turned only from a reading a few seconds old at most, and never
+  down to nothing: off is the Machine's, or a stop. A turn made while the machine was
+  busy with something else, a home or a probe, is dropped once it is two seconds old and
+  the strip says so: it is never sent when the machine comes free.
+
+**The machines are found by where they are pinned.** The printer and the router are the
+boards pinned to the garage's `printer_1` and `cnc_router`. With nothing pinned there and
+plugged in, each is the one board of its kind this server knows, wherever it is pinned.
+Two of a kind and no pin is no machine for the knobs, and both of them for that kind's
+stop key.
 
 The strip says which machine, whether its control is armed and for how long, the chosen
 machine's newest poll, the deck's own or anyone's (X, Y, Z and the fourth quantity), the
 step, and what the last turn did or why it did nothing.
 
-**Nothing the deck sends bypasses what bounds a person's jog.** Every line goes through
+**Nothing the deck sends bypasses what bounds a person's jog.** A jog goes through
+`devices.printer_jog`, the function behind `POST /firmware/printers/jog` and the page's
+pad, so it is one act on the port whoever makes it; every other line goes through
 `devices.printer_control`, the function behind `POST /firmware/printers/command`:
 
 - the port's control latch must be armed, and it is armed the page's way (⚙ Control in the

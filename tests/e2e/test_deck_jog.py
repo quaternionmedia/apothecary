@@ -332,7 +332,7 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     deck.locator(".deck-key[data-key='6']").click()
     _until(lambda: _control(url)["sent"][-1:] == ["$X"], "UNLOCK sent $X")
     _until(lambda: _at_rest(url), "the router idle")
-    _until(lambda: _drawn(url)["keys_drawn"]["6"]["colour"] == "black", "UNLOCK dark again")
+    _until(lambda: _drawn(url)["keys_drawn"]["6"]["text"] == "STOP JOG", "STOP JOG again")
     deck.locator(".deck-knob[data-knob='0'] .deck-turn[data-dir='1']").click()
     _until(lambda: _router(url)["position"] != before, "the next turn moved the router")
     _until(lambda: _at_rest(url), "the router came to rest")
@@ -341,7 +341,7 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     story.shows(
         "UNLOCK sends $X, and the next turn moves the router",
         "UNLOCK pressed: it sends the router's `$X` through the latch, the alarm is "
-        "cleared and the key goes dark again, and the next turn of knob one jogs X.",
+        "cleared and the key is STOP JOG again, and the next turn of knob one jogs X.",
         blank=TIME_LEFT_SHOWN,
     )
     _arm(url, False)
