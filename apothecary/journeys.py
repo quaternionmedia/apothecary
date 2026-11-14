@@ -101,7 +101,8 @@ class Journey:
     requires: str
     opened_by: str
     view: Layout
-    # What the rail and ⊞ Windows › Journeys call it.
+    # What the rail, ⊞ Windows › Journeys and the tour call it: what a person does and
+    # to what, the title's verb and one thing (Design a part, Make a thing).
     name: str = ""
     steps: Tuple[Step, ...] = ()
     # What the tour puts every stage of it on, on the demo, before the stage's own
@@ -340,13 +341,13 @@ CUT = Journey(
 )
 
 
-# Bring a board to life: the firmware a machine runs. The board on its port pinned to
+# Flash a board: the firmware a machine runs. The board on its port pinned to
 # its piece, the piece's sketch on the Bench with its builds, the devkit's Flashing
 # window where it is built and uploaded, and its Sketch and Log, where what it says is
 # heard. The port is the demo's devkit's (demo.py's DEVKIT).
 BOARD = Journey(
     id="board",
-    title="Board",
+    title="Flash",
     group="Machine",
     requires="machine",
     opened_by="a board's ring, Device › Open",
@@ -374,7 +375,7 @@ BOARD = Journey(
             },
         ]
     },
-    name="Bring a board to life",
+    name="Flash a board",
     staged_on=(("pin", "esp32_blink:/dev/ttyFAKE2"), ("machine", "esp32_blink")),
     steps=(
         Step(
@@ -414,11 +415,11 @@ BOARD = Journey(
 )
 
 
-# Hands on the machines: the Stream Deck +, drawn by the server, whose knobs jog the
+# Drive a machine: the Stream Deck +, drawn by the server, whose knobs jog the
 # machine chosen on it once that machine's control is armed.
 HANDS = Journey(
     id="hands",
-    title="Hands",
+    title="Drive",
     group="Tools",
     requires="deck",
     opened_by="⊞ Windows › Deck, or Open Deck on the stream_deck piece",
@@ -435,7 +436,7 @@ HANDS = Journey(
             },
         ]
     },
-    name="Hands on the machines",
+    name="Drive a machine",
     staged_on=(("part", "stream_deck"),),
     steps=(
         Step(
@@ -469,17 +470,17 @@ HANDS = Journey(
 )
 
 
-# Bring the site up: the procedure, each step a member's of the family and fired
+# Start a site: the procedure, each step a member's of the family and fired
 # through the hub on GO; the members, each with its door; and the hub's audit of what
 # it delivered. The Family system's own view.
 BRING_UP = Journey(
     id="bring-up",
-    title="Bring up",
+    title="Start",
     group="Family",
     requires="procedure",
     opened_by="⊞ Windows › Procedure",
     view=FAMILY.view,
-    name="Bring the site up",
+    name="Start a site",
     steps=(
         Step(
             "steps",
@@ -518,7 +519,7 @@ BRING_UP = Journey(
 )
 
 
-# Watch the site: the Working space, the site as its evidence has it, then one
+# Watch a site: the Working space, the site as its evidence has it, then one
 # machine's hour of it.
 WATCH = Journey(
     id="watch",
@@ -539,7 +540,7 @@ WATCH = Journey(
             },
         ]
     },
-    name="Watch the site",
+    name="Watch a site",
     steps=(
         Step(
             "space",
@@ -571,12 +572,12 @@ WATCH = Journey(
 )
 
 
-# A drawing to pieces: the whiteboard on the wall, a photograph of it pinned and
+# Read a drawing: the whiteboard on the wall, a photograph of it pinned and
 # squared, its strokes found as shapes, its marks sorted, a model asked and never
 # trusted, and the shapes ready to stand up as pieces: parts, to design.
 DRAWING = Journey(
     id="drawing",
-    title="Drawing",
+    title="Read",
     group="Pictures",
     requires="pictures",
     opened_by="⊞ Windows › Pictures",
@@ -596,7 +597,7 @@ DRAWING = Journey(
             },
         ]
     },
-    name="A drawing to pieces",
+    name="Read a drawing",
     staged_on=(("part", "whiteboard"),),
     steps=(
         Step(

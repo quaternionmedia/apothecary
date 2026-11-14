@@ -82,7 +82,7 @@ PICTURED = {
     ),
     "board": (
         "hear",
-        "Bring a board to life: its sketch on the Bench, its Flashing, what it says",
+        "Flash a board: its sketch on the Bench, its Flashing, what it says",
         "A machine runs on a board, and a board on firmware. The demo's devkit stands "
         "on its port unpinned, so the page pins it to esp32_blink, as Pin in the piece's "
         "Device section does, and opens its Machine: Pin's stage is Selected, where the "
@@ -93,7 +93,7 @@ PICTURED = {
     ),
     "hands": (
         "knobs",
-        "Hands on the machines: the Stream Deck, and the printer beside it",
+        "Drive a machine: the Stream Deck, and the printer beside it",
         "Hands on what was made to move. The stream_deck piece is chosen and the Deck "
         "window brought forward: its keys and strip as the server draws them. Knobs "
         "opens printer_1's Machine beside it, the machine the deck has chosen, where its "
@@ -102,7 +102,7 @@ PICTURED = {
     ),
     "bring-up": (
         "steps",
-        "Bring the site up: the procedure, the family's members, the hub's audit",
+        "Start a site: the procedure, the family's members, the hub's audit",
         "The machines one at a time become a site brought up in order. No machine is "
         "in this journey, so the one open is closed. Steps is the Procedure, each step "
         "a member's of the family and fired through the hub on GO; Members is each "
@@ -111,14 +111,14 @@ PICTURED = {
     ),
     "watch": (
         "space",
-        "Watch the site: the Working space, then one machine's hour",
+        "Watch a site: the Working space, then one machine's hour",
         "A site that is up is watched. Space is the Working space on the garage; Hour "
         "chooses printer_1 and opens its hour there: its state poll by poll, and where "
         "a camera over it would keep its frames. The picture is Space.",
     ),
     "drawing": (
         "marks",
-        "A drawing to pieces: the whiteboard photographed, squared, read",
+        "Read a drawing: the whiteboard photographed, squared, read",
         "Last, what is seen becomes parts, and the chain closes. The whiteboard is "
         "chosen on the garage's wall; Picture pins the demo's photograph of it there, "
         "as its ring's Picture › Folder does, squared and laid in front; Shapes finds "
@@ -265,7 +265,7 @@ DID = {
         "the Bench opened on esp32_blink@arduino",
     ],
     "hands": ["stream_deck chosen", "printer_1's Machine opened"],
-    "bring-up": ["printer_1's Machine closed: Bring the site up has no machine in it"],
+    "bring-up": ["printer_1's Machine closed: Start a site has no machine in it"],
     "watch": [
         "the Working space opened: the Working space of garage",
         "printer_1 framed in the world, as f does",

@@ -421,11 +421,11 @@ what it made:
 | **Design a part** (`design`) | 1 Choose, 2 Numbers, 3 Text, 4 Kept, 5 Ready | a part a machine can make |
 | **Make a thing** (`make`) | 1 Choose, 2 Shape, 3 Slice, 4 See, 5 Print | a job on the printer |
 | **Cut a part** (`cut`) | 1 Choose, 2 Toolpath, 3 See, 4 Needs, 5 Cut | a job on the router |
-| **Bring a board to life** (`board`) | 1 Pin, 2 Bench, 3 Flash, 4 Hear | a board that says what it runs |
-| **Hands on the machines** (`hands`) | 1 Deck, 2 Knobs | a machine moved by hand |
-| **Bring the site up** (`bring-up`) | 1 Steps, 2 Members, 3 Audit | a site in working order |
-| **Watch the site** (`watch`) | 1 Space, 2 Hour | what each machine's hour held |
-| **A drawing to pieces** (`drawing`) | 1 Board, 2 Picture, 3 Shapes, 4 Marks, 5 Models, 6 Pieces | shapes that stand up as pieces: parts, to design |
+| **Flash a board** (`board`) | 1 Pin, 2 Bench, 3 Flash, 4 Hear | a board that says what it runs |
+| **Drive a machine** (`hands`) | 1 Deck, 2 Knobs | a machine moved by hand |
+| **Start a site** (`bring-up`) | 1 Steps, 2 Members, 3 Audit | a site in working order |
+| **Watch a site** (`watch`) | 1 Space, 2 Hour | what each machine's hour held |
+| **Read a drawing** (`drawing`) | 1 Board, 2 Picture, 3 Shapes, 4 Marks, 5 Models, 6 Pieces | shapes that stand up as pieces: parts, to design |
 
 *Make a thing* in full, as each is written in `apothecary/journeys.py`:
 

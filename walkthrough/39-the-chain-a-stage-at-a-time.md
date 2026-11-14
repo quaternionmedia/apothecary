@@ -74,83 +74,83 @@ The same path through another machine. cnc_router's Machine is opened in printer
     Cut a part › 5 Cut (the tour): control armed in the Machine, the work zeroed, ▶ Cut, the job in Jobs
 ```
 
-## 4. Bring a board to life: its sketch on the Bench, its Flashing, what it says
+## 4. Flash a board: its sketch on the Bench, its Flashing, what it says
 
 A machine runs on a board, and a board on firmware. The demo's devkit stands on its port unpinned, so the page pins it to esp32_blink, as Pin in the piece's Device section does, and opens its Machine: Pin's stage is Selected, where the site says which device is which. The Bench is opened on esp32_blink's sketch, as its ring's Device › Flash sketch does: each build of it with its toolchain. Flash's stage is the board's Flashing window, Hear's its Sketch and its Log. The picture is Hear. Compile, upload and Listen are left to the person.
 
-![Bring a board to life: its sketch on the Bench, its Flashing, what it says](screenshots/39-04-bring-a-board-to-life-its-sketch-on-the-bench-its-.png)
+![Flash a board: its sketch on the Bench, its Flashing, what it says](screenshots/39-04-flash-a-board-its-sketch-on-the-bench-its-flashing.png)
 
 ```
-1 Pin: /dev/ttyFAKE2 pinned to esp32_blink, as Pin in its Device section does; esp32_blink's Machine opened; esp32_blink framed in the world, as f does; Bring a board to life entered, its windows laid out
-    Bring a board to life › 1 Pin (⊞ Windows › Bring a board to life): the board on its port pinned to its piece, in Selected: which device is which
+1 Pin: /dev/ttyFAKE2 pinned to esp32_blink, as Pin in its Device section does; esp32_blink's Machine opened; esp32_blink framed in the world, as f does; Flash a board entered, its windows laid out
+    Flash a board › 1 Pin (⊞ Windows › Flash a board): the board on its port pinned to its piece, in Selected: which device is which
 2 Bench: the Bench opened on esp32_blink@arduino, as esp32_blink's Device › Flash sketch does
-    Bring a board to life › 2 Bench (the tour): the part's sketch on the Bench: each build of it with its toolchain, and Compile
+    Flash a board › 2 Bench (the tour): the part's sketch on the Bench: each build of it with its toolchain, and Compile
 3 Flash: nothing more to do
-    Bring a board to life › 3 Flash (the tour): the board's Flashing window: the sketch built and uploaded to its port, after asking
+    Flash a board › 3 Flash (the tour): the board's Flashing window: the sketch built and uploaded to its port, after asking
 4 Hear: nothing more to do
-    Bring a board to life › 4 Hear (the tour): its Sketch and its Log: what it should run, and what it was heard saying
+    Flash a board › 4 Hear (the tour): its Sketch and its Log: what it should run, and what it was heard saying
 ```
 
-## 5. Hands on the machines: the Stream Deck, and the printer beside it
+## 5. Drive a machine: the Stream Deck, and the printer beside it
 
 Hands on what was made to move. The stream_deck piece is chosen and the Deck window brought forward: its keys and strip as the server draws them. Knobs opens printer_1's Machine beside it, the machine the deck has chosen, where its control is armed before a knob moves anything. The picture is Knobs, the printer disarmed.
 
-![Hands on the machines: the Stream Deck, and the printer beside it](screenshots/39-05-hands-on-the-machines-the-stream-deck-and-the-prin.png)
+![Drive a machine: the Stream Deck, and the printer beside it](screenshots/39-05-drive-a-machine-the-stream-deck-and-the-printer-be.png)
 
 ```
-1 Deck: stream_deck chosen; stream_deck framed in the world, as f does; Hands on the machines entered, its windows laid out
-    Hands on the machines › 1 Deck (⊞ Windows › Hands on the machines): the Stream Deck + as the server draws it: its keys, its strip, and what it heard
+1 Deck: stream_deck chosen; stream_deck framed in the world, as f does; Drive a machine entered, its windows laid out
+    Drive a machine › 1 Deck (⊞ Windows › Drive a machine): the Stream Deck + as the server draws it: its keys, its strip, and what it heard
 2 Knobs: printer_1's Machine opened
-    Hands on the machines › 2 Knobs (the tour): its knobs jog the machine chosen on it, once armed: the printer's Machine beside it
+    Drive a machine › 2 Knobs (the tour): its knobs jog the machine chosen on it, once armed: the printer's Machine beside it
 ```
 
-## 6. Bring the site up: the procedure, the family's members, the hub's audit
+## 6. Start a site: the procedure, the family's members, the hub's audit
 
 The machines one at a time become a site brought up in order. No machine is in this journey, so the one open is closed. Steps is the Procedure, each step a member's of the family and fired through the hub on GO; Members is each member and its door; Audit is the hub's deliveries. The picture is Steps: GO is a person's.
 
-![Bring the site up: the procedure, the family's members, the hub's audit](screenshots/39-06-bring-the-site-up-the-procedure-the-family-s-membe.png)
+![Start a site: the procedure, the family's members, the hub's audit](screenshots/39-06-start-a-site-the-procedure-the-family-s-members-th.png)
 
 ```
-1 Steps: printer_1's Machine closed: Bring the site up has no machine in it; Bring the site up entered, its windows laid out
-    Bring the site up › 1 Steps (⊞ Windows › Bring the site up): the site's procedure: each step a member's, fired through the family's hub on GO
+1 Steps: printer_1's Machine closed: Start a site has no machine in it; Start a site entered, its windows laid out
+    Start a site › 1 Steps (⊞ Windows › Start a site): the site's procedure: each step a member's, fired through the family's hub on GO
 2 Members: nothing more to do
-    Bring the site up › 2 Members (the tour): each member of the family: how it is reached, and its door to where its step works
+    Start a site › 2 Members (the tour): each member of the family: how it is reached, and its door to where its step works
 3 Audit: nothing more to do
-    Bring the site up › 3 Audit (the tour): the hub's deliveries, newest first: each step, its member, and how it answered
+    Start a site › 3 Audit (the tour): the hub's deliveries, newest first: each step, its member, and how it answered
 ```
 
-## 7. Watch the site: the Working space, then one machine's hour
+## 7. Watch a site: the Working space, then one machine's hour
 
 A site that is up is watched. Space is the Working space on the garage; Hour chooses printer_1 and opens its hour there: its state poll by poll, and where a camera over it would keep its frames. The picture is Space.
 
-![Watch the site: the Working space, then one machine's hour](screenshots/39-07-watch-the-site-the-working-space-then-one-machine-.png)
+![Watch a site: the Working space, then one machine's hour](screenshots/39-07-watch-a-site-the-working-space-then-one-machine-s-.png)
 
 ```
-1 Space: the Working space opened: the Working space of garage: Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on.; Watch the site entered, its windows laid out
-    Watch the site › 1 Space (⊞ Windows › Watch the site): the site as its evidence has it: each machine's state, heard or quiet, and its pins
+1 Space: the Working space opened: the Working space of garage: Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on.; Watch a site entered, its windows laid out
+    Watch a site › 1 Space (⊞ Windows › Watch a site): the site as its evidence has it: each machine's state, heard or quiet, and its pins
 2 Hour: printer_1 framed in the world, as f does; the Working space opened: printer_1's hour in the Working space: No camera looks at printer_1 yet: add one above it, and choose which of this browser's cameras it is.
-    Watch the site › 2 Hour (the tour): one machine's hour: its state and heaters poll by poll, and the cameras over it
+    Watch a site › 2 Hour (the tour): one machine's hour: its state and heaters poll by poll, and the cameras over it
 ```
 
-## 8. A drawing to pieces: the whiteboard photographed, squared, read
+## 8. Read a drawing: the whiteboard photographed, squared, read
 
 Last, what is seen becomes parts, and the chain closes. The whiteboard is chosen on the garage's wall; Picture pins the demo's photograph of it there, as its ring's Picture › Folder does, squared and laid in front; Shapes finds its closed strokes; Marks sorts each mark; Models is where an image model is asked and never trusted; Pieces is where Picture › Make stands each shape up, which is left to the person: a piece made is a part, to design. The picture is Marks.
 
-![A drawing to pieces: the whiteboard photographed, squared, read](screenshots/39-08-a-drawing-to-pieces-the-whiteboard-photographed-sq.png)
+![Read a drawing: the whiteboard photographed, squared, read](screenshots/39-08-read-a-drawing-the-whiteboard-photographed-squared.png)
 
 ```
-1 Board: whiteboard chosen; whiteboard framed in the world, as f does; A drawing to pieces entered, its windows laid out
-    A drawing to pieces › 1 Board (⊞ Windows › A drawing to pieces): the whiteboard on the garage's wall: a place a picture can lie
+1 Board: whiteboard chosen; whiteboard framed in the world, as f does; Read a drawing entered, its windows laid out
+    Read a drawing › 1 Board (⊞ Windows › Read a drawing): the whiteboard on the garage's wall: a place a picture can lie
 2 Picture: whiteboard.png pinned at whiteboard, as its Picture › Folder does
-    A drawing to pieces › 2 Picture (the tour): a photograph of it pinned there: squared to it, sized by it, laid in front
+    Read a drawing › 2 Picture (the tour): a photograph of it pinned there: squared to it, sized by it, laid in front
 3 Shapes: 3 shapes found at whiteboard, as its Picture › Find shapes › outline does
-    A drawing to pieces › 3 Shapes (the tour): each closed stroke outlined as a shape, with a word for it and how sure it is
+    Read a drawing › 3 Shapes (the tour): each closed stroke outlined as a shape, with a word for it and how sure it is
 4 Marks: nothing more to do
-    A drawing to pieces › 4 Marks (the tour): each mark sorted, a diagram's or writing; the corners it was squared from
+    Read a drawing › 4 Marks (the tour): each mark sorted, a diagram's or writing; the corners it was squared from
 5 Models: nothing more to do
-    A drawing to pieces › 5 Models (the tour): an image model asked about a shape chosen on the picture, and never trusted
+    Read a drawing › 5 Models (the tour): an image model asked about a shape chosen on the picture, and never trusted
 6 Pieces: nothing more to do
-    A drawing to pieces › 6 Pieces (the tour): Picture › Make stands each shape up as a piece: a part, to design and to make
+    Read a drawing › 6 Pieces (the tour): Picture › Make stands each shape up as a piece: a part, to design and to make
 ```
 
 ## What this page does not show

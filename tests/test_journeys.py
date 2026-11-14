@@ -48,6 +48,9 @@ def test_each_journey_is_named_once_and_apart_from_the_systems():
         assert len(journey.cell) <= 12, journey.cell  # a ring label, where it has one
         assert journey.group in groups, journey.group  # a colour the palette has
         assert journey.name and journey.title, journey.id
+        # One scheme: what a person does, and to one thing. The title is the verb.
+        verb, article, thing = journey.name.partition(" a ")
+        assert verb == journey.title and article and " " not in thing, journey.name
 
 
 def test_a_stage_is_put_on_by_verbs_the_page_has_on_pieces_the_demo_s_site_has():
