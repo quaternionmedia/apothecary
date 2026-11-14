@@ -32,7 +32,8 @@
  * Every port armed, however it was armed -- its Machine, the deck's long presses,
  * another browser -- is asked for every few seconds while the page is in front
  * (GET /firmware/printers/armed): a board's `armedUntil` is when its arm lapses, 0
- * when it is not armed, and the model says `control` for a board armed or let go,
+ * when it is not armed, and the model says `control` for a board armed or let go
+ * (with `asked`, the answer's number: its Machine's own latch follows these),
  * and each second while it is armed, so what shows the time left counts down.
  */
 
@@ -392,14 +393,18 @@ export function mountBoards({ base = "", site = () => null } = {}) {
         clearTimeout(armedTimer); armedTimer = null;
         if (!following || document.hidden) return;
         let armed = null;
+        const asked = ++seq;
         try { armed = (await api("/firmware/printers/armed")).armed; } catch (e) { armed = null; }
         if (!following) return;
         if (armed) {
+            // Said for a board armed or let go, and each time for one still armed, its
+            // time left as the server has it now; `asked` is the answer's number, so a
+            // board's Machine knows one asked before its own arm or disarm.
             const now = Date.now();
             for (const b of all.values()) {
                 const was = !!b.armedUntil;
                 b.armedUntil = armed[b.port] ? now + armed[b.port] * 1000 : 0;
-                if (was !== !!b.armedUntil) emit(b.port, "control");
+                if (was || b.armedUntil) emit(b.port, "control", { asked });
             }
         }
         if (!armedSecond && [...all.values()].some((b) => b.armedUntil)) armedSecond = setInterval(countSecond, 1000);

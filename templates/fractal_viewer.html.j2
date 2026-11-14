@@ -7591,6 +7591,15 @@
                 for (const key of this.anchors.keys()) if (!wanted.has(key) && !others.some((p) => key.startsWith(p))) this.anchors.remove(key);
                 const planned = this.machine && this.machine.plan ? this.machine.path : null;
                 for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key) && !(m.plan && key === planned)) { m.marks?.destroy(); delete this.marks[key]; }
+                // A Machine is its board's, not its port name's: its pinned board found on
+                // another port -- two boards replugged trade names -- it is opened again
+                // there, and never left polling, arming or stopping the name its board
+                // had, which may be another machine's now.
+                if (this.machine && !this.machine.plan && this.machine.pin) {
+                    const row = this.bindings[this.machine.pin.path];
+                    const port = row && row.device && row.device.port;
+                    if (port && port !== this.machine.port) { this.openMachine(row.path); return; }
+                }
                 // The Machine follows its board -- to the printer a board inside drives,
                 // once it is known to be one -- and goes with it: nothing is left
                 // polling a board unseen.

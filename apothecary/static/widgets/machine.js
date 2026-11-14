@@ -28,7 +28,8 @@
  * while its latch is armed. It pops out whenever the latch is armed, from here,
  * the ring or another browser: into the host's loud window (padWindow), a window
  * of its own beside the world, wherever the person is looking and whatever tab
- * is in front, since a real machine armed can heat and move. Its ⇥ Put back, or
+ * is in front, since a real machine armed can heat and move. There it has an
+ * E-STOP of its own, the Machine's head being in another window. Its ⇥ Put back, or
  * its window's ✕, puts it back as the last thing in the Machine's column; its
  * ⧉ Pop out pops it out again.
  *
@@ -127,7 +128,7 @@ const HEAD = `
 
 const CARDS = `
 <div class="cards" id="cards">
-    <div class="card printer-only gcode"><div class="k">State</div><div class="v" id="c-state">—</div><div class="s" id="c-state-s"></div></div>
+    <div class="card printer-only gcode"><div class="k">State</div><div class="v" id="c-state">—</div><div class="s" id="c-state-s"></div><div class="s old" id="c-age" hidden></div></div>
     <div class="card wide needs" id="c-needs-card" hidden><div class="k">Needs you</div><div class="needs-list" id="c-needs"></div></div>
     <div class="card wide"><div class="k">Board · link</div><div class="kv" id="c-board">—</div></div>
 </div>
@@ -244,6 +245,8 @@ const CONTROL = `
 <div id="control" class="machine-pad" hidden>
     <div class="head">🔓 <span id="ctl-who">Control</span> armed: it can <span id="ctl-can">heat and move</span> <span class="ttl" id="ctl-ttl2"></span><span class="grow"></span>
         <span class="sent" id="ctl-sent"></span>
+        <span class="unknown" id="ctl-unknown" hidden>not confirmed: the server did not answer</span>
+        <button type="button" id="pad-estop">⏹ E-STOP</button>
         <button type="button" id="ctl-pop"></button>
         <button type="button" id="ctl-disarm">🔒 Disarm</button>
     </div>
@@ -382,6 +385,13 @@ const BY_CMD = {
     "G10 L20 P1 X0 Y0 Z0": "control:zero-xyz", "G10 L20 P1 Z0": "control:zero-z", "G0 X0 Y0": "control:go-zero", "G53 G0 Z0": "control:top-z",
     "G38.2 Z-{r-probe} F100": "control:probe-z", "PROBE-PLATE Z{r-plate} D{r-probe} F100": "control:probe-plate", "JOG-CANCEL": "control:jog-cancel", "RESUME": "control:job-resume", "HOLD": "control:job-hold", "RESET": "control:job-abort",
 };
+// The lines that interrupt what the board is doing: the server writes each ahead of
+// the exchange in flight, so the page sends each at once, never behind another line,
+// and its button is never greyed.
+const INTERRUPTS = new Set(["M410", "M108", "JOG-CANCEL", "HOLD", "RESUME"]);
+// A status older than this is said to be, with its age; a board polled less often
+// than that is given two of its intervals.
+const OLD_MS = 5000;
 // The words of each kind are machine_words.js's (KINDS): applyKind writes them into
 // the markup, which carries none of its own.
 
@@ -477,7 +487,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("reconnect").title = isGcode() ? "Release and reopen the serial link (no reset); the remedy for a wedged port" : "Close the serial stream and open it again, while listening";
         $("release").title = isGcode() ? "Drop the held link so another program can open the port" : "Stop listening, so another program (an upload) can open the port";
         if (isGcode()) {
-            $("poll").title = w.poll; $("q").placeholder = w.queries; $("estop").title = w.estop; $("ctl-label").title = w.arm;
+            $("poll").title = w.poll; $("q").placeholder = w.queries; $("estop").title = w.estop; $("pad-estop").title = w.estop; $("ctl-label").title = w.arm;
             $("ctl-can").textContent = w.can;
             $("print-title").textContent = w.title;
             $("print-start").textContent = w.start; $("print-start").title = w.startTitle;
@@ -536,7 +546,20 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
 
     // --- status ------------------------------------------------------------------------
     const pinRow = () => `${pin.how === "sketch" ? "bound by its sketch to" : "pinned at"} <b>${esc(pin.site)} › ${esc(pin.path)}</b>`;
+    // How old the status the cards are drawn from is, said once it is old: a poll
+    // that failed leaves the last one drawn, and so does auto-poll switched off.
+    // Counted each second while a G-code board's Machine is open.
+    function renderAge() {
+        const st = isGcode() ? state.status : null;
+        const age = st && st.polled_at ? Date.now() - new Date(st.polled_at).getTime() : 0;
+        const old = age > Math.max(OLD_MS, isLive() ? 2 * interval() : 0);
+        $("c-age").hidden = !old;
+        $("c-age").textContent = old ? `status ${age < 60000 ? `${Math.round(age / 1000)} s` : fmtDur(age / 1000)} old` : "";
+        for (const el of [root, ...windows]) el.classList.toggle("status-old", old);
+    }
+    const ageTimer = setInterval(renderAge, 1000);
     function renderStatus() {
+        renderAge();
         if (state.kind === "devkit") { renderDevkit(); return; }
         if (state.kind === "router") { renderRouter(); return; }
         const bd = state.port ? b() : null;
@@ -840,6 +863,15 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             case "device":
                 applyKind(); renderStatus();
                 break;
+            case "control":
+                // The latch as the model follows it (GET /firmware/printers/armed), whoever
+                // armed it or let it go: the deck, another browser. The model's own
+                // count of a second carries no `asked` and changes nothing here.
+                if (d.asked && latchFresh(d.asked)) {
+                    const until = d.board ? d.board.armedUntil : 0;
+                    applyControlState({ armed: !!until, seconds_left: until ? Math.max(0, (until - Date.now()) / 1000) : 0 });
+                }
+                break;
             case "observed": case "live":
                 renderDevkit();
                 break;
@@ -963,8 +995,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // model's number for the latest arm or disarm, `pending` the ones in flight: an
     // answer asked before the latest, or while one is in flight, is stale.
     // `out` is whether the pad stands popped out, in the host's window: it is, each
-    // time the latch is armed.
-    const ctl = { armed: false, until: 0, step: 10, timer: null, askedAt: 0, pending: 0, out: true };
+    // time the latch is armed. `unknown` is an arm or disarm that failed with the
+    // server then silent on the latch: what is drawn is the last it said, marked so.
+    const ctl = { armed: false, until: 0, step: 10, timer: null, askedAt: 0, pending: 0, out: true, unknown: false };
     // The deck's knobs, the server's layout (deck_knobs.js), followed while the pad is shown:
     // the machine they move and their step; Knobs here points them at this machine.
     const knob = { now: null, timer: null };
@@ -994,9 +1027,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (ctl.armed && left <= 0) { ctl.armed = false; }
         $("ctl").checked = ctl.armed;
         $("ctl-label").classList.toggle("armed", ctl.armed);
+        $("ctl-label").classList.toggle("unknown", ctl.unknown);
+        $("ctl-unknown").hidden = !ctl.unknown;
         $("control").hidden = !ctl.armed;
         const ttl = ctl.armed ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : "";
-        $("ctl-ttl").textContent = ttl; $("ctl-ttl2").textContent = ttl;
+        $("ctl-ttl").textContent = ttl + (ctl.unknown ? " ?" : ""); $("ctl-ttl2").textContent = ttl;
         placePad();
         renderLevelVerbs();
         clearInterval(ctl.timer); ctl.timer = null;
@@ -1008,6 +1043,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const was = ctl.armed;
         ctl.armed = !!(c && c.armed);
         ctl.until = Date.now() + (c ? c.seconds_left * 1000 : 0);
+        ctl.unknown = false;
         if (ctl.armed && !was) ctl.out = true;
         renderControl();
     }
@@ -1032,49 +1068,76 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     async function arm(on) {
         if (!state.port) { $("ctl").checked = false; return; }
         ctl.askedAt = model.tick(); ctl.pending++;
-        try { applyControlState(await post("/firmware/printers/control", { port: state.port, armed: on })); }
-        catch (e) { refuse("control: " + e.message); applyControlState(null); }
+        const port = state.port;
+        try { applyControlState(await post("/firmware/printers/control", { port, armed: on })); }
+        catch (e) {
+            // Refused or unanswered, the latch is what the server says it is, never
+            // what was asked for: a Disarm that failed leaves the machine armed. Asked
+            // again; with no answer, it stays as last drawn and says it is not confirmed.
+            refuse("control: " + e.message);
+            let c = null;
+            try { c = await api(`/firmware/printers/control?port=${encodeURIComponent(port)}`); } catch (e2) { c = null; }
+            if (state.port === port) {
+                if (c) applyControlState(c);
+                else { ctl.unknown = true; renderControl(); }
+            }
+        }
         finally { ctl.pending--; }
-        await model.pullLog(state.port);
+        await model.pullLog(port);
     }
     function fillTemplate(cmd) {
         return cmd.replace(/\{([a-z-]+)\}/g, (_, id) => $(id).value);
     }
-    // Every control send goes through one chain, and the pad is disabled
-    // while it runs: two jogs can never interleave their G91/G1/G90 lines,
-    // which would turn the second into an absolute move.
+    // Every control send that moves, heats or sets goes through one chain, one line
+    // answered before the next is sent, and the pad is disabled while it runs. What
+    // stops or interrupts -- the stop, and INTERRUPTS -- is sent at once, outside the
+    // chain, and its button is never disabled: a home in flight takes a minute.
     let ctlChain = Promise.resolve();
+    const neverBusy = (btn) => btn.id === "pad-estop" || INTERRUPTS.has(btn.dataset.cmd);
     function setBusy(on) {
-        for (const btn of $("control").querySelectorAll("button")) btn.disabled = on;
+        for (const btn of $("control").querySelectorAll("button")) btn.disabled = on && !neverBusy(btn);
         $("estop").disabled = false;  // never
     }
-    async function sendLines(lines) {
+    // One control request, said in the pad as `said`: whether it was taken.
+    async function sendOne(path, body, said) {
         const sent = $("ctl-sent");
+        sent.textContent = "> " + said; sent.classList.remove("bad");
+        try {
+            const asked = model.tick();
+            const r = await post(path, { port: state.port, ...body });
+            if (latchFresh(asked)) applyControlState(r.control);
+        } catch (e) {
+            sent.textContent = `${said}: ${e.message}`; sent.classList.add("bad");
+            refuse(`${said}: ${e.message}`);
+            if (/not armed/.test(e.message)) applyControlState(null);
+            return false;
+        }
+        return true;
+    }
+    async function sendLines(lines) {
         for (const command of lines) {
-            sent.textContent = "> " + command; sent.classList.remove("bad");
-            try {
-                const asked = model.tick();
-                const r = await post("/firmware/printers/command", { port: state.port, command });
-                if (latchFresh(asked)) applyControlState(r.control);
-            } catch (e) {
-                sent.textContent = `${command}: ${e.message}`; sent.classList.add("bad");
-                refuse(`${command}: ${e.message}`);
-                if (/not armed/.test(e.message)) applyControlState(null);
-                return false;
-            }
+            if (!(await sendOne("/firmware/printers/command", { command }, command))) return false;
         }
         return true;
     }
     const pollNow = () => (state.port ? model.poll(state.port).catch(() => null) : Promise.resolve(null));
+    // Straight through, never queued behind another line.
+    async function sendNow(command) {
+        if (!state.port) return;
+        await sendLines([command]);
+        await pollNow(); await model.pullLog(state.port);
+    }
     function sendControl(command, confirmText) {
         if (!state.port) return Promise.resolve();
         if (confirmText && !confirm(confirmText)) return Promise.resolve();
+        if (INTERRUPTS.has(command)) return sendNow(command);
         return enqueue([command]);
     }
-    function enqueue(lines) {
+    // `send` is what the turn sends: the lines, or a jog's one request.
+    function enqueue(lines, send = () => sendLines(lines)) {
         ctlChain = ctlChain.then(async () => {
             setBusy(true);
-            try { await sendLines(lines); await pollNow(); }  // the effect shows in the cards right away
+            try { await send(); await pollNow(); }  // the effect shows in the cards right away
             finally { setBusy(false); }
             await model.pullLog(state.port);
         }).catch(() => setBusy(false));
@@ -1090,13 +1153,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const ahead = st && st.tool_position ? { ...st.tool_position, [k]: (st.tool_position[k] || 0) + Number(d) } : null;
         emit("apothecary:position", { position: toolPosition({ ...(st || {}), position: p, tool_position: ahead }), source: "jog", port: state.port });
         const f = Number($("h-feed").value) || words().feedDefault;
-        if (state.kind === "router") {
-            // GRBL's jog: one line, relative, in mm, with its own feed; it never changes the
-            // modal state, and a jog cancel stops it.
-            return enqueue([`$J=G91 G21 ${axis}${d} F${f}`]);
-        }
-        // Relative move as three lines, sent back to back, restoring absolute mode afterwards.
-        return enqueue(["G91", `G1 ${axis}${d} F${f}`, "G90"]);
+        // One request for either kind (POST /firmware/printers/jog): the server sends a
+        // router GRBL's one jog line, and a printer its relative move with absolute
+        // positioning put back whatever became of it, so no line of a jog is the page's
+        // to lose. In the chain, as every move is: one jog answered before the next.
+        return enqueue([], () => sendOne("/firmware/printers/jog", { axis, mm: Number(d), feed: f }, `jog ${axis}${d} F${f}`));
     }
     $("ctl").addEventListener("change", () => arm($("ctl").checked));
     $("ctl-disarm").onclick = () => arm(false);
@@ -1122,12 +1183,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     }
     $("ctl-pop").onclick = () => togglePad();
     // The emergency stop never asks: a printer's heaters and motors off, a router reset, at once.
-    async function estop() {
-        if (!state.port) return;
-        await sendLines([words().stop]);  // straight through, never queued behind a jog
-        await pollNow(); await model.pullLog(state.port);
-    }
+    // The Machine's button and the pad's own, which shows while the pad stands popped
+    // out, in a window the Machine's head may not be beside.
+    const estop = () => sendNow(words().stop);
     $("estop").onclick = estop;
+    $("pad-estop").onclick = estop;
     $("h-fan").addEventListener("input", () => { $("h-fan-v").textContent = $("h-fan").value; });
     $("control").addEventListener("click", (ev) => {
         const btn = ev.target.closest("button"); if (!btn) return;
@@ -1890,6 +1950,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         out.push([$("ctl-label"), ctl.armed ? "control:disarm" : "control:arm"]);
         out.push([$("ctl-disarm"), "control:disarm"]);
         out.push([$("estop"), "control:estop"]);
+        out.push([$("pad-estop"), "control:estop"]);
         out.push([$("poll"), "device:poll"]);
         out.push([$("identify"), "device:query"]);
         out.push([$("reconnect"), "device:reconnect"]);
@@ -1930,7 +1991,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         destroy() {
             if (state.port || machineAt) emit("apothecary:toolpath", { port: state.port, path: machineAt ? machineAt.path : null, preview: null, upto: 0, origin: null });
             if (state.port) model.unwatch(state.port, who);
-            clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer); clearInterval(knob.timer);
+            clearTimeout(level.timer); clearTimeout(prt.timer); clearInterval(ctl.timer); clearInterval(knob.timer); clearInterval(ageTimer);
             if (flash) { flash.build.destroy(); flash.tasks.destroy(); flash = null; }
             if (slc.tasks) { slc.tasks.destroy(); slc.tasks = null; }
             for (const [event, fn] of onWindow) window.removeEventListener(event, fn);
@@ -1939,7 +2000,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             pad.remove();
             for (const el of [root, ...windows]) {
                 el.replaceChildren();
-                el.classList.remove("machine", `host-${host}`, "machine-section", "kind-printer", "kind-router", "kind-devkit", "in-printer", "planning");
+                el.classList.remove("machine", `host-${host}`, "machine-section", "kind-printer", "kind-router", "kind-devkit", "in-printer", "planning", "status-old");
             }
         },
     };

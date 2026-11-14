@@ -287,6 +287,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "ctl": (WIDGET, WHAT_YOU_SEE, "a tick-box that arms the control latch"),
     "estop": (WIDGET, WHAT_IS_THERE, "the emergency stop"),
+    "pad-estop": (WIDGET, WHAT_IS_THERE, "the emergency stop on the popped-out control pad"),
     # The board's one log, in its Machine: a report to ask a printer for, and
     # what to show of the traffic.
     "qform": (WIDGET, WHAT_YOU_SEE, "a form for asking the printer for a report"),
@@ -807,6 +808,7 @@ RING_BACKED: Dict[str, str] = {
     "ctl-disarm": "control:disarm",
     "ctl-pop": "panel:pad",
     "estop": "control:estop",
+    "pad-estop": "control:estop",
     "cmd:M104 S{h-hot}": "control:hotend-on",
     "cmd:M104 S0": "control:hotend-off",
     "cmd:M140 S{h-bed}": "control:bed-on",

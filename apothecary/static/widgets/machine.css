@@ -27,6 +27,9 @@
 .card .s { font-size: 0.75rem; color: var(--ink-2); margin-top: 0.15rem; }
 .card .ok { color: var(--ok); } .card .warn { color: var(--warn); } .card .bad { color: var(--bad); }
 .card.wide { grid-column: 1 / -1; }
+/* A status gone old: its age said on the State card, and what is drawn from it dimmed. */
+.card .s.old { color: var(--warn); }
+.machine.status-old .card:not(.wide) .v { color: var(--ink-3); }
 .bar { height: 6px; background: var(--line); border-radius: 3px; margin-top: 0.4rem; overflow: hidden; }
 .bar > i { display: block; height: 100%; border-radius: 3px; background: var(--ink-2); }
 .bar.hotend > i { background: var(--hotend); } .bar.bed > i { background: var(--bed); } .bar.sd > i { background: var(--ok); }
@@ -110,8 +113,14 @@
 .machine-head label.ctl { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--ink-2); padding: 0.15rem 0.5rem; border: 1px solid #3a443a; border-radius: 4px; }
 .machine-head label.ctl.armed { border-color: #7a5a1a; color: var(--warn); background: #2a2410; }
 .machine-head label.ctl .ttl { font-variant-numeric: tabular-nums; color: var(--ink-3); }
-#estop { border-color: #8a2a2a; color: #ffb0b0; background: #3a1a1a; font-weight: 600; }
-#estop:hover { background: #5a2020; }
+/* The latch as last known, the server silent on it since an arm or disarm failed. */
+.machine-head label.ctl.unknown { border-style: dashed; }
+#control .head .unknown { color: #ffe1e1; font-weight: 600; }
+#control .head .unknown[hidden] { display: none; }
+/* The stop: the Machine's, and the pad's own while it stands popped out. */
+#estop, #control #pad-estop { border-color: #8a2a2a; color: #ffb0b0; background: #3a1a1a; font-weight: 600; }
+#estop:hover, #control #pad-estop:hover { background: #5a2020; }
+#control:not(.out) #pad-estop { display: none; }
 /* The control pad. Put back, it is the Machine's last child, bordered in amber.
  * Popped out (.out) it fills a loud window of its own -- the window's red frame
  * and tab say a real machine armed can heat and move -- and its head is loud too. */
