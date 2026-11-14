@@ -29,15 +29,15 @@ Shown only: a page is read, not put on. Its examples run with the tests.
 
 ## 2. A journey's line chosen puts the page on its first stage
 
-The box's drop-down holds the roadmap's lines under its headings, in its order; the line of Making a thing that names the journey Make a thing, chosen. Its stages are the stops, and the page is put on the first: printer_1's Machine opened and the footpedal chosen, as a person would do each, and the journey entered at Choose, its windows laid out and its rail in the header. The box says what it did, then what the page said. The stage is there to explore.
+The box's drop-down holds the roadmap's lines under its headings, in its order; the line of Making a thing that names the journey Print a part, chosen. Its stages are the stops, and the page is put on the first: printer_1's Machine opened and the footpedal chosen, as a person would do each, and the journey entered at Choose, its windows laid out and its rail in the header. The box says what it did, then what the page said. The stage is there to explore.
 
 ![A journey's line chosen puts the page on its first stage](screenshots/34-02-a-journey-s-line-chosen-puts-the-page-on-its-first.png)
 
 ```
 printer_1's Machine opened
 footpedal chosen
-Make a thing entered, its windows laid out
-Make a thing › 1 Choose (⊞ Windows › Make a thing): the part, among the site's pieces
+Print a part entered, its windows laid out
+Print a part › 1 Choose (⊞ Windows › Print a part): the part, among the site's pieces
 ```
 
 ## 3. ✓ As shown keeps the word and puts the next stage on, with what to try there
@@ -59,15 +59,15 @@ See, chosen among the line's stops: the stage draws the chosen file's path, and 
 
 ```
 footpedal sliced for printer_1, as Slice does: footpedal.gcode
-Make a thing › 4 See (the tour): footpedal.gcode's path is drawn on printer_1 and framed, all of it: the preview slider in its Print goes through each layer
+Print a part › 4 See (the tour): footpedal.gcode's path is drawn on printer_1 and framed, all of it: the preview slider in its Print goes through each layer
 ```
 
 ## 5. ✗ Off keeps what is off, and only with it
 
-✗ Off with the field empty is refused, the box saying what it needs and staying on the stop; with what is off typed, it is kept, and the box goes to Print and puts the page there, the Machine and Jobs in front. Nothing is armed.
+✗ Off with the field empty is refused, the box saying what it needs and staying on the stop; with what is off typed, it is kept, and the box goes to Start and puts the page there, the Machine and Jobs in front. Nothing is armed.
 
 ```
-Make a thing › 5 Print (the tour): control armed in the Machine, ▶ Print, the job in Jobs
+Print a part › 5 Start (the tour): control armed in the Machine, ▶ Print, the job in Jobs
 ```
 
 ## 6. A view laid out moves the windows, and not the box
@@ -85,7 +85,7 @@ Tour · 2 of … said, 1 off
 The canvas ring's Panels › Windows › Tour: Back goes to See, put on again, where the box shows what was said of it; As shown says otherwise now, and the latest word is the stop's. Off, Next, Put here and Its page are cells there too, and Tour opens and closes the box.
 
 ```
-Make a thing · 5. Print
+Print a part · 5. Start
 ```
 
 ## 8. Reloaded, it is open where it was
@@ -93,7 +93,7 @@ Make a thing · 5. Print
 The page reloaded: the box is open again on the stop it showed, where it was left; this browser keeps where it was, the server what was said.
 
 ```
-Make a thing · 5. Print
+Print a part · 5. Start
 ```
 
 ## 9. `apothecary tour` reads back what was said
@@ -110,7 +110,7 @@ Making a thing
 ## What this page does not show
 
 - **A server that is not the demo**, where the box shows a stage and puts nothing on.
-- **A stage armed or started.** Print's stage brings the Machine and Jobs forward; arming control and starting a print are a person's.
+- **A stage armed or started.** Start's stage brings the Machine and Jobs forward; arming control and starting a print are a person's.
 - **What changes on every run.** Moments and the commit the server runs are blanked in the pictures and left out of the words, and so is how many stops the tour holds, which any line added to the roadmap changes.
 
 Run it yourself:

@@ -272,7 +272,7 @@ expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
   Control pad (an armed printer's pad in a loud window of its own or back in its
   Machine, as the pad's ⧉ Pop out and ⇥ Put back) and Knobs (the Stream Deck +'s:
   On / off, Machine, Step, Here and the Deck window, [stream-deck.md](stream-deck.md)); Windows › World alone (as
-  `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Make view; Bench › Bench (show it), Install (a cell per toolchain
+  `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Print view; Bench › Bench (show it), Install (a cell per toolchain
   module, then the slicer), Compile, Upload, Raw flash, Cancel, Cores,
   Libraries; Docs (the documentation in a new tab, as the header's Docs); and
   Airgap › Airgap (show it), Play, Sweep, To editor, From editor, Copy SCAD,
@@ -390,12 +390,12 @@ which the page, the ring and the tests all read.
 | Machine | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
 | Airgap | The Airgap and each of its sections in a window, the world among them |
 | Family | The world; the Procedure tall beside it; Members and Deliveries under it, with Jobs and Working space, and Selected, in the column |
-| Make | The windows a part is made through on a machine (`apothecary/journeys.py`): the world; beside it Site with Problems, Pinned, Jobs and SCAD, then Selected, Parameters, and the board's Machine sharing a stack with its Print window, Print in front, with Pictures, the Bench and Settings behind them |
+| Print | The windows a part is made through on a machine (`apothecary/journeys.py`): the world; beside it Site with Problems, Pinned, Jobs and SCAD, then Selected, Parameters, and the board's Machine sharing a stack with its Print window, Print in front, with Pictures, the Bench and Settings behind them |
 
-A view needs its main window. The Machine view, and the Make view, open the Machine
+A view needs its main window. The Machine view, and the Print view, open the Machine
 of the machine selected, or else stepped into, when none is open; with none to open
 each is offered greyed, and asked for, from ⊞ Windows or the ring, it says why and
-leaves the layout as it was: a part chosen for Make, its Slice on the part's ring opens
+leaves the layout as it was: a part chosen for Print, its Slice on the part's ring opens
 the printer's Machine.
 Laid out, either lands on the file the machine would run: the path of the file its
 Print or Cut has chosen drawn in the world, all of it, and framed, the slider
@@ -419,7 +419,7 @@ what it made:
 | Journey | Its steps | What it hands on |
 |---|---|---|
 | **Design a part** (`design`) | 1 Choose, 2 Numbers, 3 Text, 4 Kept, 5 Ready | a part a machine can make |
-| **Make a thing** (`make`) | 1 Choose, 2 Shape, 3 Slice, 4 See, 5 Print | a job on the printer |
+| **Print a part** (`make`) | 1 Choose, 2 Shape, 3 Slice, 4 See, 5 Start | a job on the printer |
 | **Cut a part** (`cut`) | 1 Choose, 2 Toolpath, 3 See, 4 Needs, 5 Cut | a job on the router |
 | **Flash a board** (`board`) | 1 Pin, 2 Bench, 3 Flash, 4 Hear | a board that says what it runs |
 | **Drive a machine** (`hands`) | 1 Deck, 2 Knobs | a machine moved by hand |
@@ -427,7 +427,7 @@ what it made:
 | **Watch a site** (`watch`) | 1 Space, 2 Hour | what each machine's hour held |
 | **Read a drawing** (`drawing`) | 1 Board, 2 Picture, 3 Shapes, 4 Marks, 5 Models, 6 Pieces | shapes that stand up as pieces: parts, to design |
 
-*Make a thing* in full, as each is written in `apothecary/journeys.py`:
+*Print a part* in full, as each is written in `apothecary/journeys.py`:
 
 | | Step | Brings forward | Owns |
 |---|---|---|---|
@@ -435,9 +435,9 @@ what it made:
 | 2 | **Shape** | Parameters, then Selected | Selected, Parameters |
 | 3 | **Slice** | the Machine's Print window | the Print window |
 | 4 | **See** | the Print window, the chosen file's path drawn in the world and framed | -- |
-| 5 | **Print** | the Machine, then Jobs | the Machine, Jobs |
+| 5 | **Start** | the Machine, then Jobs | the Machine, Jobs |
 
-A journey's view lays its windows out when it is entered. *Make a thing*'s is also
+A journey's view lays its windows out when it is entered. *Print a part*'s is also
 listed in ⊞ Windows › Views and has a cell on the ring's Panels › Windows, which is
 full; the others are entered from ⊞ Windows › Journeys and from the
 [tour](tour.md), which puts the page on each stage on the demo.

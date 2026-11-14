@@ -97,7 +97,7 @@ order, and the family's part is which member works it.
 | Journey | Begins at | Passes through | The family's part |
 |---|---|---|---|
 | **Start a site** | the Procedure | a step, the window of the member it fires on, GO, the outcome, the next step | the whole of it: the hub, its members, the steps, GO, the audit |
-| **Make a thing on a machine** | a machine's badge, its row, a part's ring | the Machine: makes, Slice or Toolpath, the file, its path previewed, control armed, ▶, the job, Jobs | the `machine` member: a step's `home`, `run`, `pause`, `resume` |
+| **Print a part on a machine** | a machine's badge, its row, a part's ring | the Machine: makes, Slice or Toolpath, the file, its path previewed, control armed, ▶, the job, Jobs | the `machine` member: a step's `home`, `run`, `pause`, `resume` |
 | **Flash a board** | a devkit's row, the Bench | the devkit's Machine: Sketch, Flashing, the Log's hello | the `board` member: a step's `flash`, `expect` |
 | **A picture to a piece** | a piece's ring, Pictures | a camera, Take picture, Pictures, Find shapes, Make, Selected, Parameters, then the machine's journey | the `camera` member, a page's to read |
 | **Design a part** | a part's ring | Selected, Parameters, SCAD, Variants (the Part view) | none; left as it is |

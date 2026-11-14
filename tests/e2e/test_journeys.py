@@ -1,13 +1,13 @@
 """The journeys (apothecary/journeys.py) on the page, as a person goes through them.
 
-The Make view: the windows a part is made through on a machine laid out together from
+The Print view: the windows a part is made through on a machine laid out together from
 ⊞ Windows, with printer_1's Machine open and the footpedal chosen -- Site with its own
 windows, Selected, Parameters, and the Machine sharing a stack with its Print window,
 Print in front, the Machine's sections open before it kept behind them. Greyed while
 no Machine is open and the piece chosen has no board.
 
-Make a thing, its journey: entered from ⊞ Windows › Journeys, its rail in the header
-at Choose, walked Next by Next to Print, each step's windows brought forward and the
+Print a part, its journey: entered from ⊞ Windows › Journeys, its rail in the header
+at Choose, walked Next by Next to Start, each step's windows brought forward and the
 address holding the step; a window's tab chosen moves the rail and nothing else, a
 reload lands on the step the address names, and ✕ leaves it, the windows where they
 are.
@@ -54,7 +54,7 @@ def no_page_errors(page: Page):
 
 @pytest.mark.e2e
 def test_the_make_view_is_greyed_until_a_machine_is_there(page: Page, url: str):
-    """The footpedal chosen and no Machine open: Make says what it needs."""
+    """The footpedal chosen and no Machine open: the Print view says what it needs."""
     open_garage(page, url, settle=False)
     _select(page, "footpedal")
     page.locator("#windows-menu > summary").click()
@@ -63,7 +63,7 @@ def test_the_make_view_is_greyed_until_a_machine_is_there(page: Page, url: str):
     expect(entry).to_have_attribute("title", re.compile(r"^Not now: .*footpedal"))
     entry.click(timeout=5000)
     said = status(page)
-    expect(said).to_contain_text("Make view: ")
+    expect(said).to_contain_text("Print view: ")
     expect(said).to_contain_text("footpedal")
     expect(said).to_have_class(re.compile(r"\berror\b"))
     assert page.evaluate("() => window.fractalViewer.machine") is None
@@ -95,8 +95,8 @@ def _rail(page: Page) -> list:
 def _enter_make_a_thing(page: Page) -> None:
     page.locator("#windows-menu > summary").click()
     entry = page.locator(MAKE_A_THING)
-    expect(entry).to_have_text("Make a thing")
-    expect(entry).to_have_attribute("title", re.compile(r"^Make a thing: 1 Choose, 2 Shape"))
+    expect(entry).to_have_text("Print a part")
+    expect(entry).to_have_attribute("title", re.compile(r"^Print a part: 1 Choose, 2 Shape"))
     entry.click(timeout=5000)
     expect(page.locator(RAIL)).to_be_visible(timeout=10000)
 
@@ -107,10 +107,10 @@ def test_the_make_view_lays_out_the_windows_a_part_is_made_through(page: Page, u
     page.locator("#windows-menu > summary").click()
     entry = page.locator(MAKE)
     expect(entry).not_to_have_class(re.compile(r"\bmissing\b"))
-    expect(entry).to_have_text("Make")
+    expect(entry).to_have_text("Print")
     entry.click(timeout=5000)
     expect(page.locator(".windows-menu-body")).to_be_hidden()
-    expect(status(page)).to_contain_text("The Make view: its windows laid out together")
+    expect(status(page)).to_contain_text("The Print view: its windows laid out together")
 
     # Print comes in front of the Machine's stack once its card has drawn.
     page.wait_for_function(
@@ -127,21 +127,21 @@ def test_the_make_view_lays_out_the_windows_a_part_is_made_through(page: Page, u
 
 @pytest.mark.e2e
 def test_make_a_thing_is_walked_step_by_step_on_its_rail(page: Page, url: str):
-    """Its view laid out and its rail at Choose; Next by Next to Print, each step's
-    window in front and the address holding the step; Print has no Next."""
+    """Its view laid out and its rail at Choose; Next by Next to Start, each step's
+    window in front and the address holding the step; Start has no Next."""
     _machine_open_and_the_part_chosen(page, url)
     expect(page.locator(RAIL)).to_be_hidden()
     _enter_make_a_thing(page)
     _on(page, "choose")
-    expect(page.locator(f"{RAIL} .journey-name")).to_have_text("Make a thing")
+    expect(page.locator(f"{RAIL} .journey-name")).to_have_text("Print a part")
     assert _rail(page) == [
         ["1", "Choose", True],
         ["2", "Shape", False],
         ["3", "Slice", False],
         ["4", "See", False],
-        ["5", "Print", False],
+        ["5", "Start", False],
     ]
-    expect(status(page)).to_contain_text("Make a thing › 1 Choose (⊞ Windows › Make a thing)")
+    expect(status(page)).to_contain_text("Print a part › 1 Choose (⊞ Windows › Print a part)")
     assert windows.state(page, "site")["shown"] is True
     assert windows.state(page, "machine")["stack"][:2] == ["machine", "machine-print"]
     expect(page).to_have_url(re.compile(r"[?&]journey=make\b"))
@@ -151,7 +151,7 @@ def test_make_a_thing_is_walked_step_by_step_on_its_rail(page: Page, url: str):
         ("shape", "part-parameters", 2, "Shape"),
         ("slice", "machine-print", 3, "Slice"),
         ("see", "machine-print", 4, "See"),
-        ("print", "machine", 5, "Print"),
+        ("print", "machine", 5, "Start"),
     ):
         nxt = page.locator(f"{RAIL} .journey-next")
         expect(nxt).to_have_attribute("data-next", step)
@@ -160,7 +160,7 @@ def test_make_a_thing_is_walked_step_by_step_on_its_rail(page: Page, url: str):
         _on(page, step)
         page.wait_for_function("(w) => window.apothecaryPanels.state(w).shown", arg=window)
         expect(page).to_have_url(re.compile(f"[?&]step={step}\\b"))
-        expect(status(page)).to_contain_text(f"Make a thing › {number} {label} (Next)")
+        expect(status(page)).to_contain_text(f"Print a part › {number} {label} (Next)")
     assert windows.state(page, "jobs")["shown"] is True
     expect(page.locator(f"{RAIL} .journey-next")).to_have_count(0)
 
@@ -184,12 +184,12 @@ def test_a_window_chosen_moves_the_rail_and_a_reload_lands_on_its_step(page: Pag
     expect(page.locator(RAIL)).to_be_visible(timeout=20000)
     _on(page, "slice")
     page.wait_for_function("() => window.apothecaryPanels.state('machine-print').shown")
-    expect(status(page)).to_contain_text("Make a thing › 3 Slice (the address)")
+    expect(status(page)).to_contain_text("Print a part › 3 Slice (the address)")
 
     page.locator(f"{RAIL} .journey-leave").click()
     expect(page.locator(RAIL)).to_be_hidden()
     expect(page).not_to_have_url(re.compile(r"[?&](journey|step)="))
-    expect(status(page)).to_contain_text("Left Make a thing")
+    expect(status(page)).to_contain_text("Left Print a part")
     assert windows.state(page, "machine-print")["shown"] is True
 
 

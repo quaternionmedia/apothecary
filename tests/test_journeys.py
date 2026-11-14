@@ -88,9 +88,9 @@ def test_the_make_view_holds_the_window_set_a_part_is_made_through():
 
 
 def test_the_ring_has_a_cell_for_the_first_journey_s_view_after_the_systems():
-    """Panels › Windows is full, so Make a thing's view alone has a cell there; the other
+    """Panels › Windows is full, so Print a part's view alone has a cell there; the other
     journeys are entered from ⊞ Windows › Journeys and the tour."""
-    assert VIEWS[len(SYSTEMS) :] == (("make", "Make view"),)
+    assert VIEWS[len(SYSTEMS) :] == (("make", "Print view"),)
     assert [j.id for j in JOURNEYS if j.cell] == ["make"]
 
 
@@ -126,8 +126,8 @@ def test_each_step_brings_forward_and_owns_windows_its_journeys_view_lays_out():
 
 def test_make_a_thing_goes_from_the_part_to_the_job():
     make = by_id("make")
-    assert make.name == "Make a thing"
-    assert [s.label for s in make.steps] == ["Choose", "Shape", "Slice", "See", "Print"]
+    assert make.name == "Print a part"
+    assert [s.label for s in make.steps] == ["Choose", "Shape", "Slice", "See", "Start"]
     assert make.steps[0].forward[0] == "site"
     assert make.steps[2].forward == ("machine-print",)
     assert [s.id for s in make.steps if s.draws] == ["see"]

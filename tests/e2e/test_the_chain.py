@@ -63,12 +63,12 @@ PICTURED = {
     ),
     "make": (
         "print",
-        "Make a thing: the part sliced for the printer, its path drawn, the job ready",
+        "Print a part: the part sliced for the printer, its path drawn, the job ready",
         "The part goes to a machine. printer_1's Machine is opened and the footpedal "
         "chosen; Slice's stage is the Machine's Print window with the part under makes; "
         "See needs a file, so the page slices the footpedal for printer_1 where none is "
-        "kept, and its path is drawn on the bed; Print's stage is the Machine and Jobs. "
-        "The picture is Print: the tour arms nothing and starts nothing.",
+        "kept, and its path is drawn on the bed; Start's stage is the Machine and Jobs. "
+        "The picture is Start: the tour arms nothing and starts nothing.",
     ),
     "cut": (
         "see",

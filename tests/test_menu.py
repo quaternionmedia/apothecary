@@ -1248,7 +1248,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Machine view", "panel:view:machine", 4),
         ("Airgap view", "panel:view:airgap", 9),
         ("Family view", "panel:view:family", 3),
-        ("Make view", "panel:view:make", 1),
+        ("Print view", "panel:view:make", 1),
         # The Tour, after the views: its box over the page, then its buttons.
         ("Tour", None, 7),
     ]

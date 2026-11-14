@@ -36,23 +36,23 @@ The chain starts at a part. The footpedal is chosen among the garage's pieces; i
     Design a part › 5 Ready (the tour): whether it is ready to make, and what the site says is wrong
 ```
 
-## 2. Make a thing: the part sliced for the printer, its path drawn, the job ready
+## 2. Print a part: the part sliced for the printer, its path drawn, the job ready
 
-The part goes to a machine. printer_1's Machine is opened and the footpedal chosen; Slice's stage is the Machine's Print window with the part under makes; See needs a file, so the page slices the footpedal for printer_1 where none is kept, and its path is drawn on the bed; Print's stage is the Machine and Jobs. The picture is Print: the tour arms nothing and starts nothing.
+The part goes to a machine. printer_1's Machine is opened and the footpedal chosen; Slice's stage is the Machine's Print window with the part under makes; See needs a file, so the page slices the footpedal for printer_1 where none is kept, and its path is drawn on the bed; Start's stage is the Machine and Jobs. The picture is Start: the tour arms nothing and starts nothing.
 
-![Make a thing: the part sliced for the printer, its path drawn, the job ready](screenshots/39-02-make-a-thing-the-part-sliced-for-the-printer-its-p.png)
+![Print a part: the part sliced for the printer, its path drawn, the job ready](screenshots/39-02-print-a-part-the-part-sliced-for-the-printer-its-p.png)
 
 ```
-1 Choose: printer_1's Machine opened; footpedal chosen; Make a thing entered, its windows laid out
-    Make a thing › 1 Choose (⊞ Windows › Make a thing): the part, among the site's pieces
+1 Choose: printer_1's Machine opened; footpedal chosen; Print a part entered, its windows laid out
+    Print a part › 1 Choose (⊞ Windows › Print a part): the part, among the site's pieces
 2 Shape: nothing more to do
-    Make a thing › 2 Shape (the tour): its numbers, in Parameters
+    Print a part › 2 Shape (the tour): its numbers, in Parameters
 3 Slice: nothing more to do
-    Make a thing › 3 Slice (the tour): the machine's Print window: the part under makes, then Slice
+    Print a part › 3 Slice (the tour): the machine's Print window: the part under makes, then Slice
 4 See: footpedal sliced for printer_1, as Slice does: footpedal.gcode
-    Make a thing › 4 See (the tour): footpedal.gcode's path is drawn on printer_1 and framed, all of it: the preview slider in its Print goes through each layer
-5 Print: nothing more to do
-    Make a thing › 5 Print (the tour): control armed in the Machine, ▶ Print, the job in Jobs
+    Print a part › 4 See (the tour): footpedal.gcode's path is drawn on printer_1 and framed, all of it: the preview slider in its Print goes through each layer
+5 Start: nothing more to do
+    Print a part › 5 Start (the tour): control armed in the Machine, ▶ Print, the job in Jobs
 ```
 
 ## 3. Cut a part: its toolpath written for the router, drawn on the table

@@ -140,7 +140,7 @@ def test_the_roadmap_orders_the_tour_and_photographs_are_last():
 
 
 def test_a_line_that_names_a_journey_has_its_stages_as_stops_with_what_to_try():
-    """Make a thing's line: each stage a stop, its words the rail's own, and what to try
+    """Print a part's line: each stage a stop, its words the rail's own, and what to try
     on it the recorded steps the stage names."""
     make = next(line for line in tour.document()["lines"] if "shaped, sliced" in line["text"])
     assert [(s["kind"], s["stage"], s["title"]) for s in make["stops"]] == [

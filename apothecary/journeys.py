@@ -102,7 +102,7 @@ class Journey:
     opened_by: str
     view: Layout
     # What the rail, ⊞ Windows › Journeys and the tour call it: what a person does and
-    # to what, the title's verb and one thing (Design a part, Make a thing).
+    # to what, the title's verb and one thing (Design a part, Print a part).
     name: str = ""
     steps: Tuple[Step, ...] = ()
     # What the tour puts every stage of it on, on the demo, before the stage's own
@@ -217,18 +217,18 @@ DESIGN = Journey(
 )
 
 
-# Make a thing on a machine: a part chosen in Site, its numbers in Parameters, the
+# Print a part on a machine: a part chosen in Site, its numbers in Parameters, the
 # machine's Print window to slice it and draw its path, the job in Jobs. The machine's
 # window and its Print window share a stack at the column's foot, Print in front.
 MAKE = Journey(
     id="make",
-    title="Make",
-    cell="Make view",
+    title="Print",
+    cell="Print view",
     group="Machine",
     requires="machine",
     opened_by="a machine's badge or its row in Site, or Slice on a part's ring",
     view=_machine_view("machine-print", "pictures", "bench", "settings", active="machine-print"),
-    name="Make a thing",
+    name="Print a part",
     staged_on=(("machine", "printer_1"), ("part", "footpedal")),
     steps=(
         Step(
@@ -264,7 +264,7 @@ MAKE = Journey(
         ),
         Step(
             "print",
-            "Print",
+            "Start",
             "control armed in the Machine, ▶ Print, the job in Jobs",
             forward=("machine", "jobs"),
             owns=("machine", "jobs"),
@@ -274,7 +274,7 @@ MAKE = Journey(
 )
 
 
-# Cut a part on the router: the same path as Make through another machine. The part
+# Cut a part on the router: the same path as Print a part's through another machine. The part
 # says how it is cut, the router's Cut window writes its toolpath and draws it on the
 # table, the router says what it needs before it moves, and the cut is a job.
 CUT = Journey(

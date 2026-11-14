@@ -1,6 +1,6 @@
 """The tour, as a person takes it: Tour in the header opens a box over the page, on the
-roadmap's first stop nobody has said anything of, a page shown only; the line of Make a
-thing chosen puts the page on its first stage -- the machine opened, the piece chosen,
+roadmap's first stop nobody has said anything of, a page shown only; the line of Print a
+part chosen puts the page on its first stage -- the machine opened, the piece chosen,
 the stage entered; ✓ As shown keeps a person's word and puts the next stage on, with
 the steps its tests recorded to try there; the See stage slices the piece where no file
 is kept, and its path is drawn; ✗ Off keeps what is off, and only with it; a view laid
@@ -119,7 +119,7 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
         does_not_show=[
             "**A server that is not the demo**, where the box shows a stage and puts "
             "nothing on.",
-            "**A stage armed or started.** Print's stage brings the Machine and Jobs "
+            "**A stage armed or started.** Start's stage brings the Machine and Jobs "
             "forward; arming control and starting a print are a person's.",
             "**What changes on every run.** Moments and the commit the server runs are "
             "blanked in the pictures and left out of the words, and so is how many stops "
@@ -159,15 +159,15 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
         blank=CHANGING,
     )
 
-    # 2. The line of Make a thing chosen: its first stage, put on.
+    # 2. The line of Print a part chosen: its first stage, put on.
     lines = httpx.get(f"{url}/tour", timeout=15.0).json()["lines"]
     at = next(i for i, line in enumerate(lines) if line["text"] == MAKE)
     assert lines[at]["group"] == "Making a thing"
     box.locator(".tour-pop-lines").select_option(value=str(at))
-    expect(title).to_have_text("Make a thing · 1. Choose")
+    expect(title).to_have_text("Print a part · 1. Choose")
     _put_on(page, "choose")
     expect(did).to_contain_text(
-        ["printer_1's Machine opened", "footpedal chosen", "Make a thing entered", "1 Choose"]
+        ["printer_1's Machine opened", "footpedal chosen", "Print a part entered", "1 Choose"]
     )
     assert page.evaluate("() => window.fractalViewer.selectedName") == "footpedal"
     assert windows.state(page, "site")["shown"] is True
@@ -175,7 +175,7 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     story.shows(
         "A journey's line chosen puts the page on its first stage",
         "The box's drop-down holds the roadmap's lines under its headings, in its order; "
-        "the line of Making a thing that names the journey Make a thing, chosen. Its "
+        "the line of Making a thing that names the journey Print a part, chosen. Its "
         "stages are the stops, and the page is put on the first: printer_1's Machine "
         "opened and the footpedal chosen, as a person would do each, and the journey "
         "entered at Choose, its windows laid out and its rail in the header. The box "
@@ -186,7 +186,7 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
 
     # 3. ✓ As shown: kept, and the next stage put on, with what its tests recorded there.
     box.get_by_role("button", name="✓ As shown").click()
-    expect(title).to_have_text("Make a thing · 2. Shape")
+    expect(title).to_have_text("Print a part · 2. Shape")
     _put_on(page, "shape")
     assert _answers(url)["journey:make/choose"]["verdict"] == "as shown"
     page.wait_for_function("() => window.apothecaryPanels.state('part-parameters').shown")
@@ -233,7 +233,7 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     assert _answers(url)["journey:make/see"] is None
     box.locator(".tour-pop-note").fill(NOTE)
     box.get_by_role("button", name="✗ Off").click()
-    expect(title).to_have_text("Make a thing · 5. Print")
+    expect(title).to_have_text("Print a part · 5. Start")
     _put_on(page, "print")
     see = _answers(url)["journey:make/see"]
     assert (see["verdict"], see["note"]) == ("off", NOTE)
@@ -241,7 +241,7 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     story.says(
         "✗ Off keeps what is off, and only with it",
         "✗ Off with the field empty is refused, the box saying what it needs and staying "
-        "on the stop; with what is off typed, it is kept, and the box goes to Print and "
+        "on the stop; with what is off typed, it is kept, and the box goes to Start and "
         "puts the page there, the Machine and Jobs in front. Nothing is armed.",
         shown=_words(did.last.inner_text()),
     )
@@ -269,12 +269,12 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     # (Opened by its key: See framed the machine, so a click on the world lands on a piece.)
     open_from_key(page)
     press(page, "Panels", "Windows", "Tour", "Back")
-    expect(title).to_have_text("Make a thing · 4. See")
+    expect(title).to_have_text("Print a part · 4. See")
     _put_on(page, "see")
     expect(box.locator(".tour-pop-answer")).to_contain_text(f"✗ Off: {NOTE} -- said ")
     open_from_key(page)
     press(page, "Panels", "Windows", "Tour", "As shown")
-    expect(title).to_have_text("Make a thing · 5. Print")
+    expect(title).to_have_text("Print a part · 5. Start")
     assert _answers(url)["journey:make/see"]["verdict"] == "as shown"  # the latest is its answer
     _put_on(page, "print")
     story.says(
@@ -289,7 +289,7 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     # 8. Reloaded: open again, where it was.
     page.reload()
     expect(box).to_be_visible(timeout=30000)
-    expect(title).to_have_text("Make a thing · 5. Print")
+    expect(title).to_have_text("Print a part · 5. Start")
     story.says(
         "Reloaded, it is open where it was",
         "The page reloaded: the box is open again on the stop it showed, where it was "

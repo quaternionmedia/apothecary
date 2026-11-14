@@ -84,7 +84,7 @@ explore.
 where the server says it is `apothecary serve --demo`. Anywhere else the box shows the
 stage and says to do what it says in the page.
 
-**Nothing is armed, started, sent or made.** Print's stage brings the Machine and Jobs
+**Nothing is armed, started, sent or made.** Start's stage brings the Machine and Jobs
 forward, Flash's the board's Flashing window, Steps' the Procedure, Pieces' the shapes
 found: arming control, ▶ Print and ▶ Cut, an upload, GO, a knob turned and Picture ›
 Make are a person's, on the demo too.
