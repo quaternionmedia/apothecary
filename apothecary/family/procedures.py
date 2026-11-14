@@ -11,13 +11,18 @@ A hold of carlos's names the site whose wiring it holds, ``{"carlos": {"hold": {
 "garage"}}}``, and that wiring is read when the step fires.
 
 A step stands by once the step before it has been fired and the evidence it names is
-in, as the log last said it. Nothing fires itself: every step waits for GO. A step
-refused or failed may be fired again, and ``again`` starts the procedure over.
+in, as the log last said it; and, where the step before it put a machine or a board to
+work, once that work has ended: a home still under way, or a cut still running, holds
+the next step, and one that failed holds it until it is fired again. Nothing fires
+itself: every step waits for GO. A step refused or failed may be fired again, and
+``again`` starts the procedure over.
 
 Each delivery's outcome is kept in the evidence log, ``actions/<day>.jsonl``, where a
-restart leaves it. What a member says later is read live, from the audit and from a
-hosted member's own state, and is not kept: a page's read of its action, or how work
-answered 202 ended.
+restart leaves it, and so is how work answered 202 ended, the first time it is read
+after it ends: a job it started is then read from the job's own record. Work whose end
+was never read before a restart is not known to have ended: its step is failed, to be
+looked at and fired again, never left fired for good. A page's read of its action is
+read live, from the audit, and is not kept.
 """
 
 from __future__ import annotations
@@ -30,6 +35,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .. import jobs
 from ..evidence import log
 from ..site_names import former
 from ..state_folder import state_dir, write_whole
@@ -50,6 +56,13 @@ FAILED = "failed"
 # Every value in force is said again within a day (evidence/printers.py's REFRESH_S).
 SAID_WITHIN = timedelta(days=1, hours=1)
 REFUSAL = 422
+
+
+# What work says whose member no longer runs it and never said how it ended.
+LOST = (
+    "how this ended is not known: the server restarted while it ran. Look at the "
+    "machine, then fire the step again"
+)
 
 
 class Unreadable(ValueError):
@@ -134,7 +147,11 @@ def load(site: str, name: str) -> Optional[Procedure]:
 
 
 def _standing(outcome: Dict[str, Any]) -> str:
-    """How one delivery stands, as its answer and, for work answered 202, as its member says."""
+    """How one delivery stands, as its answer and, for work answered 202, as its member
+    and the job it started say. ``outcome`` is marked ``working`` while a hosted
+    member's work, or that job, still runs, and takes ``worked``, how the work ended,
+    the first time it is read."""
+    outcome.pop("working", None)
     if outcome.get("status") == REFUSAL:
         return REFUSED
     if outcome.get("error"):
@@ -142,13 +159,36 @@ def _standing(outcome: Dict[str, Any]) -> str:
     if not outcome.get("done"):
         return FIRED
     if outcome.get("status") == 202:
-        member = members.hosted(outcome["member"])
-        ended = member.ended(outcome["cue"]) if member is not None else None
-        if ended is None:
-            return FIRED
-        if not ended["ok"]:
-            outcome["error"] = ended.get("error")
+        worked = outcome.get("worked")
+        if worked is None:
+            member = members.hosted(outcome["member"])
+            if member is None:
+                return FIRED
+            worked = member.ended(outcome["cue"])
+            if worked is None:
+                if member.working_on(outcome["cue"]):
+                    outcome["working"] = True
+                    return FIRED
+                outcome["error"] = LOST
+                return FAILED
+            outcome["worked"] = {k: v for k, v in worked.items() if k != "cue"}
+            outcome["fresh"] = True  # board() keeps it
+        if not worked["ok"]:
+            outcome["error"] = worked.get("error")
             return FAILED
+        if worked.get("job"):
+            # A run is done when its job is: started is not cut.
+            job = jobs.get(worked["job"])
+            if job is None:
+                outcome["error"] = f"its job {worked['job']} is not kept"
+                return FAILED
+            if job.running:
+                outcome["working"] = True
+                return FIRED
+            if job.outcome != "done":
+                why = f": {job.reason}" if job.reason else ""
+                outcome["error"] = f"its {job.kind} ended {job.outcome}{why}"
+                return FAILED
     return DONE
 
 
@@ -164,6 +204,12 @@ def _fires(site: str, name: str) -> Dict[str, List[Dict[str, Any]]]:
             continue
         if record.get("again"):
             fires.clear()
+            continue
+        if "worked" in record:
+            # How work answered 202 ended, kept once it was read: the outcome's own.
+            for outcome in fires.get(record["step"], []):
+                if outcome["cue"] == record["cue"] and outcome["member"] == record["member"]:
+                    outcome["worked"] = record["worked"]
             continue
         same = fires.get(record["step"], [])
         if same and same[0]["cue"] != record["cue"]:
@@ -212,9 +258,24 @@ def board(site: str, name: str) -> Optional[Dict[str, Any]]:
     for step in procedure.steps:
         outcomes = fires.get(step.number, [])
         why = None
+        working = False
         if outcomes:
             status = _worst([_standing(outcome) for outcome in outcomes])
             why = next((o["error"] for o in outcomes if o.get("error")), None)
+            working = any(outcome.pop("working", False) for outcome in outcomes)
+            for outcome in outcomes:
+                if outcome.pop("fresh", False):
+                    _append(
+                        site,
+                        {
+                            "procedure": name,
+                            "step": step.number,
+                            "cue": outcome["cue"],
+                            "member": outcome["member"],
+                            "worked": outcome["worked"],
+                        },
+                        now,
+                    )
         else:
             why = f"waiting for step {behind}" if behind else _waiting_for(step.waits, said)
             status = WAITING if why else STANDING_BY
@@ -227,7 +288,10 @@ def board(site: str, name: str) -> Optional[Dict[str, Any]]:
                 "outcomes": outcomes,
             }
         )
-        if behind is None and status not in (FIRED, DONE):
+        # A machine or a board still at the work this step gave it holds the next,
+        # as a step refused or failed does; fired at a page, or at a member elsewhere,
+        # is enough.
+        if behind is None and (status not in (FIRED, DONE) or working):
             behind = step.number
     return {"site": site, "name": name, "steps": steps}
 

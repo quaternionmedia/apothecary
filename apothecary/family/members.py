@@ -77,14 +77,48 @@ class Hosted(hearth.Member):
         while True:
             piece, work = self._queue.get()
             ended = dict(piece)
+            dropped: List[Tuple[Dict[str, Any], Work]] = []
             try:
                 ended.update(ok=True, **(work() or {}))
             except Exception as exc:  # the member's to say, in its state
                 ended.update(ok=False, error=str(exc))
+                dropped = self._not_after(piece, str(exc))
             with self._lock:
                 self._working.remove(piece)
                 self._ended.append(ended)
+                for behind, _ in dropped:
+                    self._working.remove(behind)
+                    self._ended.append(
+                        {
+                            **behind,
+                            "ok": False,
+                            "error": f"not run: {piece['verb']} before it failed ({ended['error']})",
+                        }
+                    )
             self.changed()
+
+    def _not_after(self, failed: Dict[str, Any], why: str) -> List[Tuple[Dict[str, Any], Work]]:
+        """The work already queued for the thing ``failed`` was for -- its node, or its
+        port -- taken out of the queue: what was asked of a machine on the strength of
+        the step before it is not done once that step has failed. Work for anything
+        else keeps its place."""
+        about = failed.get("node") or failed.get("port")
+        kept, dropped = [], []
+        while True:
+            try:
+                item = self._queue.get_nowait()
+            except queue.Empty:
+                break
+            same = about is not None and (item[0].get("node") or item[0].get("port")) == about
+            (dropped if same else kept).append(item)
+        for item in kept:
+            self._queue.put(item)
+        return dropped
+
+    def working_on(self, cue: Dict[str, Any]) -> bool:
+        """Whether work of ``cue`` is queued or running here now."""
+        with self._lock:
+            return any(piece["cue"] == cue for piece in self._working)
 
     def state(self) -> Dict[str, Any]:
         return {

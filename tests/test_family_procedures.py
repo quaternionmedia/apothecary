@@ -96,7 +96,10 @@ def test_a_refused_step_says_why_holds_the_next_and_may_be_fired_again(client, f
     assert first["status"] == "done" and first["outcomes"][0]["status"] == 202
     assert _stands(client.get(ROUTE).json(), "2")["status"] == "standing by"
     # Both fires are in the log: only the last counts.
-    assert [r["status"] for r in log.read(SITE, log.ACTIONS).records] == [422, 202]
+    kept = log.read(SITE, log.ACTIONS).records
+    assert [r["status"] for r in kept if "status" in r] == [422, 202]
+    # And how the home ended, kept the first time it was read.
+    assert [r["worked"]["ok"] for r in kept if "worked" in r] == [True]
 
 
 def test_a_member_the_hub_does_not_have_is_a_failure_never_a_pass(client):
@@ -231,3 +234,112 @@ def test_a_page_from_elsewhere_fires_nothing(client):
     _put(client, _step("1"))
     assert client.post(f"{ROUTE}/steps/1/go", headers=FOREIGN).status_code == 403
     assert log.read(SITE, log.ACTIONS).records == []
+
+
+# --- a machine at work holds the next step, and how its work ended is kept -----------------
+
+
+def test_a_machine_still_at_a_steps_work_holds_the_next_step(client, family_bench, monkeypatch):
+    """Fired is not done where a machine was put to work: the step after a home stands
+    by once the home has ended, and not while it is under way."""
+    import threading
+
+    from apothecary.family import members
+
+    gate, real = threading.Event(), members.Machine._home
+
+    def slow(port):
+        assert gate.wait(10)
+        return real(port)
+
+    monkeypatch.setattr(members.Machine, "_home", staticmethod(slow))
+    family_bench.control.arm(PRINTER)
+    _put(client, _step("1", family=HOME), _step("2"))
+    board = _go(client, "1").json()
+    assert _stands(board, "1")["status"] == "fired"
+    second = _stands(board, "2")
+    assert (second["status"], second["why"], second["can_go"]) == (
+        "waiting",
+        "waiting for step 1",
+        False,
+    )
+    assert _go(client, "2").status_code == 409
+    gate.set()
+    assert _settled(client, "1")["status"] == "done"
+    assert _stands(client.get(ROUTE).json(), "2")["can_go"]
+
+
+def _kept_file(text):
+    from apothecary.firmware import devices
+
+    return devices.save_print_file("step.gcode", text.encode(), machine="printer").id
+
+
+def test_a_run_is_done_when_its_job_is_and_failed_when_its_job_was_cancelled(client, family_bench):
+    """A run's work ends when the print has started; its step is fired while the print
+    runs, holds the next, and ends as the print's own record says it ended."""
+    from apothecary.firmware import devices
+
+    family_bench.get(PRINTER)._t.dwell_scale = 1.0  # a dwell takes its time again
+    run = {"machine": {"run": {"node": NODE, "file": _kept_file("G4 P400\n" * 20)}}}
+    family_bench.control.arm(PRINTER)
+    _put(client, _step("1", family=run), _step("2"))
+    _go(client, "1")
+    deadline = time.monotonic() + 10
+    while devices.print_job(PRINTER) is None and time.monotonic() < deadline:
+        time.sleep(0.02)
+    job = devices.print_job(PRINTER)
+    assert job is not None and job.finished is None
+    board = client.get(ROUTE).json()
+    assert _stands(board, "1")["status"] == "fired" and not _stands(board, "2")["can_go"]
+    job.cancel()
+    job.thread.join(10)
+    first = _settled(client, "1")
+    assert first["status"] == "failed" and "its print ended cancelled" in first["why"]
+    assert first["can_go"] and not _stands(client.get(ROUTE).json(), "2")["can_go"]
+    # Fired again and let run out: done, and the next stands by.
+    family_bench.get(PRINTER)._t.dwell_scale = 0.0
+    family_bench.control.arm(PRINTER)
+    assert _go(client, "1").status_code == 200
+    assert _settled(client, "1")["status"] == "done"
+    assert _stands(client.get(ROUTE).json(), "2")["can_go"]
+
+
+def test_how_work_ended_outlives_a_restart_once_read_and_is_failed_when_never_read(
+    client, family_bench, monkeypatch
+):
+    import threading
+
+    from apothecary.family import members
+
+    gate, real = threading.Event(), members.Machine._home
+    gate.set()
+
+    def home(port):
+        assert gate.wait(10)
+        return real(port)
+
+    monkeypatch.setattr(members.Machine, "_home", staticmethod(home))
+    machine = members.hosted("machine")
+    family_bench.control.arm(PRINTER)
+    _put(client, _step("1", family=HOME), _step("2"))
+    _go(client, "1")
+    assert _settled(client, "1")["status"] == "done"  # read, and so kept
+    machine._ended.clear()  # a restart: the member remembers nothing
+    board = client.get(ROUTE).json()
+    assert _stands(board, "1")["status"] == "done" and _stands(board, "2")["can_go"]
+    # Never read before the restart: not known to have ended, and never left fired.
+    client.post(f"{ROUTE}/again")
+    family_bench.control.arm(PRINTER)
+    gate.clear()  # the home is still under way when the GO answers
+    fired = _stands(_go(client, "1").json(), "1")
+    assert fired["status"] == "fired"
+    cue = fired["outcomes"][0]["cue"]
+    gate.set()
+    deadline = time.monotonic() + 10
+    while machine.working_on(cue) and time.monotonic() < deadline:
+        time.sleep(0.02)
+    machine._ended.clear()
+    first = _stands(client.get(ROUTE).json(), "1")
+    assert first["status"] == "failed" and first["why"] == procedures.LOST
+    assert first["can_go"]
