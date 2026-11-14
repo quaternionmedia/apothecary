@@ -2672,3 +2672,19 @@ def test_a_stop_to_a_known_port_with_no_open_link_is_the_first_line_the_board_re
     )
     devices.printer_control(port, "M112", links=scripted_links)
     assert ScriptedTransport.instances[-1].sent == ["M112"]
+
+
+def test_a_board_that_boots_as_its_port_is_opened_is_still_identified():
+    """A port whose opening reboots its board says its banner into the first exchange:
+    with no job on the link and no reset asked for, that is a board introducing
+    itself, and its answer is waited for."""
+    transport = ScriptedTransport("/dev/ttyFAKE1", 115200)
+    link = gcode.GcodeLink("/dev/ttyFAKE1", 115200, transport)
+    transport.pending += "".join(line + "\n" for line in BOOT).encode()
+    info = gcode.identify_printer(link)
+    assert info.firmware_name.startswith("Marlin TH3D UFW") and link.restarts == 1
+    # Under a job, the same banner ends the exchange at once.
+    link.job = {"kind": "print"}
+    transport.pending += "".join(line + "\n" for line in BOOT).encode()
+    with pytest.raises(ToolchainError, match="restarted before it answered M105"):
+        link.command("M105")

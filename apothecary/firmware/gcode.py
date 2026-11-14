@@ -590,6 +590,7 @@ OK_RE = re.compile(r"^ok\b")
 # A board's first line as it boots: Marlin's `start`, Grbl's banner.
 BOOT_RE = re.compile(r"^(start$|Grbl \S+ \[)")
 RESET_ANSWER_S = 10.0  # a banner this soon after a reset written here answers it
+UNSOLICITED_KEPT = 200  # lines said outside any exchange that a link keeps
 OWED_WAIT_S = 0.5  # how long an exchange waits for a reply owed to an earlier line
 # Marlin objects with `Error:` or `!!`. Every dialect's objection is in OBJECTIONS, each
 # dialect adding its own when it is imported (grbl.py: `error:N` and, out of turn,
@@ -727,7 +728,8 @@ class GcodeLink:
                 if OK_RE.match(line) and self._owed > 0:
                     self._owed -= 1  # the late reply of a line whose exchange is over
                 self.log.add("rx", line, "unasked", note=self._note(line))
-            self.unsolicited.extend(lines)
+            # A board that reports by itself all through a long job: the newest are kept.
+            self.unsolicited = (self.unsolicited + lines)[-UNSOLICITED_KEPT:]
             return lines
         finally:
             self._lock.release()
@@ -856,9 +858,12 @@ class GcodeLink:
                 if quiet:
                     self.log.add("tx", cmd, origin)  # the line it objected to, for the record
                 self.log.add("rx", line, origin, note=self._note(line))
-            if booted:
-                # A board that boots forgets what it was asked: this line's `ok`
-                # is not coming, and waiting its time out only holds the link.
+            asked = time.monotonic() - self._asked_reset <= RESET_ANSWER_S
+            if booted and (self.job is not None or asked):
+                # A board that boots under a job, or at a reset written here, forgets
+                # what it was asked: this line's `ok` is not coming, and waiting its
+                # time out only holds the link. A board that boots as its port is
+                # first opened is left to answer: its banner is how it is known.
                 raise ToolchainError(
                     f"{self.port}: the board restarted before it answered {cmd} ({line})"
                 )
