@@ -39,7 +39,7 @@ NOTE = "the job's row is cut off at the window's foot"
 # server runs; and what changes with any line added to the roadmap, how many stops the
 # tour holds.
 COMMIT = r"against (?:[0-9a-f]{8}|an unknown commit)(?: with changes)?"
-STOPS = r"(?<=of )\d+(?= said)"
+STOPS = r"(?<=\d/)\d+"
 CHANGING = ((BOX, MOMENT), (BOX, COMMIT), (BOX, STOPS), ("#status", MOMENT))
 STEP_ON = "() => document.querySelector('#journey-rail [aria-current=step]')?.dataset.step"
 
@@ -83,7 +83,7 @@ def _answers(url: str) -> dict:
 
 def _put_on(page, step: str) -> None:
     """The box done putting the page on ``step``, and the rail there."""
-    expect(page.locator(f"{BOX} .tour-pop-put")).to_have_text("Put the page here", timeout=60000)
+    expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=60000)
     page.wait_for_function(f"(s) => ({STEP_ON})() === s", arg=step, timeout=15000)
 
 
@@ -138,14 +138,14 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     page.locator("#tour-pop-open").click()
     expect(box).to_be_visible()
     assert page.evaluate("() => document.querySelector('#tour-pop').matches(':popover-open')")
-    expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^Tour · 0 of \d+ said, 0 off$"))
+    expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^0/\d+$"))
     expect(title).to_have_text("00 — Getting started")
     expect(box.locator(".tour-pop-explore")).to_contain_text("Shown only: a page is read")
     expect(box.locator(".tour-pop-page")).to_have_attribute(
         "href", re.compile(r"/walkthrough/00-getting-started\.md$")
     )
     expect(box.locator(".tour-pop-put")).to_be_hidden()
-    expect(box.locator(".tour-pop-answer")).to_have_text("Not said yet.")
+    expect(box.locator(".tour-pop-answer")).to_be_hidden()
     expect(page.locator("#journey-rail")).to_be_hidden()
     assert page.evaluate("() => window.fractalViewer.machine") is None
     settled(page)
@@ -166,6 +166,10 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     box.locator(".tour-pop-lines").select_option(value=str(at))
     expect(title).to_have_text("Print a part · 1. Choose")
     _put_on(page, "choose")
+    # What the page did is folded under one line, and stays open once a person opens it.
+    expect(did.first).to_be_hidden()
+    box.locator(".tour-pop-more summary").click()
+    expect(did.first).to_be_visible()
     expect(did).to_contain_text(
         ["printer_1's Machine opened", "footpedal chosen", "Print a part entered", "1 Choose"]
     )
@@ -179,7 +183,8 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
         "stages are the stops, and the page is put on the first: printer_1's Machine "
         "opened and the footpedal chosen, as a person would do each, and the journey "
         "entered at Choose, its windows laid out and its rail in the header. The box "
-        "says what it did, then what the page said. The stage is there to explore.",
+        "keeps what it did, then what the page said, folded under one line, opened "
+        "here. The stage is there to explore.",
         shown="\n".join(_words(t) for t in did.all_inner_texts()),
         blank=CHANGING,
     )
@@ -190,7 +195,7 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     _put_on(page, "shape")
     assert _answers(url)["journey:make/choose"]["verdict"] == "as shown"
     page.wait_for_function("() => window.apothecaryPanels.state('part-parameters').shown")
-    expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^Tour · 1 of \d+ said, 0 off$"))
+    expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^1/\d+$"))
     tries = box.locator(".tour-pop-tries li")
     expect(tries).to_have_text(
         [
@@ -206,8 +211,9 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     story.shows(
         "✓ As shown keeps the word and puts the next stage on, with what to try there",
         "✓ As shown: the server keeps it with the commit it runs, and the box goes to "
-        "Shape and puts the page there, Parameters in front. Under what it did are the "
-        "steps this stage's tests recorded, each a link to its picture: what to try.",
+        "Shape and puts the page there, Parameters in front. Folded under one line with "
+        "what the page did are the steps this stage's tests recorded, each a link to "
+        "its picture: what to try.",
         shown="\n".join(tries.all_inner_texts()),
         blank=CHANGING,
     )

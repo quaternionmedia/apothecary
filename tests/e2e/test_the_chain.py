@@ -33,7 +33,7 @@ from apothecary.demo import DECK, DEVKIT, PRINTER, ROUTER
 
 BOX = "#tour-pop"
 COMMIT = r"against (?:[0-9a-f]{8}|an unknown commit)(?: with changes)?"
-STOPS = r"(?<=of )\d+(?= said)"
+STOPS = r"(?<=\d/)\d+"
 # What changes on every run whatever the page does: the moments, in the box, on the
 # status line and in each window that says when it last heard its subject.
 CHANGING = (
@@ -148,11 +148,11 @@ def demo(base_url, tmp_path_factory):
 
 def _put_on(page, step: str) -> None:
     """The box done putting the page on ``step``, and the rail there."""
-    expect(page.locator(f"{BOX} .tour-pop-put")).to_have_text("Put the page here", timeout=90000)
+    expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=90000)
     try:
         page.wait_for_function(f"(s) => ({STEP_ON})() === s", arg=step, timeout=15000)
     except PlaywrightTimeout:
-        said = page.locator(f"{BOX} .tour-pop-did li").all_inner_texts()
+        said = page.locator(f"{BOX} .tour-pop-did li").all_text_contents()
         pytest.fail(f"the page was not put on {step}: the box says {said}")
 
 
@@ -349,13 +349,13 @@ def test_the_tour_puts_the_page_on_every_stage_of_the_chain(page, demo, walkthro
             if n == 0:
                 box.locator(".tour-pop-lines").select_option(value=str(at))
             else:
-                box.get_by_role("button", name="Next ›").click()
+                box.get_by_role("button", name="Next", exact=True).click()
             expect(title).to_have_text(f"{journey.name} · {n + 1}. {step.label}")
             _put_on(page, step.id)
             expect(box.locator(".tour-pop-did.refused")).to_have_count(0)
             _shown(page, step.forward[0])
             STANDS[journey.id, step.id](page)
-            said = [_words(t) for t in did.all_inner_texts()]
+            said = [_words(t) for t in did.all_text_contents()]
             done += said[:-1]
             said_of.append(
                 f"{n + 1} {step.label}: "

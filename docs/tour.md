@@ -37,7 +37,8 @@ try there.
 
 **Tour**, in the header, or the canvas ring's **Panels › Windows › Tour › Tour**. The box
 opens above the windows, so a view or a journey laid out moves them and not it. It is
-dragged by its head, folded to its head by a double-click there, and closed by its ✕
+small, since it stands over the world: its head names the stop and how many are said.
+It is dragged by its head, folded to its head by a double-click there, and closed by its ✕
 or by Tour again. Where it stands, whether it is open and the stop it shows are this
 browser's (`apothecary.tour` in its local storage), so a reload opens it where it was.
 
@@ -46,8 +47,8 @@ ticked line nobody has said anything of.
 
 ## A stage, put on
 
-On a stage the box has **Put the page here**, and going to a stage -- by its number
-among the line's stops, Next, Back, or a word said on the one before -- presses it.
+Going to a stage -- by its number among the line's stops, ›, ‹, or a word said on the
+one before -- puts the page on it, and ↻ beside the stage's words puts it on again.
 The page then does what a person would do to get there, each thing only where it is
 not so already:
 
@@ -77,8 +78,9 @@ So a stage that needs the work of the one before it has it done first: See draws
 file's path, so with no file kept the piece is sliced for the machine; Marks needs a
 photograph pinned and its shapes found.
 
-The box says what it did, then what the page said of the stage. The stage is there to
-explore.
+The box keeps what it did, then what the page said of the stage, folded under one line
+with the steps to try; it opens by itself where the page refused, and stays open or
+folded as a person left it. The stage is there to explore.
 
 **Only on the demo.** Putting a stage on acts on machines and state, so it happens only
 where the server says it is `apothecary serve --demo`. Anywhere else the box shows the
@@ -101,8 +103,9 @@ them.
 ## Saying how a stop is
 
 - **✓ As shown**: the page here does what the stop shows.
-- **✗ Off**: it does not, with what is off typed in the field above the buttons. Off
-  with the field empty is refused, the box saying so and staying on the stop.
+- **✗ Off**: it does not, with what is off typed in the field beside the buttons;
+  Enter in the field is ✗ Off. Off with the field empty is refused, the box saying so
+  and staying on the stop.
 
 Either is kept on the server, and the box goes to the next stop. A stop answered wears
 its answer among the line's stops, and the box says what was said of it, when, and

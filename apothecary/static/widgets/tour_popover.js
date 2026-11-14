@@ -7,7 +7,9 @@
 // stop's are the journey's or the page's.
 //
 // The box is in the browser's top layer, so no view or journey lays it out or covers
-// it; it is dragged by its head, and folded to it by a double-click there.
+// it; it is dragged by its head, and folded to it by a double-click there. It stands
+// over the world, so it is kept small: its head names the stop, what the page did and
+// what to try are folded under one line, and what it says is only what is not so yet.
 //
 // `stage(journey, stageId)` is the page's: it resolves to `{ did: [...], said, refused }`.
 // `demo` says whether this is `apothecary serve --demo`, the one place a stage is put on.
@@ -16,29 +18,29 @@ const KEPT = 'apothecary.tour';
 
 const MARKUP = `
 <header class="tour-pop-head" title="Drag to move; double-click to fold to this bar, or unfold">
+  <span class="tour-pop-title"></span>
   <span class="tour-pop-name"></span>
   <button type="button" class="tour-pop-close" data-do="close" title="Close the tour: the page stays as it is">✕</button>
 </header>
 <div class="tour-pop-body">
   <select class="tour-pop-lines" aria-label="The roadmap's lines"></select>
   <ol class="tour-pop-stops"></ol>
-  <h4 class="tour-pop-title"></h4>
-  <p class="tour-pop-words"></p>
-  <div class="tour-pop-row">
-    <button type="button" class="tour-pop-put" data-do="put"></button>
-    <a class="tour-pop-page" target="_blank" rel="noopener">its page</a>
-  </div>
-  <ul class="tour-pop-did"></ul>
-  <ul class="tour-pop-tries"></ul>
+  <p class="tour-pop-words"><span class="tour-pop-said"></span>
+    <button type="button" class="tour-pop-put" data-do="put" aria-label="Put the page here">↻</button>
+    <a class="tour-pop-page" target="_blank" rel="noopener">its page</a></p>
   <p class="tour-pop-explore"></p>
+  <details class="tour-pop-more">
+    <summary></summary>
+    <ul class="tour-pop-did"></ul>
+    <ul class="tour-pop-tries"></ul>
+  </details>
   <p class="tour-pop-answer"></p>
-  <input class="tour-pop-note" type="text" placeholder="What is off, if it is" aria-label="What is off">
   <div class="tour-pop-row">
-    <button type="button" class="tour-pop-back" data-do="back">‹ Back</button>
-    <span class="grow"></span>
-    <button type="button" class="tour-pop-as-shown" data-do="as-shown">✓ As shown</button>
-    <button type="button" class="tour-pop-off" data-do="off">✗ Off</button>
-    <button type="button" class="tour-pop-next" data-do="next">Next ›</button>
+    <button type="button" class="tour-pop-back" data-do="back" aria-label="Back" title="The stop before">‹</button>
+    <input class="tour-pop-note" type="text" placeholder="What is off" aria-label="What is off" title="What is off at this stop: ✗ Off, or Enter, keeps it">
+    <button type="button" class="tour-pop-as-shown" data-do="as-shown" title="The page does what this stop shows: kept, and on to the next">✓ As shown</button>
+    <button type="button" class="tour-pop-off" data-do="off" title="This stop is off, with what the field says: kept, and on to the next">✗ Off</button>
+    <button type="button" class="tour-pop-next" data-do="next" aria-label="Next" title="The next stop">›</button>
   </div>
 </div>`;
 
@@ -65,12 +67,18 @@ export function mountTourPopover({ base = '', demo = false, stage, onShown = () 
     // Every stop in the roadmap's order, each knowing its line.
     const state = { lines: [], stops: [], at: 0, busy: false, did: null };
 
+    // What the page did and what to try, folded or open as a person left it.
+    const more = $('.tour-pop-more');
+    more.open = Boolean(kept().more);
+    // Opened, it grows: placed again, so it stays whole on the page.
+    more.addEventListener('toggle', () => { keep({ more: more.open }); if (box.matches(':popover-open')) place(); });
+
     const here = () => state.stops[state.at];
     const lineOf = (stop) => state.lines[stop.line];
 
     function place() {
         const { x, y } = kept();
-        const w = box.offsetWidth || 352, h = box.offsetHeight || 300;
+        const w = box.offsetWidth || 352, h = box.offsetHeight || 200;
         const left = Math.min(Math.max(4, x ?? 16), window.innerWidth - w - 4);
         // Whole on the page however much it says: it grows upward from where it was left.
         const top = Math.max(4, Math.min(y ?? window.innerHeight - h - 48, window.innerHeight - h - 8));
@@ -89,7 +97,9 @@ export function mountTourPopover({ base = '', demo = false, stage, onShown = () 
         if (!stop) return;
         const line = lineOf(stop);
         const said = state.stops.filter((s) => s.answer).length, off = state.stops.filter((s) => s.answer?.verdict === 'off').length;
-        $('.tour-pop-name').textContent = `Tour · ${said} of ${state.stops.length} said, ${off} off`;
+        const name = $('.tour-pop-name');
+        name.textContent = `${said}/${state.stops.length}${off ? ` · ${off} off` : ''}`;
+        name.title = `The tour: ${said} of ${state.stops.length} stops said, ${off} off`;
 
         const lines = $('.tour-pop-lines');
         lines.replaceChildren();
@@ -112,25 +122,27 @@ export function mountTourPopover({ base = '', demo = false, stage, onShown = () 
         $('.tour-pop-title').textContent = isStage
             ? `${stop.journey_name} · ${line.stops.indexOf(stop) + 1}. ${stop.title}`
             : `${stop.number} — ${stop.title}`;
-        $('.tour-pop-words').textContent = isStage ? `${stop.words[0].toUpperCase()}${stop.words.slice(1)}.` : stop.words;
+        $('.tour-pop-said').textContent = isStage ? `${stop.words[0].toUpperCase()}${stop.words.slice(1)}.` : stop.words;
 
         const put = $('.tour-pop-put');
         put.hidden = !isStage;
         put.disabled = state.busy || !demo || !stop.put_on;
-        put.textContent = state.busy ? 'Putting the page here…' : 'Put the page here';
+        box.classList.toggle('busy', state.busy);
         put.title = demo
-            ? 'Opens and chooses what this stage needs, and enters it'
+            ? 'Put the page here again: opens and chooses what this stage needs, and enters it'
             : 'Only on the demo (apothecary serve --demo): here, do what the stage says in the page';
         const page = $('.tour-pop-page');
         page.hidden = isStage;
         if (!isStage) page.href = `${base}/walkthrough/${stop.page}`;
 
+        // What the page did to stand here, then what it said; and what its tests
+        // recorded: each step's heading, a link to its picture where it has one, and each
+        // page that shows it whole, a link to the page. Folded under one line, and open
+        // where the page refused, which is what a person has to read.
+        const done = state.did ? [...state.did.did, state.did.said].filter(Boolean) : [];
         const did = $('.tour-pop-did');
         did.className = `tour-pop-did${state.did?.refused ? ' refused' : ''}`;
-        did.replaceChildren(...(state.did ? [...state.did.did, state.did.said].filter(Boolean) : []).map((t) => el('li', { textContent: t })));
-
-        // What its tests recorded: each step's heading, a link to its picture where it has
-        // one; and each page that shows it whole, a link to the page.
+        did.replaceChildren(...done.map((t) => el('li', { textContent: t })));
         $('.tour-pop-tries').replaceChildren(...stop.tries.map((t) => {
             const text = t.heading;
             const href = t.index === null ? `${base}/walkthrough/${t.page}` : t.picture && `${base}/walkthrough/${t.picture}`;
@@ -138,18 +150,20 @@ export function mountTourPopover({ base = '', demo = false, stage, onShown = () 
             const a = el('a', { textContent: text, href, target: '_blank', rel: 'noopener', title: t.words });
             return el('li', { className: t.index === null ? 'whole' : '' }, a);
         }));
+        more.hidden = !done.length && !stop.tries.length;
+        if (state.did?.refused) more.open = true;
+        $('.tour-pop-more summary').textContent = state.did?.refused
+            ? 'The page was not put here'
+            : [done.length && 'what the page did', stop.tries.length && `${stop.tries.length} to try`].filter(Boolean).join(' · ');
 
+        // Said only where it is not so: a page is read, and off the demo nothing is put on.
         $('.tour-pop-explore').textContent = isStage
-            ? (demo
-                ? 'Explore this stage in the page, then say how it is.'
-                : 'This is not the demo, so the tour puts nothing on: do what the stage says in the page, then say how it is.')
-            : (stop.written_by
-                ? 'Shown only: a page is read, not put on. Its steps are as its test recorded them.'
-                : 'Shown only: a page is read, not put on. Its examples run with the tests.');
+            ? (demo ? '' : 'This is not the demo, so the tour puts nothing on: do what the stage says in the page, then say how it is.')
+            : 'Shown only: a page is read, not put on.';
         const a = stop.answer;
         $('.tour-pop-answer').textContent = a
             ? `${a.verdict === 'off' ? `✗ Off: ${a.note}` : '✓ As shown'} -- said ${new Date(a.at).toLocaleString()} against ${a.commit || 'an unknown commit'}${a.changed ? ' with changes' : ''}`
-            : 'Not said yet.';
+            : '';
         $('.tour-pop-back').disabled = state.at === 0;
         $('.tour-pop-next').disabled = state.at >= state.stops.length - 1;
         if (box.matches(':popover-open')) place();
@@ -261,6 +275,7 @@ export function mountTourPopover({ base = '', demo = false, stage, onShown = () 
         head.addEventListener('pointerup', up);
     });
     head.addEventListener('dblclick', (e) => { if (!e.target.closest('button')) api.act('fold'); });
+    $('.tour-pop-note').addEventListener('keydown', (e) => { if (e.key === 'Enter') api.act('off'); });
     window.addEventListener('resize', () => { if (api.isOpen()) place(); });
     return api;
 }

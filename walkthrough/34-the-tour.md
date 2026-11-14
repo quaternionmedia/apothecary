@@ -24,12 +24,12 @@ Tour in the header: a box above the windows, on the first stop of the roadmap no
 ![Tour, in the header, opens a box over the page on the roadmap's first stop](screenshots/34-01-tour-in-the-header-opens-a-box-over-the-page-on-th.png)
 
 ```
-Shown only: a page is read, not put on. Its examples run with the tests.
+Shown only: a page is read, not put on.
 ```
 
 ## 2. A journey's line chosen puts the page on its first stage
 
-The box's drop-down holds the roadmap's lines under its headings, in its order; the line of Making a thing that names the journey Print a part, chosen. Its stages are the stops, and the page is put on the first: printer_1's Machine opened and the footpedal chosen, as a person would do each, and the journey entered at Choose, its windows laid out and its rail in the header. The box says what it did, then what the page said. The stage is there to explore.
+The box's drop-down holds the roadmap's lines under its headings, in its order; the line of Making a thing that names the journey Print a part, chosen. Its stages are the stops, and the page is put on the first: printer_1's Machine opened and the footpedal chosen, as a person would do each, and the journey entered at Choose, its windows laid out and its rail in the header. The box keeps what it did, then what the page said, folded under one line, opened here. The stage is there to explore.
 
 ![A journey's line chosen puts the page on its first stage](screenshots/34-02-a-journey-s-line-chosen-puts-the-page-on-its-first.png)
 
@@ -42,7 +42,7 @@ Print a part › 1 Choose (⊞ Windows › Print a part): the part, among the si
 
 ## 3. ✓ As shown keeps the word and puts the next stage on, with what to try there
 
-✓ As shown: the server keeps it with the commit it runs, and the box goes to Shape and puts the page there, Parameters in front. Under what it did are the steps this stage's tests recorded, each a link to its picture: what to try.
+✓ As shown: the server keeps it with the commit it runs, and the box goes to Shape and puts the page there, Parameters in front. Folded under one line with what the page did are the steps this stage's tests recorded, each a link to its picture: what to try.
 
 ![✓ As shown keeps the word and puts the next stage on, with what to try there](screenshots/34-03-as-shown-keeps-the-word-and-puts-the-next-stage-on.png)
 
@@ -77,7 +77,7 @@ The Default view laid out: every window goes where that view has it, and the box
 ![A view laid out moves the windows, and not the box](screenshots/34-06-a-view-laid-out-moves-the-windows-and-not-the-box.png)
 
 ```
-Tour · 2 of … said, 1 off
+2/… · 1 off
 ```
 
 ## 7. Panels › Windows › Tour: its cells are its buttons
