@@ -264,10 +264,15 @@ def same_picture(one: bytes, other: bytes) -> bool:
     return changed <= one_image.size[0] * one_image.size[1] // 10000
 
 
+# Set by a run with --gpu (tests/e2e/conftest.py): a GPU's pixels are that machine's.
+GPU_RUN = False
+
+
 def _keep_unless_changed(path: Path, png: bytes) -> None:
     """Write the screenshot only when its pixels differ from the committed one, so a
-    run leaves an unchanged screenshot as committed."""
-    if path.exists() and same_picture(path.read_bytes(), png):
+    run leaves an unchanged screenshot as committed; a run with --gpu leaves every
+    committed one."""
+    if path.exists() and (GPU_RUN or same_picture(path.read_bytes(), png)):
         return
     path.write_bytes(png)
 

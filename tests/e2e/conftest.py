@@ -22,6 +22,7 @@ from playwright.sync_api import Error as PlaywrightError
 # tests/ itself, for helpers shared with the unit tests (firmware_helpers, views_helpers).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import doc_capture  # noqa: E402
 import garage  # noqa: E402
 from browsers import launch, launched  # noqa: E402
 from doc_capture import GENERATED_DOCS_ROOT, DocRecorder, Walkthrough  # noqa: E402
@@ -65,6 +66,13 @@ def _keep_this_shard(config, items) -> None:
     spec = config.getoption("--shard")
     if not spec:
         return
+    if config.getoption("--record-durations"):
+        # A shard that ends writes the times the next one to start would be cut by: the
+        # two then disagree on which files are whose, and some run in neither.
+        raise pytest.UsageError(
+            "--record-durations with --shard: the shards are cut by the file this writes; "
+            "record in one run of the whole browser suite"
+        )
     k, n = (int(part) for part in spec.split("/"))
     if not 1 <= k <= n:
         raise pytest.UsageError(f"--shard {spec}: K must be between 1 and N")
@@ -124,6 +132,7 @@ def pytest_collection_modifyitems(config, items):
     """Tests marked docs run only with --generate-docs, the step-through tests only
     with --steps or --step N; then this shard's files are kept, what skips weighing
     nothing; in CI, each recorded test has its own cap."""
+    doc_capture.GPU_RUN = config.getoption("--gpu")
     if not config.getoption("--generate-docs"):
         skip = pytest.mark.skip(reason="doc capture: runs with --generate-docs (`apothecary docs`)")
         for item in items:
@@ -416,6 +425,18 @@ def base_url(request, test_server):
 @pytest.fixture(scope="session")
 def docs_enabled(request) -> bool:
     return request.config.getoption("--generate-docs")
+
+
+# With --gpu: Chromium's GL through this machine's driver. Its headless shell draws in
+# software unless told otherwise, and every frame of the world is drawn there.
+GPU = ["--enable-gpu", "--use-angle=gl", "--ignore-gpu-blocklist"]
+
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args, request):
+    if not request.config.getoption("--gpu"):
+        return browser_type_launch_args
+    return {**browser_type_launch_args, "args": [*browser_type_launch_args.get("args", []), *GPU]}
 
 
 @pytest.fixture

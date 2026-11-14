@@ -160,7 +160,7 @@ def test_each_note_of_the_footpedal_sketch_is_a_midi_note():
     assert notes == [1, 1, 2, 3, 4, 5, 6], "the LEDs' first note, then the six buttons'"
 
 
-def test_the_footpedal_sketch_builds_with_the_libraries_it_pins(tmp_path):
+def test_the_footpedal_sketch_builds_with_the_libraries_it_pins(tmp_path, request):
     """Where arduino-cli has the AVR core and the library versions firmware.json pins,
     the sketch builds for its board; where any is missing, it skips."""
     footpedal = find_sketch("footpedal", ROOT)
@@ -186,11 +186,17 @@ def test_the_footpedal_sketch_builds_with_the_libraries_it_pins(tmp_path):
     if missing:
         pytest.skip(f"not installed here: {', '.join(missing)} (`apothecary firmware libraries`)")
 
+    # Built where the last run built it, in pytest's cache, so arduino-cli compiles only
+    # what changed since: the core and the libraries once, the sketch when it differs.
+    # A board, a core or a library that changes changes the build's options, and
+    # arduino-cli then builds the whole of it again. With no cache, a folder of its own.
+    cache = getattr(request.config, "cache", None)
+    build = cache.mkdir("footpedal-build") if cache else tmp_path / "build"
     # One job, at the lowest priority: a build beside them starves the suite's other
     # worker, whose listens last a second (tests/test_firmware_ports.py).
     nice = getattr(os, "nice", None)
     built = subprocess.run(
-        cli.compile_argv(footpedal.path, footpedal.fqbn, tmp_path / "build") + ["--jobs", "1"],
+        cli.compile_argv(footpedal.path, footpedal.fqbn, build) + ["--jobs", "1"],
         capture_output=True,
         text=True,
         timeout=300,

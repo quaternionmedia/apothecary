@@ -85,7 +85,16 @@ file missing from `durations.json` counts as the average test for each of its
 tests. `--record-durations` writes a run's times into it -- each file run replaces
 its entries, the rest are kept -- so when the shards drift apart, `uv run
 apothecary test all --record-durations` (on as many workers as you like) brings it
-up to date.
+up to date. It is refused with `--shard`: a shard that ends writes the times the next
+one to start is cut by, the two then disagree on whose a file is, and some files run
+in neither.
+
+`--gpu` has the browser draw with this machine's GPU. The headless shell draws in
+software otherwise, and that drawing, not the page's own code or a test's waits, is
+most of a browser test's time. A GPU's pixels are its own, so a run with it rewrites
+no walkthrough picture, and it is a quick local run and not the one before a pull
+request, which is the software one, as CI's is. Its frames come sooner, so it also
+finds what a slow frame hides: the level card asked for on a devkit threw on it first.
 
 ## What a change reaches
 

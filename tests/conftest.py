@@ -49,6 +49,15 @@ def pytest_addoption(parser):
         "entries; the others are kept.",
     )
     parser.addoption(
+        "--gpu",
+        action="store_true",
+        default=False,
+        help="Browser tests only: the browser draws with this machine's GPU in place of "
+        "its software renderer, which is most of a browser test's time. The quick local "
+        "run: a GPU's pixels are its own, so no walkthrough picture is rewritten, and the "
+        "run before a pull request is the software one, as CI's is.",
+    )
+    parser.addoption(
         "--step",
         action="store",
         type=int,

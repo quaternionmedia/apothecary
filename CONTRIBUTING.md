@@ -29,6 +29,7 @@ uv run apothecary test run                      # the ordinary command: unit tes
 uv run apothecary test all                      # the same, then every browser test: the run on a stack's head before it is pulled
 uv run apothecary test all --workers 2 -k part  # both parts on two workers; further arguments narrow both parts
 uv run apothecary test all --record-durations   # the same, the browser tests' times written into tests/e2e/durations.json
+uv run apothecary test all --gpu                # the same, the browser drawing with this machine's GPU: quicker, no picture rewritten, and not the run before a pull
 uv run apothecary test all --coverage           # the same, measured: what of the package ran, and of what the change adds or changes
 uv run apothecary test coverage --markdown      # the last measured run's coverage, as a line for a pull request's body
 uv run apothecary test all --steps              # the same, and the step-through tests, which every other run skips
