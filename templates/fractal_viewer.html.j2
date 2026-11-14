@@ -741,7 +741,6 @@
                 {% if not site_names %}<span id="no-sites">No sites found</span>{% endif %}
             </nav>
             <nav id="journey-rail" class="journey-rail" aria-label="Steps" hidden></nav>
-            <button type="button" id="tour-pop-open" aria-pressed="false" title="The tour: what the roadmap claims, a stop at a time, the page put on each stage, and your word kept on it">Tour</button>
             <div class="spacer"></div>
             <details id="view-menu" class="view-menu">
                 <summary title="How the world is drawn">⚙ View</summary>
@@ -770,6 +769,8 @@
                 <summary title="Every window by its group, and the views that lay them out together: a window chosen opens, or comes in front; a stack's + opens one there (Panels › Windows on the ring)" aria-label="Windows">⊞<span class="wide-only"> Windows</span></summary>
                 <div class="view-menu-body windows-menu-body"></div>
             </details>
+            <!-- Beside Docs: the two ways a person is shown the app. -->
+            <button type="button" id="tour-pop-open" aria-pressed="false" title="The tour: what the roadmap claims, a stop at a time, the page put on each stage, and your word kept on it">Tour</button>
             <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, each of its pages a run of the tests (Panels › Docs on the ring)">Docs</a>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or Ctrl+right-click a piece); Shift+M opens the canvas ring. Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
             <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to bring Problems, beside Site, in front">Layout valid</span>

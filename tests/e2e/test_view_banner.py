@@ -50,6 +50,7 @@ def test_the_header_is_one_banner_and_what_stood_beside_it_stands(page: Page, ba
         "spacer",
         "view-menu",
         "windows-menu",
+        "tour-pop-open",
         "docs-link",
         "ring-open",
         "validity-indicator",
