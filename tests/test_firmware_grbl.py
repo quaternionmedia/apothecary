@@ -947,3 +947,87 @@ def test_a_poll_says_where_the_tool_and_the_work_zero_stand_in_the_volume(
     assert status.work_origin == {
         axis: status.work_offset[axis] + status.travel[axis] for axis in "xyz"
     }
+
+
+def test_a_cut_paused_while_it_waits_for_the_planner_sends_every_line(
+    fake_arduino_cli, router_links, monkeypatch
+):
+    """A pause that lands while a line waits for room in the planner keeps that line:
+    resumed, the cut sends it, then the rest."""
+    moves = [f"G1 X-{n} F800" for n in range(10, 60, 10)]
+    kept = devices.save_print_file("row.nc", ("\n".join(moves) + "\n").encode(), machine="router")
+    router_links.control.arm(PORT)
+    held: list = []
+
+    def wait(self, link, cmd, abandoned):
+        if cmd == moves[2] and not held:
+            held.append(cmd)
+            job.pause()
+            return False  # as the room says when the job is paused meanwhile
+        return True
+
+    monkeypatch.setattr(grbl.PlannerRoom, "wait", wait)
+    job = devices.start_print(PORT, kept.id)
+    for _ in range(200):
+        if job.stage == "paused":
+            break
+        time.sleep(0.01)
+    assert job.stage == "paused" and held == [moves[2]]
+    job.resume()
+    job.thread.join(5)
+    rec = job.record
+    assert rec.outcome == "done" and rec.detail["sent"] == len(moves)
+    assert [line for line in rec.log if line.startswith("> G1")] == [f"> {m}" for m in moves]
+
+
+def test_a_cut_whose_planner_never_has_room_fails_and_is_held_and_reset(
+    fake_arduino_cli, router_links, monkeypatch
+):
+    """A line the planner had no room for within a move's time ends the cut as failed,
+    held and reset; it is never left out and the rest sent."""
+    kept = devices.save_print_file("row.nc", b"G1 X-10 F800\nG1 X-20\nG1 X-30\n", machine="router")
+    router_links.control.arm(PORT)
+    monkeypatch.setattr(grbl.PlannerRoom, "wait", lambda self, link, cmd, gone: cmd != "G1 X-20")
+    job = devices.start_print(PORT, kept.id)
+    job.thread.join(5)
+    rec = job.record
+    assert rec.outcome == "failed" and "no room" in rec.reason and "G1 X-20" in rec.reason
+    assert rec.detail["sent"] == 1 and "> G1 X-30" not in rec.log
+    assert "> HOLD" in rec.log and "> RESET" in rec.log
+
+
+@pytest.mark.parametrize(
+    "ends, said",
+    [("Alarm", "in alarm"), ("Run", "still running")],
+)
+def test_a_cut_that_ends_in_alarm_or_never_idles_is_not_recorded_done(
+    fake_arduino_cli, router_links, monkeypatch, ends, said
+):
+    """A cut is done when its controller is idle again: one that ends in alarm, or is
+    still running when a move's time has run out, failed, and is held and reset."""
+    kept = devices.save_print_file("row.nc", b"M3 S9000\nG1 X-10 F800\nM5\n", machine="router")
+    router_links.control.arm(PORT)
+    real = grbl.report
+
+    def report(link, *a, **kw):
+        status, lines = real(link, *a, **kw)
+        finishing = devices.print_job(PORT) and devices.print_job(PORT).stage == "finishing"
+        return ({**status, "machine_state": ends} if finishing else status), lines
+
+    job = devices.start_print(PORT, kept.id)
+    monkeypatch.setattr(grbl, "report", report)
+    monkeypatch.setattr(grbl, "JOB_MOVE_TIMEOUT_S", 0.3)
+    job.thread.join(5)
+    rec = job.record
+    assert rec.outcome == "failed" and said in rec.reason
+    assert "> HOLD" in rec.log and "> RESET" in rec.log
+
+
+def test_a_cut_that_is_done_leaves_the_spindle_off(fake_arduino_cli, router_links):
+    """A file that never says M5 does not leave the spindle turning once it is done."""
+    kept = devices.save_print_file("row.nc", b"M3 S9000\nG1 X-10 F800\n", machine="router")
+    router_links.control.arm(PORT)
+    job = devices.start_print(PORT, kept.id)
+    job.thread.join(5)
+    assert job.record.outcome == "done" and "> M5" in job.record.log
+    assert not devices.printer_status(PORT).spindle.on

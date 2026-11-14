@@ -561,20 +561,31 @@ class PlannerRoom:
         return True
 
 
-def await_idle(link: GcodeLink, abandoned: Callable[[], bool]) -> None:
+def await_idle(link: GcodeLink, abandoned: Callable[[], bool]) -> str:
     """Poll the controller until it is idle, in alarm or offline, or ``abandoned()``
     says the job was cancelled, or a move's time runs out; a held controller is
-    waited for. A cut's last line is answered when it is queued, not when it is done."""
+    waited for. A cut's last line is answered when it is queued, not when it is done.
+    Answers how the wait ended, in words a refusal can carry: ``idle``, and anything
+    else is a cut that did not finish -- ``in alarm`` with the alarm the board said,
+    ``still running`` when the time ran out, ``cancelled``."""
     end = time.monotonic() + JOB_MOVE_TIMEOUT_S
-    while time.monotonic() < end and not abandoned():
+    while time.monotonic() < end:
+        if abandoned():
+            return "cancelled"
         try:
             status, _lines = report(link, wait=1.0)
         except LinkBusy:
             time.sleep(0.2)
             continue
         if not busy(status):
-            return
+            word = STATE_WORDS.get(status["machine_state"])
+            if word == "idle":
+                return "idle"
+            if word == "alarm":
+                return "in alarm" + (f" ({link.alarm})" if link.alarm else "")
+            return f"{status['machine_state']}, not idle"
         time.sleep(0.3)
+    return "still running" if not abandoned() else "cancelled"
 
 
 # --- the simulated controller ---------------------------------------------------------

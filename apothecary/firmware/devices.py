@@ -1710,6 +1710,26 @@ class PrintJob:
         """Whether the job was paused or stopped: what a wait on the controller watches."""
         return self._stop.is_set() or not self._go.is_set()
 
+    def _turn_for(self, link: gcode.GcodeLink, cmd: str) -> bool:
+        """Wait until ``cmd`` may be sent: the job not paused, and on a router the
+        planner with room for it. False once the job is stopped. A pause that lands
+        while the line waits for room keeps the line, which waits out the pause and
+        asks for room again; room that never comes within a move's time is the
+        job's failure, never a line left out."""
+        while True:
+            while not self._go.wait(0.2):
+                if self._stop.is_set():
+                    return False
+            if self._stop.is_set():
+                return False
+            if self._room is None or self._room.wait(link, cmd, self._interrupted):
+                return True
+            if not self._interrupted():
+                raise ToolchainError(
+                    f"{self.port}: the planner had no room for {cmd} within "
+                    f"{grbl.JOB_MOVE_TIMEOUT_S:.0f}s: the cut is stopped there"
+                )
+
     def cancel(self, quiet: bool = False) -> None:
         """Stop feeding; ``quiet`` skips the safe-off (the board is already halted)."""
         if self.finished is None:
@@ -1779,14 +1799,9 @@ class PrintJob:
                 cmd = gcode.strip_gcode(raw)
                 if not cmd:
                     continue
-                while not self._go.wait(0.2):
-                    if self._stop.is_set():
-                        break
-                if self._stop.is_set():
+                if not self._turn_for(link, cmd):
                     outcome = "cancelled"
                     break
-                if self._room is not None and not self._room.wait(link, cmd, self._interrupted):
-                    continue  # paused or stopped while waiting: the loop's head decides
                 self.current = cmd
                 lines = link.command(cmd, timeout=self._timeout(cmd), origin=kind, quiet=True)
                 tail = (tail + [f"> {cmd}", *lines])[-200:]
@@ -1804,10 +1819,21 @@ class PrintJob:
                     # The router is finished when its controller is idle again.
                     self.stage = "finishing"
                     self._announce()
-                    grbl.await_idle(link, self._stop.is_set)
+                    ended = grbl.await_idle(link, self._stop.is_set)
                 if self._stop.is_set():
                     outcome = "cancelled"
                 else:
+                    if self.grbl:
+                        if ended != "idle":
+                            raise ToolchainError(
+                                f"{self.port}: every line was sent and the controller is "
+                                f"{ended}: the cut did not finish"
+                            )
+                        # Idle with every line run: a file that never said M5 does not
+                        # leave the spindle turning behind a cut recorded as done.
+                        tail = (tail + ["> M5", *link.command("M5", timeout=10.0, origin=kind)])[
+                            -200:
+                        ]
                     self.stage = "done"
             if outcome == "cancelled":
                 self.stage = "cancelled"
