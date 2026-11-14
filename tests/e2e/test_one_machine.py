@@ -254,6 +254,9 @@ def test_a_devkit_has_a_machine_with_what_it_should_run_and_what_it_says(page: P
     windows.machine_ready(page, "devkit")
     expect(machine.locator("#c-board")).to_contain_text(UNO)
     expect(machine.locator("#c-board")).to_contain_text("Arduino Uno")
+    # A devkit has no bed or table to map: its level card, asked for, draws nothing and
+    # throws nothing (it is asked for whenever a Machine's port is, whatever its kind).
+    page.evaluate("() => window.apothecaryMachine.level.load()")
     sketch = machine.locator("#c-sketch")
     expect(sketch).to_contain_text("should run footpedal@arduino")
     # Listen: the board's serial output, and the hello it says, in the one log.

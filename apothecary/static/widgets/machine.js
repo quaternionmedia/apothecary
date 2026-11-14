@@ -1180,6 +1180,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     function renderLevel() {
         renderLevelVerbs();
         const rec = level.shown, w = words().level;
+        if (!w) return;  // a devkit has no bed or table to map, and no words for one
         const meshEl = $("mesh"), statsEl = $("level-stats");
         if (!rec || !rec.mesh || !rec.mesh.length) {
             meshEl.innerHTML = ""; meshEl.style.gridTemplateColumns = "";
