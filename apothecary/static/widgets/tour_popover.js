@@ -1,7 +1,7 @@
 // The tour: what the roadmap claims (docs/ROADMAP.md), a stop at a time, in a box over the
 // page. A stop is a stage of a journey (apothecary/journeys.py) or a walkthrough page.
-// A stage is put on by the page -- its machine's window opened, its piece chosen, the
-// stage entered -- and a person explores it there; a page is read, with the steps its
+// A stage is put on by the page -- what it needs opened, chosen and made, the stage
+// entered -- and a person explores it there; a page is read, with the steps its
 // test recorded. Either way one word is kept on the stop: as shown, or off with what
 // is off (POST /tour/answers, apothecary/tour.py). The box has no words of its own: a
 // stop's are the journey's or the page's.
@@ -129,12 +129,14 @@ export function mountTourPopover({ base = '', demo = false, stage, onShown = () 
         did.className = `tour-pop-did${state.did?.refused ? ' refused' : ''}`;
         did.replaceChildren(...(state.did ? [...state.did.did, state.did.said].filter(Boolean) : []).map((t) => el('li', { textContent: t })));
 
-        // What its tests recorded: each step's heading, a link to its picture where it has one.
+        // What its tests recorded: each step's heading, a link to its picture where it has
+        // one; and each page that shows it whole, a link to the page.
         $('.tour-pop-tries').replaceChildren(...stop.tries.map((t) => {
             const text = t.heading;
-            if (!t.picture) return el('li', { textContent: text, title: t.words });
-            const a = el('a', { textContent: text, href: `${base}/walkthrough/${t.picture}`, target: '_blank', rel: 'noopener', title: t.words });
-            return el('li', {}, a);
+            const href = t.index === null ? `${base}/walkthrough/${t.page}` : t.picture && `${base}/walkthrough/${t.picture}`;
+            if (!href) return el('li', { textContent: text, title: t.words });
+            const a = el('a', { textContent: text, href, target: '_blank', rel: 'noopener', title: t.words });
+            return el('li', { className: t.index === null ? 'whole' : '' }, a);
         }));
 
         $('.tour-pop-explore').textContent = isStage

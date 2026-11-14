@@ -2,7 +2,7 @@
 
 ``docs/ROADMAP.md`` orders it. Each of its lines names what shows it: a journey
 (journeys.py), whose stages are the tour's stops, or walkthrough pages, each one stop
-taken whole. A page a test writes (tests/e2e/doc_capture.py) is read back into its
+taken whole. A page a journey's stage names is that stage's, and is no stop of its own. A page a test writes (tests/e2e/doc_capture.py) is read back into its
 steps -- heading, words, the picture the run recorded after its assertions, what it
 showed -- which the tour gives as what to try at a stage, or as a page's own account.
 The tour has no words of its own.
@@ -176,14 +176,40 @@ def page_id(page: str) -> str:
 
 
 def _tries(shown_by: Tuple[str, ...], root: Path) -> List[dict]:
-    """The recorded steps a stage names, as what to try on it."""
+    """What a stage names, as what to try on it: a recorded step, or a page whole
+    (``index`` None), which says how the same thing goes at the command line."""
     out = []
     for ref in shown_by:
         page, _, number = ref.partition("#")
         here = stop(page, root)
-        step = here and next((s for s in here.steps if str(s.index) == number), None)
+        if here is None:
+            continue
+        if not number:
+            out.append(
+                {
+                    "page": page,
+                    "index": None,
+                    "heading": f"{here.number} — {here.title}",
+                    "words": here.intro,
+                    "picture": None,
+                    "shown": None,
+                }
+            )
+            continue
+        step = next((s for s in here.steps if str(s.index) == number), None)
         if step:
             out.append({"page": page, **asdict(step)})
+    return out
+
+
+def stage_pages(journey: journeys.Journey) -> List[str]:
+    """The walkthrough pages a journey's stages name, each once, in their order."""
+    out: List[str] = []
+    for step in journey.steps:
+        for ref in step.shown_by:
+            page = ref.partition("#")[0]
+            if page not in out:
+                out.append(page)
     return out
 
 
@@ -203,7 +229,7 @@ def _line_stops(line: Line, root: Path) -> List[dict]:
                     "title": s.label,
                     "words": s.hint,
                     "tries": _tries(s.shown_by, root),
-                    "put_on": bool(journey.staged_on),
+                    "put_on": True,
                 }
             )
     for page in line.pages:
@@ -313,6 +339,8 @@ def document(path: Path = ROADMAP, root: Path = WALKTHROUGH_ROOT) -> dict:
         for s in stops_:
             s["answer"] = given.get(s["id"])
         named.update(line.pages)
+        if line.journey in {j.id for j in journeys.JOURNEYS}:
+            named.update(stage_pages(journeys.by_id(line.journey)))
         lines.append(
             {
                 "group": line.group,

@@ -18,6 +18,7 @@ from apothecary.cli.main import cli
 from apothecary.docs_site import WALKTHROUGH_ROOT
 
 ROUTER = "31-what-the-router-needs.md"
+RELOAD = "33-windows-kept-over-a-reload.md"
 SHAPE = "journey:make/shape"
 
 
@@ -67,16 +68,52 @@ def test_a_page_written_by_hand_is_read_whole_from_its_first_words():
 
 
 def test_the_roadmap_names_every_page_once_and_only_what_is_there():
-    """Every walkthrough page is named by one line of the roadmap, no page twice, and
-    every journey and page a line names is one there is."""
+    """Every walkthrough page is shown somewhere: named by one line of the roadmap, or by
+    a stage of a journey a line names. No line names a page twice, and every journey and
+    page a line names is one there is."""
     lines = tour.roadmap()
     named = [page for line in lines for page in line.pages]
-    pages = sorted(p.name for p in WALKTHROUGH_ROOT.glob("[0-9][0-9]-*.md"))
-    assert sorted(named) == pages
-    assert tour.document()["not_on_the_roadmap"] == []
+    assert len(named) == len(set(named))
     known = {j.id for j in journeys.JOURNEYS}
     assert {line.journey for line in lines if line.journey} <= known
+    staged = {
+        page
+        for line in lines
+        if line.journey
+        for page in tour.stage_pages(journeys.by_id(line.journey))
+    }
+    pages = {p.name for p in WALKTHROUGH_ROOT.glob("[0-9][0-9]-*.md")}
+    assert set(named) | staged == pages
+    assert tour.document()["not_on_the_roadmap"] == []
     assert all(line.journey or line.pages for line in lines)  # none shown by nothing
+
+
+def test_every_journey_is_a_line_of_the_roadmap_in_the_chain_s_order():
+    """Each journey is named by one line, and the lines take them in the order the
+    registry chains them: a part designed, made, cut, its board, hands on it, the site
+    brought up and watched, and a drawing to pieces last."""
+    named = [line.journey for line in tour.roadmap() if line.journey]
+    assert named == [j.id for j in journeys.JOURNEYS]
+
+
+def test_every_stage_names_steps_and_pages_there_are():
+    for journey in journeys.JOURNEYS:
+        for stage in journey.steps:
+            tries = tour._tries(stage.shown_by, WALKTHROUGH_ROOT)
+            assert len(tries) == len(stage.shown_by), (journey.id, stage.id)
+            assert len(set(stage.shown_by)) == len(stage.shown_by), (journey.id, stage.id)
+
+
+def test_a_page_a_stage_names_whole_is_a_link_to_the_page():
+    """Cut a part's Choose names page 20, which no test writes: what to try there is the
+    page itself, by its title, with no step and no picture."""
+    (whole,) = tour._tries(journeys.CUT.steps[0].shown_by, WALKTHROUGH_ROOT)
+    assert (whole["page"], whole["index"], whole["picture"]) == (
+        "20-a-part-through-the-router.md",
+        None,
+        None,
+    )
+    assert whole["heading"].startswith("20 — ") and whole["words"]
 
 
 def test_the_roadmap_orders_the_tour_and_photographs_are_last():
@@ -93,16 +130,19 @@ def test_the_roadmap_orders_the_tour_and_photographs_are_last():
     ]
     ids = tour.stop_ids()
     assert ids[0] == "page:00-getting-started.md"
-    photographs = [s["id"] for line in doc["lines"] if line["group"] == "Photographs" for s in line["stops"]]
+    photographs = [
+        s["id"] for line in doc["lines"] if line["group"] == "Photographs" for s in line["stops"]
+    ]
     assert "page:01-photographs-into-pieces.md" in photographs
     assert ids[-len(photographs) :] == photographs
-    assert ids.index("page:04-designing-a-part.md") < ids.index(SHAPE) < ids.index(photographs[0])
+    assert "journey:drawing/board" in photographs
+    assert ids.index("journey:design/numbers") < ids.index(SHAPE) < ids.index(photographs[0])
 
 
 def test_a_line_that_names_a_journey_has_its_stages_as_stops_with_what_to_try():
     """Make a thing's line: each stage a stop, its words the rail's own, and what to try
     on it the recorded steps the stage names."""
-    make = next(line for line in tour.document()["lines"] if line["text"].startswith("A part is chosen"))
+    make = next(line for line in tour.document()["lines"] if "shaped, sliced" in line["text"])
     assert [(s["kind"], s["stage"], s["title"]) for s in make["stops"]] == [
         ("stage", s.id, s.label) for s in journeys.MAKE.steps
     ]
@@ -113,9 +153,6 @@ def test_a_line_that_names_a_journey_has_its_stages_as_stops_with_what_to_try():
         ("04-designing-a-part.md", 3),
     ]
     assert shape["tries"][0]["heading"] == "A size dragged is checked once the slider rests"
-    # Every step a stage names is one a page has.
-    for stage in journeys.MAKE.steps:
-        assert len(tour._tries(stage.shown_by, WALKTHROUGH_ROOT)) == len(stage.shown_by), stage.id
 
 
 def test_a_line_that_names_nothing_is_shown_by_nothing(tmp_path):
@@ -157,9 +194,14 @@ def test_an_answer_is_kept_with_the_commit_and_the_latest_is_the_stop_s(kept):
 
 
 def test_a_page_is_one_stop_answered_whole(kept):
-    said = {"stop": f"page:{ROUTER}", "verdict": "as shown"}
+    said = {"stop": f"page:{RELOAD}", "verdict": "as shown"}
     assert TestClient(app).post("/tour/answers", json=said).status_code == 201
-    assert tour.answers()[f"page:{ROUTER}"]["verdict"] == "as shown"
+    assert tour.answers()[f"page:{RELOAD}"]["verdict"] == "as shown"
+
+
+def test_a_page_a_stage_shows_is_no_stop_of_its_own(kept):
+    said = {"stop": f"page:{ROUTER}", "verdict": "as shown"}
+    assert TestClient(app).post("/tour/answers", json=said).status_code == 404
 
 
 @pytest.mark.parametrize(

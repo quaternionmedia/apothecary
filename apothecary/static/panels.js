@@ -609,6 +609,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         viewsHead.textContent = "Views";
         into.append(viewsHead);
         for (const [id, v] of views) {
+            if (v.listed === false) continue;  // a journey's, laid out by entering it
             const b = document.createElement("button");
             b.type = "button";
             b.className = "window-item view-item";
@@ -824,8 +825,8 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
          * person opens that window (`hint`), said where the view is refused. A window a
          * view leaves out is closed; one made for the moment that was open stays open,
          * at its home. */
-        defineView(id, { title, layout: spec, requires = null, hint = null }) { views.set(id, { title: title || id, spec, requires, hint }); },
-        views() { return [...views].map(([id, v]) => ({ id, title: v.title, requires: v.requires })); },
+        defineView(id, { title, layout: spec, requires = null, hint = null, listed = true }) { views.set(id, { title: title || id, spec, requires, hint, listed }); },
+        views() { return [...views].map(([id, v]) => ({ id, title: v.title, requires: v.requires, listed: v.listed })); },
         /* The window a view needs and the page has not got now ({ id, title, hint }), else null. */
         viewMissing(id) {
             const view = views.get(id);

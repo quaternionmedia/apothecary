@@ -31,3 +31,4 @@
 .tour-pop-tries:empty { display: none; }
 .tour-pop a { color: #4a9eff; }
 .tour-pop [hidden] { display: none; }
+.tour-pop-tries li.whole { list-style: square; }

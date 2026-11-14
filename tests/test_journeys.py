@@ -7,8 +7,10 @@ from __future__ import annotations
 import json
 import re
 
-from apothecary.journeys import JOURNEYS, by_id, manifest
-from apothecary.menu import VIEWS
+from apothecary.demo import DEVKIT
+from apothecary.example_hierarchy import create_example_site
+from apothecary.journeys import JOURNEYS, PUTS, by_id, manifest
+from apothecary.menu import PANEL_GROUPS, VIEWS
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.systems import SYSTEMS
 from apothecary.viewer import render_fractal_viewer_page
@@ -40,11 +42,28 @@ def test_each_journey_is_named_once_and_apart_from_the_systems():
     ids = [j.id for j in JOURNEYS]
     assert len(ids) == len(set(ids))
     assert not set(ids) & {s.id for s in SYSTEMS}
-    groups = {s.group for s in SYSTEMS}
+    groups = set(PANEL_GROUPS.values()) | {s.group for s in SYSTEMS}
     for journey in JOURNEYS:
         assert re.fullmatch(r"[a-z][a-z0-9-]*", journey.id)
-        assert 0 < len(journey.cell) <= 12, journey.cell  # a ring label
+        assert len(journey.cell) <= 12, journey.cell  # a ring label, where it has one
         assert journey.group in groups, journey.group  # a colour the palette has
+        assert journey.name and journey.title, journey.id
+
+
+def test_a_stage_is_put_on_by_verbs_the_page_has_on_pieces_the_demo_s_site_has():
+    """What the tour does to stand on a stage is from the page's own short list, and its
+    subjects are pieces of the demo's site."""
+    pieces = {child.name for child in create_example_site().children}  # the demo's garage
+    for journey in JOURNEYS:
+        for verb, subject in [*journey.staged_on, *(p for s in journey.steps for p in s.puts)]:
+            assert verb in PUTS, (journey.id, verb)
+            piece, _, what = subject.partition(":")
+            if verb == "pin":
+                assert what == DEVKIT  # the demo's devkit, which stands unpinned
+            assert piece in pieces or (verb == "working" and not piece), (journey.id, subject)
+    page = PAGE.read_text(encoding="utf-8")
+    for verb in PUTS:
+        assert f"verb === '{verb}'" in page, verb
 
 
 def test_every_window_a_journeys_view_lays_out_is_one_the_page_has():
@@ -65,8 +84,11 @@ def test_the_make_view_holds_the_window_set_a_part_is_made_through():
     assert column[-1]["active"] == "machine-print"
 
 
-def test_the_ring_has_a_cell_for_each_journeys_view_after_the_systems():
-    assert VIEWS[len(SYSTEMS) :] == tuple((j.id, j.cell) for j in JOURNEYS)
+def test_the_ring_has_a_cell_for_the_first_journey_s_view_after_the_systems():
+    """Panels › Windows is full, so Make a thing's view alone has a cell there; the other
+    journeys are entered from ⊞ Windows › Journeys and the tour."""
+    assert VIEWS[len(SYSTEMS) :] == (("make", "Make view"),)
+    assert [j.id for j in JOURNEYS if j.cell] == ["make"]
 
 
 def test_the_page_is_given_the_journeys_and_defines_their_views_from_them_alone():

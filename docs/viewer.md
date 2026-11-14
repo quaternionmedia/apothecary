@@ -413,6 +413,22 @@ A journey is a path a person takes through the windows, a step at a time
 enters one: its view is laid out where it can be now, and its rail stands in the
 header at its first step.
 
+The journeys are in the order of the chain the page manages, each handing the next
+what it made:
+
+| Journey | Its steps | What it hands on |
+|---|---|---|
+| **Design a part** (`design`) | 1 Choose, 2 Numbers, 3 Text, 4 Kept, 5 Ready | a part a machine can make |
+| **Make a thing** (`make`) | 1 Choose, 2 Shape, 3 Slice, 4 See, 5 Print | a job on the printer |
+| **Cut a part** (`cut`) | 1 Choose, 2 Toolpath, 3 See, 4 Needs, 5 Cut | a job on the router |
+| **Bring a board to life** (`board`) | 1 Pin, 2 Bench, 3 Flash, 4 Hear | a board that says what it runs |
+| **Hands on the machines** (`hands`) | 1 Deck, 2 Knobs | a machine moved by hand |
+| **Bring the site up** (`bring-up`) | 1 Steps, 2 Members, 3 Audit | a site in working order |
+| **Watch the site** (`watch`) | 1 Space, 2 Hour | what each machine's hour held |
+| **A drawing to pieces** (`drawing`) | 1 Board, 2 Picture, 3 Shapes, 4 Marks, 5 Models, 6 Pieces | shapes that stand up as pieces: parts, to design |
+
+*Make a thing* in full, as each is written in `apothecary/journeys.py`:
+
 | | Step | Brings forward | Owns |
 |---|---|---|---|
 | 1 | **Choose** | Site, then Selected | Site, Problems, Pinned, SCAD |
@@ -421,7 +437,10 @@ header at its first step.
 | 4 | **See** | the Print window, the chosen file's path drawn in the world and framed | -- |
 | 5 | **Print** | the Machine, then Jobs | the Machine, Jobs |
 
-*Make a thing*, the first journey, goes from a part to the job that makes it.
+A journey's view lays its windows out when it is entered. *Make a thing*'s is also
+listed in ⊞ Windows › Views and has a cell on the ring's Panels › Windows, which is
+full; the others are entered from ⊞ Windows › Journeys and from the
+[tour](tour.md), which puts the page on each stage on the demo.
 
 - **A step on the rail enters it**, the step already on included: its windows
   come in front of their stacks, the one it is about first, and a closed one

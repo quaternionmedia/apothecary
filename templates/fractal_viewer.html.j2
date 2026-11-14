@@ -7909,58 +7909,146 @@
                 return true;
             }
             // A stage of a journey put on for the tour (widgets/tour_popover.js), on the
-            // demo: the machine it is staged on opened, its piece chosen, the journey's
-            // view laid out and the step entered, as a person would do each. It says
-            // what it did, then what the page said of the step.
+            // demo: what its journey is staged on and then its own puts done, each as a
+            // person would do it and only where it is not so already (stagePut), the
+            // journey's view laid out and the step entered. It says what it did, then
+            // what the page said of the step. Nothing here arms, starts or sends.
             async stageJourney(id, stepId) {
                 const journey = JOURNEYS.find((j) => j.id === id);
                 if (!journey) return { did: [], said: `There is no journey ${id}`, refused: true };
-                const on = journey.staged_on || {};
+                const step = journey.steps.find((x) => x.id === stepId) || journey.steps[0];
                 const did = [];
+                // The site's own level: a piece is chosen and opened among the site's.
+                if (this.focusPath.length) { this.goUpTo(0, 'the tour'); did.push(`stepped out to ${this.siteName}`); }
+                // A journey with no machine in it: the one open is closed, as its tab's ✕ does.
+                if (this.machine && !JSON.stringify(journey.view).includes('"machine')) {
+                    const who = this.machine.path || this.machine.port;
+                    this.closeMachine();
+                    did.push(`${who}'s Machine closed: ${journey.name} has no machine in it`);
+                }
+                for (const [verb, subject] of [...(journey.staged_on || []), ...(step.puts || [])]) {
+                    const done = await this.stagePut(verb, subject);
+                    if (done.refused) return { did, said: done.refused, refused: true };
+                    if (done.did) did.push(done.did);
+                }
+                if (this.journey?.id !== id) {
+                    await this.enterJourney(id, { stepId: step.id });
+                    did.push(`${journey.name} entered, its windows laid out`);
+                } else {
+                    await this.enterStep(step.id, 'the tour');
+                }
+                const status = document.getElementById('status');
+                return { did, said: status.textContent, refused: status.classList.contains('error') };
+            }
+            // One thing a stage is put on by (journeys.py's PUTS): `{ did }` saying what
+            // was done, `{}` where it was so already, `{ refused }` saying why not.
+            async stagePut(verb, subject) {
                 const until = async (test, ms) => {
                     const end = Date.now() + ms;
                     while (Date.now() < end) { if (test()) return true; await new Promise((r) => setTimeout(r, 150)); }
                     return Boolean(test());
                 };
-                if (on.machine && !this.machine) {
-                    if (!this.renderNodeByKey[on.machine]) return { did, said: `${on.machine} is not in ${this.siteName}: the tour stages ${journey.name} on it`, refused: true };
-                    await until(() => this.bindingFor(on.machine).row?.device?.port, 15000);
-                    this.selectPath(on.machine);
-                    if (!this.openMachine(on.machine) || !(await until(() => this.machine, 10000))) {
-                        return { did, said: `${on.machine}'s Machine did not open: ${document.getElementById('status').textContent}`, refused: true };
+                const here = (piece) => (this.renderNodeByKey[piece] ? null : `${piece} is not in ${this.siteName}: the tour stages this on it`);
+                const choose = async (piece) => {
+                    if (this.selectedName === piece) return false;
+                    this.selectPath(piece);
+                    await until(() => this.selectedName === piece, 5000);
+                    return true;
+                };
+                if (verb === 'part') {
+                    if (here(subject)) return { refused: here(subject) };
+                    return (await choose(subject)) ? { did: `${subject} chosen` } : {};
+                }
+                if (verb === 'pin') {
+                    const [piece, port] = subject.split(':');
+                    if (here(piece)) return { refused: here(piece) };
+                    await until(() => this.bindingsLoaded, 15000);
+                    if (this.bindingFor(piece).row?.device?.port) return {};
+                    await choose(piece);
+                    await this.setNodeDevice(piece, port);
+                    if (!(await until(() => this.bindingFor(piece).row?.device?.port, 10000))) {
+                        return { refused: `${port} was not pinned to ${piece}: ${document.getElementById('status').textContent}` };
                     }
-                    did.push(`${on.machine}'s Machine opened`);
+                    return { did: `${port} pinned to ${piece}, as Pin in its Device section does` };
                 }
-                if (on.part && this.selectedName !== on.part) {
-                    if (!this.selectPath(on.part)) return { did, said: `${on.part} is not in ${this.siteName}`, refused: true };
-                    await until(() => this.selectedName === on.part, 5000);
-                    did.push(`${on.part} chosen`);
+                if (verb === 'machine') {
+                    if (here(subject)) return { refused: here(subject) };
+                    await until(() => this.bindingsLoaded, 15000);
+                    const port = this.bindingFor(subject).row?.device?.port;
+                    if (this.machine && port && this.machine.port === port && this.machine.handle?.kind()) return {};
+                    await choose(subject);
+                    // Its sections are its kind's: waited for, so a stage's windows are there.
+                    if (!this.openMachine(subject) || !(await until(() => this.machine && this.machine.port === port && this.machine.handle?.kind(), 15000))) {
+                        return { refused: `${subject}'s Machine did not open: ${document.getElementById('status').textContent}` };
+                    }
+                    return { did: `${subject}'s Machine opened` };
                 }
-                // A stage that draws a file's path needs one kept: with none, the stage
-                // before it is done here, the piece sliced for the machine and waited for.
-                const step = journey.steps.find((x) => x.id === stepId);
-                const print = this.machine?.handle?.print;
-                if (step?.draws && on.part && print?.slice) {
+                if (verb === 'file') {
+                    const machine = this.machine, print = machine?.handle?.print;
+                    if (!print?.slice) return { refused: `No Machine that makes ${subject} is open` };
+                    const who = machine.path || machine.port;
                     const found = await print.show();
-                    if (found && !found.file) {
-                        const started = await print.slice(on.part);
-                        if (started.refused) return { did, said: `${on.part} was not sliced: ${started.refused}`, refused: true };
-                        await until(() => !print.slicing(), 180000);
-                        const kept = await print.show();
-                        if (!kept || !kept.file) {
-                            return { did, said: `${on.part}'s slice for ${on.machine} did not end in three minutes: its task is in the Print window`, refused: true };
+                    if (!found || found.file) return {};
+                    const router = machine.handle.kind() === 'router';
+                    const started = await print.slice(subject);
+                    if (started.refused) return { refused: `${subject} was not ${router ? 'given a toolpath' : 'sliced'}: ${started.refused}` };
+                    await until(() => !print.slicing(), 180000);
+                    const kept = await print.show();
+                    if (!kept || !kept.file) return { refused: `${subject}'s ${router ? 'toolpath' : 'slice'} for ${who} did not end in three minutes: its task is in the ${found.card} window` };
+                    return { did: router ? `${subject}'s toolpath written for ${who}, as Toolpath does: ${kept.file}` : `${subject} sliced for ${who}, as Slice does: ${kept.file}` };
+                }
+                if (verb === 'edit') {
+                    if (here(subject)) return { refused: here(subject) };
+                    if (this.editorOpenFor === subject && this.selectedName === subject) return {};
+                    await choose(subject);
+                    return this.openEditor(subject) ? { did: `${subject}'s editor opened, as Part › Edit does` } : { refused: `${subject} has no parameters to edit` };
+                }
+                if (verb === 'scad') {
+                    if (here(subject)) return { refused: here(subject) };
+                    await choose(subject);
+                    const { ok, said } = await this.scadWindowOn(subject);
+                    return ok ? { did: `${subject}'s SCAD opened in its window, as Part › SCAD does` } : { refused: said };
+                }
+                if (verb === 'fit') {
+                    if (here(subject)) return { refused: here(subject) };
+                    await choose(subject);
+                    const { ok, said } = this.fitSelected();
+                    return ok ? { did: `${subject} framed in the world, as f does` } : { refused: said };
+                }
+                if (verb === 'bench') {
+                    const sketch = await this.flashSketchOf(subject);
+                    return sketch ? { did: `the Bench opened on ${sketch}, as ${subject}'s Device › Flash sketch does` } : { refused: document.getElementById('status').textContent };
+                }
+                if (verb === 'working') {
+                    const said = await this.openWorkingSpace(subject || null);
+                    return { did: `the Working space opened: ${said}` };
+                }
+                if (verb === 'picture' || verb === 'shapes') {
+                    const [host, what] = subject.split(':');
+                    if (here(host)) return { refused: here(host) };
+                    const drawn = () => this.pictureMarks.drawnAt(host);
+                    // The picture framed where it lies, so what a stage is about is in view.
+                    const framed = (done) => {
+                        const corners = drawn()?.mat?.corners;
+                        if (corners) {
+                            const [xs, ys] = [0, 1].map((i) => corners.map((c) => c[i]));
+                            this.frameBox({ min: [Math.min(...xs), Math.min(...ys), 0], max: [Math.max(...xs), Math.max(...ys), 0] });
                         }
-                        did.push(`${on.part} sliced for ${on.machine}, as Slice does: ${kept.file}`);
+                        return done;
+                    };
+                    if (verb === 'picture') {
+                        if (drawn()) return framed({});
+                        await this.pictures.pinPicture(host, what);
+                        if (!(await until(() => drawn(), 30000))) return { refused: `${what} was not pinned at ${host}: ${document.getElementById('status').textContent}` };
+                        return framed({ did: `${what} pinned at ${host}, as its Picture › Folder does` });
                     }
+                    if (!drawn()) return { refused: `No picture is drawn at ${host} to find shapes in` };
+                    if (drawn().shapes?.length) return framed({});
+                    await this.pictures.findShapes(host, what);
+                    if (!(await until(() => drawn()?.shapes?.length, 30000))) return { refused: `No shape was found at ${host}: ${document.getElementById('status').textContent}` };
+                    return framed({ did: `${drawn().shapes.length} shapes found at ${host}, as its Picture › Find shapes › ${what} does` });
                 }
-                if (this.journey?.id !== id) {
-                    await this.enterJourney(id, { stepId });
-                    did.push(`${journey.name} entered, its windows laid out`);
-                } else {
-                    await this.enterStep(stepId, 'the tour');
-                }
-                const status = document.getElementById('status');
-                return { did, said: status.textContent, refused: status.classList.contains('error') };
+                return { refused: `The tour has no way to ${verb} ${subject}` };
             }
             // The journey left: the rail goes, the windows stay where they are.
             leaveJourney() {
