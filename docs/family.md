@@ -131,7 +131,11 @@ folder, `procedures/<site>/<name>.json`:
   last said it.
 
 Every step waits for a person's GO, and only the step standing by fires: the one whose
-predecessor has fired, once the evidence it names is in. GO is in the **Procedure**
+predecessor has fired, once the evidence it names is in. Where the step before it put
+a machine or a board to work, the work must have ended too: a home still under way, or
+a cut still running, holds the next step, and work that failed holds it until its step
+is fired again. A run is done when its job is, and failed when its job was cancelled or
+failed. Work already queued for a machine behind work that failed for it is not run. GO is in the **Procedure**
 window, which says how each step stands. It stands beside the world
 whenever the site has a procedure, without being asked for, and gives its room back on a site
 with none; a window a person closed stays closed, and one a person opened is the person's.
@@ -156,15 +160,19 @@ new tab; a pull member leads nowhere. GO never arms a latch.
 |---|---|
 | waiting | For the step before it, or for its evidence; `why` says which |
 | standing by | GO fires it |
-| fired | Delivered, and not finished: a page has not read it, or a member beside the hub answered 202. The next step may go on |
+| fired | Delivered, and not finished: a page has not read it, a member beside the hub answered 202, or a machine or a board here is still at the work. The next step may go on in the first two cases, and waits in the third |
 | done | Every member took it, and a hosted member's work has ended well |
 | refused | A member refused it, in the words `why` holds. It may be fired again |
-| failed | A member is down, is not in the hub's table, or its work failed. It may be fired again |
+| failed | A member is down, is not in the hub's table, its work or the job it started failed, or the server restarted while it ran and how it ended was never read. It may be fired again |
 
 Each delivery's outcome is kept in the evidence log, `actions/<day>.jsonl`, each naming
-its procedure, its step and its node, so a restart leaves what each step did. What a
-member says later is read live and is not kept: a page's read of its action, or how
-work answered 202 ended, which reads as fired after a restart.
+its procedure, its step and its node, so a restart leaves what each step did. How work
+answered 202 ended is kept there too, the first time it is read after it ends, and a
+job it started is read from the job's own record. Work whose end was never read before
+a restart is not known to have ended: its step is failed, to be looked at and fired
+again. A page's read of its action is read live and is not kept. A board's flash is
+refused for a port whose board answered as a printer or a router: a step never
+replaces the firmware that runs a machine.
 
 ## What goes through it
 

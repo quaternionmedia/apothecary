@@ -289,6 +289,12 @@ listening does not reset the devkit), and asks the chip what it is with
 the first one's -- Arduino's, when arduino-cli is there -- and is listened to
 by it; a board's Machine says which module found it.
 
+A flash is refused for a port whose board answered as a printer or a router: it would
+replace the firmware that runs the machine, and a router's controller is the very
+chip a devkit's sketch is built for. Replacing it is asked for by name,
+`"replace_machine_firmware": true` in the request or `--replace-machine-firmware` at
+the command line; a procedure's flash step never asks.
+
 ## Knowing what a board is running
 
 `apothecary firmware devices` (and each board's Machine in the viewer) describe
@@ -569,7 +575,13 @@ printer's plan is made in its own Machine.
 ### Control, behind a latch
 
 Disarmed, the default, nothing can heat or move the machine: the API refuses
-control lines with `409`. A printer's Machine's **⚙ Control** arms a per-port latch
+control lines with `409`. What only turns something off or stops it goes all the
+same, as the stop does: a heater's target to zero (`M104 S0`, `M140 S0`), the fan off,
+a heat-and-wait broken (`M108`), the quickstop (`M410`), the card's pause, and a
+router's spindle off (`M5`), hold and jog cancel. A latch that lapsed is never between
+a person and the off switch, and none of these arms anything. The latch gates what is
+asked next and stops nothing by lapsing: a print five hours long outlives it.
+A printer's Machine's **⚙ Control** arms a per-port latch
 held on the server; it lapses after five minutes without a command (each
 accepted command renews it) and is dropped by a **Release** or a lost link.
 **E-STOP** (`M112`; a router's `RESET`) is always accepted, latch or not, and
@@ -606,8 +618,13 @@ travel, feed and extrusion caps beside it. Homing is one axis at a time as well 
 of X, Y and Z (`G28 X`), a router's `$H` is all three and `$HX`, `$HY` and `$HZ` one;
 the pad's Home X, Home Y and Home Z each send their kind's line, and the ring's Home has
 the same, the printer's with XY beside them. Out-of-bounds values are refused before they reach the port;
-there is no EEPROM write and no firmware configuration. A jog is three lines
-(`G91`, `G1 …`, `G90`), so the board is left in absolute mode. The travel cap
+there is no EEPROM write and no firmware configuration. A jog is one act on the port
+(`POST /firmware/printers/jog`, `devices.printer_jog`), whoever makes it, the page's
+pad or the deck's knobs. A router's is GRBL's jog line, which changes no modal state. A
+printer's is three lines (`G91`, `G1 …`, `G90`) with the link held from the first to
+the last, so no other caller's line goes between them, and `G90` is sent whatever
+became of the move, latch or no latch: the board is always left in absolute mode. A
+move out of bounds sends none of the three. The travel cap
 bounds each move, not where the head ends up: jogs one after another add up,
 and the firmware's soft endstops (after a homing) are what keeps the head on
 the machine.
@@ -626,7 +643,17 @@ POST /firmware/printers/control  {"port": …, "armed": true, "ttl_s": 300}
 GET  /firmware/printers/control?port=…                               → armed, and the seconds left
 GET  /firmware/printers/armed                                        → every port armed, and its seconds left
 POST /firmware/printers/command  {"port": …, "command": "M140 S60"}   → 409 unless armed
+POST /firmware/printers/jog      {"port": …, "axis": "X", "mm": -5, "feed": 3000}  → one relative move
+GET  /firmware/busy                                                  → what a restart would cut into
 ```
+
+`M108` and `M410` are written ahead of an exchange in flight, as the stop is: each is
+for a board busy with the line before it. The reply such a line is owed, and the reply
+of a line whose `ok` did not come in time, is read off before the next exchange's own,
+so one late `ok` does not make every reply after it the answer to the line before.
+
+A stop sent to a port this server knows and holds no link to opens it and writes the
+stop first: nothing is waited for and nothing asked before it.
 
 Anything else a person may send by hand is *report-only*
 (`firmware.gcode.QUERY_CODES`: `M503`, `M119`, `M20`, `M420 V`, `M122` …),
@@ -728,7 +755,23 @@ or answered with an error or a resend, ends the print. While it prints,
 heaters, fan and break-wait stay available; motion, SD, homing, the bed and
 release, reconnect, reset or upload on that port are refused. **Cancel** and
 a failed line send the safe-off (`M104 S0`, `M140 S0`, `M107`, `M84`); E-STOP
-ends the job with nothing more sent. It is not a queue or a webcam, and the
+ends the job with nothing more sent. A cancel breaks a heat-and-wait first (`M108`),
+so the safe-off is the next thing the printer reads and not minutes behind a bed
+still heating; behind a home or a probe it waits for that one line to end. Two
+starts at once on one port are one job and one refusal. A board that restarts under
+a print -- its power cycled while the print is paused, say -- is known by its boot
+banner: the print fails there and no more of the file is sent to a board that is cold
+and has no position.
+
+**A server that stops ends its jobs first.** Shutting down, it cancels each print,
+cut, bed reading and table map, waits for the safe-off, and sends the stop to a job
+still behind a line its board has not answered after twenty seconds
+(`devices.stop_jobs`). A server that dies with no chance to (power, a kill) leaves its
+job kept as running: when that machine's port is next opened the job is ended as
+failed and the safe-off sent then, unless the machine is plainly doing something
+else, a printer printing from its card or a router that is not idle, which is left
+alone and said. `GET /firmware/busy` lists what a restart would cut into, for whatever
+restarts the server for a reason of its own. It is not a queue or a webcam, and the
 slicing is OrcaSlicer's, behind the slicer's own seam; the *G-code printer
 seam* record draws that line: a host for one print at a time, and no more
 than that.
@@ -763,6 +806,11 @@ A kind of job belongs to a kind of machine: a printer offers `print`
 `jobs.register` and start its jobs from its own card in the same way.
 
 ## Serial engines
+
+`apothecary serve` refuses `APOTHECARY_SERIAL_ENGINE=simulated` on a person's own state
+folder: the simulated engine named by hand has neither the demo's folder nor its
+banner. `apothecary serve --demo` is the way to simulated machines, or a state folder
+of its own named in `APOTHECARY_STATE_DIR`.
 
 The byte transport under the G-code seam -- and under the Rust module's own
 port list and monitor -- is an engine slot:

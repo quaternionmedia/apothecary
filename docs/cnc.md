@@ -133,6 +133,33 @@ two is missing. What a port showed is kept while it is open and gone when it is 
 again, a replug or the controller's power included. The simulated router has no switch
 for a hand to press, and its homes are held to none of this.
 
+### A cut needs the tool placed
+
+After its power is cycled a controller reports its machine position as zero wherever
+the tool stands, and the work zero it kept is an offset from that: a cut's coordinates
+are only as true as the last home, or the last work zero set here. So a cut is refused
+(`grbl.not_placed`) until each axis has, on the open port, been homed (`$H`, or its
+own `$HX`, `$HY`, `$HZ`) or given a work zero (`G10 L20 P1`, or the touch plate's Z).
+What a port showed is gone when it is opened again, and taken away by a banner nothing
+here asked for (the controller's power cycled, its button pressed) and by a reset in
+motion (`ALARM:3`, the controller's own word that its position may be lost). A reset
+this server sent to a controller standing still keeps it. While an axis is not placed
+the poll's `todo` says which and since when, and the Machine's Needs you card shows
+it. The simulated router is held to none of this.
+
+### What a cut leaves
+
+A cut is done when its controller is idle again after its last line. One whose
+controller ends in alarm, or is still running when a move's time has run out, failed,
+and is held and reset as a cancelled one is. A cut that is done sends `M5`: a file
+that never says it does not leave the spindle turning. A pause that lands while a
+line waits for room in the planner keeps that line: resumed, the cut sends it and
+then the rest; room that never comes within a move's time fails the cut, and no line
+is left out. A hold or a resume typed at a cut is the cut's own pause and resume.
+A controller that restarts under a cut is known by its banner, and the cut fails
+there. A table map can be stopped: the stop, or the server stopping, holds and
+resets the router under it, and no further point is probed.
+
 ### What the state asks of a person
 
 What stops a person is in the machine's state, for the page, the deck and a program alike,

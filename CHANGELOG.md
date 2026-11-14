@@ -171,6 +171,15 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Changed
 
+- A jog is one act on the port, whoever makes it: `POST /firmware/printers/jog` and `devices.printer_jog` send a router's jog line, or a printer's relative move with the link held from `G91` to `G90` and absolute positioning put back whatever became of the move; the deck's knobs go through it as the page's pad does. ([doc](docs/firmware.md#control-behind-a-latch))
+- What only turns something off or stops it goes with the control latch down: a heater's target to zero, the fan off, a heat-and-wait broken, the quickstop, a router's spindle off, hold and jog cancel. ([doc](docs/firmware.md#control-behind-a-latch))
+- A cut is refused until each axis has been homed or given a work zero on the open port, and a controller that restarted or was reset in motion has to be placed again; the Machine's Needs you card says which axis and since when. ([doc](docs/cnc.md#a-cut-needs-the-tool-placed))
+- A cut is done only when its controller is idle again: one that ends in alarm or never idles failed, and a cut that is done sends `M5`. ([doc](docs/cnc.md#what-a-cut-leaves))
+- A procedure's step that put a machine or a board to work holds the next until the work has ended, and a run is done when its job is; how work ended is kept in the actions log, and a restart leaves no step fired for good. ([doc](docs/family.md#a-procedure))
+- A flash is refused for a port whose board answered as a printer or a router, unless replacing its firmware is asked for by name (`replace_machine_firmware`, `--replace-machine-firmware`). ([doc](docs/firmware.md#build-and-upload))
+- The Stream Deck's stop keys reach every machine this server knows of, each on its own thread, wherever its board is pinned; key 6 stops the move under way (STOP JOG, QUICKSTOP) out of alarm; a turn two seconds old is dropped, not sent late; the spindle knob stops at one step and turns only from a fresh reading. ([doc](docs/stream-deck.md#the-controller))
+- `apothecary serve` refuses `APOTHECARY_SERIAL_ENGINE=simulated` on a person's own state folder. ([doc](docs/firmware.md#serial-engines))
+
 - A stack is tested and checked at its head: the whole suite runs here once, on the head of the stack being pulled, and the pull-request workflows other than the stack's own checks and the walkthrough run on a pull request into `main`, a stack's bottom when it opens and its head when it is marked ready, never on a level stacked on another or on a branch's push. ([doc](CONTRIBUTING.md#the-loop))
 - A board has one key, which a pin, a flash record and a bed reading are kept under: its MAC, else its USB bridge's serial number, else its bridge's make (`usb:1a86:7523`), so the router's pin follows it from port to port as the printer's does; two bridges of one make plugged in at once are told by their ports, and a pin by the make names neither. ([doc](docs/firmware.md#a-pin-follows-the-board))
 - The kind of machine a board drives follows from the dialect it answered in: `PrinterInfo.machine` is computed from `dialect` through one map, `firmware/models.py`'s `MACHINE_OF`, kept in the board's record and sent in its JSON, and the dialect modules read their kind from it. ([code](apothecary/firmware/models.py))
@@ -220,6 +229,10 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 - Legacy JSCAD viewer endpoints and three orphaned modules. ([code](apothecary/api.py))
 
 ### Fixed
+
+- A cut paused while a line waited for room in the router's planner left that line out; the line now waits out the pause, and the cut sends every line or fails. ([doc](docs/cnc.md#what-a-cut-leaves))
+- A server that stopped under a print or a cut left its heaters or its spindle on: shutting down ends each job with its safe-off first, and a job a dead server left running is ended, and its machine made safe, when its port is next opened; `GET /firmware/busy` says what a restart would cut into. ([doc](docs/firmware.md#printing-without-an-sd-card))
+- A print's cancel waited behind a heat-and-wait; it breaks the wait first. Two starts at once on one port were two jobs; they are one job and one refusal. A board that restarted under a paused print went on being sent the file; the print fails on its boot banner. A reply that came late shifted every reply after it; it is read off first. ([doc](docs/firmware.md#printing-without-an-sd-card))
 
 - The deck lights UNLOCK when the router is in alarm after a stop mid-move: it read its own last poll, from before the stop, ahead of a newer one, since it polls only while a machine is armed. ([doc](docs/stream-deck.md#the-controller))
 - The deck's layout, stopped, touches nothing after: a tick part way through a scan or a poll ends before the stop returns. ([doc](docs/stream-deck.md))
