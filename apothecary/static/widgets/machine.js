@@ -605,7 +605,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const rows = [];
         const unlock = st && st.dialect === "grbl" && st.state === "alarm"
             ? ' <button type="button" class="needs-unlock" title="Unlock ($X): the controller moves again, where it believes it is. Moves nothing. Control must be armed">Unlock</button>' : "";
-        for (const t of (st && st.todo) || []) rows.push(`<div class="need warn">${esc(t)}${unlock}</div>`);
+        // Unlock stands on the alarm's own line: a router not yet placed for a cut is not unlocked into one.
+        for (const t of (st && st.todo) || []) rows.push(`<div class="need warn">${esc(t)}${/^In alarm/.test(t) ? unlock : ""}</div>`);
         const r = st && st.refused;
         if (r) {
             const at = r.at ? new Date(r.at).toLocaleTimeString() : "";

@@ -9,6 +9,7 @@ from typing import Optional
 import click
 import uvicorn
 
+from .. import state_folder
 from ..projects.parts.skeleton import ROOT
 from ..stays_local import require_loopback
 from ..wiring.carlos import CARLOS_ENV, loopback_url
@@ -124,7 +125,7 @@ def _simulated_keeps_its_own_state(demo: bool) -> None:
     hand has neither, so the jobs and readings of machines that do not exist would be
     kept among the real ones, on a page that looks like the real one."""
     simulated = os.environ.get("APOTHECARY_SERIAL_ENGINE", "").strip().lower() == "simulated"
-    if simulated and not demo and not os.environ.get("APOTHECARY_STATE_DIR", "").strip():
+    if simulated and not demo and not state_folder.named():
         raise click.ClickException(
             "APOTHECARY_SERIAL_ENGINE=simulated would keep simulated machines' jobs and "
             "readings in your own state folder, on a page that does not say they are "
