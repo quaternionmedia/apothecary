@@ -252,7 +252,8 @@ def test_the_everything_key_reaches_each_machines_own_stop(bench):
 
     controller.send = spy
     _press(one, 7)
-    assert seen == [(PRINTER, "M112"), (ROUTER, "RESET")]  # each by its own dialect's word
+    # Each by its own dialect's word, and at once: neither waits for the other.
+    assert sorted(seen) == [(PRINTER, "M112"), (ROUTER, "RESET")]
     assert controller.sent == ["stop printer_1", "stop cnc_router"]
     assert _printer_halted(links) and not _spindle_on(links)
     assert "STOP sent to printer_1, cnc_router" in one.strip["small"]
