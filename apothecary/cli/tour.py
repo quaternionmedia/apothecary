@@ -1,4 +1,4 @@
-"""What a person said of the tour's steps, from the command line (apothecary/tour.py)."""
+"""What a person said of the tour's stops, from the command line (apothecary/tour.py)."""
 
 from __future__ import annotations
 
@@ -8,40 +8,47 @@ from .. import tour as the_tour
 
 
 @click.command("tour")
-@click.option("--off", is_flag=True, help="Only the steps a person said are off.")
-@click.option("--page", default=None, help="Only this walkthrough page (its file name or number).")
-def tour(off: bool, page: str | None) -> None:
-    """What a person said of each step of the tour (⊞ Windows › Tour in the viewer).
+@click.option("--off", is_flag=True, help="Only the stops a person said are off.")
+def tour(off: bool) -> None:
+    """What a person said of each stop of the tour (Tour, in the viewer's header).
 
-    A page a step at a time, each step's latest verdict -- as shown, or off with what
-    is off -- and the commit the server ran when it was said. The verdicts are kept
-    under the state folder, in tour/verdicts.jsonl.
+    The roadmap's lines in their order (docs/ROADMAP.md), each with its stops -- a
+    journey's stages, a walkthrough page -- and each stop's latest answer: as shown, or
+    off with what is off, and the commit the server ran when it was said. A line that
+    names nothing is shown by nothing. The answers are kept under the state folder, in
+    tour/answers.jsonl.
     """
-    given = the_tour.answers()
-    shown = [
-        s
-        for s in the_tour.stops()
-        if page is None or page in (s.page, s.number, s.page.removesuffix(".md"))
-    ]
-    if page is not None and not shown:
-        raise click.ClickException(f"no walkthrough page {page}")
-    for stop in shown:
-        steps = [(st.index, st.heading) for st in stop.steps] or [(0, "the page, read whole")]
-        mine = [(i, heading, given.get((stop.page, i))) for i, heading in steps]
-        counts = {v: sum(1 for *_, r in mine if r and r["verdict"] == v) for v in the_tour.VERDICTS}
-        waiting = sum(1 for *_, r in mine if r is None)
+    doc = the_tour.document()
+    group = None
+    for line in doc["lines"]:
+        stops = line["stops"]
+        given = [s["answer"] for s in stops]
+        counts = {
+            v: sum(1 for a in given if a and a["verdict"] == v) for v in the_tour.VERDICTS
+        }
         if off and not counts["off"]:
             continue
+        if line["group"] != group:
+            group = line["group"]
+            click.echo(group)
+        if line["shown_by_nothing"]:
+            click.echo(f"  {line['text']} shown by nothing")
+            continue
+        waiting = sum(1 for a in given if a is None)
         click.echo(
-            f"{stop.number} {stop.title}: {counts['as shown']} as shown, "
-            f"{counts['off']} off, {waiting} not yet"
+            f"  {line['text']} {counts['as shown']} as shown, {counts['off']} off, "
+            f"{waiting} not yet"
         )
-        for i, heading, record in mine:
+        for s in stops:
+            record = s["answer"]
             if record is None or (off and record["verdict"] != "off"):
                 continue
             mark = "✓" if record["verdict"] == "as shown" else "✗"
+            name = s["title"] if s["kind"] == "stage" else f"{s['number']} {s['title']}"
             note = f": {record['note']}" if record.get("note") else ""
             against = record.get("commit") or "an unknown commit"
             changed = ", changed" if record.get("changed") else ""
-            click.echo(f"  {mark} {i}. {heading}{note} ({against}{changed}, {record['at']})")
-    click.echo(f"Kept in {the_tour.verdicts_path()}")
+            click.echo(f"    {mark} {name}{note} ({against}{changed}, {record['at']})")
+    for page in doc["not_on_the_roadmap"]:
+        click.echo(f"Not on the roadmap: {page}")
+    click.echo(f"Kept in {the_tour.answers_path()}")

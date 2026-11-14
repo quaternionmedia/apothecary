@@ -9,93 +9,109 @@ opening, the notes under it and the list of what the page does not show
 are the test's fixed words. Editing the page by hand is editing the output
 of a program: the next run puts it back.
 
-The walkthrough a step at a time, beside the live page: each step as the test that writes its page recorded it -- its heading, its words, the picture taken after its assertions, what it showed -- and a person's word on it, kept with the commit the server ran. The words say what to do in the page; the picture is what the page did when the test did it. A page no test writes is read whole at its link. [docs/tour.md](../docs/tour.md) is the reference.
+What the roadmap claims, a stop at a time, in a box over the page: [docs/ROADMAP.md](../docs/ROADMAP.md) orders it, each of its lines naming a journey, whose stages are stops the page is put on, or walkthrough pages, each a stop that is read. A person explores a stage where it stands, and one word is kept on the stop with the commit the server ran. The box says nothing of its own: a stop's words are the journey's or the page's. [docs/tour.md](../docs/tour.md) is the reference.
 
-**Runtime-bound.** It drives a real browser against a real server of its own, whose state folder is this test's, so the words it keeps are its own and `apothecary tour` reads them from there. The steps it shows are the walkthrough's pages as committed.
+**Runtime-bound.** It drives a real browser against a real server of its own that says it is the demo, its printer a simulation and its slicer a script that answers as OrcaSlicer's command line does. Its state folder is this test's, so the answers it keeps are its own. The roadmap and the pages are as committed.
 
 Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build from an STL it built; a part it cannot build is drawn from an STL already there, or as its box.
 
 ---
 
-## 1. ⊞ Windows › Tour opens beside the world, on the first step not answered
+## 1. Tour, in the header, opens a box over the page on the roadmap's first stop
 
-The header's ⊞ Windows, Tour under Tools: the walkthrough beside the world, nothing answered yet, so on its first page. Page 00 is written by hand and its checks run with the tests, so it is read whole: the window gives its first words and its page's link, and asks whether it says what the app does.
+Tour in the header: a box above the windows, on the first stop of the roadmap nobody has said anything of. That is page 00, and a page is shown only: its first words, its link, and a word asked on the whole of it. Nothing in the page beneath has moved.
 
-![⊞ Windows › Tour opens beside the world, on the first step not answered](screenshots/34-01-windows-tour-opens-beside-the-world-on-the-first-s.png)
-
-```
-Page 00 is read whole, its checks run by the test command: read it at its link, and say whether it says what the app does.
-```
-
-## 2. Page 31 chosen: its first step, as its test recorded it
-
-The window's drop-down, page 31: its first step's heading and words, which say what a person does in the page beside it, and the picture its test took after the step's assertions passed. A click on the picture opens it whole in a tab of its own; its page is the link at the foot.
-
-![Page 31 chosen: its first step, as its test recorded it](screenshots/34-02-page-31-chosen-its-first-step-as-its-test-recorded.png)
+![Tour, in the header, opens a box over the page on the roadmap's first stop](screenshots/34-01-tour-in-the-header-opens-a-box-over-the-page-on-th.png)
 
 ```
-Step 1 of 7 of page 31: do what it says here, beside this window, and say whether the page does what the picture shows.
+Shown only: a page is read, not put on. Its examples run with the tests.
 ```
 
-## 3. ✓ As shown keeps the word and goes to the next step
+## 2. A journey's line chosen puts the page on its first stage
 
-✓ As shown: the server keeps it, with the moment and the commit it runs, and the window goes to step 2. The drop-down counts the page's steps answered, and the line under it the whole tour's.
+The box's drop-down holds the roadmap's lines under its headings, in its order; the line of Making a thing that names the journey Make a thing, chosen. Its stages are the stops, and the page is put on the first: printer_1's Machine opened and the footpedal chosen, as a person would do each, and the journey entered at Choose, its windows laid out and its rail in the header. The box says what it did, then what the page said. The stage is there to explore.
 
-![✓ As shown keeps the word and goes to the next step](screenshots/34-03-as-shown-keeps-the-word-and-goes-to-the-next-step.png)
-
-```
-Page 31, step 1: as shown
-```
-
-## 4. ✗ Off keeps what is off, and only with it
-
-✗ Off with the box empty is refused, the window saying what it needs and staying on the step; with what is off typed in the box, it is kept, and the window goes on.
+![A journey's line chosen puts the page on its first stage](screenshots/34-02-a-journey-s-line-chosen-puts-the-page-on-its-first.png)
 
 ```
-Page 31, step 2: off, Z's line ends past the pad's edge
+printer_1's Machine opened
+footpedal chosen
+Make a thing entered, its windows laid out
+Make a thing › 1 Choose (⊞ Windows › Make a thing): the part, among the site's pieces
 ```
 
-## 5. ‹ Back shows the word kept on the step
+## 3. ✓ As shown keeps the word and puts the next stage on, with what to try there
 
-‹ Back to step 2: under its picture, what was said of it, when, and against which commit; the drop-down says the page has one step off.
+✓ As shown: the server keeps it with the commit it runs, and the box goes to Shape and puts the page there, Parameters in front. Under what it did are the steps this stage's tests recorded, each a link to its picture: what to try.
 
-![‹ Back shows the word kept on the step](screenshots/34-05-back-shows-the-word-kept-on-the-step.png)
-
-```
-✗ Off: Z's line ends past the pad's edge -- said … against ….
-```
-
-## 6. Panels › Windows › Tour: its cells are its buttons
-
-The canvas ring's Panels › Windows › Tour: Next goes to step 3, and As shown keeps a word on it and goes to step 4. Back, Off, Its page and Its picture are cells there too.
+![✓ As shown keeps the word and puts the next stage on, with what to try there](screenshots/34-03-as-shown-keeps-the-word-and-puts-the-next-stage-on.png)
 
 ```
-Step 4 of 7 of page 31: do what it says here, beside this window, and say whether the page does what the picture shows.
+A size dragged is checked once the slider rests
+Apply draws the variant, marked as not saved
 ```
 
-## 7. Reloaded, it is open where it was
+## 4. See is put on from nothing: the piece sliced, its path drawn
 
-The page reloaded: the Tour is open again beside the world, as any window is, on the step it showed; this browser keeps where it was, the server what was said.
+See, chosen among the line's stops: the stage draws the chosen file's path, and no file is kept, so the page does the stage before it -- the footpedal sliced for printer_1, as Slice does -- and the path is drawn on the machine and framed.
 
-```
-Step 4 of 7 of page 31: do what it says here, beside this window, and say whether the page does what the picture shows.
-```
-
-## 8. `apothecary tour` reads back what was said
-
-At the command line, `apothecary tour --page 31`: each step answered, with what is off, and the commit and moment each was said against; `--off` lists only what is off, across every page.
+![See is put on from nothing: the piece sliced, its path drawn](screenshots/34-04-see-is-put-on-from-nothing-the-piece-sliced-its-pa.png)
 
 ```
-31 What the router needs: 2 as shown, 1 off, 4 not yet
-  ✓ 1. In alarm, Needs you says what clears it (…)
-  ✗ 2. A jog in alarm did not go, and the card keeps why: Z's line ends past the pad's edge (…)
-  ✓ 3. Each axis's home, beside its button: not proved, and what to do first (…)
+footpedal sliced for printer_1, as Slice does: footpedal.gcode
+Make a thing › 4 See (the tour): footpedal.gcode's path is drawn on printer_1 and framed, all of it: the preview slider in its Print goes through each layer
+```
+
+## 5. ✗ Off keeps what is off, and only with it
+
+✗ Off with the field empty is refused, the box saying what it needs and staying on the stop; with what is off typed, it is kept, and the box goes to Print and puts the page there, the Machine and Jobs in front. Nothing is armed.
+
+```
+Make a thing › 5 Print (the tour): control armed in the Machine, ▶ Print, the job in Jobs
+```
+
+## 6. A view laid out moves the windows, and not the box
+
+The Default view laid out: every window goes where that view has it, and the box is where it was, open on the stop it showed. The line's stops wear what was said of each.
+
+![A view laid out moves the windows, and not the box](screenshots/34-06-a-view-laid-out-moves-the-windows-and-not-the-box.png)
+
+```
+Tour · 2 of … said, 1 off
+```
+
+## 7. Panels › Windows › Tour: its cells are its buttons
+
+The canvas ring's Panels › Windows › Tour: Back goes to See, put on again, where the box shows what was said of it; As shown says otherwise now, and the latest word is the stop's. Off, Next, Put here and Its page are cells there too, and Tour opens and closes the box.
+
+```
+Make a thing · 5. Print
+```
+
+## 8. Reloaded, it is open where it was
+
+The page reloaded: the box is open again on the stop it showed, where it was left; this browser keeps where it was, the server what was said.
+
+```
+Make a thing · 5. Print
+```
+
+## 9. `apothecary tour` reads back what was said
+
+At the command line, `apothecary tour`: the roadmap's lines under its headings, each with how many of its stops are as shown, off and not yet, and each stop answered with the commit and moment it was said against; `--off` lists only what is off.
+
+```
+Making a thing
+  A part is chosen, shaped, sliced, seen and printed on a machine. 2 as shown, 0 off, 3 not yet
+    ✓ Choose (…)
+    ✓ See (…)
 ```
 
 ## What this page does not show
 
-- **Doing a step.** The tour shows a step's words and picture beside the page; doing what the words say is the person's, in the page beside it, and is each page's own test.
-- **What changes on every run.** Moments and the commit the server runs are blanked in the pictures and left out of the words, and so is how many steps the tour holds, which any page added changes.
+- **A server that is not the demo**, where the box shows a stage and puts nothing on.
+- **A stage armed or started.** Print's stage brings the Machine and Jobs forward; arming control and starting a print are a person's.
+- **What changes on every run.** Moments and the commit the server runs are blanked in the pictures and left out of the words, and so is how many stops the tour holds, which any line added to the roadmap changes.
 
 Run it yourself:
 

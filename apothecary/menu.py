@@ -734,10 +734,6 @@ PANELS: Sequence[Tuple[str, str]] = (
     # (widgets/deck.js), a stack beside the world registered at start and closed until
     # asked for; the Stream Deck + piece's Open Deck opens it too.
     ("deck", "Deck"),
-    # The Tour: the walkthrough a step at a time beside the live page, and a person's
-    # word on each step (widgets/tour.js, apothecary/tour.py), a stack beside the world
-    # registered at start and closed until asked for.
-    ("tour", "Tour"),
 )
 # The group each panel's window is registered under, as the page registers it (its
 # markup's data-group, its script's `group:`, a system's entry): a panel's cell wears
@@ -759,7 +755,6 @@ PANEL_GROUPS = {
     "bench": "Tools",
     "settings": "Tools",
     "deck": "Tools",
-    "tour": "Tools",
     "airgap": "Airgap",
 }
 # What a person may say a whiteboard's mark is (apothecary/vision/marks.py's Kind).
@@ -856,9 +851,9 @@ def _panels() -> Option:
                     )
                     for vid, label in VIEWS
                 ]
-                # The Tour, after the views, so no cell before it moves: the window and
-                # its verbs.
-                + [_tour(toggle("tour", "Tour"))],
+                # The Tour, after the views, so no cell before it moves: its box over
+                # the page and its verbs.
+                + [_tour()],
             )
         ]
         + [_bench(toggle("bench", "Bench"))]
@@ -1009,24 +1004,24 @@ def _models(toggle: Option) -> Option:
     )
 
 
-def _tour(toggle: Option) -> Option:
-    """Panels › Windows › Tour: the window, then its buttons, which the page hands to
-    it (widgets/tour.js): Back and Next through the walkthrough's steps, As shown and
-    Off saying whether the page does what the step shows (Off with what the window's
-    box says is off), and Its page and Its picture, the walkthrough page or the step's
-    picture whole, in a tab of its own."""
+def _tour() -> Option:
+    """Panels › Windows › Tour: the tour's box over the page, then its buttons, which
+    the page hands to it (widgets/tour_popover.js): Back and Next through the roadmap's
+    stops, As shown and Off saying whether the page does what the stop shows (Off with
+    what the box's field says is off), Put here, which puts the page on the stage, and
+    Its page, the walkthrough page a stop is from, in a tab of its own."""
     return Option(
         id="panels:tour",
         label="Tour",
-        group=PANEL_GROUPS["tour"],
+        group="Tools",
         children=[
-            toggle,
+            Option(id="tour:toggle", label="Tour", action="tour:toggle"),
             Option(id="tour:back", label="Back", action="tour:back"),
             Option(id="tour:as-shown", label="As shown", action="tour:as-shown"),
             Option(id="tour:off", label="Off", action="tour:off"),
             Option(id="tour:next", label="Next", action="tour:next"),
             Option(id="tour:page", label="Its page", action="tour:page"),
-            Option(id="tour:picture", label="Its picture", action="tour:picture"),
+            Option(id="tour:put", label="Put here", action="tour:put"),
         ],
     )
 
@@ -2075,8 +2070,8 @@ CARRIED_BY: Dict[str, Carries] = {
     # Marks' verbs: the page carries each to the window (widgets/marks.js), which
     # tells the server a person's word on the mark chosen there.
     "marks": Carries.VIEWER,
-    # The Tour's verbs: the page carries each to the window (widgets/tour.js), which
-    # keeps a person's word on the step it shows (POST /tour/verdicts).
+    # The Tour's verbs: the page carries each to its box (widgets/tour_popover.js), which
+    # keeps a person's word on the stop it shows (POST /tour/answers).
     "tour": Carries.VIEWER,
     # A camera's verbs: which of this browser's cameras it is (and Allow, to name
     # them), live, a picture taken and made its view, and the gathering's report

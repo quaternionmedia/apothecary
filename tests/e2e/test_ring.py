@@ -586,8 +586,6 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
         "procedure",
         # The Deck, a stack of its own beside the world, closed until asked for.
         "deck",
-        # The Tour, a stack of its own beside the world, closed until asked for.
-        "tour",
     ]
     assert not any(windows.state(page, f"airgap-{s}")["open"] for s in windows.AIRGAP_SECTIONS)
     expect(page.locator(".lm_goldenlayout")).to_have_count(1)

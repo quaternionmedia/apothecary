@@ -40,6 +40,9 @@ class Step:
     # Whether entering it draws the path of the file the machine has chosen, as the
     # Machine view does.
     draws: bool = False
+    # The walkthrough steps whose tests check it, ``page.md#step``: what the tour gives
+    # a person to try while on it (apothecary/tour.py).
+    shown_by: Tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -111,6 +114,7 @@ MAKE = Journey(
             "its numbers, in Parameters",
             forward=("part-parameters", "selected"),
             owns=("selected", "part-parameters"),
+            shown_by=("04-designing-a-part.md#2", "04-designing-a-part.md#3"),
         ),
         Step(
             "slice",
@@ -118,6 +122,7 @@ MAKE = Journey(
             "the machine's Print window: the part under makes, then Slice",
             forward=("machine-print",),
             owns=("machine-print",),
+            shown_by=("03-a-picture-to-a-print.md#7",),
         ),
         Step(
             "see",
@@ -132,6 +137,7 @@ MAKE = Journey(
             "control armed in the Machine, ▶ Print, the job in Jobs",
             forward=("machine", "jobs"),
             owns=("machine", "jobs"),
+            shown_by=("03-a-picture-to-a-print.md#8", "03-a-picture-to-a-print.md#9"),
         ),
     ),
 )

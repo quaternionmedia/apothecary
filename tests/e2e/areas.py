@@ -279,10 +279,11 @@ AREAS = {
         "sources": (
             "apothecary/tour.py",
             "apothecary/routes/tour.py",
-            "apothecary/static/widgets/tour.*",
             "apothecary/static/widgets/tour_popover.*",
+            "apothecary/journeys.py",
+            "docs/ROADMAP.md",
         ),
-        "tests": ("test_tour.py", "test_tour_popover.py"),
+        "tests": ("test_tour.py",),
     },
 }
 

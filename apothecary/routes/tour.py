@@ -1,5 +1,5 @@
-"""The tour's routes: the walkthrough as stops and steps, each with its answer, and a
-person's verdict on a step kept (apothecary/tour.py)."""
+"""The tour's routes: the roadmap's lines as stops, each with its answer, and a person's
+word on a stop kept (apothecary/tour.py)."""
 
 from __future__ import annotations
 
@@ -11,49 +11,24 @@ from .. import tour
 router = APIRouter()
 
 
-class Verdict(BaseModel):
-    page: str
-    step: int
+class Answer(BaseModel):
+    stop: str
     verdict: str
     note: str = ""
 
 
 @router.get("/tour")
 async def tour_document():
-    """Every walkthrough page as a stop, its steps as its test recorded them, each
-    step's latest verdict, and the commit the server runs."""
+    """The roadmap's lines in order, each with its stops -- a journey's stages, a
+    walkthrough page -- each stop's latest answer, and the commit the server runs."""
     return tour.document()
 
 
-@router.post("/tour/verdicts", status_code=201)
-async def tour_verdict(body: Verdict):
-    """A person's word on one step: ``as shown``, or ``off`` saying what is off."""
+@router.post("/tour/answers", status_code=201)
+async def tour_answer(body: Answer):
+    """A person's word on one stop: ``as shown``, or ``off`` saying what is off."""
     try:
-        return tour.say(body.page, body.step, body.verdict, body.note)
-    except LookupError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from None
-    except tour.Refused as e:
-        raise HTTPException(status_code=422, detail=str(e)) from None
-
-
-class StageVerdict(BaseModel):
-    journey: str
-    stage: str
-    verdict: str
-    note: str = ""
-
-
-@router.get("/tour/journeys")
-async def tour_journeys():
-    """Each journey's stages, each with a person's latest word on it."""
-    return tour.staged()
-
-
-@router.post("/tour/stages", status_code=201)
-async def tour_stage(body: StageVerdict):
-    """A person's word on one stage of a journey."""
-    try:
-        return tour.say_stage(body.journey, body.stage, body.verdict, body.note)
+        return tour.say(body.stop, body.verdict, body.note)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e)) from None
     except tour.Refused as e:

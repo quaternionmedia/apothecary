@@ -1,38 +1,44 @@
-// The tour over the page: a journey's stages (apothecary/journeys.py) in a box above the
-// windows. A stage is put on by the page -- its machine's window opened, its piece
-// chosen, its step entered -- and a person explores it there, then says how it is:
-// as shown, or off with what is off (POST /tour/stages, apothecary/tour.py). The box is
-// in the browser's top layer, so no view or journey lays it out or covers it; it is
-// dragged by its head and folded to it. A prototype, on Make a thing.
+// The tour: what the roadmap claims (docs/ROADMAP.md), a stop at a time, in a box over the
+// page. A stop is a stage of a journey (apothecary/journeys.py) or a walkthrough page.
+// A stage is put on by the page -- its machine's window opened, its piece chosen, the
+// stage entered -- and a person explores it there; a page is read, with the steps its
+// test recorded. Either way one word is kept on the stop: as shown, or off with what
+// is off (POST /tour/answers, apothecary/tour.py). The box has no words of its own: a
+// stop's are the journey's or the page's.
+//
+// The box is in the browser's top layer, so no view or journey lays it out or covers
+// it; it is dragged by its head, and folded to it by a double-click there.
 //
 // `stage(journey, stageId)` is the page's: it resolves to `{ did: [...], said, refused }`.
 // `demo` says whether this is `apothecary serve --demo`, the one place a stage is put on.
 
-const KEPT = 'apothecary.tour-pop';
+const KEPT = 'apothecary.tour';
 
 const MARKUP = `
-<header class="tour-pop-head" title="Drag to move">
+<header class="tour-pop-head" title="Drag to move; double-click to fold to this bar, or unfold">
   <span class="tour-pop-name"></span>
-  <button type="button" data-do="fold" title="Fold to this bar, or unfold">▁</button>
-  <button type="button" data-do="close" title="Close the tour: the page stays as it is">✕</button>
+  <button type="button" class="tour-pop-close" data-do="close" title="Close the tour: the page stays as it is">✕</button>
 </header>
 <div class="tour-pop-body">
-  <ol class="tour-pop-stages"></ol>
-  <h4 class="tour-pop-stage"></h4>
-  <p class="tour-pop-hint"></p>
+  <select class="tour-pop-lines" aria-label="The roadmap's lines"></select>
+  <ol class="tour-pop-stops"></ol>
+  <h4 class="tour-pop-title"></h4>
+  <p class="tour-pop-words"></p>
   <div class="tour-pop-row">
     <button type="button" class="tour-pop-put" data-do="put"></button>
+    <a class="tour-pop-page" target="_blank" rel="noopener">its page</a>
   </div>
   <ul class="tour-pop-did"></ul>
+  <ul class="tour-pop-tries"></ul>
   <p class="tour-pop-explore"></p>
   <p class="tour-pop-answer"></p>
   <input class="tour-pop-note" type="text" placeholder="What is off, if it is" aria-label="What is off">
   <div class="tour-pop-row">
-    <button type="button" data-do="back">‹ Back</button>
+    <button type="button" class="tour-pop-back" data-do="back">‹ Back</button>
     <span class="grow"></span>
-    <button type="button" data-do="as-shown">✓ As shown</button>
-    <button type="button" data-do="off">✗ Off</button>
-    <button type="button" data-do="next">Next ›</button>
+    <button type="button" class="tour-pop-as-shown" data-do="as-shown">✓ As shown</button>
+    <button type="button" class="tour-pop-off" data-do="off">✗ Off</button>
+    <button type="button" class="tour-pop-next" data-do="next">Next ›</button>
   </div>
 </div>`;
 
@@ -42,21 +48,25 @@ function kept() {
 function keep(more) {
     try { localStorage.setItem(KEPT, JSON.stringify({ ...kept(), ...more })); } catch (e) { /* this browser keeps nothing */ }
 }
+const el = (tag, props = {}, ...kids) => {
+    const node = Object.assign(document.createElement(tag), props);
+    node.append(...kids);
+    return node;
+};
 
 export function mountTourPopover({ base = '', demo = false, stage, onShown = () => {} }) {
-    const box = document.createElement('div');
-    box.className = 'tour-pop';
-    box.id = 'tour-pop';
+    const box = el('div', { className: 'tour-pop', id: 'tour-pop' });
     box.setAttribute('popover', 'manual');
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-label', 'Tour');
     box.innerHTML = MARKUP;
     document.body.append(box);
     const $ = (sel) => box.querySelector(sel);
-    const state = { journeys: [], journey: null, at: 0, busy: false, did: null };
+    // Every stop in the roadmap's order, each knowing its line.
+    const state = { lines: [], stops: [], at: 0, busy: false, did: null };
 
-    const journey = () => state.journeys.find((j) => j.id === state.journey) || state.journeys[0];
-    const here = () => journey()?.stages[state.at];
+    const here = () => state.stops[state.at];
+    const lineOf = (stop) => state.lines[stop.line];
 
     function place() {
         const { x, y } = kept();
@@ -68,83 +78,113 @@ export function mountTourPopover({ base = '', demo = false, stage, onShown = () 
         box.style.top = `${top}px`;
     }
 
+    const mark = (stop) => (stop.answer ? (stop.answer.verdict === 'off' ? 'off' : 'as-shown') : '');
+    const count = (stops) => {
+        const said = stops.filter((s) => s.answer).length, off = stops.filter((s) => s.answer?.verdict === 'off').length;
+        return `${said}/${stops.length}${off ? ` · ${off} off` : ''}`;
+    };
+
     function render() {
-        const j = journey(), s = here();
-        if (!j || !s) return;
-        const answered = j.stages.filter((x) => x.answer).length;
-        $('.tour-pop-name').textContent = `Tour · ${j.name} · ${answered} of ${j.stages.length} said`;
-        const list = $('.tour-pop-stages');
-        list.replaceChildren(...j.stages.map((x, i) => {
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.dataset.at = String(i);
-            b.textContent = `${i + 1} ${x.label}`;
-            b.title = x.hint;
-            if (i === state.at) b.setAttribute('aria-current', 'step');
-            if (x.answer) b.className = x.answer.verdict === 'off' ? 'off' : 'as-shown';
-            const li = document.createElement('li');
-            li.append(b);
-            return li;
+        const stop = here();
+        if (!stop) return;
+        const line = lineOf(stop);
+        const said = state.stops.filter((s) => s.answer).length, off = state.stops.filter((s) => s.answer?.verdict === 'off').length;
+        $('.tour-pop-name').textContent = `Tour · ${said} of ${state.stops.length} said, ${off} off`;
+
+        const lines = $('.tour-pop-lines');
+        lines.replaceChildren();
+        let group = null;
+        state.lines.forEach((l, i) => {
+            if (!group || group.label !== l.group) { group = el('optgroup', { label: l.group }); lines.append(group); }
+            const text = l.shown_by_nothing ? `${l.text} · shown by nothing` : `${l.text} · ${count(l.stops)}`;
+            group.append(el('option', { value: String(i), textContent: text, disabled: l.shown_by_nothing }));
+        });
+        lines.value = String(stop.line);
+
+        $('.tour-pop-stops').replaceChildren(...line.stops.map((s, i) => {
+            const b = el('button', { type: 'button', className: mark(s), textContent: s.kind === 'stage' ? `${i + 1} ${s.title}` : s.number, title: s.kind === 'stage' ? s.words : s.title });
+            b.dataset.stop = s.id;
+            if (s.id === stop.id) b.setAttribute('aria-current', 'step');
+            return el('li', {}, b);
         }));
-        $('.tour-pop-stage').textContent = `${state.at + 1}. ${s.label}`;
-        $('.tour-pop-hint').textContent = `${s.hint[0].toUpperCase()}${s.hint.slice(1)}.`;
+
+        const isStage = stop.kind === 'stage';
+        $('.tour-pop-title').textContent = isStage
+            ? `${stop.journey_name} · ${line.stops.indexOf(stop) + 1}. ${stop.title}`
+            : `${stop.number} — ${stop.title}`;
+        $('.tour-pop-words').textContent = isStage ? `${stop.words[0].toUpperCase()}${stop.words.slice(1)}.` : stop.words;
+
         const put = $('.tour-pop-put');
-        const on = Object.values(j.staged_on || {}).join(' and ');
-        put.disabled = state.busy || !demo || !on;
+        put.hidden = !isStage;
+        put.disabled = state.busy || !demo || !stop.put_on;
         put.textContent = state.busy ? 'Putting the page here…' : 'Put the page here';
         put.title = demo
-            ? `Opens and chooses what this stage needs (${on}), and enters it`
+            ? 'Opens and chooses what this stage needs, and enters it'
             : 'Only on the demo (apothecary serve --demo): here, do what the stage says in the page';
+        const page = $('.tour-pop-page');
+        page.hidden = isStage;
+        if (!isStage) page.href = `${base}/walkthrough/${stop.page}`;
+
         const did = $('.tour-pop-did');
         did.className = `tour-pop-did${state.did?.refused ? ' refused' : ''}`;
-        did.replaceChildren(...(state.did ? [...state.did.did, state.did.said].filter(Boolean) : []).map((t) => {
-            const li = document.createElement('li');
-            li.textContent = t;
-            return li;
+        did.replaceChildren(...(state.did ? [...state.did.did, state.did.said].filter(Boolean) : []).map((t) => el('li', { textContent: t })));
+
+        // What its tests recorded: each step's heading, a link to its picture where it has one.
+        $('.tour-pop-tries').replaceChildren(...stop.tries.map((t) => {
+            const text = t.heading;
+            if (!t.picture) return el('li', { textContent: text, title: t.words });
+            const a = el('a', { textContent: text, href: `${base}/walkthrough/${t.picture}`, target: '_blank', rel: 'noopener', title: t.words });
+            return el('li', {}, a);
         }));
-        $('.tour-pop-explore').textContent = demo
-            ? 'Explore this stage in the page, then say how it is.'
-            : 'This is not the demo, so the tour puts nothing on: do what the stage says in the page, then say how it is.';
-        const a = s.answer;
+
+        $('.tour-pop-explore').textContent = isStage
+            ? (demo
+                ? 'Explore this stage in the page, then say how it is.'
+                : 'This is not the demo, so the tour puts nothing on: do what the stage says in the page, then say how it is.')
+            : (stop.written_by
+                ? 'Shown only: a page is read, not put on. Its steps are as its test recorded them.'
+                : 'Shown only: a page is read, not put on. Its examples run with the tests.');
+        const a = stop.answer;
         $('.tour-pop-answer').textContent = a
             ? `${a.verdict === 'off' ? `✗ Off: ${a.note}` : '✓ As shown'} -- said ${new Date(a.at).toLocaleString()} against ${a.commit || 'an unknown commit'}${a.changed ? ' with changes' : ''}`
             : 'Not said yet.';
-        $('[data-do="back"]').disabled = state.at === 0;
-        $('[data-do="next"]').disabled = state.at >= j.stages.length - 1;
+        $('.tour-pop-back').disabled = state.at === 0;
+        $('.tour-pop-next').disabled = state.at >= state.stops.length - 1;
         if (box.matches(':popover-open')) place();
     }
 
     async function read() {
-        const doc = await fetch(`${base}/tour/journeys`).then((r) => r.json());
-        state.journeys = doc.journeys;
-        if (!state.journey) state.journey = kept().journey || doc.journeys[0]?.id;
+        const doc = await fetch(`${base}/tour`).then((r) => r.json());
+        const id = here()?.id;
+        state.lines = doc.lines;
+        state.stops = doc.lines.flatMap((l, i) => l.stops.map((s) => Object.assign(s, { line: i })));
+        if (id) state.at = Math.max(0, state.stops.findIndex((s) => s.id === id));
     }
 
     async function put() {
-        const j = journey(), s = here();
-        if (!demo || !j || !s || state.busy) return;
+        const stop = here();
+        if (!demo || !stop || stop.kind !== 'stage' || !stop.put_on || state.busy) return;
         state.busy = true; state.did = null; render();
-        try { state.did = await stage(j.id, s.id); }
+        try { state.did = await stage(stop.journey, stop.stage); }
         catch (e) { state.did = { did: [], said: `The stage was not put on: ${e.message || e}`, refused: true }; }
         state.busy = false; render();
     }
 
     async function go(at, { putOn = true } = {}) {
-        const j = journey();
-        if (!j || at < 0 || at >= j.stages.length) return;
+        if (at < 0 || at >= state.stops.length) return;
         state.at = at; state.did = null;
-        keep({ journey: j.id, at });
+        keep({ stop: here().id });
         render();
-        if (putOn && demo) await put();
+        if (putOn) await put();
     }
 
     async function say(verdict) {
-        const j = journey(), s = here();
+        const stop = here();
         const note = $('.tour-pop-note').value;
-        const r = await fetch(`${base}/tour/stages`, {
+        const r = await fetch(`${base}/tour/answers`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ journey: j.id, stage: s.id, verdict, note }),
+            body: JSON.stringify({ stop: stop.id, verdict, note }),
         });
         if (!r.ok) {
             const why = (await r.json().catch(() => ({}))).detail || r.statusText;
@@ -153,22 +193,58 @@ export function mountTourPopover({ base = '', demo = false, stage, onShown = () 
         }
         $('.tour-pop-note').value = '';
         await read();
-        if (state.at < j.stages.length - 1) await go(state.at + 1);
+        if (state.at < state.stops.length - 1) await go(state.at + 1);
         else render();
     }
+
+    const api = {
+        isOpen: () => box.matches(':popover-open'),
+        async open() {
+            await read();
+            const was = state.stops.findIndex((s) => s.id === kept().stop);
+            const first = state.stops.findIndex((s) => !s.answer && lineOf(s).ticked);
+            state.at = was >= 0 ? was : Math.max(0, first);
+            box.classList.toggle('folded', Boolean(kept().folded));
+            box.showPopover();
+            render(); place();
+            keep({ open: true });
+            onShown(true);
+        },
+        close() { box.hidePopover(); keep({ open: false }); onShown(false); },
+        toggle() { return api.isOpen() ? api.close() : api.open(); },
+        // What the box's buttons do, for the ring's Panels › Windows › Tour cells.
+        async act(verb) {
+            if (verb === 'toggle') return api.toggle();
+            if (!api.isOpen()) await api.open();
+            if (verb === 'close') return api.close();
+            if (verb === 'fold') { box.classList.toggle('folded'); keep({ folded: box.classList.contains('folded') }); return; }
+            if (verb === 'put') return put();
+            if (verb === 'back') return go(state.at - 1);
+            if (verb === 'next') return go(state.at + 1);
+            if (verb === 'as-shown') return say('as shown');
+            if (verb === 'off') return say('off');
+            if (verb === 'page') { const s = here(); const page = s.kind === 'page' ? s.page : s.tries[0]?.page; if (page) window.open(`${base}/walkthrough/${page}`, '_blank', 'noopener'); }
+        },
+        // The rail moved in the page: the box shows that stage, and puts nothing on.
+        follow(journeyId, stageId) {
+            if (!api.isOpen() || state.busy) return;
+            const at = state.stops.findIndex((s) => s.kind === 'stage' && s.journey === journeyId && s.stage === stageId);
+            if (at >= 0 && at !== state.at) { state.at = at; state.did = null; keep({ stop: here().id }); render(); }
+        },
+        wasOpen: () => Boolean(kept().open),
+    };
 
     box.addEventListener('click', (e) => {
         const b = e.target.closest('button');
         if (!b) return;
-        if (b.dataset.at) return void go(Number(b.dataset.at));
-        const verb = b.dataset.do;
-        if (verb === 'close') return void api.close();
-        if (verb === 'fold') { box.classList.toggle('folded'); keep({ folded: box.classList.contains('folded') }); return; }
-        if (verb === 'put') return void put();
-        if (verb === 'back') return void go(state.at - 1);
-        if (verb === 'next') return void go(state.at + 1);
-        if (verb === 'as-shown') return void say('as shown');
-        if (verb === 'off') return void say('off');
+        if (b.dataset.stop) return void go(state.stops.findIndex((s) => s.id === b.dataset.stop));
+        api.act(b.dataset.do);
+    });
+    // A line chosen: its first stop, put on where it can be.
+    const tourLines = $('.tour-pop-lines');
+    tourLines.addEventListener('change', function chosen() {
+        const first = state.stops.findIndex((s) => s.line === Number(tourLines.value));
+        if (first >= 0) go(first);
     });
 
     // Dragged by its head, kept where it was left.
@@ -182,32 +258,7 @@ export function mountTourPopover({ base = '', demo = false, stage, onShown = () 
         head.addEventListener('pointermove', move);
         head.addEventListener('pointerup', up);
     });
-    window.addEventListener('resize', () => { if (box.matches(':popover-open')) place(); });
-
-    const api = {
-        isOpen: () => box.matches(':popover-open'),
-        async open({ putOn = false } = {}) {
-            await read();
-            const j = journey();
-            const first = j ? j.stages.findIndex((s) => !s.answer) : 0;
-            state.at = Math.min(kept().at ?? (first < 0 ? 0 : first), (j?.stages.length || 1) - 1);
-            box.classList.toggle('folded', Boolean(kept().folded));
-            box.showPopover();
-            render(); place();
-            keep({ open: true });
-            onShown(true);
-            if (putOn && demo) await put();
-        },
-        close() { box.hidePopover(); keep({ open: false }); onShown(false); },
-        toggle() { return api.isOpen() ? api.close() : api.open(); },
-        // The rail moved in the page: the box shows that stage, and puts nothing on.
-        follow(journeyId, stageId) {
-            const j = journey();
-            if (!api.isOpen() || !j || j.id !== journeyId) return;
-            const at = j.stages.findIndex((s) => s.id === stageId);
-            if (at >= 0 && at !== state.at && !state.busy) { state.at = at; state.did = null; keep({ at }); render(); }
-        },
-        wasOpen: () => Boolean(kept().open),
-    };
+    head.addEventListener('dblclick', (e) => { if (!e.target.closest('button')) api.act('fold'); });
+    window.addEventListener('resize', () => { if (api.isOpen()) place(); });
     return api;
 }

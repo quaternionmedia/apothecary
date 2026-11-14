@@ -479,8 +479,9 @@ it: one opened from ⊞ Windows -- Models, Marks, the Working space, the Deck --
 open again after a reload, where it was, and the world as wide as it was
 ([walkthrough 33](../walkthrough/33-windows-kept-over-a-reload.md)).
 
-The **Tour** (⊞ Windows › Tour, or Panels › Windows › Tour) is the walkthrough a
-step at a time beside the page, and a person's word on each step
+The **Tour** (Tour in the header, or Panels › Windows › Tour) is not a window: it is
+a box over the page that takes what the roadmap claims a stop at a time, puts the
+page on a journey's stage, and keeps a person's word on each stop
 ([the tour](tour.md)).
 
 ## The part editor

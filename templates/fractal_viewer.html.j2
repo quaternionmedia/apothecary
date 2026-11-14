@@ -741,7 +741,7 @@
                 {% if not site_names %}<span id="no-sites">No sites found</span>{% endif %}
             </nav>
             <nav id="journey-rail" class="journey-rail" aria-label="Steps" hidden></nav>
-            <button type="button" id="tour-pop-open" aria-pressed="false" title="The tour over the page: a journey a stage at a time, the page put on each (a prototype)">Tour</button>
+            <button type="button" id="tour-pop-open" aria-pressed="false" title="The tour: what the roadmap claims, a stop at a time, the page put on each stage, and your word kept on it">Tour</button>
             <div class="spacer"></div>
             <details id="view-menu" class="view-menu">
                 <summary title="How the world is drawn">⚙ View</summary>
@@ -834,7 +834,6 @@
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/working_space.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/procedure.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/deck.css">
-    <link rel="stylesheet" href="{{ base_url }}/static/widgets/tour.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/tour_popover.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/airgap.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/models.css">
@@ -884,7 +883,6 @@
         import { mountProcedure } from '/static/widgets/procedure.js';
         import { mountFamily } from '/static/widgets/family.js';
         import { mountDeck } from '/static/widgets/deck.js';
-        import { mountTour } from '/static/widgets/tour.js';
         import { mountTourPopover } from '/static/widgets/tour_popover.js';
         // Whether this is `apothecary serve --demo`: the one place the tour puts a stage on.
         const IS_DEMO = {{ (true if demo else false) | tojson }};
@@ -1555,7 +1553,7 @@
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
                     defaultRoot: PAGE_LAYOUT,
-                    known: ['gather', 'models', 'marks', 'working', 'deck', 'tour', ...knownWindows(SYSTEMS)],
+                    known: ['gather', 'models', 'marks', 'working', 'deck', ...knownWindows(SYSTEMS)],
                     transient: ['control', 'lighting', ...transientWindows(SYSTEMS)],
                 });
                 // What the rail this layout replaced remembered: nothing reads it any more.
@@ -1895,24 +1893,6 @@
                     onOpen: () => this.deck?.shown(),
                     onClose: () => this.deck?.close(),
                 });
-                // Tour: the walkthrough a step at a time beside the live page, each step as
-                // its test recorded it, and a person's word on it kept (widgets/tour.js,
-                // apothecary/tour.py) -- a stack of its own beside the world, closed until
-                // asked for.
-                this.tour = null;
-                this.panels.register('tour', {
-                    title: 'Tour', group: 'Tools', home: 'beside', open: false,
-                    hint: 'The walkthrough a step at a time beside the live page: say whether the page does what each step shows',
-                    body: (slot) => {
-                        this.tour = mountTour(slot, {
-                            base: BASE_URL,
-                            log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
-                        });
-                        window.apothecaryTour = this.tour;
-                        this.tourOpened = this.tour.open();
-                    },
-                    onOpen: () => this.tour?.shown(),
-                });
                 // ⊞ Windows: drawn afresh each time it opens, so it says which are open.
                 const windowsBody = this.windowsMenuEl.querySelector('.windows-menu-body');
                 this.windowsMenuEl.addEventListener('toggle', () => {
@@ -1943,7 +1923,8 @@
                     else if (b.dataset.next) this.enterStep(b.dataset.next, 'Next');
                     else if (b.classList.contains('journey-leave')) this.leaveJourney();
                 });
-                // The tour over the page (widgets/tour_popover.js), opened from the header.
+                // The tour (widgets/tour_popover.js, apothecary/tour.py): the roadmap's stops
+                // in a box over the page, opened from the header or the ring.
                 const tourOpen = document.getElementById('tour-pop-open');
                 this.tourPop = mountTourPopover({
                     base: BASE_URL,
@@ -9716,8 +9697,7 @@
                 // on a mat; what it asked or said, or refused, is the window's own last word.
                 // A Tour verb: the window shown, and the verb done on the step it shows.
                 if (action.startsWith('tour:')) {
-                    viewer.panels.open('tour');
-                    Promise.resolve(viewer.tourOpened).then(() => viewer.tour?.act(action.slice('tour:'.length)));
+                    viewer.tourPop.act(action.slice('tour:'.length));
                     return;
                 }
                 if (action.startsWith('marks:')) {

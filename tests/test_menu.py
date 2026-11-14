@@ -1249,7 +1249,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Airgap view", "panel:view:airgap", 9),
         ("Family view", "panel:view:family", 3),
         ("Make view", "panel:view:make", 1),
-        # The Tour, after the views: the window, then its buttons.
+        # The Tour, after the views: its box over the page, then its buttons.
         ("Tour", None, 7),
     ]
     assert address_of(root, "panel:view:airgap") == "499"
@@ -1257,15 +1257,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert address_of(root, "panel:view:make") == "491"
     tour = next(c for c in windows.children if c.label == "Tour")
     assert [(c.label, c.action, c.cell) for c in tour.children] == [
-        ("Tour", "panel:toggle:tour", 8),
+        ("Tour", "tour:toggle", 8),
         ("Back", "tour:back", 6),
         ("As shown", "tour:as-shown", 2),
         ("Off", "tour:off", 4),
         ("Next", "tour:next", 9),
         ("Its page", "tour:page", 3),
-        ("Its picture", "tour:picture", 1),
+        ("Put here", "tour:put", 1),
     ]
-    assert address_of(root, "panel:tour") == "4978"
+    assert address_of(root, "tour:toggle") == "4978"
     assert address_of(root, "tour:as-shown") == "4972"
     assert carried_by("tour:off").name == "VIEWER"
     assert carried_by("panel:view:airgap").name == "VIEWER"

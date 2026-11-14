@@ -328,14 +328,17 @@ GROUPS = {
             "test_viewer_assets.py",
         ),
     },
-    # The tour: the walkthrough's pages read back as its steps, and a person's word on
-    # each kept; a page changed is a step changed.
+    # The tour: the roadmap's lines as stops -- a journey's stages, a walkthrough page read
+    # back as its steps -- and a person's word on each kept; a page or the roadmap
+    # changed is a stop changed.
     "tour": {
         "sources": (
             "apothecary/tour.py",
             "apothecary/routes/tour.py",
             "apothecary/cli/tour.py",
             "apothecary/docs_site.py",
+            "apothecary/journeys.py",
+            "docs/ROADMAP.md",
             "walkthrough/*",
         ),
         "tests": ("test_tour.py",),
