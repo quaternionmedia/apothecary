@@ -43,7 +43,7 @@ layer and the layers below it, at the top of a module and inside a function alik
 
 | Layer | Units | What it is |
 |---|---|---|
-| 0 | `core`, `models`, `version`, `stamped`, `site_names`, `stays_local`, `state_folder`, `meshes`, `systems`, `journeys`, `census`, `preflight`, `release`, `airgap_metrics`, `preview` | Foundations: geometry types, names, the network guard, the state folder, the window registry, checks over the repository |
+| 0 | `core`, `models`, `version`, `stamped`, `site_names`, `stays_local`, `state_folder`, `picture_root`, `meshes`, `systems`, `journeys`, `census`, `preflight`, `release`, `airgap_metrics`, `preview` | Foundations: geometry types, names, the network guard, the state folder, the picture root, the window registry, checks over the repository |
 | 1 | `primitives`, `booleans`, `objects`, `transforms`, `scene`, `hierarchy`, `jscad`, `templates`, `example`, `lighting`, `console_feedback`, `apothecary` | Geometry: shapes, a scene and its tree, OpenSCAD and JSCAD out; a site's lighting rig |
 | 2 | `projects`, `universe`, `kernel_compare`, `datum_core_site`, `theatre_site`, `example_hierarchy`, `openscad_installer` | Parts and the sites built of them: the parts registry, a part's STL and its variants, OpenSCAD itself |
 | 3 | `firmware`, `slicer`, `cam`, `jobs`, `evidence`, `vision`, `vocabulary`, `gathering`, `finders`, `wiring`, `rig`, `family`, `machine_plans`, `site_store`, `sites` | Machines and evidence: boards and their sketches, printers and routers, slices, toolpaths and jobs, cameras, pictures and observations, carlos's wiring, the family's hub, the sites kept |
@@ -61,22 +61,28 @@ machine seam, `openscad_installer` and the slicer's installer for the tool finde
 | From | To | Where | When | What it takes |
 |---|---|---|---|---|
 | `family` | `routes` | `apothecary/family/procedures.py` | in a call | `hold_action`, a site's wiring sent to carlos |
-| `finders` | `api` | `apothecary/finders/qmcp.py` | in a call | `_picture_root` |
 | `hierarchy` | `projects` | `apothecary/hierarchy.py` | in a call | the parts registry, for a node's `part_ref`; `ROOT` |
 | `primitives` | `projects` | `apothecary/primitives.py` | in a call | `ROOT`, the repository's root |
 | `projects` | `cam` | `apothecary/projects/parts/router_coupon.py` | in a call | cam's types, for the coupon's declared cuts |
 | `openscad_installer` | `firmware` | `apothecary/openscad_installer.py` | at import | `tools_dir` |
 
 *When* says whether the import runs as the module loads (at import) or only once a
-function is called (in a call); the check holds both. `finders` reaches the server's
-private state, the picture root, from a layer below it, and `apothecary/routes/`
-imports the same private names from the server's own layer. The picture root has no
-interface below the server.
+function is called (in a call); the check holds both. No unit of a layer below it
+imports `api`.
 
 The sites kept are `apothecary/sites.py`'s: `store` is the one store of them, which
 the server, the routes, cam, the family's members and the command line ask for a site
 by its name. A name it does not hold is `UnknownSiteError`, and the server answers
 that with a 404 in one place, its handler in `apothecary/api.py`.
+
+The picture root is `apothecary/picture_root.py`'s: `picture_root` is the one folder
+pictures are read from, and `picture_within_root` a path settled inside it. Each
+refusal is an exception of that module's, a `PictureRefused`, and the server gives
+each kind its status in one place, `PICTURE_REFUSALS` in `apothecary/api.py`: 500 for
+a root that is no folder of pictures, 403 for a path outside it, 400 for one that
+cannot be asked about, 404 for one that is no ordinary file. The module is an install
+point of the network guard, as `apothecary/state_folder.py` is: whatever resolves the
+picture root has the guard on.
 
 ## The handoffs
 

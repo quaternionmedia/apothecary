@@ -66,6 +66,15 @@ from .firmware.toolchains import ToolchainError
 from .hierarchy import Assembly, find_node_by_path
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
+from .picture_root import (
+    CannotLook,
+    NoPicture,
+    NotAPictureRoot,
+    OutsideRoot,
+    PictureRefused,
+    picture_root,
+    picture_within_root,
+)
 from .primitives import Cube, Cylinder, Sphere, absolute_imports
 from .projects.parts.base import BasePart
 from .projects.parts.customizer import (
@@ -148,7 +157,6 @@ from .slicer.models import Made as SlicedMade
 from .slicer.models import SlicedFor
 from .slicer.modules import SlicerError
 from .slicer.profiles import Declared
-from .state_folder import state_dir
 from .stays_local import LocalOnly
 from .templates import TemplateRenderer
 from .theatre_site import load_theatre_rig
@@ -1773,101 +1781,17 @@ class LookAtPicture(BaseModel):
     finder: str = "plain"
 
 
-def _picture_root() -> Path:
-    """The one folder pictures may be read from.
-
-    A server that reads any path it is handed is a server that will read
-    ``/etc/shadow`` the day somebody points it at a network it did not expect.
-    Everything here is meant to run on one machine and listen only to it, and
-    that is still not a reason to leave the door open.
-
-    Set ``APOTHECARY_PICTURE_ROOT`` to say where pictures live. Without it, the
-    folder the server was started in. Never the whole machine, and never the
-    person's home folder or anything above it: a picture root is a folder of
-    pictures, and those hold everything else of theirs.
-    """
-    named = os.environ.get("APOTHECARY_PICTURE_ROOT") or str(Path.cwd())
-    root = Path(named).resolve()
-    if not root.is_dir():
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"pictures are supposed to be read from {root}, and there is no "
-                "folder there. Set APOTHECARY_PICTURE_ROOT to one that exists."
-            ),
-        )
-    if root == Path(root.anchor):
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"pictures are supposed to be read from {root}, which is the whole "
-                "machine. That turns the restriction off rather than setting it."
-            ),
-        )
-    homes = _home_folders()
-    state = _state_folder()
-    if any(root == home or root in home.parents for home in homes) or (
-        root == state or state in root.parents
-    ):
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"pictures are supposed to be read from {root}, which holds everything "
-                "of yours, not a folder of pictures. Start the server in a folder of "
-                "pictures, or set APOTHECARY_PICTURE_ROOT to one."
-            ),
-        )
-    return root
+# What each refusal of the picture root (apothecary/picture_root.py) is answered with.
+PICTURE_REFUSALS = {NotAPictureRoot: 500, OutsideRoot: 403, CannotLook: 400, NoPicture: 404}
 
 
-def _home_folders() -> List[Path]:
-    """The person's home: by HOME, and by the account, which a variable cannot move."""
-    folders = [Path.home()]
-    try:
-        import pwd
-
-        folders.append(Path(pwd.getpwuid(os.getuid()).pw_dir))
-    except (ImportError, KeyError, AttributeError):
-        pass
-    return [f.expanduser().resolve() for f in folders]
-
-
-def _state_folder() -> Path:
-    """Where the serial numbers, camera labels and readings live: never pictures."""
-    return state_dir().expanduser().resolve()
-
-
-def _picture_within_root(where: Path) -> Path:
-    """Check a picture is inside the one folder, following any links first.
-
-    Checked every time it is used, not only when it arrives. A file that passed
-    on the way in can be swapped for a link pointing anywhere afterwards, and
-    then the door that refused it is serving it.
-    """
-    root = _picture_root()
-    try:
-        settled = Path(where).resolve()
-        settled.relative_to(root)
-    except (ValueError, OSError):
-        raise HTTPException(
-            status_code=403, detail=f"pictures are read from {root} and nowhere else"
-        ) from None
-    # `is_file` rather than `exists`: a pipe exists, and opening one waits for
-    # somebody to write to it, which is never. It also has to be guarded,
-    # because asking about an impossible path is itself an error rather than a
-    # no.
-    try:
-        real = settled.is_file()
-    except OSError as exc:
-        raise HTTPException(
-            status_code=400, detail=f"{settled} cannot be looked at: {exc}"
-        ) from None
-    if not real:
-        raise HTTPException(
-            status_code=404,
-            detail=f"there is no picture at {settled}, or it is not an ordinary file",
-        )
-    return settled
+@app.exception_handler(PictureRefused)
+async def picture_refused(request: Request, refused: PictureRefused) -> JSONResponse:
+    """A root that is no folder of pictures, or a path that is no picture inside it,
+    answered in its own words, whichever route read the picture."""
+    return JSONResponse(
+        status_code=PICTURE_REFUSALS[type(refused)], content={"detail": str(refused)}
+    )
 
 
 @app.post("/photos")
@@ -1882,9 +1806,9 @@ def look_at_picture(request: LookAtPicture):
     from .vision import get as get_finder
     from .vision.shelf import shelf
 
-    root = _picture_root()
+    root = picture_root()
     asked = Path(request.picture)
-    where = _picture_within_root(asked if asked.is_absolute() else root / asked)
+    where = picture_within_root(asked if asked.is_absolute() else root / asked)
 
     name = _check_name(request.name or where.stem)
     stock = shelf()
@@ -1992,7 +1916,7 @@ def get_photo_picture(name: str):
             status_code=404,
             detail="the picture is no longer where it was when this was built",
         )
-    settled = _picture_within_root(where)
+    settled = picture_within_root(where)
 
     # The type is chosen from a short list, not built out of the file name. A
     # name can contain anything at all, including the characters that end a

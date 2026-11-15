@@ -110,6 +110,7 @@ INSTALL_POINTS = {
     "apothecary.rig": PACKAGE / "rig" / "__init__.py",
     "apothecary.evidence": PACKAGE / "evidence" / "__init__.py",
     "apothecary.state_folder": PACKAGE / "state_folder.py",
+    "apothecary.picture_root": PACKAGE / "picture_root.py",
 }
 ROOT_CONFTEST = ROOT / "conftest.py"
 
@@ -244,11 +245,13 @@ def test_each_install_point_puts_the_guard_on_before_any_of_its_own_code(source)
 # What reads personal data, by the means the record names: the serial link, an
 # image library, the state folder and the picture root. Outside the install
 # points' packages none of it is done, but through one of them: the state folder
-# is apothecary.state_folder's to resolve and the picture root apothecary.api's,
-# so a module that calls either has imported an install point first.
+# is apothecary.state_folder's to resolve and the picture root
+# apothecary.picture_root's, so a module that calls either has imported an install
+# point first.
 GUARDED_SOURCES = (
     "api.py",
     "state_folder.py",
+    "picture_root.py",
     "cli/",
     "vision/",
     "gathering/",
@@ -259,7 +262,7 @@ GUARDED_SOURCES = (
 )
 READER_MODULES = {"serial": "the serial link", "PIL": "an image library"}
 READER_VARIABLES = {"APOTHECARY_STATE_DIR", "APOTHECARY_PICTURE_ROOT"}
-RESOLVED_BY = {"state_dir": "apothecary.state_folder", "_picture_root": "apothecary.api"}
+RESOLVED_BY = {"state_dir": "apothecary.state_folder", "picture_root": "apothecary.picture_root"}
 
 
 def _imported_from(node: ast.ImportFrom, package: str) -> str:
@@ -320,7 +323,7 @@ def _personal_data_readers(text: str, package: str) -> list:
         "import os\nos.environ.get('APOTHECARY_STATE_DIR')",
         "import os\nos.getenv('APOTHECARY_PICTURE_ROOT')",
         "import os\nos.environ['APOTHECARY_STATE_DIR']",
-        "from .scene import Scene\n_picture_root()",
+        "from .scene import Scene\npicture_root()",
     ],
 )
 def test_the_reader_scan_sees_each_way_of_reading_personal_data(code):
@@ -858,38 +861,36 @@ def test_a_value_the_page_carries_cannot_become_script():
 def test_the_picture_root_is_a_folder_of_pictures_never_everything(monkeypatch, tmp_path):
     """The whole machine, the person's home folder and anything above it are refused as a
     picture root: a root there would serve everything of theirs to whatever asks."""
-    from fastapi import HTTPException
-
-    from apothecary import api
+    from apothecary.picture_root import NotAPictureRoot, picture_root
 
     home = tmp_path / "home" / "person"
     (home / "pictures").mkdir(parents=True)
-    monkeypatch.setattr(api.Path, "home", classmethod(lambda cls: home))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
     monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(home / "pictures"))
-    assert api._picture_root() == (home / "pictures").resolve()
+    assert picture_root() == (home / "pictures").resolve()
     for root in (home, home.parent, tmp_path):
         monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(root))
-        with pytest.raises(HTTPException) as caught:
-            api._picture_root()
-        assert "everything of yours" in caught.value.detail, root
+        with pytest.raises(NotAPictureRoot) as caught:
+            picture_root()
+        assert "everything of yours" in str(caught.value), root
     monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(Path(tmp_path.anchor)))
-    with pytest.raises(HTTPException, match="whole"):
-        api._picture_root()
+    with pytest.raises(NotAPictureRoot, match="whole"):
+        picture_root()
     # HOME is a variable; the account's home folder is not, and the state folder
     # (serial numbers, camera labels, readings) is never a picture root either.
     import pwd
 
     real_home = Path(pwd.getpwuid(os.getuid()).pw_dir).resolve()
-    monkeypatch.setattr(api.Path, "home", classmethod(lambda cls: tmp_path / "elsewhere"))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path / "elsewhere"))
     monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(real_home))
-    with pytest.raises(HTTPException, match="everything of yours"):
-        api._picture_root()
+    with pytest.raises(NotAPictureRoot, match="everything of yours"):
+        picture_root()
     state = tmp_path / "state"
     state.mkdir()
     monkeypatch.setenv("APOTHECARY_STATE_DIR", str(state))
     monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(state))
-    with pytest.raises(HTTPException, match="everything of yours"):
-        api._picture_root()
+    with pytest.raises(NotAPictureRoot, match="everything of yours"):
+        picture_root()
     # And the file route serves a picture, judged by its bytes, and nothing else.
     pictures = tmp_path / "pics"
     pictures.mkdir()
@@ -903,6 +904,47 @@ def test_the_picture_root_is_a_folder_of_pictures_never_everything(monkeypatch, 
     assert here.get("/photos/pictures/file", params={"path": "real.png"}).status_code == 200
     assert here.get("/photos/pictures/file", params={"path": "notes.json"}).status_code == 415
     assert here.get("/photos/pictures/file", params={"path": "fake.png"}).status_code == 415
+
+
+def test_each_refusal_of_the_picture_root_has_its_status_and_says_why(monkeypatch, tmp_path):
+    """A path outside the root is a 403, one that is no ordinary file a 404, one that
+    cannot be asked about a 400, and a root that is no folder a 500: each in the words
+    the picture root (``apothecary/picture_root.py``) refused it with."""
+    root = (tmp_path / "pics").resolve()
+    root.mkdir()
+    (tmp_path / "outside.png").write_bytes(b"not read")
+    monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(root))
+    here = TestClient(app)
+
+    def asked(path: str):
+        answer = here.get("/photos/pictures/file", params={"path": path})
+        return answer.status_code, answer.json()["detail"]
+
+    assert asked(str(tmp_path / "outside.png")) == (
+        403,
+        f"pictures are read from {root} and nowhere else",
+    )
+    assert asked("../outside.png")[0] == 403
+    assert asked("missing.png") == (
+        404,
+        f"there is no picture at {root / 'missing.png'}, or it is not an ordinary file",
+    )
+    with monkeypatch.context() as broken:
+
+        def cannot(self):
+            raise OSError("the disk is gone")
+
+        broken.setattr(Path, "is_file", cannot)
+        assert asked("any.png") == (
+            400,
+            f"{root / 'any.png'} cannot be looked at: the disk is gone",
+        )
+    monkeypatch.setenv("APOTHECARY_PICTURE_ROOT", str(tmp_path / "nowhere"))
+    assert asked("any.png") == (
+        500,
+        f"pictures are supposed to be read from {tmp_path.resolve() / 'nowhere'}, and there "
+        "is no folder there. Set APOTHECARY_PICTURE_ROOT to one that exists.",
+    )
 
 
 def test_views_write_nothing_outside_the_root_its_two_folders_and_the_state_folder(

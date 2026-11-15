@@ -24,6 +24,7 @@ from urllib.parse import urlparse
 
 from ..evidence.observation import Instance, Observation, Origin, Ref, Region, Sighting, now
 from ..evidence.words import COLOURS, MATERIALS
+from ..picture_root import picture_root
 from ..stays_local import is_loopback
 
 ENV = "APOTHECARY_QMCP"
@@ -59,9 +60,7 @@ def configured() -> str:
 
 
 def picture_roots() -> List[Path]:
-    from ..api import _picture_root
-
-    return [_picture_root()]
+    return [picture_root()]
 
 
 class Qmcp:

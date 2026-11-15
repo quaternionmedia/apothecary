@@ -6,7 +6,7 @@ an arrangement from it; `apothecary photo gather` does the rest from the
 command line. These routes give the world's page the same, and no more:
 
 - ``GET /photos/pictures`` lists the pictures in the one folder pictures are
-  read from (`APOTHECARY_PICTURE_ROOT`, see `_picture_root` in api.py) and
+  read from (`APOTHECARY_PICTURE_ROOT`, see `apothecary/picture_root.py`) and
   its two sub-folders the browser fills: ``captures/``, where a camera's
   frames are kept, and ``uploads/``, where the pictures a person added from
   the browser are kept. Nothing outside that folder is ever listed or read.
@@ -47,6 +47,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from .. import sites
 from ..gathering.looking import PICTURE_SUFFIXES
+from ..picture_root import PictureRefused, picture_root, picture_within_root
 from ..site_store import UnknownSiteError
 from ..stamped import claim, stamp
 
@@ -59,12 +60,6 @@ KEPT = {"capture": CAPTURES, "upload": UPLOADS}
 CAPTURE_MAX = 16 * 1024 * 1024
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 JPEG_MAGIC = b"\xff\xd8\xff"
-
-
-def _root() -> Path:
-    from ..api import _picture_root
-
-    return _picture_root()
 
 
 def _kept_as(path: Path, root: Path) -> Optional[str]:
@@ -119,7 +114,7 @@ def _pictures_in(folder: Path) -> List[Path]:
 @router.get("/photos/pictures")
 def list_pictures() -> List[dict]:
     """The pictures in the one folder, newest first: its own, its captures, its uploads."""
-    root = _root()
+    root = picture_root()
     found: List[Path] = []
     for folder in (root, root / CAPTURES, root / UPLOADS):
         found.extend(_pictures_in(folder))
@@ -262,7 +257,7 @@ def keep_picture(
         from .views import check_host
 
         check_host(site, host)
-    root = _root()
+    root = picture_root()
     # "--" is a camera part's mark in a frame's name (TAKEN_BY): no other picture has it.
     stem = re.sub(r"-{2,}", "-", re.sub(r"[^A-Za-z0-9_-]+", "_", Path(name).stem)).strip("_")[:60]
     if pinning and camera is not None and kept == "capture":
@@ -298,7 +293,7 @@ def keep_picture(
                 else pin_picture(site, host, entry["path"])
             )
             entry["view"] = _answer(site, view)
-        except (HTTPException, UnknownSiteError) as refused:
+        except (HTTPException, UnknownSiteError, PictureRefused) as refused:
             # Kept, and not pinned: the picture is the person's either way.
             entry["view"], entry["not_pinned"] = None, getattr(refused, "detail", str(refused))
     return entry
@@ -352,11 +347,11 @@ def picture_file(
 
     from fastapi.responses import FileResponse, Response
 
-    from ..api import PICTURE_TYPES, _picture_within_root
+    from ..api import PICTURE_TYPES
 
-    root = _root()
+    root = picture_root()
     asked = Path(path)
-    settled = _picture_within_root(asked if asked.is_absolute() else root / asked)
+    settled = picture_within_root(asked if asked.is_absolute() else root / asked)
     guessed, _ = mimetypes.guess_type(settled.name)
     kind = guessed if guessed in PICTURE_TYPES else None
     if kind is None or not _is_a_picture(settled):
@@ -429,7 +424,7 @@ def forget_kept_pictures(kept: str = Query("all", pattern="^(all|capture|upload)
     directly in them go."""
     from ..vision.views import store
 
-    root = _root()
+    root = picture_root()
     folders = [KEPT[kept]] if kept != "all" else list(KEPT.values())
     forgotten: List[str] = []
     unpinned: List[str] = []
@@ -452,7 +447,7 @@ def forget_picture(path: str):
     Its views are unpinned, every site's; pieces made from it stay, marked forgotten."""
     from ..vision.views import store
 
-    root = _root()
+    root = picture_root()
     kept = _kept_picture(root, path)
     kept.unlink()
     forgotten = kept.relative_to(root).as_posix()
@@ -487,7 +482,6 @@ class GatherRequest(BaseModel):
 @router.post("/photos/gather")
 def gather_pictures(body: GatherRequest):
     """Which of these pictures are of the same thing, what to ask, and the arrangement."""
-    from ..api import _picture_within_root
     from ..gathering import as_text, gather, whole_gathering
     from ..gathering.judgement import (
         CannotRead,
@@ -507,11 +501,11 @@ def gather_pictures(body: GatherRequest):
             detail=f"{len(body.pictures)} pictures at once is too many: every pair is "
             f"compared, so {GATHER_MOST} is the most. Gather them in smaller piles.",
         )
-    root = _root()
+    root = picture_root()
     paths = []
     for rel in body.pictures:
         asked = Path(rel)
-        paths.append(_picture_within_root(asked if asked.is_absolute() else root / asked))
+        paths.append(picture_within_root(asked if asked.is_absolute() else root / asked))
     try:
         finder = get_finder(body.finder)
     except KeyError:

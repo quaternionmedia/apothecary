@@ -67,6 +67,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from .. import sites
 from ..hierarchy import Assembly, find_node_by_path
+from ..picture_root import PictureRefused, picture_root, picture_within_root
 from ..projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
 from ..projects.parts.stl_renderer import geometry_scad
 from ..vision import cameras, whiteboard
@@ -244,10 +245,8 @@ def check_host(site_name: str, host: str) -> Assembly:
 
 def _picture_at(picture: str) -> Path:
     """A picture under the root, by the path the listing gave; refused elsewhere."""
-    from ..api import _picture_root, _picture_within_root
-
     asked = Path(picture)
-    return _picture_within_root(asked if asked.is_absolute() else _picture_root() / asked)
+    return picture_within_root(asked if asked.is_absolute() else picture_root() / asked)
 
 
 def _picture_size(where: Path) -> Tuple[int, int]:
@@ -275,10 +274,8 @@ def pin_picture(
     (``viewing.laid_at``), and stays there.
 
     Find shapes (``find_in``) is the step that finds its shapes."""
-    from ..api import _picture_root
-
     site = check_host(site_name, host)
-    root = _picture_root()
+    root = picture_root()
     where = _picture_at(picture)
     node = next((c for c in site.children if c.name == host), None)
     if node is not None and whiteboard.is_whiteboard(node):
@@ -366,8 +363,6 @@ def take_picture(site_name: str, camera: str, picture: str) -> View:
     stands now: a view lying where the camera's centre ray first meets a top or the
     floor -- or nowhere, at a wall or the sky -- keeping the camera's pose and lens,
     and finding nothing in it. What Take picture pins."""
-    from ..api import _picture_root
-
     taker = camera_or_404(site_name, camera)
     site = sites.store.get(site_name)
     where = _picture_at(picture)
@@ -376,7 +371,7 @@ def take_picture(site_name: str, camera: str, picture: str) -> View:
         site_name,
         site,
         taker,
-        picture=where.relative_to(_picture_root()).as_posix(),
+        picture=where.relative_to(picture_root()).as_posix(),
         pixel_width=width,
         pixel_height=height,
         at=datetime.now(timezone.utc),
@@ -427,14 +422,13 @@ def finders_for(picture: str) -> List[str]:
     finder that says the picture is not its kind (``reads``).
     What the ring's Find shapes offers, so it is offered only where it can do
     something."""
-    from ..api import _picture_root, _picture_within_root
     from ..vision import get as get_finder
     from ..vision import names as finder_names
 
-    root = _picture_root()
+    root = picture_root()
     try:
-        where = _picture_within_root(root / picture)
-    except HTTPException:
+        where = picture_within_root(root / picture)
+    except PictureRefused:
         return []
     readable = []
     for name in finder_names():
@@ -550,14 +544,12 @@ def move_corners(site_name: str, view_id: str, body: CornersBody):
     """A person's word on a whiteboard's corners: its photograph squared again with
     them. A view the outline finder had searched is searched again. Refused once a
     piece is made from it."""
-    from ..api import _picture_root
-
     view = _squared_view(site_name, view_id)
     site = sites.store.get(site_name)
     node = next((c for c in site.children if c.name == view.host), None)
     if node is None:
         raise HTTPException(status_code=404, detail=f"{view.host} is no longer in {site_name}")
-    root = _picture_root()
+    root = picture_root()
     source = _picture_at(view.squared.source)
     corners = whiteboard.Corners(corners=list(body.corners), by="you")
     picture, (width, height) = _square(source, root, corners, node)
