@@ -92,7 +92,6 @@ def _open(page: Page, url: str, site: str = "apothecary", part: str = PART) -> N
     page.set_viewport_size({"width": 1280, "height": 800})
     page.goto(f"{url}/viewer/sites/{site}")
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
-    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
     page.wait_for_function(
         f"() => {{ const m = window.fractalViewer.meshByName['{part}'];"
         " return m && !m.userData.isPlaceholder; }",

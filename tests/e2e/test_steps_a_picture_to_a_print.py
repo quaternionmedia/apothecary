@@ -66,8 +66,6 @@ def add(w: Walk) -> None:
     bench by hand, to look at it."""
     w.page.goto(f"{w.base}/viewer/sites/garage")
     expect(w.page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    if not w.on_simulated:
-        w.page.evaluate("() => localStorage.removeItem('apothecary.panels')")
     w.page.evaluate("() => window.fractalViewer.waveDone")
     settled(w.page)
     _ring_on(w.page, "workbench")

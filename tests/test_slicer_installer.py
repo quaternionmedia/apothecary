@@ -141,6 +141,27 @@ def test_the_pinned_appimage_is_checked_installed_and_made_current(tools, monkey
     assert found.how.startswith("AppImage, run through FUSE")
 
 
+def test_a_folder_whose_manifest_names_no_way_it_was_installed_is_not_an_install(tools):
+    """An install is a version's folder with an ``install.json`` naming how it was made.
+    One that names none of the installer's ways is not listed, has no program and no
+    profiles, and is not the current one."""
+    folder = tools / "2.4.2"
+    folder.mkdir(parents=True)
+    (folder / "OrcaSlicer.AppImage").write_bytes(b"\x7fELF")
+    (folder / "install.json").write_text(
+        json.dumps(
+            {"executable": "OrcaSlicer.AppImage", "resources": "resources", "version": "2.4.2"}
+        )
+    )
+    assert oi.installed_versions() == []
+    assert oi.executable_for("2.4.2") is None and oi.resources_for("2.4.2") is None
+    (folder / "install.json").write_text(
+        json.dumps({"method": "appimage", "executable": "OrcaSlicer.AppImage", "version": "2.4.2"})
+    )
+    assert oi.installed_versions() == ["2.4.2"]
+    assert oi.executable_for("2.4.2") == folder / "OrcaSlicer.AppImage"
+
+
 def test_an_install_in_another_tools_folder_is_read_in_place(tools, monkeypatch, tmp_path):
     """`apothecary serve --simulated` has a tools folder of its own and names the person's
     OrcaSlicer by its path: its profiles are found by the install.json beside it."""

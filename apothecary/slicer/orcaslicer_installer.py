@@ -395,7 +395,12 @@ def read_manifest(version: str) -> dict:
 
 
 def _in_install(version: str, key: str) -> Optional[Path]:
-    rel = _plain(read_manifest(version).get(key))
+    """Where an install of ``version`` keeps ``key``, by its ``install.json``. A folder
+    whose manifest names none of the ways an install is made (``HOW``) is not one."""
+    record = read_manifest(version)
+    if record.get("method") not in HOW:
+        return None
+    rel = _plain(record.get(key))
     return home() / version / rel if rel else None
 
 
@@ -808,12 +813,11 @@ def describe(version: str) -> Installed:
     if not isinstance(archs, list) or not all(isinstance(a, str) for a in archs):
         archs = binary_archs(exe)
     label = record.get("platform") if isinstance(record.get("platform"), str) else "?"
-    method = record.get("method") if record.get("method") in HOW else None
     return Installed(
         version=version,
         executable=exe,
         resources=resources_for(version),
         platform=label,
-        how=HOW.get(method, "installed by an older apothecary"),
+        how=HOW[record["method"]],
         runs=runs_here(archs) if archs else "architecture not known",
     )

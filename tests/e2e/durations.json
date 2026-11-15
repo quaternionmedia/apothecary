@@ -241,7 +241,6 @@
  "tests/e2e/test_site_panel.py::test_site_is_a_window_beside_the_world_and_the_retired_panels_are_gone[chromium]": 1.5,
  "tests/e2e/test_site_panel.py::test_sites_scad_section_shows_the_sites_scad[chromium]": 1.38,
  "tests/e2e/test_site_panel.py::test_the_toolbar_count_opens_sites_problems[chromium]": 2.74,
- "tests/e2e/test_site_panel.py::test_what_the_rail_remembered_is_ignored_and_forgotten[chromium]": 1.36,
  "tests/e2e/test_steps_a_picture_to_a_print.py::test_a_picture_to_a_print_a_step_at_a_time": 0.0,
  "tests/e2e/test_steps_firmware.py::test_firmware_a_step_at_a_time": 0.0,
  "tests/e2e/test_steps_one_machine.py::test_one_machine_a_step_at_a_time": 0.0,

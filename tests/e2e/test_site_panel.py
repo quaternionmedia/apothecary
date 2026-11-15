@@ -14,7 +14,6 @@ pinned in ``garage`` are taken back from their rows while the page shows
 from __future__ import annotations
 
 import io
-import json
 import re
 from urllib.parse import urlparse
 
@@ -47,7 +46,6 @@ def _keep(page, base_url: str, name: str, offset: int, where: str = "") -> dict:
 def _open(page, base_url: str, site: str = "garage") -> None:
     page.goto(f"{base_url}/viewer/sites/{site}")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
 
 
 def _row(page, path: str):
@@ -118,61 +116,6 @@ def test_site_is_a_window_beside_the_world_and_the_retired_panels_are_gone(page,
     # The windows beside it leave the world at least half the page.
     width = page.viewport_size["width"]
     assert page.locator(windows.WORLD).bounding_box()["width"] >= width / 2 - 2
-
-
-@pytest.mark.e2e
-def test_what_the_rail_remembered_is_ignored_and_forgotten(page, base_url: str):
-    """A browser that remembered the rail's panels -- two rails, Site docked left, the
-    right rail narrowed and the left hidden, Contents, Validation, OpenSCAD, Kept and
-    Gather -- opens the page with no error and its windows as they start, and the old
-    record is gone from the browser."""
-    old = {
-        "contents": {"open": False, "where": "free", "x": 9, "y": 9},
-        "validation": {"open": True, "collapsed": True, "where": "left"},
-        "scad": {"open": False},
-        "kept": {"open": True, "where": "free"},
-        "camera": {"open": True},
-        "site": {"open": True, "collapsed": True, "where": "left"},
-        "selected": {"open": False, "where": "right"},
-        "_rails": {
-            "right": {"width": 300, "hidden": False},
-            "left": {"width": 260, "hidden": True},
-        },
-    }
-    page.add_init_script(
-        f"try {{ localStorage.setItem('apothecary.panels', {json.dumps(json.dumps(old))}); }} catch (e) {{}}"
-    )
-    errors = []
-    page.on("pageerror", lambda e: errors.append(str(e)))
-    page.goto(f"{base_url}/viewer/sites/garage")
-    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    states = page.evaluate("() => window.apothecaryPanels.list()")
-    assert [(s["id"], s["open"], s["shown"]) for s in states] == [
-        ("world", True, True),
-        ("site", True, True),
-        ("problems", True, False),
-        ("pinned", True, False),
-        ("jobs", True, False),
-        ("scad", True, False),
-        ("selected", True, True),
-        ("pictures", True, True),
-        ("bench", True, False),
-        ("settings", True, False),
-        ("gather", False, False),  # closed until asked for
-        ("models", False, False),  # closed until asked for
-        ("marks", False, False),  # closed until asked for
-        *((f"part-{sid}", False, False) for sid in windows.PART_SECTIONS),
-        ("airgap", False, False),
-        *((f"airgap-{sid}", False, False) for sid in windows.AIRGAP_SECTIONS),
-        ("family-members", False, False),  # closed until asked for
-        ("family-deliveries", False, False),
-        ("working", False, False),  # closed until asked for
-        ("procedure", False, False),  # closed until asked for
-        ("deck", False, False),  # closed until asked for
-    ]
-    assert page.locator(windows.WORLD).bounding_box()["x"] <= 1
-    assert page.evaluate("() => localStorage.getItem('apothecary.panels')") is None
-    assert errors == []
 
 
 # A remembered layout with a Kept tab beside the Bench, as a page that had a Kept panel

@@ -40,7 +40,6 @@ def _png(offset: int) -> bytes:
 def _open(page, base_url: str) -> None:
     page.goto(f"{base_url}/viewer/sites/garage")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    page.evaluate("() => localStorage.removeItem('apothecary.panels')")
 
 
 def _views(page, base_url: str) -> list:

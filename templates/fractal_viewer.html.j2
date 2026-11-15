@@ -1575,8 +1575,6 @@
                     known: ['gather', 'models', 'marks', 'working', 'deck', ...knownWindows(SYSTEMS)],
                     transient: ['control', 'lighting', ...transientWindows(SYSTEMS)],
                 });
-                // What the rail this layout replaced remembered: nothing reads it any more.
-                try { localStorage.removeItem('apothecary.panels'); } catch (e) { /* blocked storage */ }
                 // Pinned is mounted the first time it is in front of a person, and listed
                 // again each time it is in front again.
                 const onOpen = { pinned: () => this.pinnedOpened() };
