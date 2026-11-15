@@ -650,7 +650,7 @@ def params_sidecar_path(stl_path: Path) -> Path:
     return stl_path.with_suffix(".params.json")
 
 
-def _recordable(value: object) -> object:
+def recordable(value: object) -> object:
     if isinstance(value, Enum):
         return value.value
     if isinstance(value, BaseModel):
@@ -670,7 +670,7 @@ def write_params_sidecar(stl_path: Path, params: dict) -> Path:
             {"params": params, "generated": datetime.now().isoformat(timespec="seconds")},
             indent=2,
             sort_keys=True,
-            default=_recordable,
+            default=recordable,
         )
         + chr(10),
         encoding="utf-8",
@@ -699,6 +699,13 @@ def get_renderer() -> OpenSCADRenderer:
     if _renderer is None:
         _renderer = OpenSCADRenderer()
     return _renderer
+
+
+def forget_renderer() -> None:
+    """Let the singleton go, so the next use finds OpenSCAD again: an install has
+    just put another one in place."""
+    global _renderer
+    _renderer = None
 
 
 SNAPSHOTS_URL = "https://openscad.org/downloads.html#snapshots"
@@ -988,7 +995,7 @@ def scad_dependencies(scad: Path, text: Optional[str] = None) -> Dict[str, Optio
     return found
 
 
-def _sources(part: BasePart) -> List[Path]:
+def sources_of(part: BasePart) -> List[Path]:
     """What a part's STL is built from: its SCAD and every file the SCAD
     includes, uses or imports, its part.json when it has one, and each loaded
     wrapper module whose DEFAULT is this part; either sets its output path and
@@ -1022,17 +1029,17 @@ def _sources(part: BasePart) -> List[Path]:
     return list(dict.fromkeys(sources))
 
 
-def _is_fresh(part: BasePart, stl_path: Path, params: dict) -> bool:
+def is_fresh(part: BasePart, stl_path: Path, params: dict) -> bool:
     """The STL on disk was rendered with these parameters and is newer than
     everything it was built from."""
     if not stl_path.exists():
         return False
     record = read_params_sidecar(stl_path) or {}
-    asked = json.loads(json.dumps(params, default=_recordable))
+    asked = json.loads(json.dumps(params, default=recordable))
     if record.get("params", {}) != asked:
         return False
     built = stl_path.stat().st_mtime
-    return all(src.stat().st_mtime <= built for src in _sources(part) if src.exists())
+    return all(src.stat().st_mtime <= built for src in sources_of(part) if src.exists())
 
 
 def _scratch_beside(stl_path: Path) -> tempfile.TemporaryDirectory:
@@ -1136,7 +1143,7 @@ def build_stl(
     params = part.validate_overrides(params)
     pose = posed(part, pose)
     stl_path = posed_path(part.get_stl_output_path(), pose)
-    if not force and _is_fresh(part, stl_path, params):
+    if not force and is_fresh(part, stl_path, params):
         return RenderResult(success=True, stl_path=stl_path, skipped="fresh")
 
     can_build, reason = part.can_generate_stl(renderer.openscad_path if renderer else None)

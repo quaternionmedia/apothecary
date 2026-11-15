@@ -113,7 +113,7 @@ def openscad_install(
         raise click.ClickException(f"{exc}{why}") from exc
     from ..projects.parts import stl_renderer
 
-    stl_renderer._renderer = None  # the default renderer is found again
+    stl_renderer.forget_renderer()  # the default renderer is found again
     click.echo("")
     _status()
     click.echo("")

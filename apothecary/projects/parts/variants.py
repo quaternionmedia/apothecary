@@ -89,18 +89,18 @@ from .stl_renderer import (
     Cancellation,
     OpenSCADRenderer,
     RenderResult,
-    _is_fresh,
-    _recordable,
     binary_stl,
     build_stl,
     geometry_scad,
     has_manifold,
+    is_fresh,
     openscad_version,
     params_sidecar_path,
     part_renderer,
     posed,
     posed_path,
     read_params_sidecar,
+    recordable,
     render_part,
     scad_definitions,
     scad_dependencies,
@@ -265,9 +265,9 @@ def variant_key(
         add("definitions", "\0".join(scad_definitions(definitions)))
     except TypeError as exc:  # a value -D cannot carry: the request's fault
         raise ValueError(str(exc)) from None
-    add("params", json.dumps(dict(params), sort_keys=True, default=_recordable))
+    add("params", json.dumps(dict(params), sort_keys=True, default=recordable))
     if part.rest:
-        add("rest", json.dumps(part.rest, sort_keys=True, default=_recordable))
+        add("rest", json.dumps(part.rest, sort_keys=True, default=recordable))
     add("openscad", openscad_of(renderer) or "none")
     add("backend", backend_of(renderer))
     return digest.hexdigest()[:24]
@@ -627,7 +627,7 @@ def _printed(
             made.failure, made.error_message = "cancelled", SUPERSEDED
             return made
         record = None if force else read_variant(part, key, cache)
-        if record is None and not force and draft is None and _is_fresh(part, canonical, params):
+        if record is None and not force and draft is None and is_fresh(part, canonical, params):
             # The part's own STL answers it; it was not rendered by this cache.
             made.stl_path, made.saved = canonical, True
             made.measure(None)
@@ -710,7 +710,7 @@ def _printed(
                 _write_atomically(variant_draft_path(part, key, cache), draft.encode("utf-8"))
             _write_atomically(
                 record_path,
-                (json.dumps(record, indent=2, sort_keys=True, default=_recordable) + "\n").encode(
+                (json.dumps(record, indent=2, sort_keys=True, default=recordable) + "\n").encode(
                     "utf-8"
                 ),
             )
@@ -736,9 +736,9 @@ def _finished(part, made, params, holds_default, force, canonical, draft, stl) -
         # The part's own STL is the default variant: kept current, and
         # left alone while it is (whichever OpenSCAD made it), unless forced.
         with _LOCKS(f"{_folder_name(part)}/canonical"):
-            if force or not _is_fresh(part, canonical, {}):
+            if force or not is_fresh(part, canonical, {}):
                 _place_as_canonical(part, stl)
-    made.saved = draft is None and _is_fresh(part, canonical, params)
+    made.saved = draft is None and is_fresh(part, canonical, params)
     trim_variants(stl.parent)
     return made
 
@@ -815,7 +815,7 @@ def _rested(part, made, params, force, timeout, chosen, renderer, cancel, cache,
             }
             _write_atomically(
                 record_path,
-                (json.dumps(record, indent=2, sort_keys=True, default=_recordable) + "\n").encode(
+                (json.dumps(record, indent=2, sort_keys=True, default=recordable) + "\n").encode(
                     "utf-8"
                 ),
             )
@@ -857,7 +857,7 @@ def _rest_of_twin(part: BasePart, key: str, compiled: str, cache: Optional[Path]
     mine = {**record, "key": key, "compiled_from": twin}
     _write_atomically(
         record_path,
-        (json.dumps(mine, indent=2, sort_keys=True, default=_recordable) + "\n").encode("utf-8"),
+        (json.dumps(mine, indent=2, sort_keys=True, default=recordable) + "\n").encode("utf-8"),
     )
     return mine
 
@@ -955,7 +955,7 @@ def compiled_key(part: BasePart, compiled, renderer, pose: str = PRINT) -> Optio
     ):
         digest.update(f"{label}\0{value}\0".encode("utf-8"))
     if part.rest:
-        rest = json.dumps(part.rest, sort_keys=True, default=_recordable)
+        rest = json.dumps(part.rest, sort_keys=True, default=recordable)
         digest.update(f"rest\0{rest}\0".encode("utf-8"))
     if pose == REST:
         digest.update(f"pose\0{REST}\0".encode("utf-8"))
@@ -1027,7 +1027,7 @@ def _same_render(
         _write_atomically(variant_draft_path(part, key, cache), draft.encode("utf-8"))
     _write_atomically(
         record_path,
-        (json.dumps(mine, indent=2, sort_keys=True, default=_recordable) + "\n").encode("utf-8"),
+        (json.dumps(mine, indent=2, sort_keys=True, default=recordable) + "\n").encode("utf-8"),
     )
     return True
 
@@ -1115,7 +1115,7 @@ class PageRenders:
 def wants(params: Mapping[str, Any], force: bool, pose: str = PRINT) -> str:
     """What a request asks for, for telling one request from another."""
     asked = {"params": dict(params), "force": force, **({"pose": pose} if pose != PRINT else {})}
-    return json.dumps(asked, sort_keys=True, default=_recordable)
+    return json.dumps(asked, sort_keys=True, default=recordable)
 
 
 # --- what is on disk ----------------------------------------------------------------
@@ -1168,7 +1168,7 @@ def part_state(part: BasePart, url_name: Optional[str] = None, pose: str = PRINT
         params=params,
         default=not params,
         generated=record.get("generated"),
-        fresh=exists and _is_fresh(part, canonical, params),
+        fresh=exists and is_fresh(part, canonical, params),
         measured=measured_box(measured),
         measured_from=FROM_STL if measured else None,
     )
@@ -1233,7 +1233,7 @@ def variant_record(
         measured=measured_box(measured),
         measured_from=source,
         messages=[OpenSCADMessage(**m) for m in record.get("messages", [])],
-        saved=not draft and _is_fresh(part, part.get_stl_output_path(), params),
+        saved=not draft and is_fresh(part, part.get_stl_output_path(), params),
         draft=draft,
         scad_url=f"{base}/scad" if draft else None,
         compiled_from=record.get("compiled_from"),

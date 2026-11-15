@@ -53,11 +53,11 @@ def _overlay_of(source: str) -> Optional[Tuple[Path, str]]:
     """(the overlay's path, the upstream SCAD from the checkout's top) for a SCAD
     in a submodule; None for one that is not (or not in git). Asked of git once
     per file: whether a folder is a submodule does not change while serving."""
-    from .saved import GitError, _where
+    from .saved import GitError, where_saved
 
     part = BasePart(name=Path(source).stem, source_file=Path(source))
     try:
-        where = _where(part)
+        where = where_saved(part)
     except GitError:
         return None
     if not where.overlay:

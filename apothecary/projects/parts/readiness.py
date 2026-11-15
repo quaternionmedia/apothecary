@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 from apothecary.meshes import MeshError, bounds, read_mesh
-from apothecary.projects.parts.stl_renderer import _sources, get_renderer, read_params_sidecar
+from apothecary.projects.parts.stl_renderer import get_renderer, read_params_sidecar, sources_of
 
 PASS = "pass"
 BLOCKED = "blocked"
@@ -110,7 +110,7 @@ def _sources_newer_than(part, stl_path: Path) -> List[str]:
     includes, uses or imports, and the wrapper (a Python module, or the
     part's part.json) -- the same inputs build_stl rebuilds from."""
     rendered = stl_path.stat().st_mtime
-    inputs = _sources(part)
+    inputs = sources_of(part)
     return [f.name for f in inputs if f.exists() and f.stat().st_mtime > rendered]
 
 
