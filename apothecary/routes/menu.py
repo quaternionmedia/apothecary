@@ -24,6 +24,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from ..hierarchy import find_node_by_path
 from ..menu import (
     FLOOR_MARK,
     Carries,
@@ -167,11 +168,10 @@ def _part_seen(site: str, path: str) -> Optional[PartSeen]:
     whether its SCAD is its own to edit, its variants saved in git, and whether it
     is a board."""
     from ..api import _load_part_wrapper
-    from ..menu import _find
     from ..projects.parts.drafts import editable
     from ..projects.parts.saved import GitError, NotInGit, list_trash, saved_names
 
-    node = _find(_site(site), path) if path else None
+    node = find_node_by_path(_site(site), path) if path else None
     if node is None or not node.part_ref:
         return None
     try:

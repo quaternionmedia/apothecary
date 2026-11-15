@@ -33,7 +33,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .hierarchy import Assembly
+from .hierarchy import Assembly, find_node_by_path
 from .journeys import JOURNEYS
 from .journeys import by_id as journey_by_id
 from .site_names import UNIVERSE, UNIVERSE_SHOWN
@@ -488,21 +488,6 @@ def distinct(names: Sequence[str]) -> List[str]:
         mark = f" {seen[label]}"
         out.append((label[: LONGEST_LABEL - len(mark)]).rstrip() + mark)
     return out
-
-
-def _find(node: Assembly, path: str) -> Optional[Assembly]:
-    """Walk a dotted path down from a node, as the rest of the tool does."""
-    here = node
-    for step in path.split("."):
-        nxt = None
-        for child in [*here.children, *here.additions, *here.subtractions]:
-            if child.name == step:
-                nxt = child
-                break
-        if nxt is None:
-            return None
-        here = nxt
-    return here
 
 
 def resolve(
@@ -1581,7 +1566,7 @@ def _canvas_ring(
     whose pieces have categories).
     """
     focus_path = context.targets[0] if context.targets else ""
-    focus = _find(site, focus_path) if site and focus_path else site
+    focus = find_node_by_path(site, focus_path) if site and focus_path else site
     options = [
         option
         for option in (
@@ -1614,7 +1599,7 @@ def _node_ring(
     sketch: Optional[str] = None,
 ) -> Ring:
     path = context.targets[0] if context.targets else ""
-    node = _find(site, path) if site and path else None
+    node = find_node_by_path(site, path) if site and path else None
     camera = bool(path) and path in picture.camera_parts
 
     # Step in, Move and Why this are every piece's, and keep cells 8, 6 and 2 wherever

@@ -8,12 +8,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 import apothecary.api as api
-from apothecary.api import _find_node_by_path, _site_store, app
+from apothecary.api import _site_store, app
 from apothecary.example_hierarchy import create_example_site
 from apothecary.firmware import devices as firmware_devices
 from apothecary.firmware import gcode as firmware_gcode
 from apothecary.firmware.models import DeviceInfo, PrinterInfo
-from apothecary.hierarchy import Assembly, Site
+from apothecary.hierarchy import Assembly, Site, find_node_by_path
 from apothecary.primitives import Import
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.stl_renderer import RenderResult, get_renderer
@@ -231,7 +231,7 @@ def test_each_violation_names_its_pieces_by_tree_path_beside_their_names():
         assert len(v["paths"]) == len(v["structures"]), v
         assert [p.rsplit(".", 1)[-1] for p in v["paths"]] == v["structures"], v
         for path in v["paths"]:
-            assert _find_node_by_path(_site_store.get("garage"), path) is not None, path
+            assert find_node_by_path(_site_store.get("garage"), path) is not None, path
 
 
 def test_layout_endpoint_detects_overhang():
@@ -322,13 +322,13 @@ def test_site_viewer_page_unknown_site_is_404():
 
 
 # =============================================================================
-# _find_node_by_path -- dotted-path resolution for the node-STL endpoint
+# find_node_by_path -- dotted-path resolution for the node-STL endpoint
 # =============================================================================
 
 
 def test_find_node_by_path_resolves_a_direct_child():
     site = create_example_site()
-    node = _find_node_by_path(site, "garage_building")
+    node = find_node_by_path(site, "garage_building")
     assert node is not None
     assert node.name == "garage_building"
 
@@ -339,7 +339,7 @@ def test_find_node_by_path_resolves_through_additions_and_children():
     and subtractions uniformly, not just children.
     """
     site = create_example_site()
-    node = _find_node_by_path(
+    node = find_node_by_path(
         site, "printer_1.gantry_system.belt_tensioner_system.belt_tensioner_boss"
     )
     assert node is not None
@@ -348,8 +348,8 @@ def test_find_node_by_path_resolves_through_additions_and_children():
 
 def test_find_node_by_path_unknown_segment_returns_none():
     site = create_example_site()
-    assert _find_node_by_path(site, "printer_1.no_such_child") is None
-    assert _find_node_by_path(site, "no_such_top_level") is None
+    assert find_node_by_path(site, "printer_1.no_such_child") is None
+    assert find_node_by_path(site, "no_such_top_level") is None
 
 
 # =============================================================================

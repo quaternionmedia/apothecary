@@ -27,6 +27,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..evidence import frames, log
+from ..hierarchy import find_node_by_path
 
 router = APIRouter(tags=["evidence"])
 
@@ -100,10 +101,10 @@ def _found():
 def _printer_or_404(name: str, path: str):
     """The site, when ``path`` is one of its machines (a printer or a router: a node
     that carries a machine's status); 404 otherwise."""
-    from ..api import MACHINE_STATUSES, _find_node_by_path, _get_site_or_404
+    from ..api import MACHINE_STATUSES, _get_site_or_404
 
     site = _get_site_or_404(name)
-    node = _find_node_by_path(site, path)
+    node = find_node_by_path(site, path)
     if node is None or node.status not in MACHINE_STATUSES:
         raise HTTPException(status_code=404, detail=f"{path} is no machine of {name}")
     return site

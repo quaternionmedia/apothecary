@@ -60,7 +60,7 @@ machine seam, `openscad_installer` and the slicer's installer for the tool finde
 
 | From | To | Where | When | What it takes |
 |---|---|---|---|---|
-| `cam` | `api` | `apothecary/cam/api.py` | in a call | `_site_store`, `_find_node_by_path` |
+| `cam` | `api` | `apothecary/cam/api.py` | in a call | `_site_store` |
 | `family` | `api` | `apothecary/family/members.py` | in a call | `_get_site_or_404` |
 | `family` | `routes` | `apothecary/family/procedures.py` | in a call | `hold_action`, a site's wiring sent to carlos |
 | `finders` | `api` | `apothecary/finders/qmcp.py` | in a call | `_picture_root` |
@@ -71,7 +71,7 @@ machine seam, `openscad_installer` and the slicer's installer for the tool finde
 
 *When* says whether the import runs as the module loads (at import) or only once a
 function is called (in a call); the check holds both. The first four reach the server's
-private state (the site store, the picture root, a node lookup) from a layer below it;
+private state (the site store, the picture root) from a layer below it;
 `apothecary/routes/`, `apothecary/spaces.py` and `apothecary/cli/` import the same
 private names from its own layer or above. The site store and the picture root have no
 interface below the server.

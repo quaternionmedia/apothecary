@@ -317,6 +317,25 @@ def _validate_tree(assembly: "Assembly", path: str = "") -> LayoutReport:
     return LayoutReport(violations=violations)
 
 
+def find_node_by_path(site: Assembly, path: str) -> Optional[Assembly]:
+    """Resolve a dotted, site-rooted path (e.g. ``printer_1.gantry_system``)
+    to the Assembly node it names, walking ``children``/``additions``/
+    ``subtractions`` together -- the same three-list-as-one-tree shape
+    ``GET /sites/{name}``'s tree exposes to the client, so a path the viewer
+    displays is always resolvable back here. Returns None if any segment
+    doesn't match, rather than raising, so callers can choose their own 404
+    wording.
+    """
+    node = site
+    for segment in path.split("."):
+        candidates = [*node.children, *node.additions, *node.subtractions]
+        found = next((c for c in candidates if c.name == segment), None)
+        if found is None:
+            return None
+        node = found
+    return node
+
+
 # ---------------------------------------------------------------------------
 # Vocabulary: Site / Structure / Substructure / Feature as ergonomic
 # constructors over the one generic Assembly class. These are functions (and,

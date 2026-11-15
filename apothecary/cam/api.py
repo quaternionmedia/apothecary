@@ -14,6 +14,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from ..hierarchy import find_node_by_path
 from . import service
 from .models import CutFor, CutRecord
 
@@ -37,10 +38,10 @@ def _part_named(site: Optional[str], part: str) -> str:
     one, the registry name itself."""
     if site is None:
         return part
-    from ..api import _find_node_by_path, _site_store
+    from ..api import _site_store
 
     try:
-        node = _find_node_by_path(_site_store.get(site), part)
+        node = find_node_by_path(_site_store.get(site), part)
     except KeyError:
         node = None
     if node is None:

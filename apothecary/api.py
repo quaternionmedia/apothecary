@@ -63,7 +63,7 @@ from .firmware.bindings import bindings_for_site, device_for_identity, same_devi
 from .firmware.deck_api import router as firmware_deck_router
 from .firmware.models import DeviceAttachRequest, validate_port
 from .firmware.toolchains import ToolchainError
-from .hierarchy import Assembly
+from .hierarchy import Assembly, find_node_by_path
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .primitives import Cube, Cylinder, Sphere, absolute_imports
@@ -1208,7 +1208,7 @@ def pinned_build_volume(site_name: str, printer: Optional[str] = None):
             f"{len(pinned)} printers are pinned in {site_name}: {', '.join(pinned)}",
             "name the one to print on (printer=<path>)",
         )
-    node = _find_node_by_path(_site_store.get(site_name), chosen)
+    node = find_node_by_path(_site_store.get(site_name), chosen)
     volume = getattr(node, "build_volume", None) if node is not None else None
     if volume is None:
         return None, (
@@ -1361,24 +1361,6 @@ def _get_site_or_404(name: str) -> Assembly:
         return _site_store.get(name)
     except UnknownSiteError:
         raise HTTPException(status_code=404, detail=f"Site '{name}' not found") from None
-
-
-def _find_node_by_path(site: Assembly, path: str) -> Optional[Assembly]:
-    """Resolve a dotted, site-rooted path (e.g. ``printer_1.gantry_system``)
-    to the Assembly node it names, walking ``children``/``additions``/
-    ``subtractions`` together -- the same three-list-as-one-tree shape
-    ``_assembly_tree`` exposes to the client, so a path the viewer displays
-    is always resolvable back here. Returns None if any segment doesn't
-    match, rather than raising, so callers can choose their own 404 wording.
-    """
-    node = site
-    for segment in path.split("."):
-        candidates = [*node.children, *node.additions, *node.subtractions]
-        found = next((c for c in candidates if c.name == segment), None)
-        if found is None:
-            return None
-        node = found
-    return node
 
 
 # Node renders kept in the cache. A key includes the node's position, so every
@@ -2127,7 +2109,7 @@ def _node_stl(name: str, path: str) -> tuple[bytes, Assembly]:
     """One node's STL and the node, as ``get_node_stl`` serves it -- the slicer
     slices a made piece from it too. Raises the HTTPException that route answers."""
     site = _get_site_or_404(name)
-    node = _find_node_by_path(site, path)
+    node = find_node_by_path(site, path)
     if node is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
 
@@ -2172,7 +2154,7 @@ def status_bearer_for(site: Assembly, path: str) -> Optional[str]:
     parts = path.split(".")
     for depth in range(len(parts), 0, -1):
         candidate = ".".join(parts[:depth])
-        node = _find_node_by_path(site, candidate)
+        node = find_node_by_path(site, candidate)
         if node is not None and node.status is not None:
             return candidate
     return None
@@ -2279,9 +2261,9 @@ def printer_where(port: str):
     if pinned is None:
         return {"port": port, "site": None, "board": None, "printer": None}
     name, site, path = pinned
-    node = _find_node_by_path(site, path)
+    node = find_node_by_path(site, path)
     bearer_path = status_bearer_for(site, path) or path
-    bearer = _find_node_by_path(site, bearer_path) or node
+    bearer = find_node_by_path(site, bearer_path) or node
     return {
         "port": port,
         "site": name,
@@ -2312,7 +2294,7 @@ def _pinned_at(port: str) -> Optional[tuple[str, Assembly, str]]:
             site = _site_store.get(binding.site)
         except KeyError:  # forgotten, or its picture left the shelf, since names()
             continue
-        if _find_node_by_path(site, binding.path) is None:
+        if find_node_by_path(site, binding.path) is None:
             continue
         return binding.site, site, binding.path
     return None
@@ -2373,7 +2355,7 @@ def _slice_target(site_name: str, path: str) -> Optional[slicing.Target]:
         site = _site_store.get(site_name)
     except KeyError:  # an UnknownSiteError, or forgotten since
         return None
-    node = _find_node_by_path(site, path)
+    node = find_node_by_path(site, path)
     if node is None:
         return None
     if node.part_ref:
@@ -2429,7 +2411,7 @@ def _printer_to_slice_for(
             path = _the_printer_in(site_name, site)
             if path is None:
                 return None
-    node = _find_node_by_path(site, path)
+    node = find_node_by_path(site, path)
     if node is None or not node.part_ref:
         return None
     if port is None:
@@ -2513,7 +2495,7 @@ def _machines_in(site_name: str, statuses, router: bool) -> List[str]:
     found = set()
     for binding in state.bindings(site_name):
         bearer = status_bearer_for(site, binding.path)
-        node = _find_node_by_path(site, bearer) if bearer else None
+        node = find_node_by_path(site, bearer) if bearer else None
         if node is None or node.status not in statuses:
             continue
         on_port = device_for_identity(binding.identity, plugged, binding.kind)
@@ -2549,7 +2531,7 @@ def every_pin(fresh: bool = False):
         node_found = False
         if site_known:
             try:
-                node = _find_node_by_path(_site_store.get(binding.site), binding.path)
+                node = find_node_by_path(_site_store.get(binding.site), binding.path)
             except KeyError:  # forgotten, or its picture left the shelf, since names()
                 node = None
             node_found = node is not None
@@ -2595,7 +2577,7 @@ def _sync_printer_status(status) -> List[Dict[str, object]]:
             target = status_bearer_for(site, binding.path)
             if target is None:
                 continue
-            node = _find_node_by_path(site, target)
+            node = find_node_by_path(site, target)
             row: Dict[str, object] = {"site": site_name, "path": target}
             if target != binding.path:
                 row["via"] = binding.path
@@ -2659,7 +2641,7 @@ def _sync_job_status(job: jobs.Job) -> None:
         return
     site = _site_store.get(job.site)
     target = status_bearer_for(site, job.machine.path)
-    node = _find_node_by_path(site, target) if target is not None else None
+    node = find_node_by_path(site, target) if target is not None else None
     if node is None or node.status == "maintenance":
         return
     if job.running:
@@ -2736,7 +2718,7 @@ def attach_device(name: str, path: str, body: DeviceAttachRequest):
     port. The row answered says what was stored.
     """
     site = _get_site_or_404(name)
-    if _find_node_by_path(site, path) is None:
+    if find_node_by_path(site, path) is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
     identity = firmware_devices.stable_identity(body.identity)
     known = firmware_devices.known_device(body.identity)
@@ -2750,7 +2732,7 @@ def attach_device(name: str, path: str, body: DeviceAttachRequest):
 def detach_device(name: str, path: str):
     """Drop a pin; the node goes back to the by-sketch rule (or to nothing)."""
     site = _get_site_or_404(name)
-    if _find_node_by_path(site, path) is None:
+    if find_node_by_path(site, path) is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
     firmware_devices.get_state().clear_binding(name, path)
     return _binding_row(name, site, path)

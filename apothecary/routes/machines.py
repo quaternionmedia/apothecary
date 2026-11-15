@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from .. import jobs, machine_plans
 from ..firmware.bindings import walk_paths
+from ..hierarchy import find_node_by_path
 
 router = APIRouter(prefix="/sites", tags=["machines"])
 
@@ -41,10 +42,8 @@ def _site(name: str):
 def _machine(name: str, path: str):
     """The site, the machine node at ``path`` and its kind; 404 for a node that is not
     there, 400 for one that is no machine."""
-    from ..api import _find_node_by_path
-
     site = _site(name)
-    node = _find_node_by_path(site, path)
+    node = find_node_by_path(site, path)
     if node is None:
         raise HTTPException(status_code=404, detail=f"no node {path!r} in {name}")
     kind = machine_plans.kind_of_part(node.part_ref) if node.part_ref else None

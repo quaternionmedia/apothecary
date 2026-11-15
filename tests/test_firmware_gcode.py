@@ -982,9 +982,10 @@ BOARD = "printer_1.frame_system.mainboard"
 
 
 def test_garage_printers_carry_a_mainboard(garage):
-    from apothecary.api import _find_node_by_path, status_bearer_for
+    from apothecary.api import status_bearer_for
+    from apothecary.hierarchy import find_node_by_path
 
-    board = _find_node_by_path(garage, BOARD)
+    board = find_node_by_path(garage, BOARD)
     assert board is not None and board.status is None and board.category == "electrical"
     assert board.footprint.max_point.x == 102.0
     assert status_bearer_for(garage, BOARD) == "printer_1"

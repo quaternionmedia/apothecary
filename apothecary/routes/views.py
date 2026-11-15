@@ -65,7 +65,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from ..hierarchy import Assembly
+from ..hierarchy import Assembly, find_node_by_path
 from ..projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
 from ..projects.parts.stl_renderer import geometry_scad
 from ..vision import cameras, whiteboard
@@ -740,7 +740,7 @@ def placed():
     ``site_known``), so it can still be taken back from the list that shows it: a
     camera whose site is gone (an arrangement built from a picture, forgotten) is
     removed by ``DELETE /sites/{s}/cameras/{name}`` all the same."""
-    from ..api import _find_node_by_path, _site_store
+    from ..api import _site_store
     from ..firmware import devices as firmware_devices
 
     names = set(_site_store.names())
@@ -759,7 +759,7 @@ def placed():
                 **binding.model_dump(mode="json"),
                 "site_known": site is not None,
                 "node_found": site is not None
-                and _find_node_by_path(site, binding.path) is not None,
+                and find_node_by_path(site, binding.path) is not None,
             }
         )
     camera_rows = []
