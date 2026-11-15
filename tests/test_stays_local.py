@@ -517,7 +517,7 @@ def test_a_tool_fetch_takes_no_proxy_and_a_version_is_three_numbers(monkeypatch)
 
     monkeypatch.setattr(installer.urllib.request, "build_opener", build_opener)
     with pytest.raises(OSError, match="not reached"):
-        installer._fetch("https://github.com/arduino/arduino-cli/releases/download/v1.2.3/x")
+        installer.fetch_url("https://github.com/arduino/arduino-cli/releases/download/v1.2.3/x")
     assert opened["url"].startswith("https://github.com/")
     assert installer.resolve_version("v1.5.1", fetch=lambda url: b"") == "1.5.1"
     for bad in ("../../other/repo/releases/download/v1", "1.5", "1.5.1/../x", "latest;rm"):
@@ -555,7 +555,7 @@ def test_a_tool_fetch_has_two_callers_the_two_installers():
         "apothecary/firmware/installer.py",
         "apothecary/openscad_installer.py",
     }
-    assert rust_installer._fetch is installer._fetch
+    assert rust_installer.fetch_url is installer.fetch_url
     assert "files.openscad.org" in stays_local.TOOL_SOURCES
     # OpenSCAD's source, for a Linux arm64 build: the tarballs GitHub serves.
     assert "codeload.github.com" in stays_local.TOOL_SOURCES
@@ -717,10 +717,10 @@ def test_the_openscad_installer_fetches_from_its_source_alone_by_a_date(monkeypa
 
     monkeypatch.setattr(openscad_installer.urllib.request, "build_opener", build_opener)
     with pytest.raises(stays_local.LeftTheMachine):
-        openscad_installer._fetch("https://evil.example/snapshots/")
+        openscad_installer.fetch_url("https://evil.example/snapshots/")
     assert opened == {}
     with pytest.raises(OSError, match="not reached"):
-        openscad_installer._fetch(openscad_installer.SNAPSHOTS)
+        openscad_installer.fetch_url(openscad_installer.SNAPSHOTS)
     assert opened["url"] == "https://files.openscad.org/snapshots/"
     assert openscad_installer.check_date("2026.09.27") == "2026.09.27"
     for bad in ("../../x", "2026.9.27", "2026.09.27/../x", "latest;rm", "2026.09"):
@@ -729,7 +729,7 @@ def test_the_openscad_installer_fetches_from_its_source_alone_by_a_date(monkeypa
     # A source build's tarball: a commit, 40 hex characters, spliced into a codeload URL.
     sha = "31f27b7522af858ebabed764e67ecc10d9e27add"
     with pytest.raises(OSError, match="not reached"):
-        openscad_installer._fetch(f"https://codeload.github.com/openscad/openscad/tar.gz/{sha}")
+        openscad_installer.fetch_url(f"https://codeload.github.com/openscad/openscad/tar.gz/{sha}")
     assert opened["url"].startswith("https://codeload.github.com/")
     assert openscad_installer.check_sha(sha) == sha
     for bad in ("../../x", sha[:7], sha + "/../x", "g" * 40, "master", sha.upper()):
@@ -1194,8 +1194,8 @@ def test_the_slicer_installer_fetches_through_the_openscad_installers_fetch():
     from apothecary import openscad_installer
     from apothecary.slicer import orcaslicer_installer
 
-    assert orcaslicer_installer._fetch is openscad_installer._fetch
-    assert orcaslicer_installer._fetch_to is openscad_installer._fetch_to
+    assert orcaslicer_installer.fetch_url is openscad_installer.fetch_url
+    assert orcaslicer_installer.fetch_url_to is openscad_installer.fetch_url_to
     assert set(SLICER_INSTALL_HOSTS) <= stays_local.TOOL_SOURCES
 
 

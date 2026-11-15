@@ -54,7 +54,7 @@ build scripts that run on this machine -- is checked first, and refused with
 what installs it; nothing here runs sudo.
 
 Every fetch apothecary makes goes through the firmware installer's tool
-fetch (``_fetch``, ``_fetch_to``) to the hosts in ``stays_local.TOOL_SOURCES``;
+fetch (``fetch_url``, ``fetch_url_to``) to the hosts in ``stays_local.TOOL_SOURCES``;
 rustup-init and cargo are subprocesses, outside the socket guard, told where
 to fetch from by the pinned versions and with no proxy, no registry or
 source override and no GitHub token in their environment.
@@ -76,7 +76,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
-from .installer import _fetch, _fetch_to
+from .installer import fetch_url, fetch_url_to
 from .modules.rust_esp32 import (
     CARGO,
     RUST_ESP32,
@@ -168,9 +168,9 @@ def host_triple(system: Optional[str] = None, machine: Optional[str] = None) -> 
     if system is None or machine is None:
         here = _host()
         system, machine = system or here[0], machine or here[1]
-    from ..openscad_installer import _machine_name
+    from ..openscad_installer import machine_name
 
-    key = (system, _machine_name(machine))
+    key = (system, machine_name(machine))
     if key in TRIPLES:
         return TRIPLES[key]
     if key in REFUSED:
@@ -414,10 +414,10 @@ class RustEsp32Installer:
         self,
         log: Optional[Log] = None,
         force: bool = False,
-        fetch: Fetch = _fetch,
+        fetch: Fetch = fetch_url,
         run: Optional[Callable[..., int]] = None,
         triple: Optional[str] = None,
-        fetch_to: Callable[[str, Path], str] = _fetch_to,
+        fetch_to: Callable[[str, Path], str] = fetch_url_to,
     ):
         self.log = log or (lambda _line: None)
         self.force = force

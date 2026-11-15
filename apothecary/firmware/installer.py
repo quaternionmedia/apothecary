@@ -67,7 +67,7 @@ def asset_name(version: str, system: Optional[str] = None, machine: Optional[str
     return f"arduino-cli_{version}_{os_name}_{arch}.{ext}"
 
 
-def _fetch(url: str, timeout: int = 120) -> bytes:
+def fetch_url(url: str, timeout: int = 120) -> bytes:
     """A tool fetch: the one kind of connection past this machine, to fixed hosts only.
 
     ``tool_fetch`` (apothecary/stays_local.py) refuses a URL whose host is not
@@ -83,7 +83,7 @@ def _fetch(url: str, timeout: int = 120) -> bytes:
         return resp.read()
 
 
-def _fetch_to(url: str, path: Path, timeout: int = 600) -> str:
+def fetch_url_to(url: str, path: Path, timeout: int = 600) -> str:
     """The same tool fetch, written to ``path`` as it arrives -- an archive too large
     to hold in memory -- and the SHA-256 of what arrived."""
     from ..stays_local import tool_fetch
@@ -105,7 +105,7 @@ def _fetch_to(url: str, path: Path, timeout: int = 600) -> str:
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 
-def resolve_version(version: str = "latest", fetch: Callable[[str], bytes] = _fetch) -> str:
+def resolve_version(version: str = "latest", fetch: Callable[[str], bytes] = fetch_url) -> str:
     """Turn ``latest`` into a concrete ``X.Y.Z`` via the releases API.
 
     A version is three numbers and nothing else: it is spliced into the
@@ -122,7 +122,7 @@ def resolve_version(version: str = "latest", fetch: Callable[[str], bytes] = _fe
     return version
 
 
-def expected_checksum(version: str, name: str, fetch: Callable[[str], bytes] = _fetch) -> str:
+def expected_checksum(version: str, name: str, fetch: Callable[[str], bytes] = fetch_url) -> str:
     text = fetch(f"{RELEASES_DOWNLOAD}/v{version}/{version}-checksums.txt").decode("utf-8")
     for line in text.splitlines():
         parts = line.split()
@@ -160,7 +160,10 @@ class ArduinoCliInstaller:
     """Drives one install: resolve → download → verify → extract → smoke-test."""
 
     def __init__(
-        self, spec: InstallSpec, log: Optional[Log] = None, fetch: Callable[[str], bytes] = _fetch
+        self,
+        spec: InstallSpec,
+        log: Optional[Log] = None,
+        fetch: Callable[[str], bytes] = fetch_url,
     ):
         self.spec = spec
         self.log = log or (lambda _line: None)

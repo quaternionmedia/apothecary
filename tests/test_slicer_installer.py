@@ -429,8 +429,8 @@ def test_slicer_install_installs_and_then_says_where_it_stands(tools, monkeypatc
 
     body = _appimage()
     github = _linux(monkeypatch, body)
-    monkeypatch.setattr(oi, "_fetch", lambda url, **kw: github.fetch(url))
-    monkeypatch.setattr(oi, "_fetch_to", lambda url, path, **kw: github.fetch_to(url, path))
+    monkeypatch.setattr(oi, "fetch_url", lambda url, **kw: github.fetch(url))
+    monkeypatch.setattr(oi, "fetch_url_to", lambda url, path, **kw: github.fetch_to(url, path))
     monkeypatch.delenv("APOTHECARY_ORCASLICER", raising=False)
     result = CliRunner().invoke(cli, ["slicer", "install"])
     assert result.exit_code == 0, result.output

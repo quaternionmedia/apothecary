@@ -274,7 +274,7 @@ def test_openscad_install_and_status(tools, monkeypatch):
     from apothecary.cli import cli
 
     host = Host()
-    monkeypatch.setattr(oi, "_fetch", host)
+    monkeypatch.setattr(oi, "fetch_url", host)
     result = CliRunner().invoke(cli, ["openscad", "install", "--latest"])
     assert result.exit_code == 0, result.output
     assert "OpenSCAD version 2026.09.27" in result.output
@@ -290,7 +290,7 @@ def test_openscad_install_takes_the_parts_floor_by_default(tools, monkeypatch):
     from apothecary.cli import openscad as cmd
 
     host = Host()
-    monkeypatch.setattr(oi, "_fetch", host)
+    monkeypatch.setattr(oi, "fetch_url", host)
     monkeypatch.setattr(cmd, "parts_floor", lambda: ("2026.09.25", "gridfinity"))
     result = CliRunner().invoke(cli, ["openscad", "install", "--snapshot", "2026.09.22"])
     assert result.exit_code != 0
@@ -319,7 +319,7 @@ def test_openscad_install_says_where_it_downloads_from():
 def test_latest_and_a_pinned_date_are_one_or_the_other(tools, monkeypatch):
     from apothecary.cli import cli
 
-    monkeypatch.setattr(oi, "_fetch", Host())
+    monkeypatch.setattr(oi, "fetch_url", Host())
     result = CliRunner().invoke(
         cli, ["openscad", "install", "--latest", "--snapshot", "2026.09.22"]
     )
