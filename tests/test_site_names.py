@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from firmware_helpers import _isolate_firmware_state
 
-from apothecary import api, jobs
+from apothecary import api, jobs, sites
 from apothecary.family import procedures
 from apothecary.firmware import devices
 from apothecary.site_names import UNIVERSE
@@ -78,12 +78,12 @@ def test_a_camera_kept_under_a_name_no_site_has_stands_in_no_site():
     path.write_text(json.dumps({"cameras": [record]}), encoding="utf-8")
     assert cameras.records(UNIVERSE) == []
     assert [(c.site, c.name) for c in cameras.records()] == [(NO_SITE_S, "camera_1")]
-    universe = api._site_store.reset(UNIVERSE)
+    universe = sites.store.reset(UNIVERSE)
     try:
         assert "camera_1" not in {child.name for child in universe.children}
     finally:
         path.unlink()
-        api._site_store.reset(UNIVERSE)
+        sites.store.reset(UNIVERSE)
 
 
 def test_a_job_kept_under_a_name_no_site_has_is_no_site_s():

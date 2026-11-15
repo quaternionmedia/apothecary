@@ -26,6 +26,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
 
+from .. import sites
 from ..family import hub
 from ..firmware import devices as firmware_devices
 from ..firmware.bindings import bindings_for_site
@@ -45,9 +46,7 @@ def _hold(body: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _wiring(name: str) -> Wiring:
-    from ..api import _get_site_or_404
-
-    site = _get_site_or_404(name)
+    site = sites.store.get(name)
     try:
         found = firmware_devices.detected_devices()
     except ToolchainError:

@@ -30,7 +30,8 @@ from views_helpers import pin as _pin
 from views_helpers import png as _png
 from views_helpers import roots as _roots
 
-from apothecary.api import _site_store, app
+from apothecary import sites
+from apothecary.api import app
 
 
 def _centre(structure):
@@ -376,7 +377,7 @@ def test_a_floor_mat_and_a_piece_at_its_centre_touch_nothing_in_any_site(world):
     (world / "centred.shapes.json").write_text(
         json.dumps({"pixel_width": WIDE, "pixel_height": HIGH, "shapes": [centred]})
     )
-    for site in _site_store.names():
+    for site in sites.store.names():
         before = [s for s in _roots(c, site).values() if s["world_bounds"]]
         view = _pin(c, site=site, host="", picture="centred.png", mm_across=1800)
         mat = view["mat"]

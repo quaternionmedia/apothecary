@@ -28,6 +28,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from .. import sites
 from ..vision import again, history, marks, whiteboard
 from ..vision import views as viewing
 from ..vision.models import Picture
@@ -35,7 +36,6 @@ from .marks import _read, keep, kept_for
 from .views import (
     _answer,
     _picture_at,
-    _site,
     _site_answer,
     _view_or_404,
     find_in,
@@ -46,7 +46,7 @@ router = APIRouter(tags=["views"])
 
 
 def _whiteboard_or_404(site_name: str, name: str):
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     node = next((c for c in site.children if c.name == name), None)
     if node is None or not whiteboard.is_whiteboard(node):
         raise HTTPException(status_code=404, detail=f"{name!r} is not a whiteboard of {site_name}")
@@ -70,7 +70,7 @@ def _moment(at: Optional[str]) -> Optional[str]:
 @router.get("/sites/{site_name}/whiteboards")
 def list_whiteboards(site_name: str):
     """The site's whiteboards, each with how many photographs it holds."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     return [
         {"name": node.name, "photographs": len(_photographs(site_name, node.name))}
         for node in site.children
@@ -185,7 +185,7 @@ def take_changes(site_name: str, view_id: str, body: Take):
             raise HTTPException(
                 status_code=409, detail=f"row {number} cannot be taken: {rows[number].says}"
             )
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     made_now: List[str] = []
     dropped: List[str] = []
     for number in sorted(body.take):
@@ -239,7 +239,7 @@ def place_moment(site_name: str, view_id: str, body: Place):
     whiteboard, is refused."""
     source = _view_or_404(site_name, view_id)
     when = _moment(body.as_of)
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     node = next((c for c in site.children if c.name == body.host), None)
     if body.host == source.host:
         raise HTTPException(status_code=409, detail=f"{view_id} already lies at {body.host!r}")

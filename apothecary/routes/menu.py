@@ -24,6 +24,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from .. import sites
 from ..hierarchy import find_node_by_path
 from ..menu import (
     FLOOR_MARK,
@@ -86,30 +87,18 @@ class Carried(BaseModel):
 
 
 def _site(name: Optional[str]):
-    """The arrangement by name, or None.
-
-    Imported inside the function rather than at the top because
-    `apothecary/api.py` mounts this router, so importing it at module scope would
-    close a circle. The same deferred-import shape the photo shelf already uses
-    in that module.
-    """
-    if name is None:
-        return None
-    from ..api import _get_site_or_404
-
-    return _get_site_or_404(name)
+    """The arrangement by name, or None."""
+    return sites.store.get(name) if name is not None else None
 
 
 def _catalogue(name: Optional[str]) -> Dict[str, List[str]]:
     """The lists a ring is built from, read fresh on every call: the
     arrangements that exist now, and the groups in this one."""
-    from ..api import _site_store
-
     groups: List[str] = []
     site = _site(name)
     if site is not None:
         groups = sorted({child.category for child in site.children if child.category})
-    return {"site_names": sorted(_site_store.names()), "groups": groups}
+    return {"site_names": sorted(sites.store.names()), "groups": groups}
 
 
 def _pictures_known(
@@ -154,11 +143,10 @@ def _pictures_known(
 
 def _planned(site: str, kind: str) -> List[str]:
     """The site's machines of ``kind``, by the part each is drawn from."""
-    from ..api import _site_store
     from .machines import machines_of
 
     try:
-        return [m["path"] for m in machines_of(_site_store.get(site), kind)]
+        return [m["path"] for m in machines_of(sites.store.get(site), kind)]
     except KeyError:
         return []
 
@@ -171,7 +159,7 @@ def _part_seen(site: str, path: str) -> Optional[PartSeen]:
     from ..projects.parts.drafts import editable
     from ..projects.parts.saved import GitError, NotInGit, list_trash, saved_names
 
-    node = find_node_by_path(_site(site), path) if path else None
+    node = find_node_by_path(sites.store.get(site), path) if path else None
     if node is None or not node.part_ref:
         return None
     try:
@@ -246,12 +234,12 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
     Make says ends with the steps after it, when it made something, and the piece
     it made -- Make all's first -- is ``added``, which the page selects, as it
     selects the camera Add here added: the steps it names are that piece's."""
-    from ..api import _site_payload, _site_store
+    from ..api import _site_payload
     from ..vision import views as viewing
 
     action = chosen.intent.action
     name = _needs_site(chosen)
-    site = _site(name)
+    site = sites.store.get(name)
     verb, _, rest = action.partition(":")[2].partition(":")
     rest = rest.removesuffix(f":{FLOOR_MARK}")
     piece = chosen.intent.context.targets[0] if chosen.intent.context.targets else ""
@@ -306,7 +294,7 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
         action=action,
         carried_by=who.value,
         did=did,
-        site=_site_payload(site, _site_store.validator(name)(site)),
+        site=_site_payload(site, sites.store.validator(name)(site)),
         address=chosen.intent.address,
         added=added,
     )
@@ -317,7 +305,7 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
     functions the camera routes call. Add here stands on a host (the ring's
     target) or, with ``@floor``, the floor; Remove names the camera by the ring's
     target. Every refusal is a 4xx naming its reason."""
-    from ..api import _site_payload, _site_store
+    from ..api import _site_payload
     from ..vision import cameras
     from .views import check_host
 
@@ -346,7 +334,7 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
             )
         added = camera.name
     elif action == "camera:remove":
-        site = _site(name)
+        site = sites.store.get(name)
         try:
             cameras.remove(name, site, target)
         except cameras.CameraNotFound as missing:
@@ -359,7 +347,7 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
         action=action,
         carried_by=who.value,
         did=did,
-        site=_site_payload(site, _site_store.validator(name)(site)),
+        site=_site_payload(site, sites.store.validator(name)(site)),
         address=chosen.intent.address,
         added=added,
     )
@@ -370,7 +358,7 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
 @router.post("/intent", response_model=Carried)
 async def carry_out(chosen: Chosen) -> Carried:
     """Carry out a chosen option, or say that the viewer does, or refuse."""
-    from ..api import _site_payload, _site_store
+    from ..api import _site_payload
 
     action = chosen.intent.action
     try:
@@ -388,13 +376,12 @@ async def carry_out(chosen: Chosen) -> Carried:
 
     if action == "reset":
         name = _needs_site(chosen)
-        _site(name)  # 404s on a name that is not there, before anything is reset
-        rebuilt = _site_store.reset(name)
+        rebuilt = sites.store.reset(name)
         return Carried(
             action=action,
             carried_by=who.value,
             did=f"rebuilt {name} from its factory",
-            site=_site_payload(rebuilt, _site_store.validator(name)(rebuilt)),
+            site=_site_payload(rebuilt, sites.store.validator(name)(rebuilt)),
             address=chosen.intent.address,
         )
 

@@ -9,7 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image, ImageDraw
 
-from apothecary.api import _site_store, app
+from apothecary import sites
+from apothecary.api import app
 
 
 def _drawn(shapes: str, size=(640, 480)) -> bytes:
@@ -42,8 +43,8 @@ def pictures(tmp_path, monkeypatch):
     with patch.object(shelf_module, "_shelf", stock):
         yield tmp_path
     for name in list(stock.names()):
-        if name in _site_store.names():
-            _site_store.remove(name)
+        if name in sites.store.names():
+            sites.store.remove(name)
 
 
 def test_the_pictures_in_the_folder_are_listed_and_a_capture_is_kept(pictures):
@@ -292,7 +293,7 @@ def test_gathering_from_the_browser_reports_asks_and_takes_the_answers(pictures)
         },
     )
     assert r.status_code == 200 and r.json()["site"] == "from_pictures"
-    assert "from_pictures" in _site_store.names()
+    assert "from_pictures" in sites.store.names()
     assert c.get("/sites/from_pictures").status_code == 200
 
 
@@ -336,7 +337,7 @@ def test_cameras_are_parts_kept_in_the_state_folder_and_the_old_file_is_not_read
     old = {"abc123": {"id": "abc123", "label": "Old pin", "site": "garage", "path": "workbench"}}
     (state / "cameras.json").write_text(json.dumps(old))
     before = (state / "cameras.json").read_bytes()
-    _site_store.reset("garage")
+    sites.store.reset("garage")
     try:
         c = TestClient(app)
         assert c.get("/sites/garage/attached").json()["cameras"] == []

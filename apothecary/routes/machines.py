@@ -19,7 +19,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import jobs, machine_plans
+from .. import jobs, machine_plans, sites
 from ..firmware.bindings import walk_paths
 from ..hierarchy import find_node_by_path
 
@@ -33,16 +33,10 @@ class PlanRequest(BaseModel):
     file_id: Optional[str] = Field(None, max_length=120)
 
 
-def _site(name: str):
-    from ..api import _get_site_or_404
-
-    return _get_site_or_404(name)
-
-
 def _machine(name: str, path: str):
     """The site, the machine node at ``path`` and its kind; 404 for a node that is not
     there, 400 for one that is no machine."""
-    site = _site(name)
+    site = sites.store.get(name)
     node = find_node_by_path(site, path)
     if node is None:
         raise HTTPException(status_code=404, detail=f"no node {path!r} in {name}")
@@ -68,7 +62,7 @@ def machines_of(site, kind: Optional[str] = None) -> list[dict]:
 
 @router.get("/{name}/machines")
 def site_machines(name: str):
-    return machines_of(_site(name))
+    return machines_of(sites.store.get(name))
 
 
 @router.get("/{name}/machines/{path}")

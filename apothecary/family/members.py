@@ -25,15 +25,17 @@ from contextlib import suppress
 from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
 
 import hearth
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from hearth import web
 
+from .. import sites
 from ..firmware import devices, gcode
 from ..firmware.bindings import bindings_for_site, device_for_identity
 from ..firmware.models import DeviceInfo, NodeBinding, TaskStatus
 from ..firmware.sketches import find_sketch
 from ..firmware.tasks import get_task_runner
 from ..firmware.toolchains import ToolchainError
+from ..site_store import UnknownSiteError
 from ..version import __version__
 
 FAMILY = "irl"
@@ -236,12 +238,10 @@ class Board(Hosted):
     @staticmethod
     def _row(node: Any, found: List[DeviceInfo]) -> NodeBinding:
         """What the site knows of ``node``, the board it names."""
-        from ..api import _get_site_or_404
-
         site_name, _, path = str(node).partition(":")
         try:
-            site = _get_site_or_404(site_name)
-        except HTTPException:
+            site = sites.store.get(site_name)
+        except UnknownSiteError:
             raise hearth.Refused(f"no site holds {hearth.shown(node)}") from None
         for row in bindings_for_site(site_name, site, devices=found):
             if row.path == path:

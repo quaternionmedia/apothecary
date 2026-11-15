@@ -8,6 +8,7 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
+from apothecary import sites
 from apothecary.api import app
 from apothecary.example_hierarchy import create_example_site
 from apothecary.firmware.models import (
@@ -208,10 +209,8 @@ def test_a_boards_box_is_its_drawings_bounds(part):
 
 @pytest.fixture
 def garage():
-    import apothecary.api as api_module
-
-    yield api_module._site_store.get("garage")
-    api_module._site_store.reset("garage")
+    yield sites.store.get("garage")
+    sites.store.reset("garage")
 
 
 def test_the_routes_answer_the_pinned_mainboard_as_a_lead_and_the_document_alone(
@@ -363,12 +362,11 @@ def test_the_follower_sends_once_for_an_unchanged_bench_and_again_when_it_change
 
 
 def test_a_look_that_fails_the_same_way_is_logged_once(caplog):
-    """APOTHECARY_CARLOS_SITE naming no site fails every look with the route's 404:
-    one traceback for it, and one more when a look fails another way."""
+    """APOTHECARY_CARLOS_SITE naming no site fails every look with the store's word
+    for it: one traceback for it, and one more when a look fails another way."""
     import threading
 
-    from fastapi import HTTPException
-
+    from apothecary.site_store import UnknownSiteError
     from apothecary.wiring.carlos import Follower
 
     looks = []
@@ -379,7 +377,7 @@ def test_a_look_that_fails_the_same_way_is_logged_once(caplog):
         if len(looks) >= 6:
             six.set()
         if len(looks) <= 3:
-            raise HTTPException(status_code=404, detail="Site 'nowhere' not found")
+            raise UnknownSiteError("nowhere")
         raise OSError("the state folder is not there")
 
     follower = Follower("http://127.0.0.1:1", wiring, every=0.01)
@@ -388,7 +386,7 @@ def test_a_look_that_fails_the_same_way_is_logged_once(caplog):
         assert six.wait(5)
         follower.stop()
     failed = [r for r in caplog.records if r.getMessage() == "wiring: a look at the bench failed"]
-    assert [type(r.exc_info[1]).__name__ for r in failed] == ["HTTPException", "OSError"]
+    assert [type(r.exc_info[1]).__name__ for r in failed] == ["UnknownSiteError", "OSError"]
 
 
 def test_carlos_is_reached_on_this_machine_only():

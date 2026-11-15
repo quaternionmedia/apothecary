@@ -26,7 +26,9 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
+from .. import sites
 from ..evidence import frames, log
+from ..example_hierarchy import MACHINE_STATUSES
 from ..hierarchy import find_node_by_path
 
 router = APIRouter(tags=["evidence"])
@@ -43,9 +45,7 @@ def site_evidence(
     name: str, at: Optional[datetime] = None, since: Optional[datetime] = None
 ) -> Dict[str, Any]:
     """The site as every kind of evidence has it, at a moment, and what changed in a span."""
-    from ..api import _get_site_or_404
-
-    _get_site_or_404(name)
+    sites.store.get(name)
     at, since = _utc(at), _utc(since)
     if at is not None and since is not None and since > at:
         raise HTTPException(status_code=422, detail="since is after at")
@@ -101,9 +101,7 @@ def _found():
 def _printer_or_404(name: str, path: str):
     """The site, when ``path`` is one of its machines (a printer or a router: a node
     that carries a machine's status); 404 otherwise."""
-    from ..api import MACHINE_STATUSES, _get_site_or_404
-
-    site = _get_site_or_404(name)
+    site = sites.store.get(name)
     node = find_node_by_path(site, path)
     if node is None or node.status not in MACHINE_STATUSES:
         raise HTTPException(status_code=404, detail=f"{path} is no machine of {name}")
@@ -114,9 +112,9 @@ def _printer_or_404(name: str, path: str):
 def printers_watched(name: str) -> Dict[str, Any]:
     """Each machine a board pinned in the site drives -- its printers and its routers,
     sorted -- as the Working space opens on one."""
-    from ..api import _get_site_or_404, printers_in, routers_in
+    from ..api import printers_in, routers_in
 
-    site = _get_site_or_404(name)
+    site = sites.store.get(name)
     found = _found()
     machines = sorted({*printers_in(name), *routers_in(name)})
     return {"site": name, "printers": [_watched(name, site, p, found) for p in machines]}

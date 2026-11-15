@@ -45,7 +45,9 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
 
+from .. import sites
 from ..gathering.looking import PICTURE_SUFFIXES
+from ..site_store import UnknownSiteError
 from ..stamped import claim, stamp
 
 router = APIRouter(tags=["photos"])
@@ -296,9 +298,9 @@ def keep_picture(
                 else pin_picture(site, host, entry["path"])
             )
             entry["view"] = _answer(site, view)
-        except HTTPException as refused:
+        except (HTTPException, UnknownSiteError) as refused:
             # Kept, and not pinned: the picture is the person's either way.
-            entry["view"], entry["not_pinned"] = None, refused.detail
+            entry["view"], entry["not_pinned"] = None, getattr(refused, "detail", str(refused))
     return entry
 
 
@@ -485,7 +487,7 @@ class GatherRequest(BaseModel):
 @router.post("/photos/gather")
 def gather_pictures(body: GatherRequest):
     """Which of these pictures are of the same thing, what to ask, and the arrangement."""
-    from ..api import _picture_within_root, _site_store
+    from ..api import _picture_within_root
     from ..gathering import as_text, gather, whole_gathering
     from ..gathering.judgement import (
         CannotRead,
@@ -580,7 +582,7 @@ def gather_pictures(body: GatherRequest):
                 status_code=422, detail="nothing could be read from any of these pictures"
             )
         stock = shelf()
-        if body.name in _site_store.names() and body.name not in stock:
+        if body.name in sites.store.names() and body.name not in stock:
             # The same rule as POST /photos: a gathering never covers over a
             # site that did not come from pictures (the garage, the universe).
             raise HTTPException(
@@ -590,7 +592,7 @@ def gather_pictures(body: GatherRequest):
             )
         together = whole_gathering(result, built, name=body.name)
         stock.put(together)
-        _site_store.add(
+        sites.store.add(
             together.site.name, stock.factory(together.site.name), stock.checker(together.site.name)
         )
         answer["site"] = together.site.name

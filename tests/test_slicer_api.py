@@ -13,7 +13,8 @@ from fastapi.testclient import TestClient
 from slicer_helpers import fake_calls
 
 from apothecary import api as api_module
-from apothecary.api import _site_store, app
+from apothecary import sites
+from apothecary.api import app
 from apothecary.firmware import devices
 from apothecary.hierarchy import Structure
 from apothecary.slicer import service
@@ -27,9 +28,9 @@ BOARD = "printer_1.frame_system.mainboard"
 
 @pytest.fixture(autouse=True)
 def garage():
-    _site_store.reset("garage")
-    yield _site_store.get("garage")
-    _site_store.reset("garage")
+    sites.store.reset("garage")
+    yield sites.store.get("garage")
+    sites.store.reset("garage")
 
 
 @pytest.fixture

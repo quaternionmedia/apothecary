@@ -46,7 +46,7 @@ layer and the layers below it, at the top of a module and inside a function alik
 | 0 | `core`, `models`, `version`, `stamped`, `site_names`, `stays_local`, `state_folder`, `meshes`, `systems`, `journeys`, `census`, `preflight`, `release`, `airgap_metrics`, `preview` | Foundations: geometry types, names, the network guard, the state folder, the window registry, checks over the repository |
 | 1 | `primitives`, `booleans`, `objects`, `transforms`, `scene`, `hierarchy`, `jscad`, `templates`, `example`, `lighting`, `console_feedback`, `apothecary` | Geometry: shapes, a scene and its tree, OpenSCAD and JSCAD out; a site's lighting rig |
 | 2 | `projects`, `universe`, `kernel_compare`, `datum_core_site`, `theatre_site`, `example_hierarchy`, `openscad_installer` | Parts and the sites built of them: the parts registry, a part's STL and its variants, OpenSCAD itself |
-| 3 | `firmware`, `slicer`, `cam`, `jobs`, `evidence`, `vision`, `vocabulary`, `gathering`, `finders`, `wiring`, `rig`, `family`, `machine_plans`, `site_store` | Machines and evidence: boards and their sketches, printers and routers, slices, toolpaths and jobs, cameras, pictures and observations, carlos's wiring, the family's hub, the sites kept |
+| 3 | `firmware`, `slicer`, `cam`, `jobs`, `evidence`, `vision`, `vocabulary`, `gathering`, `finders`, `wiring`, `rig`, `family`, `machine_plans`, `site_store`, `sites` | Machines and evidence: boards and their sketches, printers and routers, slices, toolpaths and jobs, cameras, pictures and observations, carlos's wiring, the family's hub, the sites kept |
 | 4 | `api`, `routes`, `viewer`, `docs_site`, `simulated`, `menu`, `spaces`, `tour` | The server and the page, and what reads across the whole package: the HTTP API, the viewer, the ring's menus, the simulated machines, the problems and solutions indexes, the tour |
 | 5 | `cli`, `__main__` | The command line |
 
@@ -60,8 +60,6 @@ machine seam, `openscad_installer` and the slicer's installer for the tool finde
 
 | From | To | Where | When | What it takes |
 |---|---|---|---|---|
-| `cam` | `api` | `apothecary/cam/api.py` | in a call | `_site_store` |
-| `family` | `api` | `apothecary/family/members.py` | in a call | `_get_site_or_404` |
 | `family` | `routes` | `apothecary/family/procedures.py` | in a call | `hold_action`, a site's wiring sent to carlos |
 | `finders` | `api` | `apothecary/finders/qmcp.py` | in a call | `_picture_root` |
 | `hierarchy` | `projects` | `apothecary/hierarchy.py` | in a call | the parts registry, for a node's `part_ref`; `ROOT` |
@@ -70,11 +68,15 @@ machine seam, `openscad_installer` and the slicer's installer for the tool finde
 | `openscad_installer` | `firmware` | `apothecary/openscad_installer.py` | at import | `tools_dir` |
 
 *When* says whether the import runs as the module loads (at import) or only once a
-function is called (in a call); the check holds both. The first four reach the server's
-private state (the site store, the picture root) from a layer below it;
-`apothecary/routes/`, `apothecary/spaces.py` and `apothecary/cli/` import the same
-private names from its own layer or above. The site store and the picture root have no
+function is called (in a call); the check holds both. `finders` reaches the server's
+private state, the picture root, from a layer below it, and `apothecary/routes/`
+imports the same private names from the server's own layer. The picture root has no
 interface below the server.
+
+The sites kept are `apothecary/sites.py`'s: `store` is the one store of them, which
+the server, the routes, cam, the family's members and the command line ask for a site
+by its name. A name it does not hold is `UnknownSiteError`, and the server answers
+that with a 404 in one place, its handler in `apothecary/api.py`.
 
 ## The handoffs
 
@@ -113,7 +115,7 @@ What crosses between the stages of each loop, where its form is stated, and what
 
 | From, to | What crosses | Stated in | Held by |
 |---|---|---|---|
-| a site, the API | `apothecary/site_store.py` keeps each site's tree; `GET /sites/{name}` answers it whole, its tree, structures, SCAD and violations, with no response model, so `/openapi.json` does not describe it | `walkthrough/10-serving-it.md` | `tests/test_site_api.py` |
+| a site, the API | `apothecary/sites.py` holds the one store, and `apothecary/site_store.py` says what it keeps of each site's tree; `GET /sites/{name}` answers it whole, its tree, structures, SCAD and violations, with no response model, so `/openapi.json` does not describe it | `walkthrough/10-serving-it.md` | `tests/test_site_api.py` |
 | an STL, the world | the page's `loadSTLMesh` turns OpenSCAD's z up into three.js's y up and centres the mesh on its node's envelope, or on a variant's `measured` box | [The viewer](viewer.md) | `tests/e2e/test_viewer_regressions.py` |
 | a machine, the world | `GET /firmware/printers/where`: its build volume, origin and base, drawn by `apothecary/static/machine_marks.js` | | `tests/e2e/test_printer_ui.py` |
 

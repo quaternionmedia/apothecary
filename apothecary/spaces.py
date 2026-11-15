@@ -222,12 +222,12 @@ def problems(build_volume: Optional[tuple] = None) -> List[Problem]:
         found.extend(open_here)
 
     # Sites carry layout constraints that parts do not.
-    from .api import _site_store
+    from . import sites
 
-    for name in _site_store.names():
+    for name in sites.store.names():
         try:
-            site = _site_store.get(name)
-            found.extend(_site_problems(name, _site_store.validator(name)(site)))
+            site = sites.store.get(name)
+            found.extend(_site_problems(name, sites.store.validator(name)(site)))
         except Exception as exc:  # any failure to build or check a site is the problem
             found.append(_broken(name, exc))
 
@@ -262,7 +262,7 @@ def capabilities() -> List[Capability]:
             )
         )
 
-    from .api import _site_store
+    from . import sites
 
     found.extend(
         Capability(
@@ -271,7 +271,7 @@ def capabilities() -> List[Capability]:
             summary="a navigable assembly with a layout validator",
             addresses=["violation"],
         )
-        for name in _site_store.names()
+        for name in sites.store.names()
     )
 
     # The black-box seam: how an unmeasured envelope stops being one.

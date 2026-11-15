@@ -16,7 +16,8 @@ from click.testing import CliRunner
 from fastapi.testclient import TestClient
 from PIL import Image, ImageDraw
 
-from apothecary.api import _site_store, app
+from apothecary import sites
+from apothecary.api import app
 from apothecary.cli import cli
 from apothecary.vision import PlainFinder, ScaleReference, build
 from apothecary.vision.shelf import Shelf
@@ -56,7 +57,7 @@ def shelved(picture):
     )
     stock = Shelf()
     stock.put(made)
-    _site_store.add("test_bench", stock.factory("test_bench"), stock.checker("test_bench"))
+    sites.store.add("test_bench", stock.factory("test_bench"), stock.checker("test_bench"))
 
     from apothecary.vision import shelf as shelf_module
 
@@ -66,7 +67,7 @@ def shelved(picture):
     # The register belongs to the whole program, so anything put on it here has
     # to come back off. A test that leaves something behind is a test that
     # breaks a different one.
-    _site_store.remove("test_bench")
+    sites.store.remove("test_bench")
 
 
 # ---------------------------------------------------------------- grouping
@@ -190,12 +191,12 @@ def test_the_register_takes_an_arrangement_it_did_not_start_with(picture):
     """The register takes an arrangement it did not start with, as a picture's is."""
     stock = Shelf()
     stock.put(build(PlainFinder().look(picture), name="added_later", picture_path=picture))
-    _site_store.add("added_later", stock.factory("added_later"), stock.checker("added_later"))
+    sites.store.add("added_later", stock.factory("added_later"), stock.checker("added_later"))
     try:
-        assert "added_later" in _site_store.names()
-        assert _site_store.get("added_later").name == "added_later"
+        assert "added_later" in sites.store.names()
+        assert sites.store.get("added_later").name == "added_later"
     finally:
-        _site_store.remove("added_later")
+        sites.store.remove("added_later")
 
 
 # ---------------------------------------------------------------- one command
@@ -211,15 +212,15 @@ def test_one_command_builds_it_and_opens_the_viewer_on_it(picture):
         assert result.exit_code == 0, result.output
         assert started.call_count == 1
         assert "/viewer/sites/one_go" in result.output
-        assert "one_go" in _site_store.names()
+        assert "one_go" in sites.store.names()
     finally:
-        _site_store.remove("one_go")
+        sites.store.remove("one_go")
 
 
 def test_the_command_says_plainly_when_nothing_is_measured(picture):
     with patch("uvicorn.run"):
         result = CliRunner().invoke(cli, ["photo", "view", str(picture), "--name", "unsized_go"])
-    _site_store.remove("unsized_go")
+    sites.store.remove("unsized_go")
     assert "Nothing is measured" in result.output
 
 
@@ -247,7 +248,7 @@ def test_a_held_port_is_refused_before_anything_is_built_or_printed(picture, hel
         in said.output
     )
     assert "http://" not in said.output and "piece(s)" not in said.output
-    assert "held_go" not in _site_store.names()
+    assert "held_go" not in sites.store.names()
 
 
 def test_serve_refuses_a_held_port_too(held_port):
@@ -261,7 +262,7 @@ def test_serve_refuses_a_held_port_too(held_port):
 def test_the_command_listens_only_to_this_machine_unless_told_otherwise(picture):
     with patch("uvicorn.run") as started:
         CliRunner().invoke(cli, ["photo", "view", str(picture), "--name", "local_go"])
-    _site_store.remove("local_go")
+    sites.store.remove("local_go")
     assert started.call_args.kwargs["host"] == "127.0.0.1"
 
 
@@ -269,11 +270,11 @@ def test_an_arrangement_can_be_taken_back_off_the_register(picture):
     """Otherwise every test that adds one quietly breaks the next."""
     stock = Shelf()
     stock.put(build(PlainFinder().look(picture), name="temporary", picture_path=picture))
-    before = set(_site_store.names())
-    _site_store.add("temporary", stock.factory("temporary"), stock.checker("temporary"))
-    assert _site_store.remove("temporary") is True
-    assert set(_site_store.names()) == before
-    assert _site_store.remove("temporary") is False
+    before = set(sites.store.names())
+    sites.store.add("temporary", stock.factory("temporary"), stock.checker("temporary"))
+    assert sites.store.remove("temporary") is True
+    assert set(sites.store.names()) == before
+    assert sites.store.remove("temporary") is False
 
 
 # ---------------------------------------------------------------- refusals

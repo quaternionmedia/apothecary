@@ -10,8 +10,8 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from apothecary import jobs
-from apothecary.api import _site_store, app
+from apothecary import jobs, sites
+from apothecary.api import app
 from apothecary.firmware import devices as firmware_devices
 from apothecary.firmware.models import DeviceInfo, PrinterInfo
 from apothecary.hierarchy import Structure
@@ -27,9 +27,9 @@ AT = datetime(2026, 10, 3, 12, 0, 0, tzinfo=timezone.utc)
 
 @pytest.fixture(autouse=True)
 def reset_garage_site():
-    _site_store.reset("garage")
+    sites.store.reset("garage")
     yield
-    _site_store.reset("garage")
+    sites.store.reset("garage")
 
 
 def _status(printer):
@@ -138,7 +138,7 @@ def test_the_choices_say_where_a_machine_stands_and_what_its_job_can_name(
         {"kind": "print", "label": "Print", "inputs": [".gcode", ".gco", ".g"]}
     ]
 
-    garage = _site_store.get("garage")
+    garage = sites.store.get("garage")
     garage.children.append(Structure(name="bin_1"))  # as a piece made from a picture stands
     made = {"bin_1": SimpleNamespace(word="bin", picture="captures/bench.png", camera="camera_1")}
     assert client.put(f"/sites/garage/nodes/{BOARD}/device", json={"identity": PRINTER}).is_success

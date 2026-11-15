@@ -8,7 +8,7 @@ import subprocess
 import pytest
 from fastapi.testclient import TestClient
 
-from apothecary import api
+from apothecary import api, sites
 from apothecary.hierarchy import Assembly, LayoutReport, Site, Structure
 from apothecary.models.bounds import BoundingBox3D
 from apothecary.models.vectors import Vector3D
@@ -38,7 +38,7 @@ def _registered_part_names():
 
 def _others():
     """The other registered sites, as the universe is given them."""
-    return api._site_store.others()
+    return sites.store.others()
 
 
 def _leaves(universe: Assembly):
@@ -87,7 +87,7 @@ def test_every_part_that_loads_is_a_leaf_or_inside_a_represented_site(held):
 
 
 def test_the_served_universe_leaves_no_part_out():
-    universe = api._site_store.get(UNIVERSE)
+    universe = sites.store.get(UNIVERSE)
     assert _unrepresented(universe, _others()) == set()
 
 
@@ -147,13 +147,11 @@ def test_every_other_site_is_one_piece_in_a_cell_of_its_own_named_for_it():
 
 
 def test_the_universe_does_not_hold_itself():
-    assert UNIVERSE in api._site_store.names()
-    assert UNIVERSE not in api._site_store.others()
-    universe = api._site_store.get(UNIVERSE)
+    assert UNIVERSE in sites.store.names()
+    assert UNIVERSE not in sites.store.others()
+    universe = sites.store.get(UNIVERSE)
     assert UNIVERSE not in {piece.site_ref for piece in _pieces(universe)}
-    assert {piece.site_ref for piece in _pieces(universe)} == set(api._site_store.names()) - {
-        UNIVERSE
-    }
+    assert {piece.site_ref for piece in _pieces(universe)} == set(sites.store.names()) - {UNIVERSE}
 
 
 def _bench() -> Assembly:
@@ -281,7 +279,7 @@ def test_the_tree_carries_a_pieces_miniature_and_no_level_beneath_it():
     garage = pieces["garage"]
     assert garage["name"] == "site-garage" and garage["role"] == "site"
     assert garage["children"] == [] and garage["part_ref"] is None
-    real = real_size(api._site_store.get("garage"))
+    real = real_size(sites.store.get("garage"))
     assert garage["site_size"] == [real.x, real.y, real.z]
     # Each box inside the piece's own bounds, where the piece stands.
     low, high = garage["world_bounds"]["min"], garage["world_bounds"]["max"]

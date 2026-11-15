@@ -382,7 +382,7 @@ def world(tmp_path, monkeypatch):
 
     from views_helpers import HIGH, SHAPES, WIDE, forget_cameras, png
 
-    from apothecary.api import _site_store
+    from apothecary import sites
     from apothecary.firmware import devices
     from apothecary.vision import cache as cache_module
     from apothecary.vision import views as views_module
@@ -402,8 +402,8 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setattr(devices, "_STATE", None)  # the boards pinned in this state folder
     monkeypatch.setattr(views_module, "_store", views_module.Views())
     monkeypatch.setattr(cache_module, "_cache", cache_module.FinderCache())
-    for name in _site_store.names():
-        _site_store.reset(name)
+    for name in sites.store.names():
+        sites.store.reset(name)
     yield root
     forget_cameras()
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from apothecary import jobs
+from apothecary import jobs, sites
 from apothecary.api import app, routers_in
 from apothecary.cam import measure, service, toolpath
 from apothecary.cam.models import CutFor, Cuts, Feeds, Hole, Outline, Pocket, Stock
@@ -34,11 +34,9 @@ def router_links(monkeypatch):
 
 @pytest.fixture
 def garage():
-    from apothecary import api as api_module
-
-    api_module._site_store.reset("garage")
-    yield api_module._site_store.get("garage")
-    api_module._site_store.reset("garage")
+    sites.store.reset("garage")
+    yield sites.store.get("garage")
+    sites.store.reset("garage")
 
 
 # --- the toolpath -----------------------------------------------------------------

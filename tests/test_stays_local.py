@@ -917,7 +917,7 @@ def test_views_write_nothing_outside_the_root_its_two_folders_and_the_state_fold
 
     from PIL import Image, ImageDraw
 
-    from apothecary.api import _site_store
+    from apothecary import sites
     from apothecary.vision import cache as cache_module
     from apothecary.vision import views as views_module
 
@@ -939,7 +939,7 @@ def test_views_write_nothing_outside_the_root_its_two_folders_and_the_state_fold
     before = everything()
     here = TestClient(app)
     try:
-        _site_store.reset("garage")
+        sites.store.reset("garage")
         camera = here.post("/sites/garage/cameras", json={"host": "workbench"}).json()
         here.put(
             f"/sites/garage/cameras/{camera['camera']['name']}/device",

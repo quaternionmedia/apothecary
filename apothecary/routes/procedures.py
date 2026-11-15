@@ -21,7 +21,9 @@ from typing import Annotated, Any, Dict
 from fastapi import APIRouter, HTTPException, Path, Request
 from fastapi.routing import APIRoute
 
+from .. import sites
 from ..family import beside, procedures
+from ..site_store import UnknownSiteError
 from .jobs import SITE_NAME
 
 
@@ -46,12 +48,6 @@ Name = Annotated[str, Path(pattern=SITE_NAME, description="the procedure's name"
 Site = Annotated[str, Path(pattern=SITE_NAME, description="the site it is under")]
 
 
-def _site(name: str) -> None:
-    from ..api import _get_site_or_404
-
-    _get_site_or_404(name)
-
-
 def _no_procedure(site: str, name: str) -> HTTPException:
     return HTTPException(404, detail=f"{site} has no procedure {name}")
 
@@ -59,14 +55,14 @@ def _no_procedure(site: str, name: str) -> HTTPException:
 @router.get("/sites/{site}/procedures")
 def list_procedures(site: Site) -> Dict[str, Any]:
     """The names of the site's procedures."""
-    _site(site)
+    sites.store.get(site)
     return {"site": site, "procedures": procedures.names(site)}
 
 
 @router.get("/sites/{site}/procedures/{name}")
 def get_procedure(site: Site, name: Name) -> Dict[str, Any]:
     """One procedure as it stands."""
-    _site(site)
+    sites.store.get(site)
     board = procedures.board(site, name)
     if board is None:
         raise _no_procedure(site, name)
@@ -76,7 +72,7 @@ def get_procedure(site: Site, name: Name) -> Dict[str, Any]:
 @router.put("/sites/{site}/procedures/{name}")
 def put_procedure(site: Site, name: Name, body: procedures.Procedure) -> Dict[str, Any]:
     """One procedure written, whole; the outcomes its steps have kept stay theirs."""
-    _site(site)
+    sites.store.get(site)
     procedures.save(site, name, body)
     return procedures.board(site, name)
 
@@ -84,9 +80,11 @@ def put_procedure(site: Site, name: Name, body: procedures.Procedure) -> Dict[st
 @router.post("/sites/{site}/procedures/{name}/steps/{number}/go")
 def go(site: Site, name: Name, number: str) -> Dict[str, Any]:
     """One step fired through the family's hub."""
-    _site(site)
+    sites.store.get(site)
     try:
         return procedures.go(site, name, number)
+    except UnknownSiteError:  # a step holds the wiring of a site that is not there
+        raise
     except KeyError:
         raise _no_procedure(site, f"{name} step {number}") from None
     except procedures.NotStandingBy as exc:
@@ -96,7 +94,7 @@ def go(site: Site, name: Name, number: str) -> Dict[str, Any]:
 @router.post("/sites/{site}/procedures/{name}/again")
 def again(site: Site, name: Name) -> Dict[str, Any]:
     """The procedure started over."""
-    _site(site)
+    sites.store.get(site)
     board = procedures.again(site, name)
     if board is None:
         raise _no_procedure(site, name)

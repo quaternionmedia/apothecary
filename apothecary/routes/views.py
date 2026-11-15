@@ -65,6 +65,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .. import sites
 from ..hierarchy import Assembly, find_node_by_path
 from ..projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
 from ..projects.parts.stl_renderer import geometry_scad
@@ -210,15 +211,9 @@ def made_answer(record: Made, pinned: bool) -> Dict[str, object]:
 
 
 def _site_answer(site_name: str, site: Assembly) -> Dict[str, object]:
-    from ..api import _site_payload, _site_store
+    from ..api import _site_payload
 
-    return _site_payload(site, _site_store.validator(site_name)(site))
-
-
-def _site(site_name: str) -> Assembly:
-    from ..api import _get_site_or_404
-
-    return _get_site_or_404(site_name)
+    return _site_payload(site, sites.store.validator(site_name)(site))
 
 
 def _view_or_404(site_name: str, view_id: str) -> View:
@@ -229,7 +224,7 @@ def _view_or_404(site_name: str, view_id: str) -> View:
 
 
 def _answer(site_name: str, view: View) -> Dict[str, object]:
-    return view_answer(view, _site(site_name), viewing.store().made_at(site_name))
+    return view_answer(view, sites.store.get(site_name), viewing.store().made_at(site_name))
 
 
 # --- pinning ---------------------------------------------------------------------------
@@ -237,7 +232,7 @@ def _answer(site_name: str, view: View) -> Dict[str, object]:
 
 def check_host(site_name: str, host: str) -> Assembly:
     """The site, once ``host`` is known to be able to hold a view or a camera; or refused."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     try:
         viewing.host_node(site, host, viewing.made_names(site_name), cameras.names(site_name))
     except viewing.HostNotFound as missing:
@@ -359,7 +354,7 @@ def _pin_at_whiteboard(site_name: str, node: Assembly, source: Path, root: Path)
 
 def camera_or_404(site_name: str, name: str) -> cameras.Camera:
     """A camera part of the site, or a 404 that says so."""
-    _site(site_name)
+    sites.store.get(site_name)
     try:
         return cameras.record(site_name, name)
     except cameras.CameraNotFound as missing:
@@ -374,7 +369,7 @@ def take_picture(site_name: str, camera: str, picture: str) -> View:
     from ..api import _picture_root
 
     taker = camera_or_404(site_name, camera)
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     where = _picture_at(picture)
     width, height = _picture_size(where)
     view = viewing.taken_by(
@@ -558,7 +553,7 @@ def move_corners(site_name: str, view_id: str, body: CornersBody):
     from ..api import _picture_root
 
     view = _squared_view(site_name, view_id)
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     node = next((c for c in site.children if c.name == view.host), None)
     if node is None:
         raise HTTPException(status_code=404, detail=f"{view.host} is no longer in {site_name}")
@@ -626,7 +621,7 @@ async def size_view(site_name: str, view_id: str, body: ScaleBody):
     from ..vision.models import Picture
 
     view = _view_or_404(site_name, view_id)
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     if body.mm_across is None:
         if not view.found:
             raise HTTPException(
@@ -716,7 +711,7 @@ def unpin_view(site_name: str, view_id: str):
 def attached(site_name: str):
     """A site's camera parts (in the order they were added), views (oldest first) and
     made pieces, in one request."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     store = viewing.store()
     made = store.made_at(site_name)
     views = store.views_at(site_name)
@@ -740,14 +735,13 @@ def placed():
     ``site_known``), so it can still be taken back from the list that shows it: a
     camera whose site is gone (an arrangement built from a picture, forgotten) is
     removed by ``DELETE /sites/{s}/cameras/{name}`` all the same."""
-    from ..api import _site_store
     from ..firmware import devices as firmware_devices
 
-    names = set(_site_store.names())
+    names = set(sites.store.names())
 
     def site_or_none(name: str) -> Optional[Assembly]:
         try:
-            return _site_store.get(name) if name in names else None
+            return sites.store.get(name) if name in names else None
         except KeyError:
             return None
 
@@ -805,7 +799,7 @@ async def word_for_shape(site_name: str, view_id: str, index: int, body: WordBod
     view = _view_or_404(site_name, view_id)
     if not 0 <= index < len(view.shapes):
         raise HTTPException(status_code=404, detail=f"view {view_id!r} has no shape {index}")
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     view = viewing.store().set_word(site_name, view_id, index, body.word)
     rebuilt = view.made.get(index)
     if rebuilt is not None:
@@ -835,7 +829,7 @@ class MakeBody(BaseModel):
 async def make_pieces(site_name: str, view_id: str, body: MakeBody):
     """Pieces from a view's shapes: one, or every one not already made. ``beyond``
     counts the shapes left because they lie past a camera picture's horizon."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     try:
         making = viewing.make(site_name, site, view_id, body.shape)
     except viewing.ViewNotFound as missing:
@@ -963,7 +957,7 @@ async def rebuild_made(site_name: str, piece: str, body: RebuildBody):
     or by a person's sides. Its name and position stay; the answer carries its
     provenance as it is now (``found`` beside ``parameters``), the box it
     occupies (``bounds``) and the site."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     change = _normalised(_made_part(site_name, piece), body)
     if change["word"] is None and change["parameters"] is None:
         record = _made_or_404(site_name, piece)  # nothing differs: nothing to rebuild
@@ -986,7 +980,7 @@ async def rebuild_made(site_name: str, piece: str, body: RebuildBody):
 @router.delete("/sites/{site_name}/made/{piece}")
 async def drop_made(site_name: str, piece: str):
     """Drop: the piece leaves the site, and its shape reads as found again."""
-    site = _site(site_name)
+    site = sites.store.get(site_name)
     _made_or_404(site_name, piece)
     record = viewing.drop(site_name, site, piece)
     return {

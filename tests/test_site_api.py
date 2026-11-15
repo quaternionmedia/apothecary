@@ -8,7 +8,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 import apothecary.api as api
-from apothecary.api import _site_store, app
+from apothecary import sites
+from apothecary.api import app
 from apothecary.example_hierarchy import create_example_site
 from apothecary.firmware import devices as firmware_devices
 from apothecary.firmware import gcode as firmware_gcode
@@ -25,7 +26,7 @@ client = TestClient(app)
 def reset_garage_site():
     """The site store keeps edits between requests: each test starts from the
     factory garage. test_reset_endpoint_discards_edits covers the route."""
-    _site_store.reset("garage")
+    sites.store.reset("garage")
     yield
 
 
@@ -38,6 +39,47 @@ def test_list_sites():
 def test_get_unknown_site_is_404():
     response = client.get("/sites/nope")
     assert response.status_code == 404
+
+
+RESET_NOPE = {
+    "intent": {
+        "action": "reset",
+        "option_id": "reset",
+        "context": {"pointing": "canvas", "targets": []},
+    },
+    "site": "nope",
+}
+
+
+@pytest.mark.parametrize(
+    "method, url, body",
+    [
+        ("get", "/sites/nope", None),
+        ("post", "/sites/nope/layout", {"positions": {}}),
+        ("post", "/sites/nope/structures/printer_1/status", {"status": "idle"}),
+        ("post", "/sites/nope/reset", None),
+        ("get", "/sites/nope/nodes/garage_building/stl", None),
+        ("get", "/sites/nope/devices", None),
+        ("put", "/sites/nope/nodes/printer_1/device", {"identity": "/dev/ttyUSB0"}),
+        ("delete", "/sites/nope/nodes/printer_1/device", None),
+        ("get", "/sites/nope/cameras/camera_1", None),
+        ("get", "/sites/nope/attached", None),
+        ("post", "/sites/nope/views", {"picture": "a.png"}),
+        ("get", "/sites/nope/evidence", None),
+        ("get", "/sites/nope/evidence/printers", None),
+        ("get", "/sites/nope/evidence/printers/printer_1", None),
+        ("get", "/sites/nope/machines", None),
+        ("get", "/sites/nope/machines/printer_1", None),
+        ("get", "/sites/nope/procedures", None),
+        ("get", "/sites/nope/wiring", None),
+        ("post", "/menu/intent", RESET_NOPE),
+        ("post", "/menu/resolve", {"context": RESET_NOPE["intent"]["context"], "site": "nope"}),
+    ],
+)
+def test_a_site_that_is_not_there_is_one_404_whichever_route_asks(method, url, body):
+    response = client.request(method, url, json=body)
+    assert response.status_code == 404, response.text
+    assert response.json() == {"detail": "Site 'nope' not found"}
 
 
 def test_get_garage_site_default_layout_is_valid():
@@ -231,7 +273,7 @@ def test_each_violation_names_its_pieces_by_tree_path_beside_their_names():
         assert len(v["paths"]) == len(v["structures"]), v
         assert [p.rsplit(".", 1)[-1] for p in v["paths"]] == v["structures"], v
         for path in v["paths"]:
-            assert find_node_by_path(_site_store.get("garage"), path) is not None, path
+            assert find_node_by_path(sites.store.get("garage"), path) is not None, path
 
 
 def test_layout_endpoint_detects_overhang():
@@ -417,13 +459,13 @@ def slow_openscad(tmp_path, monkeypatch):
 
 def test_node_stl_scratch_sits_in_the_cache_and_imports_by_absolute_path(slow_openscad, tmp_path):
     mesh = Assembly(name="mesh", role="part", base=Import(file="parts/somewhere/thing.stl"))
-    _site_store.add(
+    sites.store.add(
         "import_probe", lambda: Site("import_probe", structures=[mesh]), Assembly.validate
     )
     try:
         response = client.get("/sites/import_probe/nodes/mesh/stl")
     finally:
-        _site_store.remove("import_probe")
+        sites.store.remove("import_probe")
     assert response.status_code == 200, response.text
     assert f'import("{ROOT.as_posix()}/parts/somewhere/thing.stl"' in slow_openscad.scad[0]
     assert slow_openscad.folders == [tmp_path / "node_stl"]

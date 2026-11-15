@@ -17,7 +17,7 @@ import pytest
 from click.testing import CliRunner
 from fastapi.testclient import TestClient
 
-from apothecary import jobs
+from apothecary import jobs, sites
 from apothecary.api import app, printers_in
 from apothecary.cli import cli
 from apothecary.evidence import printers as evidence_printers
@@ -52,11 +52,9 @@ def router_links(monkeypatch):
 
 @pytest.fixture
 def garage():
-    from apothecary import api as api_module
-
-    api_module._site_store.reset("garage")
-    yield api_module._site_store.get("garage")
-    api_module._site_store.reset("garage")
+    sites.store.reset("garage")
+    yield sites.store.get("garage")
+    sites.store.reset("garage")
 
 
 # --- parsers ---------------------------------------------------------------------

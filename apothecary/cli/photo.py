@@ -724,7 +724,8 @@ def view(
 
     Listens on this machine only.
     """
-    from ..api import _site_store, app
+    from .. import sites
+    from ..api import app
     from ..vision.shelf import shelf
 
     host = _loopback_or_die(host)
@@ -735,7 +736,7 @@ def view(
 
     stock = shelf()
     stock.put(made)
-    _site_store.add(made.site.name, stock.factory(made.site.name), stock.checker(made.site.name))
+    sites.store.add(made.site.name, stock.factory(made.site.name), stock.checker(made.site.name))
 
     album = made.album
     click.echo(f"{made.site.name}: {len(made.site.children)} piece(s) from {album.picture_name}")
@@ -949,7 +950,8 @@ def gather_pictures(
     if not open_viewer:
         return
 
-    from ..api import _site_store, app
+    from .. import sites
+    from ..api import app
     from ..gathering import whole_gathering
     from ..vision.shelf import shelf
 
@@ -973,7 +975,7 @@ def gather_pictures(
 
     stock = shelf()
     stock.put(together)
-    _site_store.add(
+    sites.store.add(
         together.site.name,
         stock.factory(together.site.name),
         stock.checker(together.site.name),

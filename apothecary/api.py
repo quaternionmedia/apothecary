@@ -35,22 +35,22 @@ from urllib.parse import quote
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
-from . import jobs
+from . import jobs, sites
 from .cam.api import router as cam_router
 from .core import OpenSCADObject
-from .datum_core_site import create_datum_core_site, validate_datum_core
 from .docs_site import router as docs_router
 from .evidence import printers as evidence_printers
-from .example_hierarchy import (
-    MACHINE_STATUSES,
-    PRINTER_STATUSES,
-    create_example_site,
-    validate_garage_layout,
-)
+from .example_hierarchy import MACHINE_STATUSES, PRINTER_STATUSES
 from .family import hub as family_hub
 from .family import members as family_members
 from .firmware import deck_control
@@ -141,7 +141,7 @@ from .routes.whiteboards import router as whiteboards_router
 from .routes.wiring import router as wiring_router
 from .scene import Scene
 from .site_names import UNIVERSE
-from .site_store import SiteStore, UnknownSiteError
+from .site_store import UnknownSiteError
 from .slicer import service as slicing
 from .slicer.api import router as slicer_router
 from .slicer.models import Made as SlicedMade
@@ -151,9 +151,9 @@ from .slicer.profiles import Declared
 from .state_folder import state_dir
 from .stays_local import LocalOnly
 from .templates import TemplateRenderer
-from .theatre_site import create_theatre_site, load_theatre_rig, validate_theatre
+from .theatre_site import load_theatre_rig
 from .transforms import Translate
-from .universe import create_universe_site, real_size, validate_universe
+from .universe import real_size
 from .viewer import render_fractal_viewer_page
 from .vocabulary.word import WORD_PRINT_SETTINGS_STUB
 
@@ -1208,7 +1208,7 @@ def pinned_build_volume(site_name: str, printer: Optional[str] = None):
             f"{len(pinned)} printers are pinned in {site_name}: {', '.join(pinned)}",
             "name the one to print on (printer=<path>)",
         )
-    node = find_node_by_path(_site_store.get(site_name), chosen)
+    node = find_node_by_path(sites.store.get(site_name), chosen)
     volume = getattr(node, "build_volume", None) if node is not None else None
     if volume is None:
         return None, (
@@ -1253,7 +1253,7 @@ def get_part_checklist(
     drawn = drawn_variant(part, variant) if variant else None
     volume, source, none = _parse_build_volume(build_volume), "given", NO_VOLUME
     if volume is None and site:
-        if site not in _site_store.names():
+        if site not in sites.store.names():
             raise HTTPException(status_code=404, detail=f"Site '{site}' not found")
         found, said = pinned_build_volume(site, printer)
         if found is None:
@@ -1318,9 +1318,10 @@ def validate_without_model(
 # =============================================================================
 # Site/Structure/Substructure/Feature hierarchy (prototype, unratified)
 #
-# Backed by a process-lifetime SiteStore: edits persist across requests,
-# unlike /render's stateless Scene handling. site_store.py says what it keeps
-# across a restart and what it does not share between worker processes.
+# Backed by the process-lifetime store of apothecary/sites.py: edits persist
+# across requests, unlike /render's stateless Scene handling. site_store.py
+# says what it keeps across a restart and what it does not share between
+# worker processes.
 #
 # Routes that change a site stay `async def`: they run one at a time on the
 # event loop, which is all that serializes the store's plain dicts until it
@@ -1328,17 +1329,7 @@ def validate_without_model(
 # render work, are plain `def` and run on the threadpool.
 # =============================================================================
 
-_site_store = SiteStore(
-    {
-        # The universe: every registered part a leaf, every other site here one piece.
-        UNIVERSE: (lambda: create_universe_site(_site_store.others()), validate_universe),
-        "garage": (create_example_site, validate_garage_layout),
-        "datum_core": (create_datum_core_site, validate_datum_core),
-        # A theatre's shell with sliders, and its lighting rig: theatre_site.py.
-        "theatre": (create_theatre_site, validate_theatre),
-    },
-    universe=UNIVERSE,
-)
+# The theatre's lighting rig: theatre_site.py.
 lighting_routes.RIG_LOADERS["theatre"] = load_theatre_rig
 # The site /viewer opens on. Named rather than "whichever sorts first", so that
 # registering a new site cannot silently move the front door.
@@ -1356,11 +1347,10 @@ def _photo_shelf():
     return shelf()
 
 
-def _get_site_or_404(name: str) -> Assembly:
-    try:
-        return _site_store.get(name)
-    except UnknownSiteError:
-        raise HTTPException(status_code=404, detail=f"Site '{name}' not found") from None
+@app.exception_handler(UnknownSiteError)
+async def unknown_site(request: Request, missing: UnknownSiteError) -> JSONResponse:
+    """A site asked for by a name the store does not hold is a 404, whichever route asked."""
+    return JSONResponse(status_code=404, content={"detail": str(missing)})
 
 
 # Node renders kept in the cache. A key includes the node's position, so every
@@ -1677,7 +1667,7 @@ def _site_piece(node: Assembly, world_position: Vector3D) -> Dict[str, object]:
     its site's top-level pieces, scaled into its cell, each where it stands in the
     universe's frame. The viewer builds the boxes itself: nothing is rendered."""
     try:
-        size = real_size(_site_store.get(node.site_ref))
+        size = real_size(sites.store.get(node.site_ref))
     except KeyError:
         size = None
     return {
@@ -1898,7 +1888,7 @@ def look_at_picture(request: LookAtPicture):
 
     name = _check_name(request.name or where.stem)
     stock = shelf()
-    if name in _site_store.names() and name not in stock:
+    if name in sites.store.names() and name not in stock:
         raise HTTPException(
             status_code=409,
             detail=(
@@ -1921,7 +1911,7 @@ def look_at_picture(request: LookAtPicture):
     made = build_arrangement(picture, name=name, scale=scale, picture_path=where)
 
     stock.put(made)
-    _site_store.add(made.site.name, stock.factory(made.site.name), stock.checker(made.site.name))
+    sites.store.add(made.site.name, stock.factory(made.site.name), stock.checker(made.site.name))
     return get_photo_album(made.site.name)
 
 
@@ -1982,7 +1972,7 @@ def forget_photo_site(name: str):
             ),
         )
     stock.forget(name)
-    _site_store.remove(name)
+    sites.store.remove(name)
     return {"forgotten": name}
 
 
@@ -2019,13 +2009,13 @@ def get_photo_picture(name: str):
 
 @app.get("/sites")
 async def list_sites():
-    return _site_store.names()
+    return sites.store.names()
 
 
 @app.get("/sites/{name}")
 def get_site(name: str):
-    site = _get_site_or_404(name)
-    validator = _site_store.validator(name)
+    site = sites.store.get(name)
+    validator = sites.store.validator(name)
     return _site_payload(site, validator(site))
 
 
@@ -2039,14 +2029,14 @@ async def update_site_layout(name: str, body: LayoutRequest):
     """
     from .vision.cameras import follow
 
-    site = _get_site_or_404(name)
+    site = sites.store.get(name)
     for structure in site.children:
         override = body.positions.get(structure.name)
         if override is not None:
             structure.position = Vector3D(x=override.x, y=override.y, z=override.z)
     follow(name, site)
 
-    validator = _site_store.validator(name)
+    validator = sites.store.validator(name)
     return _site_payload(site, validator(site))
 
 
@@ -2063,7 +2053,7 @@ async def update_structure_status(name: str, structure_name: str, body: StatusRe
             status_code=400,
             detail=f"Invalid status {body.status!r}; must be one of {PRINTER_STATUSES}",
         )
-    site = _get_site_or_404(name)
+    site = sites.store.get(name)
     structure = next((s for s in site.children if s.name == structure_name), None)
     if structure is None:
         raise HTTPException(
@@ -2071,16 +2061,15 @@ async def update_structure_status(name: str, structure_name: str, body: StatusRe
         )
     structure.status = body.status
 
-    validator = _site_store.validator(name)
+    validator = sites.store.validator(name)
     return _site_payload(site, validator(site))
 
 
 @app.post("/sites/{name}/reset")
 async def reset_site_layout(name: str):
     """Discard all edits and rebuild the site fresh from its factory."""
-    _get_site_or_404(name)  # validates the name before resetting
-    site = _site_store.reset(name)
-    validator = _site_store.validator(name)
+    site = sites.store.reset(name)
+    validator = sites.store.validator(name)
     payload = _site_payload(site, validator(site))
     payload["scad"] = site.render()
     return payload
@@ -2107,8 +2096,9 @@ def get_node_stl(name: str, path: str):
 
 def _node_stl(name: str, path: str) -> tuple[bytes, Assembly]:
     """One node's STL and the node, as ``get_node_stl`` serves it -- the slicer
-    slices a made piece from it too. Raises the HTTPException that route answers."""
-    site = _get_site_or_404(name)
+    slices a made piece from it too. Raises what that route answers: an
+    HTTPException, or the store's own word for a site it does not hold."""
+    site = sites.store.get(name)
     node = find_node_by_path(site, path)
     if node is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
@@ -2288,10 +2278,10 @@ def _pinned_at(port: str) -> Optional[tuple[str, Assembly, str]]:
     for binding in state.bindings():
         if not same_device(binding.identity, port, known, binding.kind):
             continue
-        if binding.site not in _site_store.names():
+        if binding.site not in sites.store.names():
             continue
         try:
-            site = _site_store.get(binding.site)
+            site = sites.store.get(binding.site)
         except KeyError:  # forgotten, or its picture left the shelf, since names()
             continue
         if find_node_by_path(site, binding.path) is None:
@@ -2352,7 +2342,7 @@ def _slice_target(site_name: str, path: str) -> Optional[slicing.Target]:
     from .vision import views as viewing
 
     try:
-        site = _site_store.get(site_name)
+        site = sites.store.get(site_name)
     except KeyError:  # an UnknownSiteError, or forgotten since
         return None
     node = find_node_by_path(site, path)
@@ -2367,6 +2357,8 @@ def _slice_target(site_name: str, path: str) -> Optional[slicing.Target]:
     def stl(log) -> bytes:
         try:
             data, _node = _node_stl(site_name, path)
+        except UnknownSiteError as exc:
+            raise SlicerError(f"the piece {node.name} could not be rendered: {exc}") from None
         except HTTPException as exc:
             raise SlicerError(
                 f"the piece {node.name} could not be rendered: {exc.detail}"
@@ -2404,7 +2396,7 @@ def _printer_to_slice_for(
         if not site_name:
             return None
         try:
-            site = _site_store.get(site_name)
+            site = sites.store.get(site_name)
         except KeyError:
             return None
         if not path:
@@ -2480,10 +2472,10 @@ def routers_in(site_name: str) -> List[str]:
 
 
 def _machines_in(site_name: str, statuses, router: bool) -> List[str]:
-    if site_name not in _site_store.names():
+    if site_name not in sites.store.names():
         return []
     try:
-        site = _site_store.get(site_name)
+        site = sites.store.get(site_name)
     except KeyError:
         return []
     state = firmware_devices.get_state()
@@ -2524,14 +2516,14 @@ def every_pin(fresh: bool = False):
         found = firmware_devices.detected_devices(fresh=fresh)
     except ToolchainError as exc:
         found, problem = [], str(exc)
-    names = _site_store.names()
+    names = sites.store.names()
     rows = []
     for binding in sorted(state.bindings(), key=lambda b: (b.site, b.path)):
         site_known = binding.site in names
         node_found = False
         if site_known:
             try:
-                node = find_node_by_path(_site_store.get(binding.site), binding.path)
+                node = find_node_by_path(sites.store.get(binding.site), binding.path)
             except KeyError:  # forgotten, or its picture left the shelf, since names()
                 node = None
             node_found = node is not None
@@ -2569,8 +2561,8 @@ def _sync_printer_status(status) -> List[Dict[str, object]]:
         return out
     state = firmware_devices.get_state()
     known = firmware_devices.known_device(status.port, state)
-    for site_name in _site_store.loaded():
-        site = _site_store.get(site_name)
+    for site_name in sites.store.loaded():
+        site = sites.store.get(site_name)
         for binding in state.bindings(site_name):
             if not same_device(binding.identity, status.port, known, binding.kind):
                 continue
@@ -2603,8 +2595,8 @@ def _record_printer_poll(status) -> List[Dict[str, object]]:
     known = firmware_devices.known_device(status.port, state)
     identity = known.identity if known is not None else status.port
     pins: List[evidence_printers.Pin] = []
-    for site_name in _site_store.loaded():
-        site = _site_store.get(site_name)
+    for site_name in sites.store.loaded():
+        site = sites.store.get(site_name)
         for binding in state.bindings(site_name):
             if same_device(binding.identity, status.port, known, binding.kind):
                 bearer = status_bearer_for(site, binding.path)
@@ -2637,9 +2629,9 @@ def _sync_job_status(job: jobs.Job) -> None:
     operation = jobs.operation(job.kind)
     if operation is None or operation.busy is None or not job.site or not job.machine.path:
         return
-    if job.site not in _site_store.loaded():
+    if job.site not in sites.store.loaded():
         return
-    site = _site_store.get(job.site)
+    site = sites.store.get(job.site)
     target = status_bearer_for(site, job.machine.path)
     node = find_node_by_path(site, target) if target is not None else None
     if node is None or node.status == "maintenance":
@@ -2702,7 +2694,7 @@ def site_devices(name: str, fresh: bool = False):
     runs in the threadpool rather than blocking the event loop. ``fresh``
     bypasses the short port-scan cache (a rescan button, the auto-refresh).
     """
-    site = _get_site_or_404(name)
+    site = sites.store.get(name)
     return _site_devices_payload(name, site, fresh=fresh)
 
 
@@ -2717,7 +2709,7 @@ def attach_device(name: str, path: str, body: DeviceAttachRequest):
     port's name. A make another bridge on the machine shares is stored as the
     port. The row answered says what was stored.
     """
-    site = _get_site_or_404(name)
+    site = sites.store.get(name)
     if find_node_by_path(site, path) is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
     identity = firmware_devices.stable_identity(body.identity)
@@ -2731,7 +2723,7 @@ def attach_device(name: str, path: str, body: DeviceAttachRequest):
 @app.delete("/sites/{name}/nodes/{path}/device")
 def detach_device(name: str, path: str):
     """Drop a pin; the node goes back to the by-sketch rule (or to nothing)."""
-    site = _get_site_or_404(name)
+    site = sites.store.get(name)
     if find_node_by_path(site, path) is None:
         raise HTTPException(status_code=404, detail=f"Node '{path}' not found in site '{name}'")
     firmware_devices.get_state().clear_binding(name, path)
@@ -2740,7 +2732,7 @@ def detach_device(name: str, path: str):
 
 def _default_site() -> str:
     """The site the viewer opens on when none is named: the garage, else the first."""
-    names = _site_store.names()
+    names = sites.store.names()
     return DEFAULT_VIEWER_SITE if DEFAULT_VIEWER_SITE in names else names[0]
 
 
@@ -2795,12 +2787,12 @@ def site_viewer(name: str, request: Request, focus: str = Query(default="")):
     is an optional dotted path (e.g. ``workbench.frame_system``) that opens the
     viewer at that node instead of at the root.
     """
-    if name not in _site_store.names():
+    if name not in sites.store.names():
         raise HTTPException(status_code=404, detail=f"Site '{name}' not found")
     base_url = str(request.base_url).rstrip("/")
     return HTMLResponse(
         render_fractal_viewer_page(
-            _site_store.names(),
+            sites.store.names(),
             base_url,
             default_site=name,
             focus_path=focus,

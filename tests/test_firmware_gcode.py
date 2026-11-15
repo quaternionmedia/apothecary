@@ -16,7 +16,7 @@ import pytest
 from click.testing import CliRunner
 from fastapi.testclient import TestClient
 
-from apothecary import jobs
+from apothecary import jobs, sites
 from apothecary.api import app
 from apothecary.cli import cli
 from apothecary.firmware import devices, gcode
@@ -525,11 +525,9 @@ def test_cli_printer_command(fake_arduino_cli, scripted_links):
 @pytest.fixture
 def garage(monkeypatch):
     """A fresh garage site in the API's store, so status edits do not leak between tests."""
-    from apothecary import api as api_module
-
-    api_module._site_store.reset("garage")
-    yield api_module._site_store.get("garage")
-    api_module._site_store.reset("garage")
+    sites.store.reset("garage")
+    yield sites.store.get("garage")
+    sites.store.reset("garage")
 
 
 def test_poll_syncs_bound_printer_node(fake_arduino_cli, fresh_task_runner, scripted_links, garage):
@@ -2087,15 +2085,13 @@ def test_a_pin_by_a_path_that_resolves_to_the_port_matches(tmp_path):
 def test_where_answers_before_anyone_has_opened_the_viewer(fake_arduino_cli, garage):
     """On a fresh server, before the garage has been loaded, `where` still finds the
     pin: a pin names its site, and the route loads it."""
-    from apothecary import api as api_module
-
     c = TestClient(app)
     c.put(f"/sites/garage/nodes/{BOARD}/device", json={"identity": "/dev/ttyFAKE1"})
-    api_module._site_store._sites.pop("garage", None)  # as a server that just started
-    assert "garage" not in api_module._site_store.loaded()
+    sites.store._sites.pop("garage", None)  # as a server that just started
+    assert "garage" not in sites.store.loaded()
     where = c.get("/firmware/printers/where", params={"port": "/dev/ttyFAKE1"}).json()
     assert where["site"] == "garage" and where["board"]["path"] == BOARD
-    assert "garage" in api_module._site_store.loaded()
+    assert "garage" in sites.store.loaded()
 
 
 # --- a job's link is the job's: nothing drops, reopens or resets it under a print ---

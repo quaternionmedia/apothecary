@@ -21,6 +21,7 @@ from click.testing import CliRunner
 from fastapi.testclient import TestClient
 from firmware_helpers import fake_cli_calls
 
+from apothecary import sites
 from apothecary.api import app
 from apothecary.cli import cli
 from apothecary.firmware import devices, gcode, grbl, occupants, serial_monitor
@@ -102,11 +103,9 @@ def bench(fake_arduino_cli, monkeypatch):
 
 @pytest.fixture
 def garage():
-    from apothecary import api as api_module
-
-    api_module._site_store.reset("garage")
-    yield api_module._site_store.get("garage")
-    api_module._site_store.reset("garage")
+    sites.store.reset("garage")
+    yield sites.store.get("garage")
+    sites.store.reset("garage")
 
 
 def _links(monkeypatch, board):
