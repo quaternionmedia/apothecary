@@ -35,7 +35,7 @@ def _target(path: str) -> str:
         rest = clean.split("/", 1)[1] if "/" in clean else ""
         if (root / rest).is_file():
             return f"/{first}/{rest}"
-        if docs_site._generated(root / rest):  # made here, not committed: kept, and marked
+        if docs_site.is_generated(root / rest):  # made here, not committed: kept, and marked
             return f"/{first}/{rest}"
     if (ROOT / clean).is_dir():
         return f"{REPOSITORY}/tree/main/{clean}"
@@ -47,7 +47,7 @@ def rewrite_links(body: str) -> str:
 
     def one(m: re.Match) -> str:
         path = html.unescape(m.group(1))
-        if not path or not docs_site._local(path) or path.startswith("/"):
+        if not path or not docs_site.is_local(path) or path.startswith("/"):
             return m.group(0)
         if re.match(r"^[a-z][a-z0-9+.-]*:", path, re.I):
             return m.group(0)
@@ -59,5 +59,5 @@ def rewrite_links(body: str) -> str:
 @router.get("/README.md")
 async def readme_page():
     body, title = docs_site.render_markdown((ROOT / "README.md").read_text(encoding="utf-8"))
-    body = docs_site._mark_absent(rewrite_links(body), ROOT)
-    return docs_site._page(body, title or "README", "README.md")
+    body = docs_site.mark_absent(rewrite_links(body), ROOT)
+    return docs_site.as_page(body, title or "README", "README.md")

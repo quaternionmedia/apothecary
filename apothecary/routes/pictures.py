@@ -284,7 +284,7 @@ def keep_picture(
         entry["forgotten"] = _over_budget(root, site, entry["evidence"]["subjects"])
         return entry
     if pinning:
-        from .views import _answer, pin_picture, take_picture
+        from .views import pin_picture, take_picture, view_answer_in
 
         try:
             view = (
@@ -292,7 +292,7 @@ def keep_picture(
                 if camera is not None
                 else pin_picture(site, host, entry["path"])
             )
-            entry["view"] = _answer(site, view)
+            entry["view"] = view_answer_in(site, view)
         except (HTTPException, UnknownSiteError, PictureRefused) as refused:
             # Kept, and not pinned: the picture is the person's either way.
             entry["view"], entry["not_pinned"] = None, getattr(refused, "detail", str(refused))

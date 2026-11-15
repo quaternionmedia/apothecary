@@ -32,14 +32,14 @@ from .. import sites
 from ..vision import again, history, marks, whiteboard
 from ..vision import views as viewing
 from ..vision.models import Picture
-from .marks import _read, keep, kept_for
+from .marks import keep, kept_for, read_marks
 from .views import (
-    _answer,
-    _picture_at,
-    _site_answer,
-    _view_or_404,
     find_in,
+    picture_at,
     pin_picture,
+    site_answer,
+    view_answer_in,
+    view_or_404,
 )
 
 router = APIRouter(tags=["views"])
@@ -134,13 +134,13 @@ def _rows(site_name: str, later: viewing.View, earlier: viewing.View) -> List[ag
             else f"{row.says}; nothing is made from it"
         )
         rows.append(row.model_copy(update={"takeable": row.takeable and changes, "says": says}))
-    _, old_notes = _read(site_name, earlier.id)
-    _, new_notes = _read(site_name, later.id)
+    _, old_notes = read_marks(site_name, earlier.id)
+    _, new_notes = read_marks(site_name, later.id)
     return rows + again.compare_notes(old_notes, new_notes, numbered_from=len(rows) + 1)
 
 
 def _pair(site_name: str, view_id: str, since: str):
-    later, earlier = _view_or_404(site_name, view_id), _view_or_404(site_name, since)
+    later, earlier = view_or_404(site_name, view_id), view_or_404(site_name, since)
     if not later.found or not earlier.found:
         raise HTTPException(
             status_code=409,
@@ -203,7 +203,7 @@ def take_changes(site_name: str, view_id: str, body: Take):
         elif row.change is again.Change.NEW:
             made_now.extend(viewing.make(site_name, site, later.id, row.after).made)
         elif row.change is again.Change.NOTE_SAME:
-            found, _ = _read(site_name, later.id)
+            found, _ = read_marks(site_name, later.id)
             mark = next(m for m in found if m.id == row.note_after)
             held = kept_for(site_name, later.id)
             held.words.append(
@@ -222,7 +222,7 @@ def take_changes(site_name: str, view_id: str, body: Take):
         "made": made_now,
         "dropped": dropped,
         "rows": [r.model_dump(mode="json") for r in _rows(site_name, later, earlier)],
-        "site": _site_answer(site_name, site),
+        "site": site_answer(site_name, site),
     }
 
 
@@ -237,7 +237,7 @@ def place_moment(site_name: str, view_id: str, body: Place):
     structure's top or the floor (``""``), as wide as it was, searched by the same
     finder, with the words given up to ``as_of``. A view's own place, or another
     whiteboard, is refused."""
-    source = _view_or_404(site_name, view_id)
+    source = view_or_404(site_name, view_id)
     when = _moment(body.as_of)
     site = sites.store.get(site_name)
     node = next((c for c in site.children if c.name == body.host), None)
@@ -260,7 +260,7 @@ def place_moment(site_name: str, view_id: str, body: Place):
         if source.finder == "outline":
             from ..vision import get as get_finder
 
-            seen = get_finder("outline").look_with(_picture_at(placed.picture), words)
+            seen = get_finder("outline").look_with(picture_at(placed.picture), words)
             shapes, left_out = viewing.keep_the_most_sure(seen.shapes)
             find_in(site_name, placed.id, "outline")
             placed = viewing.store().read_again(
@@ -272,7 +272,7 @@ def place_moment(site_name: str, view_id: str, body: Place):
             )
         else:
             placed = find_in(site_name, placed.id, source.finder)
-    return {**_answer(site_name, placed), "placed_from": view_id, "as_of": when}
+    return {**view_answer_in(site_name, placed), "placed_from": view_id, "as_of": when}
 
 
 __all__ = ["router"]

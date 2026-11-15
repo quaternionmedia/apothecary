@@ -40,19 +40,13 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .. import sites
-from ..hierarchy import Assembly
 from ..models.vectors import Vector3D
 from ..projects.parts.params import ParamsSpec, Validation, params_spec, validate_staged
 from ..vision import cameras
 from ..vision.camera_part import CameraPart
+from .views import site_answer
 
 router = APIRouter(tags=["cameras"])
-
-
-def _site_answer(site_name: str, site: Assembly) -> Dict[str, object]:
-    from ..api import site_payload
-
-    return site_payload(site, sites.store.validator(site_name)(site))
 
 
 def _record_or_404(site_name: str, name: str) -> cameras.Camera:
@@ -79,7 +73,7 @@ async def add_camera(site_name: str, body: AddCamera):
 
     site = check_host(site_name, body.host)
     camera = cameras.add_here(site_name, site, body.host)
-    return {"camera": cameras.answer(camera, site), "site": _site_answer(site_name, site)}
+    return {"camera": cameras.answer(camera, site), "site": site_answer(site_name, site)}
 
 
 @router.get("/sites/{site_name}/cameras/{name}")
@@ -125,7 +119,7 @@ async def pose_camera(site_name: str, name: str, body: PoseBody):
     camera = cameras.set_pose(
         site_name, site, name, position=position, turn=body.turn, tilt=body.tilt
     )
-    return {"camera": cameras.answer(camera, site), "site": _site_answer(site_name, site)}
+    return {"camera": cameras.answer(camera, site), "site": site_answer(site_name, site)}
 
 
 class DeviceBody(BaseModel):
@@ -224,7 +218,7 @@ async def edit_camera(site_name: str, name: str, body: EditBody):
     return {
         "camera": cameras.answer(cameras.record(site_name, name), site),
         "rebuilt": rebuilt,
-        "site": _site_answer(site_name, site),
+        "site": site_answer(site_name, site),
     }
 
 
@@ -240,7 +234,7 @@ async def remove_camera(site_name: str, name: str):
         raise HTTPException(status_code=404, detail=str(missing).strip('"')) from None
     return {
         "removed": name,
-        "site": _site_answer(site_name, site) if site is not None else None,
+        "site": site_answer(site_name, site) if site is not None else None,
     }
 
 

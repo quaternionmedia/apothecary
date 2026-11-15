@@ -83,13 +83,13 @@ def switch_origin(origin: str, body: SwitchBody):
 
 
 def _shape(site_name: str, view_id: str, index: int):
-    from .views import _picture_at, _view_or_404
+    from .views import picture_at, view_or_404
 
-    view = _view_or_404(site_name, view_id)
+    view = view_or_404(site_name, view_id)
     shape = next((s for i, s in enumerate(view.shapes) if i == index), None)
     if shape is None:
         raise HTTPException(status_code=404, detail=f"view {view_id!r} has no shape {index}")
-    return view, shape, _picture_at(view.picture), sites.store.get(site_name)
+    return view, shape, picture_at(view.picture), sites.store.get(site_name)
 
 
 @router.get("/sites/{site_name}/views/{view_id}/shapes/{index}/observations")

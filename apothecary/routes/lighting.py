@@ -51,7 +51,7 @@ def start_console_feeds() -> None:
     the first (SO_REUSEPORT); upgrade to one receiver routing by universe when there is one.
     """
     for name in RIG_LOADERS:
-        state = _rig_state(name)
+        state = rig_state(name)
         if state is None:
             continue
         if os.environ.get(CONSOLE_SACN_ENV):
@@ -67,7 +67,7 @@ def stop_console_feeds() -> None:
         _receivers.pop().stop()
 
 
-def _rig_state(name: str) -> Optional[ConsoleState]:
+def rig_state(name: str) -> Optional[ConsoleState]:
     with _lock:
         if name not in _states:
             loader = RIG_LOADERS.get(name)
@@ -79,7 +79,7 @@ def _rig_state(name: str) -> Optional[ConsoleState]:
 
 
 def _state(name: str) -> ConsoleState:
-    state = _rig_state(name)
+    state = rig_state(name)
     if state is None:
         raise HTTPException(status_code=404, detail=f"Site '{name}' has no lighting rig")
     return state
@@ -88,7 +88,7 @@ def _state(name: str) -> ConsoleState:
 @router.get("/sites/{name}/lighting")
 def site_lighting(name: str) -> dict:
     # A site with no rig answers 200 with none: the viewer asks every site, and a 404 is a console error on each.
-    state = _rig_state(name)
+    state = rig_state(name)
     if state is None:
         return {"rig": None, "universes": [], "unplaced": 0, "violations": []}
     rig = state.rig

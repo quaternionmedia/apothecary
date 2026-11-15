@@ -351,11 +351,11 @@ def sweep_the_rigs_once(t: float) -> int:
     """Every site's rig given the simulated console's levels at ``t`` seconds, as a
     PUT of them would set them; how many rigs were swept."""
     from .console_feedback import simulate_levels
-    from .routes.lighting import RIG_LOADERS, _rig_state
+    from .routes.lighting import RIG_LOADERS, rig_state
 
     swept = 0
     for name in list(RIG_LOADERS):
-        state = _rig_state(name)
+        state = rig_state(name)
         if state is not None:
             state.set_levels(simulate_levels(state.rig, t))
             swept += 1
