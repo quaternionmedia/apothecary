@@ -75,9 +75,9 @@ def save(
         if file is None:
             raise ValueError(f"no file {file_id!r} is kept")
         if file.machine != kind:
-            kept_for = f"a {file.machine}" if file.machine else "no kind of machine"
             raise ValueError(
-                f"{file.name} was kept for {kept_for}: a {kind}'s plan names a file kept for a {kind}"
+                f"{file.name} was kept for a {file.machine}: "
+                f"a {kind}'s plan names a file kept for a {kind}"
             )
     plan = MachinePlan(
         site=current(site),

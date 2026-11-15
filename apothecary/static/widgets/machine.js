@@ -1477,7 +1477,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-start").disabled = running || !fits(chosen) || !state.port;
         $("print-start").title = !state.port && machineAt ? `${machineAt.path} has no board connected: its plan is made here, and ${words().start} is its board's once it is`
             : !chosen || fits(chosen) ? words().startTitle
-            : `${chosen.name} was ${chosen.machine ? `kept for a ${chosen.machine}` : "kept for no kind of machine"}: it is sent to the kind it was kept for alone (Choose File keeps a file for this ${state.kind})`;
+            : `${chosen.name} was kept for a ${chosen.machine}: it is sent to the kind it was kept for alone (Choose File keeps a file for this ${state.kind})`;
         $("print-pause").hidden = !running || paused;
         $("print-pause").disabled = !running || (job.stage !== words().running && job.stage !== "finishing");
         $("print-resume").hidden = !paused;
@@ -1529,14 +1529,14 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         try { for (const r of await api("/cam/cuts")) prt.slices[r.file_id] = { ...r, toolpath: true }; } catch (e) { /* no toolpaths kept */ }
         const sel = $("print-pick"), had = pick || sel.value;
         // The files kept are every machine's. What was chosen stays chosen, but the
-        // other kind of machine's file gives way to the newest that is not; with
-        // nothing chosen that one is, before the newest of any. Where every file
-        // kept is the other kind's, none is chosen until a person chooses one here:
-        // one left chosen from another machine's Machine does not stay.
-        const own = prt.files.find(fits) || prt.files.find((f) => !madeForAnother(f.id));
+        // other kind of machine's file gives way to the newest of this kind; with
+        // nothing chosen that one is. Where every file kept is the other kind's,
+        // none is chosen until a person chooses one here: one left chosen from
+        // another machine's Machine does not stay.
+        const own = prt.files.find(fits);
         const none = prt.files.length && !own ? `<option value="">— none kept for ${state.kind ? `a ${state.kind}` : "this machine"} —</option>` : "";
         sel.innerHTML = prt.files.length
-            ? none + prt.files.map((f) => `<option value="${esc(f.id)}" ${f.problems.length || !fits(f) ? 'class="bad"' : ""}>${esc(f.name)} · ${f.lines} lines${slicedFrom(f)}${fits(f) ? "" : ` · ${f.machine ? `kept for a ${esc(f.machine)}` : "kept for no kind of machine"}`}${f.problems.length ? " · refused: " + esc(f.problems[0]) : ""}</option>`).join("")
+            ? none + prt.files.map((f) => `<option value="${esc(f.id)}" ${f.problems.length || !fits(f) ? 'class="bad"' : ""}>${esc(f.name)} · ${f.lines} lines${slicedFrom(f)}${fits(f) ? "" : ` · kept for a ${esc(f.machine)}`}${f.problems.length ? " · refused: " + esc(f.problems[0]) : ""}</option>`).join("")
             : '<option value="">— no files kept —</option>';
         const stays = had && prt.files.some((f) => f.id === had) && !(own && madeForAnother(had))
             && (!madeForAnother(had) || prt.picked === had);
@@ -1546,12 +1546,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // A kept file says the kind of machine it was kept for (Choose File keeps it for
     // the Machine's kind, a slice for a printer, a toolpath for a router), and is sent
     // to that kind alone: a printer's on a router homes it and waits out its
-    // millisecond dwells as seconds. One kept before files said is either's to choose
-    // and neither's to send.
+    // millisecond dwells as seconds.
     const fits = (f) => !!f && f.machine === state.kind;
     function madeForAnother(id) {
         const f = prt.files.find((x) => x.id === id);
-        return !!(f && f.machine) && f.machine !== state.kind;
+        return !!f && !fits(f);
     }
     async function loadPrintJobs() {
         if (!state.port || !isGcode()) { prt.jobs = []; renderPrint(); return; }
@@ -1799,11 +1798,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!file) return;
         try {
             // Kept for this Machine's kind of machine: checked in its terms, sent to it alone.
-            const kind = isGcode() ? `&machine=${encodeURIComponent(state.kind)}` : "";
-            const r = await fetch(`${BASE}/firmware/printers/prints?name=${encodeURIComponent(file.name)}${kind}`, { method: "POST", body: file, headers: { "Content-Type": "text/plain" } });
+            if (!isGcode()) throw new Error("a file is kept for a printer or a router, and this board drives neither");
+            const r = await fetch(`${BASE}/firmware/printers/prints?name=${encodeURIComponent(file.name)}&machine=${encodeURIComponent(state.kind)}`, { method: "POST", body: file, headers: { "Content-Type": "text/plain" } });
             const body = await r.json().catch(() => ({}));
             if (!r.ok) throw new Error(body.detail || r.statusText);
-            logLine("sys", `kept ${body.name}: ${body.lines} lines, for a ${body.machine || "machine of no kind"}` + (body.problems.length ? ` -- refused: ${body.problems.join("; ")}` : ""));
+            logLine("sys", `kept ${body.name}: ${body.lines} lines, for a ${body.machine}` + (body.problems.length ? ` -- refused: ${body.problems.join("; ")}` : ""));
             await loadPrintFiles(body.id);
         } catch (e) { refuse("keep file: " + e.message); }
         $("print-file").value = "";

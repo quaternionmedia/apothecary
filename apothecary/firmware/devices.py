@@ -1607,12 +1607,12 @@ def _print_file_path(file_id: str) -> Path:
     return prints_dir() / f"{file_id}.gcode"
 
 
-def save_print_file(name: str, data: bytes, machine: Optional[str] = None) -> PrintFile:
+def save_print_file(name: str, data: bytes, machine: str) -> PrintFile:
     """Keep an uploaded file for a kind of machine (``machine``) and say what it holds;
     ``problems`` says why it may not be sent. The same bytes under the same name for the
     same kind are the file already kept, kept again now: a toolpath or slice written
     twice, or a file chosen twice, is one file, the newest."""
-    if machine is not None and machine not in dialects.BY_MACHINE:
+    if machine not in dialects.BY_MACHINE:
         raise ValueError(f"no kind of machine is called {machine!r}")
     at = datetime.now(timezone.utc)
     digest = hashlib.sha256(data).hexdigest()
@@ -1661,7 +1661,8 @@ def print_preview(file_id: str, machine: str) -> Optional[Preview]:
 
 
 def print_files() -> List[PrintFile]:
-    """Every kept file, newest first."""
+    """Every kept file, newest first. A description that does not parse, or says no
+    kind of machine, is no kept file's."""
     folder = prints_dir()
     if not folder.is_dir():
         return []
@@ -1691,6 +1692,12 @@ def print_file(file_id: str) -> Optional[PrintFile]:
         return PrintFile(**json.loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         return None
+
+
+def holds_print_file(file_id: str) -> bool:
+    """Whether the files' folder holds G-code under ``file_id``, a kept file's or not:
+    one whose description does not parse, or says no kind of machine, is still there."""
+    return _is_print_id(file_id) and _print_file_path(file_id).is_file()
 
 
 def delete_print_file(file_id: str) -> bool:
@@ -2172,11 +2179,6 @@ def _file_fits(file: PrintFile, port: str, kind: Optional[str]) -> None:
         raise ValueError(
             f"{port}: the board there has not said what kind of machine it drives -- "
             f"{file.name} is sent to the kind it was kept for alone"
-        )
-    if file.machine is None:
-        raise ValueError(
-            f"{file.name} says no kind of machine it is for: choose it again with this "
-            f"{kind}'s Choose File, which keeps it for a {kind}"
         )
     if file.machine != kind:
         raise ValueError(

@@ -91,10 +91,9 @@ def by_word(word: Optional[str]) -> Dialect:
     return BY_WORD.get(word or "", MARLIN)
 
 
-def by_machine(kind: Optional[str]) -> Dialect:
-    """The dialect driving ``kind`` of machine; Marlin's for None, a file kept for no
-    kind. KeyError for a kind no dialect drives."""
-    return MARLIN if kind is None else BY_MACHINE[kind]
+def by_machine(kind: str) -> Dialect:
+    """The dialect driving ``kind`` of machine. KeyError for a kind no dialect drives."""
+    return BY_MACHINE[kind]
 
 
 def either(command: str, how: str) -> str:

@@ -1731,11 +1731,10 @@ def test_the_same_file_kept_again_is_the_file_already_kept_now_the_newest(fake_a
     assert len(list(devices.prints_dir().glob("*.gcode"))) == 2
     for name, data, machine in [
         ("cube.gcode", b"G28\n", "router"),
-        ("cube.gcode", b"G28\n", None),
         ("cube.gcode", b"G28\nG1 X5\n", "printer"),
     ]:
         assert devices.save_print_file(name, data, machine=machine).id != cube.id
-    assert len(devices.print_files()) == 5
+    assert len(devices.print_files()) == 4
 
 
 def test_print_job_streams_pauses_resumes_and_polls_between_lines(fake_arduino_cli, scripted_links):
@@ -1919,10 +1918,10 @@ def test_print_routes(fake_arduino_cli, fresh_task_runner, scripted_links):
     c = TestClient(app)
     port = "/dev/ttyFAKE1"
     assert c.get("/firmware/printers/prints").json() == []
-    assert (
-        c.post("/firmware/printers/prints", params={"name": "x.gcode"}, content=b"").status_code
-        == 422
+    empty = c.post(
+        "/firmware/printers/prints", params={"name": "x.gcode", "machine": "printer"}, content=b""
     )
+    assert empty.status_code == 422 and empty.json()["detail"] == "an empty file"
     r = c.post(
         "/firmware/printers/prints",
         params={"name": "small.gcode", "machine": "printer"},

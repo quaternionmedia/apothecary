@@ -359,7 +359,10 @@ def get_record(file_id: str) -> Optional[SliceRecord]:
         return None
     path = slices_dir() / f"{file_id}.json"
     if devices.print_file(file_id) is None:
-        path.unlink(missing_ok=True)  # the Print card forgot the file: the slice goes with it
+        # The Print card forgot the file: the slice goes with it. G-code still in the
+        # folder that is no kept file's keeps its slice's record.
+        if not devices.holds_print_file(file_id):
+            path.unlink(missing_ok=True)
         return None
     try:
         return SliceRecord(**json.loads(path.read_text(encoding="utf-8")))

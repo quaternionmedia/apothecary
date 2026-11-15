@@ -544,6 +544,39 @@ def test_a_printer_draws_its_own_file_not_the_router_s_newer_toolpath(page: Page
     assert _drawn(page, printer.node) is None
 
 
+# A kept file as the server lists one, less the kind of machine it was kept for.
+A_FILE_OF_NO_KIND = {
+    "id": "20260920T132512.468-square",
+    "name": "square.gcode",
+    "size": 16,
+    "sha256": None,
+    "lines": 2,
+    "uploaded_at": "2026-09-20T13:25:12.468000Z",
+    "problems": [],
+}
+
+
+@pytest.mark.e2e
+def test_a_file_that_says_no_kind_of_machine_is_no_card_s_to_choose(page: Page, url: str):
+    """A kept file says the kind of machine it was kept for, and a card chooses a file
+    of its own kind. Told of a file that says none (the list answered as the server
+    answers none), the printer's card chooses none: its list opens on none kept for a
+    printer, and nothing is drawn."""
+    printer = MACHINES["printer"]
+    _keep_only(url)
+    page.route(
+        re.compile(r".*/firmware/printers/prints$"),
+        lambda route: route.fulfill(json=[A_FILE_OF_NO_KIND]),
+    )
+    _selected(page, url, printer.node)
+    _from_windows(page)
+    pick = windows.machine(page).locator("#print-pick")
+    expect(pick.locator("option").first).to_have_text("— none kept for a printer —", timeout=10000)
+    expect(pick.locator("option", has_text=A_FILE_OF_NO_KIND["name"])).to_be_attached()
+    expect(pick).to_have_value("")
+    assert _drawn(page, printer.node) is None
+
+
 # A bed reading as the server lists one, less the kind of machine that took it.
 A_READING_OF_NO_KIND = {
     "id": "20260920T132512.468-dev_ttyFAKE1",

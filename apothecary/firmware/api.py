@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import queue
 import threading
-from typing import List, Literal, Optional
+from typing import List, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
@@ -499,13 +499,12 @@ async def firmware_print_files():
 async def firmware_print_upload(
     request: Request,
     name: str = Query(..., min_length=1, max_length=200),
-    machine: Optional[str] = Query(
-        None, pattern="^(printer|router)$", description="the kind of machine it is kept for"
+    machine: str = Query(
+        ..., pattern="^(printer|router)$", description="the kind of machine it is kept for"
     ),
 ):
     """Keep a G-code file (the request body, as text) under ``name``, for a kind of
-    machine; it is checked in that machine's terms, not sent. A file kept for none is
-    sent to none until it is kept again for one."""
+    machine; it is checked in that machine's terms, not sent."""
     data = await request.body()
     if not data:
         raise HTTPException(status_code=422, detail="an empty file")
