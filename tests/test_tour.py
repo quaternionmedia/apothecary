@@ -1,7 +1,7 @@
-"""The tour (apothecary/tour.py): the roadmap's lines in its order, each naming a journey
-whose stages are stops or walkthrough pages that are; every page a test writes read back
-as the steps it recorded; and a person's word on a stop kept, read back by the box and by
-`apothecary tour`. The box that shows it is tests/e2e/test_tour.py's."""
+"""The tour (apothecary/tour.py): the journeys in their order, each stage with its own
+words and what it names to try, read back from the walkthrough's pages; and a person's
+word on a stage kept, given back by the box's routes. The box that shows it is
+tests/e2e/test_tour.py's."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import json
 import re
 
 import pytest
-from click.testing import CliRunner
 from fastapi.testclient import TestClient
 
 from apothecary import journeys, tour
@@ -18,82 +17,83 @@ from apothecary.cli.main import cli
 from apothecary.docs_site import WALKTHROUGH_ROOT
 
 ROUTER = "31-what-the-router-needs.md"
-RELOAD = "33-windows-kept-over-a-reload.md"
-SHAPE = "journey:make/shape"
+SHAPE = "make/shape"
 
 
 @pytest.fixture
 def kept(tmp_path, monkeypatch):
-    """A state folder of the test's own: the answers it keeps are its."""
+    """A state folder of the test's own: the feedback it keeps is its."""
     monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
-    return tmp_path / "state" / "tour" / "answers.jsonl"
+    return tmp_path / "state" / "tour" / "feedback.jsonl"
 
 
 # --- the reader -------------------------------------------------------------------------
 
 
-def test_every_page_a_test_writes_is_its_steps_with_the_pictures_it_recorded():
-    """Each page a test writes is read back as every numbered step it holds, in order,
+def test_every_page_a_module_writes_is_its_steps_with_the_pictures_kept_with_them():
+    """Each page a module writes is read back as every numbered step it holds, in order,
     each with its words, and its picture where it has one, a file that is there."""
-    written = [s for s in tour.stops() if s.written_by]
+    written = [p for p in tour.pages() if p.written_by]
     assert written
-    for stop in written:
-        text = (WALKTHROUGH_ROOT / stop.page).read_text(encoding="utf-8")
-        assert len(stop.steps) == len(re.findall(r"^## \d+\. ", text, re.MULTILINE)), stop.page
-        assert [s.index for s in stop.steps] == list(range(1, len(stop.steps) + 1)), stop.page
-        assert stop.intro and all(s.heading and s.words for s in stop.steps), stop.page
-        pictures = [s.picture for s in stop.steps if s.picture]
-        assert len(pictures) == text.count("](screenshots/"), stop.page
+    for page in written:
+        text = (WALKTHROUGH_ROOT / page.page).read_text(encoding="utf-8")
+        assert len(page.steps) == len(re.findall(r"^## \d+\. ", text, re.MULTILINE)), page.page
+        assert [s.index for s in page.steps] == list(range(1, len(page.steps) + 1)), page.page
+        assert page.intro and all(s.heading and s.words for s in page.steps), page.page
+        pictures = [s.picture for s in page.steps if s.picture]
+        assert len(pictures) == text.count("](screenshots/"), page.page
         for picture in pictures:
-            assert (WALKTHROUGH_ROOT / picture).is_file(), (stop.page, picture)
+            assert (WALKTHROUGH_ROOT / picture).is_file(), (page.page, picture)
 
 
 def test_a_step_is_its_heading_words_picture_and_what_it_showed():
-    first = tour.stop(ROUTER).steps[0]
+    first = tour.page(ROUTER).steps[0]
     assert first.heading == "In alarm, Needs you says what clears it"
     assert first.words.startswith("cnc_router selected in Site, Open in its Device line")
     assert first.picture == "screenshots/31-01-in-alarm-needs-you-says-what-clears-it.png"
-    pins = tour.stop("32-a-quiet-board-and-a-router-s-pins.md").steps[1]
+    pins = tour.page("32-a-quiet-board-and-a-router-s-pins.md").steps[1]
     assert pins.picture is None and pins.shown == "pins\tX · Z\tmeasured by its poll\tnow"
 
 
 def test_a_page_written_by_hand_is_read_whole_from_its_first_words():
-    part = tour.stop("07-a-part.md")
+    part = tour.page("07-a-part.md")
     assert part.written_by is None and part.steps == ()
     assert part.intro.startswith("A part is a folder, a SCAD file named after it")
-    assert tour.stop("00-getting-started.md").intro.startswith("Four steps take a fresh clone")
+    assert tour.page("00-getting-started.md").intro.startswith("Four steps take a fresh clone")
+    assert tour.page("99-nowhere.md") is None
 
 
-# --- the roadmap ------------------------------------------------------------------------
+# --- the stages -------------------------------------------------------------------------
 
 
-def test_the_roadmap_names_every_page_once_and_only_what_is_there():
-    """Every walkthrough page is shown somewhere: named by one line of the roadmap, or by
-    a stage of a journey a line names. No line names a page twice, and every journey and
-    page a line names is one there is."""
-    lines = tour.roadmap()
-    named = [page for line in lines for page in line.pages]
-    assert len(named) == len(set(named))
-    known = {j.id for j in journeys.JOURNEYS}
-    assert {line.journey for line in lines if line.journey} <= known
-    staged = {
-        page
-        for line in lines
-        if line.journey
-        for page in tour.stage_pages(journeys.by_id(line.journey))
-    }
-    pages = {p.name for p in WALKTHROUGH_ROOT.glob("[0-9][0-9]-*.md")}
-    assert set(named) | staged == pages
-    assert tour.document()["not_on_the_roadmap"] == []
-    assert all(line.journey or line.pages for line in lines)  # none shown by nothing
+def test_the_tour_is_the_journeys_in_the_chain_s_order_a_stage_at_a_time():
+    """The document the box reads: every journey in the registry's order -- a part
+    designed, made, cut, its board, hands on it, the site brought up and watched, and a
+    drawing to pieces last -- each stage with the rail's own words."""
+    doc = tour.document()
+    assert [j["id"] for j in doc["journeys"]] == [j.id for j in journeys.JOURNEYS]
+    assert doc["journeys"][0]["id"] == "design" and doc["journeys"][-1]["id"] == "drawing"
+    make = next(j for j in doc["journeys"] if j["id"] == "make")
+    assert make["name"] == "Print a part"
+    assert [(s["id"], s["stage"], s["title"], s["words"]) for s in make["stages"]] == [
+        (f"make/{s.id}", s.id, s.label, s.hint) for s in journeys.MAKE.steps
+    ]
+    assert tour.stage_ids() == [s["id"] for j in doc["journeys"] for s in j["stages"]]
+    assert doc["commit"] == tour.running()["commit"]
 
 
-def test_every_journey_is_a_line_of_the_roadmap_in_the_chain_s_order():
-    """Each journey is named by one line, and the lines take them in the order the
-    registry chains them: a part designed, made, cut, its board, hands on it, the site
-    brought up and watched, and a drawing to pieces last."""
-    named = [line.journey for line in tour.roadmap() if line.journey]
-    assert named == [j.id for j in journeys.JOURNEYS]
+def test_a_stage_carries_what_it_names_to_try():
+    """Print a part's Shape: what to try on it is the two steps of page 04 it names,
+    each with its heading and its picture."""
+    make = next(j for j in tour.document()["journeys"] if j["id"] == "make")
+    shape = next(s for s in make["stages"] if s["id"] == SHAPE)
+    assert shape["words"] == "its numbers, in Parameters"
+    assert [(t["page"], t["index"]) for t in shape["tries"]] == [
+        ("04-designing-a-part.md", 2),
+        ("04-designing-a-part.md", 3),
+    ]
+    assert shape["tries"][0]["heading"] == "A size dragged is checked once the slider rests"
+    assert shape["tries"][0]["picture"].startswith("screenshots/04-02-")
 
 
 def test_every_stage_names_steps_and_pages_there_are():
@@ -105,8 +105,8 @@ def test_every_stage_names_steps_and_pages_there_are():
 
 
 def test_a_page_a_stage_names_whole_is_a_link_to_the_page():
-    """Cut a part's Choose names page 20, which no test writes: what to try there is the
-    page itself, by its title, with no step and no picture."""
+    """Cut a part's Choose names page 20, which no module writes: what to try there is
+    the page itself, by its title, with no step and no picture."""
     (whole,) = tour._tries(journeys.CUT.steps[0].shown_by, WALKTHROUGH_ROOT)
     assert (whole["page"], whole["index"], whole["picture"]) == (
         "20-a-part-through-the-router.md",
@@ -116,131 +116,68 @@ def test_a_page_a_stage_names_whole_is_a_link_to_the_page():
     assert whole["heading"].startswith("20 — ") and whole["words"]
 
 
-def test_the_roadmap_orders_the_tour_and_photographs_are_last():
-    """The tour's stops are the roadmap's lines in its order: a part designed before a
-    thing made, and the photographs after everything else."""
-    doc = tour.document()
-    groups = [line["group"] for line in doc["lines"]]
-    assert list(dict.fromkeys(groups)) == [
-        "Starting",
-        "Designing a part",
-        "Making a thing",
-        "The site and the page",
-        "Photographs",
-    ]
-    ids = tour.stop_ids()
-    assert ids[0] == "page:00-getting-started.md"
-    photographs = [
-        s["id"] for line in doc["lines"] if line["group"] == "Photographs" for s in line["stops"]
-    ]
-    assert "page:01-photographs-into-pieces.md" in photographs
-    assert ids[-len(photographs) :] == photographs
-    assert "journey:drawing/board" in photographs
-    assert ids.index("journey:design/numbers") < ids.index(SHAPE) < ids.index(photographs[0])
+# --- feedback ---------------------------------------------------------------------------
 
 
-def test_a_line_that_names_a_journey_has_its_stages_as_stops_with_what_to_try():
-    """Print a part's line: each stage a stop, its words the rail's own, and what to try
-    on it the recorded steps the stage names."""
-    make = next(line for line in tour.document()["lines"] if "shaped, sliced" in line["text"])
-    assert [(s["kind"], s["stage"], s["title"]) for s in make["stops"]] == [
-        ("stage", s.id, s.label) for s in journeys.MAKE.steps
-    ]
-    shape = next(s for s in make["stops"] if s["id"] == SHAPE)
-    assert shape["words"] == "its numbers, in Parameters" and shape["put_on"] is True
-    assert [(t["page"], t["index"]) for t in shape["tries"]] == [
-        ("04-designing-a-part.md", 2),
-        ("04-designing-a-part.md", 3),
-    ]
-    assert shape["tries"][0]["heading"] == "A size dragged is checked once the slider rests"
-
-
-def test_a_line_that_names_nothing_is_shown_by_nothing(tmp_path):
-    road = tmp_path / "ROADMAP.md"
-    road.write_text(
-        "## Later\n\n- [ ] A thing nobody can see yet.\n"
-        "- [x] The router. [31](../walkthrough/31-what-the-router-needs.md)\n",
-        encoding="utf-8",
-    )
-    lines = tour.document(road)["lines"]
-    assert [(line["text"], line["ticked"], line["shown_by_nothing"]) for line in lines] == [
-        ("A thing nobody can see yet.", False, True),
-        ("The router.", True, False),
-    ]
-    assert [s["id"] for s in lines[1]["stops"]] == [f"page:{ROUTER}"]
-    assert lines[1]["stops"][0]["kind"] == "page" and len(lines[1]["stops"][0]["tries"]) == 7
-
-
-# --- answers ----------------------------------------------------------------------------
-
-
-def test_an_answer_is_kept_with_the_commit_and_the_latest_is_the_stop_s(kept):
+def test_a_word_is_kept_with_the_commit_and_the_latest_is_the_stage_s(kept):
     client = TestClient(app)
-    said = client.post("/tour/answers", json={"stop": SHAPE, "verdict": "as shown"})
+    said = client.post("/tour/feedback", json={"stage": SHAPE, "verdict": "works"})
     assert said.status_code == 201
     first = said.json()
-    assert first["stop"] == SHAPE and first["verdict"] == "as shown"
+    assert first["stage"] == SHAPE and first["verdict"] == "works"
     assert first["commit"] == tour.running()["commit"] and first["at"]
-    again = {"stop": SHAPE, "verdict": "off", "note": "the slider is below the fold"}
-    assert client.post("/tour/answers", json=again).status_code == 201
+    again = {"stage": SHAPE, "verdict": "off", "note": "the slider is below the fold"}
+    assert client.post("/tour/feedback", json=again).status_code == 201
     lines = kept.read_text(encoding="utf-8").splitlines()
-    assert [json.loads(line)["verdict"] for line in lines] == ["as shown", "off"]  # both kept
+    assert [json.loads(line)["verdict"] for line in lines] == ["works", "off"]  # both kept
     doc = client.get("/tour").json()
-    stops = {s["id"]: s for line in doc["lines"] for s in line["stops"]}
-    assert stops[SHAPE]["answer"]["verdict"] == "off"
-    assert stops[SHAPE]["answer"]["note"] == "the slider is below the fold"
-    assert [i for i, s in stops.items() if s["answer"]] == [SHAPE]
-    assert doc["commit"] == tour.running()["commit"]
+    stages = {s["id"]: s for j in doc["journeys"] for s in j["stages"]}
+    assert stages[SHAPE]["feedback"]["verdict"] == "off"
+    assert stages[SHAPE]["feedback"]["note"] == "the slider is below the fold"
+    assert [i for i, s in stages.items() if s["feedback"]] == [SHAPE]
 
 
-def test_a_page_is_one_stop_answered_whole(kept):
-    said = {"stop": f"page:{RELOAD}", "verdict": "as shown"}
-    assert TestClient(app).post("/tour/answers", json=said).status_code == 201
-    assert tour.answers()[f"page:{RELOAD}"]["verdict"] == "as shown"
-
-
-def test_a_page_a_stage_shows_is_no_stop_of_its_own(kept):
-    said = {"stop": f"page:{ROUTER}", "verdict": "as shown"}
-    assert TestClient(app).post("/tour/answers", json=said).status_code == 404
+def test_every_word_kept_is_given_back_oldest_first(kept):
+    client = TestClient(app)
+    assert client.get("/tour/feedback").json() == {"feedback": []}
+    tour.say(SHAPE, "works")
+    tour.say("make/see", "off", "the path is drawn under the bed")
+    tour.say(SHAPE, "off", "the slider is below the fold")
+    given = client.get("/tour/feedback").json()["feedback"]
+    assert [(r["stage"], r["verdict"], r["note"]) for r in given] == [
+        (SHAPE, "works", ""),
+        ("make/see", "off", "the path is drawn under the bed"),
+        (SHAPE, "off", "the slider is below the fold"),
+    ]
+    assert all(set(r) == {"stage", "verdict", "note", "at", "commit", "changed"} for r in given)
 
 
 @pytest.mark.parametrize(
     "said, status, why",
     [
-        ({"stop": "page:99-nowhere.md", "verdict": "as shown"}, 404, "has no stop"),
-        ({"stop": "journey:make/polish", "verdict": "as shown"}, 404, "has no stop"),
-        ({"stop": SHAPE, "verdict": "fine"}, 422, "an answer is one of"),
-        ({"stop": SHAPE, "verdict": "off", "note": "  "}, 422, "say what is off"),
+        ({"stage": "make/polish", "verdict": "works"}, 404, "no journey has a stage"),
+        ({"stage": "33-windows-kept-over-a-reload.md", "verdict": "works"}, 404, "no journey has"),
+        ({"stage": SHAPE, "verdict": "fine"}, 422, "feedback is one of"),
+        ({"stage": SHAPE, "verdict": "off", "note": "  "}, 422, "say what is off"),
     ],
 )
 def test_what_the_tour_does_not_keep_is_refused_saying_why(kept, said, status, why):
-    answered = TestClient(app).post("/tour/answers", json=said)
+    answered = TestClient(app).post("/tour/feedback", json=said)
     assert answered.status_code == status
     assert why in answered.json()["detail"]
     assert not kept.exists()
 
 
 def test_a_line_that_does_not_read_is_left_out(kept):
-    tour.say(SHAPE, "as shown")
+    tour.say(SHAPE, "works")
     with kept.open("a", encoding="utf-8") as out:
-        out.write("not an answer\n" + json.dumps({"stop": SHAPE}) + "\n")
-    assert [r["stop"] for r in tour.said()] == [SHAPE]
+        out.write("not feedback\n" + json.dumps({"stage": SHAPE}) + "\n")
+    assert [r["stage"] for r in tour.said()] == [SHAPE]
 
 
-def test_apothecary_tour_reads_back_what_was_said(kept):
-    tour.say(SHAPE, "as shown")
-    tour.say("journey:make/see", "off", "the path is drawn under the bed")
-    shown = CliRunner().invoke(cli, ["tour"])
-    assert shown.exit_code == 0, shown.output
-    lines = shown.output.splitlines()
-    at = lines.index("Making a thing")
-    assert lines[at + 1] == (
-        "  A part is chosen, shaped, sliced, seen and printed on a machine. "
-        "1 as shown, 1 off, 3 not yet"
-    )
-    assert lines[at + 2].startswith("    ✓ Shape (")
-    assert lines[at + 3].startswith("    ✗ See: the path is drawn under the bed (")
-    assert lines.index("Photographs") > at
-    off = CliRunner().invoke(cli, ["tour", "--off"])
-    assert [line for line in off.output.splitlines() if line.startswith("    ")] == [lines[at + 3]]
-    assert "Designing a part" not in off.output
+def test_what_a_roadmap_claims_is_not_read_here():
+    """The app keeps journeys and feedback; the roadmap is the project's, on its branch
+    of the governance corpus, and its review is `qmcp tour`, so there is no
+    `apothecary tour`."""
+    assert "tour" not in cli.commands
+    assert not hasattr(tour, "roadmap")

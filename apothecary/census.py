@@ -685,33 +685,33 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "airgap-run": (WIDGET, WHAT_YOU_SEE, "a button that maps the metric the sweep line names"),
     # ---- the Tour, apothecary/static/widgets/tour_popover.js -------------------
-    # What the roadmap claims a stop at a time, in a box over the page: a line chosen,
-    # Back and Next, the page put on a stage, a person's word on the stop (Off with
-    # what its field says), and a page in a tab. The header's Tour opens it. All but
-    # the lines' drop-down and the field are cells of Panels › Windows › Tour; its ✕
-    # is that ring's Tour, which closes it too.
+    # The journeys a stage at a time, in a box over the page: a journey chosen, Back and
+    # Next, the page taken to a stage, and a person's word on the stage (Off with what
+    # its field says). The header's Tour opens it. All but the journeys' drop-down and
+    # the field are cells of Panels › Windows › Tour; its ✕ is that ring's Tour, which
+    # closes it too.
     "tour-pop-open": (WIDGET, WHAT_YOU_SEE, "a button that opens the tour's box, or closes it"),
     "tour-pop-close": (WIDGET, WHAT_YOU_SEE, "a button that closes the tour's box"),
-    "tour-pop-lines": (WIDGET, WHAT_YOU_SEE, "a drop-down of the roadmap's lines, each with its stops"),
-    "tour-pop-note": (WIDGET, WHAT_YOU_SEE, "a field for what is off at the stop shown"),
-    "tour-pop-back": (WIDGET, WHAT_YOU_SEE, "a button that goes to the stop before"),
-    "tour-pop-put": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "a button that puts the page on the stage shown, on the demo",
-    ),
-    "tour-pop-as-shown": (
+    "tour-pop-journeys": (WIDGET, WHAT_YOU_SEE, "a drop-down of the journeys, each with its stages"),
+    "tour-pop-note": (WIDGET, WHAT_YOU_SEE, "a field for what is off at the stage shown"),
+    "tour-pop-back": (WIDGET, WHAT_YOU_SEE, "a button that goes to the stage before"),
+    "tour-pop-put": (WIDGET, WHAT_YOU_SEE, "a button that takes the page to the stage shown"),
+    "tour-pop-works": (
         WIDGET,
         WHAT_IS_THERE,
-        "a button that says the page does what the stop shows, kept on the server",
+        "a button that says the stage does what it says, kept on the server",
     ),
     "tour-pop-off": (
         WIDGET,
         WHAT_IS_THERE,
-        "a button that says the stop is off, with what the field says, kept on the server",
+        "a button that says the stage is off, with what the field says, kept on the server",
     ),
-    "tour-pop-next": (WIDGET, WHAT_YOU_SEE, "a button that goes to the next stop"),
-    "tour-pop-page": (WIDGET, WHAT_YOU_SEE, "a link to the walkthrough page the stop is"),
+    "tour-pop-next": (WIDGET, WHAT_YOU_SEE, "a button that goes to the next stage"),
+    "tour-pop-page": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a link to the first walkthrough page the stage names",
+    ),
     # ---- the Working space, apothecary/static/widgets/working_space.js ---------
     # Its first line's buttons take the step it names; a printer's hour has a row
     # per camera, a camera's device chosen there, and its frames' budget set.
@@ -748,7 +748,7 @@ RING_BACKED: Dict[str, str] = {
     "tour-pop-close": "tour:toggle",
     "tour-pop-back": "tour:back",
     "tour-pop-put": "tour:put",
-    "tour-pop-as-shown": "tour:as-shown",
+    "tour-pop-works": "tour:works",
     "tour-pop-off": "tour:off",
     "tour-pop-next": "tour:next",
     "tour-pop-page": "tour:page",
@@ -1328,7 +1328,7 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "a mark's kind chosen, a person's word on it; or another picture's marks listed",
     ),
     "marks:click:closest": (WIDGET, WHAT_YOU_SEE, "a mark chosen, for the ring's Marks cells"),
-    "tourLines:change:chosen": (WIDGET, WHAT_YOU_SEE, "a line of the roadmap chosen, its first stop shown"),
+    "tourJourneys:change:chosen": (WIDGET, WHAT_YOU_SEE, "a journey chosen, the page taken to its first stage"),
     "marks:input:closest": (
         WIDGET,
         WHAT_YOU_SEE,

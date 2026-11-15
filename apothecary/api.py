@@ -294,7 +294,7 @@ app.mount("/static", _AskedAgain(directory=STATIC_ROOT), name="static")
 app.include_router(docs_router)
 # The root README, as a page of the same kind.
 app.include_router(readme_router)
-# The tour: the walkthrough a step at a time, and a person's word on each step.
+# The tour: the journeys a stage at a time, and a person's word on each stage.
 app.include_router(tour_router)
 # Mounted before the photo routes below, so /photos/pictures and /photos/gather
 # are matched before /photos/{name} can take "pictures" for a name. The router

@@ -21,7 +21,6 @@ from .slicer import slicer
 from .spaces import problems, solutions
 from .system import check
 from .testing import test
-from .tour import tour
 from .vision import vision
 
 # Commands for working on this repository rather than with it: its tests, its CI
@@ -101,7 +100,6 @@ cli.add_command(lighting)
 cli.add_command(airgap)
 cli.add_command(rig)
 cli.add_command(evidence)
-cli.add_command(tour)
 
 
 def main():  # pragma: no cover - entry point

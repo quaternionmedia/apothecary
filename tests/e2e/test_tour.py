@@ -1,17 +1,17 @@
 """The tour, as a person takes it: Tour in the header opens a box over the page, on the
-roadmap's first stop nobody has said anything of, a page shown only; the line of Print a
-part chosen puts the page on its first stage -- the machine opened, the piece chosen,
-the stage entered; ✓ As shown keeps a person's word and puts the next stage on, with
-the steps its tests recorded to try there; the See stage slices the piece where no file
-is kept, and its path is drawn; ✗ Off keeps what is off, and only with it; a view laid
-out moves the windows and not the box; the ring's Panels › Windows › Tour cells do what
-its buttons do; a reload opens it where it was; and `apothecary tour` reads back what
-was said. Walkthrough page 34 is what it writes.
+first stage nobody has said anything of; the journey Print a part chosen takes the page
+to its first stage -- the machine opened, the piece chosen, the stage entered; ✓ Works
+keeps a person's word and takes the page to the next stage, with what there is to try
+there; the See stage slices the piece where no file is kept, and its path is drawn;
+✗ Off keeps what is off, and only with it; a view laid out moves the windows and not the
+box; the ring's Panels › Windows › Tour cells do what its buttons do; a reload opens it
+where it was; a machine with no board connected is taken as the site plans it; a stage
+that needs what only a person brings is entered, the box saying what it needs; and the
+server gives back every word kept. Walkthrough page 34 is what it writes.
 
-Runs against a server of its own that says it is the demo (the tour puts a stage on
-nowhere else), with the simulated printer pinned to printer_1's mainboard and the
-scripted OrcaSlicer its slicer; its state folder is this module's, so the answers it
-keeps are its and `apothecary tour` reads them from there.
+Runs against a server of its own, with the simulated printer pinned to printer_1's
+mainboard, the router's controller not pinned, and the scripted OrcaSlicer its slicer;
+its state folder is this module's, so the feedback it keeps is its own.
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ import httpx
 import pytest
 import windows
 from boards import BOARD, DWELL, LAYERS, PRINTER
-from click.testing import CliRunner
 from doc_capture import MOMENT
 from garage import open_garage
 from playwright.sync_api import expect
@@ -30,24 +29,24 @@ from rings import open_from_key, press
 from slicer_helpers import write_fake_orcaslicer
 from viewer_ready import settled
 
-from apothecary.cli.main import cli
-
 BOX = "#tour-pop"
-MAKE = "A part is chosen, shaped, sliced, seen and printed on a machine."
 NOTE = "the job's row is cut off at the window's foot"
-# What changes on every run whatever the page does: the moments, and the commit the
-# server runs; and what changes with any line added to the roadmap, how many stops the
-# tour holds.
-COMMIT = r"against (?:[0-9a-f]{8}|an unknown commit)(?: with changes)?"
-STOPS = r"(?<=\d/)\d+"
-CHANGING = ((BOX, MOMENT), (BOX, COMMIT), (BOX, STOPS), ("#status", MOMENT))
+PLANNED = "cnc_router's Machine opened with no board connected: what it makes is planned there"
+NO_BOARD = (
+    "esp32_blink's board is pinned to a board, but not connected: connect it, or ⟳ Rescan in "
+    "its Device section"
+)
+# What changes on every run whatever the page does: the moments; and what changes with
+# any stage added to a journey, how many the tour holds.
+STAGES = r"(?<=\d/)\d+"
+CHANGING = ((BOX, MOMENT), (BOX, STAGES), ("#status", MOMENT))
 STEP_ON = "() => document.querySelector('#journey-rail [aria-current=step]')?.dataset.step"
 
 
 def _words(text: str) -> str:
-    """What the box says, its moments, the commit and the count of stops left out, as its
-    pictures blank them."""
-    return re.sub(STOPS, "…", re.sub(COMMIT, "against …", re.sub(MOMENT, "…", text)))
+    """What the box says, its moments and the count of stages left out, as its pictures
+    blank them."""
+    return re.sub(STAGES, "…", re.sub(MOMENT, "…", text))
 
 
 @pytest.fixture(scope="module")
@@ -61,7 +60,6 @@ def url(start_server, state, tmp_path_factory):
     url = start_server(
         {
             "APOTHECARY_STATE_DIR": str(state),
-            "APOTHECARY_DEMO": str(state),
             "APOTHECARY_SIMULATED_PRINTER": "idle",
             "APOTHECARY_ORCASLICER": str(orca),
             "FAKE_ORCA_LAYERS": LAYERS,
@@ -76,13 +74,13 @@ def url(start_server, state, tmp_path_factory):
     return url
 
 
-def _answers(url: str) -> dict:
-    lines = httpx.get(f"{url}/tour", timeout=15.0).json()["lines"]
-    return {s["id"]: s["answer"] for line in lines for s in line["stops"]}
+def _feedback(url: str) -> dict:
+    journeys = httpx.get(f"{url}/tour", timeout=15.0).json()["journeys"]
+    return {s["id"]: s["feedback"] for j in journeys for s in j["stages"]}
 
 
-def _put_on(page, step: str) -> None:
-    """The box done putting the page on ``step``, and the rail there."""
+def _taken_to(page, step: str) -> None:
+    """The box done taking the page to ``step``, and the rail there."""
     expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=60000)
     page.wait_for_function(f"(s) => ({STEP_ON})() === s", arg=step, timeout=15000)
 
@@ -94,36 +92,32 @@ def _off_the_buttons(page) -> None:
 
 
 @pytest.mark.e2e
-def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
-    page, url, state, walkthrough, monkeypatch
+def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
+    page, url, state, walkthrough
 ):
     story = walkthrough(
         ordinal="34",
         slug="the-tour",
         title="The tour",
         intro=(
-            "What the roadmap claims, a stop at a time, in a box over the page: "
-            "[docs/ROADMAP.md](../docs/ROADMAP.md) orders it, each of its lines naming a "
-            "journey, whose stages are stops the page is put on, or walkthrough pages, "
-            "each a stop that is read. A person explores a stage where it stands, and "
-            "one word is kept on the stop with the commit the server ran. The box says "
-            "nothing of its own: a stop's words are the journey's or the page's. "
-            "[docs/tour.md](../docs/tour.md) is the reference."
+            "The page's journeys a stage at a time, in a box over the page: going to a "
+            "stage takes the page there, a person explores it where it stands, and one "
+            "word is kept on the stage -- it works, or it is off, with what is off. The "
+            "box says nothing of its own: a stage's words are the ones its journey's "
+            "rail shows. [docs/tour.md](../docs/tour.md) is the reference."
         ),
         runtime=(
-            "It drives a real browser against a real server of its own that says it is "
-            "the demo, its printer a simulation and its slicer a script that answers as "
-            "OrcaSlicer's command line does. Its state folder is this test's, so the "
-            "answers it keeps are its own. The roadmap and the pages are as committed."
+            "It drives a real browser against a real server of its own, its printer a "
+            "simulation pinned to printer_1's mainboard, its router's controller not "
+            "pinned, and its slicer a script that answers as OrcaSlicer's command line "
+            "does. Its state folder is this test's, so the feedback it keeps is its own."
         ),
         does_not_show=[
-            "**A server that is not the demo**, where the box shows a stage and puts "
-            "nothing on.",
             "**A stage armed or started.** Start's stage brings the Machine and Jobs "
             "forward; arming control and starting a print are a person's.",
-            "**What changes on every run.** Moments and the commit the server runs are "
-            "blanked in the pictures and left out of the words, and so is how many stops "
-            "the tour holds, which any line added to the roadmap changes.",
+            "**What changes on every run.** Moments are blanked in the pictures and "
+            "left out of the words, and so is how many stages the tour holds, which any "
+            "stage added to a journey changes.",
         ],
         browser_suite_only=True,
     )
@@ -132,40 +126,36 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     title = box.locator(".tour-pop-title")
     open_garage(page, url)
 
-    # 1. Tour, in the header: the box over the page, on the first stop nobody has said
+    # 1. Tour, in the header: the box over the page, on the first stage nobody has said
     # anything of, the page as it was.
     expect(box).to_be_hidden()
     page.locator("#tour-pop-open").click()
     expect(box).to_be_visible()
     assert page.evaluate("() => document.querySelector('#tour-pop').matches(':popover-open')")
     expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^0/\d+$"))
-    expect(title).to_have_text("00 — Getting started")
-    expect(box.locator(".tour-pop-explore")).to_contain_text("Shown only: a page is read")
-    expect(box.locator(".tour-pop-page")).to_have_attribute(
-        "href", re.compile(r"/walkthrough/00-getting-started\.md$")
-    )
-    expect(box.locator(".tour-pop-put")).to_be_hidden()
-    expect(box.locator(".tour-pop-answer")).to_be_hidden()
+    expect(title).to_have_text("Design a part · 1. Choose")
+    expect(box.locator(".tour-pop-put")).to_be_enabled()
+    expect(box.locator(".tour-pop-feedback")).to_be_hidden()
     expect(page.locator("#journey-rail")).to_be_hidden()
     assert page.evaluate("() => window.fractalViewer.machine") is None
     settled(page)
     story.shows(
-        "Tour, in the header, opens a box over the page on the roadmap's first stop",
-        "Tour in the header: a box above the windows, on the first stop of the roadmap "
-        "nobody has said anything of. That is page 00, and a page is shown only: its "
-        "first words, its link, and a word asked on the whole of it. Nothing in the "
-        "page beneath has moved.",
-        shown=_words(box.locator(".tour-pop-explore").inner_text()),
+        "Tour, in the header, opens a box over the page on the first stage",
+        "Tour in the header: a box above the windows, on the first stage nobody has "
+        "said anything of, which is where the journeys begin: Design a part, at Choose. "
+        "Its head names the stage and how many have a word on them, its drop-down holds "
+        "the journeys in their order, and under it are this journey's stages. Nothing "
+        "in the page beneath has moved: ↻ beside the stage's words takes the page there.",
+        shown=_words(box.locator(".tour-pop-said").inner_text()),
         blank=CHANGING,
     )
 
-    # 2. The line of Print a part chosen: its first stage, put on.
-    lines = httpx.get(f"{url}/tour", timeout=15.0).json()["lines"]
-    at = next(i for i, line in enumerate(lines) if line["text"] == MAKE)
-    assert lines[at]["group"] == "Making a thing"
-    box.locator(".tour-pop-lines").select_option(value=str(at))
+    # 2. Print a part chosen: the page taken to its first stage.
+    journeys = httpx.get(f"{url}/tour", timeout=15.0).json()["journeys"]
+    at = next(i for i, j in enumerate(journeys) if j["name"] == "Print a part")
+    box.locator(".tour-pop-journeys").select_option(value=str(at))
     expect(title).to_have_text("Print a part · 1. Choose")
-    _put_on(page, "choose")
+    _taken_to(page, "choose")
     # What the page did is folded under one line, and stays open once a person opens it.
     expect(did.first).to_be_hidden()
     box.locator(".tour-pop-more summary").click()
@@ -177,23 +167,21 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     assert windows.state(page, "site")["shown"] is True
     settled(page)
     story.shows(
-        "A journey's line chosen puts the page on its first stage",
-        "The box's drop-down holds the roadmap's lines under its headings, in its order; "
-        "the line of Making a thing that names the journey Print a part, chosen. Its "
-        "stages are the stops, and the page is put on the first: printer_1's Machine "
-        "opened and the footpedal chosen, as a person would do each, and the journey "
-        "entered at Choose, its windows laid out and its rail in the header. The box "
-        "keeps what it did, then what the page said, folded under one line, opened "
-        "here. The stage is there to explore.",
+        "A journey chosen takes the page to its first stage",
+        "Print a part, chosen in the box's drop-down. The page is taken to its first "
+        "stage: printer_1's Machine opened and the footpedal chosen, as a person would "
+        "do each, and the journey entered at Choose, its windows laid out and its rail "
+        "in the header. The box keeps what the page did, then what the page said, "
+        "folded under one line, opened here. The stage is there to explore.",
         shown="\n".join(_words(t) for t in did.all_inner_texts()),
         blank=CHANGING,
     )
 
-    # 3. ✓ As shown: kept, and the next stage put on, with what its tests recorded there.
-    box.get_by_role("button", name="✓ As shown").click()
+    # 3. ✓ Works: kept, and the page taken to the next stage, with what to try there.
+    box.get_by_role("button", name="✓ Works").click()
     expect(title).to_have_text("Print a part · 2. Shape")
-    _put_on(page, "shape")
-    assert _answers(url)["journey:make/choose"]["verdict"] == "as shown"
+    _taken_to(page, "shape")
+    assert _feedback(url)["make/choose"]["verdict"] == "works"
     page.wait_for_function("() => window.apothecaryPanels.state('part-parameters').shown")
     expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^1/\d+$"))
     tries = box.locator(".tour-pop-tries li")
@@ -209,46 +197,47 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     _off_the_buttons(page)
     settled(page)
     story.shows(
-        "✓ As shown keeps the word and puts the next stage on, with what to try there",
-        "✓ As shown: the server keeps it with the commit it runs, and the box goes to "
-        "Shape and puts the page there, Parameters in front. Folded under one line with "
-        "what the page did are the steps this stage's tests recorded, each a link to "
-        "its picture: what to try.",
+        "✓ Works keeps the word and takes the page to the next stage, with what to try",
+        "✓ Works: the server keeps it, and the box goes to Shape and takes the page "
+        "there, Parameters in front. Folded under one line with what the page did is "
+        "what there is to try on this stage, each a link to a picture of it in the "
+        "walkthrough.",
         shown="\n".join(tries.all_inner_texts()),
         blank=CHANGING,
     )
 
     # 4. See, chosen in the box: no file is kept, so the piece is sliced, and its path drawn.
-    box.locator(".tour-pop-stops button", has_text="4 See").click()
-    _put_on(page, "see")
+    box.locator(".tour-pop-stages button", has_text="4 See").click()
+    _taken_to(page, "see")
     expect(did).to_contain_text(["footpedal sliced for printer_1, as Slice does"])
     expect(did.last).to_contain_text("path is drawn on printer_1 and framed")
     settled(page)
     story.shows(
-        "See is put on from nothing: the piece sliced, its path drawn",
-        "See, chosen among the line's stops: the stage draws the chosen file's path, and "
-        "no file is kept, so the page does the stage before it -- the footpedal sliced "
-        "for printer_1, as Slice does -- and the path is drawn on the machine and framed.",
+        "See is reached from nothing: the piece sliced, its path drawn",
+        "See, chosen among the journey's stages: the stage draws the chosen file's "
+        "path, and no file is kept, so the page does the stage before it -- the "
+        "footpedal sliced for printer_1, as Slice does -- and the path is drawn on the "
+        "machine and framed.",
         shown="\n".join(_words(t) for t in did.all_inner_texts()),
         blank=CHANGING,
     )
 
     # 5. ✗ Off keeps what is off, and only with it.
     box.get_by_role("button", name="✗ Off").click()
-    expect(box.locator(".tour-pop-answer")).to_have_text("Not kept: say what is off.")
-    assert _answers(url)["journey:make/see"] is None
+    expect(box.locator(".tour-pop-feedback")).to_have_text("Not kept: say what is off.")
+    assert _feedback(url)["make/see"] is None
     box.locator(".tour-pop-note").fill(NOTE)
     box.get_by_role("button", name="✗ Off").click()
     expect(title).to_have_text("Print a part · 5. Start")
-    _put_on(page, "print")
-    see = _answers(url)["journey:make/see"]
+    _taken_to(page, "print")
+    see = _feedback(url)["make/see"]
     assert (see["verdict"], see["note"]) == ("off", NOTE)
     page.wait_for_function("() => window.apothecaryPanels.state('machine').shown")
     story.says(
         "✗ Off keeps what is off, and only with it",
         "✗ Off with the field empty is refused, the box saying what it needs and staying "
-        "on the stop; with what is off typed, it is kept, and the box goes to Start and "
-        "puts the page there, the Machine and Jobs in front. Nothing is armed.",
+        "on the stage; with what is off typed, it is kept, and the box goes to Start and "
+        "takes the page there, the Machine and Jobs in front. Nothing is armed.",
         shown=_words(did.last.inner_text()),
     )
 
@@ -265,8 +254,8 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     story.shows(
         "A view laid out moves the windows, and not the box",
         "The Default view laid out: every window goes where that view has it, and the "
-        "box is where it was, open on the stop it showed. The line's stops wear what "
-        "was said of each.",
+        "box is where it was, open on the stage it showed. The journey's stages wear "
+        "what was said of each.",
         shown=_words(box.locator(".tour-pop-name").inner_text()),
         blank=CHANGING,
     )
@@ -276,19 +265,19 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     open_from_key(page)
     press(page, "Panels", "Windows", "Tour", "Back")
     expect(title).to_have_text("Print a part · 4. See")
-    _put_on(page, "see")
-    expect(box.locator(".tour-pop-answer")).to_contain_text(f"✗ Off: {NOTE} -- said ")
+    _taken_to(page, "see")
+    expect(box.locator(".tour-pop-feedback")).to_contain_text(f"✗ Off: {NOTE} -- said ")
     open_from_key(page)
-    press(page, "Panels", "Windows", "Tour", "As shown")
+    press(page, "Panels", "Windows", "Tour", "Works")
     expect(title).to_have_text("Print a part · 5. Start")
-    assert _answers(url)["journey:make/see"]["verdict"] == "as shown"  # the latest is its answer
-    _put_on(page, "print")
+    assert _feedback(url)["make/see"]["verdict"] == "works"  # the latest is its feedback
+    _taken_to(page, "print")
     story.says(
         "Panels › Windows › Tour: its cells are its buttons",
-        "The canvas ring's Panels › Windows › Tour: Back goes to See, put on again, where "
-        "the box shows what was said of it; As shown says otherwise now, and the latest "
-        "word is the stop's. Off, Next, Put here and Its page are cells there too, and "
-        "Tour opens and closes the box.",
+        "The canvas ring's Panels › Windows › Tour: Back goes to See, the page taken "
+        "there again, where the box shows what was said of it; Works says otherwise "
+        "now, and the latest word is the stage's. Off, Next, Take me here and Its page "
+        "are cells there too, and Tour opens and closes the box.",
         shown=_words(box.locator(".tour-pop-title").inner_text()),
     )
 
@@ -298,26 +287,70 @@ def test_the_tour_puts_the_page_on_each_stage_and_keeps_a_person_s_word(
     expect(title).to_have_text("Print a part · 5. Start")
     story.says(
         "Reloaded, it is open where it was",
-        "The page reloaded: the box is open again on the stop it showed, where it was "
+        "The page reloaded: the box is open again on the stage it showed, where it was "
         "left; this browser keeps where it was, the server what was said.",
         shown=_words(title.inner_text()),
     )
 
-    # 9. `apothecary tour` reads back what was said.
-    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(state))
-    said = CliRunner().invoke(cli, ["tour"])
-    assert said.exit_code == 0, said.output
-    out = said.output.splitlines()
-    here = out.index(f"  {MAKE} 2 as shown, 0 off, 3 not yet")
-    assert out[here - 1] == "Making a thing"
-    assert out[here + 1].startswith("    ✓ Choose (") and out[here + 2].startswith("    ✓ See (")
+    # 9. A machine whose board is not connected: its Machine as the site plans it.
+    at = next(i for i, j in enumerate(journeys) if j["name"] == "Cut a part")
+    box.locator(".tour-pop-journeys").select_option(value=str(at))
+    expect(title).to_have_text("Cut a part · 1. Choose")
+    _taken_to(page, "choose")
+    expect(did).to_contain_text([PLANNED, "router_coupon chosen", "Cut a part entered"])
+    expect(box.locator(".tour-pop-needs")).to_be_empty()
+    assert page.evaluate("() => window.fractalViewer.machine.plan") is True
     story.says(
-        "`apothecary tour` reads back what was said",
-        "At the command line, `apothecary tour`: the roadmap's lines under its headings, "
-        "each with how many of its stops are as shown, off and not yet, and each stop "
-        "answered with the commit and moment it was said against; `--off` lists only "
-        "what is off.",
+        "A machine with no board connected is taken as the site plans it",
+        "Cut a part, chosen: its stages are on the router's Machine, and this server's "
+        "router has no board connected. Its Machine opens all the same, as its badge "
+        "opens it: what it makes is planned there, its toolpath written and drawn, "
+        "and ▶ Cut is its board's once it is connected.",
+        shown="\n".join(_words(t) for t in did.all_inner_texts()),
+    )
+
+    # 10. A stage that needs what only a person brings: entered, and what it needs said.
+    at = next(i for i, j in enumerate(journeys) if j["name"] == "Flash a board")
+    box.locator(".tour-pop-journeys").select_option(value=str(at))
+    expect(title).to_have_text("Flash a board · 1. Pin")
+    _taken_to(page, "pin")
+    expect(box.locator(".tour-pop-more summary")).to_have_text("This stage needs something first")
+    expect(box.locator(".tour-pop-needs")).to_have_text(NO_BOARD)
+    expect(did).to_contain_text(["Flash a board entered"])
+    assert windows.state(page, "selected")["shown"] is True
+    # Nothing was pinned for the person.
+    assert page.evaluate(
+        "() => window.fractalViewer.bindingFor('esp32_blink').row?.binding_source !== 'manual'"
+    )
+    _off_the_buttons(page)
+    settled(page)
+    story.shows(
+        "A stage that needs what only a person brings says what it needs",
+        "Flash a board, chosen: its first stage is the board on its port pinned to its "
+        "piece, and no board of esp32_blink's is connected. Which device is which is a "
+        "person's to say, so nothing is pinned for them: the page leaves the rest, "
+        "enters the stage all the same, so Selected is in front, where a board is "
+        "pinned, and the box opens on what the stage needs. ↻ takes the page the rest "
+        "of the way once it is there.",
+        shown=_words(box.locator(".tour-pop-needs").inner_text()),
+        blank=CHANGING,
+    )
+
+    # 11. Every word kept is the server's to give back, oldest first.
+    kept = httpx.get(f"{url}/tour/feedback", timeout=15.0).json()["feedback"]
+    assert [(r["stage"], r["verdict"], r["note"]) for r in kept] == [
+        ("make/choose", "works", ""),
+        ("make/see", "off", NOTE),
+        ("make/see", "works", ""),
+    ]
+    assert all(r["at"] and "commit" in r and "changed" in r for r in kept)
+    assert (state / "tour" / "feedback.jsonl").read_text(encoding="utf-8").count("\n") == 3
+    story.says(
+        "Every word kept is given back, oldest first",
+        "`GET /tour/feedback`: every word said, none rewritten, each with its stage, "
+        "the moment, and the commit the server ran. The latest for a stage is its "
+        "feedback; the rest is there for whoever reviews what was found.",
         shown="\n".join(
-            re.sub(r" \([^()]*\)$", " (…)", line) for line in out[here - 1 : here + 3]
+            f"{r['stage']}\t{r['verdict']}" + (f"\t{r['note']}" if r["note"] else "") for r in kept
         ),
     )

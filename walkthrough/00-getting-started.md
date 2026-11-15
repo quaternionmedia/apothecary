@@ -93,10 +93,9 @@ ring, `m` or Ctrl+right-click, which holds every verb of what it opens on, the
 digits pressed to reach one its address. A right-click alone is the camera's.
 [The viewer](../docs/viewer.md) describes each of its controls.
 
-**Tour**, in the header, takes what [the roadmap](../docs/ROADMAP.md) claims a
-stop at a time in a box over the page: on the demo it puts the page on each stage
-of a journey for a person to explore, and it keeps a word on whether the page does
-what the stop shows, for `apothecary tour` to read back
+**Tour**, in the header, takes the page's journeys a stage at a time in a box over
+the page: it takes the page to each stage for a person to explore, says what a
+stage needs where that is not there, and keeps a word on whether the stage works
 ([the tour](../docs/tour.md)).
 
 ## 5. The five loops

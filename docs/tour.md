@@ -1,56 +1,44 @@
 # The tour
 
-What apothecary claims is built, a stop at a time, in a box over the page: the way a
-person finds their way through the app, and the way a person says whether it does what
-it claims. [Walkthrough 34](../walkthrough/34-the-tour.md) goes through the box, and
+The page's journeys, a stage at a time, in a box over the page: the way a person finds
+their way through the app, and the way they say how each part of it is.
+[Walkthrough 34](../walkthrough/34-the-tour.md) goes through the box, and
 [walkthrough 39](../walkthrough/39-the-chain-a-stage-at-a-time.md) through every stage
-it puts the page on, each written by the browser test that does it.
+it takes the page to.
 
 ## What it takes, and in what order
 
-[The roadmap](ROADMAP.md) orders it. Each of the roadmap's lines is a claim, and names
-what shows it:
+The tour is [the viewer's journeys](viewer.md#journeys), in their order, which is the
+order of the chain the page manages: a part designed; made on the printer, or cut on
+the router; the board a machine runs on; a deck's knobs on the machines; the site
+brought up, and watched; and photographs last, a drawing read into shapes that stand
+up as parts to design. Each journey hands the next what it made.
 
-- **a journey** (`journey:<id>`, [the viewer's journeys](viewer.md#journeys)): its
-  stages are the tour's stops, and the page is put on each;
-- **walkthrough pages**, by their links: each page is one stop, read and not put on.
-
-A page a journey's stage names is that stage's, and no stop of its own: the roadmap
-names it by naming the journey.
-
-The tour takes the lines in the roadmap's order, which is the order of the chain the
-page manages: a part designed; made on the printer, or cut on the router; the board a
-machine runs on; a deck's knobs on the machines; the site brought up, and watched; and
-photographs last, a drawing read into shapes that stand up as parts to design
-([the viewer's journeys](viewer.md#journeys) lists each journey's stages). A line that names neither a journey nor a page is *shown by
-nothing*, and the box and `apothecary tour` say so in those words.
-
-The box has no words of its own. A stage's line is the one its journey's rail shows; a
-page's are its own first words; and under either are the steps the page's test
-recorded, each a link to the picture the run took after the step's assertions passed
-([one executable walkthrough](../governance/qm/records/DRAFT-one-executable-walkthrough.md)).
-A stage names the recorded steps that check it, and the pages that show the same thing
-whole, at the command line (`shown_by`, in `apothecary/journeys.py`): they are what to
-try there.
+The box has no words of its own. A stage's line is the one its journey's rail shows.
+Under it is what there is to try on the stage: the steps of the walkthrough that go
+through it, each a link to its picture, and the pages that show the same thing whole,
+at the command line (`shown_by`, in `apothecary/journeys.py`).
 
 ## Opening it
 
 **Tour**, in the header, or the canvas ring's **Panels › Windows › Tour › Tour**. The box
 opens above the windows, so a view or a journey laid out moves them and not it. It is
-small, since it stands over the world: its head names the stop and how many are said.
-It is dragged by its head, folded to its head by a double-click there, and closed by its ✕
-or by Tour again. Where it stands, whether it is open and the stop it shows are this
-browser's (`apothecary.tour` in its local storage), so a reload opens it where it was.
+small, since it stands over the world: its head names the stage and how many have a
+word on them. It is dragged by its head, folded to its head by a double-click there,
+and closed by its ✕ or by Tour again. Where it stands, whether it is open and the stage
+it shows are this browser's (`apothecary.tour` in its local storage), so a reload opens
+it where it was.
 
-Opened in a browser that has not taken it before, it starts at the first stop of a
-ticked line nobody has said anything of.
+Opened in a browser that has not taken it before, it starts at the first stage nobody
+has said anything of.
 
-## A stage, put on
+## A stage, and the page taken there
 
-Going to a stage -- by its number among the line's stops, ›, ‹, or a word said on the
-one before -- puts the page on it, and ↻ beside the stage's words puts it on again.
-The page then does what a person would do to get there, each thing only where it is
-not so already:
+Going to a stage -- a journey chosen in the drop-down, a stage's number, ›, ‹, or a
+word said on the one before -- takes the page there, and ↻ beside the stage's words
+takes it there again. **its page**, beside ↻, is the first walkthrough page the stage
+names, in a tab. The page then does what a person would do to get there, each
+thing only where it is not so already:
 
 - what the journey is staged on, then what the stage itself needs (`staged_on` and a
   stage's `puts`, in `apothecary/journeys.py`), from a short list of things the page
@@ -58,8 +46,8 @@ not so already:
 
   | Put | What the page does | As |
   |---|---|---|
-  | `pin` | a board on a port pinned to a piece | Pin, in the piece's Device section |
-  | `machine` | a piece's Machine opened, in place of another's | its badge, or Device › Open |
+  | `pin` | a board on a port pinned to a piece, where that port is listed | Pin, in the piece's Device section |
+  | `machine` | a piece's Machine opened, in place of another's; with no board connected, as the site plans it | its badge, or Device › Open |
   | `part` | a piece chosen | its row in Site |
   | `fit` | a piece chosen and framed in the world | `f` |
   | `file` | the open Machine given a file for a part, where it keeps none | Slice, or a router's Toolpath |
@@ -78,78 +66,79 @@ So a stage that needs the work of the one before it has it done first: See draws
 file's path, so with no file kept the piece is sliced for the machine; Marks needs a
 photograph pinned and its shapes found.
 
-The box keeps what it did, then what the page said of the stage, folded under one line
-with the steps to try; it opens by itself where the page refused, and stays open or
-folded as a person left it. The stage is there to explore.
+The box keeps what the page did, then what the page said of the stage, folded under
+one line with what there is to try. The stage is there to explore.
 
-**Only on the demo.** Putting a stage on acts on machines and state, so it happens only
-where the server says it is `apothecary serve --demo`. Anywhere else the box shows the
-stage and says to do what it says in the page.
+**It is the same on every server.** The page does the same things whether the
+machines are real or simulated, and each acts on what is there.
+
+**A machine whose board is not connected is taken as the site plans it.** Its Machine
+opens as its badge opens it then: what it makes, its slice or its toolpath and the
+path drawn are planned there, and ▶ is its board's once it is connected
+([the viewer](viewer.md)).
+
+**What is a person's to bring is not stood in for.** Which board is a piece's, a
+photograph taken: where a stage needs one that is not there, the page leaves the
+rest and enters the stage all the same, so a person stands where it is done, and the
+box opens on what the stage needs, in the page's own words for it -- *esp32_blink's
+board is pinned to a board, but not connected: connect it, or ⟳ Rescan in its Device
+section*. With that done, ↻ takes the page the rest of the way.
 
 **Nothing is armed, started, sent or made.** Start's stage brings the Machine and Jobs
 forward, Flash's the board's Flashing window, Steps' the Procedure, Pieces' the shapes
 found: arming control, ▶ Print and ▶ Cut, an upload, GO, a knob turned and Picture ›
-Make are a person's, on the demo too.
+Make are a person's.
 
-Moving the rail in the page moves the box to that stage, and puts nothing on.
+Moving the rail in the page moves the box to that stage, and takes the page nowhere.
 
-## A page, shown
+## Saying how a stage is
 
-A page's stop gives its first words, its recorded steps where a test writes it, and
-**its page**, the page whole in a tab. It is shown only: a page's states are reached
-by its test, some by answers the test fakes, and the box does not put the page on
-them.
+- **✓ Works**: the stage does what it says.
+- **✗ Off**: something is not right, with what is off typed in the field beside the
+  buttons; Enter in the field is ✗ Off. Off with the field empty is refused, the box
+  saying so and staying on the stage.
 
-## Saying how a stop is
+Either is kept on the server, and the box goes to the next stage. A stage with a word
+on it wears it among the journey's stages, and the box says what was said and when.
 
-- **✓ As shown**: the page here does what the stop shows.
-- **✗ Off**: it does not, with what is off typed in the field beside the buttons;
-  Enter in the field is ✗ Off. Off with the field empty is refused, the box saying so
-  and staying on the stop.
-
-Either is kept on the server, and the box goes to the next stop. A stop answered wears
-its answer among the line's stops, and the box says what was said of it, when, and
-against which commit.
-
-An answer is a line of `tour/answers.jsonl` under the state folder
+A word is a line of `tour/feedback.jsonl` under the state folder
 (`APOTHECARY_STATE_DIR`, [configuration](configuration.md#apothecary_-variables)): the
-stop (`journey:make/slice`, `page:33-windows-kept-over-a-reload.md`), the answer, what is
-off, the moment, and the commit the server ran, with whether its tree had changes
-beside it. A line is never rewritten; the latest for a stop is its answer. Answers are
-kept beside the roadmap and never written into it: a ticked line is the claim, and
-what a person said is what was found.
+stage (`make/slice`), `works` or `off`, what is off, the moment, and the commit the
+server ran, with whether its tree had changes beside it. A line is never rewritten;
+the latest for a stage is its feedback.
 
-## Reading it back
+## The routes
 
-```sh
-uv run apothecary tour            # every line of the roadmap: its stops as shown, off, and not yet
-uv run apothecary tour --off      # only what is off, with what was said
-```
+- `GET /tour`: the journeys in their order, each stage with its words, what to try on
+  it and its latest feedback, and the commit the server runs. The box reads this.
+- `POST /tour/feedback`: one word, `{stage, verdict, note}`. A stage no journey has
+  is refused (404), and so is a verdict that is neither, or Off with nothing said
+  (422).
+- `GET /tour/feedback`: every word kept, oldest first.
 
-`GET /tour` is the whole tour as the box reads it: the roadmap's lines in order, each
-with its stops and each stop's answer, and any walkthrough page no line names.
-`POST /tour/answers` keeps one word (`{stop, verdict, note}`), refusing a stop the
-roadmap does not have (404), and a verdict that is neither or Off with nothing said
-(422).
+What the project plans, and what was found of each thing it claims, are not kept in
+this repository or read by it. The roadmap is the project's own, `project/ROADMAP.md`
+on apothecary's branch of the governance corpus, and `qmcp tour` reads it beside the
+two `GET` routes above: each claim, the journey or pages that show it, and what was
+said of each stage.
 
 ## The ring
 
-Panels › Windows › Tour is the box, then its buttons: Tour (open or closed), Back, As
-shown, Off (with what the box's field says), Next, Its page and Put here. It is seated
-after the views, so no cell before it moves.
+Panels › Windows › Tour is the box, then its buttons: Tour (open or closed), Back,
+Works, Off (with what the box's field says), Next, Its page (the first walkthrough
+page the stage names, in a tab) and Take me here. It is seated after the views, so no
+cell before it moves.
 
 ## What it does not do
 
-- It does not put the page on a page's stop, only on a journey's stage. What is left
-  as pages is what the page cannot stand on: a fresh clone installed and served, the
-  checks before a push, being depended on, an assembly stepped into, and a camera's
-  picture, which needs the browser's camera.
-- It does not put on a state a test reaches by faking an answer: a router in alarm, a
-  board not heard for ten minutes. Those are at their stage as recorded steps.
+- It takes the page to a journey's stage, and to nothing else. What no journey holds
+  is in the walkthrough: a fresh clone installed and served, the checks before a push,
+  being depended on, an assembly stepped into, and a camera's picture, which needs the
+  browser's camera.
+- It does not bring about a state only a fault brings: a router in alarm, a board not
+  heard for ten minutes. Those are at their stage as steps to read.
 - It does not arm, start, send or make anything.
 - The box stands over the world, so what a stage frames there can lie under it until
   the box is dragged or folded.
-- An answer is said against the commit the server runs. A page's pictures are of the
-  run that last wrote them, rewritten by the browser suite (`apothecary test all`).
-- Nothing leaves the machine: the answers are under the state folder, and the server
+- Nothing leaves the machine: the feedback is under the state folder, and the server
   answers this machine only.

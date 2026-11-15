@@ -1259,14 +1259,14 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [(c.label, c.action, c.cell) for c in tour.children] == [
         ("Tour", "tour:toggle", 8),
         ("Back", "tour:back", 6),
-        ("As shown", "tour:as-shown", 2),
+        ("Works", "tour:works", 2),
         ("Off", "tour:off", 4),
         ("Next", "tour:next", 9),
         ("Its page", "tour:page", 3),
-        ("Put here", "tour:put", 1),
+        ("Take me here", "tour:put", 1),
     ]
     assert address_of(root, "tour:toggle") == "4978"
-    assert address_of(root, "tour:as-shown") == "4972"
+    assert address_of(root, "tour:works") == "4972"
     assert carried_by("tour:off").name == "VIEWER"
     assert carried_by("panel:view:airgap").name == "VIEWER"
     assert carried_by("panel:world:toggle").name == "VIEWER"

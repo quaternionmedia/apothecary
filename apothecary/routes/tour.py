@@ -1,5 +1,5 @@
-"""The tour's routes: the roadmap's lines as stops, each with its answer, and a person's
-word on a stop kept (apothecary/tour.py)."""
+"""The tour's routes: the journeys a stage at a time, each stage with its feedback, and a
+person's word on a stage kept (apothecary/tour.py)."""
 
 from __future__ import annotations
 
@@ -11,24 +11,31 @@ from .. import tour
 router = APIRouter()
 
 
-class Answer(BaseModel):
-    stop: str
+class Feedback(BaseModel):
+    stage: str
     verdict: str
     note: str = ""
 
 
 @router.get("/tour")
 async def tour_document():
-    """The roadmap's lines in order, each with its stops -- a journey's stages, a
-    walkthrough page -- each stop's latest answer, and the commit the server runs."""
+    """The journeys in their order, each stage with its words, what to try on it and
+    the latest feedback on it, and the commit the server runs."""
     return tour.document()
 
 
-@router.post("/tour/answers", status_code=201)
-async def tour_answer(body: Answer):
-    """A person's word on one stop: ``as shown``, or ``off`` saying what is off."""
+@router.get("/tour/feedback")
+async def tour_feedback_kept():
+    """Every word kept, oldest first: a stage, ``works`` or ``off`` with what is off,
+    the moment, and the commit the server ran."""
+    return {"feedback": tour.said()}
+
+
+@router.post("/tour/feedback", status_code=201)
+async def tour_feedback(body: Feedback):
+    """A person's word on one stage: ``works``, or ``off`` saying what is off."""
     try:
-        return tour.say(body.stop, body.verdict, body.note)
+        return tour.say(body.stage, body.verdict, body.note)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e)) from None
     except tour.Refused as e:

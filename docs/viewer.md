@@ -440,7 +440,7 @@ what it made:
 A journey's view lays its windows out when it is entered. *Print a part*'s is also
 listed in ⊞ Windows › Views and has a cell on the ring's Panels › Windows, which is
 full; the others are entered from ⊞ Windows › Journeys and from the
-[tour](tour.md), which puts the page on each stage on the demo.
+[tour](tour.md), which takes the page to each stage.
 
 - **A step on the rail enters it**, the step already on included: its windows
   come in front of their stacks, the one it is about first, and a closed one
@@ -499,9 +499,8 @@ open again after a reload, where it was, and the world as wide as it was
 ([walkthrough 33](../walkthrough/33-windows-kept-over-a-reload.md)).
 
 The **Tour** (Tour in the header, or Panels › Windows › Tour) is not a window: it is
-a box over the page that takes what the roadmap claims a stop at a time, puts the
-page on a journey's stage, and keeps a person's word on each stop
-([the tour](tour.md)).
+a box over the page that takes the journeys a stage at a time, takes the page to
+each stage, and keeps a person's word on it ([the tour](tour.md)).
 
 ## The part editor
 

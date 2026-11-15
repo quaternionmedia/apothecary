@@ -1006,10 +1006,10 @@ def _models(toggle: Option) -> Option:
 
 def _tour() -> Option:
     """Panels › Windows › Tour: the tour's box over the page, then its buttons, which
-    the page hands to it (widgets/tour_popover.js): Back and Next through the roadmap's
-    stops, As shown and Off saying whether the page does what the stop shows (Off with
-    what the box's field says is off), Put here, which puts the page on the stage, and
-    Its page, the walkthrough page a stop is from, in a tab of its own."""
+    the page hands to it (widgets/tour_popover.js): Back and Next through the journeys'
+    stages, Works and Off saying how the stage is (Off with what the box's field says
+    is off), Take me here, which takes the page to the stage, and Its page, the first
+    walkthrough page the stage names, in a tab of its own."""
     return Option(
         id="panels:tour",
         label="Tour",
@@ -1017,11 +1017,11 @@ def _tour() -> Option:
         children=[
             Option(id="tour:toggle", label="Tour", action="tour:toggle"),
             Option(id="tour:back", label="Back", action="tour:back"),
-            Option(id="tour:as-shown", label="As shown", action="tour:as-shown"),
+            Option(id="tour:works", label="Works", action="tour:works"),
             Option(id="tour:off", label="Off", action="tour:off"),
             Option(id="tour:next", label="Next", action="tour:next"),
             Option(id="tour:page", label="Its page", action="tour:page"),
-            Option(id="tour:put", label="Put here", action="tour:put"),
+            Option(id="tour:put", label="Take me here", action="tour:put"),
         ],
     )
 
@@ -2071,7 +2071,7 @@ CARRIED_BY: Dict[str, Carries] = {
     # tells the server a person's word on the mark chosen there.
     "marks": Carries.VIEWER,
     # The Tour's verbs: the page carries each to its box (widgets/tour_popover.js), which
-    # keeps a person's word on the stop it shows (POST /tour/answers).
+    # keeps a person's word on the stage it shows (POST /tour/feedback).
     "tour": Carries.VIEWER,
     # A camera's verbs: which of this browser's cameras it is (and Allow, to name
     # them), live, a picture taken and made its view, and the gathering's report

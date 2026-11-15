@@ -22,10 +22,12 @@ board that runs a machine built, flashed and heard; a deck's knobs on the machin
 the site brought up a step at a time through the family's hub; the site watched; and
 a drawing photographed into pieces, which are parts to design.
 
-A stage is put on, for the tour and on the demo alone, by ``puts``: what the page does
-to stand where the stage is, each a verb the page already has and its subject, done
-only where it is not so already (the template's ``stagePut``). None arms, starts or
-sends anything: those are a person's.
+The tour takes the page to a stage by its ``puts``: what the page does to stand where
+the stage is, each a verb the page already has and its subject, done only where it is
+not so already (the template's ``stagePut``). None arms, starts or sends anything, and
+none supplies what is a person's to bring -- a board plugged in, a photograph taken:
+where that is missing the rest is left, the stage is entered all the same, and the
+page says what the stage needs.
 """
 
 from __future__ import annotations
@@ -51,19 +53,21 @@ class Step:
     # Whether entering it draws the path of the file the machine has chosen, as the
     # Machine view does.
     draws: bool = False
-    # The walkthrough steps whose tests check it, ``page.md#step``, and the pages that
+    # The walkthrough steps that go through it, ``page.md#step``, and the pages that
     # show it whole, ``page.md``: what the tour gives a person to try while on it
     # (apothecary/tour.py).
     shown_by: Tuple[str, ...] = ()
-    # What the tour does to stand on it, after its journey's ``staged_on``: (verb,
+    # What the tour does to take the page to it, after its journey's ``staged_on``: (verb,
     # subject) pairs, in order.
     puts: Tuple[Tuple[str, str], ...] = ()
 
 
 # What a stage is put on by, each as a person would do it (the template's stagePut):
 #   pin       a board on a port pinned to a piece, ``piece:port``, as Pin in the
-#             piece's Device section does: the demo's devkit stands unpinned
-#   machine   a piece's Machine opened, the piece chosen first
+#             piece's Device section does, where that port is listed: a piece with
+#             no board pinned and no such port says to pin one
+#   machine   a piece's Machine opened, the piece chosen first: with no board
+#             connected, as the site plans it
 #   part      a piece chosen
 #   file      the open Machine keeping a file for a part: sliced, or its toolpath
 #             written, where none is kept
@@ -105,8 +109,8 @@ class Journey:
     # to what, the title's verb and one thing (Design a part, Print a part).
     name: str = ""
     steps: Tuple[Step, ...] = ()
-    # What the tour puts every stage of it on, on the demo, before the stage's own
-    # ``puts``: the machine whose window it opens and the piece it chooses.
+    # What the tour does for every stage of it, before the stage's own ``puts``: the
+    # machine whose window it opens and the piece it chooses.
     staged_on: Tuple[Tuple[str, str], ...] = ()
     # Its view's cell under the ring's Panels › Windows, as a system's view's is, and
     # its entry in ⊞ Windows › Views. That ring is full, so only the first journey has

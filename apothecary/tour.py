@@ -1,16 +1,19 @@
-"""The tour: what the roadmap claims, a stop at a time, and what a person said of each.
+"""The tour: the page's journeys a stage at a time, and what a person said of each.
 
-``docs/ROADMAP.md`` orders it. Each of its lines names what shows it: a journey
-(journeys.py), whose stages are the tour's stops, or walkthrough pages, each one stop
-taken whole. A page a journey's stage names is that stage's, and is no stop of its own. A page a test writes (tests/e2e/doc_capture.py) is read back into its
-steps -- heading, words, the picture the run recorded after its assertions, what it
-showed -- which the tour gives as what to try at a stage, or as a page's own account.
-The tour has no words of its own.
+The journeys (journeys.py) order it, in the order of the chain the page manages. A
+stage's words are its own line on the rail, and what there is to try on it is what the
+stage names: steps of the walkthrough's pages, each read back here with its heading, its
+words and the picture kept with it, and pages that show the same thing whole. The tour
+has no words of its own.
 
-An answer is a person's word on one stop: ``as shown``, or ``off`` with what is off.
-Each is kept as a line of ``tour/answers.jsonl`` under the state folder, with the moment
-and the commit the server ran, and never rewritten: the latest for a stop is its answer.
-``apothecary tour`` reads them back. The box over the page is widgets/tour_popover.js.
+Feedback is a person's word on one stage: ``works``, or ``off`` with what is off. Each
+is kept as a line of ``tour/feedback.jsonl`` under the state folder, with the moment and
+the commit the server ran, and never rewritten: the latest for a stage is its feedback.
+The box over the page is widgets/tour_popover.js.
+
+What the project's roadmap claims of these journeys, and what was said of each claim, is
+not read here: the roadmap is project/ROADMAP.md on apothecary's branch of the governance
+corpus, and ``qmcp tour`` reads it beside ``GET /tour`` and ``GET /tour/feedback``.
 """
 
 from __future__ import annotations
@@ -24,11 +27,11 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from . import journeys
-from .docs_site import DOCS_ROOT, WALKTHROUGH_ROOT
+from .docs_site import WALKTHROUGH_ROOT
 from .projects.parts.skeleton import ROOT
 from .state_folder import private_folder, state_dir
 
-VERDICTS = ("as shown", "off")
+VERDICTS = ("works", "off")
 
 TITLE = re.compile(r"^# (?:(\d+) — )?(.+)$")
 WRITTEN_BY = re.compile(r"^Written by `([^`]+)`")
@@ -48,11 +51,11 @@ class Step:
 
 
 @dataclass(frozen=True)
-class Stop:
+class Page:
     page: str  # its file name under walkthrough/
     number: str
     title: str
-    written_by: Optional[str]  # the test module that writes it, where one does
+    written_by: Optional[str]  # the module that writes it, where one does
     intro: str
     steps: Tuple[Step, ...]
 
@@ -69,8 +72,8 @@ def _paragraph(lines: List[str], start: int) -> Tuple[str, int]:
     return " ".join(out), i
 
 
-def read_stop(path: Path) -> Stop:
-    """A walkthrough page as the tour's stop."""
+def read_page(path: Path) -> Page:
+    """A walkthrough page as the tour reads it: its title, its first words, its steps."""
     lines = path.read_text(encoding="utf-8").splitlines()
     number = path.name.split("-", 1)[0]
     title = path.stem
@@ -112,82 +115,39 @@ def read_stop(path: Path) -> Stop:
                 shown = "\n".join(block)
             i += 1
         steps.append(Step(index, heading, words, picture, shown))
-    return Stop(path.name, number, title, written, intro, tuple(steps))
+    return Page(path.name, number, title, written, intro, tuple(steps))
 
 
-def stops(root: Path = WALKTHROUGH_ROOT) -> List[Stop]:
-    """Every walkthrough page, in order, as a stop."""
-    return [read_stop(p) for p in sorted(root.glob("[0-9][0-9]-*.md"))]
+def pages(root: Path = WALKTHROUGH_ROOT) -> List[Page]:
+    """Every walkthrough page, in order."""
+    return [read_page(p) for p in sorted(root.glob("[0-9][0-9]-*.md"))]
 
 
-def stop(page: str, root: Path = WALKTHROUGH_ROOT) -> Optional[Stop]:
-    return next((s for s in stops(root) if s.page == page), None)
+def page(name: str, root: Path = WALKTHROUGH_ROOT) -> Optional[Page]:
+    path = root / name
+    return read_page(path) if path.is_file() else None
 
 
-# --- the roadmap ------------------------------------------------------------------------
-
-ROADMAP = DOCS_ROOT / "ROADMAP.md"
-LINE = re.compile(r"^- \[([ xX])\] (.+)$")
-JOURNEY = re.compile(r"`journey:([a-z0-9-]+)`")
-PAGE = re.compile(r"\]\(\.\./walkthrough/([0-9][0-9]-[^)\s#]+\.md)\)")
-NAMES = re.compile(r"\s*(?:`journey:[a-z0-9-]+`|\[[^\]]*\]\([^)]*\))[,\s]*")
-
-
-@dataclass(frozen=True)
-class Line:
-    group: str  # the heading it is under
-    text: str  # the claim, without what it names
-    ticked: bool
-    journey: Optional[str]
-    pages: Tuple[str, ...]
-
-
-def roadmap(path: Path = ROADMAP) -> List[Line]:
-    """The roadmap's lines, in its order."""
-    out: List[Line] = []
-    group = ""
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        if raw.startswith("## "):
-            group = raw[3:].strip()
-            continue
-        found = LINE.match(raw)
-        if not found:
-            continue
-        rest = found.group(2)
-        journey = JOURNEY.search(rest)
-        out.append(
-            Line(
-                group,
-                NAMES.sub(" ", rest).strip(),
-                found.group(1) != " ",
-                journey.group(1) if journey else None,
-                tuple(PAGE.findall(rest)),
-            )
-        )
-    return out
+# --- the stages -------------------------------------------------------------------------
 
 
 def stage_id(journey: str, stage: str) -> str:
-    return f"journey:{journey}/{stage}"
-
-
-def page_id(page: str) -> str:
-    return f"page:{page}"
+    return f"{journey}/{stage}"
 
 
 def _tries(shown_by: Tuple[str, ...], root: Path) -> List[dict]:
-    """What a stage names, as what to try on it: a recorded step, or a page whole
+    """What a stage names, as what to try on it: a step of a page, or a page whole
     (``index`` None), which says how the same thing goes at the command line."""
     out = []
     for ref in shown_by:
-        page, _, number = ref.partition("#")
-        here = stop(page, root)
+        name, _, number = ref.partition("#")
+        here = page(name, root)
         if here is None:
             continue
         if not number:
             out.append(
                 {
-                    "page": page,
+                    "page": name,
                     "index": None,
                     "heading": f"{here.number} — {here.title}",
                     "words": here.intro,
@@ -198,69 +158,19 @@ def _tries(shown_by: Tuple[str, ...], root: Path) -> List[dict]:
             continue
         step = next((s for s in here.steps if str(s.index) == number), None)
         if step:
-            out.append({"page": page, **asdict(step)})
+            out.append({"page": name, **asdict(step)})
     return out
 
 
-def stage_pages(journey: journeys.Journey) -> List[str]:
-    """The walkthrough pages a journey's stages name, each once, in their order."""
-    out: List[str] = []
-    for step in journey.steps:
-        for ref in step.shown_by:
-            page = ref.partition("#")[0]
-            if page not in out:
-                out.append(page)
-    return out
+def stage_ids() -> List[str]:
+    return [stage_id(j.id, s.id) for j in journeys.JOURNEYS for s in j.steps]
 
 
-def _line_stops(line: Line, root: Path) -> List[dict]:
-    """A line's stops: its journey's stages, then its pages, each one stop."""
-    out: List[dict] = []
-    journey = next((j for j in journeys.JOURNEYS if j.id == line.journey), None)
-    if journey:
-        for s in journey.steps:
-            out.append(
-                {
-                    "id": stage_id(journey.id, s.id),
-                    "kind": "stage",
-                    "journey": journey.id,
-                    "journey_name": journey.name,
-                    "stage": s.id,
-                    "title": s.label,
-                    "words": s.hint,
-                    "tries": _tries(s.shown_by, root),
-                    "put_on": True,
-                }
-            )
-    for page in line.pages:
-        here = stop(page, root)
-        if here is None:
-            continue
-        out.append(
-            {
-                "id": page_id(page),
-                "kind": "page",
-                "page": page,
-                "number": here.number,
-                "title": here.title,
-                "words": here.intro,
-                "written_by": here.written_by,
-                "tries": [{"page": page, **asdict(s)} for s in here.steps],
-                "put_on": False,
-            }
-        )
-    return out
+# --- feedback ---------------------------------------------------------------------------
 
 
-def stop_ids(path: Path = ROADMAP, root: Path = WALKTHROUGH_ROOT) -> List[str]:
-    return [s["id"] for line in roadmap(path) for s in _line_stops(line, root)]
-
-
-# --- answers ----------------------------------------------------------------------------
-
-
-def answers_path() -> Path:
-    return state_dir() / "tour" / "answers.jsonl"
+def feedback_path() -> Path:
+    return state_dir() / "tour" / "feedback.jsonl"
 
 
 def _git(*args: str) -> Optional[str]:
@@ -281,26 +191,26 @@ def running() -> dict:
 
 
 class Refused(ValueError):
-    """An answer the tour does not keep, saying why."""
+    """Feedback the tour does not keep, saying why."""
 
 
-def say(stop_id: str, verdict: str, note: str = "") -> dict:
-    """Keep a person's word on the stop ``stop_id``."""
-    if stop_id not in stop_ids():
-        raise LookupError(f"the roadmap has no stop {stop_id}")
+def say(stage: str, verdict: str, note: str = "") -> dict:
+    """Keep a person's word on the stage ``stage``, ``journey/stage``."""
+    if stage not in stage_ids():
+        raise LookupError(f"no journey has a stage {stage}")
     if verdict not in VERDICTS:
-        raise Refused(f"an answer is one of {', '.join(VERDICTS)}, not {verdict!r}")
+        raise Refused(f"feedback is one of {', '.join(VERDICTS)}, not {verdict!r}")
     note = note.strip()
     if verdict == "off" and not note:
         raise Refused("say what is off")
     record = {
-        "stop": stop_id,
+        "stage": stage,
         "verdict": verdict,
         "note": note,
         "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         **running(),
     }
-    path = answers_path()
+    path = feedback_path()
     private_folder(path.parent)
     with path.open("a", encoding="utf-8") as out:
         out.write(json.dumps(record) + "\n")
@@ -308,8 +218,8 @@ def say(stop_id: str, verdict: str, note: str = "") -> dict:
 
 
 def said(path: Optional[Path] = None) -> List[dict]:
-    """Every answer kept, oldest first; a line that does not read is left out."""
-    path = path or answers_path()
+    """Every word kept, oldest first; a line that does not read is left out."""
+    path = path or feedback_path()
     if not path.is_file():
         return []
     out = []
@@ -318,37 +228,39 @@ def said(path: Optional[Path] = None) -> List[dict]:
             record = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if isinstance(record, dict) and {"stop", "verdict"} <= set(record):
+        if isinstance(record, dict) and {"stage", "verdict"} <= set(record):
             out.append(record)
     return out
 
 
-def answers(path: Optional[Path] = None) -> Dict[str, dict]:
-    """Each stop's answer: the latest word on it."""
-    return {record["stop"]: record for record in said(path)}
+def feedback(path: Optional[Path] = None) -> Dict[str, dict]:
+    """Each stage's feedback: the latest word on it."""
+    return {record["stage"]: record for record in said(path)}
 
 
-def document(path: Path = ROADMAP, root: Path = WALKTHROUGH_ROOT) -> dict:
-    """The tour as the box reads it: the roadmap's lines in order, each with its stops
-    and each stop's answer, the pages no line names, and the commit the server runs."""
-    given = answers()
-    lines = []
-    named = set()
-    for line in roadmap(path):
-        stops_ = _line_stops(line, root)
-        for s in stops_:
-            s["answer"] = given.get(s["id"])
-        named.update(line.pages)
-        if line.journey in {j.id for j in journeys.JOURNEYS}:
-            named.update(stage_pages(journeys.by_id(line.journey)))
-        lines.append(
+def document(root: Path = WALKTHROUGH_ROOT) -> dict:
+    """The tour as the box reads it: the journeys in their order, each stage with its
+    words, what to try on it and its feedback, and the commit the server runs."""
+    given = feedback()
+    return {
+        **running(),
+        "journeys": [
             {
-                "group": line.group,
-                "text": line.text,
-                "ticked": line.ticked,
-                "shown_by_nothing": not stops_,
-                "stops": stops_,
+                "id": journey.id,
+                "name": journey.name,
+                "stages": [
+                    {
+                        "id": stage_id(journey.id, s.id),
+                        "journey": journey.id,
+                        "stage": s.id,
+                        "title": s.label,
+                        "words": s.hint,
+                        "tries": _tries(s.shown_by, root),
+                        "feedback": given.get(stage_id(journey.id, s.id)),
+                    }
+                    for s in journey.steps
+                ],
             }
-        )
-    unnamed = [s.page for s in stops(root) if s.page not in named]
-    return {**running(), "lines": lines, "not_on_the_roadmap": unnamed}
+            for journey in journeys.JOURNEYS
+        ],
+    }

@@ -1,15 +1,15 @@
-"""Every stage of every journey, put on by the tour: the chain the page manages, taken a
-stage at a time on the demo as a person starts it. A part designed; made on the printer;
-cut on the router; the board a machine runs on built for and heard; a deck's knobs on the
-machines; the site brought up through the family's hub; the site watched; and a drawing
-photographed into shapes. At each stage the tour's box says what the page did to stand
-there, and the page stands there: its window in front, its subject chosen, what the
-stage needs made. Walkthrough page 39 is what it writes.
+"""Every stage of every journey, the page taken there by the tour: the chain the page
+manages, a stage at a time, on simulated machines as a person starts them. A part
+designed; made on the printer; cut on the router; the board a machine runs on built for
+and heard; a deck's knobs on the machines; the site brought up through the family's hub;
+the site watched; and a drawing photographed into shapes. At each stage the tour's box
+says what the page did to stand there, and the page stands there: its window in front,
+its subject chosen, what the stage needs made. Walkthrough page 39 is what it writes.
 
-Runs against `python -m apothecary serve --demo` as a subprocess (demo_process.py), the
-one place the tour puts a stage on, with the scripted OrcaSlicer its slicer. Nothing is
-armed, started or made into a piece by the tour, and the test says so at its end, with
-the serial guard's record empty.
+Runs against `python -m apothecary serve --demo` as a subprocess (demo_process.py),
+where every machine a stage is about is there to stand on, with the scripted OrcaSlicer
+its slicer. Nothing is armed, started or made into a piece by the tour, and the test
+says so at its end, with the serial guard's record empty.
 """
 
 from __future__ import annotations
@@ -28,18 +28,16 @@ from playwright.sync_api import expect
 from slicer_helpers import write_fake_orcaslicer
 from viewer_ready import settled
 
-from apothecary import journeys, tour
+from apothecary import journeys
 from apothecary.demo import DECK, DEVKIT, PRINTER, ROUTER
 
 BOX = "#tour-pop"
-COMMIT = r"against (?:[0-9a-f]{8}|an unknown commit)(?: with changes)?"
-STOPS = r"(?<=\d/)\d+"
+STAGES = r"(?<=\d/)\d+"
 # What changes on every run whatever the page does: the moments, in the box, on the
 # status line and in each window that says when it last heard its subject.
 CHANGING = (
     (BOX, MOMENT),
-    (BOX, COMMIT),
-    (BOX, STOPS),
+    (BOX, STAGES),
     ("#status", MOMENT),
     *(
         (f".panel[data-panel='{pid}']", MOMENT)
@@ -83,7 +81,7 @@ PICTURED = {
     "board": (
         "hear",
         "Flash a board: its sketch on the Bench, its Flashing, what it says",
-        "A machine runs on a board, and a board on firmware. The demo's devkit stands "
+        "A machine runs on a board, and a board on firmware. The simulated devkit stands "
         "on its port unpinned, so the page pins it to esp32_blink, as Pin in the piece's "
         "Device section does, and opens its Machine: Pin's stage is Selected, where the "
         "site says which device is which. The Bench is opened on esp32_blink's sketch, "
@@ -120,7 +118,7 @@ PICTURED = {
         "marks",
         "Read a drawing: the whiteboard photographed, squared, read",
         "Last, what is seen becomes parts, and the chain closes. The whiteboard is "
-        "chosen on the garage's wall; Picture pins the demo's photograph of it there, "
+        "chosen on the garage's wall; Picture pins the folder's photograph of it there, "
         "as its ring's Picture › Folder does, squared and laid in front; Shapes finds "
         "its closed strokes; Marks sorts each mark; Models is where an image model is "
         "asked and never trusted; Pieces is where Picture › Make stands each shape up, "
@@ -131,12 +129,13 @@ PICTURED = {
 
 
 def _words(text: str) -> str:
-    return re.sub(STOPS, "…", re.sub(COMMIT, "against …", re.sub(MOMENT, "…", text)))
+    return re.sub(STAGES, "…", re.sub(MOMENT, "…", text))
 
 
 @pytest.fixture(scope="module")
 def demo(base_url, tmp_path_factory):
-    """The demo as a person starts it, its folders temp ones, the serial guard on."""
+    """The simulated machines as a person starts them, their folders temp ones, the
+    serial guard on."""
     folder = tmp_path_factory.mktemp("chain-demo")
     env = guarded_env(folder)
     env["APOTHECARY_ORCASLICER"] = str(write_fake_orcaslicer(folder / "their-orcaslicer"))
@@ -146,14 +145,14 @@ def demo(base_url, tmp_path_factory):
     stop(proc)
 
 
-def _put_on(page, step: str) -> None:
-    """The box done putting the page on ``step``, and the rail there."""
+def _taken_to(page, step: str) -> None:
+    """The box done taking the page to ``step``, and the rail there."""
     expect(page.locator(BOX)).not_to_have_class(re.compile(r"\bbusy\b"), timeout=90000)
     try:
         page.wait_for_function(f"(s) => ({STEP_ON})() === s", arg=step, timeout=15000)
     except PlaywrightTimeout:
         said = page.locator(f"{BOX} .tour-pop-did li").all_text_contents()
-        pytest.fail(f"the page was not put on {step}: the box says {said}")
+        pytest.fail(f"the page was not taken to {step}: the box says {said}")
 
 
 def _shown(page, pid: str) -> None:
@@ -290,38 +289,39 @@ def test_every_stage_has_what_stands_there_written_down():
 
 
 @pytest.mark.e2e
-def test_the_tour_puts_the_page_on_every_stage_of_the_chain(page, demo, walkthrough):
+def test_the_tour_takes_the_page_to_every_stage_of_the_chain(page, demo, walkthrough):
     url = demo["url"]
     story = walkthrough(
         ordinal="39",
         slug="the-chain-a-stage-at-a-time",
         title="The chain, a stage at a time",
         intro=(
-            "Every journey the page has, in the order of the chain it manages, each put "
-            "on a stage at a time by the [tour](34-the-tour.md): a part designed, made "
+            "Every journey the page has, in the order of the chain it manages, the page "
+            "taken to each stage by the [tour](34-the-tour.md): a part designed, made "
             "on the printer, cut on the router; the board a machine runs on; a deck's "
             "knobs on the machines; the site brought up and watched; and a drawing "
             "photographed into shapes, which stand up as parts to design. Each journey "
             "hands the next what it made. Under each is what the tour's box said the "
             "page did to stand on each stage, then what the page said of it. "
-            "[docs/tour.md](../docs/tour.md) is the reference, and "
-            "[docs/ROADMAP.md](../docs/ROADMAP.md) the order."
+            "[docs/tour.md](../docs/tour.md) is the reference."
         ),
         runtime=(
             "It drives a real browser against `apothecary serve --demo`, started as a "
             "person starts it: a simulated printer, router, devkit and Stream Deck, the "
             "scripted firmware tools, and a script that answers as OrcaSlicer's command "
-            "line does. Every Python process of the demo refuses a real serial port."
+            "line does. Every Python process of that server refuses a real serial port."
         ),
         does_not_show=[
             "**Anything armed, started, sent or made.** A stage is where a person does "
             "those: ▶ Print, ▶ Cut, Upload, GO, a knob turned, Picture › Make. Each is "
             "its own page's, named at its stage in the tour's box.",
-            "**A server that is not the demo**, where the tour puts nothing on.",
-            "**A camera's picture.** A browser's camera cannot be put on a stage; pages "
-            "01 to 03 are read.",
-            "**What changes on every run.** Moments and the commit the server runs are "
-            "blanked in the pictures and left out of the words.",
+            "**A machine that is not there.** Where a stage's board is not pinned or "
+            "not connected the page stops short and says what the stage needs; "
+            "[page 34](34-the-tour.md) shows it.",
+            "**A camera's picture.** A browser's camera is a person's to point; pages "
+            "01 to 03 go through it.",
+            "**What changes on every run.** Moments are blanked in the pictures and "
+            "left out of the words.",
         ],
         browser_suite_only=True,
     )
@@ -333,26 +333,21 @@ def test_the_tour_puts_the_page_on_every_stage_of_the_chain(page, demo, walkthro
     open_garage(page, url)
     page.locator("#tour-pop-open").click()
     expect(box).to_be_visible()
-    lines = httpx.get(f"{url}/tour", timeout=15.0).json()["lines"]
+    served = httpx.get(f"{url}/tour", timeout=15.0).json()["journeys"]
+    assert [j["id"] for j in served] == [j.id for j in journeys.JOURNEYS]
 
-    for journey in journeys.JOURNEYS:
-        at = next(
-            i
-            for i, line in enumerate(lines)
-            if line["stops"]
-            and line["stops"][0]["id"] == tour.stage_id(journey.id, journey.steps[0].id)
-        )
+    for at, journey in enumerate(journeys.JOURNEYS):
         said_of = []
         done = []
         for n, step in enumerate(journey.steps):
-            # The journey's line chosen puts its first stage on; Next › each one after.
+            # The journey chosen takes the page to its first stage; Next › each one after.
             if n == 0:
-                box.locator(".tour-pop-lines").select_option(value=str(at))
+                box.locator(".tour-pop-journeys").select_option(value=str(at))
             else:
                 box.get_by_role("button", name="Next", exact=True).click()
             expect(title).to_have_text(f"{journey.name} · {n + 1}. {step.label}")
-            _put_on(page, step.id)
-            expect(box.locator(".tour-pop-did.refused")).to_have_count(0)
+            _taken_to(page, step.id)
+            expect(box.locator(".tour-pop-needs")).to_be_empty()
             _shown(page, step.forward[0])
             STANDS[journey.id, step.id](page)
             said = [_words(t) for t in did.all_text_contents()]
@@ -365,28 +360,25 @@ def test_the_tour_puts_the_page_on_every_stage_of_the_chain(page, demo, walkthro
         for expected in DID[journey.id]:
             assert any(expected in d for d in done), (journey.id, expected, done)
 
-        # Back on the stage its picture is of: chosen among the line's stops, and put on
-        # again with nothing left to do but what its windows need.
+        # Back on the stage its picture is of: chosen among the journey's stages, the page
+        # taken there again with nothing left to do but what its windows need.
         stage, heading, words = PICTURED[journey.id]
         label = next(s.label for s in journey.steps if s.id == stage)
-        box.locator(".tour-pop-stops button", has_text=label).click()
-        _put_on(page, stage)
+        box.locator(".tour-pop-stages button", has_text=label).click()
+        _taken_to(page, stage)
         STANDS[journey.id, stage](page)
         page.mouse.move(640, 700)
         settled(page)
         story.shows(heading, words, shown="\n".join(said_of), blank=CHANGING)
 
-    # Nothing armed, nothing started, no piece made, no answer given, no real port touched.
+    # Nothing armed, nothing started, no piece made, no word given, no real port touched.
     with httpx.Client(base_url=url, timeout=15.0) as http:
         assert http.get("/firmware/printers/armed").json() == {"armed": {}}
         assert (
             http.get("/firmware/printers/print", params={"port": PRINTER}).json()["running"]
             is False
         )
-        answered = [
-            s for line in http.get("/tour").json()["lines"] for s in line["stops"] if s["answer"]
-        ]
-        assert answered == []
+        assert http.get("/tour/feedback").json() == {"feedback": []}
     assert _drawn(page).get("made") == {}
     assert errors == []
     assert not demo["touched"].exists() or demo["touched"].read_text() == ""

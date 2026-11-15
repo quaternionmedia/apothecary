@@ -74,7 +74,7 @@
             background: #404040; color: #e0e0e0; text-decoration: none;
         }
         .toolbar .docs-link:hover { background: #505050; }
-        /* apothecary serve --demo: one quiet line above the header. */
+        /* Simulated machines: one quiet line above the header. */
         .demo-banner {
             padding: 0.2rem 0.75rem; font-size: 0.78rem; color: #9fb0c4; background: #1b2028;
             border-bottom: 1px solid #2a2f38; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -724,7 +724,7 @@
 <body>
     <div class="app-container">
         {% if demo %}
-        <div id="demo-banner" class="demo-banner" role="note" title="apothecary serve --demo: printer_1's mainboard is pinned to a simulated Ender, cnc_router's controller to a simulated GRBL router, an ESP32 devkit is simulated, a simulated lighting console sweeps the theatre's rig, arduino-cli, cargo and espflash are scripted, and no real serial port is opened. Its state is {{ demo }}, kept between runs; your own ~/.apothecary and pins are not touched.">The demo: a simulated printer, router, ESP32 and lighting console, scripted firmware tools, its own state in {{ demo }}. To leave it, stop the server and run <code>apothecary serve</code> without --demo.</div>
+        <div id="demo-banner" class="demo-banner" role="note" title="No machine here is real: printer_1's mainboard is pinned to a simulated Ender, cnc_router's controller to a simulated GRBL router, an ESP32 devkit is simulated, a simulated lighting console sweeps the theatre's rig, arduino-cli, cargo and espflash are scripted, and no real serial port is opened. Its state is {{ demo }}, kept between runs; your own ~/.apothecary and pins are not touched.">Simulated machines: a printer, a router, an ESP32 and a lighting console, with scripted firmware tools and state of their own in {{ demo }}. For the real ones, stop the server and run <code>apothecary serve</code>.</div>
         {% endif %}
         <div class="toolbar">
             <nav id="view-banner" class="view-banner" aria-label="Where you are">
@@ -770,8 +770,8 @@
                 <div class="view-menu-body windows-menu-body"></div>
             </details>
             <!-- Beside Docs: the two ways a person is shown the app. -->
-            <button type="button" id="tour-pop-open" aria-pressed="false" title="The tour: what the roadmap claims, a stop at a time, the page put on each stage, and your word kept on it">Tour</button>
-            <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, each of its pages a run of the tests (Panels › Docs on the ring)">Docs</a>
+            <button type="button" id="tour-pop-open" aria-pressed="false" title="The tour: each journey a stage at a time, the page taken to each stage, and your word kept on it">Tour</button>
+            <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, which goes through the app a page at a time (Panels › Docs on the ring)">Docs</a>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or Ctrl+right-click a piece); Shift+M opens the canvas ring. Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
             <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to bring Problems, beside Site, in front">Layout valid</span>
         </div>
@@ -885,8 +885,6 @@
         import { mountFamily } from '/static/widgets/family.js';
         import { mountDeck } from '/static/widgets/deck.js';
         import { mountTourPopover } from '/static/widgets/tour_popover.js';
-        // Whether this is `apothecary serve --demo`: the one place the tour puts a stage on.
-        const IS_DEMO = {{ (true if demo else false) | tojson }};
         import { mountPictureList } from '/static/widgets/picture_list.js';
         import { mountModels } from '/static/widgets/models.js';
         import { mountMarks } from '/static/widgets/marks.js';
@@ -1924,12 +1922,11 @@
                     else if (b.dataset.next) this.enterStep(b.dataset.next, 'Next');
                     else if (b.classList.contains('journey-leave')) this.leaveJourney();
                 });
-                // The tour (widgets/tour_popover.js, apothecary/tour.py): the roadmap's stops
+                // The tour (widgets/tour_popover.js, apothecary/tour.py): the journeys' stages
                 // in a box over the page, opened from the header or the ring.
                 const tourOpen = document.getElementById('tour-pop-open');
                 this.tourPop = mountTourPopover({
                     base: BASE_URL,
-                    demo: IS_DEMO,
                     stage: (journey, stage) => this.stageJourney(journey, stage),
                     onShown: (open) => tourOpen.setAttribute('aria-pressed', String(open)),
                 });
@@ -7917,11 +7914,14 @@
                 else this.setStatus(`${head}: ${step.hint}`, 'success');
                 return true;
             }
-            // A stage of a journey put on for the tour (widgets/tour_popover.js), on the
-            // demo: what its journey is staged on and then its own puts done, each as a
-            // person would do it and only where it is not so already (stagePut), the
-            // journey's view laid out and the step entered. It says what it did, then
-            // what the page said of the step. Nothing here arms, starts or sends.
+            // The page taken to a stage of a journey for the tour (widgets/tour_popover.js):
+            // what its journey is staged on and then its own puts done, each as a person
+            // would do it and only where it is not so already (stagePut), the journey's
+            // view laid out and the step entered. It says what it did, then what the
+            // page said of the step. Nothing here arms, starts or sends, and nothing
+            // stands in for what a person brings: where that is missing the rest is
+            // left, the step is entered all the same, so a person stands where it is
+            // done, and what the stage needs is said (`refused`).
             async stageJourney(id, stepId) {
                 const journey = JOURNEYS.find((j) => j.id === id);
                 if (!journey) return { did: [], said: `There is no journey ${id}`, refused: true };
@@ -7935,9 +7935,10 @@
                     this.closeMachine();
                     did.push(`${who}'s Machine closed: ${journey.name} has no machine in it`);
                 }
+                let needs = null;
                 for (const [verb, subject] of [...(journey.staged_on || []), ...(step.puts || [])]) {
                     const done = await this.stagePut(verb, subject);
-                    if (done.refused) return { did, said: done.refused, refused: true };
+                    if (done.refused) { needs = done.refused; break; }
                     if (done.did) did.push(done.did);
                 }
                 if (this.journey?.id !== id) {
@@ -7947,6 +7948,7 @@
                     await this.enterStep(step.id, 'the tour');
                 }
                 const status = document.getElementById('status');
+                if (needs) return { did, said: needs, refused: true };
                 return { did, said: status.textContent, refused: status.classList.contains('error') };
             }
             // One thing a stage is put on by (journeys.py's PUTS): `{ did }` saying what
@@ -7957,7 +7959,7 @@
                     while (Date.now() < end) { if (test()) return true; await new Promise((r) => setTimeout(r, 150)); }
                     return Boolean(test());
                 };
-                const here = (piece) => (this.renderNodeByKey[piece] ? null : `${piece} is not in ${this.siteName}: the tour stages this on it`);
+                const here = (piece) => (this.renderNodeByKey[piece] ? null : `${piece} is not in ${this.siteName}: this stage is about it`);
                 const choose = async (piece) => {
                     if (this.selectedName === piece) return false;
                     this.selectPath(piece);
@@ -7974,6 +7976,9 @@
                     await until(() => this.bindingsLoaded, 15000);
                     if (this.bindingFor(piece).row?.device?.port) return {};
                     await choose(piece);
+                    // Which board is this piece's is a person's to say: only a port
+                    // that stands for it by name is pinned here.
+                    if (!this.siteDevices.some((d) => d.port === port)) return { refused: this.noMachine(piece) };
                     await this.setNodeDevice(piece, port);
                     if (!(await until(() => this.bindingFor(piece).row?.device?.port, 10000))) {
                         return { refused: `${port} was not pinned to ${piece}: ${document.getElementById('status').textContent}` };
@@ -7984,13 +7989,17 @@
                     if (here(subject)) return { refused: here(subject) };
                     await until(() => this.bindingsLoaded, 15000);
                     const port = this.bindingFor(subject).row?.device?.port;
-                    if (this.machine && port && this.machine.port === port && this.machine.handle?.kind()) return {};
+                    // Its board connected, its Machine; not connected, its Machine as the
+                    // site plans it. Its sections are its kind's: waited for, so a
+                    // stage's windows are there.
+                    const open = () => this.machine && this.machine.handle?.kind()
+                        && (port ? this.machine.port === port : this.machine.plan && this.machine.path === subject);
+                    if (open()) return {};
                     await choose(subject);
-                    // Its sections are its kind's: waited for, so a stage's windows are there.
-                    if (!this.openMachine(subject) || !(await until(() => this.machine && this.machine.port === port && this.machine.handle?.kind(), 15000))) {
-                        return { refused: `${subject}'s Machine did not open: ${document.getElementById('status').textContent}` };
+                    if (!this.openMachine(subject) || !(await until(open, 15000))) {
+                        return { refused: port ? `${subject}'s Machine did not open: ${document.getElementById('status').textContent}` : this.noMachine(subject) };
                     }
-                    return { did: `${subject}'s Machine opened` };
+                    return { did: port ? `${subject}'s Machine opened` : `${subject}'s Machine opened with no board connected: what it makes is planned there` };
                 }
                 if (verb === 'file') {
                     const machine = this.machine, print = machine?.handle?.print;
@@ -8047,7 +8056,8 @@
                     };
                     if (verb === 'picture') {
                         if (drawn()) return framed({});
-                        await this.pictures.pinPicture(host, what);
+                        try { await this.pictures.pinPicture(host, what); }
+                        catch (e) { return { refused: `No picture lies at ${host} yet: its Picture › Add or Folder puts one there (${e.message || e})` }; }
                         if (!(await until(() => drawn(), 30000))) return { refused: `${what} was not pinned at ${host}: ${document.getElementById('status').textContent}` };
                         return framed({ did: `${what} pinned at ${host}, as its Picture › Folder does` });
                     }
@@ -8057,7 +8067,7 @@
                     if (!(await until(() => drawn()?.shapes?.length, 30000))) return { refused: `No shape was found at ${host}: ${document.getElementById('status').textContent}` };
                     return framed({ did: `${drawn().shapes.length} shapes found at ${host}, as its Picture › Find shapes › ${what} does` });
                 }
-                return { refused: `The tour has no way to ${verb} ${subject}` };
+                return { refused: `The page has no way to ${verb} ${subject}` };
             }
             // The journey left: the rail goes, the windows stay where they are.
             leaveJourney() {

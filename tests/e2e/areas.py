@@ -283,7 +283,6 @@ AREAS = {
             "apothecary/static/widgets/tour_popover.*",
             "apothecary/journeys.py",
             "apothecary/demo.py",
-            "docs/ROADMAP.md",
         ),
         "tests": ("test_tour.py", "test_the_chain.py"),
     },

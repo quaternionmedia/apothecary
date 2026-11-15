@@ -9,9 +9,9 @@ opening, the notes under it and the list of what the page does not show
 are the test's fixed words. Editing the page by hand is editing the output
 of a program: the next run puts it back.
 
-Every journey the page has, in the order of the chain it manages, each put on a stage at a time by the [tour](34-the-tour.md): a part designed, made on the printer, cut on the router; the board a machine runs on; a deck's knobs on the machines; the site brought up and watched; and a drawing photographed into shapes, which stand up as parts to design. Each journey hands the next what it made. Under each is what the tour's box said the page did to stand on each stage, then what the page said of it. [docs/tour.md](../docs/tour.md) is the reference, and [docs/ROADMAP.md](../docs/ROADMAP.md) the order.
+Every journey the page has, in the order of the chain it manages, the page taken to each stage by the [tour](34-the-tour.md): a part designed, made on the printer, cut on the router; the board a machine runs on; a deck's knobs on the machines; the site brought up and watched; and a drawing photographed into shapes, which stand up as parts to design. Each journey hands the next what it made. Under each is what the tour's box said the page did to stand on each stage, then what the page said of it. [docs/tour.md](../docs/tour.md) is the reference.
 
-**Runtime-bound.** It drives a real browser against `apothecary serve --demo`, started as a person starts it: a simulated printer, router, devkit and Stream Deck, the scripted firmware tools, and a script that answers as OrcaSlicer's command line does. Every Python process of the demo refuses a real serial port.
+**Runtime-bound.** It drives a real browser against `apothecary serve --demo`, started as a person starts it: a simulated printer, router, devkit and Stream Deck, the scripted firmware tools, and a script that answers as OrcaSlicer's command line does. Every Python process of that server refuses a real serial port.
 
 Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build from an STL it built; a part it cannot build is drawn from an STL already there, or as its box.
 
@@ -76,7 +76,7 @@ The same path through another machine. cnc_router's Machine is opened in printer
 
 ## 4. Flash a board: its sketch on the Bench, its Flashing, what it says
 
-A machine runs on a board, and a board on firmware. The demo's devkit stands on its port unpinned, so the page pins it to esp32_blink, as Pin in the piece's Device section does, and opens its Machine: Pin's stage is Selected, where the site says which device is which. The Bench is opened on esp32_blink's sketch, as its ring's Device › Flash sketch does: each build of it with its toolchain. Flash's stage is the board's Flashing window, Hear's its Sketch and its Log. The picture is Hear. Compile, upload and Listen are left to the person.
+A machine runs on a board, and a board on firmware. The simulated devkit stands on its port unpinned, so the page pins it to esp32_blink, as Pin in the piece's Device section does, and opens its Machine: Pin's stage is Selected, where the site says which device is which. The Bench is opened on esp32_blink's sketch, as its ring's Device › Flash sketch does: each build of it with its toolchain. Flash's stage is the board's Flashing window, Hear's its Sketch and its Log. The picture is Hear. Compile, upload and Listen are left to the person.
 
 ![Flash a board: its sketch on the Bench, its Flashing, what it says](screenshots/39-04-flash-a-board-its-sketch-on-the-bench-its-flashing.png)
 
@@ -134,7 +134,7 @@ A site that is up is watched. Space is the Working space on the garage; Hour cho
 
 ## 8. Read a drawing: the whiteboard photographed, squared, read
 
-Last, what is seen becomes parts, and the chain closes. The whiteboard is chosen on the garage's wall; Picture pins the demo's photograph of it there, as its ring's Picture › Folder does, squared and laid in front; Shapes finds its closed strokes; Marks sorts each mark; Models is where an image model is asked and never trusted; Pieces is where Picture › Make stands each shape up, which is left to the person: a piece made is a part, to design. The picture is Marks.
+Last, what is seen becomes parts, and the chain closes. The whiteboard is chosen on the garage's wall; Picture pins the folder's photograph of it there, as its ring's Picture › Folder does, squared and laid in front; Shapes finds its closed strokes; Marks sorts each mark; Models is where an image model is asked and never trusted; Pieces is where Picture › Make stands each shape up, which is left to the person: a piece made is a part, to design. The picture is Marks.
 
 ![Read a drawing: the whiteboard photographed, squared, read](screenshots/39-08-read-a-drawing-the-whiteboard-photographed-squared.png)
 
@@ -156,9 +156,9 @@ Last, what is seen becomes parts, and the chain closes. The whiteboard is chosen
 ## What this page does not show
 
 - **Anything armed, started, sent or made.** A stage is where a person does those: ▶ Print, ▶ Cut, Upload, GO, a knob turned, Picture › Make. Each is its own page's, named at its stage in the tour's box.
-- **A server that is not the demo**, where the tour puts nothing on.
-- **A camera's picture.** A browser's camera cannot be put on a stage; pages 01 to 03 are read.
-- **What changes on every run.** Moments and the commit the server runs are blanked in the pictures and left out of the words.
+- **A machine that is not there.** Where a stage's board is not pinned or not connected the page stops short and says what the stage needs; [page 34](34-the-tour.md) shows it.
+- **A camera's picture.** A browser's camera is a person's to point; pages 01 to 03 go through it.
+- **What changes on every run.** Moments are blanked in the pictures and left out of the words.
 
 Run it yourself:
 
