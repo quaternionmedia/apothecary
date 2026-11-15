@@ -153,10 +153,6 @@ here: run `apothecary problems`.
   one group per file), and `tests/e2e/durations.json`, which sets every test's
   bound, is no shared ground. None of these occurs in the suite today.
 - The borders, what is open ([docs/boundaries.md](docs/boundaries.md)):
-  - The site store, the picture root and a node lookup are private names of
-    `apothecary/api.py`, imported by `cam`, `family` and `finders` from the layer
-    below and by `routes`, `spaces` and `cli` beside and above it. A module of their
-    own below the server would retire four of the page's reaches.
   - `apothecary.firmware` holds the firmware toolchains, the machine seam (ports,
     Marlin, GRBL, a port's task) and the tool finder every installer uses; `slicer`,
     `cam`, `evidence` and `openscad_installer` depend on it for the last two.

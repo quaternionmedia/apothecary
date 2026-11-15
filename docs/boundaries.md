@@ -3,8 +3,9 @@
 Where apothecary ends and another repository begins, how its own package is layered,
 and what crosses at each handoff of its loops. `tests/test_boundaries.py` reads the
 tables under [The layers](#the-layers), [Where an import reaches up](#where-an-import-reaches-up)
-and [Doors](#doors) and checks the package against them, and checks that every path
-this page names exists; a change that moves a border changes this page with it.
+and [Doors](#doors) and checks the package against them, holds
+[what a module keeps to itself](#what-a-module-keeps-to-itself), and checks that every
+path this page names exists; a change that moves a border changes this page with it.
 
 ## The repositories
 
@@ -83,6 +84,18 @@ a root that is no folder of pictures, 403 for a path outside it, 400 for one tha
 cannot be asked about, 404 for one that is no ordinary file. The module is an install
 point of the network guard, as `apothecary/state_folder.py` is: whatever resolves the
 picture root has the guard on.
+
+### What a module keeps to itself
+
+A name that begins with an underscore is its module's own. No module of the package
+imports one from another module of the package, reads one as an attribute of a module
+it imported, or imports a module so named; what two modules share has a public name
+where it is defined. `tests/test_boundaries.py::test_no_module_takes_an_underscore_name_from_another`
+reads every module for it. It follows a module through an import, through a function
+of the same module that returns it, and through a name such a call is assigned to. It
+does not follow one handed on as an argument or kept in a container, and it says
+nothing of an object's own attributes: a class's `_field` read from another module is
+not a module's name.
 
 ## The handoffs
 

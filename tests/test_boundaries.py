@@ -1,7 +1,8 @@
 """The borders docs/boundaries.md states, held against the package: the layer each unit
-is in, the imports that reach up a layer, and the one place each package from another
-repository or an optional install enters through. The page is the statement; this
-reads its tables and checks the code against them."""
+is in, the imports that reach up a layer, the one place each package from another
+repository or an optional install enters through, and that no module takes an
+underscore name from another. The page is the statement; this reads its tables and
+checks the code against them."""
 
 from __future__ import annotations
 
@@ -192,3 +193,134 @@ def test_every_path_the_page_names_exists():
     }
     assert paths, "the page names no path"
     assert sorted(p for p in paths if not _exists(p)) == []
+
+
+def _is_private(name: str) -> bool:
+    """A name its module keeps to itself: a leading underscore, and no dunder."""
+    return name.startswith("_") and not (name.startswith("__") and name.endswith("__"))
+
+
+def _dotted(node: ast.AST) -> str:
+    """``a.b.c`` for attributes read off a name, else nothing."""
+    names = []
+    while isinstance(node, ast.Attribute):
+        names.append(node.attr)
+        node = node.value
+    return ".".join([node.id, *reversed(names)]) if isinstance(node, ast.Name) else ""
+
+
+def _underscore_names_taken(text: str, module: str, package: list[str]) -> set[tuple[str, str]]:
+    """Each underscore name the module ``text`` is takes from another module of the
+    package, with that module: by a ``from`` import, as an attribute of a name an import
+    bound to such a module, by ``getattr`` of one with the name written out, or by
+    importing a module whose own name begins with an underscore. A module is followed
+    through a function of this module that returns it and a name such a call is
+    assigned to, and no further: not through an argument, a container or
+    ``sys.modules``."""
+    tree = ast.parse(text)
+    bound: dict[str, str] = {}  # a name this module reads a module of the package by
+    taken = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".")[0] != "apothecary":
+                    continue
+                bound[alias.asname or alias.name] = alias.name
+                taken.update((alias.name, n) for n in alias.name.split(".") if _is_private(n))
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level:
+                base = ".".join(package[: len(package) - node.level + 1] + ([base] if base else []))
+            if base.split(".")[0] != "apothecary":
+                continue
+            taken.update((base, n) for n in base.split(".") if _is_private(n))
+            for alias in node.names:
+                if _is_module(f"{base}.{alias.name}"):
+                    bound[alias.asname or alias.name] = f"{base}.{alias.name}"
+                if _is_private(alias.name):
+                    taken.add((base, alias.name))
+
+    def owner(node: ast.AST) -> str:
+        """The module of the package ``node`` reads, another than this one; else nothing."""
+        if isinstance(node, ast.Call):
+            return returned.get(getattr(node.func, "id", ""), "")
+        names = _dotted(node).split(".")
+        for cut in range(len(names), 0, -1):
+            head = bound.get(".".join(names[:cut]))
+            if head is not None:
+                found = ".".join([head, *names[cut:]])
+                return found if found != module and _is_module(found) else ""
+        return ""
+
+    returned: dict[str, str] = {}  # a function of this module, and the module it returns
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Return) and inner.value is not None:
+                    if owner(inner.value):
+                        returned[node.name] = owner(inner.value)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
+            if owner(node.value):
+                bound.update({_dotted(target): owner(node.value) for target in node.targets})
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and _is_private(node.attr) and owner(node.value):
+            taken.add((owner(node.value), node.attr))
+        elif isinstance(node, ast.Call) and getattr(node.func, "id", "") == "getattr":
+            name = getattr(node.args[1], "value", None) if len(node.args) > 1 else None
+            if isinstance(name, str) and _is_private(name) and owner(node.args[0]):
+                taken.add((owner(node.args[0]), name))
+    return taken
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "from .site_store import _held",
+        "from .site_store import _held as held",
+        "def f():\n    from .site_store import SiteStore, _held",
+        "from . import site_store\nsite_store._held()",
+        "from . import site_store as kept\nkept._held()",
+        "from .routes import views\nviews._answer",
+        "import apothecary.site_store\napothecary.site_store._held",
+        "import apothecary.routes as r\nr.views._answer",
+        "from . import site_store\ngetattr(site_store, '_held')",
+        "def kept():\n    from . import site_store\n\n    return site_store\n\nkept()._held",
+        "from . import site_store\ndef kept():\n    return site_store\n\nk = kept()\nk._held",
+        "from . import _site_store",
+        "from ._site_store import held",
+        "import apothecary._site_store",
+    ],
+)
+def test_the_underscore_scan_sees_each_way_of_taking_a_name(code):
+    assert _underscore_names_taken(code, "apothecary.sites", ["apothecary"])
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "from .site_store import SiteStore",
+        "from .version import __version__",
+        "from . import site_store\nsite_store.SiteStore()._sites",
+        "from . import sites\nsites._held",
+        "import os\nos._exit",
+        "from .stays_local import install_guard as _install_guard\n_install_guard()",
+    ],
+)
+def test_the_underscore_scan_leaves_what_is_no_such_taking(code):
+    assert not _underscore_names_taken(code, "apothecary.sites", ["apothecary"])
+
+
+def test_no_module_takes_an_underscore_name_from_another():
+    """A name that begins with an underscore is its module's own (docs/boundaries.md,
+    What a module keeps to itself): what two modules of the package share has a
+    public name where it is defined."""
+    taken = set()
+    for path in _sources():
+        module = _module(path)
+        package = module.split(".") if path.name == "__init__.py" else module.split(".")[:-1]
+        text = path.read_text(encoding="utf-8")
+        for source, name in _underscore_names_taken(text, module, package):
+            taken.add((str(path.relative_to(ROOT)), source, name))
+    assert sorted(taken) == []
