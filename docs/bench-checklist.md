@@ -29,7 +29,7 @@ nothing printing from its own SD card.
       `uv run apothecary firmware install --esp32` (arduino-cli and the ESP32
       core, for the Arduino blink),
       `uv run apothecary firmware install --rust-esp32` (Rust for the ESP32).
-- [ ] `uv run apothecary serve` -- your own server and state, not `--demo` --
+- [ ] `uv run apothecary serve` -- your own server and state, not `--simulated` --
       and open `http://127.0.0.1:6283/viewer`: it lands on the garage.
 
 ## Prepared, nothing plugged in

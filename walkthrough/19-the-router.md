@@ -151,5 +151,5 @@ Machine's Table map card, which takes the next one
 ([docs/firmware.md](../docs/firmware.md#bed-leveling)).
 
 [docs/cnc.md](../docs/cnc.md) says what of the router is built and what is
-not: the page's window for it, the demo's pin and the bench's confirmation
+not: the page's window for it, the simulated router's pin and the bench's confirmation
 are the next pages of this one.

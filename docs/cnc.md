@@ -249,7 +249,7 @@ it turns and the cut's progress, its hour in the Working space charts the spindl
 and its marks stand on the table:
 the working area, the table and the tool, placed from the controller's
 machine coordinates and the working area (`mpos + travel`, a Grbl machine
-homed to its maximum switches). `apothecary serve --demo` pins the router's
+homed to its maximum switches). `apothecary serve --simulated` pins the router's
 controller to the simulated router on `/dev/ttyFAKE3`, beside the printer's
 pin; `tests/e2e/test_router_ui.py` walks the Machine against it.
 

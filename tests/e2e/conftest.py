@@ -195,7 +195,7 @@ def _the_shared_server_as_found(request):
     """A browser test file leaves the session's shared server as it found it, so which
     files share a server -- the shards decide, and --record-durations moves them --
     changes nothing a test sees. A file that leaves something changed fails here,
-    named, with what it changed. Not under --step, whose walk on the demo changes it
+    named, with what it changed. Not under --step, whose walk on the simulated server changes it
     on purpose; not for a file that never asks for the shared server."""
     if request.config.getoption("--step") is not None or not any(
         "base_url" in item.fixturenames

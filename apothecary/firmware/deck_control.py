@@ -58,7 +58,7 @@ disarm key is acted on the same way. No
 key or knob starts a scan for ports (two seconds): the newest scan is read however old,
 and the layout's tick looks for a board that is not found.
 
-It starts for a deck only when ``APOTHECARY_DECK_CONTROL`` is set (the demo sets it) or
+It starts for a deck only when ``APOTHECARY_DECK_CONTROL`` is set (``serve --simulated`` sets it) or
 a person asks (``POST /firmware/decks/{id}/control``): opening a real deck takes the
 device from any other program that has it.
 """

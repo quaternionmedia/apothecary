@@ -104,7 +104,7 @@ def create(root: Path) -> BasePart:
         description="A plate with a pocket and holes, cut on the router from a sheet",
         params_model=Params,
         category="coupon",
-        tags=["router", "cnc", "coupon", "test", "demo"],
+        tags=["router", "cnc", "coupon", "test"],
         readme_path=root / "parts" / "router_coupon" / "README.md",
         preview_color=Color.from_hex("#c9a66b"),
     )

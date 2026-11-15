@@ -1,6 +1,6 @@
 """The README's map, *What it does, and how to see it*, is the reviewer's: each row is one
 thing the code does, the tests that hold it and its walkthrough page. A review walks the
-rows on the running demo, so a row naming a test or a page that is not there sends the
+rows on the running server, so a row naming a test or a page that is not there sends the
 reviewer nowhere, a browser test in no row holds something no reviewer is shown, and a
 page a run writes in no row naming that run is a picture nobody is pointed at."""
 

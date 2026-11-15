@@ -56,7 +56,7 @@ export function mountModels(root, { base = "", world = null, log = null } = {}) 
 
     // What each state of qmcp means for a person: what still works, and the way on.
     const NOTES = {
-        "not configured": "Apothecary reads without it: the plain reader still reads a colour. APOTHECARY_QMCP names a qmcp on this machine; apothecary serve --demo has a simulated one.",
+        "not configured": "Apothecary reads without it: the plain reader still reads a colour. APOTHECARY_QMCP names a qmcp on this machine; apothecary serve --simulated has a simulated one.",
         "refused": "Nothing is sent there. A qmcp is asked only on this machine.",
         "not reachable": "Nothing is asked of it; apothecary reads without it.",
         "not answering": "Nothing is asked of it; apothecary reads without it. It is asked again each time this window is shown, and after each Ask.",

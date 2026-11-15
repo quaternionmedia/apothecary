@@ -10,7 +10,7 @@ needed: each has a default.
 | `APOTHECARY_PORT` | The port `serve` and `photo view` listen on, and the one `slicer slice` and `lighting simulate` find a running server on; `--port` names another for one command | `6283` | [dev-loop.md](dev-loop.md#two-loops-at-once) |
 | `APOTHECARY_TOOLS_DIR` | The folder OpenSCAD snapshots, OrcaSlicer and the firmware toolchains are installed in | `~/.apothecary/tools` | [firmware.md](firmware.md#setup), [openscad.md](openscad.md#installing-a-snapshot) |
 | `APOTHECARY_STATE_DIR` | The state folder, this account's alone: pinned boards, flash records, cached probes, bed readings, kept prints and slices, jobs, cameras, the family's table, a site's procedures ([family.md](family.md)) and what a person said of the tour's stages ([tour.md](tour.md)) | `~/.apothecary` | [firmware.md](firmware.md#setup) |
-| `APOTHECARY_CACHE_DIR` | The render cache -- a node's STLs, a part's variants -- and the demo's state folder | `.cache` in the checkout | [parts-authoring.md](parts-authoring.md) |
+| `APOTHECARY_CACHE_DIR` | The render cache -- a node's STLs, a part's variants -- and the simulated machines' state folder | `.cache` in the checkout | [parts-authoring.md](parts-authoring.md) |
 | `APOTHECARY_PICTURE_ROOT` | The one folder pictures are read from; never a home folder or anything above one, or the state folder | The folder `serve` was started in | [pictures.md](pictures.md#where-pictures-live) |
 | `APOTHECARY_MARKS_TABLE` | A fitted table of the thresholds that sort a whiteboard's marks, as `apothecary photo fit --out` writes one | The packaged thresholds | [pictures.md](pictures.md#a-whiteboards-marks) |
 | `APOTHECARY_LOOKSATWORDS` | Where `apothecary photo notes --send` sends a whiteboard's words; refused unless it is on this machine | looksatwords' own port on this machine | [pictures.md](pictures.md#a-whiteboards-notes) |
@@ -26,7 +26,7 @@ needed: each has a default.
 | `APOTHECARY_SIMULATED_SPEED` | Multiplies the simulated printer's every dwell (`G4`): 1 is real time, 0 skips them | 1 | |
 | `APOTHECARY_SIMULATED_DEVKIT` | With the simulated engine, the ports the Rust module finds, each a pretend devkit (comma-separated) | None | [firmware.md](firmware.md#setup) |
 | `APOTHECARY_SIMULATED_DECK` | With the simulated engine, the Stream Deck + decks found, each a pretend deck that keeps the images it is sent and hears the events it is given (comma-separated) | None | [stream-deck.md](stream-deck.md#simulated) |
-| `APOTHECARY_DECK_CONTROL` | `1`, `true`, `yes` or `on`: the server starts the Stream Deck + layout (its knobs jog the machines) on every deck found at start; a real deck is opened by it, which takes it from any other program. Unset, a layout is started by `POST /firmware/decks/{id}/control` alone. The demo sets it | Unset | [stream-deck.md](stream-deck.md#the-controller) |
+| `APOTHECARY_DECK_CONTROL` | `1`, `true`, `yes` or `on`: the server starts the Stream Deck + layout (its knobs jog the machines) on every deck found at start; a real deck is opened by it, which takes it from any other program. Unset, a layout is started by `POST /firmware/decks/{id}/control` alone. `serve --simulated` sets it | Unset | [stream-deck.md](stream-deck.md#the-controller) |
 | `APOTHECARY_SIMULATED_ROUTER` | With the simulated engine, the ports that answer as the simulated GRBL router rather than the simulated printer (comma-separated) | None | [cnc.md](cnc.md#simulated) |
 | `APOTHECARY_SIMULATED_ROUTER_STATE` | `alarm` starts the simulated router as a real one powers up with homing enabled, in alarm until homed | Idle, the tool over the middle of the table | [cnc.md](cnc.md#simulated) |
 | `APOTHECARY_SIMULATED_ROUTER_UNPROVED` | set, the simulated router's homes are held to the homing proof as a real one's are: each axis's switch seen and the axis jogged the way it homes | unset: a simulated router has no switch for a hand to press, and its homes go | [cnc.md](cnc.md#a-home-is-proved-first) |
@@ -34,8 +34,8 @@ needed: each has a default.
 | `APOTHECARY_CONSOLE_SACN`, `APOTHECARY_CONSOLE_OSC` | Set by `apothecary serve --console-sacn` and `--console-osc` in its server's environment: the server listens for a console's levels on the local network, UDP 5568 and 8001, receive only. Not set by hand | Unset | [lighting.md](lighting.md#getting-levels-in) |
 | `APOTHECARY_CARLOS` | Carlos's address on this machine. `apothecary serve --carlos URL` sets it in its server's environment, and the server sends a site's wiring there to be held and drawn; `apothecary rig` asks it for a rig, and holds a concert's frames there, when no `--carlos` is given | Unset: nothing is sent | [the bench plan](plans/qm-family-carlos-2026-10-29.md#the-demo), [the concert plan](plans/carlos-concert-rig-2026-10-29.md#the-demo) |
 | `APOTHECARY_CARLOS_SITE` | The site whose wiring `serve --carlos` sends | `garage` | [the plan](plans/qm-family-carlos-2026-10-29.md#the-demo) |
-| `APOTHECARY_QMCP` | qmcp, through which image models are asked about the shape chosen on a mat, only when a person asks (Models, and `apothecary vision`): an address on this machine, reached over MCP, or `simulated`, a qmcp in process (`simulated:slow`, `:empty`, `:broken`, `:down` for each way it can fail); `off` is the same as unset. `apothecary serve --demo` sets `simulated` unless another is named | Unset: nothing is asked, and the plain reader still reads a colour | [the plan](plans/image-models-through-qmcp-2026-10-30.md), [the checklist](models-checklist.md) |
-| `APOTHECARY_DEMO` | The demo's folder, set by `apothecary serve --demo` in its server's environment; the page's banner reads it. Not set by hand | Unset | [viewer.md](viewer.md#the-header) |
+| `APOTHECARY_QMCP` | qmcp, through which image models are asked about the shape chosen on a mat, only when a person asks (Models, and `apothecary vision`): an address on this machine, reached over MCP, or `simulated`, a qmcp in process (`simulated:slow`, `:empty`, `:broken`, `:down` for each way it can fail); `off` is the same as unset. `apothecary serve --simulated` sets `simulated` unless another is named | Unset: nothing is asked, and the plain reader still reads a colour | [the plan](plans/image-models-through-qmcp-2026-10-30.md), [the checklist](models-checklist.md) |
+| `APOTHECARY_SIMULATED` | The simulated machines' folder, set by `apothecary serve --simulated` in its server's environment; the page's banner reads it. Not set by hand | Unset | [viewer.md](viewer.md#the-header) |
 
 ## Other variables Apothecary reads
 
@@ -44,10 +44,10 @@ needed: each has a default.
 | `ARDUINO_CLI` | The arduino-cli the Arduino module runs, checked first; `none` means none | The tools dir, then `PATH` |
 | `ESPTOOL` | The esptool the Arduino module runs; `none` means none | `PATH`, the `esp32:esp32` core's, or the Python module |
 | `CARGO`, `ESPFLASH` | The cargo and espflash a Rust sketch is built and flashed with; `none` means none | The tools dir, then `PATH` |
-| `FAKE_DEVKIT`, `FAKE_ROUTER`, `FAKE_MONITOR` | Read by the scripted arduino-cli the demo and the tests run (`apothecary/firmware/scripted.py`), never by a real one: a devkit in its board list, the router's controller in it, and a monitor that sends far more than a serial line carries | Unset |
+| `FAKE_DEVKIT`, `FAKE_ROUTER`, `FAKE_MONITOR` | Read by the scripted arduino-cli `serve --simulated` and the tests run (`apothecary/firmware/scripted.py`), never by a real one: a devkit in its board list, the router's controller in it, and a monitor that sends far more than a serial line carries | Unset |
 | `OPENSCADPATH` | OpenSCAD's own library path, read for the files a SCAD includes | Unset |
 
 [firmware.md](firmware.md#setup) says how each toolchain finds its tools. The
 browser tests' servers set most of these for themselves
-([tests/e2e/README.md](../tests/e2e/README.md)), and `apothecary serve --demo`
+([tests/e2e/README.md](../tests/e2e/README.md)), and `apothecary serve --simulated`
 sets those its bench needs.

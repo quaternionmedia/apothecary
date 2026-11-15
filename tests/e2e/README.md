@@ -34,7 +34,7 @@ not answer `/health` stops the run.
 | `--start-server` | Starts one server for the session, on `--server-port` if given, else on a free port. It runs the scripted `arduino-cli` from `tests/firmware_helpers.py` and the simulated printer mid-print, and none of the person's own tools: `ESPTOOL`, `CARGO`, `ESPFLASH` and `APOTHECARY_ORCASLICER` are `none` unless a module names scripted ones. Its tools dir, firmware state and render cache (`APOTHECARY_CACHE_DIR`, so a part's variants too) are temp folders of its own, and so are its pictures unless `APOTHECARY_PICTURE_ROOT` names a folder; a variant it saves goes to a bare clone of this checkout (`APOTHECARY_VARIANTS_REPO`), never the checkout's own refs. No test opens a real serial port, reads `~/.apothecary`, or sees a real board. |
 | `--base-url URL` | Uses a server you started yourself for the tests instead. Tests that show the server a picture skip unless `APOTHECARY_PICTURE_ROOT` names the folder that server reads. The Bench's and the Machines' tests expect the scripted toolchain, so they fail against a real one. |
 | `--generate-docs` | Runs the tests marked `docs`, which skip without it, and turns on their `doc_recorder` screenshots (below). Pass it through `apothecary docs generate`, not by hand. |
-| `--step N` | With `--base-url` naming the demo (`apothecary serve --demo`): a step-through test (`test_steps_*.py`) runs only its step N, on the demo, in the visible Chromium answering DevTools at 127.0.0.1:9222 (or the address `APOTHECARY_WALK_DEVTOOLS` names), in its tab named `apothecary-walk`, and leaves the tab there, its picture in `.cache/walk/<loop>-step-N.png`. Each step first checks that the tab is where the step before leaves it, and does nothing otherwise. What they share is `stepping.py`. |
+| `--step N` | With `--base-url` naming the simulated server (`apothecary serve --simulated`): a step-through test (`test_steps_*.py`) runs only its step N, on the simulated server, in the visible Chromium answering DevTools at 127.0.0.1:9222 (or the address `APOTHECARY_WALK_DEVTOOLS` names), in its tab named `apothecary-walk`, and leaves the tab there, its picture in `.cache/walk/<loop>-step-N.png`. Each step first checks that the tab is where the step before leaves it, and does nothing otherwise. What they share is `stepping.py`. |
 | `--steps` | The step-through tests (`test_steps_*.py`) run whole, every step in order on a server of their own. With neither this nor `--step N` they skip: each walks a loop another browser test holds end to end (a picture to a print, firmware, one machine). The `steps.yml` workflow, at a version tag, passes it, and so can `apothecary test all --steps`. |
 | `--headed`, `--slowmo 500`, `--tracing on` | pytest-playwright's own flags, for debugging. Open a trace with `uv run playwright show-trace test-results/<test>/trace.zip`. |
 
@@ -50,7 +50,7 @@ module for the bench its loop needs:
 mainboard with a scripted OrcaSlicer, `test_part_loop.py` an OpenSCAD that
 refuses one size, `test_scad_loop.py` this machine's OpenSCAD, and
 `test_the_firmware_loop.py` scripted arduino-cli, cargo and espflash around one
-simulated devkit; `test_the_demo.py` runs `serve --demo` itself, with a guard that
+simulated devkit; `test_simulated_machines.py` runs `serve --simulated` itself, with a guard that
 logs any serial port it touches to the file `APOTHECARY_TEST_SERIAL_GUARD` names, and
 fails on any. Every other module uses the session's server, which lives
 for the whole run: take back what a test pins, places or adds, or the tests
@@ -98,7 +98,7 @@ finds what a slow frame hides: the level card asked for on a devkit threw on it 
 
 ## What a change reaches
 
-The suite is in areas -- windows, pictures, machine, parts, lighting, the demo --
+The suite is in areas -- windows, pictures, machine, parts, lighting, the simulated server --
 each with the sources a change to which reaches it and the files that hold it
 (`tests/e2e/areas.py`), as the unit suite is in groups (`tests/groups.py`).
 `apothecary test changed` runs the walkthrough and the unit files of the groups a

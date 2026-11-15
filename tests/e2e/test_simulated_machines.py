@@ -1,23 +1,23 @@
-"""`apothecary serve --demo`, started as a person starts it, gone round each loop.
+"""`apothecary serve --simulated`, started as a person starts it, gone round each loop.
 
-The demo (apothecary/demo.py) serves the viewer on a state folder of its own with a
+The simulated server (apothecary/simulated.py) serves the viewer on a state folder of its own with a
 simulated Ender pinned to printer_1's mainboard, a simulated ESP32 devkit and the
 scripted firmware tools. These start it as a subprocess -- `python -m apothecary
-serve --demo` -- with the person's own folders (state, tools, render cache) temp
+serve --simulated` -- with the person's own folders (state, tools, render cache) temp
 folders that must be left as they were, and go round each loop through the page:
 the firmware loop (walkthrough 05), a picture to a print (03), and designing a part
-and editing its SCAD (04, 06). A demo with no OrcaSlicer says how to install it.
+and editing its SCAD (04, 06). A simulated server with no OrcaSlicer says how to install it.
 
 No real serial port is touched, and a test says so. Every Python process of the
-demo -- the server, and the scripted tools it runs -- starts with a guard
+simulated server -- the server itself, and the scripted tools it runs -- starts with a guard
 (``sitecustomize.py`` on its PYTHONPATH) that refuses, and writes down, any opening
 of a serial device and any listing of the machine's real ports. The guard is shown
-to work before the demo starts, and its record is empty when the module ends.
+to work before the simulated server starts, and its record is empty when the module ends.
 
 The slicer named is the unit tests' scripted OrcaSlicer, standing in for a person's
-own: the demo uses the OrcaSlicer a person has installed, named where it is. Pictures
+own: the simulated server uses the OrcaSlicer a person has installed, named where it is. Pictures
 of the banner and of each loop's end are written under pytest's temp folder
-(``demo-shots``).
+(``simulated-shots``).
 """
 
 from __future__ import annotations
@@ -30,9 +30,6 @@ from pathlib import Path
 import pytest
 import windows
 from boards import BOARD, DEVKIT, PRINTER
-from demo_process import guarded_env as _guarded_env
-from demo_process import start_demo as _start_demo
-from demo_process import stop as _stop
 from garage import found as _found
 from garage import kept as _kept
 from garage import make as _make
@@ -43,23 +40,26 @@ from playwright.sync_api import Page, expect
 from rings import labels as _labels
 from rings import open_on_row as _ring_on
 from rings import press as _press
+from simulated_process import guarded_env as _guarded_env
+from simulated_process import start_simulated as _start_simulated
+from simulated_process import stop as _stop
 from slicer_helpers import write_fake_orcaslicer
 from viewer_ready import settled
 from windows import BENCH
 
-from apothecary.demo import CONTROLLER, ROUTER
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.stl_renderer import get_renderer
+from apothecary.simulated import CONTROLLER, ROUTER
 
 MACHINE = windows.MACHINE
 
 
 @pytest.fixture(scope="module")
-def demo(base_url, tmp_path_factory):
-    """The demo, its folders and its guard; the guard's record is read at the end.
+def simulated(base_url, tmp_path_factory):
+    """The simulated server, its folders and its guard; the guard's record is read at the end.
     ``base_url`` is asked for only so that with no server to run against this is
     skipped, as every browser test is."""
-    folder = tmp_path_factory.mktemp("demo")
+    folder = tmp_path_factory.mktemp("simulated")
     env = _guarded_env(folder)
     env["APOTHECARY_ORCASLICER"] = str(write_fake_orcaslicer(folder / "their-orcaslicer"))
     env["FAKE_ORCA_LAYERS"], env["FAKE_ORCA_DWELL"] = "6", "20"
@@ -75,22 +75,27 @@ def demo(base_url, tmp_path_factory):
     assert tried.returncode != 0 and "a serial port was opened" in tried.stderr, tried.stderr
     assert touched.read_text() == "os.open /dev/ttyUSB9\n"
     touched.unlink()
-    url, proc = _start_demo(folder, env)
-    yield {"url": url, "folder": folder, "root": folder / "person" / "cache" / "demo", "env": env}
+    url, proc = _start_simulated(folder, env)
+    yield {
+        "url": url,
+        "folder": folder,
+        "root": folder / "person" / "cache" / "simulated",
+        "env": env,
+    }
     _stop(proc)
 
 
 @pytest.fixture(scope="module")
 def shots(tmp_path_factory):
-    folder = tmp_path_factory.getbasetemp() / "demo-shots"
+    folder = tmp_path_factory.getbasetemp() / "simulated-shots"
     folder.mkdir(exist_ok=True)
     return folder
 
 
 @pytest.fixture
-def page(drawing_camera_browser, demo):
-    """A page on the demo whose camera sees the drawing, allowed."""
-    url = demo["url"]
+def page(drawing_camera_browser, simulated):
+    """A page on the simulated server whose camera sees the drawing, allowed."""
+    url = simulated["url"]
     context = drawing_camera_browser.new_context(
         viewport={"width": 1280, "height": 800}, base_url=url
     )
@@ -103,14 +108,16 @@ def page(drawing_camera_browser, demo):
 
 
 @pytest.mark.e2e
-def test_the_demo_says_it_is_the_demo_and_has_printer_1_pinned(page: Page, demo, shots):
+def test_the_simulated_server_says_its_machines_are_simulated_and_has_printer_1_pinned(
+    page: Page, simulated, shots
+):
     """A quiet line above the header says its machines are simulated and how to reach
     the real ones;
     printer_1's mainboard is pinned to the simulated Ender, which said what it is, and
     cnc_router's controller to the simulated router."""
-    url = demo["url"]
+    url = simulated["url"]
     _open_garage(page, url)
-    banner = page.locator("#demo-banner")
+    banner = page.locator("#simulated-banner")
     expect(banner).to_be_visible()
     expect(banner).to_contain_text(
         "Simulated machines: a printer, a router, an ESP32 and a lighting console"
@@ -127,15 +134,15 @@ def test_the_demo_says_it_is_the_demo_and_has_printer_1_pinned(page: Page, demo,
     assert controller["device"]["port"] == ROUTER
     assert controller["device"]["printer"]["dialect"] == "grbl"
     settled(page)
-    page.screenshot(path=str(shots / "demo-banner.png"))
+    page.screenshot(path=str(shots / "simulated-banner.png"))
 
 
 @pytest.mark.e2e
-def test_the_demo_goes_round_the_firmware_loop(page: Page, demo, shots):
+def test_the_simulated_server_goes_round_the_firmware_loop(page: Page, simulated, shots):
     """The Bench: esp32_blink built and uploaded to the simulated devkit by the scripted
     arduino-cli; its node's Device › Query hears it say hello. Nothing real is built
     or flashed."""
-    url = demo["url"]
+    url = simulated["url"]
     dialogs: list = []
     page.on("dialog", lambda d: (dialogs.append(d.message), d.accept()))
     _open_garage(page, url)
@@ -162,17 +169,17 @@ def test_the_demo_goes_round_the_firmware_loop(page: Page, demo, shots):
     expect(machine.locator("#log")).to_contain_text("heard esp32_blink say hello", timeout=30000)
     expect(machine.locator("#c-sketch")).to_contain_text("observed esp32_blink ✓ matches")
     settled(page)
-    page.screenshot(path=str(shots / "demo-firmware.png"))
-    # The flash is recorded in the demo's state, never the person's.
-    assert "esp32_blink" in (demo["root"] / "state" / "firmware-state.json").read_text()
+    page.screenshot(path=str(shots / "simulated-firmware.png"))
+    # The flash is recorded in the simulated server's state, never the person's.
+    assert "esp32_blink" in (simulated["root"] / "state" / "firmware-state.json").read_text()
 
 
 @pytest.mark.e2e
-def test_the_demo_goes_round_a_picture_to_a_print(page: Page, demo, shots):
-    """A camera over the bench, a picture taken into the demo's own folder, its shapes
+def test_the_simulated_server_goes_round_a_picture_to_a_print(page: Page, simulated, shots):
+    """A camera over the bench, a picture taken into the simulated server's own folder, its shapes
     found, one made a piece -- selected -- sliced for printer_1 from its ring by the
     OrcaSlicer named, and printed on the simulated printer to its end."""
-    url = demo["url"]
+    url = simulated["url"]
     _open_garage(page, url)
     _ring_on(page, "workbench")
     _press(page, "Camera", "Add here")
@@ -188,7 +195,7 @@ def test_the_demo_goes_round_a_picture_to_a_print(page: Page, demo, shots):
     _press(page, "Take picture")
     _said(page, f"{camera}'s picture lies on workbench")
     (view,) = page.request.get(f"{url}/sites/garage/attached").json()["views"]
-    taken = demo["root"] / "pictures" / view["picture"]
+    taken = simulated["root"] / "pictures" / view["picture"]
     assert view["picture"].startswith("captures/") and taken.is_file(), view
     _found(page)
     piece = _make(page, url, "disc")  # selected, as Make selects what it made
@@ -211,19 +218,21 @@ def test_the_demo_goes_round_a_picture_to_a_print(page: Page, demo, shots):
     _said(page, f"{piece}.gcode on {PRINTER}, making {piece}, ended: done, {lines}/{lines} lines")
     machine.locator("#print-card").scroll_into_view_if_needed()
     settled(page)
-    page.screenshot(path=str(shots / "demo-print.png"))
-    # The slice and the print are kept in the demo's state, nowhere else.
-    assert any((demo["root"] / "state" / "slices").iterdir())
+    page.screenshot(path=str(shots / "simulated-print.png"))
+    # The slice and the print are kept in the simulated server's state, nowhere else.
+    assert any((simulated["root"] / "state" / "slices").iterdir())
 
 
 @pytest.mark.e2e
-def test_the_demo_goes_round_designing_a_part_and_editing_its_scad(page: Page, demo, shots):
+def test_the_simulated_server_goes_round_designing_a_part_and_editing_its_scad(
+    page: Page, simulated, shots
+):
     """calibration_cube in the universe: its size moved and applied, drawn as a
-    variant; its SCAD edited and rendered; saved as a variant into the demo's own
+    variant; its SCAD edited and rendered; saved as a variant into the simulated server's own
     clone; then Part › Defaults and Apply draw the saved part again."""
     if not get_renderer().is_available:
         pytest.skip("OpenSCAD not installed")
-    url = demo["url"]
+    url = simulated["url"]
     refs = subprocess.run(
         ["git", "for-each-ref", "--format=%(refname) %(objectname)", "refs/apothecary/"],
         cwd=ROOT,
@@ -273,9 +282,9 @@ def test_the_demo_goes_round_designing_a_part_and_editing_its_scad(page: Page, d
     expect(_status(page)).to_contain_text("drawn as saved", timeout=90000)
     assert "variant=" not in page.url, page.url
     settled(page)
-    page.screenshot(path=str(shots / "demo-part.png"))
-    # Saved into the demo's own clone, never the checkout's refs.
-    clone = demo["root"] / "variants.git"
+    page.screenshot(path=str(shots / "simulated-part.png"))
+    # Saved into the simulated server's own clone, never the checkout's refs.
+    clone = simulated["root"] / "variants.git"
     saved = subprocess.run(
         ["git", "for-each-ref", "--format=%(refname)", "refs/apothecary/variants/"],
         cwd=clone,
@@ -295,39 +304,43 @@ def test_the_demo_goes_round_designing_a_part_and_editing_its_scad(page: Page, d
 
 
 @pytest.mark.e2e
-def test_the_demo_touched_no_real_port_and_left_the_persons_folders_alone(demo, browser_name):
+def test_the_simulated_server_touched_no_real_port_and_left_the_persons_folders_alone(
+    simulated, browser_name
+):
     """Last in the module: the guard wrote nothing down -- no serial device was opened
     and no real port listed, by the server or any tool it ran -- and the person's own
-    state and tools folders were never made. The demo's folder holds its state.
+    state and tools folders were never made. The simulated server's folder holds its state.
 
     ``browser_name`` makes it a [chromium] test like the ones before it: pytest runs a
     test with no browser after every test with one, so in a run with another browser
-    test module after this one it would run last of all, on a second demo of its own,
+    test module after this one it would run last of all, on a second simulated server of its own,
     and find none of the first one's pictures."""
-    touched = Path(demo["env"]["APOTHECARY_TEST_SERIAL_GUARD"])
+    touched = Path(simulated["env"]["APOTHECARY_TEST_SERIAL_GUARD"])
     assert not touched.exists(), touched.read_text()
-    person = demo["folder"] / "person"
+    person = simulated["folder"] / "person"
     assert not (person / "state").exists() and not (person / "tools").exists()
-    assert sorted(p.name for p in (person / "cache").iterdir()) == ["demo"]
-    root = demo["root"]
+    assert sorted(p.name for p in (person / "cache").iterdir()) == ["simulated"]
+    root = simulated["root"]
     assert (root / "state" / "firmware-state.json").is_file()
     assert any((root / "pictures" / "captures").iterdir())
 
 
 @pytest.fixture(scope="module")
-def demo_without_a_slicer(base_url, tmp_path_factory):
-    folder = tmp_path_factory.mktemp("demo-no-slicer")
+def simulated_without_a_slicer(base_url, tmp_path_factory):
+    folder = tmp_path_factory.mktemp("simulated-no-slicer")
     env = _guarded_env(folder)
     env["APOTHECARY_ORCASLICER"] = "none"  # nothing installed, whatever PATH holds
-    url, proc = _start_demo(folder, env)
+    url, proc = _start_simulated(folder, env)
     yield {"url": url, "env": env}
     _stop(proc)
 
 
 @pytest.mark.e2e
-def test_a_demo_with_no_slicer_says_how_to_install_one(browser, demo_without_a_slicer):
-    """With no OrcaSlicer installed, Slice in the demo says so and how to install it."""
-    url = demo_without_a_slicer["url"]
+def test_a_simulated_server_with_no_slicer_says_how_to_install_one(
+    browser, simulated_without_a_slicer
+):
+    """With no OrcaSlicer installed, Slice in the simulated server says so and how to install it."""
+    url = simulated_without_a_slicer["url"]
     context = browser.new_context(viewport={"width": 1280, "height": 800}, base_url=url)
     page = context.new_page()
     try:
@@ -341,5 +354,5 @@ def test_a_demo_with_no_slicer_says_how_to_install_one(browser, demo_without_a_s
         expect(_status(page)).to_contain_text("Panels › Bench › Install › OrcaSlicer installs it")
     finally:
         context.close()
-    touched = Path(demo_without_a_slicer["env"]["APOTHECARY_TEST_SERIAL_GUARD"])
+    touched = Path(simulated_without_a_slicer["env"]["APOTHECARY_TEST_SERIAL_GUARD"])
     assert not touched.exists(), touched.read_text()

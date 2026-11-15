@@ -20,8 +20,8 @@ status bar said, word for word.
 
 ## Setting up
 
-- [ ] `uv run apothecary serve --demo` (`--port` for a port of its own), and
-      open the viewer. The demo runs with the simulated qmcp unless
+- [ ] `uv run apothecary serve --simulated` (`--port` for a port of its own), and
+      open the viewer. It runs with the simulated qmcp unless
       `APOTHECARY_QMCP` names another.
 - [ ] A picture with a few things of plain colours on a light ground, a black
       disc among them (a lens cap, a puck): a photograph of the bench, or a
@@ -105,14 +105,14 @@ status bar said, word for word.
 - [ ] Tick both again, reload the page: both stay ticked (the switches are kept
       in the state folder), and Models is open again where it was, the world as
       wide as it was.
-- [ ] With the demo's state folder (`APOTHECARY_STATE_DIR=.cache/demo/state`),
+- [ ] With that server's state folder (`APOTHECARY_STATE_DIR=.cache/simulated/state`),
       `uv run apothecary vision off plain/colour` and `vision on plain/colour`
       switch the same origin, and Models shows it the next time it is shown.
 
 ## Each way qmcp can be missing
 
-Stop the server and serve the demo again with `APOTHECARY_QMCP` set as each
-row says (the demo starts afresh: pin the picture and find its shapes again).
+Stop the server and serve `--simulated` again with `APOTHECARY_QMCP` set as each
+row says (it starts afresh: pin the picture and find its shapes again).
 Each time, Models' first line says which, a colour is still read off the
 pixels, and nothing else in the viewer changes.
 

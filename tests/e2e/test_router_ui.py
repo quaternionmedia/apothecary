@@ -5,7 +5,7 @@ here streamed and followed.
 
 Runs against a server of its own with the simulated router on ``/dev/ttyFAKE3``
 (``APOTHECARY_SIMULATED_ROUTER``) and the scripted arduino-cli listing it
-(``FAKE_ROUTER``), as ``apothecary serve --demo`` has it. Nothing here opens a real
+(``FAKE_ROUTER``), as ``apothecary serve --simulated`` has it. Nothing here opens a real
 port.
 """
 

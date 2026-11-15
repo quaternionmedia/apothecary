@@ -30,7 +30,7 @@ from garage import select as _select
 from playwright.sync_api import Page, expect
 from windows import DECK
 
-DECK_ID = "DEMODECK"
+DECK_ID = "SIMDECK"
 # The time an armed latch has left, which the Deck window writes beside the machine it
 # moves; the strip writes it too, in the picture the server draws, which is not blanked.
 TIME_LEFT_SHOWN = ((DECK, TIME_LEFT),)

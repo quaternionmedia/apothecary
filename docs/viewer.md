@@ -61,9 +61,10 @@ Left to right, one row:
 - **The validity count**, "Layout valid" or the number of violations: a click
   brings Problems, beside Site, in front.
 
-Under `apothecary serve --demo`, one quiet line above the header says it is
-the demo -- a simulated printer, ESP32 and lighting console, scripted firmware tools, its own
-state folder -- and how to leave it: `apothecary serve` without `--demo`.
+Under `apothecary serve --simulated`, one quiet line above the header says its
+machines are simulated -- a printer, a router, an ESP32 and a lighting console, scripted
+firmware tools, a state folder of their own -- and how to reach the real ones:
+`apothecary serve` without `--simulated`.
 
 The status line is the bar along the bottom: every verb says there what it
 did and what comes next, with the address of the ring cell that does it,

@@ -70,11 +70,10 @@ from the suite down is ticked again on the new head.
 ## What only a person sees
 
 - [ ] Each row of the README's map, *What it does, and how to see it*, that the stack
-      changes is walked on the head under `apothecary serve --demo`.
+      changes is walked on the head under `apothecary serve --simulated`.
 - [ ] Each row of [the bench checklist](bench-checklist.md) or
       [the models checklist](models-checklist.md) that the stack changes is walked,
-      or named open with what it needs. The demo's machines are simulated, and show
-      none of those rows.
+      or named open with what it needs. Simulated machines show none of those rows.
 
 ## The pull requests
 

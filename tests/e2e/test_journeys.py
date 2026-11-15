@@ -34,7 +34,7 @@ STEP_ON = "() => document.querySelector('#journey-rail [aria-current=step]')?.da
 
 @pytest.fixture(scope="module")
 def url(start_server):
-    """printer_1's board identified and pinned, as the demo's is."""
+    """printer_1's board identified and pinned, as the simulated server's is."""
     url = start_server({})
     with httpx.Client(base_url=url, timeout=15.0) as http:
         http.post("/firmware/devices/identify", json={"port": PRINTER}).raise_for_status()

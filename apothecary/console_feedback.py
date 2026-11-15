@@ -229,7 +229,7 @@ class OscReceiver(_Receiver):
 def simulate_levels(rig: LightingRig, t: float) -> Dict[int, Dict[str, float]]:
     """Levels for every parameter the rig's fixtures have, at time ``t`` seconds.
 
-    A sweep for demoing without a console: intensity pulses, colour cycles, and
+    A sweep to show the viewer with no console: intensity pulses, colour cycles, and
     moving heads pan and tilt. Each fixture is offset so the room does not move in step.
     """
     out: Dict[int, Dict[str, float]] = {}

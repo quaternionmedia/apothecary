@@ -1,4 +1,4 @@
-"""``apothecary serve --demo``: every loop of the page, with nothing real.
+"""``apothecary serve --simulated``: every loop of the page, with nothing real.
 
 The viewer as ``apothecary serve`` serves it, on a state folder of its own and
 with every machine simulated:
@@ -8,7 +8,7 @@ with every machine simulated:
 - **cnc_router's controller** is pinned to the simulated GRBL router
   (``firmware/grbl.py``'s ``SimulatedRouter``), idle with its tool over the middle
   of the table, on ``/dev/ttyFAKE3``;
-- **a Stream Deck +**, ``DEMODECK`` (``firmware/deck.py``), keeps the images it is sent and
+- **a Stream Deck +**, ``SIMDECK`` (``firmware/deck.py``), keeps the images it is sent and
   hears the events the page or a route gives it, and its knobs jog the simulated printer and
   router (``firmware/deck_control.py``); no HID device is listed or opened;
 - **an ESP32 devkit** on ``/dev/ttyFAKE2`` runs whatever was last flashed to it and
@@ -30,7 +30,7 @@ with every machine simulated:
 Every serial port is the simulated engine's (``APOTHECARY_SERIAL_ENGINE``), so no
 real port is opened or even listed.
 
-**Where its state lives.** ``.cache/demo/`` in the checkout -- under
+**Where its state lives.** ``.cache/simulated/`` in the checkout -- under
 ``$APOTHECARY_CACHE_DIR`` when that is set -- beside the render caches, ignored by
 git and never the person's ``~/.apothecary``: its firmware state and pins, its
 cameras, kept prints and slices (``state/``), its pictures (``pictures/``), its
@@ -39,7 +39,7 @@ render cache (``cache/``), its builds (``builds/``), the scripted bench
 its variants are saved into (``variants.git``). It is kept between runs, as a
 person's own state is, so pictures taken and variants saved are there next time;
 printer_1's mainboard is pinned again at every start. Deleting the folder starts
-the demo afresh.
+them afresh.
 
 ``prepare`` makes the folder and says the environment the server runs in; the
 server's process applies it and builds the app with ``create_app`` (uvicorn's
@@ -60,9 +60,9 @@ from typing import Dict, Optional
 
 from .projects.parts.skeleton import ROOT
 
-# Set in the demo server's environment, naming its folder: the page's banner and
+# Set in the simulated machines' server's environment, naming its folder: the page's banner and
 # create_app read it.
-DEMO_ENV = "APOTHECARY_DEMO"
+SIMULATED_ENV = "APOTHECARY_SIMULATED"
 
 SITE = "garage"
 PRINTER = "/dev/ttyFAKE1"  # the scripted arduino-cli's unmatched board: the simulated Ender
@@ -70,21 +70,21 @@ BOARD = "printer_1.frame_system.mainboard"
 DEVKIT = "/dev/ttyFAKE2"  # the scripted bench's devkit
 ROUTER = "/dev/ttyFAKE3"  # the scripted bench's router controller: the simulated Grbl_ESP32
 CONTROLLER = "cnc_router.frame_system.controller"
-DECK = "DEMODECK"  # the simulated Stream Deck +
-WHITEBOARD = "whiteboard.png"  # the drawn whiteboard among the demo's pictures
+DECK = "SIMDECK"  # the simulated Stream Deck +
+WHITEBOARD = "whiteboard.png"  # the drawn whiteboard among the simulated machines' pictures
 CONSOLE_HZ = 10  # the simulated console's levels a second, as `lighting simulate` sends them
 
 log = logging.getLogger(__name__)
 
 
-def demo_root() -> Path:
-    """``$APOTHECARY_CACHE_DIR/demo``, by default the checkout's ``.cache/demo``."""
-    return Path(os.environ.get("APOTHECARY_CACHE_DIR") or ROOT / ".cache") / "demo"
+def simulated_root() -> Path:
+    """``$APOTHECARY_CACHE_DIR/simulated``, by default the checkout's ``.cache/simulated``."""
+    return Path(os.environ.get("APOTHECARY_CACHE_DIR") or ROOT / ".cache") / "simulated"
 
 
 def running() -> Optional[Path]:
-    """The demo's folder when this process serves the demo, else None."""
-    named = os.environ.get(DEMO_ENV, "").strip()
+    """The simulated machines' folder when this process serves them, else None."""
+    named = os.environ.get(SIMULATED_ENV, "").strip()
     return Path(named) if named else None
 
 
@@ -97,8 +97,8 @@ def shown(root: Path) -> str:
 
 
 @dataclass
-class Demo:
-    """The demo's folder, the environment its server runs in, and the tools of the
+class Simulated:
+    """The simulated machines' folder, the environment their server runs in, and the tools of the
     person's own it found and uses where they are."""
 
     root: Path
@@ -124,14 +124,14 @@ def _openscad() -> Optional[Path]:
     return openscad_override() or managed_openscad()
 
 
-# How long a git call of the demo's may take: a local clone sharing its objects takes
+# How long a git call made here may take: a local clone sharing its objects takes
 # seconds; a git that waits on something (a prompt, a lock) is given up on.
 GIT_TIMEOUT_S = 120
 
 
 def _variants_repo(where: Path) -> Optional[Path]:
     """A bare clone of the checkout sharing its objects, made once: a variant saved in
-    the demo is a ref there, never in the checkout. Its own identity, so a save is
+    simulated machines is a ref there, never in the checkout. Its own identity, so a save is
     made whoever runs it, and nothing of the person's configuration signs it. None
     when git is missing, fails or does not answer in time: Save says so."""
     try:
@@ -152,8 +152,8 @@ def _variants_repo(where: Path) -> Optional[Path]:
                 if made.returncode != 0:
                     return None
         for key, value in (
-            ("user.name", "Apothecary demo"),
-            ("user.email", "demo@apothecary.invalid"),
+            ("user.name", "Apothecary simulated machines"),
+            ("user.email", "simulated@apothecary.invalid"),
             ("commit.gpgsign", "false"),
         ):
             subprocess.run(
@@ -168,14 +168,14 @@ def _variants_repo(where: Path) -> Optional[Path]:
     return where
 
 
-def prepare(root: Optional[Path] = None) -> Demo:
-    """Make the demo's folder (or find it, kept from the last run) and say the
+def prepare(root: Optional[Path] = None) -> Simulated:
+    """Make the simulated machines' folder (or find it, kept from the last run) and say the
     environment its server runs in. The person's OrcaSlicer and OpenSCAD are found
     first, as their own serve finds them, and named where they are: nothing is
     copied, and nothing is written outside the folder."""
     from .firmware.scripted import write_fake_arduino_cli, write_fake_cargo, write_fake_espflash
 
-    root = (root or demo_root()).resolve()
+    root = (root or simulated_root()).resolve()
     orcaslicer, openscad = _orcaslicer(), _openscad()
     folders = {
         name: root / name for name in ("state", "pictures", "tools", "cache", "builds", "bench")
@@ -183,13 +183,13 @@ def prepare(root: Optional[Path] = None) -> Demo:
     for folder in folders.values():
         folder.mkdir(parents=True, exist_ok=True)
     bench = folders["bench"]
-    # A drawn whiteboard in the demo's pictures, where a checkout has one: the
+    # A drawn whiteboard among the pictures, where a checkout has one: the
     # picture the Marks window and Find shapes › outline have something to read in.
     drawn = ROOT / "examples" / "pictures" / WHITEBOARD
     if drawn.is_file() and not (folders["pictures"] / WHITEBOARD).exists():
         shutil.copyfile(drawn, folders["pictures"] / WHITEBOARD)
     env = {
-        DEMO_ENV: str(root),
+        SIMULATED_ENV: str(root),
         "APOTHECARY_STATE_DIR": str(folders["state"]),
         "APOTHECARY_PICTURE_ROOT": str(folders["pictures"]),
         "APOTHECARY_TOOLS_DIR": str(folders["tools"]),
@@ -219,7 +219,7 @@ def prepare(root: Optional[Path] = None) -> Demo:
         env["APOTHECARY_ORCASLICER"] = str(orcaslicer)
     if openscad is not None:
         env["APOTHECARY_OPENSCAD"] = str(openscad)
-    return Demo(root=root, env=env, orcaslicer=orcaslicer, openscad=openscad)
+    return Simulated(root=root, env=env, orcaslicer=orcaslicer, openscad=openscad)
 
 
 def _work_zero_on_the_coupon() -> None:
@@ -241,7 +241,7 @@ def _work_zero_on_the_coupon() -> None:
 
 
 def _bring_up():
-    """The procedure the demo's garage starts with, on its simulated bench."""
+    """The procedure the garage starts with, on its simulated bench."""
     from .family.procedures import Procedure
 
     devkit = f"{SITE}:esp32_blink"
@@ -297,14 +297,14 @@ def seed() -> Optional[str]:
     identified (``$I``): what the printer's is pinned to, or None when it could not
     be (the page's Device section pins it by hand then; the router's the same, said
     in the log). The garage's procedure is written once, then kept. Refuses outside the
-    demo's environment, where a port would be a real one."""
+    simulated machines' environment, where a port would be a real one."""
     from .family import procedures
     from .firmware import devices
     from .firmware.gcode import serial_engine
     from .firmware.toolchains import ToolchainError
 
     if running() is None or serial_engine() != "simulated":
-        raise RuntimeError("the demo's pin is seeded in the demo's environment only")
+        raise RuntimeError("the simulated machines are pinned in their own environment only")
     if procedures.load(SITE, "bring-up") is None:
         procedures.save(SITE, "bring-up", _bring_up())
     try:
@@ -312,24 +312,24 @@ def seed() -> Optional[str]:
         devices.get_state().set_binding(SITE, CONTROLLER, devices.stable_identity(ROUTER))
         _work_zero_on_the_coupon()
     except (ToolchainError, OSError) as exc:
-        log.warning("demo: cnc_router's controller not pinned: %s", exc)
+        log.warning("simulated: cnc_router's controller not pinned: %s", exc)
     try:
         devices.identify_printer(PRINTER)
         identity = devices.stable_identity(PRINTER)
         devices.get_state().set_binding(SITE, BOARD, identity)
     except (ToolchainError, OSError) as exc:
-        log.warning("demo: printer_1's mainboard not pinned: %s", exc)
+        log.warning("simulated: printer_1's mainboard not pinned: %s", exc)
         return None
     return identity
 
 
 def create_app():
-    """The server's app in the demo's environment: its builds in its own folder, the
+    """The server's app in the simulated machines' environment: its builds in its own folder, the
     simulated boards answering at once (as the suites' do), printer_1's mainboard
     pinned. uvicorn's factory, so ``--reload`` builds it the same way."""
     root = running()
     if root is None:
-        raise RuntimeError(f"{DEMO_ENV} is not set: start the demo with apothecary serve --demo")
+        raise RuntimeError(f"{SIMULATED_ENV} is not set: start with apothecary serve --simulated")
     from .firmware import bindings, service
     from .firmware.gcode import GcodeLink
 
@@ -343,7 +343,7 @@ def create_app():
 
     seed()
     if not (os.environ.get("APOTHECARY_CONSOLE_SACN") or os.environ.get("APOTHECARY_CONSOLE_OSC")):
-        threading.Thread(target=sweep_the_rigs, name="demo-console", daemon=True).start()
+        threading.Thread(target=sweep_the_rigs, name="simulated-console", daemon=True).start()
     return app
 
 
@@ -364,11 +364,11 @@ def sweep_the_rigs_once(t: float) -> int:
 
 def sweep_the_rigs(stop: Optional[threading.Event] = None) -> None:
     """The simulated console, CONSOLE_HZ times a second until ``stop`` is set (never,
-    in the demo's server: its thread ends with the process)."""
+    in this server: its thread ends with the process)."""
     stop = stop or threading.Event()
     started = time.monotonic()
     while not stop.wait(1 / CONSOLE_HZ):
         try:
             sweep_the_rigs_once(time.monotonic() - started)
         except Exception:  # a rig's files changed under it: the next sweep tries again
-            log.exception("the demo's console could not sweep a rig")
+            log.exception("the simulated console could not sweep a rig")

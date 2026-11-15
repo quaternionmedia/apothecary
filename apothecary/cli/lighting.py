@@ -24,7 +24,7 @@ def _request(url: str, data: bytes | None = None, method: str = "GET") -> dict:
 
 @click.group("lighting")
 def lighting() -> None:
-    """A lighting rig's live feedback: a sweep to demo the viewer without a console."""
+    """A lighting rig's live feedback: a sweep to show the viewer with no console."""
 
 
 @lighting.command("simulate")

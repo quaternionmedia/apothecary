@@ -107,7 +107,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     const knownTypes = new Set([WORLD, ...typesIn(defaultRoot), ...TRANSIENT, ...known]);
     const layout = new GoldenLayout(host);
     // The host is the page's main row, not the body: its size follows the window, the
-    // demo's banner and the status line, and the layout follows it.
+    // simulated machines' banner and the status line, and the layout follows it.
     layout.resizeWithContainerAutomatically = true;
 
     function record(id) {

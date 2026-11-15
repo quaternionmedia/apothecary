@@ -200,7 +200,7 @@ def _simulated_device_env(env: dict) -> dict:
     """Point the doc server at scripted ports and the simulated printer.
 
     The scripted ``arduino-cli`` is the package's (apothecary/firmware/scripted.py),
-    which the unit tests and ``apothecary serve --demo`` run too: an installed
+    which the unit tests and ``apothecary serve --simulated`` run too: an installed
     package has no tests/ to borrow it from.
     """
     from ..firmware.scripted import write_fake_arduino_cli

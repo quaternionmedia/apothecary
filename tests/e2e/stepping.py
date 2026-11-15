@@ -4,8 +4,8 @@ first checking that the page is where the step before it leaves it.
 Under ``--steps`` a step-through test runs every step, in order, on a server of its own in
 its own browser; with neither flag it skips, since each walks a loop another browser test
 holds end to end, and the steps workflow (.github/workflows/steps.yml, at a version tag) passes
-``--steps``. Given ``--step N`` and ``--base-url`` naming the demo (``apothecary serve
---demo``), it runs only step N, on the demo, in the visible Chromium answering DevTools at
+``--steps``. Given ``--step N`` and ``--base-url`` naming the simulated server (``apothecary serve
+--simulated``), it runs only step N, on the simulated server, in the visible Chromium answering DevTools at
 127.0.0.1:9222 (started with ``--remote-debugging-port=9222``), in its tab named
 ``apothecary-walk``, opened if there is none. The tab is left where the step leaves it, to
 be looked at, its picture in ``.cache/walk/<loop>-step-N.png``; a step whose page is not
@@ -69,7 +69,7 @@ def picture(name: str, wait: float = 15.0) -> Optional[Path]:
 
 
 def walk_tab(request, base_url: str) -> Page:
-    """The demo's walk tab in the visible Chromium, opened on the garage if there is none,
+    """The simulated server's walk tab in the visible Chromium, opened on the garage if there is none,
     brought to the front."""
     browser = request.getfixturevalue("playwright").chromium.connect_over_cdp(DEVTOOLS)
     context = browser.contexts[0]
@@ -85,8 +85,8 @@ def walk_tab(request, base_url: str) -> Page:
 def chosen(
     request, base_url: str, loop: str, steps: Steps, own: Callable[[], Tuple[Page, str]]
 ) -> Iterator[Tuple[Page, str, bool, List[int]]]:
-    """For a step-through test's fixture: the page, its server, whether it is the demo's
-    tab, and the steps to run there -- one on the demo under --step, every one on the
+    """For a step-through test's fixture: the page, its server, whether it is the simulated server's
+    tab, and the steps to run there -- one on the simulated server under --step, every one on the
     test's own (``own``) otherwise. Under --step, the step's words and picture after it."""
     n = request.config.getoption("--step")
     if n is None:

@@ -1,5 +1,5 @@
 """The Stream Deck + as a controller for the garage's machines (firmware/deck_control.py),
-against the simulated deck and the demo's bench: the simulated Ender and router, pinned.
+against the simulated deck and the simulated server's bench: the simulated Ender and router, pinned.
 
 Every motion goes through what bounds a person's jog -- the control latch, the port's
 dialect, its bounds -- so each test sends a turn and reads the machine's own answer. No
@@ -14,14 +14,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from apothecary.api import app
-from apothecary.demo import PRINTER, ROUTER
 from apothecary.firmware import deck, deck_control, devices, gcode, grbl
 from apothecary.firmware.toolchains import PortHeld, ToolchainError
+from apothecary.simulated import PRINTER, ROUTER
 
 
 @pytest.fixture
 def bench(family_bench, monkeypatch):
-    """The demo's bench, and one simulated deck with the layout running on it."""
+    """The simulated server's bench, and one simulated deck with the layout running on it."""
     monkeypatch.setenv(deck.SIMULATED_DECK_ENV, "SIMDECK0")
     monkeypatch.delenv(deck_control.CONTROL_ENV, raising=False)
     deck.reset_decks()
@@ -276,7 +276,7 @@ def test_a_stop_reaches_a_machine_that_is_pinned_somewhere_else(bench):
     kind."""
     controller, one, links = bench
     state = devices.get_state()
-    from apothecary.demo import BOARD, SITE
+    from apothecary.simulated import BOARD, SITE
 
     assert state.clear_binding(SITE, BOARD)
     state.set_binding("apothecary", "creality_v422", devices.stable_identity(PRINTER))

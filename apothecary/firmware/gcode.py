@@ -26,7 +26,7 @@ Two things distinguish this from ``devices.SerialStreams``:
 The byte transport is an engine slot (``Transport``), chosen by
 ``serial_engine()``: **pyserial** (any baud, every platform) unless
 ``APOTHECARY_SERIAL_ENGINE=simulated`` selects an in-process pretend Marlin
-for demos and browser tests with no hardware. Everything above the slot is
+for ``serve --simulated`` and browser tests, with no hardware. Everything above the slot is
 engine-agnostic.
 """
 

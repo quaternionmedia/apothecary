@@ -142,14 +142,14 @@ def test_the_pinned_appimage_is_checked_installed_and_made_current(tools, monkey
 
 
 def test_an_install_in_another_tools_folder_is_read_in_place(tools, monkeypatch, tmp_path):
-    """`apothecary serve --demo` has a tools folder of its own and names the person's
+    """`apothecary serve --simulated` has a tools folder of its own and names the person's
     OrcaSlicer by its path: its profiles are found by the install.json beside it."""
     from apothecary.slicer.modules import orcaslicer
 
     github = _linux(monkeypatch, _appimage())
     path = oi.OrcaSlicerInstaller(fetch=github.fetch, fetch_to=github.fetch_to).install()
     resources = tools / "2.4.2" / "squashfs-root" / "resources"
-    monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tmp_path / "the-demos-own"))
+    monkeypatch.setenv("APOTHECARY_TOOLS_DIR", str(tmp_path / "the-simulated servers-own"))
     assert oi.current_version() is None
     assert oi.resources_of_install(path) == resources
     assert orcaslicer.resources_beside(path) == resources

@@ -175,7 +175,7 @@ pad, so it is one act on the port whoever makes it; every other line goes throug
 for: the deck's stop keys are a USB report, a host process, a link and a queue away from the
 controller. Keep a hand on the machine's own switch, as the bench checklist says.
 
-The layout starts on a deck when `APOTHECARY_DECK_CONTROL` is set (the demo sets it), or
+The layout starts on a deck when `APOTHECARY_DECK_CONTROL` is set (`serve --simulated` sets it), or
 when `POST /firmware/decks/{id}/control` with `{"on": true}` asks; `GET` on the same route
 says whether it runs, the machine chosen, the step, the control's seconds left, what it
 said last and the lines it sent. A real deck is opened by it, which takes the device from
@@ -201,8 +201,8 @@ With `APOTHECARY_SERIAL_ENGINE=simulated` no HID device is listed or opened. The
 found are the ones `APOTHECARY_SIMULATED_DECK` names (comma-separated), each a pretend
 Stream Deck + that keeps the images it is sent and hears the events
 `POST /firmware/decks/{id}/events` gives it, validated as a real deck's reports could
-be: a knob turns by a whole number of steps, a touch is a tap, a hold or a drag. The
-demo (`apothecary serve --demo`) has one, `DEMODECK`.
+be: a knob turns by a whole number of steps, a touch is a tap, a hold or a drag.
+`apothecary serve --simulated` has one, `SIMDECK`.
 
 `tests/test_firmware_deck.py` holds the seam against the simulated deck, against a
 stand-in for the library's device that counts what is opened, and against the

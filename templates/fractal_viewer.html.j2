@@ -75,11 +75,11 @@
         }
         .toolbar .docs-link:hover { background: #505050; }
         /* Simulated machines: one quiet line above the header. */
-        .demo-banner {
+        .simulated-banner {
             padding: 0.2rem 0.75rem; font-size: 0.78rem; color: #9fb0c4; background: #1b2028;
             border-bottom: 1px solid #2a2f38; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .demo-banner code { color: #c8d6e8; font-size: 0.95em; }
+        .simulated-banner code { color: #c8d6e8; font-size: 0.95em; }
         /* The View menu: how the world is drawn, folded behind ⚙ View as Site's
            sections fold; each item a cell of the canvas ring's View. */
         .view-menu { position: relative; }
@@ -723,8 +723,8 @@
 </head>
 <body>
     <div class="app-container">
-        {% if demo %}
-        <div id="demo-banner" class="demo-banner" role="note" title="No machine here is real: printer_1's mainboard is pinned to a simulated Ender, cnc_router's controller to a simulated GRBL router, an ESP32 devkit is simulated, a simulated lighting console sweeps the theatre's rig, arduino-cli, cargo and espflash are scripted, and no real serial port is opened. Its state is {{ demo }}, kept between runs; your own ~/.apothecary and pins are not touched.">Simulated machines: a printer, a router, an ESP32 and a lighting console, with scripted firmware tools and state of their own in {{ demo }}. For the real ones, stop the server and run <code>apothecary serve</code>.</div>
+        {% if simulated %}
+        <div id="simulated-banner" class="simulated-banner" role="note" title="No machine here is real: printer_1's mainboard is pinned to a simulated Ender, cnc_router's controller to a simulated GRBL router, an ESP32 devkit is simulated, a simulated lighting console sweeps the theatre's rig, arduino-cli, cargo and espflash are scripted, and no real serial port is opened. Its state is {{ simulated }}, kept between runs; your own ~/.apothecary and pins are not touched.">Simulated machines: a printer, a router, an ESP32 and a lighting console, with scripted firmware tools and state of their own in {{ simulated }}. For the real ones, stop the server and run <code>apothecary serve</code>.</div>
         {% endif %}
         <div class="toolbar">
             <nav id="view-banner" class="view-banner" aria-label="Where you are">

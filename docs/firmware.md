@@ -818,8 +818,8 @@ A kind of job belongs to a kind of machine: a printer offers `print`
 ## Serial engines
 
 `apothecary serve` refuses `APOTHECARY_SERIAL_ENGINE=simulated` on a person's own state
-folder: the simulated engine named by hand has neither the demo's folder nor its
-banner. `apothecary serve --demo` is the way to simulated machines, or a state folder
+folder: the simulated engine named by hand has neither `--simulated`'s folder nor its
+banner. `apothecary serve --simulated` is the way to simulated machines, or a state folder
 of its own named in `APOTHECARY_STATE_DIR`.
 
 The byte transport under the G-code seam -- and under the Rust module's own
@@ -828,12 +828,12 @@ port list and monitor -- is an engine slot:
 | Engine | What it is |
 |---|---|
 | `pyserial` | the default: any baud, every platform |
-| `simulated` | an in-process pretend Marlin for demos and browser tests: any port opened through it answers with plausible, slowly moving values, and answers `G29`, `M420 V`, `M851` and `G30` with a slightly tilted bed; and, for the Rust module, the pretend devkits `APOTHECARY_SIMULATED_DEVKIT` names, each saying the hello of the sketch Apothecary last flashed to it |
+| `simulated` | an in-process pretend Marlin for `serve --simulated` and browser tests: any port opened through it answers with plausible, slowly moving values, and answers `G29`, `M420 V`, `M851` and `G30` with a slightly tilted bed; and, for the Rust module, the pretend devkits `APOTHECARY_SIMULATED_DEVKIT` names, each saying the hello of the sketch Apothecary last flashed to it |
 
-`apothecary serve --demo` is the way to try all of this with no board: an
+`apothecary serve --simulated` is the way to try all of this with no board: an
 idle simulated Ender pinned to printer_1's mainboard, a simulated ESP32
 devkit and the scripted firmware tools, on a state folder of its own
-(`.cache/demo` in the checkout, kept between runs), with every port the
+(`.cache/simulated` in the checkout, kept between runs), with every port the
 simulated engine's ([walkthrough 00](../walkthrough/00-getting-started.md)). By hand,
 `APOTHECARY_SIMULATED_PRINTER=printing` starts the simulator mid-way through
 an SD print; the default is a cold, idle machine. A port must still be
@@ -843,7 +843,7 @@ supplies two:
 ```bash
 ARDUINO_CLI=$(uv run python -c "from pathlib import Path; from apothecary.firmware.scripted import write_fake_arduino_cli; print(write_fake_arduino_cli(Path('/tmp/fake-arduino-cli')))") \
 APOTHECARY_SERIAL_ENGINE=simulated APOTHECARY_SIMULATED_PRINTER=printing \
-APOTHECARY_STATE_DIR=/tmp/apothecary-demo uv run apothecary serve
+APOTHECARY_STATE_DIR=/tmp/apothecary-simulated uv run apothecary serve
 ```
 
 ## A stable device name
@@ -878,7 +878,7 @@ serial ports on the host, which is why the server listens on this machine only.
 
 The seam's tests run against a scripted fake `arduino-cli`, and the Rust
 module's against a scripted `cargo` and `espflash`
-(`apothecary/firmware/scripted.py`, which `serve --demo` runs too), so CI
+(`apothecary/firmware/scripted.py`, which `serve --simulated` runs too), so CI
 needs no toolchain, network or serial port. The fakes in one folder are
 one simulated bench: with `FAKE_DEVKIT` set, an ESP32 devkit on
 `/dev/ttyFAKE2` runs whatever was last uploaded or flashed to it and says that

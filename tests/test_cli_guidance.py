@@ -42,7 +42,7 @@ def test_the_help_ends_with_the_three_steps_and_the_page_that_says_them():
     shown = CliRunner().invoke(cli, ["--help"]).output
     tail = shown[shown.index("Start here:") :]
     steps = [tail.index(f"apothecary {step}") for step in ("check", "openscad install")]
-    steps.append(tail.index("apothecary serve --demo"))
+    steps.append(tail.index("apothecary serve --simulated"))
     assert steps == sorted(steps)
     assert "walkthrough/00-getting-started.md" in tail
     assert (ROOT / "walkthrough" / "00-getting-started.md").is_file()
@@ -53,12 +53,12 @@ def test_check_ends_with_the_next_step(monkeypatch):
 
     monkeypatch.setattr(system, "has_manifold", lambda exe: False)
     without = CliRunner().invoke(cli, ["check"]).output.rstrip().splitlines()[-1]
-    assert without.startswith("next: apothecary openscad install, then apothecary serve --demo")
+    assert without.startswith("next: apothecary openscad install, then apothecary serve --simulated")
     monkeypatch.setattr(system, "has_manifold", lambda exe: True)
     monkeypatch.setattr(system.OpenSCADRenderer, "is_available", True)
     monkeypatch.setattr(system.OpenSCADRenderer, "get_version", lambda self: "2026.01.01")
     done = CliRunner().invoke(cli, ["check"]).output.rstrip().splitlines()[-1]
-    assert done == "next: apothecary serve --demo (walkthrough/00-getting-started.md)"
+    assert done == "next: apothecary serve --simulated (walkthrough/00-getting-started.md)"
 
 
 def test_firmware_validate_says_each_missing_tool_once(no_arduino_cli):
@@ -144,7 +144,7 @@ def test_a_command_the_command_line_has_not_is_found():
     assert _not_commands("run `apothecary visions status` first") == ["visions"]
     assert _not_commands("run `uv run apothecary photos` first") == ["photos"]
     said = (
-        "apothecary reads without it; apothecary vision ask a.png; `apothecary serve --demo`;"
+        "apothecary reads without it; apothecary vision ask a.png; `apothecary serve --simulated`;"
         " `uv run apothecary vision status`; it prints `apothecary esp32_blink: hello`"
     )
     assert _not_commands(said) == []

@@ -1,11 +1,11 @@
-"""`apothecary serve --demo`'s folder and seed (apothecary/demo.py).
+"""`apothecary serve --simulated`'s folder and seed (apothecary/simulated.py).
 
-The demo runs on a state folder of its own, never the person's ``~/.apothecary``
+The simulated server runs on a state folder of its own, never the person's ``~/.apothecary``
 or their pins, and every port it has is the simulated engine's. These hold the
 folder -- where it is, what is in it, that it is kept between runs and that
 nothing is written outside it -- and the seed, printer_1's mainboard pinned to the
-simulated Ender, with every real port refused. tests/e2e/test_the_demo.py goes
-round each loop against the demo's own server.
+simulated Ender, with every real port refused. tests/e2e/test_simulated_machines.py goes
+round each loop against the simulated server's own server.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from click.testing import CliRunner
 from firmware_helpers import _isolate_firmware_state
 from slicer_helpers import write_fake_orcaslicer
 
-from apothecary import demo
+from apothecary import simulated
 from apothecary.cli.main import cli
 from apothecary.cli.server import DEFAULT_PORT, PORT_ENV
 from apothecary.projects.parts.skeleton import ROOT
@@ -38,7 +38,7 @@ PATHS = (
 
 @pytest.fixture
 def person(tmp_path, monkeypatch):
-    """A person's own folders, which the demo must leave as it found them: their
+    """A person's own folders, which the simulated server must leave as it found them: their
     state, their tools (with nothing installed) and their render cache."""
     folders = {name: tmp_path / name for name in ("state", "tools", "cache")}
     monkeypatch.setenv("APOTHECARY_STATE_DIR", str(folders["state"]))
@@ -48,17 +48,19 @@ def person(tmp_path, monkeypatch):
     return folders
 
 
-def test_the_demo_folder_is_the_checkouts_cache_unless_the_cache_is_elsewhere(monkeypatch):
+def test_the_simulated_server_folder_is_the_checkouts_cache_unless_the_cache_is_elsewhere(
+    monkeypatch,
+):
     monkeypatch.delenv("APOTHECARY_CACHE_DIR", raising=False)
-    assert demo.demo_root() == ROOT / ".cache" / "demo"
-    assert demo.shown(demo.demo_root()) == ".cache/demo"
+    assert simulated.simulated_root() == ROOT / ".cache" / "simulated"
+    assert simulated.shown(simulated.simulated_root()) == ".cache/simulated"
     monkeypatch.setenv("APOTHECARY_CACHE_DIR", "/somewhere/else")
-    assert demo.demo_root() == Path("/somewhere/else/demo")
+    assert simulated.simulated_root() == Path("/somewhere/else/simulated")
 
 
-def test_the_demo_runs_on_a_folder_of_its_own(person):
-    made = demo.prepare()
-    root = person["cache"] / "demo"
+def test_the_simulated_server_runs_on_a_folder_of_its_own(person):
+    made = simulated.prepare()
+    root = person["cache"] / "simulated"
     assert made.root == root.resolve()
     for name in PATHS:
         where = Path(made.env[name])
@@ -78,23 +80,25 @@ def test_the_demo_runs_on_a_folder_of_its_own(person):
     )
     # The person's state and tools are as they were: nothing written there.
     assert not person["state"].exists() and not person["tools"].exists()
-    assert sorted(p.name for p in person["cache"].iterdir()) == ["demo"]
+    assert sorted(p.name for p in person["cache"].iterdir()) == ["simulated"]
 
 
-def test_the_demo_has_a_drawn_whiteboard_among_its_pictures_and_leaves_a_changed_one(person):
+def test_the_simulated_server_has_a_drawn_whiteboard_among_its_pictures_and_leaves_a_changed_one(
+    person,
+):
     """The examples' drawn whiteboard is copied in once, and a person's own picture
     of that name is left as it is on the next run."""
-    made = demo.prepare()
-    there = Path(made.env["APOTHECARY_PICTURE_ROOT"]) / demo.WHITEBOARD
-    drawn = demo.ROOT / "examples" / "pictures" / demo.WHITEBOARD
+    made = simulated.prepare()
+    there = Path(made.env["APOTHECARY_PICTURE_ROOT"]) / simulated.WHITEBOARD
+    drawn = simulated.ROOT / "examples" / "pictures" / simulated.WHITEBOARD
     assert there.read_bytes() == drawn.read_bytes()
     there.write_bytes(b"a person's own")
-    demo.prepare()
+    simulated.prepare()
     assert there.read_bytes() == b"a person's own"
 
 
-def test_the_demo_is_kept_between_runs(person):
-    first = demo.prepare()
+def test_the_simulated_server_is_kept_between_runs(person):
+    first = simulated.prepare()
     kept = Path(first.env["APOTHECARY_PICTURE_ROOT"]) / "captures" / "a.png"
     kept.parent.mkdir(parents=True)
     kept.write_bytes(b"a picture taken last time")
@@ -103,31 +107,31 @@ def test_the_demo_is_kept_between_runs(person):
         ["git", "rev-parse", "--git-dir"], cwd=variants, capture_output=True, text=True
     )
     assert saved.returncode == 0, saved.stderr
-    again = demo.prepare()
+    again = simulated.prepare()
     assert again.root == first.root and again.env == first.env
     assert kept.read_bytes() == b"a picture taken last time"
 
 
-def test_the_demo_slices_with_the_persons_orcaslicer_read_where_it_is(
+def test_the_simulated_server_slices_with_the_persons_orcaslicer_read_where_it_is(
     person, tmp_path, monkeypatch
 ):
-    """Found as their own serve finds it, and named where it is: the demo's tools
+    """Found as their own serve finds it, and named where it is: the simulated server's tools
     folder is its own, so it is named rather than looked for there."""
     orca = write_fake_orcaslicer(tmp_path / "theirs")
     monkeypatch.setenv("APOTHECARY_ORCASLICER", str(orca))
-    made = demo.prepare()
+    made = simulated.prepare()
     assert made.orcaslicer == orca and made.env["APOTHECARY_ORCASLICER"] == str(orca)
     monkeypatch.setenv("APOTHECARY_ORCASLICER", "none")
-    made = demo.prepare()
+    made = simulated.prepare()
     assert made.orcaslicer is None and "APOTHECARY_ORCASLICER" not in made.env
 
 
 @pytest.mark.parametrize("failure", ["missing", "hung"])
-def test_a_git_that_is_missing_or_does_not_answer_leaves_the_demo_without_saves(
+def test_a_git_that_is_missing_or_does_not_answer_leaves_the_simulated_server_without_saves(
     tmp_path, monkeypatch, failure
 ):
-    """The demo's variants repository is made by git, each call given a time: a git that
-    is not there, or does not answer in time, leaves the demo running without one."""
+    """The simulated server's variants repository is made by git, each call given a time: a git that
+    is not there, or does not answer in time, leaves the simulated server running without one."""
     calls = []
 
     def run(argv, **kwargs):
@@ -136,15 +140,15 @@ def test_a_git_that_is_missing_or_does_not_answer_leaves_the_demo_without_saves(
             raise FileNotFoundError("git")
         raise subprocess.TimeoutExpired(argv, kwargs.get("timeout"))
 
-    monkeypatch.setattr(demo.subprocess, "run", run)
-    assert demo._variants_repo(tmp_path / "variants.git") is None
-    assert calls and all(t == demo.GIT_TIMEOUT_S for t in calls)
+    monkeypatch.setattr(simulated.subprocess, "run", run)
+    assert simulated._variants_repo(tmp_path / "variants.git") is None
+    assert calls and all(t == simulated.GIT_TIMEOUT_S for t in calls)
 
 
-def test_the_seed_refuses_outside_the_demo(monkeypatch):
-    monkeypatch.delenv(demo.DEMO_ENV, raising=False)
-    with pytest.raises(RuntimeError, match="demo's environment only"):
-        demo.seed()
+def test_the_seed_refuses_outside_the_simulated_server(monkeypatch):
+    monkeypatch.delenv(simulated.SIMULATED_ENV, raising=False)
+    with pytest.raises(RuntimeError, match="their own environment only"):
+        simulated.seed()
 
 
 def test_the_seed_pins_printer_1s_mainboard_and_touches_no_real_port(person, monkeypatch, tmp_path):
@@ -159,11 +163,11 @@ def test_the_seed_pins_printer_1s_mainboard_and_touches_no_real_port(person, mon
 
     def refuse(*args, **kwargs):
         touched.append(args)
-        raise AssertionError("the demo touched a real serial port")
+        raise AssertionError("the simulated server touched a real serial port")
 
     monkeypatch.setattr(serial.Serial, "open", refuse)
     monkeypatch.setattr(serial.tools.list_ports, "comports", refuse)
-    made = demo.prepare()
+    made = simulated.prepare()
     for key, value in made.env.items():
         monkeypatch.setenv(key, value)
     _isolate_firmware_state(monkeypatch, tmp_path)
@@ -172,29 +176,34 @@ def test_the_seed_pins_printer_1s_mainboard_and_touches_no_real_port(person, mon
     links = gcode.PrinterLinks()
     monkeypatch.setattr(gcode, "_LINKS", links)
     try:
-        identity = demo.seed()
+        identity = simulated.seed()
         assert identity == "FAKESERIAL1"
-        pins = {b.path: b.identity for b in devices.get_state().bindings(demo.SITE)}
-        assert pins == {demo.BOARD: "FAKESERIAL1", demo.CONTROLLER: "FAKEROUTER3"}
-        printer = devices.known_device(demo.PRINTER)
+        pins = {b.path: b.identity for b in devices.get_state().bindings(simulated.SITE)}
+        assert pins == {simulated.BOARD: "FAKESERIAL1", simulated.CONTROLLER: "FAKEROUTER3"}
+        printer = devices.known_device(simulated.PRINTER)
         assert printer.printer.machine_type == "Simulated Ender"
         # The router's work zero is the coupon's stock, wherever the tool stands: a file's
         # zero, in the working area, is the machine's offset plus its travel.
         from apothecary.example_hierarchy import ROUTER_COUPON_WORK_ZERO as zero
         from apothecary.projects.parts.anolex_4060_evo_ultra_2 import WORK
 
-        offset = devices.printer_status(demo.ROUTER).work_offset
+        offset = devices.printer_status(simulated.ROUTER).work_offset
         assert (offset["x"] + WORK.x, offset["y"] + WORK.y, offset["z"] + WORK.z) == (
             zero.x,
             zero.y,
             zero.z,
         )
-        router = devices.known_device(demo.ROUTER)
+        router = devices.known_device(simulated.ROUTER)
         assert router.printer.dialect == "grbl" and router.printer.machine == "router"
-        # Every port the demo has is the scripted bench's: the printer, the devkit and
+        # Every port the simulated server has is the scripted bench's: the printer, the devkit and
         # the router.
         ports = [d.port for d in devices.detected_devices(fresh=True)]
-        assert set(ports) == {"/dev/ttyFAKE0", demo.PRINTER, demo.DEVKIT, demo.ROUTER}, ports
+        assert set(ports) == {
+            "/dev/ttyFAKE0",
+            simulated.PRINTER,
+            simulated.DEVKIT,
+            simulated.ROUTER,
+        }, ports
     finally:
         links.stop_all()
         toolchains.reset_toolchains()
@@ -203,8 +212,8 @@ def test_the_seed_pins_printer_1s_mainboard_and_touches_no_real_port(person, mon
     assert not person["state"].exists()
 
 
-def test_the_demos_console_sweeps_every_rig_as_a_put_would(monkeypatch):
-    """The demo's simulated console sets the theatre's levels in the server's own
+def test_the_simulated_console_sweeps_every_rig_as_a_put_would(monkeypatch):
+    """The simulated server's simulated console sets the theatre's levels in the server's own
     state: its fixtures show a colour, and a sweep a moment later a different one."""
     from fastapi.testclient import TestClient
 
@@ -213,19 +222,19 @@ def test_the_demos_console_sweeps_every_rig_as_a_put_would(monkeypatch):
 
     monkeypatch.setattr(lighting_routes, "_states", {})
     here = TestClient(app)
-    assert demo.sweep_the_rigs_once(0.0) >= 1
+    assert simulated.sweep_the_rigs_once(0.0) >= 1
     first = here.get("/sites/theatre/lighting/state").json()
     assert first["seq"] > 0 and any(any(rgb) for rgb in first["rgb"].values()), first
-    demo.sweep_the_rigs_once(2.0)
+    simulated.sweep_the_rigs_once(2.0)
     second = here.get("/sites/theatre/lighting/state").json()
     assert second["seq"] > first["seq"] and second["rgb"] != first["rgb"]
 
 
-def test_serve_help_describes_the_demo_and_shows_the_defaults():
+def test_serve_help_describes_simulated_machines_and_shows_the_defaults():
     said = CliRunner().invoke(cli, ["serve", "--help"], terminal_width=200).output
-    assert "--demo" in said and "simulated Ender" in said and ".cache/demo" in said
+    assert "--simulated" in said and "simulated Ender" in said and ".cache/simulated" in said
     flat = " ".join(said.split())
-    assert "Serve without --demo to leave it" in flat
+    assert "Serve without --simulated for the real ones" in flat
     assert "A simulated console sweeps the theatre's lighting rig" in flat
     assert "[default: 127.0.0.1]" in said
     assert f"[env var: {PORT_ENV}; default: {DEFAULT_PORT}]" in said

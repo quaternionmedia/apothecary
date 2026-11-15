@@ -228,5 +228,5 @@ def _next_step(renderer: OpenSCADRenderer) -> str:
     """The line `check` ends with: the next command walkthrough page 00 gives."""
     page = "walkthrough/00-getting-started.md"
     if renderer.is_available and has_manifold(renderer.openscad_path):
-        return f"next: apothecary serve --demo ({page})"
-    return f"next: apothecary openscad install, then apothecary serve --demo ({page})"
+        return f"next: apothecary serve --simulated ({page})"
+    return f"next: apothecary openscad install, then apothecary serve --simulated ({page})"

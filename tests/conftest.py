@@ -64,7 +64,7 @@ def pytest_addoption(parser):
         default=None,
         metavar="N",
         help="A step-through browser test (tests/e2e/test_steps_*.py): run only its step N, "
-        "on the running demo in the visible browser's tab named apothecary-walk, and leave "
+        "on the running simulated server in the visible browser's tab named apothecary-walk, and leave "
         "it there.",
     )
     parser.addoption(
@@ -317,11 +317,11 @@ def served():
 
 @pytest.fixture
 def family_bench(fake_arduino_cli, monkeypatch):
-    """The demo's bench under the family's hub: the Ender and the router simulated and
+    """The simulated server's bench under the family's hub: the Ender and the router simulated and
     pinned, the devkit scripted; yields the machines' links."""
-    from apothecary.demo import BOARD, CONTROLLER, PRINTER, ROUTER, SITE
     from apothecary.family import hub
     from apothecary.firmware import devices, gcode, tasks
+    from apothecary.simulated import BOARD, CONTROLLER, PRINTER, ROUTER, SITE
 
     monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "simulated")
     monkeypatch.setenv("APOTHECARY_SIMULATED_ROUTER", ROUTER)
@@ -334,7 +334,7 @@ def family_bench(fake_arduino_cli, monkeypatch):
     hub.close()
     for port, path in ((PRINTER, BOARD), (ROUTER, CONTROLLER)):
         devices.identify_printer(port)
-        # Pinned as a Pin pins and the demo does: by the board's own identity.
+        # Pinned as a Pin pins and the simulated server does: by the board's own identity.
         devices.get_state().set_binding(SITE, path, devices.stable_identity(port))
     yield links
     links.stop_all()

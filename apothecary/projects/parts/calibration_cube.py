@@ -94,7 +94,7 @@ def create(metadata_root: Path) -> CalibrationCubePart:
         description="Calibration cube with XYZ axes and dimension markers",
         params_model=Params,
         category="calibration",
-        tags=["calibration", "test", "axes", "dimensions", "demo"],
+        tags=["calibration", "test", "axes", "dimensions"],
         readme_path=metadata_root / "parts" / "README.md",
         preview_color=Color.from_hex("#808080"),  # Gray
         print_settings=PrintSettings(

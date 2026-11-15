@@ -5,7 +5,7 @@ are yours to run, in order, from a fresh clone.
 
 Four steps take a fresh clone to a viewer with a bench it can drive and no
 hardware plugged in: install, see what this machine has, put a fast OpenSCAD
-in place, and serve the demo. Then the five loops, each with what it needs,
+in place, and serve it with simulated machines. Then the five loops, each with what it needs,
 and the installs only some of them want. [Page 07](07-a-part.md) onward
 is the library's tour.
 
@@ -37,7 +37,7 @@ package is the only failure: it exits 1 and names `uv sync`. Everything else
 is optional and says how to install it. Its last line is the next step:
 
 ```
-next: apothecary openscad install, then apothecary serve --demo (walkthrough/00-getting-started.md)
+next: apothecary openscad install, then apothecary serve --simulated (walkthrough/00-getting-started.md)
 ```
 
 ## 3. An OpenSCAD with Manifold, before the first serve
@@ -69,7 +69,7 @@ generate-stl --all --force` builds them again.
 ## 4. The viewer, with a bench to drive
 
 ```bash
-uv run apothecary serve --demo
+uv run apothecary serve --simulated
 ```
 
 Then open `http://127.0.0.1:6283/viewer`: `serve` prints the address, and where
@@ -78,14 +78,14 @@ started in until Ctrl+C; run anything else in another one. The port is 6283 unle
 `--port` or `APOTHECARY_PORT` names another, so a second checkout's server runs
 beside it.
 
-`--demo` serves the viewer on a state folder of its own, never yours, with a
+`--simulated` serves the viewer on a state folder of its own, never yours, with a
 bench that needs no hardware: an idle simulated Ender pinned to printer_1's
 mainboard, a simulated ESP32 devkit, and scripted firmware tools. It slices
 with the real OrcaSlicer when one is installed, and says how to install it
-when not; a print goes to the simulated printer. A banner on the page says it
-is the demo, and no real board is touched. Its state is `.cache/demo` in the
-checkout, kept between runs; deleting it starts the demo afresh. Without
-`--demo`, `serve` is the same viewer on your own state and the boards plugged
+when not; a print goes to the simulated printer. A banner on the page says its
+machines are simulated, and no real board is touched. Its state is `.cache/simulated` in the
+checkout, kept between runs; deleting it starts them afresh. Without
+`--simulated`, `serve` is the same viewer on your own state and the boards plugged
 into this machine.
 
 The page opens on the garage: the world, its panels as windows beside it, and the
@@ -103,7 +103,7 @@ stage needs where that is not there, and keeps a word on whether the stage works
 Each loop is a path through the page that goes round twice, and each has a
 page the browser test that walks it writes as it goes.
 
-| Loop | Page | Needs | Under `serve --demo` |
+| Loop | Page | Needs | Under `serve --simulated` |
 |---|---|---|---|
 | Designing a part: a size moved, checked, applied and drawn | [04](04-designing-a-part.md) | nothing but OpenSCAD | the same |
 | Editing a part's SCAD, kept as a variant in git | [06](06-editing-a-parts-scad.md) | nothing but OpenSCAD | the same |
@@ -146,7 +146,7 @@ printer_1's Machine. Each loop's last message names the next on it: a save
 names Slice; a print of it done names its board; Selected's Flash its sketch
 opens the Bench on `footpedal@arduino` and the Uno it is for; the upload names
 its ring's Device › Query; and the hello heard names Part › Edit, round again.
-Under `serve --demo` the scripted arduino-cli builds and flashes it.
+Under `serve --simulated` the scripted arduino-cli builds and flashes it.
 
 ## 6. The installs only some loops want
 
@@ -195,7 +195,7 @@ above:
       1. apothecary check              what is installed here, and what is missing
       2. apothecary openscad install   an OpenSCAD with Manifold: fast renders, and the
                                        parts OpenSCAD 2021.01 is too old to build
-      3. apothecary serve --demo       the viewer at http://127.0.0.1:6283/viewer,
+      3. apothecary serve --simulated  the viewer at http://127.0.0.1:6283/viewer,
                                        with a simulated printer and board
     walkthrough/00-getting-started.md says each step, then the five loops.
     <BLANKLINE>
@@ -214,7 +214,7 @@ above:
 |---|---|
 | What is installed | `apothecary check` |
 | The OpenSCAD renders use | `apothecary openscad status` |
-| The viewer, no hardware | `apothecary serve --demo` |
+| The viewer, no hardware | `apothecary serve --simulated` |
 | The viewer, this machine's boards | `apothecary serve` |
 | The real printer and board, checked at the bench | [the bench checklist](../docs/bench-checklist.md) |
 | The ordinary tests | `apothecary test run` |

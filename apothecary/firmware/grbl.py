@@ -17,7 +17,7 @@ a printer's is. What differs is here -- how a board is identified (``$I``,
 there being no ``M115``), how it is polled (the realtime ``?`` and ``$G``),
 which lines may be typed at it while control is armed and what bounds them,
 what the emergency stop is (a soft reset), what a streamed job may not carry,
-and a pretend controller behind the transport slot for demos and tests. The
+and a pretend controller behind the transport slot for ``serve --simulated`` and tests. The
 site's words for its state are ``example_hierarchy.ROUTER_STATUSES``.
 """
 

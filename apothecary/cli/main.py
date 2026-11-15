@@ -34,7 +34,7 @@ Start here:
   1. apothecary check              what is installed here, and what is missing
   2. apothecary openscad install   an OpenSCAD with Manifold: fast renders, and the
                                    parts OpenSCAD 2021.01 is too old to build
-  3. apothecary serve --demo       the viewer at http://127.0.0.1:{DEFAULT_PORT}/viewer,
+  3. apothecary serve --simulated  the viewer at http://127.0.0.1:{DEFAULT_PORT}/viewer,
                                    with a simulated printer and board
 walkthrough/00-getting-started.md says each step, then the five loops.
 

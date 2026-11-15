@@ -1,5 +1,5 @@
-"""The demo started as a person starts it, for the browser tests that go round it:
-``python -m apothecary serve --demo`` as a subprocess, the person's own folders temp
+"""The simulated server started as a person starts it, for the browser tests that go round it:
+``python -m apothecary serve --simulated`` as a subprocess, the person's own folders temp
 ones, and a guard on every Python process it starts that refuses, and writes down, any
 opening of a serial device and any listing of the machine's real ports."""
 
@@ -19,7 +19,7 @@ import pytest
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.stl_renderer import get_renderer
 
-# Every Python process the demo starts imports this first. Opening a serial device, by
+# Every Python process the simulated server starts imports this first. Opening a serial device, by
 # any route Python has, or listing the machine's ports is refused and written down.
 GUARD = textwrap.dedent(
     r"""
@@ -92,7 +92,7 @@ def guarded_env(folder: Path) -> dict:
         {
             "PYTHONPATH": os.pathsep.join(filter(None, [str(guard), env.get("PYTHONPATH")])),
             "APOTHECARY_TEST_SERIAL_GUARD": str(folder / "serial-touched.log"),
-            # The person's own folders: the demo must leave them as they were.
+            # The person's own folders: the simulated server must leave them as they were.
             "APOTHECARY_STATE_DIR": str(folder / "person" / "state"),
             "APOTHECARY_TOOLS_DIR": str(folder / "person" / "tools"),
             "APOTHECARY_CACHE_DIR": str(folder / "person" / "cache"),
@@ -104,12 +104,12 @@ def guarded_env(folder: Path) -> dict:
     return env
 
 
-def start_demo(folder: Path, env: dict) -> tuple[str, subprocess.Popen]:
+def start_simulated(folder: Path, env: dict) -> tuple[str, subprocess.Popen]:
     port = free_port()
     url = f"http://127.0.0.1:{port}"
-    log = (folder / "demo.log").open("w")
+    log = (folder / "simulated.log").open("w")
     proc = subprocess.Popen(
-        [sys.executable, "-m", "apothecary", "serve", "--demo", "--port", str(port)],
+        [sys.executable, "-m", "apothecary", "serve", "--simulated", "--port", str(port)],
         cwd=ROOT,
         env=env,
         stdout=log,
@@ -118,7 +118,9 @@ def start_demo(folder: Path, env: dict) -> tuple[str, subprocess.Popen]:
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         if proc.poll() is not None:
-            pytest.fail(f"the demo exited at start:\n{(folder / 'demo.log').read_text()}")
+            pytest.fail(
+                f"the simulated server exited at start:\n{(folder / 'simulated.log').read_text()}"
+            )
         try:
             if httpx.get(f"{url}/health", timeout=1.0).status_code == 200:
                 return url, proc
@@ -126,7 +128,9 @@ def start_demo(folder: Path, env: dict) -> tuple[str, subprocess.Popen]:
             pass
         time.sleep(0.25)
     proc.terminate()
-    pytest.fail(f"the demo did not answer within 60 s:\n{(folder / 'demo.log').read_text()}")
+    pytest.fail(
+        f"the simulated server did not answer within 60 s:\n{(folder / 'simulated.log').read_text()}"
+    )
 
 
 def stop(proc: subprocess.Popen) -> None:

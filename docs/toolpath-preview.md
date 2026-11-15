@@ -71,7 +71,7 @@ kind's length in the colour it is drawn in, which is the path's key. It follows 
 A printer's file is in the bed's coordinates, so it stands at the bed. A router's counts
 from its work zero, so it stands where the controller's last poll says that is
 (`machine_marks.fileOrigin`), and moves when the zero does: a zero set in the wrong place
-shows before the cut does. In `apothecary serve --demo` the router's work zero is seeded at
+shows before the cut does. In `apothecary serve --simulated` the router's work zero is seeded at
 the coupon's stock, so the coupon's toolpath is drawn on the coupon.
 
 ⊞ Windows › Machine, and the ring's Panels › Windows › Machine view, land on it. The

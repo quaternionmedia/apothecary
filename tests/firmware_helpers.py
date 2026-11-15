@@ -5,7 +5,7 @@ to whichever conftest pytest imported first (``tests/e2e/conftest.py`` in a
 full run), so it is not a stable module to import from.
 
 The scripted arduino-cli, cargo and espflash are the package's
-(``apothecary/firmware/scripted.py``), since ``apothecary serve --demo`` runs
+(``apothecary/firmware/scripted.py``), since ``apothecary serve --simulated`` runs
 them too; they are imported here under the names the tests know them by.
 """
 

@@ -47,7 +47,7 @@ layer and the layers below it, at the top of a module and inside a function alik
 | 1 | `primitives`, `booleans`, `objects`, `transforms`, `scene`, `hierarchy`, `jscad`, `templates`, `example`, `lighting`, `console_feedback`, `apothecary` | Geometry: shapes, a scene and its tree, OpenSCAD and JSCAD out; a site's lighting rig |
 | 2 | `projects`, `universe`, `kernel_compare`, `datum_core_site`, `theatre_site`, `example_hierarchy`, `openscad_installer` | Parts and the sites built of them: the parts registry, a part's STL and its variants, OpenSCAD itself |
 | 3 | `firmware`, `slicer`, `cam`, `jobs`, `evidence`, `vision`, `vocabulary`, `gathering`, `finders`, `wiring`, `rig`, `family`, `machine_plans`, `site_store` | Machines and evidence: boards and their sketches, printers and routers, slices, toolpaths and jobs, cameras, pictures and observations, carlos's wiring, the family's hub, the sites kept |
-| 4 | `api`, `routes`, `viewer`, `docs_site`, `demo`, `menu`, `spaces`, `tour` | The server and the page, and what reads across the whole package: the HTTP API, the viewer, the ring's menus, the demo, the problems and solutions indexes, the tour |
+| 4 | `api`, `routes`, `viewer`, `docs_site`, `simulated`, `menu`, `spaces`, `tour` | The server and the page, and what reads across the whole package: the HTTP API, the viewer, the ring's menus, the simulated machines, the problems and solutions indexes, the tour |
 | 5 | `cli`, `__main__` | The command line |
 
 `apothecary.firmware` is three things that sit in one layer: the firmware toolchains,

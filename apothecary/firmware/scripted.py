@@ -1,6 +1,6 @@
 """The scripted bench: stand-ins for arduino-cli, cargo and espflash.
 
-The browser suites' servers and ``apothecary serve --demo`` run these in place of
+The browser suites' servers and ``apothecary serve --simulated`` run these in place of
 the real tools, so a sketch is built and flashed, and a devkit heard saying its
 hello, with nothing real: no toolchain, no network and no serial port. Each is a
 small Python script written into a folder (``write_fake_*``) and named by the

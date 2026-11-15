@@ -68,7 +68,7 @@ GROUPS = {
             "apothecary/firmware/*",
             "apothecary/jobs.py",
             "apothecary/machine_plans.py",
-            "apothecary/demo.py",
+            "apothecary/simulated.py",
             "apothecary/routes/jobs.py",
             "apothecary/routes/machines.py",
             "apothecary/cli/firmware.py",
@@ -103,7 +103,7 @@ GROUPS = {
             "test_state_folder.py",
             "test_stream_deck_part.py",
             "test_whiteboard_part.py",
-            "test_demo.py",
+            "test_simulated.py",
         ),
     },
     "making": {

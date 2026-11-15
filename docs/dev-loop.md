@@ -23,7 +23,7 @@ A clone made without `--recurse-submodules` has an empty `governance/qm`: run
 ## Seeing a change
 
 ```bash
-uv run apothecary serve --reload     # or --demo, for a bench with nothing real on it
+uv run apothecary serve --reload     # or --simulated, for a bench with nothing real on it
 ```
 
 `serve` prints where it answers: the viewer, the docs, the API, and this page.

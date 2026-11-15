@@ -24,7 +24,7 @@ from garage import open_garage, select
 from playwright.sync_api import Page, expect
 from windows import DECK
 
-DECK_ID = "DEMODECK"
+DECK_ID = "SIMDECK"
 LABELS = [
     ("X-", "blue"), ("Y+", "blue"), ("Y-", "blue"), ("X+", "blue"),
     ("Z-", "green"), ("Z+", "green"), ("1 mm", "amber"), ("STOP", "red"),

@@ -9,10 +9,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from apothecary.api import app
-from apothecary.demo import BOARD, DEVKIT, PRINTER, SITE
 from apothecary.evidence import log
 from apothecary.evidence.observation import By, Observation, Origin
 from apothecary.family import hub, procedures
+from apothecary.simulated import BOARD, DEVKIT, PRINTER, SITE
 
 NODE = f"{SITE}:{BOARD}"
 HOME = {"machine": {"home": {"node": NODE}}}

@@ -56,7 +56,7 @@ def test_an_object_that_does_not_say_what_it_is_is_refused(bad):
 def test_the_cli_loader_reads_the_documented_example(tmp_path):
     path = tmp_path / "scene.json"
     path.write_text(
-        '{"name": "json_demo", "objects": [{"type": "cube", '
+        '{"name": "json_example", "objects": [{"type": "cube", '
         '"size": {"x": 15, "y": 15, "z": 10}, "center": true}]}'
     )
     assert (

@@ -11,7 +11,7 @@ of a program: the next run puts it back.
 
 Every journey the page has, in the order of the chain it manages, the page taken to each stage by the [tour](34-the-tour.md): a part designed, made on the printer, cut on the router; the board a machine runs on; a deck's knobs on the machines; the site brought up and watched; and a drawing photographed into shapes, which stand up as parts to design. Each journey hands the next what it made. Under each is what the tour's box said the page did to stand on each stage, then what the page said of it. [docs/tour.md](../docs/tour.md) is the reference.
 
-**Runtime-bound.** It drives a real browser against `apothecary serve --demo`, started as a person starts it: a simulated printer, router, devkit and Stream Deck, the scripted firmware tools, and a script that answers as OrcaSlicer's command line does. Every Python process of that server refuses a real serial port.
+**Runtime-bound.** It drives a real browser against `apothecary serve --simulated`, started as a person starts it: a simulated printer, router, devkit and Stream Deck, the scripted firmware tools, and a script that answers as OrcaSlicer's command line does. Every Python process of that server refuses a real serial port.
 
 Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its server runs, can build from an STL it built; a part it cannot build is drawn from an STL already there, or as its box.
 

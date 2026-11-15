@@ -6,7 +6,7 @@ the site watched; and a drawing photographed into shapes. At each stage the tour
 says what the page did to stand there, and the page stands there: its window in front,
 its subject chosen, what the stage needs made. Walkthrough page 39 is what it writes.
 
-Runs against `python -m apothecary serve --demo` as a subprocess (demo_process.py),
+Runs against `python -m apothecary serve --simulated` as a subprocess (simulated_process.py),
 where every machine a stage is about is there to stand on, with the scripted OrcaSlicer
 its slicer. Nothing is armed, started or made into a piece by the tour, and the test
 says so at its end, with the serial guard's record empty.
@@ -20,16 +20,16 @@ from pathlib import Path
 import httpx
 import pytest
 import windows
-from demo_process import guarded_env, start_demo, stop
 from doc_capture import MOMENT
 from garage import open_garage
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from playwright.sync_api import expect
+from simulated_process import guarded_env, start_simulated, stop
 from slicer_helpers import write_fake_orcaslicer
 from viewer_ready import settled
 
 from apothecary import journeys
-from apothecary.demo import DECK, DEVKIT, PRINTER, ROUTER
+from apothecary.simulated import DECK, DEVKIT, PRINTER, ROUTER
 
 BOX = "#tour-pop"
 STAGES = r"(?<=\d/)\d+"
@@ -133,14 +133,14 @@ def _words(text: str) -> str:
 
 
 @pytest.fixture(scope="module")
-def demo(base_url, tmp_path_factory):
+def simulated(base_url, tmp_path_factory):
     """The simulated machines as a person starts them, their folders temp ones, the
     serial guard on."""
-    folder = tmp_path_factory.mktemp("chain-demo")
+    folder = tmp_path_factory.mktemp("chain-simulated")
     env = guarded_env(folder)
     env["APOTHECARY_ORCASLICER"] = str(write_fake_orcaslicer(folder / "their-orcaslicer"))
     env["FAKE_ORCA_LAYERS"], env["FAKE_ORCA_DWELL"] = "6", "20"
-    url, proc = start_demo(folder, env)
+    url, proc = start_simulated(folder, env)
     yield {"url": url, "touched": Path(env["APOTHECARY_TEST_SERIAL_GUARD"])}
     stop(proc)
 
@@ -289,8 +289,8 @@ def test_every_stage_has_what_stands_there_written_down():
 
 
 @pytest.mark.e2e
-def test_the_tour_takes_the_page_to_every_stage_of_the_chain(page, demo, walkthrough):
-    url = demo["url"]
+def test_the_tour_takes_the_page_to_every_stage_of_the_chain(page, simulated, walkthrough):
+    url = simulated["url"]
     story = walkthrough(
         ordinal="39",
         slug="the-chain-a-stage-at-a-time",
@@ -306,7 +306,7 @@ def test_the_tour_takes_the_page_to_every_stage_of_the_chain(page, demo, walkthr
             "[docs/tour.md](../docs/tour.md) is the reference."
         ),
         runtime=(
-            "It drives a real browser against `apothecary serve --demo`, started as a "
+            "It drives a real browser against `apothecary serve --simulated`, started as a "
             "person starts it: a simulated printer, router, devkit and Stream Deck, the "
             "scripted firmware tools, and a script that answers as OrcaSlicer's command "
             "line does. Every Python process of that server refuses a real serial port."
@@ -381,4 +381,4 @@ def test_the_tour_takes_the_page_to_every_stage_of_the_chain(page, demo, walkthr
         assert http.get("/tour/feedback").json() == {"feedback": []}
     assert _drawn(page).get("made") == {}
     assert errors == []
-    assert not demo["touched"].exists() or demo["touched"].read_text() == ""
+    assert not simulated["touched"].exists() or simulated["touched"].read_text() == ""

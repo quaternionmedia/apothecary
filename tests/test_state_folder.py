@@ -20,7 +20,7 @@ VARIABLE = "APOTHECARY_STATE_DIR"
 def _reads_the_variable(tree: ast.AST) -> bool:
     """Whether the module reads the state folder's variable: ``os.environ.get``,
     ``os.getenv`` or a subscript of it. Naming it as a key of a dict it builds for
-    another process (the demo, the docs' example) is not a read."""
+    another process (the simulated server, the docs' example) is not a read."""
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             func = node.func

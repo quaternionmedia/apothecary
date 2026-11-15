@@ -8,7 +8,7 @@ order, on a server of the test's own (the simulated printer on ``/dev/ttyFAKE1``
 to printer_1's mainboard, the scripted OrcaSlicer) in its own browser, so nothing it adds
 outlives it.
 
-Given ``--step N`` and ``--base-url`` naming the demo, only step N runs, on the demo's
+Given ``--step N`` and ``--base-url`` naming the simulated server, only step N runs, on the simulated server's
 walk tab, and the tab is left there (tests/e2e/stepping.py); its picture is
 ``.cache/walk/picture-to-print-step-N.png``::
 
@@ -42,12 +42,12 @@ WIDTH_MM = 300  # shapes.png across, as the README's photo example has it
 
 @dataclass
 class Walk:
-    """The page a step acts on, the server it is on, and whether it is the demo's tab,
+    """The page a step acts on, the server it is on, and whether it is the simulated server's tab,
     whose panels a person has laid out (left as they are)."""
 
     page: Page
     base: str
-    on_the_demo: bool
+    on_simulated: bool
 
     def view(self) -> Optional[dict]:
         """The newest view at the bench, as the server has it."""
@@ -66,7 +66,7 @@ def add(w: Walk) -> None:
     bench by hand, to look at it."""
     w.page.goto(f"{w.base}/viewer/sites/garage")
     expect(w.page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
-    if not w.on_the_demo:
+    if not w.on_simulated:
         w.page.evaluate("() => localStorage.removeItem('apothecary.panels')")
     w.page.evaluate("() => window.fractalViewer.waveDone")
     settled(w.page)
@@ -196,7 +196,7 @@ STEPS: List[Tuple[str, Callable[[Walk], None]]] = [
 
 @pytest.fixture
 def steps(request, base_url):
-    """One step on the demo's walk tab under --step; every step on a server of the
+    """One step on the simulated server's walk tab under --step; every step on a server of the
     test's own otherwise (stepping.chosen)."""
 
     def own():
@@ -228,7 +228,7 @@ def own_server(start_server, tmp_path_factory):
 
 @pytest.mark.e2e
 def test_a_picture_to_a_print_a_step_at_a_time(steps):
-    page, url, on_the_demo, numbers = steps
-    walk = Walk(page, url, on_the_demo)
+    page, url, on_simulated, numbers = steps
+    walk = Walk(page, url, on_simulated)
     for n in numbers:
         STEPS[n - 1][1](walk)

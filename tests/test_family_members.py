@@ -9,9 +9,9 @@ from fastapi.testclient import TestClient
 from hearth import conformance
 
 from apothecary.api import app
-from apothecary.demo import BOARD, CONTROLLER, DEVKIT, PRINTER, ROUTER, SITE
 from apothecary.family import hub, members
 from apothecary.firmware import tasks as firmware_tasks
+from apothecary.simulated import BOARD, CONTROLLER, DEVKIT, PRINTER, ROUTER, SITE
 
 MACHINE_NODE = f"{SITE}:{BOARD}"
 ROUTER_NODE = f"{SITE}:{CONTROLLER}"

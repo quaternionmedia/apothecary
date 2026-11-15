@@ -219,9 +219,9 @@ AREAS = {
         ),
         "tests": ("test_lighting_overlay.py",),
     },
-    "demo": {
-        "sources": ("apothecary/demo.py", "apothecary/cli/server.py"),
-        "tests": ("test_the_demo.py",),
+    "simulated": {
+        "sources": ("apothecary/simulated.py", "apothecary/cli/server.py"),
+        "tests": ("test_simulated_machines.py",),
     },
     "carlos": {
         "sources": (
@@ -282,7 +282,7 @@ AREAS = {
             "apothecary/routes/tour.py",
             "apothecary/static/widgets/tour_popover.*",
             "apothecary/journeys.py",
-            "apothecary/demo.py",
+            "apothecary/simulated.py",
         ),
         "tests": ("test_tour.py", "test_the_chain.py"),
     },

@@ -27,7 +27,7 @@ and the coordinator, imported from `qm-hearth`, never copied.
 `hearth check` judges it from outside, by these routes alone:
 
 ```bash
-uv run apothecary serve --demo
+uv run apothecary serve --simulated
 uv run hearth check --hub http://127.0.0.1:6283
 ```
 
@@ -143,7 +143,7 @@ It is also ⊞ Windows › Procedure, in the Family group with **Members**, each
 reached, its state where the hub started it and its door, and **Deliveries**, the hub's audit,
 newest first, each delivery's step, member, status, milliseconds and the instance that took
 it. Panels › Windows › Family view lays the three out with the world.
-`apothecary serve --demo` starts with one, `bring-up`, on the garage's simulated bench.
+`apothecary serve --simulated` starts with one, `bring-up`, on the garage's simulated bench.
 
 The window leads to where each step's work is. A step's node is a door: pressed, the
 node's window opens, a machine's or a board's Machine or a camera's Pictures, or the

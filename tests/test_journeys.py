@@ -7,11 +7,11 @@ from __future__ import annotations
 import json
 import re
 
-from apothecary.demo import DEVKIT
 from apothecary.example_hierarchy import create_example_site
 from apothecary.journeys import JOURNEYS, PUTS, by_id, manifest
 from apothecary.menu import PANEL_GROUPS, VIEWS
 from apothecary.projects.parts.skeleton import ROOT
+from apothecary.simulated import DEVKIT
 from apothecary.systems import SYSTEMS
 from apothecary.viewer import render_fractal_viewer_page
 
@@ -53,16 +53,18 @@ def test_each_journey_is_named_once_and_apart_from_the_systems():
         assert verb == journey.title and article and " " not in thing, journey.name
 
 
-def test_a_stage_is_put_on_by_verbs_the_page_has_on_pieces_the_demo_s_site_has():
+def test_a_stage_is_put_on_by_verbs_the_page_has_on_pieces_the_simulated_server_s_site_has():
     """What the tour does to stand on a stage is from the page's own short list, and its
-    subjects are pieces of the demo's site."""
-    pieces = {child.name for child in create_example_site().children}  # the demo's garage
+    subjects are pieces of the simulated server's site."""
+    pieces = {
+        child.name for child in create_example_site().children
+    }  # the simulated server's garage
     for journey in JOURNEYS:
         for verb, subject in [*journey.staged_on, *(p for s in journey.steps for p in s.puts)]:
             assert verb in PUTS, (journey.id, verb)
             piece, _, what = subject.partition(":")
             if verb == "pin":
-                assert what == DEVKIT  # the demo's devkit, which stands unpinned
+                assert what == DEVKIT  # the simulated server's devkit, which stands unpinned
             assert piece in pieces or (verb == "working" and not piece), (journey.id, subject)
     page = PAGE.read_text(encoding="utf-8")
     for verb in PUTS:

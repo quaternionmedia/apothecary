@@ -65,7 +65,7 @@ def create(root: Path) -> MyPart:
         description="A hollow cube",
         params_model=Params,
         category="misc",
-        tags=["demo"],
+        tags=["example"],
         readme_path=root / "parts" / "my_part" / "README.md",
         preview_color=Color.from_hex("#3366CC"),
     )

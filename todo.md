@@ -66,7 +66,7 @@ here: run `apothecary problems`.
   [docs/bench-checklist.md](docs/bench-checklist.md) has not been walked, so its
   build is known and its buttons' notes and the strip are not. It prints no
   `apothecary footpedal: hello`, since its serial line carries Hairless MIDI, so
-  the made thing's Query hears its hello only from the demo's scripted monitor.
+  the made thing's Query hears its hello only from the scripted monitor of `serve --simulated`.
 - The router at the bench. The AnoleX 4060-Evo Ultra 2 is drawn, its
   controller's dialect spoken and its Machine built against the simulated
   controller; the real controller has identified itself and nothing past that.

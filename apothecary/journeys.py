@@ -348,7 +348,7 @@ CUT = Journey(
 # Flash a board: the firmware a machine runs. The board on its port pinned to
 # its piece, the piece's sketch on the Bench with its builds, the devkit's Flashing
 # window where it is built and uploaded, and its Sketch and Log, where what it says is
-# heard. The port is the demo's devkit's (demo.py's DEVKIT).
+# heard. The port is the simulated devkit's (simulated.py's DEVKIT).
 BOARD = Journey(
     id="board",
     title="Flash",

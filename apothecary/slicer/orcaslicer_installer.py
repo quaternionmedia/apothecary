@@ -412,7 +412,7 @@ def resources_for(version: str) -> Optional[Path]:
 def resources_of_install(program: Path) -> Optional[Path]:
     """The ``resources`` folder of the install ``program`` is the executable of,
     wherever that install is, by the ``install.json`` beside it: how an install in
-    another tools folder is read in place (``apothecary serve --demo`` names the
+    another tools folder is read in place (``apothecary serve --simulated`` names the
     person's own). None when no install of this kind holds it."""
     try:
         data = json.loads((program.parent / MANIFEST).read_text("utf-8"))
