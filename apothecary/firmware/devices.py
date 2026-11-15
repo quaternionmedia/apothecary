@@ -1340,7 +1340,8 @@ def leveling_dir() -> Path:
 
 def leveling_records(port: Optional[str] = None) -> List[LevelingRecord]:
     """Every saved reading, newest first; given a port, the readings of the board on
-    it now (``readings_of``): a printer's bed readings, a router's table maps."""
+    it now (``readings_of``): a printer's bed readings, a router's table maps. A file
+    that does not parse, or names no board or no kind of machine, is no reading."""
     folder = leveling_dir()
     if not folder.is_dir():
         return []
@@ -1360,25 +1361,12 @@ def readings_of(
 ) -> List[LevelingRecord]:
     """The readings that are ``board``'s: those kept under its key by a board of its
     kind -- a printer's bed readings, a router's table maps; a bridge's ``usb:`` key
-    is one make's, and a printer's reading under it is never a router's -- and, for
-    a printer, one kept before readings carried a key, when it was taken on the port
-    the printer is on and names the firmware the printer answered with. Nothing for
+    is one make's, and a printer's reading under it is never a router's. Nothing for
     a board not yet identified as either kind, or one whose key another board on the
     machine shares."""
     if board is None or board.kind is None or board.shared:
         return []
-    return [
-        rec
-        for rec in records
-        if (board.owns(rec.board) and (rec.machine or "printer") == board.kind)
-        or (
-            rec.board is None
-            and board.kind == "printer"
-            and rec.port == board.port
-            and rec.firmware is not None
-            and rec.firmware == board.firmware
-        )
-    ]
+    return [rec for rec in records if board.owns(rec.board) and rec.machine == board.kind]
 
 
 def leveling_record(record_id: str) -> Optional[LevelingRecord]:
@@ -1398,16 +1386,19 @@ def _as_record(
     port: str, reading: BedReading, note: Optional[str], state: Optional[FirmwareState] = None
 ) -> LevelingRecord:
     """The reading as the board's record: whose it is (``occupants``: the board's key
-    and the kind of machine it drives), when, and what it answered as."""
+    and the kind of machine it drives), when, and what it answered as. Raises
+    ``ToolchainError`` when the port no longer holds a board with both."""
     cached = (state or get_state()).cached_device(port)
     board = occupants.on_port(port, state)
+    if board is None or not board.key or board.kind is None:
+        raise ToolchainError(f"{port}: no board with a key and a kind to keep the reading under")
     at = datetime.now(timezone.utc)
     slug = re.sub(r"[^A-Za-z0-9]+", "_", port).strip("_")
     return LevelingRecord(
         id=f"{stamp(at)}-{slug}",  # with -2 after it, if need be, when it is kept
         port=port,
-        board=board.key if board is not None else None,
-        machine=board.kind if board is not None else None,
+        board=board.key,
+        machine=board.kind,
         at=at,
         firmware=cached.printer.firmware_name if cached and cached.printer else None,
         note=note,
@@ -1575,6 +1566,11 @@ def _start_leveling(
         raise ToolchainError(
             f"{port}: a bed reading is a printer's or a router's, and {port} holds no board "
             "known as either"
+        )
+    if not board.key:
+        raise ToolchainError(
+            f"{port}: a reading is kept under its board's key, and the board on {port} has "
+            "no key: no MAC, no serial number and no USB ids"
         )
     if board.shared:
         raise ToolchainError(

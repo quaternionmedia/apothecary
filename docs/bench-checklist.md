@@ -98,8 +98,7 @@ one machine on the number another held; nothing in them moves a machine.
       armed; the router's polls drive nothing onto `printer_1`.
 - [ ] Nothing of the printer's lies over the router's table, though the
       printer's readings were taken on that port number. Once the printer is back its bed wears
-      the newest reading kept for its board, or, of those kept before readings
-      named their board, the newest taken on the port it is on now.
+      the newest reading kept for its board.
 - [ ] Pin the router (section I), then plug the printer into the router's
       socket: `cnc_router` does not take the printer, whose serial number its
       pin would have named; its node says *not connected*.

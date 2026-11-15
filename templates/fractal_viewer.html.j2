@@ -876,9 +876,9 @@
         import { boardLabel, boardSummary } from '/static/board_text.js';
         import { KINDS as MACHINE_WORDS, GCODE_KINDS, kindOf as boardKindOf } from '/static/machine_words.js';
         // Whether a bed reading is a machine of `kind`'s: a reading names the kind of
-        // machine that took it (a printer's bed, a router's table; one kept before
-        // readings said is a printer's), and is laid over that kind's marks alone.
-        const readingOfKind = (record, kind) => !!record && GCODE_KINDS.includes(kind) && (record.machine || 'printer') === kind;
+        // machine that took it (a printer's bed, a router's table), and is laid over
+        // that kind's marks alone.
+        const readingOfKind = (record, kind) => !!record && GCODE_KINDS.includes(kind) && record.machine === kind;
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
         import { mountProcedure } from '/static/widgets/procedure.js';

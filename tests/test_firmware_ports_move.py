@@ -643,17 +643,26 @@ def _a_reading_of_the_printer(bench, monkeypatch, port=PORT):
     return links, job.record
 
 
-def _a_reading_kept_before_readings_named_their_board(firmware="Marlin made up"):
-    old = LevelingRecord(
-        id="20260920T132512.468-dev_ttyMOVES0",
-        port=PORT,
-        at=datetime(2026, 9, 20, 13, 25, tzinfo=timezone.utc),
-        method="read",
-        mesh=[[0.0, 0.1], [0.2, 0.3]],
-        firmware=firmware,
+def _a_record_that_names_no_board(firmware="Marlin made up"):
+    """A file in the readings' folder with a reading's mesh and no board: taken on
+    ``PORT``, it says, by the firmware the printer answers with. Its id."""
+    record_id = "20260920T132512.468-dev_ttyMOVES0"
+    folder = devices.leveling_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{record_id}.json").write_text(
+        json.dumps(
+            {
+                "id": record_id,
+                "port": PORT,
+                "at": "2026-09-20T13:25:00+00:00",
+                "method": "read",
+                "mesh": [[0.0, 0.1], [0.2, 0.3]],
+                "firmware": firmware,
+            }
+        ),
+        encoding="utf-8",
     )
-    devices._save_leveling(old)
-    return old
+    return record_id
 
 
 def test_a_bed_reading_is_kept_as_the_board_s_that_took_it(bench, monkeypatch):
@@ -667,7 +676,6 @@ def test_the_router_on_the_printer_s_port_wears_none_of_its_readings(bench, monk
     """What happened on the bench: the router on the port the Ender's readings were
     taken on, and the page asking for the port's readings to draw over its table."""
     links, reading = _a_reading_of_the_printer(bench, monkeypatch)
-    _a_reading_kept_before_readings_named_their_board()
     _a_router_was_identified(bench)
     assert devices.leveling_records(PORT) == []
     answer = TestClient(app).get("/firmware/printers/leveling", params={"port": PORT})
@@ -683,22 +691,53 @@ def test_the_printer_s_readings_follow_it_to_another_port(bench, monkeypatch):
     links.stop_all()
 
 
-def test_a_reading_kept_without_its_board_is_the_printer_s_on_its_port_with_its_firmware(bench):
-    old = _a_reading_kept_before_readings_named_their_board()
-    _a_printer_was_identified(bench)
-    assert [r.id for r in devices.leveling_records(PORT)] == [old.id]
-    # The same printer on another port, another printer on its port, the router there:
-    # none of them is shown it.
-    bench.unplug(PORT)
-    _a_printer_was_identified(bench, OTHER)
-    assert devices.leveling_records(OTHER) == []
-    bench.plug(PORT, ENDER_TWIN)
-    scanned = next(d for d in devices.detected_devices() if d.port == PORT)
-    other = _answered("marlin", "printer", "Marlin of another build")
-    devices.get_state().remember_device(scanned.model_copy(update={"printer": other}))
-    assert devices.leveling_records(PORT) == []
-    _a_router_was_identified(bench)
-    assert devices.leveling_records(PORT) == []
+def test_a_record_that_names_no_board_is_not_a_reading(bench, monkeypatch):
+    """A reading carries its board's key and the kind of machine it drives. A file
+    without them is left out when the folder is read, as one that does not parse
+    is: it is nobody's, not the printer's on the port it names, answering with the
+    firmware it names."""
+    links, reading = _a_reading_of_the_printer(bench, monkeypatch)
+    nobody_s = _a_record_that_names_no_board()
+    assert (devices.leveling_dir() / f"{nobody_s}.json").is_file()
+    assert [r.id for r in devices.leveling_records()] == [reading.id]
+    assert [r.id for r in devices.leveling_records(PORT)] == [reading.id]
+    assert devices.leveling_record(nobody_s) is None
+    answer = TestClient(app).get("/firmware/printers/leveling")
+    assert [r["id"] for r in answer.json()] == [reading.id]
+    assert TestClient(app).get(f"/firmware/printers/leveling/{nobody_s}").status_code == 404
+    links.stop_all()
+
+
+@pytest.mark.parametrize("missing", ["board", "machine"])
+def test_a_reading_is_not_made_without_its_board_or_its_kind(missing):
+    whole = {
+        "id": "20260920T132512.468-dev_ttyMOVES0",
+        "port": PORT,
+        "at": datetime(2026, 9, 20, 13, 25, tzinfo=timezone.utc),
+        "method": "read",
+        "mesh": [[0.0, 0.1], [0.2, 0.3]],
+        "board": "MADEUPENDER1",
+        "machine": "printer",
+    }
+    assert LevelingRecord(**whole).board == "MADEUPENDER1"
+    for without in ({k: v for k, v in whole.items() if k != missing}, {**whole, missing: None}):
+        with pytest.raises(ValueError, match=missing):
+            LevelingRecord(**without)
+
+
+def test_a_reading_is_not_begun_on_a_board_with_no_key(bench, monkeypatch):
+    """A board with no MAC, no serial number and no USB ids has no key to keep a
+    reading under: its reading is refused, and nothing is asked of its bed."""
+    links = _links(monkeypatch, gcode.SimulatedPrinter)
+    info = _answered("marlin", "printer", "Marlin made up")
+    devices.get_state().remember_device(DeviceInfo(port=PORT, printer=info))
+    board = occupants.on_port(PORT)
+    assert (board.key, board.kind) == (None, "printer")
+    with pytest.raises(devices.ToolchainError, match="no key"):
+        devices.start_leveling(PORT, probe=False)
+    assert devices.leveling_job(PORT) is None and devices.leveling_records() == []
+    assert not any("M420" in line for line in _sent(links))
+    links.stop_all()
 
 
 def test_a_stored_mesh_is_refused_on_a_router_and_nothing_marlin_is_sent(bench, monkeypatch):

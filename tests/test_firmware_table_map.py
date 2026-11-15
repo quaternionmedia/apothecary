@@ -279,27 +279,23 @@ def test_a_printer_s_reading_is_never_the_router_s_whatever_key_it_is_under(
 ):
     """A reading is the board's of the kind that took it: a printer's bed reading kept
     under the very key the router answers to (a bridge's ``usb:`` key is one make's)
-    is not listed for the router, nor one kept before readings named their board;
-    the router's own map is, alone."""
+    is not listed for the router; the router's own map is, alone."""
     devices.identify_printer(PORT)
     board = occupants.on_port(PORT)
     assert board.kind == "router"
-    for name, kept in (
-        ("printer", {"board": board.key, "machine": "printer"}),
-        ("nobody", {"board": None, "machine": None}),
-    ):
-        devices._save_leveling(
-            LevelingRecord(
-                id=f"20260920T132512.468-{name}",
-                port=PORT,
-                at=datetime(2026, 9, 20, 13, 25, tzinfo=timezone.utc),
-                method="read",
-                mesh=[[0.0, 0.4], [0.1, 0.5]],
-                stats=gcode.mesh_stats([[0.0, 0.4], [0.1, 0.5]]),
-                firmware="Grbl 1.3a",  # even naming the router's firmware
-                **kept,
-            )
+    devices._save_leveling(
+        LevelingRecord(
+            id="20260920T132512.468-printer",
+            port=PORT,
+            board=board.key,
+            machine="printer",
+            at=datetime(2026, 9, 20, 13, 25, tzinfo=timezone.utc),
+            method="read",
+            mesh=[[0.0, 0.4], [0.1, 0.5]],
+            stats=gcode.mesh_stats([[0.0, 0.4], [0.1, 0.5]]),
+            firmware="Grbl 1.3a",  # even naming the router's firmware
         )
+    )
     assert devices.leveling_records(PORT) == []
     router_links.control.arm(PORT)
     job = devices.start_leveling(PORT, probe=True)

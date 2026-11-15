@@ -732,10 +732,11 @@ readings are the readings of the board on it now (`firmware.occupants`), of its
 kind: a printer's bed readings, a router's table maps. They follow the board
 from port to port, and a router on a port a printer's readings were taken on is
 listed none of them, nor wears one over its table; a printer's reading kept
-under a bridge's shared key is never a router's. A reading kept before readings
-named their board is the printer's on the port it was taken on that answers
-with the firmware it names. A bed reading is refused on a board nothing has
-identified as a printer or a router, before any of the reading is sent, and a stored mesh
+under a bridge's shared key is never a router's. A file in the readings' folder
+that names no board, or no kind of machine, is not a reading: it is listed for
+nobody, as a file that does not parse is. A bed reading is refused on a board nothing has
+identified as a printer or a router, before any of the reading is sent, on a
+board with no key (no MAC, no serial number and no USB ids), and a stored mesh
 on anything but a printer; and while two boards on the machine answer to one
 key (two bridges of one make, neither with a serial number), it is refused on
 both, since a reading kept then could not be told whose.

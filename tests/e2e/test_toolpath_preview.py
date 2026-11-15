@@ -542,3 +542,47 @@ def test_a_printer_draws_its_own_file_not_the_router_s_newer_toolpath(page: Page
     expect(pick.locator("option").first).to_have_text("— none kept for a printer —")
     expect(pick).to_have_value("")
     assert _drawn(page, printer.node) is None
+
+
+# A bed reading as the server lists one, less the kind of machine that took it.
+A_READING_OF_NO_KIND = {
+    "id": "20260920T132512.468-dev_ttyFAKE1",
+    "port": PRINTER,
+    "board": "FAKESERIAL1",
+    "at": "2026-09-20T13:25:12.468000Z",
+    "method": "read",
+    "mesh": [[0.0, 0.4, 0.9], [0.1, 0.5, 1.2], [0.2, 0.7, 1.6]],
+    "stats": {"range": 1.6, "mean": 0.62},
+    "firmware": "Marlin made up",
+}
+
+
+@pytest.mark.e2e
+def test_a_reading_that_names_no_kind_of_machine_is_laid_over_no_bed(page: Page, url: str):
+    """The page lays a bed reading over the marks of the kind of machine the reading
+    names. One that names none, answered to the printer's marks when they ask for
+    their readings and told by the page's own event for the printer's port, is drawn
+    over no bed; the same reading naming a printer is drawn over the printer's."""
+    asked: list[str] = []
+
+    def of_no_kind(route):
+        asked.append(route.request.url)
+        route.fulfill(json=[A_READING_OF_NO_KIND])
+
+    page.route(re.compile(r".*/firmware/printers/leveling\?port=.*ttyFAKE1.*"), of_no_kind)
+    open_garage(page, url, settle=False)
+    wears(page, "printer_1")
+    marks = "window.fractalViewer.marks['printer_1']"
+    page.wait_for_function(f"() => {marks} && {marks}.marks", timeout=15000)
+    tell = (
+        "(reading) => window.dispatchEvent(new CustomEvent('apothecary:mesh', { detail: reading }))"
+    )
+    page.evaluate(
+        f"() => {{ {marks}.readingAt = 0; window.fractalViewer.refreshReading('printer_1'); }}"
+    )
+    page.evaluate(tell, A_READING_OF_NO_KIND)
+    page.wait_for_timeout(1000)
+    assert asked and page.evaluate(f"() => {marks}.kind") == "printer"
+    assert page.evaluate(f"() => {marks}.marks.mesh()") is None
+    page.evaluate(tell, {**A_READING_OF_NO_KIND, "machine": "printer"})
+    page.wait_for_function(f"() => {marks}.marks.mesh() && {marks}.marks.mesh().rows === 3")

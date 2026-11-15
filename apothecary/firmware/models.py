@@ -646,9 +646,8 @@ class LevelingRecord(BedReading):
     port: str  # where it was taken; whose it is is ``board``
     # The board that took it, by its key (occupants.key_of), and the kind of machine
     # it drives: a reading is listed for that board alone, wherever it is plugged in.
-    # None on a reading kept before readings carried it.
-    board: Optional[str] = None
-    machine: Optional[str] = None
+    board: str = Field(min_length=1)
+    machine: str = Field(min_length=1)
     at: datetime
     firmware: Optional[str] = None
     note: Optional[str] = None

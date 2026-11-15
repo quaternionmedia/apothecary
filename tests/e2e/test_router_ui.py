@@ -37,6 +37,8 @@ WITHIN_A_POLL = 3 * POLL_MS
 A_PRINTER_S_READING = {
     "id": "20260920T132512.468-dev_ttyFAKE3",
     "port": ROUTER,
+    "board": "MADEUPENDER1",
+    "machine": "printer",
     "at": "2026-09-20T13:25:12.468000Z",
     "method": "read",
     "mesh": [[0.0, 0.4, 0.9], [0.1, 0.5, 1.2], [0.2, 0.7, 1.6]],
