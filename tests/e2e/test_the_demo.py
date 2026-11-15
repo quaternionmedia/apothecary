@@ -53,6 +53,7 @@ from apothecary.projects.parts.stl_renderer import get_renderer
 
 MACHINE = windows.MACHINE
 
+
 @pytest.fixture(scope="module")
 def demo(base_url, tmp_path_factory):
     """The demo, its folders and its guard; the guard's record is read at the end.
@@ -103,7 +104,8 @@ def page(drawing_camera_browser, demo):
 
 @pytest.mark.e2e
 def test_the_demo_says_it_is_the_demo_and_has_printer_1_pinned(page: Page, demo, shots):
-    """A quiet line above the header says it is the demo and how to leave it;
+    """A quiet line above the header says its machines are simulated and how to reach
+    the real ones;
     printer_1's mainboard is pinned to the simulated Ender, which said what it is, and
     cnc_router's controller to the simulated router."""
     url = demo["url"]
@@ -111,9 +113,9 @@ def test_the_demo_says_it_is_the_demo_and_has_printer_1_pinned(page: Page, demo,
     banner = page.locator("#demo-banner")
     expect(banner).to_be_visible()
     expect(banner).to_contain_text(
-        "The demo: a simulated printer, router, ESP32 and lighting console"
+        "Simulated machines: a printer, a router, an ESP32 and a lighting console"
     )
-    expect(banner).to_contain_text("run apothecary serve without --demo")
+    expect(banner).to_contain_text("For the real ones, stop the server and run apothecary serve")
     assert banner.bounding_box()["height"] < 30  # one quiet line
     pins = page.request.get(f"{url}/sites/garage/devices").json()["bindings"]
     manual = {r["path"]: r for r in pins if r["binding_source"] == "manual"}
