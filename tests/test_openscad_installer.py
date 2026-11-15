@@ -1031,15 +1031,61 @@ def test_status_says_a_mac_app_is_universal_or_runs_under_rosetta(tools, mac, mo
     assert "under Rosetta 2" in oi.describe("2026.09.27").runs
 
 
-def test_an_install_from_before_the_record_is_described_as_the_appimage_it_is(tools, monkeypatch):
-    monkeypatch.setattr(oi, "binary_archs", lambda path: ["x86_64"])
+def test_a_snapshot_s_folder_with_no_install_json_is_not_an_install(tools, monkeypatch):
+    """An install is a snapshot's folder with its ``install.json``. A folder with an
+    OpenSCAD in it and none is not one: not listed, not the one in use though
+    ``current`` names it, and the command line says what it says with none installed.
+    Installing its date fetches the snapshot and puts a whole install in its place."""
+    from apothecary.cli import cli
+    from apothecary.projects.parts import stl_renderer
+
+    monkeypatch.delenv("APOTHECARY_OPENSCAD", raising=False)
     home = tools / "2026.09.27"
     _script(home / "openscad", _appimage("2026.09.27").decode())
     (tools / "current").write_text("2026.09.27\n")
+    assert oi.installed_versions() == [] and oi.executable_for("2026.09.27") is None
+    assert oi.current_version() == "2026.09.27" and oi.current_executable() is None
+    assert stl_renderer.managed_openscad() is None
+    with pytest.raises(oi.InstallError, match="2026.09.27 is not installed"):
+        oi.describe("2026.09.27")
+    status = CliRunner().invoke(cli, ["openscad", "status"])
+    assert status.exit_code == 0, status.output
+    assert "none (apothecary openscad install)" in status.output
+    assert "2026.09.27 (current)" not in status.output
+    assert str(home / "openscad") not in CliRunner().invoke(cli, ["check"]).output
+    host, log = Host(), []
+    oi.SnapshotInstaller(fetch=host, log=log.append, snapshot="2026.09.27").install()
+    assert BASE + "OpenSCAD-2026.09.27-x86_64.AppImage" in host.urls
+    assert not any("already installed" in line for line in log)
+    assert oi.installed_versions() == ["2026.09.27"]
     assert oi.current_executable() == home / "openscad"
-    assert oi.describe("2026.09.27").line() == (
-        "Linux x86_64 · AppImage, run through FUSE · native · Manifold"
-    )
+    assert oi.read_manifest("2026.09.27")["method"] == "appimage"
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        {},
+        {"method": "appimage"},
+        {"executable": "openscad"},
+        {"method": "by hand", "executable": "openscad"},
+        {"method": "appimage", "executable": "../2026.09.27/openscad"},
+        {"method": "appimage", "executable": "squashfs-root/AppRun"},
+    ],
+    ids=["nothing", "no-executable", "no-method", "no-known-method", "outside", "not-there"],
+)
+def test_an_install_json_names_its_executable_and_how_it_was_installed(tools, said):
+    """What an install's ``install.json`` always says: the executable, inside the
+    snapshot's folder and there, and which of the installer's ways put it there. A
+    folder whose ``install.json`` says less is not an install."""
+    home = tools / "2026.09.27"
+    _script(home / "openscad", _appimage("2026.09.27").decode())
+    (tools / "current").write_text("2026.09.27\n")
+    (home / "install.json").write_text(json.dumps(said))
+    assert oi.installed_versions() == [] and oi.current_executable() is None
+    (home / "install.json").write_text(json.dumps({"method": "appimage", "executable": "openscad"}))
+    assert oi.installed_versions() == ["2026.09.27"]
+    assert oi.current_executable() == home / "openscad"
 
 
 def test_openscad_install_passes_jobs_through(tools, monkeypatch):

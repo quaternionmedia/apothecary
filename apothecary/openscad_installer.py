@@ -43,8 +43,10 @@ key this program does not carry, so it is not checked.)
 Where it goes: ``tools_dir()/openscad/<date>/``, with ``install.json`` in it
 saying what was installed (how, the executable, the platform, its
 architectures, a source build's commits), and ``tools_dir()/openscad/current``
-a text file naming the date in use. The resolver in
-apothecary/projects/parts/stl_renderer.py reads it. Stdlib only.
+a text file naming the date in use. A snapshot's folder whose ``install.json``
+is missing, or names no executable or no way it was installed, is not an
+install. The resolver in apothecary/projects/parts/stl_renderer.py reads it.
+Stdlib only.
 """
 
 from __future__ import annotations
@@ -240,6 +242,7 @@ def _platform_label(system: str, machine: str) -> str:
 # --- how this machine installs -------------------------------------------------------
 
 APPIMAGE, EXTRACTED, DMG, ZIP, SOURCE = "appimage", "appimage-extracted", "dmg", "zip", "source"
+METHODS = (APPIMAGE, EXTRACTED, DMG, ZIP, SOURCE)
 
 # How each platform's snapshot is named in the listing. In 2025 the AppImage
 # carried a build number: OpenSCAD-2025.10.02.ai27993-x86_64.AppImage.
@@ -314,8 +317,7 @@ def snapshot_pattern(system: Optional[str] = None, machine: Optional[str] = None
 
 # --- where it lives ------------------------------------------------------------------
 
-# The AppImage's name in a snapshot's directory. An install with no install.json is
-# the AppImage itself, at <date>/openscad.
+# The AppImage's name in a snapshot's directory.
 APPIMAGE_EXECUTABLE = "openscad"
 
 
@@ -341,11 +343,22 @@ def read_manifest(date: str) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def executable_for(date: str) -> Path:
-    """The executable of the snapshot of ``date``: where ``install.json`` says it
-    is, else the AppImage at ``<date>/openscad`` (an install with none)."""
-    rel = _plain(read_manifest(date).get("executable")) or APPIMAGE_EXECUTABLE
+def executable_for(date: str) -> Optional[Path]:
+    """The executable of the install of ``date``, where its ``install.json`` says it
+    is. None for a snapshot's folder that is not an install: one with no
+    ``install.json``, or whose ``install.json`` names no executable inside the folder
+    or none of the ways an install is made (``METHODS``)."""
+    record = read_manifest(date)
+    rel = _plain(record.get("executable"))
+    if rel is None or record.get("method") not in METHODS:
+        return None
     return openscad_dir() / check_date(date) / rel
+
+
+def installed(date: str) -> Optional[Path]:
+    """The executable of the install of ``date`` when it is there, else None."""
+    path = executable_for(date)
+    return path if path is not None and path.is_file() else None
 
 
 def installed_versions() -> list[str]:
@@ -353,9 +366,7 @@ def installed_versions() -> list[str]:
     home = openscad_dir()
     if not home.is_dir():
         return []
-    return sorted(
-        p.name for p in home.iterdir() if DATE_RE.match(p.name) and executable_for(p.name).is_file()
-    )
+    return sorted(p.name for p in home.iterdir() if DATE_RE.match(p.name) and installed(p.name))
 
 
 def current_version() -> Optional[str]:
@@ -370,10 +381,7 @@ def current_version() -> Optional[str]:
 def current_executable() -> Optional[Path]:
     """The installed snapshot in use, or None."""
     date = current_version()
-    if date is None:
-        return None
-    path = executable_for(date)
-    return path if path.is_file() else None
+    return installed(date) if date is not None else None
 
 
 def _write_current(date: str) -> None:
@@ -487,11 +495,14 @@ class Installed:
 
 
 def describe(date: str) -> Installed:
-    """The snapshot of ``date``: the platform it was installed for, how, whether
-    it runs natively here, and whether it has Manifold."""
+    """The install of ``date``: the platform it was installed for, how, whether
+    it runs natively here, and whether it has Manifold. InstallError for a
+    snapshot's folder that is not an install."""
     record = read_manifest(date)
     exe = executable_for(date)
-    method = record.get("method") if record.get("method") in HOW else APPIMAGE
+    if exe is None:
+        raise InstallError(f"snapshot {date} is not installed")
+    method = record["method"]
     archs = record.get("archs")
     if not isinstance(archs, list) or not all(isinstance(a, str) for a in archs):
         archs = binary_archs(exe)
@@ -1018,7 +1029,7 @@ class SnapshotInstaller:
             self.extract = False
         if self.snapshot is not None:
             self._refuse_below_floor(self.snapshot, floor)
-            if not self.force and executable_for(self.snapshot).is_file():
+            if not self.force and installed(self.snapshot):
                 return self._already(self.snapshot)
         if method == SOURCE:
             return self._from_source(floor)
@@ -1035,7 +1046,7 @@ class SnapshotInstaller:
                 f"(the listing keeps about a year; newest is {newest})"
             )
         self._refuse_below_floor(date, floor)
-        if not self.force and executable_for(date).is_file():
+        if not self.force and installed(date):
             return self._already(date)
 
         name, size = listing[date]
@@ -1065,7 +1076,7 @@ class SnapshotInstaller:
         """The AppImage of ``date``, installed already, extracted where it is:
         nothing fetched, the image itself not kept beside what it held."""
         record = read_manifest(date)
-        method = record.get("method") or APPIMAGE
+        method = record["method"]
         if method != APPIMAGE:
             how = HOW.get(record.get("extracted") or method, HOW.get(method, method))
             self.log(f"Nothing to extract: snapshot {date} is installed as {how}")
@@ -1248,7 +1259,7 @@ class SnapshotInstaller:
                 raise InstallError(f"{SNAPSHOTS} lists no snapshot")
             date = max(nights)
             self._refuse_below_floor(date, floor)
-            if not self.force and executable_for(date).is_file():
+            if not self.force and installed(date):
                 return self._already(date)
         self.log(
             "files.openscad.org publishes no current OpenSCAD for Linux arm64; "
