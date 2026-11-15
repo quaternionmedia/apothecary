@@ -31,14 +31,14 @@ from typing import Callable, Dict, List, Optional, Set, Tuple
 from .geometry import edge_points, smallest_box
 from .models import Cut, FoundShape, Picture, ShapeKind
 from .plain import (
-    _FLIP,
+    FLIP,
     MIN_BLOB_PIXELS,
     TRUSTWORTHY_PIXELS,
     WORKING_EDGE,
     PictureLibraryMissing,
-    _blobs,
-    _describe,
-    _split_point,
+    blobs_in,
+    describe_blob,
+    split_point,
 )
 
 # How far round a pixel the whiteboard's own brightness is looked for, as a share
@@ -234,11 +234,11 @@ def read_strokes(image: Path, working_edge: int = WORKING_EDGE) -> Reading:
             .filter(ImageFilter.MaxFilter(2 * WIDER_BY + 1))
             .tobytes()
         )
-        light_from = _split_point(grey.histogram())
+        light_from = split_point(grey.histogram())
         rgb = colour.tobytes()
 
-    blobs = _blobs(stroke_mask, width, height, MIN_BLOB_PIXELS)
-    regions = _blobs(stroke_mask.translate(_FLIP), width, height, MIN_BLOB_PIXELS)
+    blobs = blobs_in(stroke_mask, width, height, MIN_BLOB_PIXELS)
+    regions = blobs_in(stroke_mask.translate(FLIP), width, height, MIN_BLOB_PIXELS)
     reading = Reading(
         width=width,
         height=height,
@@ -271,7 +271,7 @@ def read_strokes(image: Path, working_edge: int = WORKING_EDGE) -> Reading:
                 outer=outer,
                 on_ground=outer == reading.ground,
                 holes=holes,
-                closed=any(_light(regions[hole - 1], pixels, light_from) for hole in holes),
+                closed=any(is_light(regions[hole - 1], pixels, light_from) for hole in holes),
                 box=(min(xs), min(ys), max(xs), max(ys)),
             )
         )
@@ -345,7 +345,7 @@ def _small_family(blob: List[int], width: int) -> Optional[ShapeKind]:
 def _described(blob: List[int], width: int, height: int) -> Optional[FoundShape]:
     """A blob as the plain finder describes one, and nothing for a blob narrowed
     away to no pixels."""
-    return _describe(blob, width, height) if blob else None
+    return describe_blob(blob, width, height) if blob else None
 
 
 def _a_filled_shape(mark: FoundShape, blob: List[int], width: int) -> bool:
@@ -361,7 +361,7 @@ def _a_filled_shape(mark: FoundShape, blob: List[int], width: int) -> bool:
     return box.getbbox() is not None
 
 
-def _light(region: List[int], pixels: bytes, light_from: int) -> bool:
+def is_light(region: List[int], pixels: bytes, light_from: int) -> bool:
     """Whether a region is on the light side of the picture's split of light from dark."""
     sample = region[:: max(1, len(region) // 500)]
     return sum(pixels[index] for index in sample) / len(sample) > light_from
@@ -371,7 +371,7 @@ def _ground(regions: List[List[int]], pixels: bytes, light_from: int) -> int:
     """The label of the whiteboard's own surface: the largest light region, or the
     largest of all when none is light."""
     for label, region in enumerate(regions, start=1):
-        if _light(region, pixels, light_from):
+        if is_light(region, pixels, light_from):
             return label
     return 1
 

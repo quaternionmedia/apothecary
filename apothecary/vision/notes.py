@@ -21,7 +21,7 @@ from typing import List, Optional, Sequence, Tuple
 
 from pydantic import BaseModel
 
-from .marks import Answers, Kind, Mark, Words, _overlap_of
+from .marks import Answers, Kind, Mark, Words, overlap_of
 from .outline import WIDER_BY
 from .plain import WORKING_EDGE
 
@@ -92,7 +92,7 @@ def notes_of(
             if nearest is not None and _gap(mark, nearest) <= NEAR:
                 note.about, note.lies = nearest.id, "beside"
         for said in answers.words if answers else []:
-            if _overlap_of(note.min, note.max, said.min, said.max) > 0.5:
+            if overlap_of(note.min, note.max, said.min, said.max) > 0.5:
                 note.words, note.by = said.text, said.by
         about = by_id.get(note.about) if note.about else None
         if note.words and about is not None and about.line:

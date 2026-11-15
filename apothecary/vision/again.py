@@ -209,7 +209,7 @@ def compare_notes(before, after, numbered_from: int = 1) -> List[Proposal]:
     ``after`` are each picture's notes (``notes.Note``): the same writing with words
     proposes carrying them, and is taken; rewritten writing asks for its words
     again, writing rubbed out says so, and new writing asks for its words."""
-    from .marks import _overlap_of
+    from .marks import overlap_of
 
     rows: List[Tuple[Change, Optional[str], Optional[str], str, Optional[str], bool]] = []
     matched: set = set()
@@ -218,7 +218,7 @@ def compare_notes(before, after, numbered_from: int = 1) -> List[Proposal]:
         for new in after:
             if new.id in matched:
                 continue
-            together = _overlap_of(old.min, old.max, new.min, new.max)
+            together = overlap_of(old.min, old.max, new.min, new.max)
             if together > share:
                 best, share = new, together
         if best is None or share < SAME_PLACE:

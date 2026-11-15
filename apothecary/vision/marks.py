@@ -317,7 +317,7 @@ def _runs(strokes: Sequence[Stroke], gap: float) -> List[List[Stroke]]:
     return [sorted(row, key=lambda s: s.box[0]) for row in rows.values()]
 
 
-def _overlap_of(
+def overlap_of(
     a_min: Tuple[float, float],
     a_max: Tuple[float, float],
     b_min: Tuple[float, float],
@@ -337,7 +337,7 @@ def _overlap_of(
 
 def _overlap(mark: Mark, example: Example) -> float:
     """How nearly a mark's box is an example's."""
-    return _overlap_of(
+    return overlap_of(
         (mark.min_point.x, mark.min_point.y),
         (mark.max_point.x, mark.max_point.y),
         example.min,

@@ -25,7 +25,7 @@ from typing import List, Optional, Sequence, Tuple
 from pydantic import BaseModel
 
 from .geometry import edge_points, outline
-from .outline import WIDER_BY, _light, read_strokes
+from .outline import WIDER_BY, is_light, read_strokes
 
 FORMAT = "apothecary.corners/1"
 
@@ -78,7 +78,7 @@ def find(image: Path) -> Corners:
     ground = reading.regions[reading.ground - 1]
     sample = ground[:: max(1, len(ground) // 500)]
     brightness = sum(reading.grey[i] for i in sample) / len(sample)
-    if not _light(ground, reading.grey, reading.light_from) or brightness < DARKEST_GROUND:
+    if not is_light(ground, reading.grey, reading.light_from) or brightness < DARKEST_GROUND:
         raise NoWhiteboard(f"{Path(image).name}: nothing in it is light enough to be a whiteboard")
     if len(ground) < 0.15 * reading.width * reading.height:
         raise NoWhiteboard(
