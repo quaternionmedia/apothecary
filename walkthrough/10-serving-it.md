@@ -65,13 +65,6 @@ open:
     >>> r.status_code, r.headers["location"]
     (307, '/viewer/sites/apothecary?focus=datum_core')
 
-The universe was the site `parts_library`, and that address goes to it still,
-its query kept:
-
-    >>> r = client.get("/viewer/sites/parts_library?focus=datum_core", follow_redirects=False)
-    >>> r.status_code, r.headers["location"]
-    (307, '/viewer/sites/apothecary?focus=datum_core')
-
 ## Recipes
 
 | | |

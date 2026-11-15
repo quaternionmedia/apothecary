@@ -71,10 +71,7 @@ Every board unplugged: nothing here opens a port, and nothing can move.
       the free ports: choose the printer's, **Pin**. The pin goes to the
       printer's mainboard, and when nothing is printing the page asks the
       board once what it is (M115): the status line says *asked it once what
-      it is: Marlin …*, and `printer_1` wears its ⚡ badge. A pin made before
-      the universe, on the parts library's `creality_v422`, reads under the
-      universe's: Pinned lists it there; it drives no garage node until
-      `printer_1`'s mainboard is pinned.
+      it is: Marlin …*, and `printer_1` wears its ⚡ badge.
 - [ ] Open `printer_1`'s Machine: its plan's part and file are chosen.
 - [ ] **Pin the ESP32.** Select `esp32_blink`, choose the ESP32's port,
       **Query**, **Pin**: `esp32_blink` wears its ⚡ badge.

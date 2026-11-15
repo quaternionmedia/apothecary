@@ -60,7 +60,6 @@ from ..preview import of as preview_of
 from ..preview.moves import split_comments
 from ..preview.process import OPERATION_COMMENT
 from ..projects.parts.skeleton import ROOT
-from ..site_names import current as current_site
 from ..stamped import claim, stamp
 from ..stays_local import subprocess_env
 from . import dialects, gcode, grbl, occupants, serial_monitor
@@ -293,11 +292,6 @@ class FirmwareState:
         data.setdefault("seen", {})
         data.setdefault("bindings", [])
         data.setdefault("plates", {})
-        # A pin kept under a name its site had before is that site's pin: read under
-        # the name the site has now, and written under it at the next write.
-        for binding in data["bindings"]:
-            if isinstance(binding, dict) and isinstance(binding.get("site"), str):
-                binding["site"] = current_site(binding["site"])
         return data
 
     def _save(self, data: dict) -> None:

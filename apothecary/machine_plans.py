@@ -24,7 +24,6 @@ from pydantic import BaseModel
 from .firmware import devices
 from .projects.parts.skeleton import ROOT
 from .projects.registry import PartLoadError, part_named
-from .site_names import current
 from .state_folder import state_dir, write_whole
 
 NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,199}$")
@@ -52,7 +51,7 @@ def kind_of_part(part_ref: str) -> Optional[str]:
 def _kept_at(site: str, path: str) -> Path:
     if not NAME.match(site) or not NAME.match(path):
         raise ValueError(f"no plan can be kept for {site!r}, {path!r}")
-    return state_dir() / "plans" / current(site) / f"{path}.json"
+    return state_dir() / "plans" / site / f"{path}.json"
 
 
 def load(site: str, path: str) -> Optional[MachinePlan]:
@@ -80,7 +79,7 @@ def save(
                 f"a {kind}'s plan names a file kept for a {kind}"
             )
     plan = MachinePlan(
-        site=current(site),
+        site=site,
         path=path,
         kind=kind,
         part=part or None,

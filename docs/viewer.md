@@ -11,7 +11,7 @@ controls as they are. The loops through them are walkthrough pages
 | Address | Opens |
 |---|---|
 | `/viewer` (or `/`) | the garage |
-| `/viewer/sites/<name>` | a site: `garage`, `datum_core`, `theatre`, or `apothecary`, the universe ([below](#the-world)); `/viewer/sites/parts_library`, the name it had, goes there with its query |
+| `/viewer/sites/<name>` | a site: `garage`, `datum_core`, `theatre`, or `apothecary`, the universe ([below](#the-world)) |
 | `/viewer/parts/<name>` | the universe, stepped into that part |
 | `?focus=<path>` | stepped into that piece |
 | `?panel=bench` | with the Bench in front (`/firmware` redirects here) |

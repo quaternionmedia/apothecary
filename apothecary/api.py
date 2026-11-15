@@ -140,7 +140,7 @@ from .routes.vision import router as vision_router
 from .routes.whiteboards import router as whiteboards_router
 from .routes.wiring import router as wiring_router
 from .scene import Scene
-from .site_names import FORMER, UNIVERSE
+from .site_names import UNIVERSE
 from .site_store import SiteStore, UnknownSiteError
 from .slicer import service as slicing
 from .slicer.api import router as slicer_router
@@ -1762,8 +1762,6 @@ SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 # because its address is theirs -- and forgetting it would forget the kept
 # pictures instead.
 RESERVED_NAMES = frozenset({"pictures", "gather"})
-# A name a site had before (apothecary/site_names.py) is that site's still: its
-# address goes to the site, and what was kept under it is read as the site's.
 
 
 def _check_name(name: str) -> str:
@@ -1789,14 +1787,6 @@ def _check_name(name: str) -> str:
             detail=(
                 f"{name!r} is the address of a route under /photos/; "
                 "name the arrangement something else."
-            ),
-        )
-    if name in FORMER:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"{name!r} is the name the site {FORMER[name]} had, and what was kept "
-                "under it is read as that site's; name the arrangement something else."
             ),
         )
     return name
@@ -2821,14 +2811,8 @@ def site_viewer(name: str, request: Request, focus: str = Query(default="")):
     leaf of it (``part_ref`` set), reached by zooming down, and each other site
     a piece of it (``site_ref`` set), whose site a step into it opens. ``focus``
     is an optional dotted path (e.g. ``workbench.frame_system``) that opens the
-    viewer at that node instead of at the root. A name a site had before
-    (``parts_library``) goes to the site under the name it has now, its query kept.
+    viewer at that node instead of at the root.
     """
-    if name in FORMER and name not in _site_store.names():
-        query = f"?{request.url.query}" if request.url.query else ""
-        return RedirectResponse(
-            f"/viewer/sites/{quote(FORMER[name], safe='')}{query}", status_code=307
-        )
     if name not in _site_store.names():
         raise HTTPException(status_code=404, detail=f"Site '{name}' not found")
     base_url = str(request.base_url).rstrip("/")
