@@ -1424,7 +1424,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         const name = id ? (prt.files.find((f) => f.id === id) || { name: id }).name : null;
         // Another kind of machine's file is drawn only where a person asked for it.
         if (!id || (madeForAnother(id) && !previewOn())) {
-            found.none = id ? `the file chosen, ${name}, was made for a ${w.slice ? "router" : "printer"}, and none is kept for this ${state.kind} yet` : "no file is kept yet";
+            // Nothing chosen with files kept: each is the other kind of machine's.
+            const other = w.slice ? "router" : "printer", n = prt.files.length;
+            found.none = id ? `the file chosen, ${name}, was made for a ${other}, and none is kept for this ${state.kind} yet`
+                : n ? `${n === 1 ? `the file kept, ${prt.files[0].name}, was` : "the files kept were"} made for a ${other}, and none is kept for this ${state.kind} yet`
+                : "no file is kept yet";
             found.how = "choose a part under makes, or Choose File";
             return found;
         }

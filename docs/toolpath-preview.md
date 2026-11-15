@@ -81,8 +81,11 @@ the path; a slider a person left part way stays there. With no file of that mach
 one comes to be: Slice or Toolpath of a part chosen under makes, or Choose File.
 
 The files kept are every machine's. A card chooses the newest that was not made for the
-other kind of machine -- a router's toolpath is not a printer's to print -- and the Machine
-view draws the other kind's only where a person turned its preview on.
+other kind of machine -- a router's toolpath is not a printer's to print. Where every file
+kept is the other kind's it chooses none: its list opens on *none kept for a router* (or
+*a printer*), the status line says whose the files are, and one stays chosen only once a
+person chooses it there. The Machine view draws the other kind's only where a person
+turned its preview on.
 
 ## Not built
 

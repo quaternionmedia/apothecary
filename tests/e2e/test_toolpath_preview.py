@@ -518,8 +518,8 @@ def test_with_no_machine_to_open_the_entry_is_greyed_and_a_press_says_why(page: 
 def test_a_printer_draws_its_own_file_not_the_router_s_newer_toolpath(page: Page, url: str):
     """The files kept are every machine's. A router's toolpath, the newest kept, is not
     what a printer's card chooses or its Machine view draws while a file of its own is
-    kept; with the toolpath alone kept, nothing is drawn and the status line says whose
-    it is."""
+    kept; with the toolpath alone kept, the card chooses none, nothing is drawn and the
+    status line says whose the file is."""
     printer = MACHINES["printer"]
     _keep_only(url, printer, cut=True)
     _selected(page, url, printer.node)
@@ -534,7 +534,11 @@ def test_a_printer_draws_its_own_file_not_the_router_s_newer_toolpath(page: Page
     _from_windows(page)
     said = status(page)
     expect(said).to_contain_text(
-        "No path is drawn: the file chosen, router_coupon-cnc_router.nc", timeout=10000
+        "No path is drawn: the file kept, router_coupon-cnc_router.nc, was made for a router, "
+        "and none is kept for this printer yet",
+        timeout=10000,
     )
-    expect(said).to_contain_text("was made for a router, and none is kept for this printer yet")
+    pick = windows.machine(page).locator("#print-pick")
+    expect(pick.locator("option").first).to_have_text("— none kept for a printer —")
+    expect(pick).to_have_value("")
     assert _drawn(page, printer.node) is None
