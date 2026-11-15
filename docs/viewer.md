@@ -223,6 +223,16 @@ drawing in software, without a GPU, idles between them and answers typing at
 once. A view left alone stays exactly where it is: what the orbit's arithmetic
 rounds away is no move.
 
+Where a frame is slow to draw the page keeps up with the hand. A browser that draws
+the world in software takes a tenth of a second and more for each frame, and typing
+and clicks wait behind every one. The page measures what a frame costs it, and where
+that is slow, the frames drawn while the view turns are drawn coarser -- fewer
+pixels, stretched over the canvas -- and the frame the view comes to rest on is
+drawn whole; what moves by itself, a machine's tool while it prints, is drawn whole
+and about one part in three of the time. Where frames are quick none of this
+happens. A browser draws in software when it has no use of the graphics card: its
+own page for that (`chrome://gpu`, `about:support`) says which.
+
 ## The ring
 
 `m` opens the ring at the middle of the screen, Shift+M the canvas ring

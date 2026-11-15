@@ -18,7 +18,8 @@ STILL = """() => Promise.all(
 
 # The view at rest: the orbit controls ease a turn or a zoom out over many frames
 # after the hand has stopped, so the camera is watched until two frames in a row
-# leave it where it was (or a few seconds of frames have passed).
+# leave it where it was (or a few seconds of frames have passed), and the frame it
+# rests on is drawn whole: where frames are slow a turning view is drawn coarser.
 CAMERA_AT_REST = """() => new Promise((done) => {
     const v = window.fractalViewer;
     if (!v || !v.camera) return done();
@@ -27,7 +28,7 @@ CAMERA_AT_REST = """() => new Promise((done) => {
         const now = [...v.camera.matrixWorld.elements, ...v.orbitControls.target.toArray()].join(',');
         still = now === last ? still + 1 : 0;
         last = now;
-        if (still >= 2 || ++frames > 300) return done();
+        if ((still >= 2 && !v.coarse) || ++frames > 300) return done();
         requestAnimationFrame(look);
     };
     look();

@@ -1103,6 +1103,16 @@
         const HANDLE_SIZE = 0.6;      // the move arrows, against TransformControls' own 1
         const HANDLE_LIGHTNESS = 0.55; // and their opacity, against its own
         const ORBIT_EPS = 0.000001;   // OrbitControls' own measure of the camera having moved
+        // Drawing that keeps up with the hand. Where a frame is slow to draw -- a browser
+        // that draws the world in software takes a tenth of a second and more, and types
+        // and clicks wait behind each one -- the frames drawn while the view turns are
+        // drawn coarser, fewer pixels stretched over the canvas, and the frame the view
+        // comes to rest on is drawn whole. What moves by itself (a machine's tool) is then
+        // drawn less often, whole. Where frames are quick none of this happens.
+        const SLOW_FRAME_MS = 45;       // frames one after another, each this long: slow
+        const COARSE = [1, 0.5, 0.34];  // the share of each side's pixels drawn, by how slow
+        const REST_MS = 120;            // the view still this long: the whole frame again
+        const IDLE_SHARE = 3;           // what moves by itself is drawn one part in this many
         // A point of the site's frame (z up) in three.js's (y up): a quarter turn about
         // x, the site's y running into the screen along three.js's -z. A turn, not a
         // mirror: what stands on the site's right stands on the scene's right.
@@ -1434,6 +1444,16 @@
                 this.drawnLast = [];
                 this.drawnNext = [];
                 this.anchorTail = 0;
+                // How long a frame takes to draw here, as the time to the next frame after
+                // one was drawn (the drawing itself returns at once, and is paid for after);
+                // how coarse the frames of a turning view are drawn for it (an index into
+                // COARSE); and when the view last moved and a frame was last drawn.
+                this.frameCost = 0;
+                this.coarse = 0;
+                this.drewLastFrame = false;
+                this.frameAt = 0;
+                this.viewMovedAt = 0;
+                this.drawnWhen = 0;
 
                 this.initThreeJS();
                 this.bindEvents();
@@ -2096,7 +2116,8 @@
                 const height = this.canvas.clientHeight;
                 if (!width || !height) return;  // not laid out (hidden): keep the last size
                 // A window moved to a screen of another density changes this too.
-                if (this.renderer.getPixelRatio() !== window.devicePixelRatio) this.renderer.setPixelRatio(window.devicePixelRatio);
+                const ratio = window.devicePixelRatio * COARSE[this.coarse];
+                if (this.renderer.getPixelRatio() !== ratio) this.renderer.setPixelRatio(ratio);
                 this.camera.aspect = width / height;
                 this.camera.updateProjectionMatrix();
                 this.renderer.setSize(width, height, false);
@@ -2118,6 +2139,12 @@
             // place of their own (a card under the pointer).
             animate() {
                 requestAnimationFrame(() => this.animate());
+                const now = performance.now();
+                if (this.drewLastFrame) this.frameCost = this.frameCost ? this.frameCost * 0.5 + (now - this.frameAt) * 0.5 : now - this.frameAt;
+                this.drewLastFrame = false;
+                this.frameAt = now;
+                const slow = this.frameCost > SLOW_FRAME_MS;
+                let viewMoved = Boolean(this.glide);
                 this.stepGlide();
                 // Each update the orbit divides its target by the target's length and multiplies
                 // it back, and for some targets that rounds to two neighbouring numbers in turn,
@@ -2134,21 +2161,39 @@
                     || aim.distanceToSquared(this.cameraAim) > ORBIT_EPS
                     || 8 * (1 - Math.abs(c.quaternion.dot(this.cameraTurn))) > ORBIT_EPS) {
                     this.frameWanted = true;
+                    viewMoved = true;
                 } else {
                     c.position.copy(this.cameraAt);
                     c.quaternion.copy(this.cameraTurn);
                     aim.copy(this.cameraAim);
                 }
+                let byItself = false;
                 for (const [path, m] of Object.entries(this.marks)) {
                     if (!m.marks || !m.marks.tick()) continue;
-                    this.frameWanted = true;
+                    byItself = true;
                     this.moveKinematic(this.meshByName[path], m.marks);  // a machine's pieces ride its tool
                 }
+                // A turning view on slow frames: coarser, and coarser again while they stay
+                // slow; at rest, whole. The canvas's pixels change with it, which is a frame
+                // to draw.
+                if (viewMoved) {
+                    this.viewMovedAt = now;
+                    if (slow && this.coarse < COARSE.length - 1 && (this.coarse === 0 || this.frameCost > 2 * SLOW_FRAME_MS)) this.coarsen(this.coarse + 1);
+                } else if (this.coarse && now - this.viewMovedAt > REST_MS) {
+                    this.coarsen(0);
+                }
+                // What moves by itself is drawn whole, and on slow frames one part in
+                // IDLE_SHARE of the time, so the page answers a hand between frames: held
+                // back, neither it nor what it moved in the scene is a frame to draw yet.
+                const held = byItself && slow && !viewMoved && now - this.drawnWhen < IDLE_SHARE * this.frameCost;
+                if (byItself && !held) this.frameWanted = true;
                 this.sizeCameraHandles();
-                if (this.frameWanted || this.sceneChanged()) {
+                if (this.frameWanted || (!held && this.sceneChanged())) {
                     this.frameWanted = false;
                     this.anchors.update();
                     this.renderer.render(this.scene, this.camera);
+                    this.drewLastFrame = true;
+                    this.drawnWhen = now;
                     this.framesDrawn += 1;
                     this.drawnAt = [this.canvas.width, this.canvas.height];  // the size the last frame was drawn at
                     // Read again after drawing: what the drawing itself settles (the
@@ -2165,6 +2210,15 @@
 
             // The next frame is drawn, whatever sceneChanged would say.
             invalidate() {
+                this.frameWanted = true;
+            }
+            // The frames of a turning view drawn at COARSE[level] of each side's pixels (0:
+            // whole), the canvas kept the size it is on the page.
+            coarsen(level) {
+                if (level === this.coarse) return;
+                this.coarse = level;
+                this.renderer.setPixelRatio(window.devicePixelRatio * COARSE[level]);
+                this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
                 this.frameWanted = true;
             }
 

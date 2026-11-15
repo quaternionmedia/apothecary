@@ -171,6 +171,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Changed
 
+- The page keeps up with a hand where a frame is slow to draw, as in a browser that draws the world in software: while the view turns its frames are drawn coarser and the frame it comes to rest on whole, and what moves by itself is drawn whole and less often. Where frames are quick nothing changes. ([doc](docs/viewer.md#how-the-world-is-drawn))
 - A jog is one act on the port, whoever makes it: `POST /firmware/printers/jog` and `devices.printer_jog` send a router's jog line, or a printer's relative move with the link held from `G91` to `G90` and absolute positioning put back whatever became of the move; the deck's knobs go through it as the page's pad does. ([doc](docs/firmware.md#control-behind-a-latch))
 - What only turns something off or stops it goes with the control latch down: a heater's target to zero, the fan off, a heat-and-wait broken, the quickstop, a router's spindle off, hold and jog cancel. ([doc](docs/firmware.md#control-behind-a-latch))
 - A cut is refused until each axis has been homed or given a work zero on the open port, and a controller that restarted or was reset in motion has to be placed again; the Machine's Needs you card says which axis and since when. ([doc](docs/cnc.md#a-cut-needs-the-tool-placed))
