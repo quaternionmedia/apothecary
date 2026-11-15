@@ -136,33 +136,36 @@ def firmware_validate(json_out: bool):
         click.echo(json.dumps(status.model_dump(), indent=2))
     else:
         _print_status(status)
-    if not status.arduino_cli_ok:
+    if not status.module("arduino").ok:
         sys.exit(1)
 
 
 def _print_status(status) -> None:
     click.secho("Firmware toolchain", bold=True)
     click.echo(f"  tools dir: {status.tools_dir}")
-    if status.arduino_cli_ok:
-        click.echo(f"  ✓ arduino-cli {status.arduino_cli_version}: {status.arduino_cli_path}")
-        if status.config_file:
-            click.echo(f"    config: {status.config_file}")
-        installed = [c for c in status.cores if c.installed]
+    # Arduino's lines are its own: arduino-cli with its config and its cores, and esptool.
+    arduino = status.module("arduino")
+    cli, esptool = arduino.tool("arduino-cli"), arduino.tool("esptool")
+    if cli.ok:
+        click.echo(f"  ✓ arduino-cli {cli.version}: {cli.path}")
+        if arduino.config_file:
+            click.echo(f"    config: {arduino.config_file}")
+        installed = [c for c in arduino.cores if c.installed]
         if installed:
             click.echo("    cores: " + ", ".join(f"{c.id}@{c.installed}" for c in installed))
     else:
         click.secho("  ✗ arduino-cli: not installed (apothecary firmware install)", fg="red")
-    if status.esptool_ok:
-        click.echo(f"  ✓ esptool {status.esptool_version}: {status.esptool_path}")
+    if esptool.ok:
+        click.echo(f"  ✓ esptool {esptool.version}: {esptool.path}")
     else:
         click.secho(
             "  • esptool: not found (optional: raw binary flashing needs it; "
             "arduino-cli uploads to an ESP32 without it)",
             fg="yellow",
         )
-    missing = [] if status.arduino_cli_path else ["arduino-cli"]
-    missing += [] if status.esptool_ok else ["esptool"]
-    for problem in _unsaid(status.problems, missing):
+    missing = [] if cli.path else ["arduino-cli"]
+    missing += [] if esptool.ok else ["esptool"]
+    for problem in _unsaid(arduino.problems, missing):
         click.secho(f"  ! {problem}", fg="yellow")
     for module in status.toolchains:
         if module.id == "arduino":

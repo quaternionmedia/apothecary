@@ -12,6 +12,7 @@ from pydantic import (
     AfterValidator,
     BaseModel,
     Field,
+    SerializeAsAny,
     computed_field,
     field_validator,
     model_validator,
@@ -191,7 +192,8 @@ class ToolStatus(BaseModel):
 
 
 class ModuleStatus(BaseModel):
-    """What a toolchain module says of itself: what it builds, its tools, its problems."""
+    """What a toolchain module says of itself: what it builds, its tools, its problems.
+    A module with more to say subclasses it (Arduino's: ``ArduinoStatus``)."""
 
     id: str
     label: str
@@ -205,27 +207,44 @@ class ModuleStatus(BaseModel):
     needs_board: bool = False  # a build names a board (an Arduino FQBN)
     installable: bool = True  # whether that command can install it on this machine
 
+    def tool(self, name: str) -> ToolStatus:
+        """One of its tools, by its name."""
+        for tool in self.tools:
+            if tool.name == name:
+                return tool
+        raise KeyError(name)
+
+
+class SuggestedCore(BaseModel):
+    """A core the Bench offers a one-click install for."""
+
+    id: str
+    label: str
+
+
+class ArduinoStatus(ModuleStatus):
+    """The Arduino module's status: beside its tools, what only arduino-cli has."""
+
+    config_file: Optional[str] = None  # the managed config arduino-cli is given, once it runs
+    cores: List[CoreInfo] = Field(default_factory=list)  # what ``core list`` answers
+    suggested_cores: List[SuggestedCore] = Field(default_factory=list)
+
 
 class ToolchainStatus(BaseModel):
-    """What ``apothecary firmware validate`` and ``GET /firmware/status`` report."""
+    """What ``apothecary firmware validate`` and ``GET /firmware/status`` report: where
+    an install puts a tool, and every toolchain module's status, Arduino's first.
+    Whether a module can build, its tools and its problems are that module's own."""
 
     tools_dir: str
-    arduino_cli_path: Optional[str] = None
-    arduino_cli_version: Optional[str] = None
-    arduino_cli_ok: bool = False
-    config_file: Optional[str] = None
-    cores: List[CoreInfo] = Field(default_factory=list)
-    esptool_path: Optional[str] = None
-    esptool_version: Optional[str] = None
-    esptool_ok: bool = False
-    problems: List[str] = Field(default_factory=list)
-    # Every toolchain module, Arduino's first; the fields above are Arduino's
-    # alone.
-    toolchains: List[ModuleStatus] = Field(default_factory=list)
+    # Each in its module's own shape, and written out in it.
+    toolchains: List[SerializeAsAny[ModuleStatus]] = Field(default_factory=list)
 
-    @property
-    def ok(self) -> bool:
-        return self.arduino_cli_ok
+    def module(self, module_id: str) -> ModuleStatus:
+        """One module's status, by its id."""
+        for module in self.toolchains:
+            if module.id == module_id:
+                return module
+        raise KeyError(module_id)
 
 
 class TaskStatus(str, Enum):

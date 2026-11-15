@@ -22,6 +22,7 @@ from firmware_helpers import fake_cli_calls
 from apothecary.api import app
 from apothecary.cli import cli
 from apothecary.firmware import bindings, devices, service
+from apothecary.firmware.models import ModuleStatus
 from apothecary.firmware.modules import get_module, module_for, modules
 from apothecary.firmware.modules.arduino import ArduinoModule
 from apothecary.firmware.modules.rust_esp32 import (
@@ -31,7 +32,12 @@ from apothecary.firmware.modules.rust_esp32 import (
     export_paths,
 )
 from apothecary.firmware.sketches import discover_sketches, find_sketch
-from apothecary.firmware.toolchains import Tool, ToolchainError, under_tools_dir
+from apothecary.firmware.toolchains import (
+    SUGGESTED_CORES,
+    Tool,
+    ToolchainError,
+    under_tools_dir,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 RUST = "esp32_blink@rust-esp32"
@@ -276,9 +282,31 @@ def test_the_tools_dir_cargo_runs_with_its_homes_there_and_the_vendored_crates(
     assert export_paths('$Env:PATH = "C:\\a;$Env:PATH"') == ["C:\\a"]
 
 
+def test_the_status_is_where_the_tools_live_and_each_module_s_own(fake_rust, tmp_path):
+    """One shape: the tools dir and every module's status. What only Arduino has -- its
+    config file, its cores, the cores the Bench offers -- is in Arduino's own, written
+    out with it; nothing of one module's is beside the list."""
+    status = service.toolchain_status()
+    said = status.model_dump()
+    assert set(said) == {"tools_dir", "toolchains"}
+    assert said["tools_dir"] == str(tmp_path / "tools")
+    every = set(ModuleStatus.model_fields)
+    arduino, rust, deck = said["toolchains"]
+    assert set(arduino) - every == {"config_file", "cores", "suggested_cores"}
+    assert set(rust) == every and set(deck) == every
+    assert arduino["config_file"] == str(tmp_path / "tools" / "arduino-cli.yaml")
+    assert [c["id"] for c in arduino["cores"]] == ["arduino:avr"]
+    assert [c["id"] for c in arduino["suggested_cores"]] == [c for c, _ in SUGGESTED_CORES]
+    # A module's status by its id, and a tool of it by its name; neither guesses.
+    assert status.module("rust-esp32").tool("espflash").version == "espflash 4.6.0"
+    with pytest.raises(KeyError):
+        status.module("platformio")
+    with pytest.raises(KeyError):
+        status.module("arduino").tool("cargo")
+
+
 def test_status_says_each_module_and_its_tools(fake_rust, tmp_path):
     status = service.toolchain_status()
-    assert status.arduino_cli_ok and status.ok  # the top level is Arduino's
     arduino, rust, deck = status.toolchains
     assert deck.id == "stream-deck" and deck.label == "Stream Deck +" and not deck.installable
     assert arduino.id == "arduino" and arduino.ok and arduino.tools[0].name == "arduino-cli"
@@ -354,11 +382,11 @@ def test_the_board_a_route_names_is_each_module_s_own(fake_rust, builds, fresh_t
 def test_the_status_route_and_the_toolchains_route_carry_every_module(fake_rust):
     client = TestClient(app)
     status = client.get("/firmware/status").json()
-    assert status["arduino_cli_ok"] and status["ok"]
     assert [t["id"] for t in status["toolchains"]] == ["arduino", "rust-esp32", "stream-deck"]
-    assert status["toolchains"][1]["ok"]
+    assert status["toolchains"][0]["ok"] and status["toolchains"][1]["ok"]
+    # The toolchains route lists the same statuses, each whole.
     listed = client.get("/firmware/toolchains").json()
-    assert [t["id"] for t in listed] == ["arduino", "rust-esp32", "stream-deck"]
+    assert listed == status["toolchains"]
     sketches = client.get("/firmware/sketches").json()
     rust = next(s for s in sketches if s["id"] == RUST)
     assert rust["toolchain"] == "rust-esp32" and rust["name"] == "esp32_blink"

@@ -573,15 +573,22 @@ def test_task_runner_keeps_only_the_newest_tasks(monkeypatch):
 
 
 def test_service_status_with_and_without_toolchain(fake_arduino_cli):
-    status = service.toolchain_status()
-    assert status.ok and status.arduino_cli_version == "9.9.9"
-    assert [c.id for c in status.cores] == ["arduino:avr"]
-    assert not status.esptool_ok and any("esptool" in p for p in status.problems)
+    arduino = service.toolchain_status().module("arduino")
+    assert arduino.ok and arduino.tool("arduino-cli").version == "9.9.9"
+    assert arduino.tool("arduino-cli").path == str(fake_arduino_cli)
+    assert [c.id for c in arduino.cores] == ["arduino:avr"]
+    esptool = arduino.tool("esptool")
+    assert not esptool.ok and esptool.path is None
+    assert any("esptool" in p for p in arduino.problems)
 
 
 def test_service_status_missing(no_arduino_cli):
-    status = service.toolchain_status()
-    assert not status.ok and any("firmware install" in p for p in status.problems)
+    arduino = service.toolchain_status().module("arduino")
+    assert not arduino.ok and any("firmware install" in p for p in arduino.problems)
+    assert [(t.name, t.path, t.ok) for t in arduino.tools] == [
+        ("arduino-cli", None, False),
+        ("esptool", None, False),
+    ]
 
 
 def test_service_resolve_fqbn_and_port(fake_arduino_cli, tmp_path):

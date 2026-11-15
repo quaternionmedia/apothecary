@@ -11,7 +11,7 @@ The modules (``_registry`` is the list):
 
 - ``arduino`` (``modules/arduino.py``): arduino-cli builds and uploads,
   esptool flashes raw images. Its sketches are ``<folder>/<folder>.ino``, and
-  the top-level fields of ``GET /firmware/status`` are its.
+  its status says its cores and its config file too (``ArduinoStatus``).
 - ``rust-esp32`` (``modules/rust_esp32.py``): cargo builds a Cargo project
   for the classic ESP32 on Espressif's Xtensa Rust toolchain, offline, from
   crates vendored at install time; espflash flashes it.
@@ -37,7 +37,10 @@ route, the Bench's toolchain card, the build form, the compile and upload
 routes and the CLI all go through this interface, so none of them changes.
 A module whose sketches share a target with another's (a C3 Rust module
 beside this one) names its own ``id`` and its sketches say which they want
-in their ``firmware.json``'s ``toolchain``.
+in their ``firmware.json``'s ``toolchain``. A module with more to say of
+itself than its tools and its problems answers ``status`` in a subclass of
+``ModuleStatus`` (``firmware/models.py``), and the status route writes it out
+whole.
 """
 
 from __future__ import annotations
@@ -46,13 +49,14 @@ import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, ClassVar, Dict, Iterable, List, Optional, Tuple
+from typing import Callable, ClassVar, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 
 from ...stays_local import subprocess_env
 from ..models import ARDUINO, BoardInfo, ModuleStatus, SketchInfo, ToolStatus
 from ..toolchains import Tool, ToolchainError
 
 Log = Callable[[str], None]
+Status = TypeVar("Status", bound=ModuleStatus)
 
 # Never part of a sketch's sources, whatever the module: the sidecar is
 # settings, not code, and these are what a build leaves behind.
@@ -137,8 +141,10 @@ class ToolchainModule(ABC):
         """The environment the module's steps run in."""
         return subprocess_env()
 
-    def _base_status(self) -> ModuleStatus:
-        return ModuleStatus(
+    def _base_status(self, shape: Type[Status] = ModuleStatus) -> Status:
+        """What the module is, before its tools are looked for, in the shape its
+        status has: ``ModuleStatus``, or the module's own subclass of it."""
+        return shape(
             id=self.id,
             label=self.label,
             languages=list(self.languages),

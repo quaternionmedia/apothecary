@@ -151,10 +151,11 @@ def check():
     # Each toolchain module: whether it is installed, and what it can do. An
     # install flag installs its own module and nothing else.
     can = {m.id: ", ".join(m.can) for m in fw.toolchains}
-    if fw.arduino_cli_ok:
-        cores = ", ".join(c.id for c in fw.cores if c.installed) or "no cores"
-        _safe_echo(f"  ✓ arduino-cli {fw.arduino_cli_version} ({cores})")
-        _safe_echo(f"    Arduino can {can.get('arduino', '')}")
+    arduino = fw.module("arduino")
+    if arduino.ok:
+        cores = ", ".join(c.id for c in arduino.cores if c.installed) or "no cores"
+        _safe_echo(f"  ✓ arduino-cli {arduino.tool('arduino-cli').version} ({cores})")
+        _safe_echo(f"    Arduino can {can['arduino']}")
     else:
         _safe_echo(
             "  • arduino-cli not installed (optional: apothecary firmware install)", fg="yellow"

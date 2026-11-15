@@ -66,12 +66,13 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
 
     const idOf = (x) => x.id || `${x.name}@${x.toolchain || "arduino"}`;
     const sketchOf = (id) => sketches.find((x) => idOf(x) === id) || null;
-    // The module that builds a sketch, from the status; Arduino's when the status
-    // names none.
+    // The module that builds a sketch, from the status. One the status does not name
+    // (a status that could not be asked) is not installed, and takes a board if it
+    // is Arduino's.
     function moduleOf(s) {
         const id = (s && s.toolchain) || "arduino";
         const m = ((status && status.toolchains) || []).find((t) => t.id === id);
-        return m || { id, label: id === "arduino" ? "Arduino" : id, ok: id === "arduino" && !!(status && status.arduino_cli_ok), needs_board: id === "arduino" };
+        return m || { id, label: id === "arduino" ? "Arduino" : id, ok: false, needs_board: id === "arduino" };
     }
     const needsBoard = (s) => moduleOf(s).needs_board;
     // A sketch's row: the sketch with its toolchain, and its board or its chip.
@@ -145,8 +146,9 @@ export function mountBuild(root, { base = "", tasks = null, say = null, port = n
         // knows need arduino-cli, and the ports need a module that finds them -- a tool
         // that is not there would answer each with a 503 in the console.
         const findsPorts = ((s && s.toolchains) || []).some((t) => t.ok && (t.can || []).includes("find ports"));
+        const arduino = ((s && s.toolchains) || []).some((t) => t.id === "arduino" && t.ok);
         const [all, found] = await Promise.all([
-            s && s.arduino_cli_ok ? api("/firmware/boards/all").catch(() => []) : Promise.resolve([]),
+            arduino ? api("/firmware/boards/all").catch(() => []) : Promise.resolve([]),
             port ? Promise.resolve(null)
                 : findsPorts || !s ? api("/firmware/devices").catch(() => ({ devices: [] })) : Promise.resolve({ devices: [] }),
         ]);
@@ -244,10 +246,12 @@ export function mountRawFlash(root, { base = "", tasks = null, say = null, port 
             return { offset, path: rest.join(" ") };
         });
     }
+    // esptool is one of the Arduino module's tools.
+    const esptool = () => ((status && status.toolchains) || []).some((m) => m.id === "arduino" && (m.tools || []).some((t) => t.name === "esptool" && t.ok));
     function enable() {
         const busy = !!(tasks && tasks.running()) || !!(status && status.active_task && status.active_task.status === "running");
-        $(".esp-flash-btn").disabled = !(status && status.esptool_ok) || !port() || busy;
-        $(".esp-note").textContent = status && !status.esptool_ok ? "esptool not found: uv tool install esptool, or install the esp32 core (it bundles one)." : "";
+        $(".esp-flash-btn").disabled = !esptool() || !port() || busy;
+        $(".esp-note").textContent = status && !esptool() ? "esptool not found: uv tool install esptool, or install the esp32 core (it bundles one)." : "";
     }
     async function flash() {
         const to = port(), list = images();

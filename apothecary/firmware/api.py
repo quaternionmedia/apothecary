@@ -52,7 +52,7 @@ from .models import (
 from .modules import Plan, get_module
 from .sketches import discover_sketches, find_sketch
 from .tasks import TaskBusy, get_task_runner
-from .toolchains import SUGGESTED_CORES, PortHeld, ToolchainError, get_arduino_cli, get_esptool
+from .toolchains import PortHeld, ToolchainError, get_arduino_cli, get_esptool
 
 
 class FirmwareRoute(APIRoute):
@@ -116,10 +116,9 @@ def _start(kind: str, title: str, steps: List[List[str]] | Plan, on_done=None, p
 
 @router.get("/status")
 def firmware_status():
-    status = service.toolchain_status()
-    data = status.model_dump()
-    data["ok"] = status.ok
-    data["suggested_cores"] = [{"id": cid, "label": label} for cid, label in SUGGESTED_CORES]
+    """Where the tools live and every toolchain module's status, with the task
+    running now."""
+    data = service.toolchain_status().model_dump()
     active = get_task_runner().active
     data["active_task"] = active.snapshot() if active else None
     return data

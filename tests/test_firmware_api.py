@@ -1,5 +1,6 @@
 """``/firmware`` API and ``apothecary firmware`` CLI, driven against the fake arduino-cli."""
 
+import json
 import re
 import threading
 import time
@@ -49,9 +50,21 @@ def test_the_viewer_links_to_no_page_of_its_own(fake_arduino_cli):
 def test_status_and_catalogue(fake_arduino_cli, fresh_task_runner):
     c = TestClient(app)
     status = c.get("/firmware/status").json()
-    assert status["ok"] and status["arduino_cli_version"] == "9.9.9"
+    # Where the tools live, each module's own status, and the task running now:
+    # nothing of one module's is beside them.
+    assert set(status) == {"tools_dir", "toolchains", "active_task"}
+    arduino = status["toolchains"][0]
+    assert arduino["id"] == "arduino" and arduino["ok"]
+    assert [(t["name"], t["version"], t["ok"]) for t in arduino["tools"]] == [
+        ("arduino-cli", "9.9.9", True),
+        ("esptool", None, False),
+    ]
+    assert arduino["config_file"] == f"{status['tools_dir']}/arduino-cli.yaml"
+    assert [(c["id"], c["installed"]) for c in arduino["cores"]] == [("arduino:avr", "1.8.8")]
     assert status["active_task"] is None
-    assert any(s["id"] == "esp32:esp32" for s in status["suggested_cores"])
+    assert {"id": "esp32:esp32", "label": "Espressif ESP32 (all variants)"} in (
+        arduino["suggested_cores"]
+    )
     assert [b["port"] for b in c.get("/firmware/boards").json()] == [
         "/dev/ttyFAKE0",
         "/dev/ttyFAKE1",
@@ -67,7 +80,10 @@ def test_status_and_catalogue(fake_arduino_cli, fresh_task_runner):
 def test_status_without_toolchain_is_honest(no_arduino_cli, fresh_task_runner):
     c = TestClient(app)
     status = c.get("/firmware/status").json()
-    assert not status["ok"]
+    arduino = status["toolchains"][0]
+    assert arduino["id"] == "arduino" and not arduino["ok"]
+    assert arduino["config_file"] is None and arduino["cores"] == []
+    assert "arduino-cli not found (run `apothecary firmware install`)" in arduino["problems"]
     assert c.get("/firmware/boards").status_code == 503
     assert (
         c.post("/firmware/sketches/footpedal/compile", json={"fqbn": "arduino:avr:uno"}).status_code
@@ -230,7 +246,15 @@ def test_cli_validate_missing_toolchain(no_arduino_cli, tmp_path):
         "Rust for the ESP32 (rust for esp32)",
     ]
     as_json = CliRunner().invoke(cli, ["firmware", "validate", "--json-out"])
-    assert '"arduino_cli_ok": false' in as_json.output
+    assert as_json.exit_code == 1
+    said = json.loads(as_json.output)
+    assert set(said) == {"tools_dir", "toolchains"}
+    arduino = said["toolchains"][0]
+    assert arduino["id"] == "arduino" and not arduino["ok"]
+    assert [(t["name"], t["ok"]) for t in arduino["tools"]] == [
+        ("arduino-cli", False),
+        ("esptool", False),
+    ]
 
 
 def test_cli_lists(fake_arduino_cli):

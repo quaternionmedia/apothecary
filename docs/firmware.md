@@ -35,7 +35,12 @@ family or language -- the ESP32-C3 on stable Rust, AVR, the RP2040 -- is a modul
 of its own beside them, and the
 Bench, the Machine, the routes and the CLI draw it without a change of their
 own. `GET /firmware/toolchains` lists them; `GET /firmware/status` carries
-them as `toolchains`, and its other fields are the Arduino module's.
+them as `toolchains`, beside `tools_dir` (where an install puts a tool) and
+`active_task` (the task running now). Each entry is its module's own: its
+`ok`, its `tools` as found, its `problems`. What only Arduino has is in
+Arduino's entry: its `config_file`, its `cores` and the `suggested_cores` the
+Bench offers. `apothecary firmware validate --json-out` prints the same
+`tools_dir` and `toolchains`.
 
 ## Setup
 
