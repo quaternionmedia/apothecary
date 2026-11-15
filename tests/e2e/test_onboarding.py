@@ -354,6 +354,31 @@ def test_with_no_arduino_cli_a_printer_says_why_and_the_bench_asks_for_nothing_m
     bench = page.locator(".panel[data-panel='bench']")
     expect(bench.locator(".tc-status")).to_contain_text("not installed", timeout=15000)
     expect(bench.locator(".port-select")).to_contain_text("(none detected)")
+    # The toolchain card's rows with neither tool, word for word and in order, each
+    # tool's problem under them; nothing that needs arduino-cli or esptool can be pressed.
+    rows = bench.locator(".tc-status > div").all_text_contents()
+    assert rows[0].startswith("tools dir: /") and rows[1:] == [
+        "arduino-cli: ✗ not installed",
+        "config: –",
+        "esptool: • not found (optional)",
+        "Arduino: not installed · can build, upload, find ports, listen, probe with esptool",
+        "! arduino-cli not found (run `apothecary firmware install`)",
+        "! esptool not found -- raw ESP binary flashing unavailable (arduino-cli uploads to "
+        "ESP32 still work once the esp32 core is installed)",
+    ], rows
+    expect(bench.locator(".install-btn")).to_have_text("Install arduino-cli")
+    assert bench.locator(".tc-cores li").all_text_contents() == [
+        "Arduino AVR (Uno, Nano, Mega, Leonardo) arduino:avrInstall",
+        "Espressif ESP32 (all variants) esp32:esp32Install",
+        "Espressif ESP8266 esp8266:esp8266Install",
+        "Raspberry Pi Pico / RP2040 rp2040:rp2040Install",
+        "Arduino SAMD (Zero, MKR) arduino:samdInstall",
+    ]
+    for cannot in (".core-install[data-id='arduino:avr']", ".lib-btn", ".esp-flash-btn"):
+        expect(bench.locator(cannot)).to_be_disabled()
+    expect(bench.locator(".esp-note")).to_have_text(
+        "esptool not found: uv tool install esptool, or install the esp32 core (it bundles one)."
+    )
     settled(page)
     assert failed == [], failed
 

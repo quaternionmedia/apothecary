@@ -436,6 +436,21 @@ def test_check_names_the_rust_install_when_it_is_missing(fake_arduino_cli):
         in shown.output
     )
     assert "it would build, flash, find ports, listen" in shown.output
+    # Arduino's two lines, word for word, under the heading: arduino-cli with its
+    # installed cores, and what the module can do.
+    lines = shown.output.splitlines()
+    at = lines.index("Firmware toolchain:")
+    assert lines[at + 1 : at + 3] == [
+        "  ✓ arduino-cli 9.9.9 (arduino:avr)",
+        "    Arduino can build, upload, find ports, listen, probe with esptool",
+    ]
+
+
+def test_check_says_arduino_cli_is_not_installed_in_one_line(no_arduino_cli):
+    lines = CliRunner().invoke(cli, ["check"]).output.splitlines()
+    at = lines.index("Firmware toolchain:")
+    assert lines[at + 1] == "  • arduino-cli not installed (optional: apothecary firmware install)"
+    assert lines[at + 2].startswith("  • Rust for the ESP32 not installed")
 
 
 def test_install_rust_alone_leaves_arduino_cli_be(fake_arduino_cli, monkeypatch):

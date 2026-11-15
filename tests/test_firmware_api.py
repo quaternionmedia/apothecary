@@ -192,16 +192,43 @@ def test_install_task_runs_installer(fake_arduino_cli, fresh_task_runner, monkey
 # --- CLI -------------------------------------------------------------------------
 
 
+# What validate says of esptool when there is none.
+NO_ESPTOOL = (
+    "  • esptool: not found (optional: raw binary flashing needs it; "
+    "arduino-cli uploads to an ESP32 without it)"
+)
+
+
 def test_cli_validate_reports_and_exits(fake_arduino_cli):
     result = CliRunner().invoke(cli, ["firmware", "validate"])
     assert result.exit_code == 0, result.output
     assert "arduino-cli 9.9.9" in result.output and "arduino:avr@1.8.8" in result.output
+    # Arduino's lines, word for word and in order, up to the next module's heading:
+    # the tools dir, arduino-cli as found, its config and its cores, and esptool.
+    tools = fake_arduino_cli.parent / "tools"
+    assert result.output.splitlines()[:7] == [
+        "Firmware toolchain",
+        f"  tools dir: {tools}",
+        f"  ✓ arduino-cli 9.9.9: {fake_arduino_cli}",
+        f"    config: {tools / 'arduino-cli.yaml'}",
+        "    cores: arduino:avr@1.8.8",
+        NO_ESPTOOL,
+        "Rust for the ESP32 (rust for esp32)",
+    ]
 
 
-def test_cli_validate_missing_toolchain(no_arduino_cli):
+def test_cli_validate_missing_toolchain(no_arduino_cli, tmp_path):
     result = CliRunner().invoke(cli, ["firmware", "validate"])
     assert result.exit_code == 1
     assert "not installed" in result.output
+    # A tool its own line says is missing is not said again as a problem.
+    assert result.output.splitlines()[:5] == [
+        "Firmware toolchain",
+        f"  tools dir: {tmp_path / 'tools'}",
+        "  ✗ arduino-cli: not installed (apothecary firmware install)",
+        NO_ESPTOOL,
+        "Rust for the ESP32 (rust for esp32)",
+    ]
     as_json = CliRunner().invoke(cli, ["firmware", "validate", "--json-out"])
     assert '"arduino_cli_ok": false' in as_json.output
 
