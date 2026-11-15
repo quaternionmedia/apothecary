@@ -7951,7 +7951,7 @@
                 if (needs) return { did, said: needs, refused: true };
                 return { did, said: status.textContent, refused: status.classList.contains('error') };
             }
-            // One thing a stage is put on by (journeys.py's PUTS): `{ did }` saying what
+            // One thing that takes the page to a stage (journeys.py's PUTS): `{ did }` saying what
             // was done, `{}` where it was so already, `{ refused }` saying why not.
             async stagePut(verb, subject) {
                 const until = async (test, ms) => {

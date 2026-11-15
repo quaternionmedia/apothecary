@@ -314,8 +314,9 @@ def snapshot_pattern(system: Optional[str] = None, machine: Optional[str] = None
 
 # --- where it lives ------------------------------------------------------------------
 
-# An install with no install.json is the AppImage itself, at <date>/openscad.
-LEGACY_EXECUTABLE = "openscad"
+# The AppImage's name in a snapshot's directory. An install with no install.json is
+# the AppImage itself, at <date>/openscad.
+APPIMAGE_EXECUTABLE = "openscad"
 
 
 def openscad_dir() -> Path:
@@ -343,7 +344,7 @@ def read_manifest(date: str) -> dict:
 def executable_for(date: str) -> Path:
     """The executable of the snapshot of ``date``: where ``install.json`` says it
     is, else the AppImage at ``<date>/openscad`` (an install with none)."""
-    rel = _plain(read_manifest(date).get("executable")) or LEGACY_EXECUTABLE
+    rel = _plain(read_manifest(date).get("executable")) or APPIMAGE_EXECUTABLE
     return openscad_dir() / check_date(date) / rel
 
 
@@ -1136,7 +1137,7 @@ class SnapshotInstaller:
 
     def _appimage(self, date: str, name: str, body: bytes) -> Callable[[Path], dict]:
         def populate(staging: Path) -> dict:
-            image = staging / LEGACY_EXECUTABLE
+            image = staging / APPIMAGE_EXECUTABLE
             image.write_bytes(body)
             _executable(image)
             archs = binary_archs(image)
@@ -1145,7 +1146,7 @@ class SnapshotInstaller:
                 return {**self._unpacked(image, staging, name, "asked"), "archs": archs}
             code, said = _run(image, "--version")
             if code == 0 or not needs_fuse(said):
-                return {"method": APPIMAGE, "executable": LEGACY_EXECUTABLE, "archs": archs}
+                return {"method": APPIMAGE, "executable": APPIMAGE_EXECUTABLE, "archs": archs}
             self.log("The AppImage cannot mount itself here (no FUSE); extracting it instead")
             return {**self._unpacked(image, staging, name, "no FUSE"), "archs": archs}
 

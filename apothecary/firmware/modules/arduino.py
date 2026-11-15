@@ -101,7 +101,7 @@ class ArduinoModule(ToolchainModule):
 
     # -- tools --------------------------------------------------------------------
 
-    def legacy_status(
+    def top_level_status(
         self, cli: Optional[ArduinoCli] = None, esptool: Optional[Esptool] = None
     ) -> ToolchainStatus:
         """Everything ``validate`` reports of arduino-cli and esptool, in the shape
@@ -141,28 +141,28 @@ class ArduinoModule(ToolchainModule):
             )
         return status
 
-    def from_legacy(self, legacy: ToolchainStatus) -> ModuleStatus:
+    def as_module(self, top: ToolchainStatus) -> ModuleStatus:
         out = self._base_status()
-        out.ok = legacy.arduino_cli_ok
+        out.ok = top.arduino_cli_ok
         out.tools = [
             ToolStatus(
                 name="arduino-cli",
-                path=legacy.arduino_cli_path,
-                version=legacy.arduino_cli_version,
-                ok=legacy.arduino_cli_ok,
+                path=top.arduino_cli_path,
+                version=top.arduino_cli_version,
+                ok=top.arduino_cli_ok,
             ),
             ToolStatus(
                 name="esptool",
-                path=legacy.esptool_path,
-                version=legacy.esptool_version,
-                ok=legacy.esptool_ok,
+                path=top.esptool_path,
+                version=top.esptool_version,
+                ok=top.esptool_ok,
             ),
         ]
-        out.problems = list(legacy.problems)
+        out.problems = list(top.problems)
         return out
 
     def status(self) -> ModuleStatus:
-        return self.from_legacy(self.legacy_status())
+        return self.as_module(self.top_level_status())
 
     def install(
         self, log: Log, force: bool = False, spec: Optional[InstallSpec] = None
@@ -182,7 +182,7 @@ class ArduinoModule(ToolchainModule):
                 _check(stream(cli.core_install_argv(core), log, env), f"core install {core}")
         if spec.libraries:
             _check(stream(cli.lib_install_argv(spec.libraries), log, env), "lib install")
-        return self.legacy_status(cli)
+        return self.top_level_status(cli)
 
     def env(self) -> dict:
         return env_for_arduino()

@@ -35,9 +35,9 @@ def toolchain_status(
     module's status, Arduino's first.
     """
     arduino = ArduinoModule()
-    status = arduino.legacy_status(cli, esptool)
+    status = arduino.top_level_status(cli, esptool)
     status.toolchains = [
-        arduino.from_legacy(status) if m.id == arduino.id else m.status() for m in modules()
+        arduino.as_module(status) if m.id == arduino.id else m.status() for m in modules()
     ]
     return status
 

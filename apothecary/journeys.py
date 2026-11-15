@@ -62,7 +62,7 @@ class Step:
     puts: Tuple[Tuple[str, str], ...] = ()
 
 
-# What a stage is put on by, each as a person would do it (the template's stagePut):
+# What takes the page to a stage, each as a person would do it (the template's stagePut):
 #   pin       a board on a port pinned to a piece, ``piece:port``, as Pin in the
 #             piece's Device section does, where that port is listed: a piece with
 #             no board pinned and no such port says to pin one

@@ -53,7 +53,7 @@ def test_each_journey_is_named_once_and_apart_from_the_systems():
         assert verb == journey.title and article and " " not in thing, journey.name
 
 
-def test_a_stage_is_put_on_by_verbs_the_page_has_on_pieces_the_simulated_server_s_site_has():
+def test_the_page_is_taken_to_a_stage_by_verbs_it_has_on_pieces_the_simulated_server_s_site_has():
     """What the tour does to stand on a stage is from the page's own short list, and its
     subjects are pieces of the simulated server's site."""
     pieces = {
