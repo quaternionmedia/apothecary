@@ -683,27 +683,6 @@ class PrintFile(BaseModel):
     machine: str = Field(min_length=1)
 
 
-class PrintRecord(BaseModel):
-    """One print streamed from the host, in the ``prints/records/`` format.
-
-    Nothing writes one; ``apothecary/jobs.py`` reads each kept under
-    ``prints/records/`` once, and carries it over as a print job.
-    """
-
-    id: str
-    port: str
-    file_id: str
-    name: str
-    at: datetime
-    finished: Optional[datetime] = None
-    outcome: str  # done | cancelled | failed
-    sent: int = 0
-    total: int = 0
-    error: Optional[str] = None
-    firmware: Optional[str] = None
-    lines: List[str] = Field(default_factory=list)  # the tail of what the firmware said
-
-
 # A kept print file's id: its keeping time and its name's stem, so never a dot first
 # (no hidden file, no "." or ".."), and no separator.
 PRINT_FILE_ID = r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,119}$"

@@ -23,15 +23,6 @@ own thread (``begin``'s ``live``), so its progress costs no writes. A job
 written as running that no thread of this process holds was running when the
 server stopped: it reads as failed and says so, and its file is left as it is.
 
-**Print records** (``prints/records/*.json``, a format nothing writes) are
-carried over on the first read after they appear: each becomes a print job with
-the record's id -- its port, its file's name and kept id, when it started and
-finished, its outcome, its error as the reason, the lines sent of the total as
-its progress, the firmware and the tail of what the firmware said. The file's
-size comes from the kept file's description when that is there; a record holds
-no site, part or hash, so those stay empty. The records are left where they
-are.
-
 **Listeners** (``LISTENERS``) hear each job as it begins and as it ends; the
 site layer registers one that marks the machine's node busy while a job runs
 on it, so a running job, not a hand-typed one, is what makes a printer busy.
@@ -323,7 +314,6 @@ def get(job_id: str) -> Optional[Job]:
     """One job, with what its machine said, or ``None``."""
     if not JOB_ID_RE.match(job_id or ""):
         return None
-    _carry_over_print_records()
     job = _read(jobs_dir() / f"{job_id}.json")
     return _as_read(job) if job is not None else None
 
@@ -343,7 +333,6 @@ def list_jobs(
 ) -> List[Job]:
     """Jobs, running ones first, then the newest first: of a site, of the machine on a
     port (``identity`` is the board's own, when known), of a kind."""
-    _carry_over_print_records()
     folder = jobs_dir()
     found: List[Job] = []
     if folder.is_dir():
@@ -379,56 +368,3 @@ def orphaned(machine: str, identity: Optional[str] = None) -> List[Job]:
             if _same_machine(job, machine, identity):
                 found.append(job)
     return found
-
-
-# --- print records, carried over as print jobs ---------------------------------------------
-
-
-def _carry_over_print_records() -> None:
-    """Each print record not yet a job becomes one (see the module's docstring)."""
-    records = state_dir() / "prints" / "records"
-    if not records.is_dir():
-        return
-    for path in records.glob("*.json"):
-        if (jobs_dir() / path.name).is_file():
-            continue
-        job = _from_print_record(path)
-        if job is not None:
-            with _LOCK:
-                if not (jobs_dir() / path.name).is_file():
-                    _write(job)
-
-
-def _from_print_record(path: Path) -> Optional[Job]:
-    from .firmware.models import PrintRecord
-
-    try:
-        record = PrintRecord(**json.loads(path.read_text(encoding="utf-8")))
-    except (OSError, ValueError, TypeError):
-        return None
-    if record.id != path.stem or not JOB_ID_RE.match(record.id):
-        return None
-    size = None
-    kept = state_dir() / "prints" / f"{record.file_id}.json"
-    if JOB_ID_RE.match(record.file_id) and kept.is_file():
-        try:
-            size = int(json.loads(kept.read_text(encoding="utf-8"))["size"])
-        except (OSError, ValueError, TypeError, KeyError):
-            size = None
-    outcome = record.outcome if record.outcome in ("done", "cancelled", "failed") else "failed"
-    detail: Dict[str, Any] = {"sent": record.sent, "total": record.total}
-    if record.firmware:
-        detail["firmware"] = record.firmware
-    return Job(
-        id=record.id,
-        kind=PRINT.kind,
-        machine=JobMachine(kind=PRINT.machine, port=record.port),
-        input=JobInput(name=record.name, size=size, file_id=record.file_id),
-        started_at=record.at,
-        finished_at=record.finished or record.at,
-        outcome=outcome,
-        reason=record.error,
-        progress=(record.sent / record.total) if record.total else 0.0,
-        detail=detail,
-        log=record.lines,
-    )

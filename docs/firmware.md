@@ -813,9 +813,7 @@ The card's history is the printer's jobs (`GET /jobs?machine=PORT&kind=print`),
 each with its JSON (`GET /jobs/{id}`, with the tail of what the firmware
 said), and the viewer's **Site** lists the jobs of the site's machines, a row
 opening its machine. `GET /jobs/choices?machine=PORT` says what a job there
-would record and which parts it can name. A print record under
-`~/.apothecary/prints/records/` that is not yet a job is written as one
-whenever jobs are read, and the record is left where it is.
+would record and which parts it can name.
 
 A kind of job belongs to a kind of machine: a printer offers `print`
 (`jobs.PRINT`), and a mill or a laser would register its own operation with

@@ -23,7 +23,6 @@ the failure modes they name: a blocked event loop, stacked polls, a panel
 rebuilt under the user's cursor.
 """
 
-import json
 import re
 import time
 
@@ -1165,42 +1164,6 @@ def test_a_print_from_the_card_is_a_job_that_names_the_part_it_makes(page: Page,
     }
     assert (newest["machine"]["port"], newest["machine"]["path"]) == (PRINTER, BOARD)
     assert newest["started_at"] and newest["finished_at"]
-
-
-@pytest.mark.e2e
-def test_the_print_records_kept_before_jobs_show_in_the_cards_history(
-    page: Page, start_server, tmp_path
-):
-    """A print record under prints/records is in the printer's history as a print job,
-    on a server that never saw it printed."""
-    records = tmp_path / "state" / "prints" / "records"
-    records.mkdir(parents=True)
-    (records / "20260920T132512.468-dev_ttyFAKE1.json").write_text(
-        json.dumps(
-            {
-                "id": "20260920T132512.468-dev_ttyFAKE1",
-                "port": PRINTER,
-                "file_id": "20260920T130000.000-old_cube",
-                "name": "old cube.gcode",
-                "at": "2026-09-20T13:25:12.468000+00:00",
-                "finished": "2026-09-20T13:55:12.468000+00:00",
-                "outcome": "done",
-                "sent": 12,
-                "total": 12,
-                "error": None,
-                "firmware": "Marlin",
-                "lines": ["ok"],
-            }
-        )
-    )
-    url = start_server({"APOTHECARY_STATE_DIR": str(tmp_path / "state")})
-    _identify(url)
-    _monitor(page, url)
-    expect(page.locator("#print-history")).to_contain_text(
-        "print · old cube.gcode · done · 12/12 lines", timeout=10000
-    )
-    log = page.locator("#print-history a").first
-    expect(log).to_have_attribute("href", re.compile(r"/jobs/20260920T132512\.468-dev_ttyFAKE1$"))
 
 
 def _printing(url: str, file_id: str, part: str | None = None) -> dict:

@@ -1,7 +1,7 @@
 """Jobs: one operation a machine performs on a part, kept in the state folder.
 
 The model over machine kinds, the registry of what each kind of machine offers,
-the store, and a print record under prints/records read as a print job.
+and the store.
 """
 
 import json
@@ -134,8 +134,8 @@ def test_the_list_puts_running_jobs_first_then_the_newest():
 def test_jobs_list_by_site_and_by_machine_and_a_moved_port_keeps_its_history():
     """A machine is the board's own identity when both the job and the asker know it,
     else its port: the same printer under another port number lists its jobs, and
-    another board on its old port does not; a job recorded with no identity (a
-    print record under prints/records) is its port's."""
+    another board on its old port does not; a job recorded with no identity is its
+    port's."""
     here = _run(
         _job(
             port="/dev/ttyUSB1",
@@ -194,81 +194,34 @@ def test_two_jobs_begun_in_one_millisecond_on_one_port_are_both_kept(_a_state_fo
     assert files == {f"{first.id}.json", f"{second.id}.json"}
 
 
-def _old_record(folder, rid, port, name, file_id, at, outcome, sent, total, error=None):
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / f"{rid}.json").write_text(
+def test_a_print_record_under_prints_records_is_no_job(_a_state_folder_of_its_own):
+    """The jobs are the files of the state folder's ``jobs/``. A print record under
+    ``prints/records``, named as a job is, is none: not listed, not found by its id,
+    and reading the jobs writes none for it."""
+    record = "20260920T132512.468-dev_ttyUSB0"
+    records = _a_state_folder_of_its_own / "prints" / "records"
+    records.mkdir(parents=True)
+    (records / f"{record}.json").write_text(
         json.dumps(
             {
-                "id": rid,
-                "port": port,
-                "file_id": file_id,
-                "name": name,
-                "at": at.isoformat(),
-                "finished": (at + timedelta(minutes=30)).isoformat(),
-                "outcome": outcome,
-                "sent": sent,
-                "total": total,
-                "error": error,
+                "id": record,
+                "port": "/dev/ttyUSB0",
+                "file_id": "20260920T130000.000-cube",
+                "name": "cube.gcode",
+                "at": (AT - timedelta(days=13)).isoformat(),
+                "finished": (AT - timedelta(days=13) + timedelta(minutes=30)).isoformat(),
+                "outcome": "done",
+                "sent": 12,
+                "total": 12,
+                "error": None,
                 "firmware": "Marlin TH3D UFW 2.94a",
                 "lines": ["> G1 X5", "ok"],
             }
         )
     )
-
-
-def test_the_print_records_kept_before_jobs_are_carried_over_as_print_jobs(
-    _a_state_folder_of_its_own,
-):
-    """Every print record under prints/records becomes a print job with the record's id:
-    its port, file, times, outcome, error, lines sent and the firmware's tail. The
-    records stay where they were, and reading again carries nothing twice."""
-    records = _a_state_folder_of_its_own / "prints" / "records"
-    prints = _a_state_folder_of_its_own / "prints"
-    _old_record(
-        records, "20260920T132512.468-dev_ttyUSB0", "/dev/ttyUSB0", "cube.gcode",
-        "20260920T130000.000-cube", AT - timedelta(days=13), "done", 12, 12,
-    )  # fmt: skip
-    _old_record(
-        records, "20260921T090000.000-dev_ttyUSB0", "/dev/ttyUSB0", "bracket.gcode",
-        "20260921T085900.000-bracket", AT - timedelta(days=12), "failed", 3, 40,
-        error="Error:Printer halted",
-    )  # fmt: skip
-    (prints / "20260920T130000.000-cube.json").write_text(
-        json.dumps(
-            {
-                "id": "20260920T130000.000-cube",
-                "name": "cube.gcode",
-                "size": 345,
-                "lines": 12,
-                "uploaded_at": (AT - timedelta(days=13)).isoformat(),
-                "problems": [],
-            }
-        )
-    )
-    (records / "garbage.json").write_text("{ not json")
-
-    listed = jobs.list_jobs(machine="/dev/ttyUSB0")
-    assert [j.id for j in listed] == [
-        "20260921T090000.000-dev_ttyUSB0",
-        "20260920T132512.468-dev_ttyUSB0",
-    ]
-    failed, done = listed
-    assert (failed.kind, failed.machine.kind, failed.machine.port) == (
-        "print",
-        "printer",
-        "/dev/ttyUSB0",
-    )
-    assert (failed.outcome, failed.reason) == ("failed", "Error:Printer halted")
-    assert failed.input.name == "bracket.gcode"
-    assert failed.input.file_id == "20260921T085900.000-bracket"
-    assert failed.progress == pytest.approx(3 / 40)
-    assert failed.detail == {"sent": 3, "total": 40, "firmware": "Marlin TH3D UFW 2.94a"}
-    assert failed.finished_at - failed.started_at == timedelta(minutes=30)
-    assert (failed.site, failed.part, failed.input.sha256) == (None, None, None)
-    assert (done.outcome, done.reason, done.progress, done.input.size) == ("done", None, 1.0, 345)
-    assert jobs.get(done.id).log == ["> G1 X5", "ok"]
-    # The records stay; the jobs are written beside them, once.
-    assert len(list(records.glob("*.json"))) == 3
-    assert len(list((_a_state_folder_of_its_own / "jobs").glob("*.json"))) == 2
-    assert [j.id for j in jobs.list_jobs()] == [j.id for j in listed]
-    assert len(list((_a_state_folder_of_its_own / "jobs").glob("*.json"))) == 2
+    ran = _run(_job())
+    assert [j.id for j in jobs.list_jobs()] == [ran.id]
+    assert [j.id for j in jobs.list_jobs(machine="/dev/ttyUSB0")] == [ran.id]
+    assert jobs.get(record) is None
+    kept = {p.name for p in (_a_state_folder_of_its_own / "jobs").glob("*.json")}
+    assert kept == {f"{ran.id}.json"} and (records / f"{record}.json").is_file()
