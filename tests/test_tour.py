@@ -18,6 +18,7 @@ from apothecary.docs_site import WALKTHROUGH_ROOT
 
 ROUTER = "31-what-the-router-needs.md"
 SHAPE = "make/shape"
+BY = "Ada"
 
 
 @pytest.fixture
@@ -121,12 +122,12 @@ def test_a_page_a_stage_names_whole_is_a_link_to_the_page():
 
 def test_a_word_is_kept_with_the_commit_and_the_latest_is_the_stage_s(kept):
     client = TestClient(app)
-    said = client.post("/tour/feedback", json={"stage": SHAPE, "verdict": "works"})
+    said = client.post("/tour/feedback", json={"stage": SHAPE, "verdict": "works", "by": BY})
     assert said.status_code == 201
     first = said.json()
-    assert first["stage"] == SHAPE and first["verdict"] == "works"
+    assert (first["stage"], first["verdict"], first["by"]) == (SHAPE, "works", BY)
     assert first["commit"] == tour.running()["commit"] and first["at"]
-    again = {"stage": SHAPE, "verdict": "off", "note": "the slider is below the fold"}
+    again = {"stage": SHAPE, "verdict": "off", "note": "the slider is below the fold", "by": BY}
     assert client.post("/tour/feedback", json=again).status_code == 201
     lines = kept.read_text(encoding="utf-8").splitlines()
     assert [json.loads(line)["verdict"] for line in lines] == ["works", "off"]  # both kept
@@ -140,25 +141,34 @@ def test_a_word_is_kept_with_the_commit_and_the_latest_is_the_stage_s(kept):
 def test_every_word_kept_is_given_back_oldest_first(kept):
     client = TestClient(app)
     assert client.get("/tour/feedback").json() == {"feedback": []}
-    tour.say(SHAPE, "works")
-    tour.say("make/see", "off", "the path is drawn under the bed")
-    tour.say(SHAPE, "off", "the slider is below the fold")
+    tour.say(SHAPE, "works", by=BY)
+    tour.say("make/see", "off", "the path is drawn under the bed", by=BY)
+    tour.say(SHAPE, "off", "the slider is below the fold", by="  Grace  ")
     given = client.get("/tour/feedback").json()["feedback"]
     assert [(r["stage"], r["verdict"], r["note"]) for r in given] == [
         (SHAPE, "works", ""),
         ("make/see", "off", "the path is drawn under the bed"),
         (SHAPE, "off", "the slider is below the fold"),
     ]
-    assert all(set(r) == {"stage", "verdict", "note", "at", "commit", "changed"} for r in given)
+    assert [r["by"] for r in given] == [BY, BY, "Grace"]
+    assert all(
+        set(r) == {"stage", "verdict", "note", "by", "at", "commit", "changed"} for r in given
+    )
 
 
 @pytest.mark.parametrize(
     "said, status, why",
     [
-        ({"stage": "make/polish", "verdict": "works"}, 404, "no journey has a stage"),
-        ({"stage": "33-windows-kept-over-a-reload.md", "verdict": "works"}, 404, "no journey has"),
-        ({"stage": SHAPE, "verdict": "fine"}, 422, "feedback is one of"),
-        ({"stage": SHAPE, "verdict": "off", "note": "  "}, 422, "say what is off"),
+        ({"stage": "make/polish", "verdict": "works", "by": BY}, 404, "no journey has a stage"),
+        (
+            {"stage": "33-windows-kept-over-a-reload.md", "verdict": "works", "by": BY},
+            404,
+            "no journey",
+        ),
+        ({"stage": SHAPE, "verdict": "fine", "by": BY}, 422, "feedback is one of"),
+        ({"stage": SHAPE, "verdict": "off", "note": "  ", "by": BY}, 422, "say what is off"),
+        ({"stage": SHAPE, "verdict": "works"}, 422, "say who is saying it"),
+        ({"stage": SHAPE, "verdict": "works", "by": "   "}, 422, "say who is saying it"),
     ],
 )
 def test_what_the_tour_does_not_keep_is_refused_saying_why(kept, said, status, why):
@@ -169,10 +179,31 @@ def test_what_the_tour_does_not_keep_is_refused_saying_why(kept, said, status, w
 
 
 def test_a_line_that_does_not_read_is_left_out(kept):
-    tour.say(SHAPE, "works")
+    tour.say(SHAPE, "works", by=BY)
     with kept.open("a", encoding="utf-8") as out:
         out.write("not feedback\n" + json.dumps({"stage": SHAPE}) + "\n")
     assert [r["stage"] for r in tour.said()] == [SHAPE]
+
+
+def test_a_word_is_of_the_build_it_was_said_of(kept, monkeypatch):
+    """A word said while the server ran another commit is still the stage's latest, and
+    is not current: the stage waits for a word again. One said of this commit is. A
+    server that cannot say its commit ties no word to a build, and each counts."""
+    tour.say(SHAPE, "works", by=BY)
+    earlier = {**tour.said()[0], "stage": "make/see", "commit": "0000000"}
+    with kept.open("a", encoding="utf-8") as out:
+        out.write(json.dumps(earlier) + "\n")
+
+    def latest():
+        make = next(j for j in tour.document()["journeys"] if j["id"] == "make")
+        return {s["stage"]: s["feedback"] for s in make["stages"]}
+
+    assert latest()["shape"]["current"] is True
+    assert latest()["see"]["current"] is False and latest()["see"]["commit"] == "0000000"
+    assert latest()["choose"] is None
+    assert "current" not in tour.said()[1]  # reckoned when read, never kept
+    monkeypatch.setattr(tour, "running", lambda: {"commit": None, "changed": None})
+    assert latest()["see"]["current"] is True
 
 
 def test_what_a_roadmap_claims_is_not_read_here():

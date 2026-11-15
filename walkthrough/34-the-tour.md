@@ -19,12 +19,12 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ## 1. Tour, in the header, opens a box over the page on the first stage
 
-Tour in the header: a box above the windows, on the first stage nobody has said anything of, which is where the journeys begin: Design a part, at Choose. Its head names the stage and how many have a word on them, its drop-down holds the journeys in their order, and under it are this journey's stages. Nothing in the page beneath has moved: ↻ beside the stage's words takes the page there.
+Tour in the header: a box above the windows, on the first stage with no word on this build, which is where the journeys begin: Design a part, at Choose. Its head names the stage and how many have a word on them, its drop-down holds the journeys in their order, and under it are this journey's stages. A word was said of this stage while the server ran an earlier commit: it is shown, as that, and the stage waits for a word again. Nothing in the page beneath has moved: ↻ beside the stage's words takes the page there.
 
 ![Tour, in the header, opens a box over the page on the first stage](screenshots/34-01-tour-in-the-header-opens-a-box-over-the-page-on-th.png)
 
 ```
-The part, among the site's pieces: what it is drawn from, and its envelope.
+✓ Works -- said by Grace …, of an earlier build (0000000): this stage waits for a word again
 ```
 
 ## 2. A journey chosen takes the page to its first stage
@@ -42,7 +42,7 @@ Print a part › 1 Choose (⊞ Windows › Print a part): the part, among the si
 
 ## 3. ✓ Works keeps the word and takes the page to the next stage, with what to try
 
-✓ Works: the server keeps it, and the box goes to Shape and takes the page there, Parameters in front. Folded under one line with what the page did is what there is to try on this stage, each a link to a picture of it in the walkthrough.
+✓ Works is kept under a name: with none given the box asks for it, once, and this browser keeps it. Named, the server keeps the word, and the box goes to Shape and takes the page there, Parameters in front. Folded under one line with what the page did is what there is to try on this stage, each a link to a picture of it in the walkthrough.
 
 ![✓ Works keeps the word and takes the page to the next stage, with what to try](screenshots/34-03-works-keeps-the-word-and-takes-the-page-to-the-nex.png)
 
@@ -82,7 +82,7 @@ The Default view laid out: every window goes where that view has it, and the box
 
 ## 7. Panels › Windows › Tour: its cells are its buttons
 
-The canvas ring's Panels › Windows › Tour: Back goes to See, the page taken there again, where the box shows what was said of it; Works says otherwise now, and the latest word is the stage's. Off, Next, Take me here and Its page are cells there too, and Tour opens and closes the box.
+The canvas ring's Panels › Windows › Tour: Back goes to See, the page taken there again, where the box shows what was said of it; Works says otherwise now, and the latest word is the stage's. Off, Next, Take me here, Its page and Who, the name's field, are cells there too, and Tour opens and closes the box.
 
 ```
 Print a part · 5. Start
@@ -119,12 +119,13 @@ esp32_blink's board is pinned to a board, but not connected: connect it, or ⟳ 
 
 ## 11. Every word kept is given back, oldest first
 
-`GET /tour/feedback`: every word said, none rewritten, each with its stage, the moment, and the commit the server ran. The latest for a stage is its feedback; the rest is there for whoever reviews what was found.
+`GET /tour/feedback`: every word said, none rewritten, each with its stage, who said it, the moment, and the commit the server ran. The latest for a stage is its feedback; the rest is there for whoever reviews what was found.
 
 ```
-make/choose	works
-make/see	off	the job's row is cut off at the window's foot
-make/see	works
+design/choose	works	Grace
+make/choose	works	Ada
+make/see	off	Ada	the job's row is cut off at the window's foot
+make/see	works	Ada
 ```
 
 ## What this page does not show

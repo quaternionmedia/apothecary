@@ -687,13 +687,14 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # ---- the Tour, apothecary/static/widgets/tour_popover.js -------------------
     # The journeys a stage at a time, in a box over the page: a journey chosen, Back and
     # Next, the page taken to a stage, and a person's word on the stage (Off with what
-    # its field says). The header's Tour opens it. All but the journeys' drop-down and
-    # the field are cells of Panels › Windows › Tour; its ✕ is that ring's Tour, which
-    # closes it too.
+    # its field says), under the name its other field holds. The header's Tour opens
+    # it. All but the journeys' drop-down and the field for what is off are cells of
+    # Panels › Windows › Tour; its ✕ is that ring's Tour, which closes it too.
     "tour-pop-open": (WIDGET, WHAT_YOU_SEE, "a button that opens the tour's box, or closes it"),
     "tour-pop-close": (WIDGET, WHAT_YOU_SEE, "a button that closes the tour's box"),
     "tour-pop-journeys": (WIDGET, WHAT_YOU_SEE, "a drop-down of the journeys, each with its stages"),
     "tour-pop-note": (WIDGET, WHAT_YOU_SEE, "a field for what is off at the stage shown"),
+    "tour-pop-by": (WIDGET, WHAT_YOU_SEE, "a field for the name a word is kept under"),
     "tour-pop-back": (WIDGET, WHAT_YOU_SEE, "a button that goes to the stage before"),
     "tour-pop-put": (WIDGET, WHAT_YOU_SEE, "a button that takes the page to the stage shown"),
     "tour-pop-works": (
@@ -752,6 +753,7 @@ RING_BACKED: Dict[str, str] = {
     "tour-pop-off": "tour:off",
     "tour-pop-next": "tour:next",
     "tour-pop-page": "tour:page",
+    "tour-pop-by": "tour:by",
     # Models' Ask and a person's word are the cells of Panels › Pictures › Models
     "models-ask": "models:ask",
     "models:click:closest": "models:ask",
@@ -1329,6 +1331,34 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "marks:click:closest": (WIDGET, WHAT_YOU_SEE, "a mark chosen, for the ring's Marks cells"),
     "tourJourneys:change:chosen": (WIDGET, WHAT_YOU_SEE, "a journey chosen, the page taken to its first stage"),
+    # The Tour's box (widgets/tour_popover.js): the header's button, its buttons by one
+    # listener, its fold, its name, and its head, by which it is dragged and folded.
+    "tourOpen:click:toggle": (WIDGET, WHAT_YOU_SEE, "the header's Tour, its box opened or closed"),
+    "box:click:closest": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button of the tour's box: a stage gone to, the page taken there, or a word kept",
+    ),
+    "more:toggle:keep": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "what the page did and what to try folded or unfolded, kept by this browser",
+    ),
+    "who:change:named": (WIDGET, WHAT_YOU_SEE, "the name typed, kept by this browser"),
+    "noteField:keydown:act": (WIDGET, WHAT_IS_THERE, "Enter in the field for what is off: Off"),
+    "head:pointerdown:closest": (WIDGET, WHAT_YOU_SEE, "the tour's box taken hold of by its head"),
+    "head:pointermove:move": (WIDGET, WHAT_YOU_SEE, "the tour's box dragged, kept where it is left"),
+    "head:pointerup:up": (WIDGET, NOTHING, "the tour's box let go"),
+    "head:dblclick:closest": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a double-click on the tour's box's head: folded to it, or unfolded",
+    ),
+    "window:resize:isOpen": (
+        AUTOMATIC,
+        WHAT_YOU_SEE,
+        "the window resized: the tour's box kept whole on the page",
+    ),
     "marks:input:closest": (
         WIDGET,
         WHAT_YOU_SEE,

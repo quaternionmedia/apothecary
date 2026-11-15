@@ -29,8 +29,8 @@ and closed by its ✕ or by Tour again. Where it stands, whether it is open and 
 it shows are this browser's (`apothecary.tour` in its local storage), so a reload opens
 it where it was.
 
-Opened in a browser that has not taken it before, it starts at the first stage nobody
-has said anything of.
+Opened in a browser that has not taken it before, it starts at the first stage with no
+word on the build the server runs.
 
 ## A stage, and the page taken there
 
@@ -99,21 +99,32 @@ Moving the rail in the page moves the box to that stage, and takes the page nowh
   saying so and staying on the stage.
 
 Either is kept on the server, and the box goes to the next stage. A stage with a word
-on it wears it among the journey's stages, and the box says what was said and when.
+on it wears it among the journey's stages, and the box says what was said, by whom and
+when.
+
+**A word is kept under a name.** The field above the buttons holds it: asked once,
+where a word is given with none, and kept by this browser. The server refuses a word
+with no name.
+
+**A word is of the build it was said of.** Once the server runs another commit, what
+was said is still shown, dimmed among the stages and marked as said of an earlier
+build, and the stage waits for a word again: the box's count is of words on this
+build, and it opens on the first stage without one.
 
 A word is a line of `tour/feedback.jsonl` under the state folder
 (`APOTHECARY_STATE_DIR`, [configuration](configuration.md#apothecary_-variables)): the
-stage (`make/slice`), `works` or `off`, what is off, the moment, and the commit the
-server ran, with whether its tree had changes beside it. A line is never rewritten;
-the latest for a stage is its feedback.
+stage (`make/slice`), `works` or `off`, what is off, who said it, the moment, and the
+commit the server ran, with whether its tree had changes beside it. A line is never
+rewritten; the latest for a stage is its feedback.
 
 ## The routes
 
 - `GET /tour`: the journeys in their order, each stage with its words, what to try on
-  it and its latest feedback, and the commit the server runs. The box reads this.
-- `POST /tour/feedback`: one word, `{stage, verdict, note}`. A stage no journey has
-  is refused (404), and so is a verdict that is neither, or Off with nothing said
-  (422).
+  it and its latest feedback, with whether that is `current` (said of the commit now
+  running), and the commit the server runs. The box reads this.
+- `POST /tour/feedback`: one word, `{stage, verdict, note, by}`. A stage no journey
+  has is refused (404), and so is a verdict that is neither, Off with nothing said,
+  or a word with no name (422).
 - `GET /tour/feedback`: every word kept, oldest first.
 
 What the project plans, and what was found of each thing it claims, are not kept in
@@ -126,8 +137,8 @@ said of each stage.
 
 Panels › Windows › Tour is the box, then its buttons: Tour (open or closed), Back,
 Works, Off (with what the box's field says), Next, Its page (the first walkthrough
-page the stage names, in a tab) and Take me here. It is seated after the views, so no
-cell before it moves.
+page the stage names, in a tab), Take me here, and Who, the field for the name. It is
+seated after the views, so no cell before it moves.
 
 ## What it does not do
 

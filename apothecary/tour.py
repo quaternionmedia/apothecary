@@ -6,10 +6,12 @@ stage names: steps of the walkthrough's pages, each read back here with its head
 words and the picture kept with it, and pages that show the same thing whole. The tour
 has no words of its own.
 
-Feedback is a person's word on one stage: ``works``, or ``off`` with what is off. Each
-is kept as a line of ``tour/feedback.jsonl`` under the state folder, with the moment and
-the commit the server ran, and never rewritten: the latest for a stage is its feedback.
-The box over the page is widgets/tour_popover.js.
+Feedback is a person's word on one stage: ``works``, or ``off`` with what is off, under
+the name they give. Each is kept as a line of ``tour/feedback.jsonl`` under the state
+folder, with the moment and the commit the server ran, and never rewritten: the latest
+for a stage is its feedback. A word is of the build it was said of: once the server runs
+another commit it is still shown, as said of an earlier build, and the stage waits for a
+word again. The box over the page is widgets/tour_popover.js.
 
 What the project's roadmap claims of these journeys, and what was said of each claim, is
 not read here: the roadmap is project/ROADMAP.md on apothecary's branch of the governance
@@ -32,6 +34,7 @@ from .projects.parts.skeleton import ROOT
 from .state_folder import private_folder, state_dir
 
 VERDICTS = ("works", "off")
+NAME_MOST = 80  # a name is kept this long at most
 
 TITLE = re.compile(r"^# (?:(\d+) — )?(.+)$")
 WRITTEN_BY = re.compile(r"^Written by `([^`]+)`")
@@ -194,19 +197,22 @@ class Refused(ValueError):
     """Feedback the tour does not keep, saying why."""
 
 
-def say(stage: str, verdict: str, note: str = "") -> dict:
-    """Keep a person's word on the stage ``stage``, ``journey/stage``."""
+def say(stage: str, verdict: str, note: str = "", by: str = "") -> dict:
+    """Keep the word of the person ``by`` on the stage ``stage``, ``journey/stage``."""
     if stage not in stage_ids():
         raise LookupError(f"no journey has a stage {stage}")
     if verdict not in VERDICTS:
         raise Refused(f"feedback is one of {', '.join(VERDICTS)}, not {verdict!r}")
-    note = note.strip()
+    note, by = note.strip(), by.strip()
     if verdict == "off" and not note:
         raise Refused("say what is off")
+    if not by:
+        raise Refused("say who is saying it")
     record = {
         "stage": stage,
         "verdict": verdict,
         "note": note,
+        "by": by[:NAME_MOST],
         "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         **running(),
     }
@@ -240,10 +246,20 @@ def feedback(path: Optional[Path] = None) -> Dict[str, dict]:
 
 def document(root: Path = WALKTHROUGH_ROOT) -> dict:
     """The tour as the box reads it: the journeys in their order, each stage with its
-    words, what to try on it and its feedback, and the commit the server runs."""
-    given = feedback()
+    words, what to try on it and its feedback, and the commit the server runs. A
+    stage's feedback says whether it is ``current``: said of the commit now running.
+    A server that cannot say its commit ties no word to a build, and each counts."""
+    now, given = running(), feedback()
+
+    def latest(stage: str) -> Optional[dict]:
+        record = given.get(stage)
+        if record is None:
+            return None
+        current = now["commit"] is None or record.get("commit") == now["commit"]
+        return {**record, "current": current}
+
     return {
-        **running(),
+        **now,
         "journeys": [
             {
                 "id": journey.id,
@@ -256,7 +272,7 @@ def document(root: Path = WALKTHROUGH_ROOT) -> dict:
                         "title": s.label,
                         "words": s.hint,
                         "tries": _tries(s.shown_by, root),
-                        "feedback": given.get(stage_id(journey.id, s.id)),
+                        "feedback": latest(stage_id(journey.id, s.id)),
                     }
                     for s in journey.steps
                 ],

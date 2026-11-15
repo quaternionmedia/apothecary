@@ -1,8 +1,10 @@
 // The tour: the page's journeys (apothecary/journeys.py) a stage at a time, in a box over
 // the page. Going to a stage takes the page there -- what it needs opened and chosen, the
-// stage entered -- and a person explores it; one word is kept on the stage: it works,
-// or it is off with what is off (POST /tour/feedback, apothecary/tour.py). The box has
-// no words of its own: a stage's are the ones its journey's rail shows.
+// stage entered -- and a person explores it; one word is kept on the stage, under the
+// name they give once: it works, or it is off with what is off (POST /tour/feedback,
+// apothecary/tour.py). A word is of the build it was said of: said of an earlier one,
+// it is shown as that and the stage waits again. The box has no words of its own: a
+// stage's are the ones its journey's rail shows.
 //
 // The box is in the browser's top layer, so no view or journey lays it out or covers
 // it; it is dragged by its head, and folded to it by a double-click there. It stands
@@ -32,6 +34,7 @@ const MARKUP = `
     <ul class="tour-pop-tries"></ul>
   </details>
   <p class="tour-pop-feedback"></p>
+  <label class="tour-pop-who">as <input class="tour-pop-by" type="text" placeholder="your name" aria-label="Your name" maxlength="80" title="The name your words are kept under: asked once, and kept by this browser"></label>
   <div class="tour-pop-row">
     <button type="button" class="tour-pop-back" data-do="back" aria-label="Back" title="The stage before">‹</button>
     <input class="tour-pop-note" type="text" placeholder="What is off" aria-label="What is off" title="What is off at this stage: ✗ Off, or Enter, keeps it">
@@ -70,6 +73,11 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
     // Opened, it grows: placed again, so it stays whole on the page.
     more.addEventListener('toggle', () => { keep({ more: more.open }); if (box.matches(':popover-open')) place(); });
 
+    // The name a word is kept under: asked once, kept by this browser.
+    const who = $('.tour-pop-by');
+    who.value = kept().by || '';
+    who.addEventListener('change', function named() { keep({ by: who.value.trim() }); });
+
     const here = () => state.stages[state.at];
     const journeyOf = (s) => state.journeys[s.of];
 
@@ -83,9 +91,12 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
         box.style.top = `${top}px`;
     }
 
-    const mark = (s) => (s.feedback ? (s.feedback.verdict === 'off' ? 'off' : 'works') : '');
+    // A word counts for the build it was said of: one of an earlier build is worn
+    // dimmed, and its stage is among those still waiting.
+    const now = (s) => (s.feedback?.current ? s.feedback : null);
+    const mark = (s) => (s.feedback ? `${s.feedback.verdict === 'off' ? 'off' : 'works'}${s.feedback.current ? '' : ' earlier'}` : '');
     const count = (stages) => {
-        const said = stages.filter((s) => s.feedback).length, off = stages.filter((s) => s.feedback?.verdict === 'off').length;
+        const said = stages.filter(now).length, off = stages.filter((s) => now(s)?.verdict === 'off').length;
         return `${said}/${stages.length}${off ? ` · ${off} off` : ''}`;
     };
 
@@ -93,10 +104,11 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
         const at = here();
         if (!at) return;
         const journey = journeyOf(at);
-        const said = state.stages.filter((s) => s.feedback).length, off = state.stages.filter((s) => s.feedback?.verdict === 'off').length;
+        const said = state.stages.filter(now).length, off = state.stages.filter((s) => now(s)?.verdict === 'off').length;
+        const earlier = state.stages.filter((s) => s.feedback && !s.feedback.current).length;
         const name = $('.tour-pop-name');
         name.textContent = count(state.stages);
-        name.title = `${said} of ${state.stages.length} stages have a word on them, ${off} off`;
+        name.title = `${said} of ${state.stages.length} stages have a word on this build, ${off} off${earlier ? `; ${earlier} more were said of an earlier build` : ''}`;
 
         const journeys = $('.tour-pop-journeys');
         journeys.replaceChildren(...state.journeys.map((j, i) => el('option', { value: String(i), textContent: `${j.name} · ${count(j.stages)}` })));
@@ -141,7 +153,7 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
 
         const f = at.feedback;
         $('.tour-pop-feedback').textContent = f
-            ? `${f.verdict === 'off' ? `✗ Off: ${f.note}` : '✓ Works'} -- said ${new Date(f.at).toLocaleString()}`
+            ? `${f.verdict === 'off' ? `✗ Off: ${f.note}` : '✓ Works'} -- said${f.by ? ` by ${f.by}` : ''} ${new Date(f.at).toLocaleString()}${f.current ? '' : `, of an earlier build${f.commit ? ` (${f.commit})` : ''}: this stage waits for a word again`}`
             : '';
         $('.tour-pop-back').disabled = state.at === 0;
         $('.tour-pop-next').disabled = state.at >= state.stages.length - 1;
@@ -175,11 +187,16 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
 
     async function say(verdict) {
         const at = here();
-        const note = $('.tour-pop-note').value;
+        const note = $('.tour-pop-note').value, by = who.value.trim();
+        if (!by) {
+            $('.tour-pop-feedback').textContent = 'Not kept: say who you are, once, in the field below.';
+            who.focus();
+            return;
+        }
         const r = await fetch(`${base}/tour/feedback`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ stage: at.id, verdict, note }),
+            body: JSON.stringify({ stage: at.id, verdict, note, by }),
         });
         if (!r.ok) {
             const why = (await r.json().catch(() => ({}))).detail || r.statusText;
@@ -197,7 +214,7 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
         async open() {
             await read();
             const was = state.stages.findIndex((s) => s.id === kept().stage);
-            const first = state.stages.findIndex((s) => !s.feedback);
+            const first = state.stages.findIndex((s) => !now(s));
             state.at = was >= 0 ? was : Math.max(0, first);
             box.classList.toggle('folded', Boolean(kept().folded));
             box.showPopover();
@@ -218,6 +235,7 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
             if (verb === 'next') return go(state.at + 1);
             if (verb === 'works') return say('works');
             if (verb === 'off') return say('off');
+            if (verb === 'by') return void who.focus();
             if (verb === 'page') { const page = here().tries[0]?.page; if (page) window.open(`${base}/walkthrough/${page}`, '_blank', 'noopener'); }
         },
         // The rail moved in the page: the box shows that stage, and puts nothing on.
@@ -254,7 +272,8 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
         head.addEventListener('pointerup', up);
     });
     head.addEventListener('dblclick', (e) => { if (!e.target.closest('button')) api.act('fold'); });
-    $('.tour-pop-note').addEventListener('keydown', (e) => { if (e.key === 'Enter') api.act('off'); });
+    const noteField = $('.tour-pop-note');
+    noteField.addEventListener('keydown', (e) => { if (e.key === 'Enter') api.act('off'); });
     window.addEventListener('resize', () => { if (api.isOpen()) place(); });
     return api;
 }

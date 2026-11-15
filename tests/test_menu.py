@@ -1264,6 +1264,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Next", "tour:next", 9),
         ("Its page", "tour:page", 3),
         ("Take me here", "tour:put", 1),
+        ("Who", "tour:by", 7),
     ]
     assert address_of(root, "tour:toggle") == "4978"
     assert address_of(root, "tour:works") == "4972"

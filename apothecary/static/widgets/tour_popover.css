@@ -16,6 +16,9 @@
 .tour-pop-stages button[aria-current="step"] { background: #2e6b4a; color: #fff; border-color: #2e6b4a; }
 .tour-pop-stages .works::after { content: " ✓"; color: #7fd49b; }
 .tour-pop-stages .off::after { content: " ✗"; color: #ff8d7a; }
+.tour-pop-stages .earlier::after { opacity: 0.45; }
+.tour-pop-who { display: flex; align-items: center; gap: 0.3rem; color: #aab; font-size: 12px; }
+.tour-pop-by { flex: 1; min-width: 0; box-sizing: border-box; background: #0f1113; color: #ddd; border: 1px solid #484848; border-radius: 4px; padding: 0.15rem 0.4rem; font-size: 12px; }
 .tour-pop-words, .tour-pop-feedback { margin: 0; line-height: 1.45; }
 .tour-pop-words { display: flex; align-items: flex-start; gap: 0.3rem; }
 .tour-pop-said { flex: 1; }
