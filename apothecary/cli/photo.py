@@ -16,7 +16,7 @@ from pydantic import ValidationError
 from ..vision import ScaleReference, get, names
 from ..vision import build as build_arrangement
 from ..vocabulary import starter_words, word_for
-from .server import _loopback_or_die, _port_free_or_die, port_option, run_server
+from .server import loopback_or_die, port_free_or_die, port_option, run_server
 
 
 @click.group()
@@ -728,8 +728,8 @@ def view(
     from ..api import app
     from ..vision.shelf import shelf
 
-    host = _loopback_or_die(host)
-    _port_free_or_die(host, port)  # before the work and the addresses, not after them
+    host = loopback_or_die(host)
+    port_free_or_die(host, port)  # before the work and the addresses, not after them
     picture = _look_or_explain(finder, image)
     scale = _scale_or_explain(millimetres_across=width_mm) if width_mm is not None else None
     made = build_arrangement(picture, name=name, scale=scale, picture_path=image)
@@ -862,8 +862,8 @@ def gather_pictures(
     from ..gathering.questions import as_sheet, theirs, worth_asking
 
     if open_viewer:
-        host = _loopback_or_die(host)  # before the work, not after it
-        _port_free_or_die(host, port)
+        host = loopback_or_die(host)  # before the work, not after it
+        port_free_or_die(host, port)
     paths = _pictures_in(where, pattern)
     if not paths:
         wanted = f"files matching {pattern!r}" if pattern else "pictures"

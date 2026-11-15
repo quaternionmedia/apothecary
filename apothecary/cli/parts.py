@@ -24,9 +24,9 @@ from ..projects.registry import (
 from ..templates import TemplateRenderer
 from . import status
 from .utils import (
-    _load_part,
-    _parse_param_overrides,
-    _safe_echo,
+    parse_param_overrides,
+    part_or_die,
+    safe_echo,
 )
 
 
@@ -154,7 +154,7 @@ def parts_import(
         # The open-license record takes no field-of-use restriction. The file
         # stays on this machine either way (STLs are ignored by git); it is
         # the repository it cannot join.
-        _safe_echo(
+        safe_echo(
             f"! {license_id}: a licence with a field-of-use restriction cannot be committed "
             "to this repository (the open-license record, §1). Kept here for your own use.",
             fg="yellow",
@@ -212,7 +212,7 @@ def parts_import(
             encoding="utf-8",
         )
     size = [round(hi[i] - lo[i], 1) for i in range(3)]
-    _safe_echo(
+    safe_echo(
         f"✓ {part_name}: {len(placed)} triangles, {size[0]} x {size[1]} x {size[2]} mm", fg="green"
     )
     click.echo(f"  {folder.relative_to(ROOT)}/: {kept.name}, {part_name}.scad, {SIDECAR}")
@@ -234,7 +234,7 @@ def parts_info(name: str, json_out: bool):
     """Everything about one part: its SCAD, category, tags, description, README,
     parameters, the bounds it declares at its defaults, and the parameters its
     STL on disk was built with."""
-    part = _load_part(name)
+    part = part_or_die(name)
     # A consumer sizing an assembly around this part needs the envelope, not
     # just the file path. Parts that neither override get_bounds nor set
     # default_bounds report null rather than a guess.
@@ -308,7 +308,7 @@ def parts_verify(
 
     for part_name in status.iterate(names, "Verifying"):
         try:
-            part = _load_part(part_name)
+            part = part_or_die(part_name)
         except click.ClickException:
             skipped.append((part_name, "no wrapper"))
             continue
@@ -317,7 +317,7 @@ def parts_verify(
             skipped.append((part_name, "no source file"))
             continue
 
-        params = _parse_param_overrides(part, param_pairs)
+        params = parse_param_overrides(part, param_pairs)
         declared = part.get_bounds(params or None)
         if declared is None:
             skipped.append((part_name, "declares no bounds"))
@@ -418,7 +418,7 @@ def parts_checklist(name, check_all, build_volume, tolerance):
     # Assessing renders and measures, so it is slow enough to watch.
     with status.progress(names, "Assessing") as bar:
         for part_name in bar:
-            part = _load_part(part_name)
+            part = part_or_die(part_name)
             reports.append((part_name, assess(part, build_volume=volume, tolerance=tolerance)))
 
     for part_name, report in reports:
@@ -478,7 +478,7 @@ def parts_render(name: str, params_json: str | None, template: str | None, outpu
     another), or, for a part built by Python geometry, that geometry's SCAD at
     the parameters given. No STL is built: `apothecary parts generate-stl` builds
     one."""
-    part = _load_part(name)
+    part = part_or_die(name)
     params_data = {}
     if params_json:
         try:
@@ -584,7 +584,7 @@ def parts_generate_stl(
     if generate_all:
         to_build = [_part_of(item) for item in scan_projects(ROOT) if item.kind == "part"]
     elif name:
-        to_build = [_load_part(name)]
+        to_build = [part_or_die(name)]
     else:
         raise click.ClickException("Specify a part name or use --all")
 
@@ -592,7 +592,7 @@ def parts_generate_stl(
     built = skipped = failed = 0
     for part in status.iterate(to_build, "Rendering"):
         # Validated here, before a render: OpenSCAD accepts any -D name.
-        params = _parse_param_overrides(part, param_pairs)
+        params = parse_param_overrides(part, param_pairs)
         if params:
             click.echo(f"  {part.name} parameters: {params}")
         result = build_stl(
@@ -664,9 +664,9 @@ def parts_elephant_walk(output: Path | None, gap: int, ensure_stl: bool):
                 if result.skipped == "fresh":
                     continue
                 if result.success:
-                    _safe_echo(f"  {part.name} ✓", fg="green")
+                    safe_echo(f"  {part.name} ✓", fg="green")
                 else:
-                    _safe_echo(f"  {part.name} ✗ {result.error_message}", fg="red")
+                    safe_echo(f"  {part.name} ✗ {result.error_message}", fg="red")
 
     click.echo("Calculating bounding boxes...")
     part_data = []

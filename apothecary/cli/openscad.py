@@ -7,7 +7,7 @@ from typing import Optional, Tuple
 import click
 
 from .. import openscad_installer as oi
-from .utils import _safe_echo
+from .utils import safe_echo
 
 
 def parts_floor() -> Tuple[Optional[str], Optional[str]]:
@@ -129,7 +129,7 @@ def _status() -> None:
     home = oi.openscad_dir()
     current = oi.current_version()
     versions = oi.installed_versions()
-    _safe_echo(f"This machine: {oi.what_install_does()}")
+    safe_echo(f"This machine: {oi.what_install_does()}")
     click.secho("Installed snapshots:", bold=True)
     click.echo(f"  {home}")
     if not versions:
@@ -137,8 +137,8 @@ def _status() -> None:
     for date in versions:
         found = oi.describe(date)
         mark = " (current)" if date == current else ""
-        _safe_echo(f"  • {date}{mark}: {found.executable}")
-        _safe_echo(f"      {found.line()}")
+        safe_echo(f"  • {date}{mark}: {found.executable}")
+        safe_echo(f"      {found.line()}")
     override = openscad_override()
     if override is not None:
         click.echo(f"APOTHECARY_OPENSCAD names {override}; it is used instead of any of these.")
@@ -146,11 +146,11 @@ def _status() -> None:
     exe = renderer.openscad_path
     click.secho("Renders use:", bold=True)
     if exe is None or not renderer.is_available:
-        _safe_echo("  ✗ no OpenSCAD", fg="yellow")
+        safe_echo("  ✗ no OpenSCAD", fg="yellow")
         return
     version = renderer.get_version() or "unknown version"
     manifold = "Manifold" if has_manifold(exe) else "no Manifold (CGAL)"
-    _safe_echo(f"  ✓ {exe}: {version}, {manifold}")
+    safe_echo(f"  ✓ {exe}: {version}, {manifold}")
 
 
 @openscad.command("status")

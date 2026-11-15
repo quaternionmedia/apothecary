@@ -66,10 +66,10 @@ def test_safe_echo_falls_back_on_a_legacy_code_page(monkeypatch):
         written.append(message)
 
     monkeypatch.setattr(utils.click, "secho", cp1252_secho)
-    utils._safe_echo("✓ Python: 3.11.12")
-    utils._safe_echo("  ✗ OpenSCAD not found", fg="yellow")
+    utils.safe_echo("✓ Python: 3.11.12")
+    utils.safe_echo("  ✗ OpenSCAD not found", fg="yellow")
     # cp1252 carries a bullet at 0x95, so this one never reaches the fallback.
-    utils._safe_echo("    • datum_core")
+    utils.safe_echo("    • datum_core")
 
     assert written == ["[OK] Python: 3.11.12", "  [X] OpenSCAD not found", "    • datum_core"]
 

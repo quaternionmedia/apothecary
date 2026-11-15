@@ -14,7 +14,7 @@ from ..projects.parts.skeleton import ROOT
 from ..stays_local import require_loopback
 from ..wiring.carlos import CARLOS_ENV, loopback_url
 from ..wiring.carlos import SITE_ENV as CARLOS_SITE_ENV
-from .utils import _safe_echo
+from .utils import safe_echo
 
 # The viewer answers on tau, 6283: a full turn, the circles and rotations every part
 # here is built from. Each server of the estate sits on a mathematical constant of
@@ -56,7 +56,7 @@ def free_port(host: str = "127.0.0.1") -> int:
         return sock.getsockname()[1]
 
 
-def _loopback_or_die(host: str) -> str:
+def loopback_or_die(host: str) -> str:
     """Every server this CLI starts listens on this machine only; not a choice."""
     try:
         return require_loopback(host)
@@ -81,7 +81,7 @@ def port_in_use(host: str, port: int) -> bool:
     return False
 
 
-def _port_free_or_die(host: str, port: int) -> None:
+def port_free_or_die(host: str, port: int) -> None:
     """Refuse, before anything is printed or built, a port another server holds --
     `apothecary serve` and `photo view` both default to DEFAULT_PORT."""
     if port_in_use(host, port):
@@ -106,7 +106,7 @@ def run_server(
     """
     uvicorn.run(
         target,
-        host=_loopback_or_die(host),
+        host=loopback_or_die(host),
         port=port,
         reload=reload,
         # What a reload watches: the package and the templates; nothing else in the
@@ -218,8 +218,8 @@ def serve(
       APOTHECARY_PORT=6284 apothecary serve  the same, for every command in that shell
 
     docs/dev-loop.md is the loop: change, see, test, commit, integrate."""
-    host = _loopback_or_die(host)
-    _port_free_or_die(host, port)
+    host = loopback_or_die(host)
+    port_free_or_die(host, port)
     _simulated_keeps_its_own_state(simulated)
     if console_sacn:
         os.environ["APOTHECARY_CONSOLE_SACN"] = "1"
@@ -268,7 +268,7 @@ def _start_simulated() -> None:
         if made.orcaslicer
         else "no OrcaSlicer installed: Slice says how (apothecary slicer install)"
     )
-    _safe_echo("Simulated machines: nothing real is touched.", fg="cyan")
+    safe_echo("Simulated machines: nothing real is touched.", fg="cyan")
     click.echo(f"  State:    {shown(made.root)} (kept between runs; delete it to start afresh)")
     click.echo(f"  Printer:  {BOARD} pinned to a simulated Ender on {PRINTER}, idle")
     click.echo(f"  Devkit:   a simulated ESP32 on {DEVKIT}; arduino-cli, cargo, espflash scripted")
@@ -307,7 +307,7 @@ def refresh_docs_in_background() -> subprocess.Popen | None:
         )
     except OSError as exc:
         note_refresh(finished=None, ok=False, error=f"could not start docs generate: {exc}")
-        _safe_echo(f"  (docs refresh not started: {exc})", fg="yellow")
+        safe_echo(f"  (docs refresh not started: {exc})", fg="yellow")
         return None
-    _safe_echo(f"  Docs refresh running in the background (log: {log.relative_to(ROOT)})")
+    safe_echo(f"  Docs refresh running in the background (log: {log.relative_to(ROOT)})")
     return proc

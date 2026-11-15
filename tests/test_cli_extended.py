@@ -85,9 +85,9 @@ def test_cli_parts_info_missing_wrapper_errors():
 
 
 def test_cli_parts_render_refuses_to_overwrite_source(tmp_path):
-    from apothecary.cli.utils import _load_part
+    from apothecary.cli.utils import part_or_die
 
-    src = _load_part("parametric_star").source_file
+    src = part_or_die("parametric_star").source_file
     before = src.read_bytes()
     r = CliRunner().invoke(cli, ["parts", "render", "parametric_star", "-o", str(src)])
     assert r.exit_code != 0

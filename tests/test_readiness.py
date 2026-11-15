@@ -300,9 +300,9 @@ class TestThePartDecidesWhereItsStlLives:
     """
 
     def test_readiness_reads_the_path_the_part_names(self):
-        from apothecary.cli.utils import _load_part
+        from apothecary.cli.utils import part_or_die
 
-        part = _load_part("gridfinity")
+        part = part_or_die("gridfinity")
         assert part.get_stl_output_path() != part.source_file.with_suffix(".stl")
 
         report = assess(part)
