@@ -44,6 +44,8 @@ SHARED = (
     "templates/fractal_viewer.html.j2",
     "apothecary/api.py",
     "apothecary/site_store.py",
+    "apothecary/sites.py",
+    "apothecary/picture_root.py",
     "apothecary/stays_local.py",
     "apothecary/viewer.py",
     "apothecary/static/vendor/*",

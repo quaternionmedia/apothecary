@@ -53,6 +53,8 @@ SHARED = (
     "apothecary/primitives.py",
     "apothecary/example_hierarchy.py",
     "apothecary/site_store.py",
+    "apothecary/sites.py",
+    "apothecary/picture_root.py",
     "apothecary/stays_local.py",
     "apothecary/routes/__init__.py",
     "conftest.py",
