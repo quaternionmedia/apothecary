@@ -271,7 +271,7 @@ def _busy_guard(port: str):
         raise PortHeld(f"task {active.id} ({active.title}) holds {port}")
 
 
-def _device_view(d):
+def device_view(d):
     expected = devices.expected_firmware(d, service.BUILD_ROOT)
     return {"device": d.model_dump(mode="json"), "expected": expected.model_dump(mode="json")}
 
@@ -284,7 +284,7 @@ def firmware_devices(fresh: bool = False):
     """
     found = devices.detected_devices(fresh=fresh)
     return {
-        "devices": [_device_view(d) for d in found],
+        "devices": [device_view(d) for d in found],
         "streaming": devices.get_streams().open_ports,
         "printers": gcode.get_printer_links().open_ports,
     }
@@ -295,7 +295,7 @@ def firmware_probe(body: ProbeRequest):
     """Identify the chip with esptool (resets the board); cached for later views."""
     _busy_guard(body.port)
     devices.get_streams().close(body.port)
-    return _device_view(devices.probe_device(body.port))
+    return device_view(devices.probe_device(body.port))
 
 
 @router.post("/devices/listen")
@@ -324,7 +324,7 @@ def firmware_identify(body: PrinterIdentifyRequest):
         busy = devices.known_printing(body.port)
         if busy is not None:
             raise PortHeld(f"not asked: {busy}")
-    return _device_view(devices.identify_printer(body.port, body.baud, reset=body.reset))
+    return device_view(devices.identify_printer(body.port, body.baud, reset=body.reset))
 
 
 @router.get("/printers/status")
@@ -609,7 +609,7 @@ def firmware_printer_info(port: Port):
     return {
         "port": port,
         "detected": device is not None,
-        "device": _device_view(device) if device else None,
+        "device": device_view(device) if device else None,
         "link": link.info() if link else None,
         "engine": gcode.serial_engine(),
         "last_status": last.model_dump(mode="json") if last else None,

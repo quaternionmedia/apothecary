@@ -611,7 +611,7 @@ class TestASupersededRender:
         assert newer.status_code == 200, newer.text
         assert older["r"].status_code == 409
         assert older["r"].json()["detail"]["superseded"] is True
-        assert api._page_renders.running() == 0
+        assert api.page_renders.running() == 0
 
     def test_another_pages_request_does_not_stop_it(self, cube, openscad):
         exe = openscad('case "$vals " in *"size=11 "*) sleep 1;; esac')
@@ -831,9 +831,9 @@ def poser(tmp_path, monkeypatch):
     scad.write_text(RESTS_A_SPHERE)
     part = BasePart(name="poser", source_file=scad, rest={"print": False})
     monkeypatch.setattr(BasePart, "get_stl_output_path", lambda self: tmp_path / f"{self.name}.stl")
-    real = api._load_part_wrapper
+    real = api.load_part_wrapper
     monkeypatch.setattr(
-        api, "_load_part_wrapper", lambda name: part if name == "poser" else real(name)
+        api, "load_part_wrapper", lambda name: part if name == "poser" else real(name)
     )
     return part
 

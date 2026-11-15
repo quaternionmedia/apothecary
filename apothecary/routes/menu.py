@@ -155,7 +155,7 @@ def _part_seen(site: str, path: str) -> Optional[PartSeen]:
     """The part a node of ``site`` is drawn as, when it is one from the parts folder:
     whether its SCAD is its own to edit, its variants saved in git, and whether it
     is a board."""
-    from ..api import _load_part_wrapper
+    from ..api import load_part_wrapper
     from ..projects.parts.drafts import editable
     from ..projects.parts.saved import GitError, NotInGit, list_trash, saved_names
 
@@ -163,7 +163,7 @@ def _part_seen(site: str, path: str) -> Optional[PartSeen]:
     if node is None or not node.part_ref:
         return None
     try:
-        part = _load_part_wrapper(node.part_ref)
+        part = load_part_wrapper(node.part_ref)
     except HTTPException:
         return None
     own = editable(part)
@@ -234,7 +234,7 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
     Make says ends with the steps after it, when it made something, and the piece
     it made -- Make all's first -- is ``added``, which the page selects, as it
     selects the camera Add here added: the steps it names are that piece's."""
-    from ..api import _site_payload
+    from ..api import site_payload
     from ..vision import views as viewing
 
     action = chosen.intent.action
@@ -294,7 +294,7 @@ def _carry_picture(chosen: Chosen, who: Carries) -> Carried:
         action=action,
         carried_by=who.value,
         did=did,
-        site=_site_payload(site, sites.store.validator(name)(site)),
+        site=site_payload(site, sites.store.validator(name)(site)),
         address=chosen.intent.address,
         added=added,
     )
@@ -305,7 +305,7 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
     functions the camera routes call. Add here stands on a host (the ring's
     target) or, with ``@floor``, the floor; Remove names the camera by the ring's
     target. Every refusal is a 4xx naming its reason."""
-    from ..api import _site_payload
+    from ..api import site_payload
     from ..vision import cameras
     from .views import check_host
 
@@ -347,7 +347,7 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
         action=action,
         carried_by=who.value,
         did=did,
-        site=_site_payload(site, sites.store.validator(name)(site)),
+        site=site_payload(site, sites.store.validator(name)(site)),
         address=chosen.intent.address,
         added=added,
     )
@@ -358,7 +358,7 @@ def _carry_camera(chosen: Chosen, who: Carries) -> Carried:
 @router.post("/intent", response_model=Carried)
 async def carry_out(chosen: Chosen) -> Carried:
     """Carry out a chosen option, or say that the viewer does, or refuse."""
-    from ..api import _site_payload
+    from ..api import site_payload
 
     action = chosen.intent.action
     try:
@@ -381,7 +381,7 @@ async def carry_out(chosen: Chosen) -> Carried:
             action=action,
             carried_by=who.value,
             did=f"rebuilt {name} from its factory",
-            site=_site_payload(rebuilt, sites.store.validator(name)(rebuilt)),
+            site=site_payload(rebuilt, sites.store.validator(name)(rebuilt)),
             address=chosen.intent.address,
         )
 

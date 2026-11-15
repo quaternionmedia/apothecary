@@ -212,9 +212,9 @@ def made_answer(record: Made, pinned: bool) -> Dict[str, object]:
 
 
 def _site_answer(site_name: str, site: Assembly) -> Dict[str, object]:
-    from ..api import _site_payload
+    from ..api import site_payload
 
-    return _site_payload(site, sites.store.validator(site_name)(site))
+    return site_payload(site, sites.store.validator(site_name)(site))
 
 
 def _view_or_404(site_name: str, view_id: str) -> View:

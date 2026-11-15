@@ -100,9 +100,9 @@ def checkout(tmp_path) -> Path:
 @pytest.fixture
 def block(checkout, monkeypatch) -> BasePart:
     part = BasePart(name="block", source_file=checkout / "parts" / "block" / "block.scad")
-    real = api._load_part_wrapper
+    real = api.load_part_wrapper
     monkeypatch.setattr(
-        api, "_load_part_wrapper", lambda name: part if name == "block" else real(name)
+        api, "load_part_wrapper", lambda name: part if name == "block" else real(name)
     )
     return part
 
@@ -304,7 +304,7 @@ class TestTheRoutes:
         loose.parent.mkdir()
         loose.write_text("cube(1);\n")
         part = BasePart(name="loose", source_file=loose)
-        monkeypatch.setattr(api, "_load_part_wrapper", lambda name: part)
+        monkeypatch.setattr(api, "load_part_wrapper", lambda name: part)
         client = TestClient(app)
         assert client.get("/parts/loose/saved").json() == []
         assert client.post("/parts/loose/saved", json={"name": "x"}).status_code == 409
@@ -538,9 +538,9 @@ def thing(superproject, monkeypatch) -> BasePart:
     part = BasePart(
         name="thing", source_file=superproject / "parts" / "thing" / "upstream" / "lib.scad"
     )
-    real = api._load_part_wrapper
+    real = api.load_part_wrapper
     monkeypatch.setattr(
-        api, "_load_part_wrapper", lambda name: part if name == "thing" else real(name)
+        api, "load_part_wrapper", lambda name: part if name == "thing" else real(name)
     )
     return part
 

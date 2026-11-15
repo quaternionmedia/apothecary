@@ -74,9 +74,9 @@ def block(tmp_path, monkeypatch):
     """A part with no Python model at ``/parts/block``; its STL is the test's own."""
     part = _part(tmp_path)
     monkeypatch.setattr(BasePart, "get_stl_output_path", lambda self: tmp_path / "block.stl")
-    real = api._load_part_wrapper
+    real = api.load_part_wrapper
     monkeypatch.setattr(
-        api, "_load_part_wrapper", lambda name: part if name == "block" else real(name)
+        api, "load_part_wrapper", lambda name: part if name == "block" else real(name)
     )
     return part
 

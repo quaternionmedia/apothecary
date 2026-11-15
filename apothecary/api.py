@@ -57,7 +57,7 @@ from .firmware import deck_control
 from .firmware import devices as firmware_devices
 from .firmware import gcode as firmware_gcode
 from .firmware import grbl as firmware_grbl
-from .firmware.api import _device_view as firmware_device_view
+from .firmware.api import device_view as firmware_device_view
 from .firmware.api import router as firmware_router
 from .firmware.bindings import bindings_for_site, device_for_identity, same_device
 from .firmware.deck_api import router as firmware_deck_router
@@ -126,8 +126,8 @@ from .projects.parts.variants import wants as request_wants
 from .projects.registry import (
     PartLoadError,
     ProjectInfo,
-    _sanitize_module_name,
     load_part,
+    sanitize_module_name,
     scan_projects,
 )
 from .routes import lighting as lighting_routes
@@ -355,13 +355,13 @@ def _part_template() -> str:
     return "// {{ part.name }}\ninclude <{{ source_posix }}>"
 
 
-def _load_part_wrapper(name: str):
+def load_part_wrapper(name: str):
     # Only a registered part: a name from a URL is never turned into an import
     # path, so GET /parts/stl_renderer is a 404 and imports nothing.
     # Spellings a link may carry: the registry's name in any case of - and _
     # (datum-core), or a nested part's package path. Each resolves
     # to a registered wrapper, never to a module constructed from the URL.
-    wanted = _sanitize_module_name(name)
+    wanted = sanitize_module_name(name)
     entry = next(
         (
             p
@@ -369,7 +369,7 @@ def _load_part_wrapper(name: str):
             if p.kind == "part"
             and p.has_part
             and (
-                _sanitize_module_name(p.name) == wanted
+                sanitize_module_name(p.name) == wanted
                 or p.wrapper == f"apothecary.projects.parts.{name}"
             )
         ),
@@ -396,7 +396,7 @@ def is_board(part_ref: Optional[str]) -> bool:
         return False
     if part_ref not in _BOARDS:
         try:
-            _BOARDS[part_ref] = "board" in (_load_part_wrapper(part_ref).tags or [])
+            _BOARDS[part_ref] = "board" in (load_part_wrapper(part_ref).tags or [])
         except HTTPException:
             _BOARDS[part_ref] = False
     return _BOARDS[part_ref]
@@ -548,7 +548,7 @@ def list_parts(response: Response):
     listed, not_loaded = [], []
     for name in _available_part_names():
         try:
-            listed.append(_part_metadata(_load_part_wrapper(name)))
+            listed.append(_part_metadata(load_part_wrapper(name)))
         except HTTPException:
             not_loaded.append(name)
     if not_loaded:
@@ -558,7 +558,7 @@ def list_parts(response: Response):
 
 @app.get("/parts/{name}")
 def get_part(name: str, params: str | None = Query(None, alias="params")):
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     return _part_payload(part, params)
 
 
@@ -586,7 +586,7 @@ def get_part_scad(
     edited as: its overlay setting nothing, an include of the upstream file
     (``X-Part-Scad: overlay``, ``X-Part-Upstream`` naming that file, which
     ``GET /parts/{name}/upstream`` serves read only)."""
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     if variant is not None:
         return _variant_scad(name, part, variant)
     if editable(part) and not params:
@@ -630,7 +630,7 @@ def get_part_upstream(name: str):
     part in no submodule: its SCAD is ``GET /parts/{name}/scad``."""
     from .projects.parts.texts import is_overlaid
 
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     if not editable(part) or not is_overlaid(part):
         raise HTTPException(
             status_code=404,
@@ -702,7 +702,7 @@ def get_part_stl(name: str, pose: Pose = POSE):
     pose: built beside its own STL, for the parameters that holds, when it is
     not fresh for them.
     """
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
 
     pose = posed(part, pose)
     stl_path = rest_stl(part) if pose == REST else part.stl_file
@@ -748,7 +748,7 @@ class StlGenerateRequest(BaseModel):
 
 
 # The render each page has in flight per part, so a newer one can stop it.
-_page_renders = PageRenders()
+page_renders = PageRenders()
 
 # What a variant's own URL is answered with: under its key its bytes never change.
 IMMUTABLE = "public, max-age=31536000, immutable"
@@ -803,7 +803,7 @@ def generate_part_stl(
     superseded by a newer request from the same ``page`` is a 409. No OpenSCAD, or a
     part that cannot be built on this machine, is a 503.
     """
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     with runs_for(part.name, page):
         listing = _listing(part)
     overrides = checked_overrides(part, body.params if body else None, listing)
@@ -823,14 +823,14 @@ def generate_part_stl(
             self_api(), name, part, text, force, page, version, values=overrides, pose=pose
         )
 
-    cancel = _page_renders.begin(part.name, page, request_wants(overrides, force, pose))
+    cancel = page_renders.begin(part.name, page, request_wants(overrides, force, pose))
     try:
         with runs_for(part.name, page):
             made = make_variant(part, overrides, force=force, cancel=cancel, pose=pose)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     finally:
-        _page_renders.end(part.name, page, cancel)
+        page_renders.end(part.name, page, cancel)
     return made_answer(name, part, made, overrides, body.editor_version if body else None)
 
 
@@ -1000,7 +1000,7 @@ def get_part_variant(name: str, variant: str, pose: Pose = POSE):
     has only the key (a reloaded tab, a link) starts its editor from these.
     404 once the cache has let it go. ``?pose=rest``: its rest pose's
     ``stl_url`` and ``measured``, and a 404 when that is not kept."""
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     record = (
         variant_record(part, variant, url_name=name, pose=pose)
         if KEY_PATTERN.match(variant)
@@ -1025,7 +1025,7 @@ def get_part_variant_stl(name: str, variant: str, pose: Pose = POSE):
     generating it again puts it back. ``?pose=rest``: its rest pose, kept with
     it once a request for the rest pose made it (generate's ``?pose=rest``).
     """
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     pose = posed(part, pose)
     if not KEY_PATTERN.match(variant) or read_variant(part, variant, pose=pose) is None:
         raise HTTPException(
@@ -1060,7 +1060,7 @@ def get_part_partial_stl(name: str, variant: str):
     ``partial.stl_url`` of a 422 from generate or a draft's render. Never a
     variant and never cached by the browser (a render of the same request
     that fails again writes it again); 404 once a newer failure has let it go."""
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     path = read_partial(part, variant)
     try:
         data = path.read_bytes() if path is not None else None
@@ -1095,7 +1095,7 @@ def get_part_state(name: str, pose: Pose = POSE):
     ``build_note`` why not. ``?pose=rest``: ``stl_url`` and ``measured`` are of
     it as it rests, as ``GET /parts/{name}/stl?pose=rest`` serves it.
     """
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     can, why = part.can_generate_stl()
     return part_state(part, url_name=name, pose=pose).model_copy(
         update={"can_build": can, "build_note": why or None}
@@ -1126,7 +1126,7 @@ def get_part_params(name: str):
     (gridfinity cannot on 2021.01), and ``build_note`` why not: Apply is
     refused (a 503) where it is false.
     """
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     try:
         return buildable(part, params_spec(part))
     except NoParameters:
@@ -1257,7 +1257,7 @@ def get_part_checklist(
     """
     from .projects.parts.readiness import NO_VOLUME, assess
 
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     drawn = drawn_variant(part, variant) if variant else None
     volume, source, none = _parse_build_volume(build_volume), "given", NO_VOLUME
     if volume is None and site:
@@ -1295,7 +1295,7 @@ def validate_part_params(name: str, body: Optional[StlGenerateRequest] = None):
     nothing. A part without a model is checked against what its SCAD's
     customizer lists, where OpenSCAD lists it, else by its names alone.
     """
-    part = _load_part_wrapper(name)
+    part = load_part_wrapper(name)
     params = body.params if body else {}
     if part.params_model is not None:
         return validate_staged(part, params)
@@ -1697,7 +1697,7 @@ def _site_piece(node: Assembly, world_position: Vector3D) -> Dict[str, object]:
     }
 
 
-def _site_payload(site, report) -> Dict[str, object]:
+def site_payload(site, report) -> Dict[str, object]:
     """The site as the viewer consumes it, including its generated OpenSCAD.
 
     Every read carries ``scad``, so a site merely loaded, never dragged, shows its
@@ -1940,7 +1940,7 @@ async def list_sites():
 def get_site(name: str):
     site = sites.store.get(name)
     validator = sites.store.validator(name)
-    return _site_payload(site, validator(site))
+    return site_payload(site, validator(site))
 
 
 @app.post("/sites/{name}/layout")
@@ -1961,7 +1961,7 @@ async def update_site_layout(name: str, body: LayoutRequest):
     follow(name, site)
 
     validator = sites.store.validator(name)
-    return _site_payload(site, validator(site))
+    return site_payload(site, validator(site))
 
 
 @app.post("/sites/{name}/structures/{structure_name}/status")
@@ -1986,7 +1986,7 @@ async def update_structure_status(name: str, structure_name: str, body: StatusRe
     structure.status = body.status
 
     validator = sites.store.validator(name)
-    return _site_payload(site, validator(site))
+    return site_payload(site, validator(site))
 
 
 @app.post("/sites/{name}/reset")
@@ -1994,7 +1994,7 @@ async def reset_site_layout(name: str):
     """Discard all edits and rebuild the site fresh from its factory."""
     site = sites.store.reset(name)
     validator = sites.store.validator(name)
-    payload = _site_payload(site, validator(site))
+    payload = site_payload(site, validator(site))
     payload["scad"] = site.render()
     return payload
 
@@ -2107,7 +2107,7 @@ def _base_height(printer: Assembly) -> float:
     return 0.0
 
 
-def _describe_for_view(
+def describe_for_view(
     site: Assembly, path: str, n: Assembly, *, is_printer: bool
 ) -> Dict[str, object]:
     """One node as the board view wants it: world position, footprint, build volume, base."""
@@ -2154,7 +2154,7 @@ def _bed_moves_y(n: Assembly) -> Optional[float]:
     if not ref:
         return None
     try:
-        return _load_part_wrapper(ref).bed_moves_y
+        return load_part_wrapper(ref).bed_moves_y
     except HTTPException:
         return None
 
@@ -2181,9 +2181,9 @@ def printer_where(port: str):
     return {
         "port": port,
         "site": name,
-        "board": _describe_for_view(site, path, node, is_printer=False),
+        "board": describe_for_view(site, path, node, is_printer=False),
         "printer": (
-            _describe_for_view(site, bearer_path, bearer, is_printer=True)
+            describe_for_view(site, bearer_path, bearer, is_printer=True)
             if bearer_path != path
             else None
         ),
@@ -2214,7 +2214,7 @@ def _pinned_at(port: str) -> Optional[tuple[str, Assembly, str]]:
     return None
 
 
-def _parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPart]:
+def parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPart]:
     """What a job in ``site`` can name as the part it makes, by path: every node
     built from a part (named for its ``part_ref``) and every piece made from a
     picture (named for its word, with the picture and the camera it came from),
@@ -2250,7 +2250,7 @@ def _place_of(port: str) -> Optional[jobs.Place]:
         return None
     name, site, path = pinned
     bearer = status_bearer_for(site, path) or path
-    return jobs.Place(site=name, path=path, parts=_parts_of(name, site, leave_out=bearer))
+    return jobs.Place(site=name, path=path, parts=parts_of(name, site, leave_out=bearer))
 
 
 jobs.PLACES.append(_place_of)
@@ -2743,7 +2743,7 @@ def part_view(name: str):
     viewer, focused on the part, where the parameter controls and the
     contested values live.
     """
-    part = _load_part_wrapper(name)  # 404 here rather than after a redirect
+    part = load_part_wrapper(name)  # 404 here rather than after a redirect
     # Focus on the part's own name, not on whatever spelling was typed: a link
     # may spell it `datum-core`, which the wrapper lookup accepts, and the
     # viewer lands on the part rather than on a focus string matching nothing.

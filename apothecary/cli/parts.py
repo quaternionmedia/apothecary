@@ -16,9 +16,9 @@ from ..projects.parts.skeleton import ROOT
 from ..projects.parts.stl_renderer import read_params_sidecar
 from ..projects.registry import (
     ProjectInfo,
-    _sanitize_module_name,
     load_part,
     load_parts,
+    sanitize_module_name,
     scan_projects,
 )
 from ..templates import TemplateRenderer
@@ -146,7 +146,7 @@ def parts_import(
     """
     from ..projects.parts.described import SIDECAR
 
-    part_name = _sanitize_module_name(name or file.stem)
+    part_name = sanitize_module_name(name or file.stem)
     folder = ROOT / "parts" / part_name
     if folder.exists() and not force:
         raise click.ClickException(f"{folder} exists; --force replaces it")

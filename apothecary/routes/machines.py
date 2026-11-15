@@ -67,7 +67,7 @@ def site_machines(name: str):
 
 @router.get("/{name}/machines/{path}")
 def site_machine(name: str, path: str):
-    from ..api import _describe_for_view, _parts_of
+    from ..api import describe_for_view, parts_of
 
     site, node, kind = _machine(name, path)
     return {
@@ -77,8 +77,8 @@ def site_machine(name: str, path: str):
             {"kind": op.kind, "label": op.label, "inputs": list(op.inputs)}
             for op in jobs.operations(kind)
         ],
-        "parts": [p.model_dump(mode="json") for p in _parts_of(name, site, path)],
-        "where": _describe_for_view(site, path, node, is_printer=True),
+        "parts": [p.model_dump(mode="json") for p in parts_of(name, site, path)],
+        "where": describe_for_view(site, path, node, is_printer=True),
         "plan": _plan_json(name, path),
     }
 
@@ -90,10 +90,10 @@ def _plan_json(name: str, path: str) -> Optional[dict]:
 
 @router.put("/{name}/machines/{path}/plan")
 def keep_plan(name: str, path: str, body: PlanRequest):
-    from ..api import _parts_of
+    from ..api import parts_of
 
     site, _, kind = _machine(name, path)
-    if body.part and body.part not in {p.path for p in _parts_of(name, site, path)}:
+    if body.part and body.part not in {p.path for p in parts_of(name, site, path)}:
         raise HTTPException(status_code=422, detail=f"{body.part!r} is no part or piece of {name}")
     try:
         plan = machine_plans.save(name, path, kind, body.part, body.file_id)

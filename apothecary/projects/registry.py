@@ -297,10 +297,10 @@ def resolve_wrapper_module(name: str, root: Path) -> str:
     for p in scan_projects(root):
         if p.kind == "part" and p.name == name and p.wrapper:
             return p.wrapper
-    return f"apothecary.projects.parts.{_sanitize_module_name(name)}"
+    return f"apothecary.projects.parts.{sanitize_module_name(name)}"
 
 
-def _sanitize_module_name(filename: str) -> str:
+def sanitize_module_name(filename: str) -> str:
     base = filename.lower().replace(" ", "_").replace("-", "_")
     base = base.replace(".", "_")
     return base
@@ -357,7 +357,7 @@ def _locate_wrapper_for_part(scad_path: Path) -> str | None:
     the folder: ``parts/rc/snowplow/<name>.py`` or ``parts/rc/snowplow/__init__.py``.
     A ``part.json`` beside the SCAD is read before any module (``load_part``).
     """
-    module_name = _sanitize_module_name(scad_path.stem)
+    module_name = sanitize_module_name(scad_path.stem)
     parts_pkg_dir = Path(__file__).resolve().parent / "parts"
 
     flat_candidate = parts_pkg_dir / f"{module_name}.py"
@@ -371,8 +371,8 @@ def _locate_wrapper_for_part(scad_path: Path) -> str | None:
         return None
     if rel_dir == Path("."):
         return None
-    sub_pkg = ".".join(_sanitize_module_name(part) for part in rel_dir.parts)
-    pkg_dir = parts_pkg_dir.joinpath(*(_sanitize_module_name(part) for part in rel_dir.parts))
+    sub_pkg = ".".join(sanitize_module_name(part) for part in rel_dir.parts)
+    pkg_dir = parts_pkg_dir.joinpath(*(sanitize_module_name(part) for part in rel_dir.parts))
     if (pkg_dir / f"{module_name}.py").exists():
         return f"apothecary.projects.parts.{sub_pkg}.{module_name}"
     if (pkg_dir / "__init__.py").exists():
