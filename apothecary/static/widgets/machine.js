@@ -1322,7 +1322,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // history. `choices` is what a job here can name (GET /jobs/choices): the parts
     // and pieces of the site the printer is pinned in.
     // `wanted` is a part asked for from outside (print.choose), chosen once listed.
-    const prt = { files: [], jobs: [], job: null, timer: null, choices: null, wanted: null, slices: {} };
+    const prt = { files: [], jobs: [], job: null, timer: null, choices: null, wanted: null, slices: {}, picked: null };
     // Slicing: the slicer's status (whether one is installed), and the task that
     // slices what makes names, followed by tasks.js at the slicer's own routes.
     // `shown` is the kept file whose slice the card says, the one chosen in its files.
@@ -1524,15 +1524,19 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         try { prt.slices = Object.fromEntries((await api("/slicer/slices")).map((r) => [r.file_id, r])); } catch (e) { prt.slices = {}; }
         try { for (const r of await api("/cam/cuts")) prt.slices[r.file_id] = { ...r, toolpath: true }; } catch (e) { /* no toolpaths kept */ }
         const sel = $("print-pick"), had = pick || sel.value;
-        sel.innerHTML = prt.files.length
-            ? prt.files.map((f) => `<option value="${esc(f.id)}" ${f.problems.length || !fits(f) ? 'class="bad"' : ""}>${esc(f.name)} · ${f.lines} lines${slicedFrom(f)}${fits(f) ? "" : ` · ${f.machine ? `kept for a ${esc(f.machine)}` : "kept for no kind of machine"}`}${f.problems.length ? " · refused: " + esc(f.problems[0]) : ""}</option>`).join("")
-            : '<option value="">— no files kept —</option>';
         // The files kept are every machine's. What was chosen stays chosen, but the
         // other kind of machine's file gives way to the newest that is not; with
-        // nothing chosen that one is, before the newest of any.
+        // nothing chosen that one is, before the newest of any. Where every file
+        // kept is the other kind's, none is chosen until a person chooses one here:
+        // one left chosen from another machine's Machine does not stay.
         const own = prt.files.find(fits) || prt.files.find((f) => !madeForAnother(f.id));
-        if (had && prt.files.some((f) => f.id === had) && !(own && madeForAnother(had))) sel.value = had;
-        else if (own) sel.value = own.id;
+        const none = prt.files.length && !own ? `<option value="">— none kept for ${state.kind ? `a ${state.kind}` : "this machine"} —</option>` : "";
+        sel.innerHTML = prt.files.length
+            ? none + prt.files.map((f) => `<option value="${esc(f.id)}" ${f.problems.length || !fits(f) ? 'class="bad"' : ""}>${esc(f.name)} · ${f.lines} lines${slicedFrom(f)}${fits(f) ? "" : ` · ${f.machine ? `kept for a ${esc(f.machine)}` : "kept for no kind of machine"}`}${f.problems.length ? " · refused: " + esc(f.problems[0]) : ""}</option>`).join("")
+            : '<option value="">— no files kept —</option>';
+        const stays = had && prt.files.some((f) => f.id === had) && !(own && madeForAnother(had))
+            && (!madeForAnother(had) || prt.picked === had);
+        sel.value = stays ? had : own ? own.id : "";
         renderPrint();
     }
     // A kept file says the kind of machine it was kept for (Choose File keeps it for
@@ -1826,7 +1830,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         catch (e) { refuse(`${w.job} ${verb}: ` + e.message); }
     }
     $("print-file").addEventListener("change", (ev) => keepPrintFile(ev.target.files[0]));
-    $("print-pick").addEventListener("change", renderPrint);
+    $("print-pick").addEventListener("change", () => { renderPrint(); prt.picked = $("print-pick").value; });
     $("print-preview").addEventListener("input", () => {
         if (previewOn() && !pv.data) loadPreview(); else renderPreview();
     });

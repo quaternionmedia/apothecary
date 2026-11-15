@@ -332,6 +332,10 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     expect(did).to_contain_text([PLANNED, "router_coupon chosen", "Cut a part entered"])
     expect(box.locator(".tour-pop-needs")).to_be_empty()
     assert page.evaluate("() => window.fractalViewer.machine.plan") is True
+    # The one file kept is the printer's slice: listed in the router's Cut, and not chosen.
+    pick = page.locator(".panel[data-panel='machine-print'] #print-pick")
+    expect(pick.locator("option").first).to_have_text("— none kept for a router —")
+    expect(pick).to_have_value("")
     story.says(
         "A machine with no board connected is taken as the site plans it",
         "Cut a part, chosen: its stages are on the router's Machine, and this server's "
