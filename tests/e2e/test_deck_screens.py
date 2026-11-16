@@ -4,7 +4,7 @@ strip walks the screens and stops at their ends, a tap changes nothing, the knob
 says the jogs are refused while the print holds the port, and a print that ends stays on
 Progress, how it ended, until a touch.
 
-This module is a walkthrough page too: `walkthrough/40-the-deck-while-a-print-streams.md`
+This module is a walkthrough page too: `walkthrough/41-the-deck-while-a-print-streams.md`
 is what its first test writes. The browser suite alone writes it.
 
 Runs against a server of its own with one simulated deck whose layout is started
@@ -99,7 +99,7 @@ def test_the_deck_shows_a_print_and_a_swipe_walks_its_screens(page: Page, url: s
     swipe to Status shows the printer's state; a tap moves nothing; the print is
     cancelled, and Progress says so until a touch. Walkthrough 40 is what it writes."""
     story = walkthrough(
-        ordinal="40",
+        ordinal="41",
         slug="the-deck-while-a-print-streams",
         title="The deck while a print streams",
         browser_suite_only=True,
