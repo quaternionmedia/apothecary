@@ -40,8 +40,8 @@ from __future__ import annotations
 import math
 from typing import Callable, Iterable, List, NamedTuple, Optional, Sequence, Tuple
 
-Matrix = Tuple[Tuple[float, float, float], Tuple[float, float, float], Tuple[float, float, float]]
-Point = Tuple[float, float]
+from ..homography import Matrix, Point
+
 Vec3 = Tuple[float, float, float]
 
 # Below this, a ray runs along the plane, or away from it: it lands nowhere.

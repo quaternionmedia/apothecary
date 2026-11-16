@@ -233,6 +233,7 @@ GROUPS = {
     "vision": {
         "sources": (
             "apothecary/vision/*",
+            "apothecary/homography.py",
             "apothecary/gathering/*",
             "apothecary/finders/*",
             "apothecary/vocabulary/*",
@@ -256,6 +257,7 @@ GROUPS = {
             "test_free_space.py",
             "test_gathering.py",
             "test_gathering_accuracy.py",
+            "test_homography.py",
             "test_made_part.py",
             "test_made_piece_geometry.py",
             "test_marks.py",
@@ -281,6 +283,7 @@ GROUPS = {
             "apothecary/family/*",
             "apothecary/wiring/*",
             "apothecary/rig/*",
+            "apothecary/homography.py",
             "apothecary/evidence/*",
             "apothecary/routes/procedures.py",
             "apothecary/routes/wiring.py",

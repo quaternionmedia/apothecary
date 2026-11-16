@@ -24,6 +24,7 @@ from typing import List, Optional, Sequence, Tuple
 
 from pydantic import BaseModel
 
+from ..homography import homography
 from .geometry import edge_points, outline
 from .outline import WIDER_BY, is_light, read_strokes
 
@@ -201,27 +202,14 @@ def square(
 
 def _from_square(corners: Sequence[Corner], size: Tuple[int, int]) -> Tuple[float, ...]:
     """The eight numbers that take a pixel of the squared picture to its place in
-    the photograph: the projective mapping of a rectangle onto four corners, named
-    top-left, top-right, bottom-right, bottom-left."""
-    (x0, y0), (x1, y1), (x2, y2), (x3, y3) = corners
-    dx1, dx2, sx = x1 - x2, x3 - x2, x0 - x1 + x2 - x3
-    dy1, dy2, sy = y1 - y2, y3 - y2, y0 - y1 + y2 - y3
-    below = dx1 * dy2 - dx2 * dy1
-    if abs(below) < 1e-9:
-        raise ValueError("the corners lie on one line")
-    g = (sx * dy2 - dx2 * sy) / below
-    h = (dx1 * sy - sx * dy1) / below
+    the photograph: the mapping (``apothecary/homography.py``) of the squared
+    picture's rectangle onto four corners, named top-left, top-right, bottom-right,
+    bottom-left, its last number 1 and left out, as Pillow takes it. ValueError when
+    three of the corners lie on one line."""
     wide, high = size
-    return (
-        (x1 - x0 + g * x1) / wide,
-        (x3 - x0 + h * x3) / high,
-        x0,
-        (y1 - y0 + g * y1) / wide,
-        (y3 - y0 + h * y3) / high,
-        y0,
-        g / wide,
-        h / high,
-    )
+    rectangle = ((0.0, 0.0), (wide, 0.0), (wide, high), (0.0, high))
+    (a, b, c), (d, e, f), (g, h, _) = homography(rectangle, list(corners))
+    return (a, b, c, d, e, f, g, h)
 
 
 def is_whiteboard(node) -> bool:
