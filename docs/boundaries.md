@@ -157,6 +157,7 @@ declares its rest pose, `rest`, the `-D` definitions that make its SCAD draw it 
 asking for `?pose=rest`, and a site draws it in that frame, z up, since a node
 carries no turn of its own. The bounds a part declares, `measured`, the readiness
 check and the slicer stay in the print pose, the SCAD's own frame. The z-up turn
-into three.js's frame is written in five places: the page's `sceneAt` and
-`applyScadAxisTurn`, `apothecary/static/machine_marks.js`,
-`apothecary/static/lighting.js` and `apothecary/static/picture_marks.js`.
+into three.js's frame is written in two places: `sceneAt` in
+`apothecary/static/frames.js`, which the page, `apothecary/static/machine_marks.js`,
+`apothecary/static/lighting.js` and `apothecary/static/picture_marks.js` import, and
+the page's `applyScadAxisTurn`, which turns a mesh's own vertices.
