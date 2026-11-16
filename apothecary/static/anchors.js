@@ -60,6 +60,7 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
     const dir = new THREE.Vector3();
     let frame = 0;
     let dirty = true;  // something to place, whatever the scene does
+    let hideIf = null;  // answers whether a badge's element is held out of the world (hideWhen)
 
     // The transform gizmo's handles and its (unrendered) picking plane are
     // meshes too, and the plane spans the whole scene: a badge would be
@@ -241,7 +242,7 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
         const testOcclusion = frame % OCCLUSION_EVERY === 0;
         const shown = [];
         for (const a of anchors.values()) {
-            const point = a.point();
+            const point = hideIf && hideIf(a.el) ? null : a.point();
             a.drawn = null;
             if (!point) { a.el.hidden = true; a.at = null; continue; }
             v.copy(point).project(camera);
@@ -398,6 +399,9 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
         /* Something about the badges changed that the layer cannot see (what a
          * badge's thing is, whether it is selected): placed at the next frame. */
         touch() { dirty = true; },
+        /* A badge the predicate holds out of the world (answering for its element) is
+         * not drawn, and is placed again when it stops: the page's layers say which. */
+        hideWhen(fn) { hideIf = fn; dirty = true; },
         clear() { for (const key of [...anchors.keys()]) this.remove(key); },
         destroy() { this.clear(); layer.remove(); },
     };

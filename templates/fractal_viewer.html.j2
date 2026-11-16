@@ -884,7 +884,7 @@
         import { TransformControls } from 'three/addons/controls/TransformControls.js';
         import { STLLoader } from 'three/addons/loaders/STLLoader.js';
         import { mountAnchors } from '/static/anchors.js';
-        import { makePickScope, WALL as WALL_LAYER } from '/static/pick_scope.js';
+        import { makePickScope, WALL as WALL_LAYER, GRID as GRID_LAYER, MACHINE_BUTTONS as BUTTONS_LAYER } from '/static/pick_scope.js';
         import { mountPanels } from '/static/panels.js';
         import { mountMachine } from '/static/widgets/machine.js';
         import { mountBoards } from '/static/boards.js';
@@ -1614,6 +1614,10 @@
                     container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene,
                     keepClear: () => [this.hintEl, this.minimapEl],  // no badge's words over these
                 });
+                // The machines' buttons -- the badges a machine wears in the world -- are a
+                // layer the pick scope shows or hides.
+                this.anchors.hideWhen((el) => el.dataset.group === 'Machine' && !this.pickScope.isShown(BUTTONS_LAYER));
+                this.pickScope.onChange((what) => this.layersChanged(what));
                 // The world and the page's sections are windows of one layout
                 // (panels.js): Site and Selected each a window in the column beside
                 // the world, Site's own -- Problems, Pinned, Jobs, SCAD -- tabs beside
@@ -2730,12 +2734,19 @@
                 // pieces inside it as any level draws its pieces, each a step further
                 // in (raycastPick takes a piece before the part around it).
                 const nodes = this.drawsItself(focus) ? [{ ...focus, _path: focusPrefix }] : [];
+                // Depth (the Layers window): a piece's own pieces are drawn too, as many
+                // levels down as it says; 1 is the level's own pieces alone.
+                const depth = this.pickScope.depth();
+                const down = (node, path, left) => {
+                    nodes.push({ ...node, _path: path });
+                    if (left > 1) for (const inner of node.children) down(inner, pathForChild(path, inner.name), left - 1);
+                };
                 for (const child of focus.children) {
                     const path = pathForChild(focusPrefix, child.name);
                     if (child.children.length && this.expandedCategories.has(child.category)) {
                         collectLeaves(child, path, nodes);
                     } else {
-                        nodes.push({ ...child, _path: path });
+                        down(child, path, depth);
                     }
                 }
                 return nodes;
@@ -2939,6 +2950,7 @@
                     // nothing to set it apart from.
                     if (isCompound && this.showCompoundOverlays && !this.isLevelsOwn(key)) {
                         this.addCompoundOverlay(key, size, center);
+                        this.hideByLayer(this.compoundOverlayByKey[key], !this.pickScope.drawn(child));
                     }
 
                     if (detail === DETAIL_DOT) {
@@ -3012,6 +3024,45 @@
                 }
                 // A wall is drawn faded, and solid again while it is the selection.
                 this.fadeMesh(mesh, this.isWall(node) && !isSelected);
+                this.hideByLayer(mesh, !this.pickScope.drawn(node));
+            }
+
+            // A mesh the layers hide is not drawn and not hit; shown again, it is drawn
+            // as it was. Only what the layers hid is shown again: a mesh hidden for
+            // another reason (a failure's, a comparison's) stays so.
+            hideByLayer(object, hide) {
+                if (hide) {
+                    if (!object.userData.layerHidden) { object.userData.layerHidden = true; object.visible = false; }
+                } else if (object.userData.layerHidden) {
+                    object.userData.layerHidden = false;
+                    object.visible = true;
+                }
+            }
+
+            // Every drawn thing put as the layers say: pieces and the outlines round
+            // them, the alignment grid and the build volumes.
+            applyLayers() {
+                const scope = this.pickScope;
+                for (const [key, mesh] of Object.entries(this.meshByName)) this.hideByLayer(mesh, !scope.drawn(this.renderNodeByKey[key]));
+                for (const [key, overlay] of Object.entries(this.compoundOverlayByKey)) this.hideByLayer(overlay, !scope.drawn(this.renderNodeByKey[key]));
+                for (const box of Object.values(this.buildVolumeMeshByName)) this.hideByLayer(box, !scope.isShown(GRID_LAYER));
+                this.gridHelper.visible = this.gridWanted() && scope.isShown(GRID_LAYER);
+                this.anchors.touch();
+                this.invalidate();
+            }
+
+            // Whether the level has a floor grid at all: the universe's own level, a sphere
+            // of shells a floor would cut through, has none.
+            gridWanted() {
+                return !(this.siteName === UNIVERSE && this.focusPath.length === 0);
+            }
+
+            // The pick scope changed: a depth redraws the level; a layer is put as it says,
+            // and the Select walls tick follows the wall layer's.
+            layersChanged(what) {
+                if (this.wallsToggle) this.wallsToggle.checked = this.wallsSelectable;
+                if (what && (what.depth !== undefined || what.reset || what.loaded)) this.renderFocus();
+                this.applyLayers();
             }
 
             // The amber dot over a part drawn from a variant this tab applied: from
@@ -3133,6 +3184,7 @@
                 mesh.userData.path = path;
                 mesh.scale.set(size[0], size[1], size[2]);
                 mesh.position.set(center[0], center[1], center[2]);
+                this.hideByLayer(mesh, !this.pickScope.isShown(GRID_LAYER));
             }
 
             // A machine's frame (api.machine_frame): its marks' while they stand, which
@@ -3270,7 +3322,7 @@
                 this.gridHelper.position.set(gridX, 0, gridZ);
                 // The universe's own level is a sphere of shells, which a floor would cut
                 // through: no grid there. A part stepped into stands on it, as any level.
-                this.gridHelper.visible = !(this.siteName === UNIVERSE && this.focusPath.length === 0);
+                this.gridHelper.visible = this.gridWanted() && this.pickScope.isShown(GRID_LAYER);
                 this.scene.add(this.gridHelper);
 
                 // The axes stand at the site's origin while it is on the grid, else at the
@@ -9390,7 +9442,10 @@
             raycastPick(event) {
                 const intersects = this.raycastHits(event);
                 if (!intersects.length) return null;
-                const own = (h) => this.isLevelsOwn(h.object.userData.key);
+                // The level's own part, and a piece drawn around pieces of its own (depth
+                // below 1 level), give way to a piece of it on the same ray.
+                const holds = (k) => Object.keys(this.meshByName).some((o) => o.startsWith(`${k}.`));
+                const own = (h) => this.isLevelsOwn(h.object.userData.key) || holds(h.object.userData.key);
                 const piece = own(intersects[0]) && intersects.find((h) => h.object.userData.key && !own(h));
                 const hit = (piece || intersects[0]).object;
                 const pick = this.pictureMarks.picked(hit);
