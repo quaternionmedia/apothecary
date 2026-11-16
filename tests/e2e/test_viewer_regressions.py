@@ -375,6 +375,16 @@ def test_the_machine_popup_stops_polling_when_it_goes(page: Page, pinned: str, l
 
     leave(page, pinned)
     expect(machine).to_have_count(0, timeout=10000)
+    if leave is _close:
+        # The site still draws printer_1, so the world follows it with a watcher of its
+        # own (followMachines); the Machine's is gone with it.
+        watchers = page.evaluate(
+            "(port) => [...window.fractalViewer.boards.board(port).watchers.keys()]"
+            ".map((who) => who.world || 'another')",
+            PRINTER,
+        )
+        assert watchers == [PRINTER], watchers
+        return
     polls = []
     page.on("request", lambda r: polls.append(r.url) if any(p in r.url for p in POLLS) else None)
     page.clock.pause_at(page.evaluate("Date.now()") + 1000)

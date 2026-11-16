@@ -1133,6 +1133,9 @@
         // relief (0.4 up).
         const BED_GRID_MM = 10;
         const BED_GRID_LIFT_MM = 0.3;
+        // How often the world polls a machine it draws while no Machine is open on it
+        // (followMachines): a Machine's own default.
+        const WORLD_POLL_MS = 2000;
         // A point of the site's frame (z up) in three.js's (y up), and back: sceneAt
         // and siteAt, a quarter turn about x (frames.js).
         // A box of three.js's frame (a Box3) as the site's bounds.
@@ -1975,6 +1978,7 @@
                 this.onResize();
                 this.marks = {};       // bearer path -> { marks, port, where }
                 this.whereByPort = {}; // port -> Promise of GET /firmware/printers/where
+                this.following = {};   // port -> the world's own watch of a machine it draws (followMachines)
                 // The site's machines by the part each is drawn from (GET /sites/{name}/machines):
                 // what a machine with no board connected is planned as.
                 this.machinesHere = [];
@@ -7721,7 +7725,7 @@
             // printer a board inside drives, else the board's own node. Called
             // after bindings load and after every poll.
             syncWorldMarks() {
-                const wanted = new Set(), anchorOf = {};
+                const wanted = new Set(), anchorOf = {}, followed = new Map();
                 for (const [path, row] of Object.entries(this.bindings)) {
                     if (!row.device) continue;
                     const isPrinter = !!row.device.printer;
@@ -7738,8 +7742,12 @@
                     }
                     sayBoard(this.anchors, anchorPath, boardSummary(this.boards.board(row.device.port)), { label: boardLabel(row.device), port: row.device.port });
                     badge.dataset.port = row.device.port;
-                    if (isPrinter && row.device.port) this.ensureMarks(anchorPath, row);
+                    if (isPrinter && row.device.port) {
+                        this.ensureMarks(anchorPath, row);
+                        if (this.marks[anchorPath]) followed.set(row.device.port, row.device.printer.machine === 'router' ? 'router' : 'printer');
+                    }
                 }
+                this.followMachines(followed);
                 // The machines' badges are this method's; a place's badge and a
                 // camera's are picture_marks.js', and stay whichever of the two runs
                 // last; a part's variant dot is markVariant's.
@@ -7763,6 +7771,35 @@
                     const moved = anchorOf[this.machine.port];
                     if (!moved) { this.closeMachine(); return; }
                     this.machine.path = moved;
+                }
+            }
+
+            // The world follows each machine it draws by polls of its own (boards.js watch),
+            // so its tool, its bed and its pieces move with no Machine open: only while the
+            // server holds the machine's link (a pin, a scan or a Machine opened it; the
+            // world opens no port, and lets one released stay released), and never while a
+            // Machine is open on the port, whose own watcher and auto-poll tick-box are the
+            // say there. `followed` (port -> kind), from syncWorldMarks, is what is drawn;
+            // without it, whether each is live is looked at again. The board model is told
+            // only what changes: a watch set again schedules its board's next poll afresh.
+            followMachines(followed = null) {
+                if (followed) {
+                    for (const [port, w] of Object.entries(this.following)) {
+                        if (!followed.has(port)) { this.boards.unwatch(port, w.who); delete this.following[port]; }
+                    }
+                    for (const [port, kind] of followed) {
+                        if (this.following[port]) continue;
+                        const who = { world: port };
+                        this.following[port] = { who, live: false };
+                        this.boards.watch(port, who, { kind, interval: WORLD_POLL_MS, live: false });
+                    }
+                }
+                for (const [port, w] of Object.entries(this.following)) {
+                    const machineOpen = !!(this.machine && this.machine.port === port && this.machine.handle);
+                    const live = this.boards.isHeld(port) && !machineOpen;
+                    if (live === w.live) continue;
+                    w.live = live;
+                    this.boards.setWatch(port, w.who, { live });
                 }
             }
 
@@ -8533,6 +8570,7 @@
                 // Its pad's ⇥ and ⧉ are the canvas ring's Panels › Machine › Control pad.
                 if (window.apothecaryRing && window.apothecaryRing.refreshAddresses) window.apothecaryRing.refreshAddresses();
                 this.keepMachineInAddress(port);
+                this.followMachines();  // its own watcher follows the board now
                 const where = this.whereByPort[port] || fetch(`${BASE_URL}/firmware/printers/where?port=${encodeURIComponent(port)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
                 where.then((w) => { if (w && w.printer && this.machine && this.machine.port === port) window.dispatchEvent(new CustomEvent('apothecary:where', { detail: { ...w, port } })); });
             }
@@ -8664,6 +8702,7 @@
                 this.systems.machine.detach();
                 this.panels.unregister('machine');
                 this.keepMachineInAddress(null);
+                this.followMachines();  // the world follows the board again
                 return said;
             }
             keepMachineInAddress(port) {
