@@ -31,6 +31,13 @@ and the task carries the slice's answer once it ends:
 - ``POST /slicer/tasks/{id}/cancel``.
 - ``GET /slicer/slices``, ``GET /slicer/slices/{file_id}``: the slices whose
   files the Print card still keeps.
+- ``POST /slicer/slices/{file_id}/measured`` ``{x, y, z}``: the part the printer made
+  from that slice, measured (any of the three), checked against the size sliced and
+  fed back as the printer's correction (``measured.py``), which its next slices
+  take; a measurement that is not of that part, or a correction past what moving the
+  walls corrects, is a 422 saying why, and nothing is kept.
+- ``GET /slicer/corrections?site=&printer=``: the correction kept for that printer,
+  with the measurements that made it; ``null`` where none is.
 
 Slices run one at a time on a task runner of their own, so a slice never waits
 for a flash, nor a flash for a slice. Slicing writes files only: no route here
@@ -47,7 +54,7 @@ from pydantic import BaseModel, Field
 
 from ..firmware.models import Port
 from ..firmware.tasks import Running, TaskBusy, TaskRunner
-from . import compose, service
+from . import compose, measured, service
 from .models import SliceRecord, SlicerStatus
 from .modules import NotInstalled, SlicerError, chosen_id, get_module, modules, reset_modules
 from .profiles import printers
@@ -105,6 +112,13 @@ class SliceRequest(BaseModel):
     # A cached variant of the part (its key, as generate answered it): the
     # variant a page draws is what is sliced, and the record names it.
     variant: Optional[str] = Field(None, pattern=VARIANT_KEY)
+
+
+class MeasuredRequest(BaseModel):
+    # Millimetres, as measured; one left out was not measured.
+    x: Optional[float] = Field(None, gt=0, le=2000)
+    y: Optional[float] = Field(None, gt=0, le=2000)
+    z: Optional[float] = Field(None, gt=0, le=2000)
 
 
 class Piece(BaseModel):
@@ -227,3 +241,29 @@ def slicer_slice_record(file_id: str):
     if record is None:
         raise HTTPException(status_code=404, detail="no slice made that file, or it is not kept")
     return record
+
+
+@router.post("/slices/{file_id}/measured")
+def slicer_slice_measured(file_id: str, body: MeasuredRequest):
+    """The part the slice ``file_id`` made, measured: checked, and its correction kept
+    for the printer the slice was for."""
+    record = service.get_record(file_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="no slice made that file, or it is not kept")
+    try:
+        kept = measured.measure(record, [body.x, body.y, body.z])
+    except measured.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "correction": kept.model_dump(mode="json"),
+        "said": measured.said(kept.measurements[-1]),
+    }
+
+
+@router.get("/corrections")
+def slicer_correction(
+    site: str = Query(..., pattern=SITE_NAME), printer: str = Query(..., pattern=NODE_PATH)
+):
+    """The correction kept for ``printer`` in ``site``, or null."""
+    kept = measured.load(site, printer)
+    return {"correction": kept.model_dump(mode="json") if kept else None}

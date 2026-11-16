@@ -43,7 +43,9 @@ from typing import Callable, Dict, List, Optional, Protocol
 
 from .. import preview
 from ..firmware import devices
+from ..meshes import MeshError, read_stl
 from ..state_folder import private_folder, state_dir, write_whole
+from . import measured
 from .models import Bounds, Estimate, Made, Setting, SlicedFor, SliceRecord, SlicerMessage
 from .modules import Log, NotInstalled, SlicerError, chosen_id, get_module
 from .profiles import Declared, PrinterProfile, load_part, load_profile, printers
@@ -262,6 +264,19 @@ def _work_dir() -> Path:
     return Path(tempfile.mkdtemp(prefix=f"{uuid.uuid4().hex[:8]}.", dir=folder))
 
 
+def model_size(stl: bytes) -> Optional[List[float]]:
+    """The size of the model in ``stl``, x, y, z in mm, rounded to a thousandth; None
+    where it holds no mesh."""
+    try:
+        triangles = read_stl(stl)
+    except MeshError:
+        return None
+    points = [point for triangle in triangles for point in triangle]
+    if not points:
+        return None
+    return [round(max(p[i] for p in points) - min(p[i] for p in points), 3) for i in range(3)]
+
+
 def slice_into(
     target: Target, printer: Printer, runner: Runner, slicer: Optional[str] = None
 ) -> SliceRecord:
@@ -277,7 +292,9 @@ def slice_into(
         f"Slicing {target.made.kind} {target.made.name} for {printer.at.name} "
         f"({printer.profile.file}) with {module.label} {status.tool.version}"
     )
-    resolved = module.settings(printer.profile, target.declared, port=printer.at.port)
+    # The printer's correction, fed back from a part it made, held over its profile.
+    profile = measured.applied(printer.profile, printer.at.site, printer.at.path, module.id)
+    resolved = module.settings(profile, target.declared, port=printer.at.port)
     if target.declared.note:
         resolved.settings.insert(
             0,
@@ -292,6 +309,7 @@ def slice_into(
     for setting in resolved.settings:
         runner.log(f"  {setting.name} = {setting.value!r}  [{setting.origin}: {setting.source}]")
     stl = target.stl(runner.log)
+    size = model_size(stl)
     work = _work_dir()
     try:
         model = work / "model.stl"
@@ -328,6 +346,7 @@ def slice_into(
             slicer_version=status.tool.version,
             made=target.made,
             printer=printer.at,
+            size=size,
             settings=resolved.settings,
             estimate=Estimate(**output.estimate) if output.estimate else None,
             messages=messages,
@@ -383,7 +402,6 @@ def records() -> List[SliceRecord]:
 
 
 # --- where the moves reach ------------------------------------------------------------
-
 
 
 def gcode_bounds(path: Path) -> Optional[Bounds]:

@@ -232,7 +232,8 @@ DESIGN = Journey(
 
 
 # Print a part on a machine: a part chosen in Site, its numbers in Parameters, the
-# machine's Print window to slice it and draw its path, the job in Jobs. The machine's
+# machine's Print window to slice it and draw its path, the job in Jobs, and the part
+# made measured there, its correction fed back to the printer. The machine's
 # window and its Print window share a stack at the column's foot, Print in front.
 MAKE = Journey(
     id="make",
@@ -283,6 +284,14 @@ MAKE = Journey(
             forward=("machine", "jobs"),
             owns=("machine", "jobs"),
             shown_by=("03-a-picture-to-a-print.md#8", "03-a-picture-to-a-print.md#9"),
+        ),
+        Step(
+            "measure",
+            "Measure",
+            "the part made, measured: its sizes typed under measured, checked against what "
+            "was sliced, and the walls' correction kept for the printer's next slices",
+            forward=("machine-print",),
+            puts=(("file", "footpedal"),),
         ),
     ),
 )

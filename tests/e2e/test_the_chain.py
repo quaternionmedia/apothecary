@@ -206,6 +206,8 @@ STANDS = {
     ("make", "slice"): lambda page: _says(page, "machine-print", "footpedal"),
     ("make", "see"): _path_drawn_on("printer_1"),
     ("make", "print"): lambda page: _shown(page, "machine"),
+    # The footpedal's file chosen, what it was sliced to under measured, nothing kept.
+    ("make", "measure"): lambda page: _says(page, "machine-print", "sliced"),
     ("cut", "choose"): _on(ROUTER),
     ("cut", "toolpath"): lambda page: _says(page, "machine-print", "Toolpath"),
     ("cut", "see"): _path_drawn_on("cnc_router"),

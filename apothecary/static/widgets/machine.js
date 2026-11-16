@@ -55,7 +55,10 @@
  * it keeps is chosen in the card's files, so ▶ Print follows Slice; then the
  * card says what the slice used, each value with where it came from, the
  * slicer's estimate, and its errors and warnings by line. A kept file a slice
- * made says what it was sliced from and for which printer.
+ * made says what it was sliced from and for which printer. Its part, printed and
+ * measured, is typed under measured: Keep checks each size against what was sliced
+ * and keeps the walls' correction it makes for the printer's next slices
+ * (slicer/measured.py), and says the correction kept.
  * `host` is "world": the world's page, a window of its layout, one board and
  * everything inline in one column; /firmware/monitor opens the world's page with
  * this Machine.
@@ -200,6 +203,11 @@ const CARDS = `
         <div class="row" id="print-plan-row"><label for="print-plan">plan</label>
             <button type="button" id="print-plan" title="Keep what it makes and the file chosen as this machine's plan: chosen again whenever its Machine opens, with its board connected or not. Nothing is sent">Keep as plan</button>
             <span class="s" id="print-plan-said"></span>
+        </div>
+        <div class="row printer-only" id="print-measure-row" hidden><label for="print-measure">measured</label>
+            <input id="print-measure" size="16" spellcheck="false" placeholder="x × y × z mm" title="What the part this file printed measures, in millimetres: X, Y and Z in that order, any left out as -. Checked against what was sliced; the walls' correction it makes is kept for this printer's next slices. ⌗ Print › Measure">
+            <button type="button" id="print-measure-keep" title="Check the sizes typed against what was sliced, and keep the correction they make for this printer's next slices. Nothing is sent to the printer">Keep</button>
+            <span class="s" id="print-measure-said"></span>
         </div>
         <div class="row" id="print-verbs">
             <button type="button" id="print-start" class="warm">▶ Send</button>
@@ -1451,6 +1459,59 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         else found.refused = refusals > before ? lastRefusal : d ? "this file moves nothing" : "its path could not be read";
         return found;
     }
+    // --- a part measured, fed back ---------------------------------------------------
+    // Under the chosen file, once its slice says the size of what it sliced: what it
+    // was sliced to, and the correction its printer keeps.
+    const ms = { shown: null, kept: {} };
+    const fmtSize = (size) => size.map((v) => v.toFixed(2)).join(" × ");
+    function renderMeasure() {
+        const id = $("print-pick").value || null, r = id && prt.slices[id];
+        const row = $("print-measure-row");
+        row.hidden = !(r && !r.toolpath && r.size && state.kind === "printer");
+        if (row.hidden) return;
+        const at = r.printer, key = `${at.site}:${at.path}`, kept = ms.kept[key];
+        $("print-measure-said").textContent = `of ${fmtSize(r.size)} sliced` + (kept ? ` · ${at.path}'s walls ${kept.value >= 0 ? "+" : ""}${kept.value.toFixed(3)} mm` : "");
+        if (ms.shown === key || !at.site || !at.path) return;
+        ms.shown = key;
+        api(`/slicer/corrections?site=${encodeURIComponent(at.site)}&printer=${encodeURIComponent(at.path)}`)
+            .then((answer) => { ms.kept[key] = answer.correction; renderMeasure(); })
+            .catch(() => { ms.shown = null; });
+    }
+    // "10.12 × 10.08 × 9.98": x, y and z, any as - where it was not measured.
+    function measuredSizes(text) {
+        const words = String(text || "").trim().split(/\s*(?:×|x|\*|,|\s)\s*/i).filter(Boolean);
+        if (!words.length || words.length > 3) return null;
+        const sizes = words.map((w) => (w === "-" ? null : Number(w)));
+        if (sizes.some((v) => v !== null && !(Number.isFinite(v) && v > 0))) return null;
+        while (sizes.length < 3) sizes.push(null);
+        return sizes;
+    }
+    // Keep: the sizes typed checked against what was sliced, and the correction kept.
+    async function keepMeasured() {
+        const id = $("print-pick").value || null, r = id && prt.slices[id];
+        if (!r || !r.size) { refuse("measure: choose the file the part was printed from, a slice that says its size"); return false; }
+        const sizes = measuredSizes($("print-measure").value);
+        if (!sizes) { refuse("measure: type what the part measures, x × y × z in mm (- for one not measured)"); return false; }
+        let answer;
+        try { answer = await post(`/slicer/slices/${encodeURIComponent(id)}/measured`, { x: sizes[0], y: sizes[1], z: sizes[2] }); }
+        catch (e) { refuse(`measure: ${e.message}`); return false; }
+        ms.kept[`${r.printer.site}:${r.printer.path}`] = answer.correction;
+        $("print-measure").value = "";
+        renderMeasure();
+        tell(`${answer.said}: kept for ${r.printer.path}, whose next slices take it`);
+        return true;
+    }
+    // Print › Measure: what is typed kept, as Keep does; with nothing typed, the field.
+    function measureVerb() {
+        if ($("print-measure").value.trim()) return keepMeasured();
+        if ($("print-measure-row").hidden) { refuse("measure: choose the file the part was printed from, a slice that says its size"); return false; }
+        $("print-measure").focus();
+        $("print-card").scrollIntoView({ block: "nearest" });
+        tell("type what the part measures, x × y × z in mm, then Keep");
+        return true;
+    }
+    $("print-measure-keep").onclick = () => keepMeasured();
+
     // What a kept file's slice or toolpath was made from: the piece's path in its
     // site and the part's name, or nothing for a file no slice or toolpath made.
     function madeFrom(id) {
@@ -1523,6 +1584,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         showChosenSlice();
         followChosenFile();
         renderPlan();
+        renderMeasure();
     }
     // One job of the history: when it started and finished, its kind, the file it ran
     // and the part it makes, how it ended (and why), and how far it got.
@@ -1953,6 +2015,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (action === "print:start") { await startPrint(); return true; }
         if (action === "print:preview") { togglePreview(); return true; }
         if (action === "print:plan") return keepPlan();
+        if (action === "print:measure") return measureVerb();
         if (prt.job && prt.job.running && action in HOST_VERBS) { await printVerb(HOST_VERBS[action]); return true; }
         const lines = LINES_OF();
         if (action in lines) {
@@ -1999,6 +2062,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         out.push([$("print-start"), "print:start"]);
         out.push([$("print-preview"), "print:preview"]);
         out.push([$("print-plan"), "print:plan"]);
+        out.push([$("print-measure-keep"), "print:measure"]);
         out.push([$("print-pause"), "control:sd-pause"]);
         out.push([$("print-resume"), "control:sd-resume"]);
         out.push([$("print-cancel"), "control:sd-abort"]);

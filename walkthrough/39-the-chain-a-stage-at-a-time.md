@@ -53,6 +53,8 @@ The part goes to a machine. printer_1's Machine is opened and the footpedal chos
     Print a part › 4 See (the tour): footpedal.gcode's path is drawn on printer_1 and framed, all of it: the preview slider in its Print goes through each layer
 5 Start: nothing more to do
     Print a part › 5 Start (the tour): control armed in the Machine, ▶ Print, the job in Jobs
+6 Measure: nothing more to do
+    Print a part › 6 Measure (the tour): the part made, measured: its sizes typed under measured, checked against what was sliced, and the walls' correction kept for the printer's next slices
 ```
 
 ## 3. Cut a part: its toolpath written for the router, drawn on the table

@@ -580,6 +580,17 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a button that slices what makes names for the printer, and chooses its G-code",
     ),
+    "print-measure": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a field for what the part a file printed measures, x, y and z",
+    ),
+    "print-measure-keep": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that checks the sizes measured against what was sliced and keeps the"
+        " printer's correction",
+    ),
     "print-preview": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -901,6 +912,10 @@ RING_BACKED: Dict[str, str] = {
     "print-preview": "print:preview",
     # Keep as plan keeps the machine's plan, its board connected or not.
     "print-plan": "print:plan",
+    # Print › Measure keeps what is typed under measured, as Keep does, and takes a
+    # person to the field when nothing is typed, as the tour's Who does its name.
+    "print-measure": "print:measure",
+    "print-measure-keep": "print:measure",
     # Slice slices what makes names, as the Slice cell of a made piece's ring or a
     # part's slices that piece or part, chosen under makes first.
     "print-slice": "slice:piece:printer_1",

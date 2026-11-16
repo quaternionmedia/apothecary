@@ -532,6 +532,7 @@
       "94": "print:start",
       "99": "print:preview",
       "93": "print:plan",
+      "91": "print:measure",
       "38": "control:motors-off",
       "36": "control:quickstop",
       "32": "control:break-wait",
@@ -579,6 +580,7 @@
       "794": "print:start",
       "799": "print:preview",
       "793": "print:plan",
+      "791": "print:measure",
       "738": "control:motors-off",
       "736": "control:quickstop",
       "732": "control:break-wait",
@@ -629,6 +631,7 @@
       "4794": "print:start",
       "4799": "print:preview",
       "4793": "print:plan",
+      "4791": "print:measure",
       "4738": "control:motors-off",
       "4736": "control:quickstop",
       "4732": "control:break-wait",
@@ -1073,6 +1076,18 @@
               "group": null,
               "children": null,
               "cell": 3
+            },
+            {
+              "id": "print:measure",
+              "label": "Measure",
+              "action": "print:measure",
+              "enabled": true,
+              "destructive": false,
+              "twice": false,
+              "marked": false,
+              "group": null,
+              "children": null,
+              "cell": 1
             }
           ],
           "cell": 9
@@ -1719,6 +1734,18 @@
                   "group": null,
                   "children": null,
                   "cell": 3
+                },
+                {
+                  "id": "print:measure",
+                  "label": "Measure",
+                  "action": "print:measure",
+                  "enabled": true,
+                  "destructive": false,
+                  "twice": false,
+                  "marked": false,
+                  "group": null,
+                  "children": null,
+                  "cell": 1
                 }
               ],
               "cell": 9
@@ -2414,6 +2441,18 @@
                       "group": null,
                       "children": null,
                       "cell": 3
+                    },
+                    {
+                      "id": "print:measure",
+                      "label": "Measure",
+                      "action": "print:measure",
+                      "enabled": true,
+                      "destructive": false,
+                      "twice": false,
+                      "marked": false,
+                      "group": null,
+                      "children": null,
+                      "cell": 1
                     }
                   ],
                   "cell": 9

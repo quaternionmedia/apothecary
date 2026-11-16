@@ -7,7 +7,7 @@ Print in front, the Machine's sections open before it kept behind them. Greyed w
 no Machine is open and the piece chosen has no board.
 
 Print a part, its journey: entered from ⊞ Windows › Journeys, its rail in the header
-at Choose, walked Next by Next to Start, each step's windows brought forward and the
+at Choose, walked Next by Next to Measure, each step's windows brought forward and the
 address holding the step; a window's tab chosen moves the rail and nothing else, a
 reload lands on the step the address names, and ✕ leaves it, the windows where they
 are.
@@ -127,7 +127,7 @@ def test_the_make_view_lays_out_the_windows_a_part_is_made_through(page: Page, u
 
 @pytest.mark.e2e
 def test_make_a_thing_is_walked_step_by_step_on_its_rail(page: Page, url: str):
-    """Its view laid out and its rail at Choose; Next by Next to Start, each step's
+    """Its view laid out and its rail at Choose; Next by Next to Measure, each step's
     window in front and the address holding the step; Start has no Next."""
     _machine_open_and_the_part_chosen(page, url)
     expect(page.locator(RAIL)).to_be_hidden()
@@ -140,6 +140,7 @@ def test_make_a_thing_is_walked_step_by_step_on_its_rail(page: Page, url: str):
         ["3", "Slice", False],
         ["4", "See", False],
         ["5", "Start", False],
+        ["6", "Measure", False],
     ]
     expect(status(page)).to_contain_text("Print a part › 1 Choose (⊞ Windows › Print a part)")
     assert windows.state(page, "site")["shown"] is True
@@ -152,6 +153,7 @@ def test_make_a_thing_is_walked_step_by_step_on_its_rail(page: Page, url: str):
         ("slice", "machine-print", 3, "Slice"),
         ("see", "machine-print", 4, "See"),
         ("print", "machine", 5, "Start"),
+        ("measure", "machine-print", 6, "Measure"),
     ):
         nxt = page.locator(f"{RAIL} .journey-next")
         expect(nxt).to_have_attribute("data-next", step)
@@ -161,7 +163,8 @@ def test_make_a_thing_is_walked_step_by_step_on_its_rail(page: Page, url: str):
         page.wait_for_function("(w) => window.apothecaryPanels.state(w).shown", arg=window)
         expect(page).to_have_url(re.compile(f"[?&]step={step}\\b"))
         expect(status(page)).to_contain_text(f"Print a part › {number} {label} (Next)")
-    assert windows.state(page, "jobs")["shown"] is True
+        if step == "print":
+            assert windows.state(page, "jobs")["shown"] is True
     expect(page.locator(f"{RAIL} .journey-next")).to_have_count(0)
 
 
@@ -191,6 +194,26 @@ def test_a_window_chosen_moves_the_rail_and_a_reload_lands_on_its_step(page: Pag
     expect(page).not_to_have_url(re.compile(r"[?&](journey|step)="))
     expect(status(page)).to_contain_text("Left Print a part")
     assert windows.state(page, "machine-print")["shown"] is True
+
+
+@pytest.mark.e2e
+def test_at_1280_the_rail_names_the_step_a_person_is_on_and_next_and_make_stay_in_view(
+    page: Page, url: str
+):
+    """Six steps, Next and ⚒ Make in one row: the other steps show their numbers alone,
+    so Next and ⚒ Make are in view, Make naming what it makes."""
+    page.set_viewport_size({"width": 1280, "height": 800})
+    _machine_open_and_the_part_chosen(page, url)
+    _enter_make_a_thing(page)
+    _on(page, "choose")
+    shown = page.evaluate(
+        """() => [...document.querySelectorAll('#journey-rail .journey-steps button')].map((b) =>
+            getComputedStyle(b.querySelector('.journey-label')).display !== 'none')"""
+    )
+    assert shown == [True, False, False, False, False, False]
+    expect(page.locator(f"{RAIL} .journey-next")).to_be_in_viewport(ratio=1)
+    expect(page.locator("#make-here")).to_have_text(re.compile(r"^⚒ Make footpedal on "))
+    expect(page.locator("#make-here")).to_be_in_viewport(ratio=1)
 
 
 @pytest.mark.e2e

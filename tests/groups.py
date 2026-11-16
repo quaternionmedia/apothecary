@@ -123,6 +123,7 @@ GROUPS = {
         "tests": (
             "test_slicer.py",
             "test_slicer_api.py",
+            "test_slicer_measured.py",
             "test_slicer_installer.py",
             "test_cam.py",
             "test_preview.py",

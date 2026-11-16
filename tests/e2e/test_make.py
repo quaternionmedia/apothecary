@@ -148,3 +148,40 @@ def test_make_on_the_part_stepped_into_takes_it_to_the_printer_whose_board_is_co
         finally:
             http.delete(f"/sites/garage/nodes/{BOARD}/device")
     assert errors == []
+
+
+@pytest.mark.e2e
+def test_the_part_made_measured_is_fed_back_into_the_printers_slices(page: Page, url: str):
+    """The footpedal made on printer_1, then measured in its Print window: the sizes typed
+    are checked against what was sliced, the walls' correction is kept for printer_1, and
+    its next slice takes it."""
+    errors: list = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    open_garage(page, url, settle=False)
+    _machines_known(page)
+    select(page, "footpedal")
+    expect(page.locator("#make-here")).to_have_text(re.compile("on printer_1"), timeout=15000)
+    page.locator("#make-here").click()
+    expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=SLICED_MS)
+    said = windows.in_machine(page, "#print-measure-said")
+    expect(said).to_contain_text(" sliced", timeout=10000)
+    # What was sliced, as its record keeps it: the window shows it to a hundredth.
+    record = next(
+        r
+        for r in page.request.get(f"{url}/slicer/slices").json()
+        if r["made"]["name"] == "footpedal"
+    )
+    x, y, _ = record["size"]
+    windows.in_machine(page, "#print-measure").fill(f"{x + 0.2:.3f} × {y + 0.1:.3f} × -")
+    windows.in_machine(page, "#print-measure-keep").click()
+    expect(page.locator("#status")).to_contain_text(
+        "xy_contour_compensation +0.000 -> -0.075 mm: kept for printer_1", timeout=10000
+    )
+    expect(said).to_contain_text("printer_1's walls -0.075 mm")
+    # The next slice for printer_1 says the value it took, and where it came from.
+    windows.in_machine(page, "#print-slice").click()
+    expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=SLICED_MS)
+    expect(windows.in_machine(page, "#print-slice-said")).to_contain_text(
+        "xy_contour_compensation -0.075 measured"
+    )
+    assert errors == []

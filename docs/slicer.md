@@ -187,12 +187,45 @@ Slice is a step of the loop from a picture to a print
   errors and warnings by line. A kept file a slice made says, in the card's
   files, what it was sliced from and for which printer; choosing it says that
   slice again under **makes**.
+- **Measured, fed back.** Under the chosen file, once its slice says the size of
+  what it sliced, **measured** takes what the part it printed measures, `x × y × z`
+  in millimetres (`-` for one not measured), and **Keep** -- or the control ring's
+  Print › Measure -- checks it and keeps the printer's correction, and says it
+  ([below](#a-printers-correction-measured)). It is *Print a part*'s last step.
 - **Installing it.** The Bench's toolchain card draws the slicer after the
   toolchain modules: what it slices, where it is, the release pinned, and its
   own **Install** (or Update), whose log is the Bench's task log. It is
   Panels › Bench › Install's last cell, **OrcaSlicer**, beside Arduino and Rust
   ESP32 -- the ring of modules for installs -- since installing a tool is the
   Bench's, and the Machine's Slice says where to install it when none is found.
+
+## A printer's correction, measured
+
+A part a printer made is measured by a person and fed back into that printer's
+slices (`apothecary/slicer/measured.py`). Each slice records the size of the model it
+sliced, its STL's box the way up it prints (`size` in the slice's record), and a
+measurement is held to it:
+
+- **Checked first.** Each size measured is within 5% of the size sliced, or it is not
+  that slice's part -- measured across something else, or printed from another file
+  -- and is refused, saying so; X or Y is measured, since the correction is the
+  walls'. Nothing is kept from a refused measurement.
+- **What is fed back** is OrcaSlicer's `xy_contour_compensation`, which moves each
+  outer wall in or out: the mean of X's and Y's errors is two walls' worth, so the
+  correction is half of it, taken from the value the measured slice was made with
+  (every slice shows the one it used). One past half a millimetre is refused: that
+  far off is the steps per millimetre or the flow, which moving the walls does not
+  correct. Z is checked and recorded, not applied: its error is the layers' and
+  the firmware's.
+- **The printer's own.** It is kept per machine node in the state folder
+  (`corrections/<site>/<node>.json`), with every measurement that made it, and the
+  printer's part's profile is left as it is: two Enders differ. Every later slice
+  for that printer takes it as a value whose origin is `measured`, its source the
+  measurement. A slice for a printer part standing in no site keeps and takes none,
+  and another slicer module takes none.
+
+`POST /slicer/slices/{file_id}/measured` `{x, y, z}` measures the part a kept slice
+made; `GET /slicer/corrections?site=&printer=` reads what a printer keeps.
 
 ## Another slicer
 

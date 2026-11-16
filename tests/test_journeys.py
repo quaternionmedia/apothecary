@@ -127,11 +127,14 @@ def test_each_step_brings_forward_and_owns_windows_its_journeys_view_lays_out():
             assert set(step.forward) | set(step.owns) <= named, (journey.id, step.id)
 
 
-def test_make_a_thing_goes_from_the_part_to_the_job():
+def test_make_a_thing_goes_from_the_part_to_the_job_and_back_to_the_printer():
     make = by_id("make")
     assert make.name == "Print a part"
-    assert [s.label for s in make.steps] == ["Choose", "Shape", "Slice", "See", "Start"]
+    assert [s.label for s in make.steps] == ["Choose", "Shape", "Slice", "See", "Start", "Measure"]
     assert make.steps[0].forward[0] == "site"
     assert make.steps[2].forward == ("machine-print",)
     assert [s.id for s in make.steps if s.draws] == ["see"]
-    assert make.steps[-1].owns == ("machine", "jobs")
+    assert make.steps[4].owns == ("machine", "jobs")
+    # The part made, measured in the Print window, a file of it there to measure against.
+    assert make.steps[-1].forward == ("machine-print",) and make.steps[-1].owns == ()
+    assert make.steps[-1].puts == (("file", "footpedal"),)

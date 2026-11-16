@@ -97,6 +97,7 @@ SHOWN: Dict[str, Tuple[str, ...]] = {
         "bottom_shell_layers",
         "sparse_infill_density",
         "enable_support",
+        "xy_contour_compensation",
     ),
     "filament": (
         "filament_type",
@@ -108,7 +109,7 @@ SHOWN: Dict[str, Tuple[str, ...]] = {
 }
 
 # What OrcaSlicer itself fills when a profile leaves a value out (PrintConfig.cpp).
-ORCA_DEFAULTS = {"z_offset": "0"}
+ORCA_DEFAULTS = {"z_offset": "0", "xy_contour_compensation": "0"}
 
 _SAID_ERROR = re.compile(r"\berror\b|\bfailed\b|\bcan ?not\b", re.I)
 _SAID_WARNING = re.compile(r"\bwarning\b", re.I)
@@ -388,11 +389,14 @@ class OrcaSlicerModule(SlicerModule):
                 before = configs[kind].get(key, ORCA_DEFAULTS.get(key))
                 configs[kind][key] = entry["value"]
                 agrees = before == entry["value"]
+                # A printer's measured correction (slicer/measured.py) is its own,
+                # not its profile file's.
+                measured = entry.get("origin") == "measured"
                 origins[(kind, key)] = Setting(
                     name=key,
                     value=entry["value"],
-                    origin="printer",
-                    source=f"{profile.file}: {entry['source']}",
+                    origin="measured" if measured else "printer",
+                    source=entry["source"] if measured else f"{profile.file}: {entry['source']}",
                     note=entry.get("note")
                     or (f"{base}'s profile agrees" if agrees else f"over {base}'s {before!r}"),
                 )

@@ -11,7 +11,9 @@ from pydantic import BaseModel, Field
 # Where a value of a slice came from: the part or piece declared it, the
 # printer's profile set it (OrcaSlicer's own, or what the profile kept with the
 # printer's part holds over it), or apothecary set it for every slice.
-Origin = Literal["declared", "printer", "apothecary"]
+# Where a value came from; "measured" is a printer's correction fed back from a part it
+# made (slicer/measured.py).
+Origin = Literal["declared", "printer", "apothecary", "measured"]
 
 
 class SlicerTool(BaseModel):
@@ -123,6 +125,9 @@ class SliceRecord(BaseModel):
     made: Made
     printer: SlicedFor
     settings: List[Setting]
+    # The model sliced, x, y, z in mm: its STL's box, the way up it prints. A part the
+    # printer made from this slice is measured against it (slicer/measured.py).
+    size: Optional[List[float]] = None
     estimate: Optional[Estimate] = None
     messages: List[SlicerMessage] = Field(default_factory=list)
     bounds: Optional[Bounds] = None

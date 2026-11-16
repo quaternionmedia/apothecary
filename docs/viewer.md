@@ -48,7 +48,9 @@ Left to right, one row:
   take-back in another site names that site and leaves the screen where it is.
 - **The rail of a journey**, beside the banner while one is entered: its name,
   its steps numbered, the one a person is on filled, **Next** with the step
-  after's number and name, and ✕ to leave it ([below](#journeys)).
+  after's number and name, and ✕ to leave it ([below](#journeys)). Up to 1400 px
+  wide a step's name shows on the step a person is on alone, the others' in their
+  tooltips; up to 1100 px the journey's name and every step's go.
 - **⚒ Make**, after the banner and a journey's rail, wherever the piece selected,
   or else the part stepped into, is a part or a piece made from a picture (on a
   narrow header it gives way before the rail does): it names the part and
@@ -462,6 +464,7 @@ what it made:
 | 3 | **Slice** | the Machine's Print window | the Print window |
 | 4 | **See** | the Print window, the chosen file's path drawn in the world and framed | -- |
 | 5 | **Start** | the Machine, then Jobs | the Machine, Jobs |
+| 6 | **Measure** | the Print window, a file of the part chosen there to measure against | -- |
 
 A journey's view lays its windows out when it is entered. *Print a part*'s is also
 listed in ⊞ Windows › Views and has a cell on the ring's Panels › Windows, which is
