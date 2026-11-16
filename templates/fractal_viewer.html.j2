@@ -911,7 +911,7 @@
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
         import { parseAssignments, lastOf, literalText, writeValues } from '/static/widgets/assignments.js';
         import { makeMachineMarks, makeBoardBadge, sayBoard, toolPosition as toolPositionOf } from '/static/machine_marks.js';
-        import { sceneAt, siteAt, toScene as marksToScene } from '/static/frames.js';
+        import { sceneAt, siteAt, toScene as marksToScene, volumeToSite, bedOffsetAt } from '/static/frames.js';
         import { mountPictureMarks, axes as cameraAxes } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
         import { makeSettings, mountSettings, keyLabel, modifierLabel } from '/static/widgets/settings.js';
@@ -2185,6 +2185,7 @@
                     if (!m.marks || !m.marks.tick()) continue;
                     byItself = true;
                     this.moveKinematic(this.meshByName[path], m.marks);  // a machine's pieces ride its tool
+                    this.followBed(path);  // and what stands on its bed rides the bed
                 }
                 // A turning view on slow frames: coarser, and coarser again while they stay
                 // slow; at rest, whole. The canvas's pixels change with it, which is a frame
@@ -2906,7 +2907,7 @@
                         this.scene.add(dot);
                         this.meshByName[key] = dot;
                         this.colorMesh(key, child);
-                        this.updateBuildVolumeIndicator(child, bounds);
+                        this.updateBuildVolumeIndicator(child);
                         return;
                     }
 
@@ -2932,7 +2933,7 @@
                     this.meshByName[key] = mesh;
 
                     this.colorMesh(key, child);
-                    this.updateBuildVolumeIndicator(child, bounds);
+                    this.updateBuildVolumeIndicator(child);
                 });
             }
 
@@ -3046,13 +3047,17 @@
                 return this.wallsSelectable ? 'Select walls: on, a click in the world picks a wall, until the page is left' : 'Select walls: off, a click in the world passes through them';
             }
 
-            // A wireframe-only box showing the usable print area within a
-            // printer's physical footprint -- a separate scene object so its
-            // scale doesn't compound with the (non-uniformly stretched)
+            // A wireframe-only box showing a machine's working volume, from its frame
+            // (frameOf): where the volume starts in the machine, how big it is, and how
+            // far its bed stands along Y from rest when the bed carries it, so the box
+            // rides the bed with its marks and pieces (followBed). A separate scene
+            // object so its scale doesn't compound with the (non-uniformly stretched)
             // parent box's scale.
-            updateBuildVolumeIndicator(node, bounds) {
+            updateBuildVolumeIndicator(node) {
                 const existing = this.buildVolumeMeshByName[node.name];
-                if (!node.build_volume) {
+                const path = nodeKey(node);
+                const frame = this.frameOf(path, node);
+                if (!frame) {
                     if (existing) {
                         this.scene.remove(existing);
                         existing.geometry.dispose();
@@ -3062,16 +3067,10 @@
                     return;
                 }
 
-                const [bvApX, bvApY, bvApZ] = node.build_volume;
-                // A machine that says where its volume starts (build_origin,
-                // in its own frame) is drawn there; a block is centred on its
-                // footprint with the volume on the floor.
-                const origin = node.build_origin;
-                const centerApX = origin ? node.position.x + origin[0] + bvApX / 2 : (bounds.min[0] + bounds.max[0]) / 2;
-                const centerApY = origin ? node.position.y + origin[1] + bvApY / 2 : (bounds.min[1] + bounds.max[1]) / 2;
-                const baseApZ = origin ? node.position.z + origin[2] : bounds.min[2];
-                const size = [bvApX, bvApZ, bvApY];
-                const center = sceneAt(centerApX, centerApY, baseApZ + bvApZ / 2).toArray();
+                const [vx, vy, vz] = frame.volume;
+                const middle = volumeToSite(frame, { x: vx / 2, y: vy / 2, z: vz / 2 }, { at: node.position, bedOffset: this.bedOffsetOf(path, frame) });
+                const size = [vx, vz, vy];
+                const center = marksToScene(middle).toArray();
 
                 let mesh = existing;
                 if (!mesh) {
@@ -3081,8 +3080,36 @@
                     this.scene.add(mesh);
                     this.buildVolumeMeshByName[node.name] = mesh;
                 }
+                mesh.userData.path = path;
                 mesh.scale.set(size[0], size[1], size[2]);
                 mesh.position.set(center[0], center[1], center[2]);
+            }
+
+            // A machine's frame (api.machine_frame): its marks' while they stand, which
+            // carry its controller's word (GET /firmware/printers/where), else its node's
+            // in the tree. Null for anything that is no machine.
+            frameOf(path, node = null) {
+                const m = this.marks[path];
+                if (m && m.marks && m.marks.frame) return m.marks.frame;
+                const n = node || this.nodeByPath(path);
+                return (n && n.frame) || null;
+            }
+            // How far a machine's bed stands along Y from where its frame's origin has it:
+            // where its marks put it; without them, where the part's own axes put it, as
+            // its pieces are drawn (frames.js bedOffsetAt).
+            bedOffsetOf(path, frame) {
+                const m = this.marks[path];
+                if (m && m.marks) return m.marks.bedOffset();
+                return frame ? bedOffsetAt(frame) : 0;
+            }
+            // What stands on a machine's bed follows it: the wire box of its working
+            // volume, drawn again from its frame where the level draws the machine.
+            // Called as its marks move, and when they come or go (their frame may say
+            // another volume than the tree's).
+            followBed(path) {
+                const node = this.renderNodeByKey[path];
+                const box = node && this.buildVolumeMeshByName[node.name];
+                if (box && box.userData.path === path) this.updateBuildVolumeIndicator(node);
             }
 
             // Frames every axis, not just the horizontal footprint, and
@@ -7050,7 +7077,7 @@
                     overlay.scale.set((size[0] || 1) * OVERLAY_INFLATE, (size[1] || 1) * OVERLAY_INFLATE, (size[2] || 1) * OVERLAY_INFLATE);
                     overlay.position.set(center[0], center[1], center[2]);
                 }
-                this.updateBuildVolumeIndicator(node, bounds);
+                this.updateBuildVolumeIndicator(node);
                 if (this.selectedName === key) this.showHandles(mesh);
             }
 
@@ -7659,7 +7686,7 @@
                 const others = ['place:', 'camera:', 'variant:'];
                 for (const key of this.anchors.keys()) if (!wanted.has(key) && !others.some((p) => key.startsWith(p))) this.anchors.remove(key);
                 const planned = this.machine && this.machine.plan ? this.machine.path : null;
-                for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key) && !(m.plan && key === planned)) { m.marks?.destroy(); delete this.marks[key]; }
+                for (const [key, m] of Object.entries(this.marks)) if (!wanted.has(key) && !(m.plan && key === planned)) { m.marks?.destroy(); delete this.marks[key]; this.followBed(key); }
                 // A Machine is its board's, not its port name's: its pinned board found on
                 // another port -- two boards replugged trade names -- it is opened again
                 // there, and never left polling, arming or stopping the name its board
@@ -8672,6 +8699,7 @@
                     // The kind of machine the board answered as: a bed reading is a printer's.
                     const kind = (row.device.printer && row.device.printer.machine) || null;
                     this.marks[path] = { marks, port, where, kind, readingAt: 0, readingId: null };
+                    this.followBed(path);
                     const toolpath = this.toolpathByPort[port];
                     if (toolpath) marks.setToolpath(toolpath.preview, toolpath);
                     this.refreshReading(path);
