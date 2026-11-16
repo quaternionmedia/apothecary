@@ -27,7 +27,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from fastapi.routing import APIRoute
 
-from . import devices, gcode, service
+from . import can, devices, gcode, service
 from .installer import InstallSpec, env_for_arduino
 from .models import (
     CompileRequest,
@@ -257,18 +257,14 @@ async def firmware_esptool_flash(body: EsptoolFlashRequest):
 
 
 def _no_print(port: str) -> None:
-    job = devices.print_job(port)
-    if job is not None and job.finished is None:
-        raise PortHeld(f"{port}: a print holds the port -- cancel it first")
+    can.raise_for(can.print_holds(port, devices.print_job(port)), "held")
 
 
 def _busy_guard(port: str):
     """Refused while a running task writes to ``port`` (an upload, a flash). A
     compile or an install holds no port, so a printer's poll and its emergency
     stop still go while a sketch compiles."""
-    active = get_task_runner().active
-    if active is not None and active.port == port:
-        raise PortHeld(f"task {active.id} ({active.title}) holds {port}")
+    can.raise_for(can.task_holds(port, get_task_runner().active), "held")
 
 
 def device_view(d):
@@ -557,8 +553,15 @@ def _print_verb(port: str, verb: str) -> dict:
     job = devices.print_job(port)
     if job is None or job.finished is not None:
         raise HTTPException(status_code=409, detail=f"{port}: no print is running")
-    if verb == "resume" and not gcode.get_printer_links().control.armed(port):
-        raise gcode.ControlNotArmed(f"{port}: resuming moves the machine -- arm control first")
+    if verb == "resume":
+        can.raise_for(
+            can.not_armed(
+                port,
+                gcode.get_printer_links().control.armed(port),
+                "resuming moves the machine -- arm control first",
+            ),
+            "armed",
+        )
     getattr(job, verb)()
     if verb != "cancel":
         gcode.get_printer_links().control.renew(port)

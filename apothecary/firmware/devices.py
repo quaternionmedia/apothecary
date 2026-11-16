@@ -62,7 +62,7 @@ from ..preview.process import OPERATION_COMMENT
 from ..projects.parts.skeleton import ROOT
 from ..stamped import claim, stamp
 from ..stays_local import subprocess_env
-from . import dialects, gcode, grbl, occupants, serial_monitor
+from . import can, dialects, gcode, grbl, occupants, serial_monitor
 from .models import (
     PRINT_FILE_ID,
     USB_MAKE_RE,
@@ -889,15 +889,8 @@ def not_a_machines_controller(
     written, a procedure's flash -- asks first; replacing a machine's firmware is
     asked for by name."""
     known = (state or get_state()).cached_device(port)
-    kind = machine_kind(known)
-    if kind is None or replace:
-        return
-    firmware = known.printer.firmware_name or "its firmware"
-    raise ValueError(
-        f"{port} holds a {kind}'s controller ({firmware}): a flash replaces the firmware "
-        f"that runs the {kind}. Not flashed. To replace it on purpose, ask for it by "
-        f"name ({REPLACE_FLAG})"
-    )
+    firmware = known.printer.firmware_name if known is not None and known.printer else None
+    can.raise_for(can.controller_flash(port, machine_kind(known), firmware, replace), "kind")
 
 
 def machine_kind(device: Optional[DeviceInfo]) -> Optional[str]:
@@ -1184,8 +1177,8 @@ def _control(
     if stop and links.control.armed(port):
         links.control.disarm(port)
         links.log_for(port).add("sys", "control disarmed by the stop", "control")
-    if not stop and not off and not links.control.armed(port):
-        raise gcode.ControlNotArmed(f"{port}: control is not armed -- arm it first")
+    if not stop and not off:
+        can.raise_for(can.not_armed(port, links.control.armed(port)), "armed")
     held = links.get(port)
     if held is not None and held.job is not None:
         _job_allows(held.job, cmd)
@@ -1271,8 +1264,7 @@ def printer_jog(
     if dialect_of(port, state) == grbl.DIALECT:
         return printer_control(port, f"$J=G91 G21 {axis}{distance} F{int(feed)}", state, links)
     move = normalise_control(port, f"G1 {axis}{distance} F{int(feed)}", state)  # bounded first
-    if not links.control.armed(port):
-        raise gcode.ControlNotArmed(f"{port}: control is not armed -- arm it first")
+    can.raise_for(can.not_armed(port, links.control.armed(port)), "armed")
     if links.get(port) is None:
         printer_status(port, state=state, links=links)
     link = links.get(port)
@@ -1310,13 +1302,7 @@ def what_holds(job: dict) -> str:
 
 
 def _job_allows(job: dict, cmd: str) -> None:
-    if cmd in dialects.STOPS:
-        return
-    op = jobs.operation(job.get("kind", ""))
-    if op is not None and op.kind in STREAMED:
-        if dialects.BY_MACHINE[op.machine].job_allows.match(cmd):
-            return
-    raise PortHeld(f"{port_of(job)}: {what_holds(job)} holds the port ({job.get('stage')})")
+    can.raise_for(can.job_refusal(job, cmd), "held")
 
 
 def port_of(job: dict) -> str:
@@ -1542,14 +1528,14 @@ def _start_leveling(
     links: gcode.PrinterLinks,
     grid: Optional[TableGrid],
 ) -> LevelingJob:
-    running = _LEVELING.get(port)
-    if running and running.finished is None:
-        raise PortHeld(f"{port}: {running.what} is already {running.stage}")
-    printing = _PRINTS.get(port)
-    if printing and printing.finished is None:
-        raise PortHeld(f"{port}: a print holds the port ({printing.stage})")
-    if probe and not links.control.armed(port):
-        raise gcode.ControlNotArmed(f"{port}: probing moves the machine -- arm control first")
+    can.raise_for(can.level_start_blocked(port, _LEVELING.get(port), _PRINTS.get(port)), "held")
+    if probe:
+        can.raise_for(
+            can.not_armed(
+                port, links.control.armed(port), "probing moves the machine -- arm control first"
+            ),
+            "armed",
+        )
     if links.get(port) is None:
         printer_status(port, state=state, links=links)
     if links.get(port) is None:
@@ -2170,16 +2156,7 @@ def _file_fits(file: PrintFile, port: str, kind: Optional[str]) -> None:
     """ValueError unless ``file`` was kept for the kind of machine on ``port``: a
     printer's file on a router homes it with G28 and waits out its millisecond dwells
     as seconds, and a router's on a printer cuts into the bed."""
-    if kind is None:
-        raise ValueError(
-            f"{port}: the board there has not said what kind of machine it drives -- "
-            f"{file.name} is sent to the kind it was kept for alone"
-        )
-    if file.machine != kind:
-        raise ValueError(
-            f"{file.name} was kept for a {file.machine}, and {port} holds a {kind}: "
-            f"it is never sent to a {kind}"
-        )
+    can.raise_for(can.misfit(file, port, kind), "file")
 
 
 def _sha256_of(file: PrintFile) -> str:
@@ -2227,36 +2204,30 @@ def _start_print(
     links: gcode.PrinterLinks,
 ) -> PrintJob:
     file = print_file(file_id)
-    if file is None:
-        raise ValueError(f"no such print file: {file_id}")
-    if file.problems:
-        raise ValueError(f"{file.name} may not be sent: " + "; ".join(file.problems[:3]))
-    if file.lines == 0:
-        raise ValueError(f"{file.name} has nothing to send")
+    can.raise_for(can.file_problem(file, file_id), "file")
     place = jobs.place_of(port)
     chosen = jobs.part_at(place, part)
-    if not links.control.armed(port):
-        raise gcode.ControlNotArmed(
-            f"{port}: a job heats, turns and moves the machine -- arm control first"
-        )
-    for running in (_PRINTS.get(port), _LEVELING.get(port)):
-        if running and running.finished is None:
-            what = running.op.kind if isinstance(running, PrintJob) else "bed reading"
-            raise PortHeld(f"{port}: a {what} already holds the port ({running.stage})")
+    can.raise_for(
+        can.not_armed(
+            port,
+            links.control.armed(port),
+            "a job heats, turns and moves the machine -- arm control first",
+        ),
+        "armed",
+    )
+    can.raise_for(can.print_start_blocked(port, _PRINTS.get(port), _LEVELING.get(port)), "held")
     if links.get(port) is None:
         printer_status(port, state=state, links=links)
     link = links.get(port)
     if link is None:
         raise ToolchainError(f"{port}: no printer link (is it a G-code printer?)")
-    last = _LAST_STATUS.get(port)
-    if last is not None and last.sd_printing:
-        raise PortHeld(f"{port}: the card is printing -- pause or abort that first")
+    can.raise_for(can.card_printing(port, _LAST_STATUS.get(port)), "held")
     cached = state.cached_device(port)
     _file_fits(file, port, machine_kind(cached))
     if machine_kind(cached) == grbl.MACHINE:
         unplaced = grbl.not_placed(link)
         if unplaced:
-            raise ValueError(f"{port}: {unplaced}")
+            can.raise_for(f"{port}: {unplaced}", "placed")
     job = PrintJob(
         port,
         file,
@@ -2287,8 +2258,7 @@ def printer_query(
     links = links or gcode.get_printer_links()
     cmd = normalise_query(port, command, state)  # ValueError for anything that is not a report
     held = links.get(port)
-    if held is not None and held.job is not None and held.job.get("kind") not in STREAMED:
-        raise PortHeld(f"{port}: {what_holds(held.job)} holds the port ({held.job['stage']})")
+    can.raise_for(can.query_held(port, held.job if held is not None else None), "held")
     if links.get(port) is None:
         printer_status(port, state=state, links=links)  # identifies + opens; offline if it cannot
     link = links.get(port)

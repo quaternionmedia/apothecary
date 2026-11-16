@@ -1306,13 +1306,23 @@ def todo_of(mstate: str, alarm: Optional[int]) -> List[str]:
     ]
 
 
-def check_home(link: GcodeLink, cmd: str) -> None:
-    """``NotProved``, saying what to do, unless every axis ``cmd`` homes has shown its
-    switch and been jogged the way it will seek."""
-    if proof_of(link).assumed:
-        return
+def home_problem(link: GcodeLink, cmd: str, read: bool = True) -> Optional[str]:
+    """What stops the home ``cmd`` -- an axis that has not shown its switch, or been
+    jogged the way it will seek -- saying what to do, or None. ``read`` asks the
+    controller for its settings now (``$$``); without it the settings last read
+    answer, and a port that has not read them is not held to a proof it cannot yet
+    show."""
+    proof = proof_of(link)
+    if proof.assumed:
+        return None
+    if read:
+        homes = homing_of(link, cmd[2:] or "XYZ")
+    elif proof.settings is None or HOMING_DIR not in proof.settings:
+        return None
+    else:
+        homes = homing_from(proof.settings, proof, cmd[2:] or "XYZ")
     said = []
-    for one in homing_of(link, cmd[2:] or "XYZ"):
+    for one in homes:
         axis, way = one["axis"], one["way"]
         todo = []
         if not one["jogged"]:
@@ -1338,8 +1348,15 @@ def check_home(link: GcodeLink, cmd: str) -> None:
                 f"{axis} will seek {way}{axis}{seek}{far} until its switch closes, and "
                 + " And ".join(todo)
             )
+    return "home refused: " + " ".join(said) if said else None
+
+
+def check_home(link: GcodeLink, cmd: str) -> None:
+    """``NotProved``, saying what to do, unless every axis ``cmd`` homes has shown its
+    switch and been jogged the way it will seek."""
+    said = home_problem(link, cmd)
     if said:
-        raise NotProved("home refused: " + " ".join(said))
+        raise NotProved(said)
 
 
 def control_router(link: GcodeLink, command: str, timeout: float = 60.0) -> List[str]:

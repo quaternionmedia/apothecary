@@ -1035,6 +1035,13 @@ def _read_port_list() -> None:
         PORT_LIST_READ()
 
 
+def job_holds_link(port: str, job: Optional[dict]) -> Optional[str]:
+    """Why a link may not be dropped: a job holds it, and only the job lets go."""
+    if job is None:
+        return None
+    return f"{port}: a {job.get('kind')} holds the port -- cancel it first"
+
+
 class PrinterLinks:
     """Open links, one per port, released as a group before a task takes a port."""
 
@@ -1090,10 +1097,9 @@ class PrinterLinks:
         job lets go of its link, after its own safe-off."""
         with self._lock:
             link = self._links.get(port)
-            if link is not None and link.job is not None:
-                raise PortHeld(
-                    f"{port}: a {link.job.get('kind')} holds the port -- cancel it first"
-                )
+            held = job_holds_link(port, link.job if link is not None else None)
+            if held:
+                raise PortHeld(held)
             self.control.disarm(port)  # a dropped link never stays armed
             self._links.pop(port, None)
         if link is None:
