@@ -1229,6 +1229,36 @@
                 : (statusColor ?? (node.category ? colorForCategory(node.category) : DEFAULT_COLOR));
         }
 
+        // A node's turn (Assembly.turn in apothecary/hierarchy.py): [rx, ry, rz] degrees, about
+        // the node's own origin in OpenSCAD's rotate order (x, then y, then z), or null for a
+        // node not turned. turnMatrix is that rotation in the site's frame, by rows;
+        // turnQuaternion is the same rotation in three.js's frame, which sceneAt turns the
+        // site's into: S R S^-1 with S (x, y, z) = (x, z, -y).
+        function turnMatrix(turn) {
+            const [rx, ry, rz] = turn.map((a) => (a * Math.PI) / 180);
+            const [cx, sx, cy, sy, cz, sz] = [Math.cos(rx), Math.sin(rx), Math.cos(ry), Math.sin(ry), Math.cos(rz), Math.sin(rz)];
+            return [
+                [cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx],
+                [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx],
+                [-sy, cy * sx, cy * cx],
+            ];
+        }
+        function turnMatrixInScene(turn) {
+            const r = turnMatrix(turn);
+            const rows = [r[0], r[2], r[1].map((v) => -v)];
+            return rows.map((row) => [row[0], row[2], -row[1]]);
+        }
+        function turnQuaternion(turn) {
+            if (!turn) return null;
+            const m = turnMatrixInScene(turn);
+            return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().set(
+                m[0][0], m[0][1], m[0][2], 0,
+                m[1][0], m[1][1], m[1][2], 0,
+                m[2][0], m[2][1], m[2][2], 0,
+                0, 0, 0, 1
+            ));
+        }
+
         // STLLoader hands back an STL as OpenSCAD wrote it: the site's (x, y, z), z
         // up. Each vertex is turned into three.js's frame as sceneAt turns a point,
         // so a mesh's features (a wall's door, a cube's notch, its engraved text)
@@ -2929,8 +2959,13 @@
                     );
                     wireframe.name = 'edges';
                     mesh.add(wireframe);
-                    mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
+                    // A turned node's box is its footprint turned about its middle, and its
+                    // world bounds the box round that: the box is drawn the footprint's size.
+                    const body = child.turn && child.footprint ? this.boxFromBounds(child.footprint).size : size;
+                    mesh.scale.set(body[0] || 1, body[1] || 1, body[2] || 1);
                     mesh.position.set(center[0], center[1], center[2]);
+                    const turn = turnQuaternion(child.turn);
+                    if (turn) mesh.quaternion.copy(turn);
                     mesh.userData.key = key;
                     // A unit BoxGeometry stretched to size via mesh.scale --
                     // rebuildSingleMesh needs to tell this apart from a
@@ -3227,6 +3262,9 @@
                 const onCell = (v) => Math.round((v - half) / cell) * cell + half;
                 const [gridX, gridZ] = [onCell(middle.x), onCell(middle.z)];
                 this.gridHelper.position.set(gridX, 0, gridZ);
+                // The universe's own level is a sphere of shells, which a floor would cut
+                // through: no grid there. A part stepped into stands on it, as any level.
+                this.gridHelper.visible = !(this.siteName === UNIVERSE && this.focusPath.length === 0);
                 this.scene.add(this.gridHelper);
 
                 // The axes stand at the site's origin while it is on the grid, else at the
@@ -7091,9 +7129,24 @@
             // instantly instead of waiting on the round-trip.
             recomputeWorldBounds(node) {
                 if (!node.footprint) return;
+                const at = [node.position.x, node.position.y, node.position.z];
+                if (node.turn) {
+                    // The box round the footprint's eight corners turned about the origin.
+                    const r = turnMatrix(node.turn);
+                    const corners = [];
+                    for (const x of [node.footprint.min[0], node.footprint.max[0]])
+                        for (const y of [node.footprint.min[1], node.footprint.max[1]])
+                            for (const z of [node.footprint.min[2], node.footprint.max[2]])
+                                corners.push(r.map((row, i) => row[0] * x + row[1] * y + row[2] * z + at[i]));
+                    node.world_bounds = {
+                        min: [0, 1, 2].map((i) => Math.min(...corners.map((c) => c[i]))),
+                        max: [0, 1, 2].map((i) => Math.max(...corners.map((c) => c[i]))),
+                    };
+                    return;
+                }
                 node.world_bounds = {
-                    min: node.footprint.min.map((v, i) => v + [node.position.x, node.position.y, node.position.z][i]),
-                    max: node.footprint.max.map((v, i) => v + [node.position.x, node.position.y, node.position.z][i]),
+                    min: node.footprint.min.map((v, i) => v + at[i]),
+                    max: node.footprint.max.map((v, i) => v + at[i]),
                 };
             }
 
@@ -7118,7 +7171,8 @@
                 // every rendered node, not just the one being moved, so every
                 // real mesh on screen goes through this guard.
                 if (mesh.userData.isPlaceholder) {
-                    mesh.scale.set(size[0] || 1, size[1] || 1, size[2] || 1);
+                    const body = node.turn && node.footprint ? this.boxFromBounds(node.footprint).size : size;
+                    mesh.scale.set(body[0] || 1, body[1] || 1, body[2] || 1);
                 }
                 mesh.position.set(center[0], center[1], center[2]);
                 // The assembly outline is a separate scene object, so it does
@@ -9846,6 +9900,10 @@
                             const bounds = this.placedBox(node, measured) || envelopeBounds(node) || this.placeholderBounds(node, 0);
                             const { center } = this.boxFromBounds(bounds);
                             mesh.position.set(center[0], center[1], center[2]);
+                            // A turned node (a part facing outward in the universe) is its mesh
+                            // turned about its middle, which the node's world bounds hold still.
+                            const turn = turnQuaternion(node.turn);
+                            if (turn) mesh.quaternion.copy(turn);
                             const edges = new THREE.EdgesGeometry(geometry, 30);
                             const wireframe = new THREE.LineSegments(
                                 edges, new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.3, transparent: true })
