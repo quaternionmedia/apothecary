@@ -258,6 +258,8 @@ app = FastAPI(
         "from them, the cameras that take them and the shapes found in them; firmware "
         "for the boards and printers, with their control and prints; the slicer, and cam, "
         "the router's toolpath; jobs; a site's machines and the plan each keeps before its board is connected; "
+        "a machine's projector, calibrated to its bed; the surfaces, each thing a page shows "
+        "read one way with its changes streamed, and what the family's members found; "
         "the evidence a site's printers and cameras leave, as one view of it; "
         "the airgap part's metrics document, its schema and its check; the ring's menu; "
         "the irl family's hub, on hearth's contract; "
