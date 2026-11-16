@@ -488,7 +488,11 @@ full; the others are entered from ⊞ Windows › Journeys and from the
   plain printed part, a bin, a piece made from a picture has no Device line.
 - **The tabs** below them, one in front at a time: **Pictures**, the
   **Bench**, **Settings**, and the **Machine** of the board opened, one at a
-  time, which opens in front; its sections open in a stack under it. Only the tab in front wears its ✕. **Gather**, the gathering of
+  time, which opens in front; its sections open in a stack under it. A printer's
+  or a router's opens with its **Print** or **Cut** window, under it, so its head
+  and E-STOP stay in view; opened again, the window comes back where it was closed
+  (none is opened while a journey is entered, whose steps choose their windows).
+  Only the tab in front wears its ✕. **Gather**, the gathering of
   several pictures, is a tab beside Pictures when asked for (the canvas ring's
   Pictures › Gather, or Panels › Pictures › Gather); so is the **Airgap**, the
   airgap part as a field, torque and dynamics model (Panels › Airgap ›

@@ -127,6 +127,7 @@ from .projects.registry import (
     PartLoadError,
     ProjectInfo,
     load_part,
+    part_names,
     sanitize_module_name,
     scan_projects,
 )
@@ -403,7 +404,7 @@ def is_board(part_ref: Optional[str]) -> bool:
 
 
 def _available_part_names() -> List[str]:
-    return sorted({p.name for p in scan_projects(ROOT) if p.kind == "part" and p.has_part})
+    return part_names(ROOT)
 
 
 def _repo_relative_path(path: Path) -> str:
@@ -2222,8 +2223,10 @@ def parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPar
     """What a job in ``site`` can name as the part it makes, by path: every node
     built from a part (named for its ``part_ref``) and every piece made from a
     picture (named for its word, with the picture and the camera it came from),
-    but nothing at or under ``leave_out`` -- the machine itself. Holes cut from a
-    piece are not things made."""
+    but nothing at or under ``leave_out`` -- the machine itself; then every
+    registered part no node has the path of, by its name, so any part of the
+    apothecary can be made wherever the machine stands. Holes cut from a piece
+    are not things made."""
     from .vision import views as viewing
 
     made = viewing.store().made_at(site_name)
@@ -2244,7 +2247,12 @@ def parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPar
             visit(child, path)
 
     visit(site, "")
-    return [found[path] for path in sorted(found)]
+    registered = [
+        jobs.JobPart(path=name, name=name, registered=True)
+        for name in _available_part_names()
+        if name not in found and name != leave_out
+    ]
+    return [found[path] for path in sorted(found)] + registered
 
 
 def _place_of(port: str) -> Optional[jobs.Place]:

@@ -3,7 +3,8 @@
 - ``GET /sites/{name}/machines``: the nodes of the site drawn from a part that is a
   machine, each with its kind, whether or not a board is pinned to it.
 - ``GET /sites/{name}/machines/{path}``: what a job on that machine could name -- its
-  kind and what that kind offers, the parts and pieces of the site -- in the shape
+  kind and what that kind offers, the parts and pieces of the site and then every
+  registered part -- in the shape
   ``GET /jobs/choices`` answers for a board's port, with no port; where it stands, as
   ``/firmware/printers/where`` says of a pinned board's printer; and its plan.
 - ``PUT /sites/{name}/machines/{path}/plan``: keep the part it will make and the kept
@@ -94,7 +95,10 @@ def keep_plan(name: str, path: str, body: PlanRequest):
 
     site, _, kind = _machine(name, path)
     if body.part and body.part not in {p.path for p in parts_of(name, site, path)}:
-        raise HTTPException(status_code=422, detail=f"{body.part!r} is no part or piece of {name}")
+        raise HTTPException(
+            status_code=422,
+            detail=f"{body.part!r} is no part or piece of {name}, and no part's name",
+        )
     try:
         plan = machine_plans.save(name, path, kind, body.part, body.file_id)
     except ValueError as exc:

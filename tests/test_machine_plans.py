@@ -66,6 +66,8 @@ def test_a_plan_names_a_part_of_the_site_and_a_file_of_the_machine_s_kind():
     assert client.put(plan, json={"file_id": "20260101T000000.000-nothing"}).status_code == 422
     assert client.put(plan, json={"part": "nowhere"}).status_code == 422
     assert client.put(plan, json={"part": "cnc_router"}).status_code == 422  # the machine itself
+    # A registered part standing nowhere in the site is named by its name.
+    assert client.put(plan, json={"part": "calibration_cube"}).json()["part"] == "calibration_cube"
     assert client.delete(plan).json() == {"cleared": True}
     assert client.get("/sites/garage/machines/cnc_router").json()["plan"] is None
 

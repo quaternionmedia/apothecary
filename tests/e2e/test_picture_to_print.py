@@ -478,6 +478,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
         "name": "disc",
         "picture": first["picture"],
         "camera": camera,
+        "registered": False,
     }, job
     assert job["machine"]["port"] == PRINTER and job["outcome"] == "done"
     expect(rows.first).not_to_contain_text(first["picture"])

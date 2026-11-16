@@ -1557,7 +1557,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         try { prt.jobs = await api(`/jobs?kind=${jobKind()}&machine=${encodeURIComponent(state.port)}`); } catch (e) { prt.jobs = []; }
         renderPrint();
     }
-    // The parts a print here can name: the site's, when the printer is pinned in one.
+    // The parts a print here can name, when the printer is pinned in a site: the
+    // site's pieces, then every part of the apothecary that stands nowhere in it, by
+    // its name, each group under its own heading.
     // Asked again by the world whenever its site changes in place (a piece made,
     // rebuilt or dropped), so a Machine left open lists the piece made meanwhile;
     // what was chosen stays chosen while it is still there.
@@ -1577,8 +1579,12 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         // for) while an earlier list was on its way is not undone by its arrival.
         const had = prt.wanted || sel.value;
         if (prt.wanted && parts.some((p) => p.path === prt.wanted)) prt.wanted = null;
+        const options = (list) => list.map((p) => `<option value="${esc(p.path)}">${esc(p.path)}${p.name !== p.path ? " · " + esc(p.name) : ""}</option>`).join("");
+        const group = (label, list) => (list.length ? `<optgroup label="${esc(label)}">${options(list)}</optgroup>` : "");
         sel.innerHTML = c && c.site
-            ? '<option value="">— no part named —</option>' + parts.map((p) => `<option value="${esc(p.path)}">${esc(p.path)}${p.name !== p.path ? " · " + esc(p.name) : ""}</option>`).join("")
+            ? '<option value="">— no part named —</option>'
+                + group(`in ${c.site}`, parts.filter((p) => !p.registered))
+                + group("every part of the apothecary", parts.filter((p) => p.registered))
             : '<option value="">— pinned in no site —</option>';
         sel.disabled = !(c && c.site);
         if (had && parts.some((p) => p.path === had)) sel.value = had;

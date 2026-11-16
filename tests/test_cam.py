@@ -162,7 +162,14 @@ def test_the_cut_route_takes_a_site_s_piece_and_refuses_a_part_without_cuts(
         r = c.post("/cam/cut", json={"part": "footpedal", "site": "garage", "port": PORT})
         assert r.status_code == 400 and "does not say how it is cut" in r.json()["detail"]
         r = c.post("/cam/cut", json={"part": "nowhere", "site": "garage", "port": PORT})
-        assert r.status_code == 404
+        assert r.status_code == 404 and "no part's name" in r.json()["detail"]
+        # A registered part that stands nowhere in the site is named by its name, as
+        # makes lists it after the site's pieces: found, and refused for what it is.
+        r = c.post("/cam/cut", json={"part": "calibration_cube", "site": "garage", "port": PORT})
+        assert (
+            r.status_code == 400
+            and "calibration_cube does not say how it is cut" in r.json()["detail"]
+        )
 
 
 def test_the_ring_offers_toolpath_on_a_part_with_cuts_when_a_router_is_pinned(garage):

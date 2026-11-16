@@ -7772,7 +7772,7 @@
             // A machine's Machine with no board connected: what it makes, its slice or
             // toolpath, the files and the path drawn over it, kept as its plan.
             showPlan(planned) {
-                if (this.machine && this.machine.plan && this.machine.path === planned.path) { this.panels.open('machine'); return true; }
+                if (this.machine && this.machine.plan && this.machine.path === planned.path) { this.panels.open('machine'); this.makingWith(this.machine); return true; }
                 this.mountMachinePanel('', planned.path, null, planned);
                 this.panels.open('machine');
                 const card = planned.kind === 'router' ? 'Cut' : 'Print';
@@ -7830,7 +7830,7 @@
                 return this.showMachine(port, null, null);
             }
             showMachine(port, anchor, row) {
-                if (this.machine && this.machine.port === port) { this.panels.open('machine'); return true; }
+                if (this.machine && this.machine.port === port) { this.panels.open('machine'); this.makingWith(this.machine); return true; }
                 this.mountMachinePanel(port, anchor, row);
                 this.panels.open('machine');
                 // Opened alone, as a system's main window is: the next step is named.
@@ -8229,7 +8229,13 @@
                             machineAt: anchor && (planned || this.plannedMachineOf(anchor)) ? { site: this.siteName, path: anchor } : null,
                             sections: this.systems.machine.sections,
                             onVerb: (action) => this.openSectionsFor(action),
-                            onKind: (kind) => { if (this.machine === machine) sectionsOf(kind); },
+                            onKind: (kind) => {
+                                if (this.machine !== machine) return;
+                                sectionsOf(kind);
+                                // A printer's Print or a router's Cut opens with its Machine,
+                                // once the Machine is laid out (makingWith).
+                                if (kind === 'printer' || kind === 'router') setTimeout(() => this.makingWith(machine, { forward: false }), 0);
+                            },
                             // Its pad popped out: a loud window of its own beside the world.
                             padWindow: {
                                 open: (pad, who) => this.openPadWindow(machine, pad, who),
@@ -8238,7 +8244,8 @@
                             pin: row ? { site: this.siteName, path: row.path, how: row.binding_source, sketch: row.sketch || null } : null,
                             say: (text, kind) => this.setStatus(text, kind),
                             // A part drawn from a variant this tab applied is sliced as drawn.
-                            variantFor: (path) => { const ref = this.nodeByPath(path)?.part_ref; return ref ? this.variantByPart[ref] ?? null : null; },
+                            // A part of the apothecary that stands nowhere in the site is named by its name.
+                            variantFor: (path) => { const node = this.nodeByPath(path); const ref = node ? node.part_ref : path; return ref ? this.variantByPart[ref] ?? null : null; },
                             afterPrint: (job) => this.afterPrint(job),
                             afterHello: (sketch) => this.afterHello(sketch),
                         });
@@ -8247,6 +8254,23 @@
                     onClose: () => this.closeMachine(),  // its ✕: the watching stops with it
                 });
                 return machine;
+            }
+            // A printer's Print or a router's Cut, open whenever its Machine is: what a
+            // machine is opened for is what it makes. It stands under the Machine, as its
+            // sections do, so the Machine's head and E-STOP stay in view. As the Machine
+            // opens it takes the front from no window -- a link's sections, the Machine
+            // where the column is full -- and stands behind as a tab there; the Machine
+            // opened again (`forward`) brings it forward. A journey's step chooses its own
+            // windows, so none is opened while a journey is entered.
+            makingWith(machine, { forward = true } = {}) {
+                if (this.machine !== machine || this.journey) return false;
+                const kind = machine.handle && machine.handle.kind();
+                if (kind !== 'printer' && kind !== 'router') return false;
+                if (this.panels.isShown('machine-print')) return true;
+                const shown = forward ? [] : this.panels.list().filter((w) => w && w.id !== 'machine-print' && this.panels.isShown(w.id)).map((w) => w.id);
+                this.panels.open('machine-print');
+                for (const id of shown) if (!this.panels.isShown(id)) this.panels.open(id);
+                return true;
             }
             // A Machine going takes its control pad with it, so a board left armed would
             // heat and move with no pad on screen: it is disarmed. The status bar says so

@@ -566,7 +566,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "print-part": (
         WIDGET,
         WHAT_YOU_SEE,
-        "a drop-down of the parts a print from here makes, from the printer's site",
+        "a drop-down of the parts a print from here makes: its site's, then every part's",
     ),
     "print-slice": (
         WIDGET,

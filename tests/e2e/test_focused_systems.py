@@ -2,8 +2,9 @@
 test each, parameterized over the registry, so a system or a section added there is
 held here with no test of its own.
 
-For each system: opened, its main window shows alone and every section is a window
-closed until asked for; each section opened from the header's ⊞ Windows shows its part
+For each system: opened, its main window shows, with the one section it is opened for
+where it has one (a printer's Print, a router's Cut), and every other section is a
+window closed until asked for; each section opened from the header's ⊞ Windows shows its part
 of the subject; its view, a cell of Panels › Windows, lays out every window of it; and
 a reload keeps the sections of a system that lasts and forgets those of one made for
 the moment. How each system is opened, and what each section shows, are the two
@@ -143,6 +144,10 @@ VERB = {
 
 CASES = list(OPENING)
 
+# The section a case's main window opens with: what the machine is opened for, a
+# printer's Print and a router's Cut (the page's makingWith). Every other is closed.
+WITH = {"machine-printer": "print", "machine-router": "print"}
+
 # A link to each case's subject: what it opens is the registry's (each section's
 # `on_link`), for the subject's kind.
 LINK = {
@@ -258,12 +263,19 @@ def test_every_system_and_section_has_a_line_here():
 
 @pytest.mark.e2e
 @pytest.mark.parametrize("case", CASES)
-def test_a_system_opens_its_main_window_alone(page: Page, url: str, case: str):
+def test_a_system_opens_its_main_window_with_what_it_is_opened_for(page: Page, url: str, case: str):
     _opened(page, url, case)
     system, sections = _sections(case)
+    if case in WITH:
+        page.wait_for_function(
+            "(id) => window.apothecaryPanels.isShown(id)",
+            arg=system.window(WITH[case]),
+            timeout=RING_MS,
+        )
     for section in sections:
         state = windows.state(page, system.window(section.id))
-        assert state is not None and state["open"] is False, (section.id, state)
+        opened = section.id == WITH.get(case)
+        assert state is not None and state["open"] is opened, (section.id, state)
         assert state["group"] == system.group, section.id
     # A section for another kind of subject is no window of this one.
     for section in system.sections:
@@ -308,7 +320,10 @@ def test_a_reload_keeps_a_lasting_systems_sections_and_forgets_a_passing_ones(
     system, sections = _sections(case)
     # A section no link asks for: an address that keeps the subject (a board's Machine,
     # ?machine=) is a link a reload follows, and opens what a link asks for.
-    first = system.window(next((s for s in sections if not s.on_link), sections[0]).id)
+    # Nor the one it opens with, which opens again with the subject.
+    first = system.window(
+        next((s for s in sections if not s.on_link and s.id != WITH.get(case)), sections[0]).id
+    )
     windows.from_the_windows_menu(page, first)
     windows.remembered(page)
     page.reload()
@@ -371,7 +386,12 @@ def test_a_link_to_a_subject_opens_what_it_asks_for(page: Page, url: str, case: 
     system, sections = _sections(case)
     for section in sections:
         window = system.window(section.id)
-        if window not in linked:
+        if section.id == WITH.get(case):
+            # Open with the subject, behind what the link asked for.
+            page.wait_for_function(
+                "(id) => window.apothecaryPanels.isOpen(id)", arg=window, timeout=RING_MS
+            )
+        elif window not in linked:
             assert windows.state(page, window)["open"] is False, window
 
 

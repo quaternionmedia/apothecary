@@ -33,7 +33,7 @@ class MachinePlan(BaseModel):
     site: str
     path: str  # the machine's node
     kind: str  # "printer" or "router"
-    part: Optional[str] = None  # the piece of the site it will make, by its path there
+    part: Optional[str] = None  # what it makes: a piece of the site by path, or a part by name
     file_id: Optional[str] = None  # the kept file, kept for this kind of machine, that makes it
     planned_at: datetime
 

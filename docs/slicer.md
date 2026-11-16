@@ -173,7 +173,8 @@ Slice is a step of the loop from a picture to a print
   Machine forward with the piece chosen under **makes** and slices it there. A
   host, a camera, the printer and what is inside it have no Slice; with no
   printer pinned there is nothing to slice for, and no Slice.
-- **In Print from here.** **Slice**, beside **makes** once a part is chosen
+- **In Print from here.** **makes** lists the site's pieces, then every part of
+  the apothecary by its name. **Slice**, beside it once a part is chosen
   there, slices it for this printer -- the cell does the same. While it runs the card
   shows the slicer's log with **Cancel**; when it ends, the G-code it kept is
   chosen in the card's files, so ▶ Print follows, and the card says what the

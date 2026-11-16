@@ -2259,6 +2259,7 @@ def test_a_print_started_from_the_card_is_a_job_with_its_file_machine_part_and_o
         "name": "footpedal",
         "picture": None,
         "camera": None,
+        "registered": False,
     }
     assert job.input.model_dump() == {
         "name": "bracket.gcode",

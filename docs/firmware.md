@@ -806,7 +806,8 @@ operation a machine performs on a part. The job records its kind (`print`),
 the printer (its port, the board's own identity, the node it is pinned to),
 the site, the part or piece it makes when one is chosen on the card (the
 **makes** drop-down lists the parts and pieces of the site the printer is
-pinned in; a piece made from a picture is chosen there by **Print** on its own
+pinned in, then every part of the apothecary that stands nowhere in it, by its
+name, so any part can be made wherever the machine is; a piece made from a picture is chosen there by **Print** on its own
 ring, and its job keeps the picture and the camera it came from, in its record
 and not its row), the file it ran (name, size, SHA-256), when it started and
 finished, and how it ended -- done, cancelled or failed, with the reason; the

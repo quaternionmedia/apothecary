@@ -111,6 +111,12 @@ def load_part(item: ProjectInfo) -> "BasePart":
         raise PartLoadError(item.name, item.wrapper, exc) from exc
 
 
+def part_names(root: Path) -> List[str]:
+    """The names of the registered parts under ``root``, sorted: each one
+    ``part_named`` finds, whether or not it loads."""
+    return sorted({p.name for p in scan_projects(root) if p.kind == "part" and p.has_part})
+
+
 def part_named(name: str, root: Path) -> "BasePart":
     """The registered part called ``name``; ``KeyError`` when none is, and
     ``PartLoadError`` when it will not load."""

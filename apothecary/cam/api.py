@@ -16,6 +16,8 @@ from pydantic import BaseModel, Field
 
 from .. import sites
 from ..hierarchy import find_node_by_path
+from ..projects.parts.skeleton import ROOT
+from ..projects.registry import part_names
 from . import service
 from .models import CutFor, CutRecord
 
@@ -35,8 +37,9 @@ class CutRequest(BaseModel):
 
 def _part_named(site: Optional[str], part: str) -> str:
     """The registered part ``part`` names: with a site, the part the node at that
-    path stands for (its ``part_ref``), as the Cut card's makes names it; without
-    one, the registry name itself."""
+    path stands for (its ``part_ref``), as the Cut card's makes names it, else a
+    registered part of that name, which makes lists after the site's pieces;
+    without one, the registry name itself."""
     if site is None:
         return part
     try:
@@ -44,7 +47,11 @@ def _part_named(site: Optional[str], part: str) -> str:
     except KeyError:
         node = None
     if node is None:
-        raise HTTPException(status_code=404, detail=f"{part!r} is not a piece of {site}")
+        if part in part_names(ROOT):
+            return part
+        raise HTTPException(
+            status_code=404, detail=f"{part!r} is no piece of {site} and no part's name"
+        )
     if not node.part_ref:
         raise HTTPException(
             status_code=400,

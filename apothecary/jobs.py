@@ -79,14 +79,16 @@ class JobInput(BaseModel):
 
 
 class JobPart(BaseModel):
-    """The part or piece a job makes: a node of the job's site. A piece made from a
-    picture also carries the picture and the camera that took it, as they were
-    when the job began: kept in the job's record, not shown in its row."""
+    """The part or piece a job makes: a node of the job's site, or a registered part
+    that stands nowhere in it, named by its name. A piece made from a picture also
+    carries the picture and the camera that took it, as they were when the job
+    began: kept in the job's record, not shown in its row."""
 
     path: str
     name: str  # the part it is built from, or the piece's own name
     picture: Optional[str] = None  # a made piece's picture, under the picture root
     camera: Optional[str] = None  # the camera that took that picture, when one did
+    registered: bool = False  # a registered part, not a node of the site: its path is its name
 
 
 class JobFacts(BaseModel):
@@ -223,7 +225,7 @@ def part_at(place: Optional[Place], path: Optional[str]) -> Optional[JobPart]:
         raise ValueError("this machine is pinned in no site, so no part of one can be named")
     found = next((p for p in place.parts if p.path == path), None)
     if found is None:
-        raise ValueError(f"{path!r} is not a part or piece of {place.site}")
+        raise ValueError(f"{path!r} is not a part or piece of {place.site}, nor a part's name")
     return found
 
 

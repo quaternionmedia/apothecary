@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- A printer's or a router's Machine opens with its Print or Cut window under it, and its **makes** lists the site's pieces and then every part of the apothecary by its name, so any part can be printed or cut wherever the machine stands; a machine's plan and a cut name such a part by its name too. ([doc](docs/firmware.md#a-print-is-a-job))
 - Journeys, a step at a time: ⊞ Windows › Journeys › *Print a part* lays out its view and stands a rail of its steps in the header -- Choose, Shape, Slice, See, Start -- the step a person is on filled and Next naming the one after, each step bringing its windows forward; a window chosen moves the rail, the address keeps the step, and ✕ leaves it. ([doc](docs/viewer.md#journeys))
 - The Print view lays out the windows a part is made through on a machine: the world beside Site, Selected, Parameters, and the board's Machine with its Print window in front; listed in ⊞ Windows and the ring's Panels › Windows, it opens the selected machine's Machine as the Machine view does. ([doc](docs/viewer.md#the-windows))
 - Walkthrough pages 37 and 38, *Marks worn in the world* and *A whiteboard's corners*: a whiteboard's marks worn over its picture, a person's word read back by its shapes, a note's ✎ offering the size it states, and a corner nudged squaring the whiteboard again. ([page](walkthrough/37-marks-worn-in-the-world.md))

@@ -159,7 +159,14 @@ def test_the_choices_say_where_a_machine_stands_and_what_its_job_can_name(
     assert parts["arduino_uno"] == "arduino_uno"
     assert parts["bin_1"] == "bin"
     assert not [p for p in parts if p == "printer_1" or p.startswith("printer_1.")]
-    assert list(parts) == sorted(parts)
+    # The site's own first, then every registered part no node has the path of, by
+    # its name: any part of the apothecary can be made where the printer stands.
+    here_first = [p["path"] for p in here["parts"] if not p["registered"]]
+    registered = [p["path"] for p in here["parts"] if p["registered"]]
+    assert list(parts) == here_first + registered
+    assert here_first == sorted(here_first) and registered == sorted(registered)
+    assert "calibration_cube" in registered and parts["calibration_cube"] == "calibration_cube"
+    assert "footpedal" not in registered and "esp32_devkitc" in registered
     # A made piece carries the picture and the camera it came from, for the job's
     # record (kept, and not shown in a job's row); a part carries neither.
     by_path = {p["path"]: p for p in here["parts"]}
@@ -168,6 +175,7 @@ def test_the_choices_say_where_a_machine_stands_and_what_its_job_can_name(
         "name": "bin",
         "picture": "captures/bench.png",
         "camera": "camera_1",
+        "registered": False,
     }
     assert by_path["footpedal"]["picture"] is None and by_path["footpedal"]["camera"] is None
 
