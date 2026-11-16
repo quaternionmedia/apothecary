@@ -910,7 +910,7 @@
         import { mountScadEditor, variantChoices, historyRows, trashRows } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
         import { parseAssignments, lastOf, literalText, writeValues } from '/static/widgets/assignments.js';
-        import { makeMachineMarks, makeBoardBadge, sayBoard, toolPosition as toolPositionOf } from '/static/machine_marks.js';
+        import { makeMachineMarks, makeBoardBadge, sayBoard, toolPosition as toolPositionOf, makeBedGrid } from '/static/machine_marks.js';
         import { sceneAt, siteAt, toScene as marksToScene, volumeToSite, bedOffsetAt } from '/static/frames.js';
         import { mountPictureMarks, axes as cameraAxes } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
@@ -1128,6 +1128,11 @@
         const COARSE = [1, 0.5, 0.34];  // the share of each side's pixels drawn, by how slow
         const REST_MS = 120;            // the view still this long: the whole frame again
         const IDLE_SHARE = 3;           // what moves by itself is drawn one part in this many
+        // A machine stepped into: the grid lies on its bed, a line every BED_GRID_MM of its
+        // own volume, this far over the bed's plane (drawn 0.2 up) and under a reading's
+        // relief (0.4 up).
+        const BED_GRID_MM = 10;
+        const BED_GRID_LIFT_MM = 0.3;
         // A point of the site's frame (z up) in three.js's (y up), and back: sceneAt
         // and siteAt, a quarter turn about x (frames.js).
         // A box of three.js's frame (a Box3) as the site's bounds.
@@ -3110,6 +3115,7 @@
                 const node = this.renderNodeByKey[path];
                 const box = node && this.buildVolumeMeshByName[node.name];
                 if (box && box.userData.path === path) this.updateBuildVolumeIndicator(node);
+                if (this.gridHelper && this.gridHelper.userData.path === path) this.placeBedGrid(path);
             }
 
             // Frames every axis, not just the horizontal footprint, and
@@ -3201,6 +3207,8 @@
             // cells of the site's frame, where snapping puts things. A level
             // far from the origin -- a part in the universe -- stands on it.
             updateHelpersForSpan(span, middle = { x: 0, z: 0 }) {
+                const machine = this.levelMachine();
+                if (machine) { this.layBedGrid(machine, span); return; }
                 // Six times the span, so the ground plane does not end mid-view
                 // when the camera dollies out to its clamp; divisions are capped
                 // because cell count, not extent, is what costs anything to draw.
@@ -3227,6 +3235,46 @@
                 this.axesHelper.rotation.x = -Math.PI / 2;
                 if (!originOnGrid) this.axesHelper.position.set(gridX, 0, gridZ);
                 this.scene.add(this.axesHelper);
+            }
+
+            // The level in view, by its path, when it is a machine (it has a frame).
+            levelMachine() {
+                const path = this.focusPath.join('.');
+                return path && this.frameOf(path) ? path : null;
+            }
+            // A machine stepped into: the grid is its bed's, in its own millimetres
+            // (makeBedGrid), and the axes stand at its volume's (0, 0, 0); both ride the
+            // bed along Y as its wire box does (placeBedGrid, from followBed).
+            layBedGrid(path, span) {
+                for (const helper of [this.gridHelper, this.axesHelper]) {
+                    this.scene.remove(helper);
+                    disposeDeep(helper);
+                }
+                this.gridHelper = makeBedGrid(this.frameOf(path).volume, BED_GRID_MM);
+                this.gridHelper.userData.path = path;
+                this.scene.add(this.gridHelper);
+                this.axesHelper = new THREE.AxesHelper(Math.max(20, span * 0.4));
+                this.axesHelper.rotation.x = -Math.PI / 2;
+                this.scene.add(this.axesHelper);
+                this.placeBedGrid(path);
+            }
+            // The bed's grid where the machine's frame and its bed put it now, drawn again
+            // when the frame says another volume (the controller's travel, once its
+            // marks stand).
+            placeBedGrid(path) {
+                const frame = this.frameOf(path);
+                if (!frame || !this.gridHelper || this.gridHelper.userData.path !== path) return;
+                const [vx, vy] = frame.volume, drawn = this.gridHelper.userData.volume;
+                if (!drawn || drawn[0] !== vx || drawn[1] !== vy) {
+                    this.scene.remove(this.gridHelper);
+                    disposeDeep(this.gridHelper);
+                    this.gridHelper = makeBedGrid(frame.volume, BED_GRID_MM);
+                    this.gridHelper.userData.path = path;
+                    this.scene.add(this.gridHelper);
+                }
+                const at = this.machineOrigin(path, frame), bedOffset = this.bedOffsetOf(path, frame);
+                this.gridHelper.position.copy(marksToScene(volumeToSite(frame, { x: 0, y: 0, z: BED_GRID_LIFT_MM }, { at, bedOffset })));
+                this.axesHelper.position.copy(marksToScene(volumeToSite(frame, { x: 0, y: 0, z: 0 }, { at, bedOffset })));
             }
 
             // ---------------------------------------------------------------
