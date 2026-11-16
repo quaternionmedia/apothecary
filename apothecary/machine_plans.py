@@ -17,7 +17,7 @@ import re
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from pydantic import BaseModel
 
@@ -46,6 +46,23 @@ def kind_of_part(part_ref: str) -> Optional[str]:
         return part_named(part_ref, ROOT).machine
     except (KeyError, PartLoadError):
         return None
+
+
+def kinds_that_make(part_ref: str) -> Tuple[str, ...]:
+    """The kinds of machine that make a registered part: a printer any part that is
+    neither a board (bought and pinned to, never printed) nor a machine, a router one
+    that says how it is cut (``BasePart.cuts``). None for a part that does not load;
+    ``KeyError`` for no such part."""
+    try:
+        part = part_named(part_ref, ROOT)
+    except PartLoadError:
+        return ()
+    kinds = []
+    if part.machine is None and "board" not in part.tags:
+        kinds.append("printer")
+    if part.has_cuts:
+        kinds.append("router")
+    return tuple(kinds)
 
 
 def _kept_at(site: str, path: str) -> Path:

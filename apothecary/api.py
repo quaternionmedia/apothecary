@@ -2255,6 +2255,62 @@ def parts_of(site_name: str, site: Assembly, leave_out: str) -> List[jobs.JobPar
     return [found[path] for path in sorted(found)] + registered
 
 
+def makers_of(here: str, piece: str) -> List[Dict[str, object]]:
+    """The machines that make ``piece``, as Make lists them from ``here``: a node of
+    ``here`` by its path first, else a registered part by its name. A part is made on
+    every site's machines of a kind that makes it (``machine_plans.kinds_that_make``);
+    a piece made from a picture is a node of its site alone, made on that site's
+    printers. Each is ``{path, kind, part_ref, site, live}``, ``live`` when the board
+    it drives is connected where it was pinned last; those first, then ``here``'s,
+    then a router before a printer for a part that says how it is cut, else the
+    order the sites and their machines are in. ``KeyError`` for neither a node nor a
+    part."""
+    from .machine_plans import kinds_that_make
+    from .routes.machines import machines_of
+    from .vision import views as viewing
+
+    site = sites.store.get(here)
+    node = find_node_by_path(site, piece)
+    if node is not None and not node.part_ref:
+        if piece not in viewing.store().made_at(here):
+            return []
+        kinds, names = ("printer",), [here]
+    else:
+        kinds, names = (
+            kinds_that_make(node.part_ref if node is not None else piece),
+            sites.store.names(),
+        )
+    state = firmware_devices.get_state()
+    try:
+        plugged = firmware_devices.detected_devices(state=state, any_age=True)
+    except ToolchainError:
+        plugged = []
+    # Each connected board where it was pinned last (``FirmwareState.set_binding``).
+    newest: Dict[str, object] = {}
+    for binding in state.bindings():
+        newest[binding.identity] = binding
+    live = [
+        (b.site, b.path)
+        for b in newest.values()
+        if device_for_identity(b.identity, plugged, b.kind) is not None
+    ]
+    found = []
+    for name in names:
+        try:
+            machines = machines_of(sites.store.get(name))
+        except KeyError:
+            continue
+        for machine in machines:
+            if machine["kind"] not in kinds:
+                continue
+            at = machine["path"]
+            on = any(s == name and (p == at or p.startswith(at + ".")) for s, p in live)
+            found.append({**machine, "site": name, "live": on})
+    prefer = "router" if "router" in kinds else "printer"
+    found.sort(key=lambda m: (not m["live"], m["site"] != here, m["kind"] != prefer))
+    return found
+
+
 def _place_of(port: str) -> Optional[jobs.Place]:
     """Where the machine on ``port`` stands, for a job it starts (``jobs.PLACES``)."""
     pinned = _pinned_at(port)

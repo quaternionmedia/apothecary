@@ -33,6 +33,30 @@ def test_a_machine_is_a_node_drawn_from_a_part_that_is_one():
     ]
 
 
+def test_make_lists_every_site_s_machines_that_make_a_piece():
+    """A printer makes any part but a board or a machine, a router a part that says how
+    it is cut; from the garage, the garage's first, and the router first for the coupon.
+    Nothing is pinned here, so nothing is live."""
+    makers = lambda here, part: [  # noqa: E731
+        (m["site"], m["path"], m["live"])
+        for m in client.get(f"/sites/{here}/makers", params={"part": part}).json()
+    ]
+    assert makers("garage", "footpedal") == [
+        ("garage", "printer_1", False),
+        ("apothecary", "ender3", False),
+    ]
+    assert makers("apothecary", "calibration_cube") == [
+        ("apothecary", "ender3", False),
+        ("garage", "printer_1", False),
+    ]
+    assert makers("garage", "router_coupon")[:2] == [
+        ("garage", "cnc_router", False),
+        ("garage", "printer_1", False),
+    ]
+    assert makers("garage", "esp32_blink") == [] and makers("garage", "cnc_router") == []
+    assert client.get("/sites/garage/makers", params={"part": "nothing_such"}).status_code == 404
+
+
 def test_a_machine_with_no_board_answers_its_choices_by_its_node():
     answer = client.get("/sites/garage/machines/cnc_router").json()
     assert answer["machine"] == {

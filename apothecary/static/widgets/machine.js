@@ -1664,9 +1664,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         return slc.tasks;
     }
     // Slice: what makes names, sliced for this printer by the slicer's task, its log
-    // in the card with Cancel. True when it started.
-    async function startSlice() {
-        if (!words().slice) return startToolpath();
+    // in the card with Cancel. `variant`, when given, is the variant to slice (null for
+    // the part as saved) in place of the one the page draws. True when it started.
+    async function startSlice(variant = undefined) {
+        if (!words().slice) return startToolpath(variant);
         const part = $("print-part").value;
         if (!state.port && !planning()) { refuse("slice: no printer chosen"); return false; }
         if (!part) { refuse("slice: choose what it makes under makes first"); return false; }
@@ -1676,7 +1677,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         slc.running = true; renderPrint();
         // A part the page draws from a variant it applied is sliced as drawn: that
         // variant's STL, which the slice's record names (variantFor, the page's).
-        const variant = variantFor ? variantFor(part) : null;
+        if (variant === undefined) variant = variantFor ? variantFor(part) : null;
         let task;
         const at = state.port ? { port: state.port } : { site: machineAt.site, printer: machineAt.path };
         try { task = await post("/slicer/slice", variant ? { ...at, part, variant } : { ...at, part }); }
@@ -1692,11 +1693,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     }
     // Toolpath: what makes names, its cuts written for this router (POST /cam/cut),
     // the file kept and chosen, what it holds said under makes. True when it was kept.
-    async function startToolpath() {
+    async function startToolpath(variant = undefined) {
         const part = $("print-part").value;
         if (!state.port && !planning()) { refuse("toolpath: no router chosen"); return false; }
         if (!part) { refuse("toolpath: choose what it makes under makes first"); return false; }
-        const variant = variantFor ? variantFor(part) : null;
+        if (variant === undefined) variant = variantFor ? variantFor(part) : null;
         const site = prt.choices && prt.choices.site, at = prt.choices && prt.choices.machine && prt.choices.machine.path;
         let r;
         try { r = await post("/cam/cut", { port: state.port || undefined, part, site: site || undefined, router: at || undefined, variant: variant || undefined }); }
@@ -1766,11 +1767,12 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     function messagesSaid(messages) {
         return messages.map((m) => `<div class="${m.level === "error" ? "bad" : "warn"}">${m.line ? `line ${m.line}: ` : ""}${esc(m.text)}</div>`).join("");
     }
-    // The ring's Slice on a piece or a part: chosen under makes, then sliced.
-    async function slicePart(path) {
+    // The ring's Slice on a piece or a part, and the page's Make: chosen under makes,
+    // then sliced -- as `variant` where one is given (startSlice).
+    async function slicePart(path, variant = undefined) {
         if (!(await choosePart(path))) return { refused: `${path} is not among the parts this printer's Print from here can make` };
         const before = refusals;
-        const started = await startSlice();
+        const started = await startSlice(variant);
         if (!started) return { refused: refusals > before ? lastRefusal : `${path} could not be sliced` };
         return { said: lastTold };
     }

@@ -479,6 +479,15 @@
         .pos-row input[type="number"] { width: 0; min-width: 0; padding: 0.3rem 0.3rem; font-size: 0.78rem; }
         .pos-row .axis { font-size: 0.72rem; color: #777; flex: 0 0 auto; }
 
+        /* ⚒ Make, in the header after the banner and a journey's rail: what is selected, else
+           what is in view, on its machine. It gives way before the rail does, to ⚒… at least. */
+        .toolbar #make-here {
+            flex: 0 1000 auto; min-width: 2.6rem; max-width: 24rem; overflow: hidden; text-overflow: ellipsis;
+            padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; border: 1px solid #6a5a2a;
+            background: #3a3220; color: #ffe2a0; font-size: 0.8rem; white-space: nowrap;
+        }
+        .toolbar #make-here:hover { background: #4a4028; }
+        #make-here[hidden] { display: none; }
         .part-actions { display: flex; gap: 0.5rem; margin: 0.5rem 0; }
         .part-actions button, .part-actions a {
             padding: 0.4rem 0.6rem; border-radius: 4px; cursor: pointer;
@@ -741,6 +750,7 @@
                 {% if not site_names %}<span id="no-sites">No sites found</span>{% endif %}
             </nav>
             <nav id="journey-rail" class="journey-rail" aria-label="Steps" hidden></nav>
+            <button type="button" id="make-here" hidden title="Make the piece selected, else the part in view, on the machine named: a machine whose board is connected first, then this site's. Its Machine opened, in its site, its Print or Cut in front, the part chosen there and sliced or given its toolpath. Nothing is armed, started or sent. Another machine: open it, and choose the part under its makes">⚒ Make</button>
             <div class="spacer"></div>
             <details id="view-menu" class="view-menu">
                 <summary title="How the world is drawn">⚙ View</summary>
@@ -1318,6 +1328,9 @@
                 this.detailModeEl = document.getElementById('detail-mode');
                 this.overlayToggle = document.getElementById('overlay-toggle');
                 this.breadcrumbEl = document.getElementById('breadcrumb');
+                // ⚒ Make: the piece selected, else the part in view, on a machine (makeNow).
+                this.makeHereEl = document.getElementById('make-here');
+                this.makers = {};       // the machines that make a piece, by site and piece (makersOf)
                 this.minimapEl = document.getElementById('minimap');
                 this.categoryFiltersEl = document.getElementById('category-filters');
                 this.contentsEl = document.getElementById('contents-list');
@@ -1970,6 +1983,7 @@
                 // as its ▾ does anywhere: the other sites, one chosen loading it, the
                 // address following. Back and Forward go between the sites chosen.
                 this.universeCrumbEl.addEventListener('click', (e) => this.toUniverse('the first crumb', e));
+                this.makeHereEl.addEventListener('click', () => this.makeNow());
                 this.siteLevelEl.addEventListener('click', (e) => this.toSiteLevel(e));
                 const siteMenuBody = this.siteMenuEl.querySelector('.site-menu-body');
                 this.siteMenuEl.addEventListener('toggle', () => {
@@ -2492,6 +2506,7 @@
                     // redraws what shows the boards.
                     this.boards.scan();
                     this.loadMachinesHere(name);
+                    this.makers = {};
                     this.siteJobs = [];
                     this.renderSiteJobs();
                     this.loadSiteJobs();
@@ -3206,6 +3221,7 @@
                 }
                 this.siteMenuEl.open = false;
                 this.breadcrumbEl.innerHTML = '';
+                this.showMakeHere();
                 if (!this.focusPath.length) return;
                 const trail = document.createElement('span');
                 trail.className = 'trail';
@@ -3825,6 +3841,7 @@
             }
 
             drawSelectedPanel() {
+                this.showMakeHere();
                 this.shownFacts = this.selectedName ? this.pictureFactsHtml(this.selectedName) : '';
                 if (this.selectedName === FLOOR_KEY) {
                     this.selectedBodyEl.innerHTML = `<div class="prop-row"><label>Name</label><span>the floor</span></div>
@@ -7659,6 +7676,94 @@
                 }
             }
 
+            // ---- Make: a piece made on a machine ----------------------------------------
+            // A part or a piece made from a picture can be made; a machine, a board, a
+            // camera and a site's piece in the universe are not things made here.
+            makeable(path) {
+                const node = path ? this.nodeByPath(path) : null;
+                if (!node || node.site_ref || node.build_volume || this.isCameraNode(node)) return false;
+                // A piece with a sketch of its own (the footpedal) is made; the board in it is bought.
+                if (node.board || MACHINE_STATUSES.includes(node.status)) return false;
+                return !!(node.part_ref || this.pictureMarks.madeRecord(path));
+            }
+            // The machines that make a piece, as the server lists them from this site
+            // (GET /sites/{name}/makers): every site's of a kind that makes a part, a
+            // site's printers for a piece made from a picture; those whose board is
+            // connected first, then this site's. Asked again after ten seconds, so a
+            // board plugged in or pinned meanwhile comes first.
+            makersOf(path) {
+                const key = `${this.siteName}:${path}`, had = this.makers[key];
+                if (had && Date.now() - had.at < 10000) return had.makers;
+                const makers = fetch(`${BASE_URL}/sites/${encodeURIComponent(this.siteName)}/makers?part=${encodeURIComponent(path)}`)
+                    .then((r) => (r.ok ? r.json() : [])).catch(() => []);
+                this.makers[key] = { at: Date.now(), makers };
+                return makers;
+            }
+            // The header's ⚒ Make, wherever a part to make is selected or in view: it names
+            // the part and the machine it makes it on, and that machine's site where it is
+            // another, which Make opens.
+            async showMakeHere() {
+                const path = this.makeSubject();
+                const el = this.makeHereEl;
+                el.hidden = !path;
+                if (!path) return;
+                const name = path.split('.').pop();
+                if (el.dataset.subject !== path) el.textContent = `⚒ Make ${name}`;
+                el.dataset.subject = path;
+                const [chosen] = await this.makersOf(path);
+                if (this.makeSubject() !== path) return;
+                const away = chosen && chosen.site !== this.siteName ? ` in ${chosen.site}` : '';
+                el.textContent = chosen ? `⚒ Make ${name} on ${chosen.path}${away}` : `⚒ Make ${name}`;
+                el.dataset.on = chosen ? `${chosen.site}:${chosen.path}` : '';
+            }
+            // What ⚒ Make makes: the piece selected, else what is in view, when it is a part
+            // to make; null when neither is.
+            makeSubject() {
+                if (this.selectedName && this.makeable(this.selectedName)) return this.selectedName;
+                const inView = this.focusPath.join('.');
+                return this.makeable(inView) ? inView : null;
+            }
+            // The header's ⚒ Make, pressed.
+            makeNow() {
+                const path = this.makeSubject();
+                if (!path) return Promise.resolve(this.setStatus('Make: nothing selected or in view is a part to make', 'error'));
+                return this.makePiece(path);
+            }
+            // A piece made on the first machine that makes it (makersOf). In another site,
+            // that site is opened first, as the banner's ▾ does. The machine's Machine opened, its Print or Cut in front (makingWith),
+            // the piece chosen under makes -- in another site, the part by its name -- and
+            // sliced, or its toolpath written, as the drawn variant where one is applied.
+            // Nothing is armed, started or sent: ▶ is the person's. What it says, or why not.
+            async makePiece(path) {
+                const until = async (test, ms) => {
+                    const end = Date.now() + ms;
+                    while (Date.now() < end) { if (test()) return true; await new Promise((r) => setTimeout(r, 150)); }
+                    return Boolean(test());
+                };
+                const say = (done) => { this.setStatus(done.refused ? `Make: ${done.refused}` : done.said, done.refused ? 'error' : 'success'); return done; };
+                const node = this.nodeByPath(path), ref = node && node.part_ref;
+                const [chosen] = await this.makersOf(path);
+                if (!chosen) return say({ refused: `no machine of any site makes ${ref || path}${ref ? '' : `: a piece made from a picture is made on ${this.siteName}'s printers, and it has none`}` });
+                const variant = ref ? this.variantByPart[ref] ?? null : null;
+                const away = chosen.site !== this.siteName;
+                if (away) {
+                    await this.chooseSite(chosen.site);
+                    if (this.siteName !== chosen.site) return say({ refused: `${chosen.site} did not open` });
+                }
+                await until(() => this.bindingsLoaded && (this.bindingFor(chosen.path).row?.device?.port || this.plannedMachineOf(chosen.path)), 15000);
+                const subject = away ? ref : path;
+                if (!this.openMachine(chosen.path)) return say({ refused: this.noMachine(chosen.path, 'Make') });
+                const machine = this.machine;
+                if (!(await until(() => machine.handle?.kind() === chosen.kind, 15000))) {
+                    return say({ refused: `${chosen.path}'s board has not said it is a ${chosen.kind}: Identify in its Machine asks it, then Make again` });
+                }
+                this.makingWith(machine);
+                // Said before the slice starts: the slice says what it does next, and how it ended.
+                const card = chosen.kind === 'router' ? 'Cut' : 'Print';
+                const done = say({ said: `${subject} goes to ${chosen.path}${away ? ` in ${chosen.site}` : ''}: chosen in its ${card} window, ${chosen.kind === 'router' ? 'its toolpath written' : 'sliced'}${variant ? ' as the variant drawn' : ''}, then ▶ ${card} with control armed` });
+                const started = await machine.handle.print.slice(subject, variant);
+                return started.refused ? say({ refused: started.refused }) : done;
+            }
             // A board's Machine (widgets/machine.js): a printer's cards and controls or
             // a devkit's sketch and serial output, with the board's one log, a tab
             // beside Pictures and the Bench, in front -- every way into a Machine comes

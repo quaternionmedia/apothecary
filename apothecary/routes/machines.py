@@ -2,6 +2,9 @@
 
 - ``GET /sites/{name}/machines``: the nodes of the site drawn from a part that is a
   machine, each with its kind, whether or not a board is pinned to it.
+- ``GET /sites/{name}/makers?part=``: every site's machines that make a piece of the
+  site or a registered part, as Make lists them -- those whose board is connected
+  first (``api.makers_of``).
 - ``GET /sites/{name}/machines/{path}``: what a job on that machine could name -- its
   kind and what that kind offers, the parts and pieces of the site and then every
   registered part -- in the shape
@@ -17,7 +20,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .. import jobs, machine_plans, sites
@@ -64,6 +67,25 @@ def machines_of(site, kind: Optional[str] = None) -> list[dict]:
 @router.get("/{name}/machines")
 def site_machines(name: str):
     return machines_of(sites.store.get(name))
+
+
+@router.get("/{name}/makers")
+def site_makers(
+    name: str,
+    part: str = Query(
+        ..., pattern=NODE_PATH, description="a piece of the site by its path, or a part's name"
+    ),
+):
+    """The machines of every site that make ``part``, as Make lists them from this
+    site (``api.makers_of``): those whose board is connected first."""
+    from ..api import makers_of
+
+    try:
+        return makers_of(name, part)
+    except KeyError:
+        raise HTTPException(
+            status_code=404, detail=f"{part!r} is no piece of {name} and no part's name"
+        ) from None
 
 
 @router.get("/{name}/machines/{path}")

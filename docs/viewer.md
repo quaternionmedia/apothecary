@@ -42,12 +42,27 @@ Left to right, one row:
 
   The first two crumbs are links, so a new tab opens from either. The banner,
   Site in the canvas ring, a step into a site's piece in the universe or out
-  of a site's own level, a link and Back are the only ways the site on screen
-  changes: no other verb switches it as a side effect. A picture's view or a
+  of a site's own level, ⚒ Make naming a machine in another site, a link and
+  Back are the only ways the site on screen changes: no other verb switches it
+  as a side effect. A picture's view or a
   take-back in another site names that site and leaves the screen where it is.
 - **The rail of a journey**, beside the banner while one is entered: its name,
   its steps numbered, the one a person is on filled, **Next** with the step
   after's number and name, and ✕ to leave it ([below](#journeys)).
+- **⚒ Make**, after the banner and a journey's rail, wherever the piece selected,
+  or else the part stepped into, is a part or a piece made from a picture (on a
+  narrow header it gives way before the rail does): it names the part and
+  the machine it makes it on -- the first of every site's machines that make it
+  (`GET /sites/{name}/makers`): one whose board is connected where it was pinned
+  last, then this site's, then a router before a printer for a part that says how
+  it is cut -- and that machine's site when it is another. Pressed, it opens that
+  site, the machine's Machine with its Print or Cut window in front, chooses the
+  part under **makes** (in another site, by its name) and slices it or writes its
+  toolpath, as the variant drawn where one is applied. Nothing is armed, started
+  or sent: ▶ is a person's. A printer makes any part but a board or a machine; a
+  router, a part that says how it is cut; a piece made from a picture is made on
+  its own site's printers. For another machine, open it: its **makes** offers
+  every part.
 - **⚙ View**: how the world is drawn ([below](#how-the-world-is-drawn)), and
   Settings ([below](#settings)).
 - **⊞ Windows**: the views, the journeys, then every window by its group, ●

@@ -467,6 +467,13 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a button on the Stream Deck + piece that opens the Deck window",
     ),
+    # ---- Make: a part sent to a machine -----------------------------------
+    "make-here": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button in the header that makes the piece selected, or the part in view, on its"
+        " first machine: chosen there and sliced, or its toolpath written",
+    ),
     "deck-key": (WIDGET, WHAT_IS_THERE, "a key of a simulated deck, pressed and released"),
     "deck-strip-tap": (WIDGET, WHAT_IS_THERE, "the touch strip of a simulated deck, tapped"),
     "deck-turn": (WIDGET, WHAT_IS_THERE, "a button that turns a simulated deck's knob one step"),
@@ -897,6 +904,10 @@ RING_BACKED: Dict[str, str] = {
     # Slice slices what makes names, as the Slice cell of a made piece's ring or a
     # part's slices that piece or part, chosen under makes first.
     "print-slice": "slice:piece:printer_1",
+    # ⚒ Make does what a part's Slice or Toolpath cell does -- the machine's Machine
+    # opened, the part chosen under makes, sliced or its toolpath written -- on the
+    # first machine that makes it, which may stand in another site or have no board.
+    "make-here": "slice:piece:printer_1",
     "print-pause": "control:sd-pause",
     "print-resume": "control:sd-resume",
     "print-cancel": "control:sd-abort",
@@ -1032,6 +1043,12 @@ BY_SHAPE: Sequence[Tuple[re.Pattern, str]] = (
 # The third part is load-bearing: without it two buttons in the same row of a
 # list are one entry, and a new control can be added to that row unnoticed.
 LISTENING: Dict[str, Tuple[str, str, str]] = {
+    # Make, the header's button
+    "makeHereEl:click:makeNow": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "⚒ Make makes the piece selected, or the part in view, on its first machine",
+    ),
     # the Machine: what its state asks of a person, and the touch plate
     "r-plate:change:keepPlate": (
         WIDGET,
