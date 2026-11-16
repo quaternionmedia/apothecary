@@ -224,3 +224,29 @@ def test_the_firmware_address_opens_the_viewer_with_the_bench(page: Page, url: s
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     for gone in ("#firmware-link", "#monitor-link", ".toolbar a.toolbar-link"):
         expect(page.locator(gone)).to_have_count(0)
+
+
+@pytest.mark.e2e  # UNRUN when written: a browser test, run with --start-server
+def test_a_flash_to_a_machines_controller_is_greyed_with_the_reason(page: Page, url: str):
+    """A port that answered as a printer is a machine's controller: the server's
+    ``can.flash`` refuses it, and the Bench's upload and raw flash buttons are greyed
+    with its words (firmware/can.py); a port that is no machine's is not."""
+    import httpx
+
+    port = "/dev/ttyFAKE1"
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        http.post("/firmware/devices/identify", json={"port": port}).raise_for_status()
+    open_garage(page, url, settle=False)
+    page.evaluate("() => window.apothecaryPanels.open('bench')")
+    bench = page.locator(BENCH)
+    expect(bench.locator(".port-select option[value='/dev/ttyFAKE0']")).to_have_count(
+        1, timeout=10000
+    )
+    bench.locator(".sketch-select").select_option("footpedal@arduino")
+    bench.locator(".port-select").select_option(port)
+    upload = bench.locator(".upload-btn")
+    expect(upload).to_be_disabled(timeout=5000)
+    expect(upload).to_have_attribute("title", re.compile(r"^Disabled: .*controller"))
+    expect(bench.locator(".esp-flash-btn")).to_be_disabled()
+    bench.locator(".port-select").select_option("/dev/ttyFAKE0")
+    expect(upload).to_be_enabled(timeout=5000)

@@ -705,6 +705,13 @@ E-STOP, the pad's E-STOP and the lines that interrupt (Quickstop, Break wait, St
 jog, Hold, Resume, Abort). One rule in `static/tokens.css` greys a disabled button
 everywhere.
 
+Send reads `GET /firmware/printers/can-start` for the chosen file, so the page holds no
+rule of its own for which file goes to which machine. The Bench's Compile & upload and
+raw Flash read `can.flash` of the chosen port (the info of that port, asked once when it
+is chosen and again after a task ends, never on a timer), and grey with its reason for
+a machine's controller; the Bench's own reasons (no sketch, a task running) go through
+the same helper (`setReason`), so there is one way a button says why.
+
 `M108` and `M410` are written ahead of an exchange in flight, as the stop is: each is
 for a board busy with the line before it. The reply such a line is owed, and the reply
 of a line whose `ok` did not come in time, is read off before the next exchange's own,

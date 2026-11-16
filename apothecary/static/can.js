@@ -39,11 +39,13 @@ function tipOf(btn) {
     return btn.dataset.tip;
 }
 
+// The title: the reason first while the button is refused, then its own tip, then the
+// ring's address the page wrote after it (` · ⌗932`), which a retitle must keep.
 function compose(btn) {
     const tip = btn.dataset.tip || "";
-    if (btn.dataset.canOff === "1") btn.title = `Disabled: ${btn.dataset.canWhy}.${tip ? " " + tip : ""}`;
-    else if (tip) btn.title = tip;
-    else btn.removeAttribute("title");
+    let text = btn.dataset.canOff === "1" ? `Disabled: ${btn.dataset.canWhy}.${tip ? " " + tip : ""}` : tip;
+    if (btn.dataset.address) text = text ? `${text} · ⌗${btn.dataset.address}` : `⌗${btn.dataset.address}`;
+    if (text) btn.title = text; else btn.removeAttribute("title");
 }
 
 // A button's own tip, said anew (a kind's words, a chosen file): shown as it is while
@@ -51,6 +53,36 @@ function compose(btn) {
 export function setTip(btn, text) {
     btn.dataset.tip = text || "";
     compose(btn);
+}
+
+// A button refused for a reason the page knows (`why`, or null), with its own tip: the
+// one way a button is greyed and says why, whether the reason is the server's or the
+// page's (a sketch not chosen, a task running).
+export function setReason(btn, why, tip) {
+    btn.dataset.tip = tip || "";
+    if (why) { btn.dataset.canOff = "1"; btn.dataset.canWhy = why; }
+    else { delete btn.dataset.canOff; delete btn.dataset.canWhy; }
+    compose(btn);
+    refreshDisabled(btn);
+}
+
+// `can.flash` of a port, asked once when the port is chosen (GET /firmware/printers/info)
+// and kept until `forgetFlash`: no timer. `call(path)` is the page's fetch.
+const flashCan = new Map();
+export const flashVerdict = (port) => flashCan.get(port) || null;
+export const forgetFlash = (port) => flashCan.delete(port);
+export async function askFlash(call, port) {
+    if (!port || flashCan.has(port)) return false;
+    flashCan.set(port, null);
+    try {
+        const info = await call(`/firmware/printers/info?port=${encodeURIComponent(port)}`);
+        const v = (info.can && info.can.flash) || null;
+        flashCan.set(port, v);
+        return !!v;
+    } catch (e) {
+        flashCan.delete(port);
+        return false;
+    }
 }
 
 export function applyCan(root, can) {
