@@ -45,7 +45,8 @@ from .models.vectors import Vector3D
 from .objects import SceneObject
 from .primitives import Cylinder, Import
 from .scene import Scene
-from .transforms import Translate
+from .orbitals import turned
+from .transforms import Rotate, Translate
 
 
 def part_stl_path(part_ref: str) -> Optional[str]:
@@ -87,6 +88,18 @@ class Assembly(BaseModel):
     site's piece in the universe (``universe.py``), drawn in miniature. It is
     not a level of its own; a viewer that steps into it goes to the site.
 
+    ``turn``, when set, turns the node about its own origin, in degrees, as OpenSCAD's
+    ``rotate([rx, ry, rz])`` does (about x, then y, then z), before ``position``
+    places it: the node's frame, and ``footprint`` in it, are what is turned, and
+    ``world_bounds`` is the box that contains the turned footprint. None (the default)
+    turns nothing and changes nothing. This is a node's place in a layout; it is not a
+    part's pose (``display_rotation``, refused in ``parts/base.py``, which would turn
+    the part itself after it renders): a part's own geometry stays as it prints. The
+    reported tree (``api._assembly_tree``) follows a turn for the node itself; a node
+    that holds nodes of its own and is turned is compiled correctly, but the tree's
+    world frame does not carry the turn into what it holds, so only a node that holds
+    nothing is turned in the universe.
+
     ``category``, when set, names the subsystem this node belongs to (a
     viewer's domain, e.g. "wall"/"furniture"/"mechanical"/"fluid"/
     "electrical" -- a project invents its own vocabulary, same as ``role``).
@@ -112,6 +125,7 @@ class Assembly(BaseModel):
     name: str
     role: str = "assembly"
     position: Vector3D = Field(default_factory=Vector3D)
+    turn: Optional[Vector3D] = None
     footprint: Optional[BoundingBox3D] = None
     material: Optional[str] = None
     build_volume: Optional[Vector3D] = None
@@ -131,13 +145,36 @@ class Assembly(BaseModel):
         """This node's ``footprint``, offset by ``position`` into the parent's frame.
 
         Returns ``None`` if no ``footprint`` was given — bounds are opt-in
-        metadata, not derived from the rendered geometry.
+        metadata, not derived from the rendered geometry. A node with a ``turn``
+        reports the box that contains its turned footprint.
         """
         if self.footprint is None:
             return None
+        if self.turn is not None:
+            return self.turned_bounds(self.position)
         return BoundingBox3D(
             min_point=self.footprint.min_point + self.position,
             max_point=self.footprint.max_point + self.position,
+        )
+
+    def turned_bounds(self, at: Vector3D) -> Optional[BoundingBox3D]:
+        """The box that contains this node's footprint after its ``turn``, with the
+        node's origin at ``at``; the footprint offset by ``at`` when it has no turn."""
+        if self.footprint is None:
+            return None
+        if self.turn is None:
+            return BoundingBox3D(
+                min_point=self.footprint.min_point + at, max_point=self.footprint.max_point + at
+            )
+        lo, hi = self.footprint.min_point, self.footprint.max_point
+        corners = [
+            turned((self.turn.x, self.turn.y, self.turn.z), (x, y, z))
+            for x in (lo.x, hi.x)
+            for y in (lo.y, hi.y)
+            for z in (lo.z, hi.z)
+        ]
+        return BoundingBox3D.from_points(
+            [Vector3D(x=x + at.x, y=y + at.y, z=z + at.z) for x, y, z in corners]
         )
 
     def to_scad_object(self, strict: bool = False) -> OpenSCADObject:
@@ -150,7 +187,7 @@ class Assembly(BaseModel):
         and reusing it directly would silently overwrite that inner label
         instead of nesting around it), subtract ``subtractions`` if any, tag
         the result with a ``"Role: name"`` comment, and wrap in a translate if
-        ``position`` is non-zero.
+        ``position`` is non-zero, after turning it about its own origin if it has a ``turn``.
         """
         positives: List[OpenSCADObject] = []
         if self.base is not None:
@@ -203,6 +240,8 @@ class Assembly(BaseModel):
             positive.comment = self.comment or label
             body = positive
 
+        if self.turn is not None and self.turn != Vector3D():
+            body = Rotate(a=self.turn, children=[body])
         if self.position != Vector3D():
             return Translate(v=self.position, children=[body])
         return body

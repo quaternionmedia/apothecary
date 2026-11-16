@@ -1610,14 +1610,7 @@ def _assembly_tree(
     parent_world_position = parent_world_position or Vector3D()
     world_position = parent_world_position + node.position
     category = node.category if node.category is not None else parent_category
-    world_bounds = (
-        BoundingBox3D(
-            min_point=node.footprint.min_point + world_position,
-            max_point=node.footprint.max_point + world_position,
-        )
-        if node.footprint is not None
-        else None
-    )
+    world_bounds = node.turned_bounds(world_position)
 
     # A site's piece is one piece: what it holds is how it is drawn, not a level.
     composed = (
@@ -1644,6 +1637,10 @@ def _assembly_tree(
         "board": is_board(node.part_ref),
         "category": category,
         "position": {"x": world_position.x, "y": world_position.y, "z": world_position.z},
+        # How the node is turned about its own origin: [rx, ry, rz] degrees, OpenSCAD's
+        # rotate order, or None for a node that is not turned (the footprint is then
+        # in the world's axes). world_bounds is the box that contains the turned footprint.
+        "turn": [node.turn.x, node.turn.y, node.turn.z] if node.turn is not None else None,
         "footprint": _bounds_dict(node.footprint),
         "world_bounds": _bounds_dict(world_bounds),
         "build_volume": (
