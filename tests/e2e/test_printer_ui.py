@@ -987,6 +987,8 @@ def test_a_corner_button_is_four_lines_to_paper_height(page: Page, printer_url: 
     _identify(printer_url)
     _monitor(page, printer_url)
     expect(page.locator("#c-state")).not_to_have_text("—", timeout=10000)
+    # None until the printer's frame has said its volume: no corner is guessed.
+    page.wait_for_function("() => window.apothecaryMachine.level.lines('BR')", timeout=10000)
     lines = page.evaluate("() => window.apothecaryMachine.level.lines('BR')")
     assert lines == ["G90", "G1 Z5 F3000", "G1 X190 Y190 F3000", "G1 Z0.2 F600"]
     page.locator("#ctl").check()

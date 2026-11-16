@@ -526,17 +526,17 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         }
         return changed;
     }
-    // Where the router's working area is, for the marks: a Grbl machine's coordinates run
-    // negative from its home corner, so the tool stands in the working area at mpos + travel.
+    // The router's working volume, from its frame (GET /firmware/printers/where): its
+    // controller's travel once it has said it, else the site's figure.
     async function loadWhere() {
         if (!state.port) return;
         try {
             const w = await api(`/firmware/printers/where?port=${encodeURIComponent(state.port)}`);
-            if (w && w.printer && w.printer.build_volume) level.volume = w.printer.build_volume;
-        } catch (e) { /* the marks keep the default */ }
+            if (w && w.printer && w.printer.frame) level.volume = w.printer.frame.volume;
+        } catch (e) { /* not known yet: nothing is sized by it */ }
     }
     // A jog's position carries no dialect of its own: the kind's is used.
-    const toolPosition = (st) => toolPositionOf({ ...(st || {}), dialect: words().dialect }, level.volume);
+    const toolPosition = (st) => toolPositionOf({ ...(st || {}), dialect: words().dialect });
     const interval = () => Number($("interval").value) || 2000;
     const isLive = () => (state.kind === "devkit" ? state.listening : $("auto").checked);
     function watchNow() {
@@ -1293,11 +1293,16 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // --- bed level: probe or read, show the mesh, keep the records -----------------------
     // A printer's bed, probed or read as stored; a router's table, mapped by its probe
     // at a grid of points: one card, one route, the kind's words (KINDS[kind].level).
-    const level = { records: [], shown: null, timer: null, volume: [220, 220, 250] };
-    const onWhere = (ev) => { if (ev.detail && ev.detail.printer && ev.detail.printer.build_volume && (!ev.detail.port || ev.detail.port === state.port)) level.volume = ev.detail.printer.build_volume; };
+    // `volume` is the machine's working volume from its frame, null until the world or
+    // GET /firmware/printers/where has said it: no corner is guessed from another's.
+    const level = { records: [], shown: null, timer: null, volume: null };
+    const onWhere = (ev) => { if (ev.detail && ev.detail.printer && ev.detail.printer.frame && (!ev.detail.port || ev.detail.port === state.port)) level.volume = ev.detail.printer.frame.volume; };
     window.addEventListener("apothecary:where", onWhere);
     onWindow.push(["apothecary:where", onWhere]);
+    // Null while the printer's volume is not known (its board pinned nowhere): refused.
+    const NO_CORNERS = "a corner move needs the printer's volume, which its frame says once its board is pinned in a site";
     function cornerLines(which) {
+        if (!level.volume) return null;
         // Paper height at the four corners, inset from the edges; lifted first so a
         // nozzle never drags. Absolute moves; the allowlist bounds them.
         const [vx, vy] = level.volume, inset = 30, z = 0.2, f = 3000;
@@ -1388,7 +1393,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     $("level-card").addEventListener("click", (ev) => {
         const btn = ev.target.closest("button[data-corner]"); if (!btn) return;
         if (!ctl.armed) { refuse("a corner move needs control armed"); return; }
-        enqueue(cornerLines(btn.dataset.corner));
+        const lines = cornerLines(btn.dataset.corner);
+        if (!lines) { refuse(NO_CORNERS); return; }
+        enqueue(lines);
     });
     // A reading or a print that holds the port, as a poll reports it, is followed.
     function followJob(st) {
@@ -1752,7 +1759,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         else if (planning()) {
             // The machine's node answers in the same shape, with where it stands.
             try { c = await api(machinePath()); } catch (e) { c = null; }
-            if (c && c.where && c.where.build_volume) level.volume = c.where.build_volume;
+            if (c && c.where && c.where.frame) level.volume = c.where.frame.volume;
         }
         if (port !== state.port) return;  // another port was chosen meanwhile
         prt.choices = c;
@@ -2112,7 +2119,13 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (action === "control:arm") { await arm(true); return true; }
         if (action === "control:disarm") { await arm(false); return true; }
         const corner = /^control:corner:([FB][LR])$/.exec(action);
-        if (corner) { if (!ctl.armed) { refuse(`${intent.label} (⌗${intent.address}): a corner move needs control armed`); return true; } enqueue(cornerLines(corner[1])); return true; }
+        if (corner) {
+            if (!ctl.armed) { refuse(`${intent.label} (⌗${intent.address}): a corner move needs control armed`); return true; }
+            const lines = cornerLines(corner[1]);
+            if (!lines) { refuse(`${intent.label} (⌗${intent.address}): ${NO_CORNERS}`); return true; }
+            enqueue(lines);
+            return true;
+        }
         if (action === "level:probe") { await startLevel(true); return true; }
         if (action === "level:read") { await startLevel(false); return true; }
         if (action === "print:start") { await startPrint(); return true; }
@@ -2187,7 +2200,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         flashing: () => flash,
         kind: () => state.kind,
         device, carry, pairs, pad: togglePad, padBack,
-        level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
+        level: { start: startLevel, corner: (which) => { const lines = cornerLines(which); return lines ? enqueue(lines) : refuse(NO_CORNERS); }, lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
         print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart, slice: slicePart, fileOf: chooseFileOf, slices: () => prt.slices, slicing: () => slc.running, show: showPreview },
         plan: { keep: keepPlan, load: loadPlan, shown: () => pl.plan, planning },
         destroy() {
