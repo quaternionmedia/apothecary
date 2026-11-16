@@ -1,5 +1,7 @@
 """A part's toolpath written for a router, kept where the Cut card keeps a file,
-and recorded beside it: the slicer's ``slice_into`` on the subtractive side."""
+and recorded beside it: the slicer's ``slice_into`` on the subtractive side. A
+router with a measured correction kept for its tool has every toolpath written
+with it (``measured.applied``)."""
 
 from __future__ import annotations
 
@@ -11,7 +13,7 @@ from typing import Dict, List, Optional
 from ..firmware import devices
 from ..slicer.profiles import load_part
 from ..state_folder import state_dir
-from . import toolpath
+from . import measured, toolpath
 from .models import CutFor, CutRecord
 
 
@@ -44,9 +46,13 @@ def part_cuts(name: str, variant: Optional[str] = None):
 
 
 def cut_into(name: str, router: CutFor, variant: Optional[str] = None) -> CutRecord:
-    """Write the part's toolpath for ``router``, keep it as a cut file and record it."""
+    """Write the part's toolpath for ``router``, with the allowance kept for it and its
+    tool where one is, keep it as a cut file and record it."""
     part, params, cuts = part_cuts(name, variant)
-    written = toolpath.write(cuts, name)
+    allowance, unapplied = measured.applied(router.site, router.path, cuts.tool.diameter)
+    written = toolpath.write(cuts, name, allowance=allowance.value if allowance else 0.0)
+    if unapplied:
+        written.messages.append(unapplied)
     kept = devices.save_print_file(
         f"{name}-{router.name}.nc", toolpath.text(written).encode("utf-8"), machine="router"
     )
@@ -68,6 +74,8 @@ def cut_into(name: str, router: CutFor, variant: Optional[str] = None) -> CutRec
         bounds=written.bounds,
         messages=written.messages,
         problems=kept.problems,
+        features=written.features,
+        allowance=allowance,
     )
     folder = cuts_dir()
     folder.mkdir(parents=True, exist_ok=True)

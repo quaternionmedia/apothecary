@@ -583,13 +583,14 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "print-measure": (
         WIDGET,
         WHAT_YOU_SEE,
-        "a field for what the part a file printed measures, x, y and z",
+        "a field for what the part a file printed measures, x, y and z, or the piece a"
+        " toolpath cut, each feature it names",
     ),
     "print-measure-keep": (
         WIDGET,
         WHAT_IS_THERE,
-        "a button that checks the sizes measured against what was sliced and keeps the"
-        " printer's correction",
+        "a button that checks the sizes measured against what was made and keeps the"
+        " printer's correction, or the router's tool allowance",
     ),
     "print-preview": (
         WIDGET,
@@ -913,7 +914,8 @@ RING_BACKED: Dict[str, str] = {
     # Keep as plan keeps the machine's plan, its board connected or not.
     "print-plan": "print:plan",
     # Print › Measure keeps what is typed under measured, as Keep does, and takes a
-    # person to the field when nothing is typed, as the tour's Who does its name.
+    # person to the field when nothing is typed, as the tour's Who does its name; a
+    # router's Cut › Measure is the same verb on its ring.
     "print-measure": "print:measure",
     "print-measure-keep": "print:measure",
     # Slice slices what makes names, as the Slice cell of a made piece's ring or a

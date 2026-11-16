@@ -66,7 +66,9 @@ class RouterCouponPart(BasePart):
     def cuts(self, params: Optional[Mapping[str, object]] = None):
         """The stock is the plate plus its margin on every side, the work zero at the
         stock's front-left top corner; the pocket is cleared first, the holes bored
-        through, and the outline cut around last, through the stock."""
+        through, and the outline cut around last, through the stock. Each is named, so
+        the piece cut is measured by them: the pocket and a hole bored inside, the plate
+        outside."""
         from apothecary.cam.models import Cuts, Hole, Outline, Pocket, Stock
 
         p = Params(**(params or {}))
@@ -79,6 +81,7 @@ class RouterCouponPart(BasePart):
                 w=p.pocket_w,
                 h=p.pocket_h,
                 depth=p.pocket_depth,
+                name="pocket",
             )
         ]
         for i in range(p.holes):
@@ -88,9 +91,10 @@ class RouterCouponPart(BasePart):
                     y=round(m + p.plate_y * (i + 1) / (p.holes + 1), 3),
                     diameter=p.hole_diameter,
                     depth=through,
+                    name="hole",
                 )
             )
-        operations.append(Outline(x=m, y=m, w=p.plate_x, h=p.plate_y, depth=through))
+        operations.append(Outline(x=m, y=m, w=p.plate_x, h=p.plate_y, depth=through, name="plate"))
         return Cuts(
             stock=Stock(x=p.plate_x + 2 * m, y=p.plate_y + 2 * m, thickness=p.thickness),
             operations=operations,

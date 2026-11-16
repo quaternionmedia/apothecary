@@ -447,8 +447,8 @@ what it made:
 | Journey | Its steps | What it hands on |
 |---|---|---|
 | **Design a part** (`design`) | 1 Choose, 2 Numbers, 3 Text, 4 Kept, 5 Ready | a part a machine can make |
-| **Print a part** (`make`) | 1 Choose, 2 Shape, 3 Slice, 4 See, 5 Start | a job on the printer |
-| **Cut a part** (`cut`) | 1 Choose, 2 Toolpath, 3 See, 4 Needs, 5 Cut | a job on the router |
+| **Print a part** (`make`) | 1 Choose, 2 Shape, 3 Slice, 4 See, 5 Start, 6 Measure | a job on the printer, and its correction |
+| **Cut a part** (`cut`) | 1 Choose, 2 Toolpath, 3 See, 4 Needs, 5 Cut, 6 Measure | a job on the router, and its tool's allowance |
 | **Flash a board** (`board`) | 1 Pin, 2 Bench, 3 Flash, 4 Hear | a board that says what it runs |
 | **Drive a machine** (`hands`) | 1 Deck, 2 Knobs | a machine moved by hand |
 | **Start a site** (`bring-up`) | 1 Steps, 2 Members, 3 Audit | a site in working order |

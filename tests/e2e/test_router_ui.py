@@ -822,3 +822,54 @@ def _command(url: str, line: str) -> None:
     httpx.post(
         f"{url}/firmware/printers/command", json={"port": ROUTER, "command": line}, timeout=15.0
     ).raise_for_status()
+
+
+# Last in the file: the allowance it keeps stays in this module's state folder, and every
+# toolpath written for cnc_router after it takes it.
+@pytest.mark.e2e
+def test_the_emoji_cut_and_measured_is_fed_back_into_the_router_s_toolpaths(page: Page, url: str):
+    """The router's calibration piece, a 😮, its toolpath written in the Cut window: under
+    measured it names what to measure, an eye, the mouth and the face, as designed. Its
+    sizes typed and kept -- once by Keep, once by the ring's Cut › Measure -- the tool's
+    allowance is kept for cnc_router, and its next toolpath takes it, saying so."""
+    from rings import on_row
+
+    errors: list = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    _select(page, "cnc_router")
+    page.locator("#selected-body .device-section .dev-open").click()
+    windows.machine_ready(page, "router")
+    machine = windows.machine(page)
+    machine.locator("#print-part").select_option("router_emoji")
+    machine.locator("#print-slice").click()
+    expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=10000)
+    field, said = machine.locator("#print-measure"), machine.locator("#print-measure-said")
+    expect(said).to_have_text("of eye 10 × mouth 20 × face 60 mm designed", timeout=10000)
+    expect(field).to_have_attribute("placeholder", "eye × mouth × face mm")
+    field.fill("10.12 × 20.14 × 59.84")
+    machine.locator("#print-measure-keep").click()
+    expect(page.locator("#status")).to_contain_text(
+        "scale -0.04%, the steps per millimetre's, not applied; "
+        "tool_allowance +0.000 -> +0.136 mm: kept for cnc_router",
+        timeout=10000,
+    )
+    expect(said).to_contain_text("cnc_router's tool +0.136 mm")
+    # The next toolpath makes its offsets with it, and says where it came from.
+    machine.locator("#print-slice").click()
+    expect(machine.locator("#print-slice-said")).to_contain_text(
+        "tool_allowance +0.136 measured", timeout=10000
+    )
+    # Measured again from that one, the eye alone, kept by the router's ring.
+    field.fill("10.02")
+    on_row(page, "cnc_router", "Device", "Control", "Cut", "Measure")
+    expect(page.locator("#status")).to_contain_text(
+        "tool_allowance +0.136 -> +0.156 mm: kept for cnc_router", timeout=10000
+    )
+    expect(said).to_contain_text("cnc_router's tool +0.156 mm")
+    kept = httpx.get(
+        f"{url}/cam/corrections", params={"site": "garage", "router": "cnc_router"}, timeout=15.0
+    ).json()["correction"]
+    assert kept["value"] == 0.156 and len(kept["measurements"]) == 2
+    assert errors == [], errors

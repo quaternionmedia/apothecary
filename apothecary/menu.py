@@ -1904,8 +1904,9 @@ def router_control_options(device: Device) -> List[Option]:
     (``firmware.grbl.CONTROL_CODES`` and the realtime characters), sent by the
     Machine's control chain as a printer's are. Home, Unlock and Jog first, as a
     person homes before anything else; the spindle; work zero and the probe
-    together, since a probe is how Z is zeroed; the cut's own verbs; Stop is the
-    soft reset, destructive as E-STOP is. Eight, as a ring holds.
+    together, since a probe is how Z is zeroed; the cut's own verbs, the piece cut
+    measured among them; Stop is the soft reset, destructive as E-STOP is. Eight, as
+    a ring holds.
     """
     return [
         Option(
@@ -1960,6 +1961,9 @@ def router_control_options(device: Device) -> List[Option]:
                 Option(id="print:start", label="Send file", action="print:start"),
                 Option(id="print:preview", label="Preview", action="print:preview"),
                 Option(id="print:plan", label="Keep as plan", action="print:plan"),
+                # The piece cut, measured: what is typed under measured kept as the
+                # router's tool allowance, or the field, with nothing typed.
+                Option(id="print:measure", label="Measure", action="print:measure"),
             ],
         ),
         Option(id="control:estop", label="Stop", action="control:estop", destructive=True),

@@ -65,6 +65,7 @@ machine seam, `openscad_installer` and the slicer's installer for the tool finde
 | `hierarchy` | `projects` | `apothecary/hierarchy.py` | in a call | the parts registry, for a node's `part_ref`; `ROOT` |
 | `primitives` | `projects` | `apothecary/primitives.py` | in a call | `ROOT`, the repository's root |
 | `projects` | `cam` | `apothecary/projects/parts/router_coupon.py` | in a call | cam's types, for the coupon's declared cuts |
+| `projects` | `cam` | `apothecary/projects/parts/router_emoji.py` | in a call | cam's types, for the 😮's declared cuts |
 | `openscad_installer` | `firmware` | `apothecary/openscad_installer.py` | at import | `tools_dir` |
 
 *When* says whether the import runs as the module loads (at import) or only once a

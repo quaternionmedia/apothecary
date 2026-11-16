@@ -76,7 +76,8 @@ PICTURED = {
         "cut; Toolpath's stage is the router's Cut window; See writes the coupon's "
         "toolpath where none is kept and draws it on the table; Needs is the router's "
         "Status, where it says what it needs before it moves; Cut is the Machine and "
-        "Jobs. The picture is See.",
+        "Jobs; Measure is the Cut window again, the coupon's file chosen and what it "
+        "names to measure under measured. The picture is See.",
     ),
     "board": (
         "hear",
@@ -213,6 +214,8 @@ STANDS = {
     ("cut", "see"): _path_drawn_on("cnc_router"),
     ("cut", "needs"): lambda page: _says(page, "machine-status", "Pins on"),
     ("cut", "cut"): lambda page: _shown(page, "machine"),
+    # The coupon's file chosen, what it names to measure under measured, nothing kept.
+    ("cut", "measure"): lambda page: _says(page, "machine-print", "mm designed"),
     ("board", "pin"): lambda page: (
         _on(DEVKIT)(page),
         _selected("esp32_blink")(page),

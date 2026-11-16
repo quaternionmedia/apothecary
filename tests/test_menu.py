@@ -797,6 +797,7 @@ def test_a_router_s_control_ring_is_its_own():
         "print:start",
         "print:preview",
         "print:plan",
+        "print:measure",
         "control:estop",
         "control:arm",
     }

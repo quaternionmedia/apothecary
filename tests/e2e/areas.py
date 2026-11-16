@@ -136,6 +136,7 @@ AREAS = {
             "apothecary/cam/*",
             "apothecary/preview/*",
             "parts/router_coupon/*",
+            "parts/router_emoji/*",
             "apothecary/jobs.py",
             "apothecary/routes/jobs.py",
             "apothecary/static/boards.js",

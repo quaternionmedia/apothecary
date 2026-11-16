@@ -393,6 +393,13 @@ only with the table clear and no tool in the collet until the last box.
       the end: *done*.
 - [ ] With a tool and stock, the first real cut from a CAM post's file, the
       spindle at its dial's speed: watch the first pass.
+- [ ] **The 😮.** Under *makes* choose `router_emoji`, **Toolpath**, and cut it
+      from 6 mm stock with the 6 mm end mill. Measure an eye, the mouth and the
+      face across with calipers, type them under **measured** in that order,
+      **Keep**: the status line says each size's error, the scale and the tool's
+      allowance kept for `cnc_router`. **Toolpath** again: `tool_allowance` shows
+      that value, *measured*. Note the scale: past a few tenths of a percent the
+      steps per millimetre (`$100`, `$101`) want a look, which nothing here changes.
 
 ## J. The Stream Deck +
 

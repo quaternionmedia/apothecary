@@ -299,7 +299,8 @@ MAKE = Journey(
 
 # Cut a part on the router: the same path as Print a part's through another machine. The part
 # says how it is cut, the router's Cut window writes its toolpath and draws it on the
-# table, the router says what it needs before it moves, and the cut is a job.
+# table, the router says what it needs before it moves, the cut is a job, and the piece
+# cut is measured there, its tool's allowance fed back to the router.
 CUT = Journey(
     id="cut",
     title="Cut",
@@ -359,6 +360,16 @@ CUT = Journey(
                 "24-a-cut-from-the-card.md#6",
                 "24-a-cut-from-the-card.md#8",
             ),
+        ),
+        Step(
+            "measure",
+            "Measure",
+            "the piece cut, measured: each size it names typed under measured, checked "
+            "against what was designed, and the tool's allowance kept for the router's "
+            "next toolpaths",
+            forward=("machine-print",),
+            puts=(("file", "router_coupon"),),
+            shown_by=("20-a-part-through-the-router.md",),
         ),
     ),
 )

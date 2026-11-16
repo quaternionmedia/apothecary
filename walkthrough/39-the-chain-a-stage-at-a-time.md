@@ -59,7 +59,7 @@ The part goes to a machine. printer_1's Machine is opened and the footpedal chos
 
 ## 3. Cut a part: its toolpath written for the router, drawn on the table
 
-The same path through another machine. cnc_router's Machine is opened in printer_1's place and the router_coupon chosen, a part that says how it is cut; Toolpath's stage is the router's Cut window; See writes the coupon's toolpath where none is kept and draws it on the table; Needs is the router's Status, where it says what it needs before it moves; Cut is the Machine and Jobs. The picture is See.
+The same path through another machine. cnc_router's Machine is opened in printer_1's place and the router_coupon chosen, a part that says how it is cut; Toolpath's stage is the router's Cut window; See writes the coupon's toolpath where none is kept and draws it on the table; Needs is the router's Status, where it says what it needs before it moves; Cut is the Machine and Jobs; Measure is the Cut window again, the coupon's file chosen and what it names to measure under measured. The picture is See.
 
 ![Cut a part: its toolpath written for the router, drawn on the table](screenshots/39-03-cut-a-part-its-toolpath-written-for-the-router-dra.png)
 
@@ -74,6 +74,8 @@ The same path through another machine. cnc_router's Machine is opened in printer
     Cut a part › 4 Needs (the tour): what the router needs before it moves: its state, its pins, each axis's home
 5 Cut: nothing more to do
     Cut a part › 5 Cut (the tour): control armed in the Machine, the work zeroed, ▶ Cut, the job in Jobs
+6 Measure: nothing more to do
+    Cut a part › 6 Measure (the tour): the piece cut, measured: each size it names typed under measured, checked against what was designed, and the tool's allowance kept for the router's next toolpaths
 ```
 
 ## 4. Flash a board: its sketch on the Bench, its Flashing, what it says
