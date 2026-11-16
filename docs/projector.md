@@ -138,6 +138,12 @@ the canvas's size (`PUT`), and the grid, a line every 10 mm of the bed with ever
 brighter, is drawn through what was kept, so how true it lies on the bed shows. A
 refusal is written in the band. Escape leaves calibrating.
 
+The pixels kept are the canvas's, with its size; drawn on a canvas of another size they
+are scaled to it, across and down apart. That holds while the canvas fills the
+projector's output both times, so a calibration is marked with the page full screen on
+the projector, and kept true only while the projector, its zoom and its keystone stay
+as they were.
+
 ## Following the machine
 
 The answer is kept current by the surfaces' one stream
