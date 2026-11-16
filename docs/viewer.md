@@ -55,9 +55,10 @@ Left to right, one row:
   or else the part stepped into, is a part or a piece made from a picture (on a
   narrow header it gives way before the rail does): it names the part and
   the machine it makes it on -- the first of every site's machines that make it
-  (`GET /sites/{name}/makers`): one whose board is connected where it was pinned
-  last, then this site's, then a router before a printer for a part that says how
-  it is cut -- and that machine's site when it is another. Pressed, it opens that
+  (`GET /sites/{name}/makers`): for a part that says how it is cut, a router
+  first, whatever else is plugged in; then one whose board is connected where it
+  was pinned last, then this site's -- and that machine's site when it is
+  another. Pressed, it opens that
   site, the machine's Machine with its Print or Cut window in front, chooses the
   part under **makes** (in another site, by its name) and slices it or writes its
   toolpath, as the variant drawn where one is applied. Nothing is armed, started

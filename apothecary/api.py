@@ -2261,10 +2261,10 @@ def makers_of(here: str, piece: str) -> List[Dict[str, object]]:
     every site's machines of a kind that makes it (``machine_plans.kinds_that_make``);
     a piece made from a picture is a node of its site alone, made on that site's
     printers. Each is ``{path, kind, part_ref, site, live}``, ``live`` when the board
-    it drives is connected where it was pinned last; those first, then ``here``'s,
-    then a router before a printer for a part that says how it is cut, else the
-    order the sites and their machines are in. ``KeyError`` for neither a node nor a
-    part."""
+    it drives is connected where it was pinned last. A part that says how it is cut
+    is made to be cut, so the routers come first, whatever else is plugged in; then
+    those whose board is connected, then ``here``'s, else the order the sites and
+    their machines are in. ``KeyError`` for neither a node nor a part."""
     from .machine_plans import kinds_that_make
     from .routes.machines import machines_of
     from .vision import views as viewing
@@ -2306,8 +2306,8 @@ def makers_of(here: str, piece: str) -> List[Dict[str, object]]:
             at = machine["path"]
             on = any(s == name and (p == at or p.startswith(at + ".")) for s, p in live)
             found.append({**machine, "site": name, "live": on})
-    prefer = "router" if "router" in kinds else "printer"
-    found.sort(key=lambda m: (not m["live"], m["site"] != here, m["kind"] != prefer))
+    cut = "router" in kinds
+    found.sort(key=lambda m: (cut and m["kind"] != "router", not m["live"], m["site"] != here))
     return found
 
 
