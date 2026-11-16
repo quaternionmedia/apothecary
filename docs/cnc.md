@@ -85,9 +85,12 @@ the Ender's bed, X gantry and hotend carriage), each rendered once at the part's
 axes (`POST /parts/{ref}/stl/generate` with its `piece`). As the tool's mark tweens
 toward each poll, each piece is moved with it by how far its axes stand from the
 part's, within the part's range, so the machine moves as the real one does, a poll
-behind it. A page hears the polls its own Machine window makes. They mean the table only
-once the machine has been homed: before that the controller counts from wherever it
-stood at power on.
+behind it. The world polls the router it draws while no Machine is open on it and the
+server holds its link, and its Machine's polls while one is; until a poll carries
+`tool_position` no tool is drawn, and the working volume is the controller's `travel`
+once it has said it ([viewer.md](viewer.md#a-machines-frame)). The polls mean the table
+only once the machine has been homed: before that the controller counts from wherever
+it stood at power on.
 
 The same routes serve both: `POST /firmware/devices/identify`,
 `GET /firmware/printers/status`, `/printers/control`, `/printers/command`,

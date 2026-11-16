@@ -472,9 +472,10 @@ answers as a printer or a router: nothing here flashes it.
 A board pinned to one node and then to another is where it was pinned last. A pin
 replaces only an earlier pin of its own node, so the board's pin elsewhere is kept,
 listed in Panels › Site › Pinned and taken back from there; its port answers for the
-newest pin: where the board stands (`GET /firmware/printers/where`), the site
-`/firmware/monitor` opens on, the place of a job it starts, and the printer a slice
-by its port is for.
+newest pin: where the board stands (`GET /firmware/printers/where`, with the
+machine's frame, its controller's travel and homing from the port's last poll:
+[viewer.md](viewer.md#a-machines-frame)), the site `/firmware/monitor` opens on,
+the place of a job it starts, and the printer a slice by its port is for.
 
 ### In the viewer: one Machine per board
 
@@ -529,8 +530,10 @@ Machine too.
 Every drawer of a board -- its badge in the world, its badge in Site's tree,
 Selected's line and its Machine -- reads one model of it
 (`apothecary/static/boards.js`), which polls a printer at the interval its
-Machine says, and only while its Machine is open with auto-poll on: one
-poller per board, whatever draws it. The model scans for boards when a site
+Machine says while its Machine is open with auto-poll on, and every two seconds
+for the world while no Machine is open on it and the server holds its link, so a
+machine drawn in the world follows its board ([viewer.md](viewer.md#a-machines-frame)):
+one poller per board, whatever draws it. The model scans for boards when a site
 loads, when **Rescan** asks, and by itself when a board it watches goes quiet,
 so a replugged board is found without a reload; it never scans on a timer.
 

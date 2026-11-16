@@ -230,9 +230,11 @@ on its base, buttons up, while its STL lies on its button face, the way up it
 prints ([How it rests](parts-authoring.md#how-it-rests)). The axes are
 the site's -- red x, green y, blue z -- at its origin while the origin is on the
 floor grid, else at the grid's middle; the grid lies on the floor under the
-level in view, its lines on whole cells, where snapping puts things. A level is
-framed from its front right, above, from as near as 30 mm for a small part, and
-View › Fit frames it so again; `f` frames a piece from the side the view is on.
+level in view, its lines on whole cells, where snapping puts things. A machine
+stepped into has its grid on its bed instead ([A machine's frame](#a-machines-frame)).
+A level is framed from its front right, above, from as near as 30 mm for a small
+part, and View › Fit frames it so again; `f` frames a piece from the side the view
+is on.
 
 The world is drawn only when something in it changes -- the view turned or
 easing to a stop, a piece or its colour, the handles, the window's size, a live
@@ -250,6 +252,53 @@ drawn whole; what moves by itself, a machine's tool while it prints, is drawn wh
 and about one part in three of the time. Where frames are quick none of this
 happens. A browser draws in software when it has no use of the graphics card: its
 own page for that (`chrome://gpu`, `about:support`) says which.
+
+### A machine's frame
+
+Everything the world draws of a machine -- the wire box of its working volume, its
+bed's plane, its tool's mark, a reading's relief, a file's path, the grid of the
+machine stepped into -- is placed by one record, its **frame**, which
+`api.machine_frame` builds and two answers serve: each machine node of the site's
+tree (`frame`), and the printer `GET /firmware/printers/where` describes for a port
+(`printer.frame`). Its fields, in the site's millimetres:
+
+| Field | What it says |
+|---|---|
+| `position` | the machine node's own origin in the site |
+| `origin`, `origin_from` | where the volume's (0, 0, 0) stands in the machine's frame, a bed that carries Y standing where the work's Y under the tool is `bed_moves_y`: the node's `build_origin` (`node`), else the volume centred on its footprint on top of its base (`footprint`), else its own origin (`position`) |
+| `bed_origin`, `bed_z` | the same point in the site, and its height: the bed's surface |
+| `volume`, `volume_from`, `site_volume` | the working volume: the controller's travel (`$130`-`$132`) once a poll of its port has read it (`controller`), else the site's figure (`site`, always in `site_volume`) |
+| `homing` | the way each axis homes, `min` or `max`, from the controller's `$23`; null until read |
+| `bed_moves_y` | how far into the volume along Y the tool stands, on a machine whose bed carries Y; null where the tool moves over a bed that stays |
+| `kinematics` | the part's `rest` (the axes its pieces are drawn at) and `range` |
+
+The tree's frame has no controller's word: a port's poll is what carries it, and
+the where answer reads the port's last poll without asking the port anything. The
+world draws a pinned machine from its marks' frame, the where answer's, and any
+other from the tree's; a poll that says another travel than the marks were laid
+out by has the frame asked for again and the marks made again from it.
+
+A point of the volume -- the work's coordinates, counted up from its low corner --
+stands in the site at the machine's position plus `origin` plus the point, and on
+a machine whose bed carries Y the bed and what rides it stand `bed_moves_y` minus
+the work's Y under the tool further along Y (`apothecary/static/frames.js`). The
+wire box, the bed's plane, a reading, a file's path and the grid ride the bed so;
+with no position known, the bed stands where the part's `rest` puts it, as its
+pieces do. The machine stands where its node stands in the tree: moved in the
+layout, its marks and its box go with it at once.
+
+The tool's mark stands where a poll's `tool_position` puts it, which the server
+works out from the controller's own settings: a router's machine position is no
+place in its volume until they are read (the AnoleX's X homes to its minimum, its
+Y and Z to their maximum), so until then no tool is drawn. A machine stepped into
+has its grid on its bed: a line every 10 mm of its own volume from the volume's
+low corner, every fifth brighter, the axes at the volume's (0, 0, 0).
+
+The world follows each machine it draws by polls of its own, every two seconds
+(`apothecary/static/boards.js`), so its tool, its bed and its pieces move with no
+Machine open: only while the server holds the machine's link, so the world opens
+no port and a link released stays released, and never while a Machine is open on
+the port, whose own polls and auto-poll tick-box decide there.
 
 ## The ring
 

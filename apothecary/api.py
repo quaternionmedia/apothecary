@@ -2184,8 +2184,9 @@ def machine_frame(
     is placed by. None for a node with no ``build_volume``.
 
     ``at`` is the node's own origin in the site (``position``). ``origin`` is where
-    the volume's (0, 0, 0) stands in the node's frame with the bed at rest: the
-    node's ``build_origin`` when it says (``origin_from`` "node"), else the volume
+    the volume's (0, 0, 0) stands in the node's frame, a bed that carries Y standing
+    where the work's Y under the tool is ``bed_moves_y``: the node's
+    ``build_origin`` when it says (``origin_from`` "node"), else the volume
     centred on its footprint and standing on its base (``_base_height``,
     "footprint"), else the node's own origin ("position"). ``bed_origin`` is the same
     point in the site, and ``bed_z`` its height: the bed's surface.
