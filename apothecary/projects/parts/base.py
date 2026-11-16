@@ -74,6 +74,10 @@ class BasePart(BaseModel):
     # carries Y: {"piece": "table", "follows": {"y": -1}}. None: drawn as one.
     kinematics: Optional[Dict[str, Any]] = None
     tags: List[str] = Field(default_factory=list)
+    # The registered parts this one is built from, when that is not what its SCAD's
+    # include/use lines and the sites that hold it say (apothecary/composition.py).
+    # None: inferred. A list, an empty one included, is the answer, and wins.
+    parts: Optional[List[str]] = None
     readme_path: Optional[Path] = None
     module_name: Optional[str] = None
 

@@ -50,6 +50,11 @@ class Description(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
+    parts: Optional[List[str]] = Field(
+        None,
+        description="the registered parts this one is built from; omitted, they are inferred "
+        "from the SCAD's include/use lines and the sites that hold it",
+    )
     preview_color: Optional[List[float]] = Field(None, description="[r, g, b] in 0..1")
     rest: Optional[Dict[str, Any]] = Field(
         None, description='the -D definitions that draw it as it rests, e.g. {"print": false}'
@@ -112,6 +117,8 @@ def part_from_sidecar(scad_path: Path, sidecar_path: Optional[Path] = None) -> D
     if described.preview_color and len(described.preview_color) == 3:
         r, g, b = described.preview_color
         kwargs["preview_color"] = Color(r=r, g=g, b=b)
+    if described.parts is not None:
+        kwargs["parts"] = list(described.parts)
     if described.rest:
         kwargs["rest"] = dict(described.rest)
     if described.bounds and "min" in described.bounds and "max" in described.bounds:

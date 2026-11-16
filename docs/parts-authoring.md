@@ -92,6 +92,16 @@ category, tags, colour, rest pose, bounds, provenance). See
 part has no `Params` model, so its overrides are checked against the SCAD
 file's own top-level variables.
 
+## What a part is built from
+
+The universe lays parts out on shells by composition depth
+(`apothecary/orbitals.py`). The registry holds no part-to-part relation, so it is
+read from the SCAD's `include <...>` and `use <...>` of another registered part's
+file and from sites that hold one part inside another (`apothecary/composition.py`).
+A part that says `"parts": ["name", ...]` in its `part.json` (or `parts=[...]` in its
+wrapper) is built from exactly those, an empty list meaning none; the inference is
+then not consulted.
+
 ## How it rests
 
 A part's STL is the way up it prints: its SCAD's own render, never turned.
