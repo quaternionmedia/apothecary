@@ -43,9 +43,9 @@ from .models.bounds import BoundingBox3D
 from .models.units import PrintSettings
 from .models.vectors import Vector3D
 from .objects import SceneObject
+from .orbitals import turned
 from .primitives import Cylinder, Import
 from .scene import Scene
-from .orbitals import turned
 from .transforms import Rotate, Translate
 
 

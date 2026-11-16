@@ -15,11 +15,11 @@ from apothecary import api, sites
 from apothecary.hierarchy import Assembly, LayoutReport, Site, Structure
 from apothecary.models.bounds import BoundingBox3D
 from apothecary.models.vectors import Vector3D
+from apothecary.orbitals import GAP, turned
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.registry import load_parts, scan_projects
 from apothecary.site_names import UNIVERSE
 from apothecary.site_store import SiteStore
-from apothecary.orbitals import GAP, turned
 from apothecary.universe import (
     PIECE_SPAN,
     boxes_of,
@@ -144,7 +144,7 @@ def test_a_shell_is_a_sphere_about_the_origin_and_each_clears_the_one_inside():
     reach = {}
     for leaf in leaves:
         reach[leaf.shell] = max(reach.get(leaf.shell, 0), _reach(leaf))
-    for inner, outer in zip(sorted(radius), sorted(radius)[1:]):
+    for inner, outer in zip(sorted(radius), sorted(radius)[1:], strict=False):
         assert radius[outer][0] - radius[inner][0] >= reach[inner] + reach[outer] + GAP - 1e-6
 
 

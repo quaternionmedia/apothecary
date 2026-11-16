@@ -86,7 +86,7 @@ def test_no_piece_overlaps_a_piece_of_any_shell():
 def test_radii_strictly_increase_and_each_shell_clears_the_one_inside():
     sizes = [[30.0] * 20, [50.0] * 8, [80.0] * 3, [10.0]]
     radii = shell_radii(sizes)
-    assert all(a < b for a, b in zip(radii, radii[1:]))
+    assert all(a < b for a, b in zip(radii, radii[1:], strict=False))
     for k in range(1, len(radii)):
         assert radii[k] - radii[k - 1] >= max(sizes[k - 1]) + max(sizes[k]) + GAP - 1e-9
 
@@ -127,7 +127,7 @@ def test_the_outward_turn_takes_up_along_the_ray(point):
     turn = outward_turn(point)
     up = turned(turn, (0, 0, 1))
     length = math.hypot(*point)
-    for got, want in zip(up, (c / length for c in point)):
+    for got, want in zip(up, (c / length for c in point), strict=True):
         assert got == pytest.approx(want, abs=1e-9)
 
 

@@ -72,7 +72,9 @@ def fibonacci_sphere(n: int, radius: float = 1.0, phase: float = 0.0) -> List[Po
         z = 1.0 - (2.0 * i + 1.0) / n
         ring = math.sqrt(max(0.0, 1.0 - z * z))
         angle = i * GOLDEN_ANGLE + phase
-        points.append((radius * ring * math.cos(angle), radius * ring * math.sin(angle), radius * z))
+        points.append(
+            (radius * ring * math.cos(angle), radius * ring * math.sin(angle), radius * z)
+        )
     return points
 
 
@@ -172,8 +174,8 @@ def lay_out(
     sizes = [[size_of[n] for n in names] for names in members]
     radii = shell_radii(sizes, gap)
     placed: Dict[str, Placement] = {}
-    for index, (rank, names) in enumerate(zip(ranks, members)):
+    for index, (rank, names) in enumerate(zip(ranks, members, strict=True)):
         points = fibonacci_sphere(len(names), radii[index], index * GOLDEN_ANGLE)
-        for name, point in zip(names, points):
+        for name, point in zip(names, points, strict=True):
             placed[name] = Placement(rank, radii[index], point, outward_turn(point))
     return placed
