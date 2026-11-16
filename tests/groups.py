@@ -201,6 +201,7 @@ GROUPS = {
             "apothecary/kernel_compare.py",
             "apothecary/universe.py",
             "apothecary/orbitals.py",
+            "apothecary/composition.py",
             "apothecary/site_names.py",
             "apothecary/cli/render.py",
             "apothecary/cli/kernels.py",
@@ -210,6 +211,7 @@ GROUPS = {
         ),
         "tests": (
             "test_catalog_geometry.py",
+            "test_composition.py",
             "test_datum_assembly.py",
             "test_examples.py",
             "test_garage_workbench.py",
