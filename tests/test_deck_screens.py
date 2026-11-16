@@ -165,7 +165,9 @@ def test_status_of_a_printer_is_its_state_its_temperatures_and_what_it_asks_for(
         NOW,
         "3/3",
     )
-    assert cold.small == "hotend 21 off · bed - · load the filament · 3/3" and cold.colour == "amber"
+    assert (
+        cold.small == "hotend 21 off · bed - · load the filament · 3/3" and cold.colour == "amber"
+    )
 
 
 def test_status_of_a_router_is_its_spindle_and_feed_and_its_alarm_first_thing_to_do():

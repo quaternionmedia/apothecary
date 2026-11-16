@@ -159,7 +159,9 @@ def progress_strip(machine: str, job, status, now: datetime, position: str) -> S
             word, colour = _ENDED.get(job.outcome, (job.outcome, "grey"))
             why = f" ({job.reason})" if job.reason and job.outcome != "done" else ""
             small = f"{machine} · {word}{why} after {clock(elapsed)} · tap to clear · {position}"
-        return Strip(f"{job_name(job)} · {percent}%", small, colour, max(0.0, min(1.0, job.progress)))
+        return Strip(
+            f"{job_name(job)} · {percent}%", small, colour, max(0.0, min(1.0, job.progress))
+        )
     if getattr(status, "sd_printing", False) and status.sd_progress is not None:
         small = f"{machine} · from the card"
         if status.print_time_s is not None:
