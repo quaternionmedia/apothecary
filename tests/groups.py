@@ -75,6 +75,7 @@ GROUPS = {
             "apothecary/simulated.py",
             "apothecary/routes/jobs.py",
             "apothecary/routes/machines.py",
+            "apothecary/routes/projector.py",
             "apothecary/cli/firmware.py",
             "apothecary/state_folder.py",
             "parts/esp32_blink/*",

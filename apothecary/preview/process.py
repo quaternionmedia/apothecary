@@ -48,6 +48,7 @@ class Process:
     groups: Callable[[], GroupRule]
     dwell: Callable[[Optional[float], Optional[float]], float]  # P and S, to seconds
     rapid: Optional[float] = None  # mm/min of a G0, when the file's feed does not set it
+    air: Tuple[str, ...] = ()  # the kinds that move through the air and make nothing
 
 
 def _is_flat(move: Move) -> bool:
@@ -102,6 +103,7 @@ ADDITIVE = Process(
     machine="printer",
     word="layer",
     kinds=("extrude", "travel"),
+    air=("travel",),
     classify=_additive_kind,
     groups=_Layers,
     dwell=_additive_dwell,
@@ -155,6 +157,7 @@ SUBTRACTIVE = Process(
     machine="router",
     word="pass",
     kinds=("cut", "plunge", "rapid"),
+    air=("rapid",),
     classify=_subtractive_kind,
     groups=_Passes,
     dwell=_subtractive_dwell,

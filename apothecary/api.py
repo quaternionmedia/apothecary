@@ -143,6 +143,7 @@ from .routes.marks import router as marks_router
 from .routes.part_edits import router as part_edits_router
 from .routes.pictures import router as pictures_router
 from .routes.procedures import router as procedures_router
+from .routes.projector import router as projector_router
 from .routes.readme import router as readme_router
 from .routes.tour import router as tour_router
 from .routes.views import router as views_router
@@ -321,6 +322,8 @@ app.include_router(jobs_router)
 app.include_router(slicer_router)
 app.include_router(cam_router)
 app.include_router(machines_router)
+# A projector aimed at a machine's bed: its calibration, and what it draws there.
+app.include_router(projector_router)
 # A part's SCAD edited: drafts checked and rendered, and saves as variants in git.
 app.include_router(part_edits_router)
 app.include_router(lighting_router)
@@ -2280,6 +2283,27 @@ def printer_where(port: str):
             else None
         ),
     }
+
+
+def machine_on_port(port: str) -> Optional[tuple[str, str]]:
+    """The machine the board on ``port`` drives: its site's name and the path of the node a
+    poll of it drives (``status_bearer_for``), by the newest pin naming the board
+    (``_pinned_at``); None for a board pinned nowhere. Reads the pins alone."""
+    pinned = _pinned_at(port)
+    if pinned is None:
+        return None
+    name, site, path = pinned
+    return name, status_bearer_for(site, path) or path
+
+
+def machine_poll(site_name: str, path: str) -> Optional[tuple[str, firmware_gcode.PrinterStatus]]:
+    """The port of the board driving the machine at ``path`` and its last poll, from the
+    polls this server has kept (``last_statuses``); None while no poll of it is kept.
+    Nothing is asked of any port."""
+    for port, status in firmware_devices.last_statuses().items():
+        if machine_on_port(port) == (site_name, path):
+            return port, status
+    return None
 
 
 def _pinned_at(port: str) -> Optional[tuple[str, Assembly, str]]:
