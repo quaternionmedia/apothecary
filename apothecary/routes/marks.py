@@ -27,6 +27,7 @@ from typing import Dict, List, Optional, Tuple
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from .. import surfaces
 from ..vision import marks, notes
 from ..vision import views as viewing
 from ..vision.cache import picture_hash
@@ -131,7 +132,9 @@ def say_mark(site_name: str, view_id: str, mark_id: str, body: MarkWord):
         view = viewing.store().read_again(
             site_name, view_id, shapes=shapes, left_out=left_out, at=datetime.now(timezone.utc)
         )
-    return {**_said(site_name, view_id), "seen": view_answer_in(site_name, view)}
+    said = _said(site_name, view_id)
+    surfaces.changed(WHITEBOARD_MARKS, key=f"{site_name}/{view_id}", body=said)
+    return {**said, "seen": view_answer_in(site_name, view)}
 
 
 class NoteWords(BaseModel):
@@ -151,7 +154,27 @@ def say_note(site_name: str, view_id: str, mark_id: str, body: NoteWords):
     with _lock:
         held = _kept.setdefault((site_name, view_id), marks.Answers())
         held.words = [w for w in held.words if (w.min, w.max) != (words.min, words.max)] + [words]
-    return _said(site_name, view_id)
+    said = _said(site_name, view_id)
+    surfaces.changed(WHITEBOARD_MARKS, key=f"{site_name}/{view_id}", body=said)
+    return said
+
+
+# A view's marks and notes, as a surface (apothecary/surfaces.py): read as GET .../marks
+# reads them, each mark's box in fractions of its picture, and said changed at each word.
+WHITEBOARD_MARKS = "whiteboard_marks"
+
+surfaces.register(
+    surfaces.Surface(
+        name=WHITEBOARD_MARKS,
+        frame="picture_fractions",
+        about="a view's marks, sorted, and its notes, with the words a person gave on them",
+        snapshot=lambda words: _said(words["site"], words["view"]),
+        takes=("site", "view"),
+        needs=("site", "view"),
+        tells=True,
+        owner=__name__,
+    )
+)
 
 
 __all__ = ["forget", "keep", "kept_for", "read_marks", "router"]

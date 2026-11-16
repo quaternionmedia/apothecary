@@ -40,7 +40,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import machine_plans, projector, sites
+from .. import jobs, machine_plans, projector, sites, surfaces
+from ..firmware import devices as firmware_devices
 from ..hierarchy import find_node_by_path
 
 router = APIRouter(tags=["projector"])
@@ -185,10 +186,9 @@ def _toolpath(file_id: str, kind: str, origin: Dict[str, float]) -> Optional[Dic
     """A kept file's toolpath in the bed's millimetres: each move that makes something,
     seen from above, from where it starts to where it ends, with the groups a person
     scrubs through; None for a file no longer kept."""
-    from ..firmware import devices
     from ..preview import for_machine
 
-    preview = devices.print_preview(file_id, kind)
+    preview = firmware_devices.print_preview(file_id, kind)
     if preview is None:
         return None
     air = {i for i, name in enumerate(preview.kinds) if name in for_machine(kind).air}
@@ -258,11 +258,9 @@ def _cuts(site, plan, origin: Optional[Dict[str, float]]) -> Optional[Dict[str, 
     return {"part": name, "shapes": shapes, "why": None}
 
 
-def _picture(site_name, site, path, kind, frame, status, calibration) -> Dict[str, Any]:
-    """What is drawn through the mapping: the bed's outline, the toolpath and the cuts."""
-    from ..firmware import devices
-
-    vx, vy = frame["volume"][0], frame["volume"][1]
+def _intent(site_name: str, path: str, kind: Optional[str], status):
+    """Which file is about to be made, and why: the one streaming, else the plan's;
+    where its zero stands; the plan; and what is said of what cannot be drawn."""
     job = _job(status)
     plan = machine_plans.load(site_name, path)
     origin = _file_origin(kind, status)
@@ -271,11 +269,25 @@ def _picture(site_name, site, path, kind, frame, status, calibration) -> Dict[st
     if job and job.get("file_id"):
         source, file = "job", {"id": job["file_id"], "name": job.get("name")}
     elif plan is not None and plan.file_id:
-        kept = devices.print_file(plan.file_id)
+        kept = firmware_devices.print_file(plan.file_id)
         source = "plan"
         file = {"id": plan.file_id, "name": kept.name if kept is not None else None}
     else:
         said.append("nothing streams on this machine, and no plan names a file")
+    return source, file, origin, plan, said
+
+
+def _key(source, file, origin, plan, calibration) -> str:
+    """What names a picture: it is drawn again when any of these changes."""
+    calibrated = calibration.at.isoformat() if calibration is not None else None
+    named = [source, file, origin, plan.part if plan else None, calibrated]
+    return hashlib.sha256(json.dumps(named, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def _picture(site_name, site, path, kind, frame, status, calibration) -> Dict[str, Any]:
+    """What is drawn through the mapping: the bed's outline, the toolpath and the cuts."""
+    vx, vy = frame["volume"][0], frame["volume"][1]
+    source, file, origin, plan, said = _intent(site_name, path, kind, status)
     toolpath = None
     if file is not None and kind is None:
         said.append("this machine's part names no kind of machine, so no toolpath is read")
@@ -299,8 +311,7 @@ def _picture(site_name, site, path, kind, frame, status, calibration) -> Dict[st
         "calibrated_at": calibration.at.isoformat() if calibration is not None else None,
     }
     sents = toolpath.pop("sents") if toolpath else []
-    named = [source, file, origin, plan.part if plan else None, picture["calibrated_at"]]
-    key = hashlib.sha256(json.dumps(named, sort_keys=True).encode()).hexdigest()[:16]
+    key = _key(source, file, origin, plan, calibration)
     picture["key"] = key
     with _DRAWN_LOCK:
         _DRAWN[(site_name, path)] = (key, sents)
@@ -335,16 +346,33 @@ def moving(site_name: str, path: str, frame: Dict[str, Any], status) -> Dict[str
     }
 
 
-def answer(site_name: str, path: str) -> Dict[str, Any]:
-    """Everything the projector's page draws for the machine at ``path``, as one answer."""
+def _now_at(site_name: str, path: str):
+    """The machine as its last poll has it: the site, its node and kind, the port and the
+    poll (None and None while none is kept), and its frame with the controller's word."""
     from ..api import describe_for_view, machine_poll
-    from ..homography import Degenerate
-    from ..vision.projection import as_lists
 
     site, node, kind = _machine(site_name, path)
     polled = machine_poll(site_name, path)
     port, status = polled if polled is not None else (None, None)
     frame = describe_for_view(site, path, node, is_printer=True, controller=status)["frame"]
+    return site, kind, port, status, frame
+
+
+def moved(site_name: str, path: str) -> Dict[str, Any]:
+    """What a change of the machine's says, without reading its toolpath: its picture's
+    key, so a reader holding another asks again, and what moves."""
+    _, kind, _, status, frame = _now_at(site_name, path)
+    source, file, origin, plan, _ = _intent(site_name, path, kind, status)
+    key = _key(source, file, origin, plan, projector.load(site_name, path))
+    return {"key": key, "moving": moving(site_name, path, frame, status)}
+
+
+def answer(site_name: str, path: str) -> Dict[str, Any]:
+    """Everything the projector's page draws for the machine at ``path``, as one answer."""
+    from ..homography import Degenerate
+    from ..vision.projection import as_lists
+
+    site, kind, port, status, frame = _now_at(site_name, path)
     calibration = projector.load(site_name, path)
     try:
         matrix = as_lists(projector.mapping(calibration)) if calibration is not None else None
@@ -376,12 +404,7 @@ def projected(name: str, path: str):
 def calibrate(name: str, path: str, body: CalibrationIn):
     """Keep four points of the bed and the pixels lighting them as the machine's
     calibration. A bed that carries Y is marked where its last poll says it stands."""
-    from ..api import describe_for_view, machine_poll
-
-    site, node, _ = _machine(name, path)
-    polled = machine_poll(name, path)
-    status = polled[1] if polled is not None else None
-    frame = describe_for_view(site, path, node, is_printer=True, controller=status)["frame"]
+    _, _, _, status, frame = _now_at(name, path)
     offset = bed_offset(frame, status)
     if offset is None:
         raise HTTPException(
@@ -396,13 +419,81 @@ def calibrate(name: str, path: str, body: CalibrationIn):
     except projector.Refused as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     projector.save(calibration)
+    _say_moved(name, path)
     return answer(name, path)
 
 
 @router.delete("/sites/{name}/machines/{path}/projector")
 def forget(name: str, path: str):
     _machine(name, path)
-    return {"forgotten": projector.clear(name, path)}
+    forgotten = projector.clear(name, path)
+    _say_moved(name, path)
+    return {"forgotten": forgotten}
 
 
-__all__ = ["CalibrationIn", "answer", "band", "bed_offset", "moving", "router"]
+# --- the projector's picture, as a surface ----------------------------------------------------
+
+# Read as GET .../projector answers it; said changed as the server learns of what moves it --
+# a poll of the machine's board, whoever made it, a job of it begun or ended, a calibration
+# kept or forgotten -- with its picture's key and what moves, never the toolpath itself.
+PROJECTOR = "projector"
+
+
+def _say_moved(site_name: str, path: str) -> None:
+    surfaces.changed(PROJECTOR, key=f"{site_name}/{path}", body=lambda: moved(site_name, path))
+
+
+def _relay_on_port(port: str) -> None:
+    """Said of the machine the board on ``port`` drives, while anyone follows; nothing
+    said of a board that drives no machine. Never raises into the poll or the job."""
+    if not surfaces.listening(PROJECTOR):
+        return
+    from ..api import machine_on_port
+
+    try:
+        found = machine_on_port(port)
+        if found is None:
+            return
+        node = find_node_by_path(sites.store.get(found[0]), found[1])
+    except Exception:  # a site forgotten meanwhile: nothing of it to say
+        return
+    if node is not None and node.build_volume is not None:
+        _say_moved(*found)
+
+
+def _relay_poll(status) -> list:
+    _relay_on_port(status.port)
+    return []
+
+
+def _relay_job(job) -> None:
+    _relay_on_port(job.machine.port)
+
+
+surfaces.register(
+    surfaces.Surface(
+        name=PROJECTOR,
+        frame="bed_mm",
+        about="what a projector aimed at a machine's bed draws: its calibration, what is about "
+        "to be made, and what a poll moves",
+        snapshot=lambda words: answer(words["site"], words["path"]),
+        takes=("site", "path"),
+        needs=("site", "path"),
+        tells=True,
+        owner=__name__,
+    )
+)
+firmware_devices.STATUS_LISTENERS.append(_relay_poll)
+jobs.LISTENERS.append(_relay_job)
+
+
+__all__ = [
+    "CalibrationIn",
+    "PROJECTOR",
+    "answer",
+    "band",
+    "bed_offset",
+    "moved",
+    "moving",
+    "router",
+]

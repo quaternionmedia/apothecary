@@ -54,7 +54,7 @@ try:
 except ImportError:
     msvcrt = None
 
-from .. import jobs, state_folder
+from .. import jobs, state_folder, surfaces
 from ..preview import Preview, for_machine
 from ..preview import of as preview_of
 from ..preview.moves import split_comments
@@ -941,7 +941,35 @@ def notify_status(status: gcode.PrinterStatus) -> gcode.PrinterStatus:
     _LAST_STATUS[status.port] = status
     for listener in STATUS_LISTENERS:
         status.synced.extend(listener(status) or [])
+    surfaces.changed(MACHINE_STATUS, key=status.port, body=lambda: _as_shown(status))
     return status
+
+
+# The machines' last polls, as a surface (apothecary/surfaces.py): read from what is kept,
+# and said changed at each poll, whoever made it. Nothing is polled for a reader.
+MACHINE_STATUS = "machine_status"
+
+
+def _as_shown(status: gcode.PrinterStatus) -> dict:
+    return status.model_dump(mode="json", exclude={"raw", "synced"})
+
+
+def _polls_kept(words: Dict[str, str]) -> Dict[str, dict]:
+    kept = last_statuses()
+    return {port: _as_shown(s) for port, s in kept.items() if words.get("port") in (None, port)}
+
+
+surfaces.register(
+    surfaces.Surface(
+        name=MACHINE_STATUS,
+        frame="bed_mm",
+        about="each port's last poll, its tool where it stands in the machine's volume",
+        snapshot=_polls_kept,
+        takes=("port",),
+        tells=True,
+        owner=__name__,
+    )
+)
 
 
 def printer_status(

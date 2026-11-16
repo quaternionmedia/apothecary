@@ -45,7 +45,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
 
-from .. import sites
+from .. import sites, surfaces
 from ..gathering.looking import PICTURE_SUFFIXES
 from ..picture_root import PictureRefused, picture_root, picture_within_root
 from ..site_store import UnknownSiteError
@@ -273,6 +273,7 @@ def keep_picture(
     from ..vision.views import store
 
     store().kept_again(entry["path"])
+    surfaces.changed(PICTURES, key=entry["path"], body={"kept": entry})
     if poll is not None:
         try:
             entry["evidence"] = evidence_frames.keep(
@@ -436,6 +437,8 @@ def forget_kept_pictures(kept: str = Query("all", pattern="^(all|capture|upload)
                 continue  # gone since it was listed: another purge, or the person
             forgotten.append(f"{folder}/{path.name}")
             unpinned.extend(store().forget_picture(forgotten[-1]))
+    if forgotten:
+        surfaces.changed(PICTURES, body={"forgotten": forgotten})
     return {"forgotten": forgotten, "left": len(_pictures_in(root)), "unpinned": unpinned}
 
 
@@ -451,6 +454,7 @@ def forget_picture(path: str):
     kept = _kept_picture(root, path)
     kept.unlink()
     forgotten = kept.relative_to(root).as_posix()
+    surfaces.changed(PICTURES, key=forgotten, body={"forgotten": [forgotten]})
     return {"forgotten": forgotten, "unpinned": store().forget_picture(forgotten)}
 
 
@@ -590,4 +594,22 @@ def gather_pictures(body: GatherRequest):
             together.site.name, stock.factory(together.site.name), stock.checker(together.site.name)
         )
         answer["site"] = together.site.name
+    gathered = {"gathered": [r.picture for r in result.readings], "site": answer["site"]}
+    surfaces.changed(PICTURES, body=gathered)
     return answer
+
+
+# The pictures, as a surface (apothecary/surfaces.py): listed as GET /photos/pictures lists
+# them, and said changed as one is kept or forgotten here and as a pile is gathered.
+PICTURES = "pictures"
+
+surfaces.register(
+    surfaces.Surface(
+        name=PICTURES,
+        frame="none",
+        about="the pictures in the picture root, newest first; kept, forgotten and gathered",
+        snapshot=lambda words: {"pictures": list_pictures()},
+        tells=True,
+        owner=__name__,
+    )
+)

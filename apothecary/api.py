@@ -145,6 +145,7 @@ from .routes.pictures import router as pictures_router
 from .routes.procedures import router as procedures_router
 from .routes.projector import router as projector_router
 from .routes.readme import router as readme_router
+from .routes.surfaces import router as surfaces_router
 from .routes.tour import router as tour_router
 from .routes.views import router as views_router
 from .routes.vision import router as vision_router
@@ -341,6 +342,9 @@ app.include_router(procedures_router)
 app.include_router(evidence_router)
 # Image models through qmcp, and the plain reader beside them: asked only when a person asks.
 app.include_router(vision_router)
+# The surfaces: what the server knows of each thing a page shows, read one way, its
+# changes relayed as the server learns them, and what the family's members found.
+app.include_router(surfaces_router)
 THREE_DIR = STATIC_ROOT / "vendor" / "three"
 THREE_IS_VENDORED = (THREE_DIR / "three.module.js").is_file()
 

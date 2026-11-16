@@ -44,6 +44,7 @@ from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
+from . import surfaces
 from .stamped import claim, stamp
 from .state_folder import private_folder, state_dir, write_whole
 
@@ -250,6 +251,30 @@ def _write(job: Job) -> None:
 def _tell(job: Job) -> None:
     for listener in LISTENERS:
         listener(job)
+    surfaces.changed(JOBS, key=job.id, body=lambda: job.model_dump(mode="json", exclude={"log"}))
+
+
+# The jobs, as a surface (apothecary/surfaces.py): read from the store, said changed as each
+# begins and ends. A running job's progress is its machine's polls'.
+JOBS = "jobs"
+
+
+def _jobs_kept(words: Dict[str, str]) -> Dict[str, Any]:
+    found = list_jobs(site=words.get("site"), machine=words.get("port"))
+    return {"jobs": [job.model_dump(mode="json", exclude={"log"}) for job in found]}
+
+
+surfaces.register(
+    surfaces.Surface(
+        name=JOBS,
+        frame="none",
+        about="what the machines ran and run, running first, then the newest",
+        snapshot=_jobs_kept,
+        takes=("site", "port"),
+        tells=True,
+        owner=__name__,
+    )
+)
 
 
 def begin(job: Job, live: Callable[[], Job]) -> Job:

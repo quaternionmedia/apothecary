@@ -24,6 +24,7 @@ from typing import Callable, Dict, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from .. import surfaces
 from ..console_feedback import ConsoleState, OscReceiver, SacnReceiver
 from ..lighting import DMX_CHANNELS, LightingRig, fixture_color, validate_rig
 
@@ -131,4 +132,24 @@ def put_site_lighting_state(name: str, body: LevelsIn) -> dict:
         ) from None
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
+    surfaces.changed(LIGHTING, key=name, body=lambda: site_lighting_state(name))
     return state.snapshot()
+
+
+# A site's levels, as a surface (apothecary/surfaces.py): read as GET .../lighting/state
+# answers, and said changed at each put. What the console's own feeds (sACN, OSC) set
+# between puts is read, and not said.
+LIGHTING = "lighting"
+
+surfaces.register(
+    surfaces.Surface(
+        name=LIGHTING,
+        frame="none",
+        about="a site's lighting levels by channel, each fixture's colour, the console's status",
+        snapshot=lambda words: site_lighting_state(words["site"]),
+        takes=("site",),
+        needs=("site",),
+        tells=True,
+        owner=__name__,
+    )
+)

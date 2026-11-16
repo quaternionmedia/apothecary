@@ -22,11 +22,13 @@ garage's when unset) at the start and whenever it changes: ``start_following`` a
 from __future__ import annotations
 
 import os
+import threading
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
 
-from .. import sites
+from .. import sites, surfaces
 from ..family import hub
 from ..firmware import devices as firmware_devices
 from ..firmware.bindings import bindings_for_site
@@ -40,9 +42,57 @@ _follower: Optional[carlos.Follower] = None
 
 
 def _hold(body: Dict[str, Any]) -> Dict[str, Any]:
-    """A hold, through the family's hub, so it is in the hub's audit."""
+    """A hold, through the family's hub, so it is in the hub's audit; the last sent of
+    each site kept, with what came of it (``CARLOS_HOLDS``)."""
     outcome = hub.deliver(carlos.CARLOS, body["cue"], body["action"])
-    return carlos.answer_of(outcome, hub.carlos_at() or "")
+    site = body["cue"].get("number")
+    try:
+        answer = carlos.answer_of(outcome, hub.carlos_at() or "")
+    except carlos.CarlosError as exc:
+        _held(site, body, None, str(exc))
+        raise
+    _held(site, body, answer, None)
+    return answer
+
+
+# What carlos was last asked to hold for each site, as a surface (apothecary/surfaces.py):
+# kept as each hold is sent through the hub, and said changed then. Gone when the
+# server stops; carlos's own state is carlos's (its GET /family/state).
+CARLOS_HOLDS = "carlos_holds"
+_HELD: Dict[str, Dict[str, Any]] = {}
+_HELD_LOCK = threading.Lock()
+
+
+def _held(site: Optional[str], body: Dict[str, Any], answer, error: Optional[str]) -> None:
+    record = {
+        "site": site,
+        "sent_at": datetime.now(timezone.utc).isoformat(),
+        "action": body["action"],
+        "answer": answer,
+        "error": error,
+    }
+    with _HELD_LOCK:
+        _HELD[site or ""] = record
+    surfaces.changed(CARLOS_HOLDS, key=site, body=record)
+
+
+def _holds_kept(words: Dict[str, str]) -> Dict[str, Any]:
+    with _HELD_LOCK:
+        held = dict(_HELD)
+    return {"holds": [r for s, r in sorted(held.items()) if words.get("site") in (None, s)]}
+
+
+surfaces.register(
+    surfaces.Surface(
+        name=CARLOS_HOLDS,
+        frame="none",
+        about="what carlos was last asked to hold for each site, and what it answered",
+        snapshot=_holds_kept,
+        takes=("site",),
+        tells=True,
+        owner=__name__,
+    )
+)
 
 
 def _wiring(name: str) -> Wiring:
