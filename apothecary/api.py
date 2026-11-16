@@ -1656,6 +1656,9 @@ def _assembly_tree(
             if node.build_origin
             else None
         ),
+        # A machine's frame, as GET /firmware/printers/where gives it without a
+        # controller's word (machine_frame); None for anything else.
+        "frame": machine_frame(node, world_position) if node.build_volume else None,
         "primitive": (
             _primitive_descriptor(node.base, world_position) if node.base is not None else None
         ),
@@ -2109,15 +2112,22 @@ def _base_height(printer: Assembly) -> float:
 
 
 def describe_for_view(
-    site: Assembly, path: str, n: Assembly, *, is_printer: bool
+    site: Assembly,
+    path: str,
+    n: Assembly,
+    *,
+    is_printer: bool,
+    controller: Optional[firmware_gcode.PrinterStatus] = None,
 ) -> Dict[str, object]:
-    """One node as the board view wants it: world position, footprint, build volume, base."""
+    """One node as the board view wants it: world position, footprint, build volume,
+    base, and its machine frame (``machine_frame``, with ``controller``'s word)."""
     pos = _world_position_of(site, path)
     fp = n.footprint
     return {
         "path": path,
         "name": n.name,
         "position": {"x": pos.x, "y": pos.y, "z": pos.z},
+        "frame": machine_frame(n, pos, controller=controller),
         "footprint": (
             {
                 "min": [fp.min_point.x, fp.min_point.y, fp.min_point.z],
@@ -2150,14 +2160,92 @@ def describe_for_view(
     }
 
 
-def _bed_moves_y(n: Assembly) -> Optional[float]:
+def _part_of(n: Assembly) -> Optional[BasePart]:
+    """The registered part a node is drawn from, or None."""
     ref = getattr(n, "part_ref", None)
     if not ref:
         return None
     try:
-        return load_part_wrapper(ref).bed_moves_y
+        return load_part_wrapper(ref)
     except HTTPException:
         return None
+
+
+def _bed_moves_y(n: Assembly) -> Optional[float]:
+    part = _part_of(n)
+    return part.bed_moves_y if part is not None else None
+
+
+def machine_frame(
+    n: Assembly, at: Vector3D, *, controller: Optional[firmware_gcode.PrinterStatus] = None
+) -> Optional[Dict[str, object]]:
+    """Where a machine's work happens, in the site's millimetres: what every drawing
+    of the machine -- its working volume, its bed, its tool, the grid under it --
+    is placed by. None for a node with no ``build_volume``.
+
+    ``at`` is the node's own origin in the site (``position``). ``origin`` is where
+    the volume's (0, 0, 0) stands in the node's frame with the bed at rest: the
+    node's ``build_origin`` when it says (``origin_from`` "node"), else the volume
+    centred on its footprint and standing on its base (``_base_height``,
+    "footprint"), else the node's own origin ("position"). ``bed_origin`` is the same
+    point in the site, and ``bed_z`` its height: the bed's surface.
+
+    ``volume`` is the controller's travel (``$130``-``$132``) once ``controller``, the
+    port's last poll, carries it (``volume_from`` "controller"), else the site's
+    figure (``site_volume``, "site"). ``homing`` is the way each axis homes, "min" or
+    "max", as the controller's ``$23`` says, else None: what turns a router's
+    machine position into a place in the volume (``grbl.in_volume``).
+
+    ``bed_moves_y`` and ``kinematics`` (its ``rest`` and ``range``) are the part's
+    (``BasePart``): a bed that carries Y moves under a tool standing this far into
+    the volume along Y.
+    """
+    site_volume = getattr(n, "build_volume", None)
+    if site_volume is None:
+        return None
+    travel = controller.travel if controller is not None else None
+    said = travel is not None and all(travel.get(k) is not None for k in "xyz")
+    volume = (
+        [float(travel[k]) for k in "xyz"]
+        if said
+        else [site_volume.x, site_volume.y, site_volume.z]
+    )
+    if getattr(n, "build_origin", None) is not None:
+        origin, origin_from = [n.build_origin.x, n.build_origin.y, n.build_origin.z], "node"
+    elif n.footprint is not None:
+        lo, hi = n.footprint.min_point, n.footprint.max_point
+        origin = [
+            lo.x + (hi.x - lo.x - volume[0]) / 2,
+            lo.y + (hi.y - lo.y - volume[1]) / 2,
+            lo.z + _base_height(n),
+        ]
+        origin_from = "footprint"
+    else:
+        origin, origin_from = [0.0, 0.0, 0.0], "position"
+    homing = controller.homing if controller is not None else None
+    part = _part_of(n)
+    kinematics = part.kinematics if part is not None else None
+    return {
+        "position": [at.x, at.y, at.z],
+        "origin": origin,
+        "origin_from": origin_from,
+        "bed_origin": [at.x + origin[0], at.y + origin[1], at.z + origin[2]],
+        "bed_z": at.z + origin[2],
+        "volume": volume,
+        "volume_from": "controller" if said else "site",
+        "site_volume": [site_volume.x, site_volume.y, site_volume.z],
+        "homing": (
+            {h["axis"].lower(): "min" if h["way"] == "-" else "max" for h in homing}
+            if homing
+            else None
+        ),
+        "bed_moves_y": part.bed_moves_y if part is not None else None,
+        "kinematics": (
+            {"rest": kinematics.get("rest"), "range": kinematics.get("range")}
+            if kinematics
+            else None
+        ),
+    }
 
 
 @app.get("/firmware/printers/where", tags=["firmware"])
@@ -2170,7 +2258,9 @@ def printer_where(port: str):
     footprint and build volume, and the base height the build volume sits
     on -- what the viewer's marks for a printer (``machine_marks.js``) are
     made from, and what a printer's Machine sizes its corner moves by.
-    ``board`` is ``None`` when nothing is pinned.
+    ``board`` is ``None`` when nothing is pinned. Each one's ``frame`` takes the
+    controller's word from the port's last poll (``machine_frame``); none is asked
+    for here.
     """
     pinned = _pinned_at(port)
     if pinned is None:
@@ -2179,12 +2269,13 @@ def printer_where(port: str):
     node = find_node_by_path(site, path)
     bearer_path = status_bearer_for(site, path) or path
     bearer = find_node_by_path(site, bearer_path) or node
+    last = firmware_devices.last_statuses().get(port)
     return {
         "port": port,
         "site": name,
-        "board": describe_for_view(site, path, node, is_printer=False),
+        "board": describe_for_view(site, path, node, is_printer=False, controller=last),
         "printer": (
-            describe_for_view(site, bearer_path, bearer, is_printer=True)
+            describe_for_view(site, bearer_path, bearer, is_printer=True, controller=last)
             if bearer_path != path
             else None
         ),

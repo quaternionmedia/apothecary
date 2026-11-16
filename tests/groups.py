@@ -102,6 +102,7 @@ GROUPS = {
             "test_firmware_table_map.py",
             "test_jobs.py",
             "test_job_api.py",
+            "test_machine_frame.py",
             "test_machine_plans.py",
             "test_machine_words.py",
             "test_rust_installer.py",
