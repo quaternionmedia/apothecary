@@ -910,7 +910,8 @@
         import { mountScadEditor, variantChoices, historyRows, trashRows } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
         import { parseAssignments, lastOf, literalText, writeValues } from '/static/widgets/assignments.js';
-        import { makeMachineMarks, makeBoardBadge, sayBoard, toScene as marksToScene, toolPosition as toolPositionOf } from '/static/machine_marks.js';
+        import { makeMachineMarks, makeBoardBadge, sayBoard, toolPosition as toolPositionOf } from '/static/machine_marks.js';
+        import { sceneAt, siteAt, toScene as marksToScene } from '/static/frames.js';
         import { mountPictureMarks, axes as cameraAxes } from '/static/picture_marks.js';
         import { mountPictures } from '/static/pictures.js';
         import { makeSettings, mountSettings, keyLabel, modifierLabel } from '/static/widgets/settings.js';
@@ -1127,12 +1128,8 @@
         const COARSE = [1, 0.5, 0.34];  // the share of each side's pixels drawn, by how slow
         const REST_MS = 120;            // the view still this long: the whole frame again
         const IDLE_SHARE = 3;           // what moves by itself is drawn one part in this many
-        // A point of the site's frame (z up) in three.js's (y up): a quarter turn about
-        // x, the site's y running into the screen along three.js's -z. A turn, not a
-        // mirror: what stands on the site's right stands on the scene's right.
-        const sceneAt = (x, y, z) => new THREE.Vector3(x, z, -y);
-        // A point of three.js's frame back in the site's, as [x, y, z].
-        const siteAt = (v) => [v.x, -v.z, v.y];
+        // A point of the site's frame (z up) in three.js's (y up), and back: sceneAt
+        // and siteAt, a quarter turn about x (frames.js).
         // A box of three.js's frame (a Box3) as the site's bounds.
         const siteBox = (box) => ({ min: [box.min.x, -box.max.z, box.min.y], max: [box.max.x, -box.min.z, box.max.y] });
         // A selected camera's turn ring and tilt arc, about its lens, in the move
@@ -8463,9 +8460,9 @@
                     answer = r.ok ? await r.json() : null;
                 } catch (e) { answer = null; }
                 const view = answer && answer.where;
-                if (!view || !view.build_volume || !this.machine || !this.machine.plan || this.machine.path !== planned.path || this.marks[planned.path]) return;
+                if (!view || !view.frame || !this.machine || !this.machine.plan || this.machine.path !== planned.path || this.marks[planned.path]) return;
                 const marks = makeMachineMarks(view, { drawVolume: false });
-                marks.group.position.copy(marksToScene(view.position));
+                marks.group.position.copy(marksToScene(this.machineOrigin(planned.path, view.frame)));
                 marks.group.userData.key = planned.path;
                 this.scene.add(marks.group);
                 this.marks[planned.path] = { marks, port: null, where: { printer: view }, kind: planned.kind, plan: true, readingAt: 0, readingId: null };
@@ -8639,16 +8636,16 @@
                 return `${BASE_URL}/parts/${encodeURIComponent(ref)}/variants/${encodeURIComponent(key)}/stl?${AS_IT_RESTS}`;
             }
 
-            // A printer's marks at its node, from what GET /firmware/printers/where
-            // answers for its port (asked once per port), positioned by each
-            // poll and wearing the newest bed reading.
+            // A printer's marks at its node, laid out by the machine's frame as GET
+            // /firmware/printers/where answers it for its port (asked once per port),
+            // positioned by each poll and wearing the newest bed reading.
             ensureMarks(path, row) {
                 const port = row.device.port;
                 const st = row.printer_status;
                 let have = this.marks[path];
                 if (have && have.plan) { have.marks?.destroy(); delete this.marks[path]; have = null; }
                 if (have) {
-                    if (have.marks && st && st.position) have.marks.setPosition(this.toolPosition(st, have.where));
+                    if (have.marks && st && st.position) have.marks.setPosition(this.toolPosition(st));
                     if (have.marks) this.refreshReading(path);
                     return;
                 }
@@ -8662,14 +8659,14 @@
                 this.marks[path] = { marks: null, port, pending: true };
                 this.whereByPort[port].then(async (where) => {
                     if (!this.marks[path] || !this.marks[path].pending) return;
-                    if (!where || !where.printer || !where.printer.build_volume) { delete this.marks[path]; return; }
+                    if (!where || !where.printer || !where.printer.frame) { delete this.marks[path]; return; }
                     // The world already draws each printer's build volume (updateBuildVolumeIndicator).
                     const marks = makeMachineMarks(where.printer, { drawVolume: false });
-                    marks.group.position.copy(marksToScene(where.printer.position));
+                    marks.group.position.copy(marksToScene(this.machineOrigin(path, where.printer.frame)));
                     marks.group.userData.key = path;  // the printer's: they never dim its board's badge
                     this.scene.add(marks.group);
                     const first = this.bindings[row.path] && this.bindings[row.path].printer_status;
-                    if (first && first.position) marks.setPosition(this.toolPosition(first, where), { immediate: true });
+                    if (first && first.position) marks.setPosition(this.toolPosition(first), { immediate: true });
                     const drawn = this.meshByName[path];
                     if (drawn) this.moveKinematic(drawn, marks);
                     // The kind of machine the board answered as: a bed reading is a printer's.
@@ -8753,9 +8750,18 @@
                 return true;
             }
 
-            // Where a poll puts the tool in the machine's volume (machine_marks.js).
-            toolPosition(st, where) {
-                return toolPositionOf(st, where && where.printer ? where.printer.build_volume : null);
+            // Where a poll puts the tool in the machine's volume (machine_marks.js): null
+            // for a router whose controller has not said which way each axis homes.
+            toolPosition(st) {
+                return toolPositionOf(st);
+            }
+
+            // Where a machine's own origin stands in the site now: its node's position as
+            // the tree holds it, which a layout edit moves at once; else its frame's.
+            machineOrigin(path, frame) {
+                const node = this.nodeByPath(path);
+                if (node && node.position) return node.position;
+                return { x: frame.position[0], y: frame.position[1], z: frame.position[2] };
             }
 
             // The newest bed reading of the board on a port (the server lists the

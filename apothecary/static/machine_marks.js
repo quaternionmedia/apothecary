@@ -8,11 +8,15 @@
  * over the marks of the kind of machine that took it, by its caller.
  *
  * One group, in the printer's own frame (apothecary's z-up, relative to the
- * printer's origin); the caller places it: the world scene at the printer's
- * world position, the monitor's small scene at its origin. The marker moves
- * rather than jumps: setPosition sets a target and tick() moves the drawn
- * position a fraction of the way each frame, so a poll tweens it and a jog
- * sent from a page moves it ahead of the poll that confirms it.
+ * printer's origin), laid out by the machine's frame (api.machine_frame, the
+ * `frame` GET /firmware/printers/where gives the printer): where its volume
+ * starts, how big it is, whether its bed carries Y. The caller places the group
+ * at the printer's position in the site. The marker moves rather than jumps:
+ * setPosition sets a target and tick() moves the drawn position a fraction of
+ * the way each frame, so a poll tweens it and a jog sent from a page moves it
+ * ahead of the poll that confirms it. Until a position is known the marker is
+ * not drawn, and the bed stands where the part's own axes put it (its
+ * kinematics' rest), as the machine's pieces do.
  *
  * And the board's badge (makeBoardBadge, sayBoard): ⚡ at the board's own spot,
  * its words what the board model says of it, on the anchors layer's badges.
@@ -20,6 +24,7 @@
 
 import * as THREE from "three";
 import { esc } from "/static/board_text.js";
+import { toScene } from "/static/frames.js";
 
 export const VOLUME_COLOR = 0x6fb3e8;
 export const NOZZLE_COLOR = 0xff8080;
@@ -33,9 +38,8 @@ const MESH_LOW = [0x6f, 0xb3, 0xe8];   // the bed card's blue, below the mean
 const MESH_HIGH = [0xe8, 0xb0, 0x4a];  // its amber, above
 const MESH_INSET = 10;                 // Marlin's default MESH_INSET, mm from the probeable edge
 
-// apothecary (x, y, z) z-up -> three.js (x, z, -y) y-up: a quarter turn about x, as the
-// viewer's sceneAt turns it.
-export const toScene = (p) => new THREE.Vector3(p.x, p.z, -p.y);
+// apothecary (x, y, z) z-up -> three.js (x, z, -y) y-up (frames.js).
+export { toScene };
 
 // Where a G-code file's (0, 0, 0) stands in the machine's volume: a printer's file is
 // in the bed's coordinates; a router's counts from the work zero, which the controller
@@ -49,19 +53,41 @@ export function fileOrigin(st, volume) {
     return { x: w.x + vx, y: w.y + vy, z: w.z + vz };
 }
 
-// Where a poll puts the tool in the machine's volume: a printer's position as it
-// is; a router's from the machine position its controller reports, since a Grbl
-// machine homed to its maximum switches counts down from that corner, so the tool
-// is at mpos + travel. `volume` is the working area; null for no position.
-export function toolPosition(st, volume) {
+// Where a poll puts the tool in the machine's volume: the server's word, which counts
+// each axis the way its controller homes it (grbl.in_volume, the frame's `homing`); a
+// printer's position as it is. A router's machine position is no place in its volume
+// until its controller's settings have said which way each axis homes -- the AnoleX's
+// X homes to its minimum, its Y and Z to their maximum -- so null until then: no tool
+// drawn rather than one a whole travel off.
+export function toolPosition(st) {
     const p = st && st.position;
     if (!p) return null;
-    // The server's word first: it has the controller's settings, so each axis is
-    // counted the way that controller homes it. What follows is for a poll without it.
     if (st.tool_position) return st.tool_position;
-    if (st.dialect !== "grbl") return p;
-    const [vx, vy, vz] = volume || [0, 0, 0];
-    return { x: p.x + vx, y: p.y + vy, z: p.z + vz };
+    return st.dialect === "grbl" ? null : p;
+}
+
+// The grid on a machine's bed: a line every `pitch` mm of its volume's own X and Y,
+// every fifth a shade brighter, over the whole volume from its low corner, so the
+// lines read as the machine's millimetres. In the volume's frame: its caller stands
+// it at the bed's origin (frames.js volumeToSite).
+export function makeBedGrid(volume, pitch = 10) {
+    const [vx, vy] = volume;
+    const fine = [], bold = [];
+    const lines = (span, along) => {
+        const n = Math.ceil(span / pitch - 1e-6);
+        for (let i = 0; i <= n; i++) {
+            const at = Math.min(i * pitch, span);
+            (i % 5 ? fine : bold).push(...along(at));
+        }
+    };
+    lines(vx, (x) => [toScene({ x, y: 0, z: 0 }), toScene({ x, y: vy, z: 0 })]);
+    lines(vy, (y) => [toScene({ x: 0, y, z: 0 }), toScene({ x: vx, y, z: 0 })]);
+    const grid = new THREE.Group();
+    grid.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(fine), new THREE.LineBasicMaterial({ color: 0x2a2a2a })));
+    grid.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(bold), new THREE.LineBasicMaterial({ color: 0x444444 })));
+    grid.userData.pitch = pitch;
+    grid.userData.volume = [vx, vy];
+    return grid;
 }
 
 /* Where the mesh points lie, in bed coordinates. Marlin prints the grid
@@ -85,9 +111,9 @@ export function meshExaggeration(range) {
     return Math.round(Math.min(50, Math.max(10, 40 / range)));
 }
 
-/* `printer` is what GET /firmware/printers/where answers for the printer:
- * footprint, build_volume, build_origin or base_height (position is the
- * caller's to apply). `drawVolume: false` leaves the wire box to a scene
+/* `printer` is what GET /firmware/printers/where answers for the printer; its
+ * `frame` (api.machine_frame) is what the marks are laid out by (its position
+ * is the caller's to apply). `drawVolume: false` leaves the wire box to a scene
  * that already has one. */
 export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
     const note = (text, key) => { if (onNote) onNote(text, key); };
@@ -97,22 +123,14 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
     // AnoleX's table), it is the bed that moves along Y, and the tool stands still there.
     const bedGroup = new THREE.Group();
     group.add(bedGroup);
-    const bedMovesY = printer && typeof printer.bed_moves_y === "number" ? printer.bed_moves_y : null;
-    const hasVolume = !!(printer && printer.build_volume && (printer.footprint || printer.build_origin));
-    let volumeOrigin = { x: 0, y: 0, z: 0 };
+    const frame = (printer && printer.frame) || null;
+    const bedMovesY = frame && typeof frame.bed_moves_y === "number" ? frame.bed_moves_y : null;
+    const hasVolume = !!frame;
+    // Where the volume starts in the printer's frame: the frame's word, whether the
+    // node said it (a machine drawn as it is) or it is centred on a block's footprint.
+    const volumeOrigin = frame ? { x: frame.origin[0], y: frame.origin[1], z: frame.origin[2] } : { x: 0, y: 0, z: 0 };
     if (hasVolume) {
-        const [vx, vy, vz] = printer.build_volume;
-        if (printer.build_origin) {
-            // A machine drawn as it is says where its volume starts.
-            const [ox, oy, oz] = printer.build_origin;
-            volumeOrigin = { x: ox, y: oy, z: oz };
-        } else {
-            // A block: the build volume sits on the printer's base and centred
-            // on its footprint -- the site's printers say how big it is, not where.
-            const fp = printer.footprint;
-            const fw = fp.max[0] - fp.min[0], fd = fp.max[1] - fp.min[1];
-            volumeOrigin = { x: fp.min[0] + (fw - vx) / 2, y: fp.min[1] + (fd - vy) / 2, z: fp.min[2] + (printer.base_height || 0) };
-        }
+        const [vx, vy, vz] = frame.volume;
         if (drawVolume) {
             const box = new THREE.BoxGeometry(vx, vz, vy);
             const volume = new THREE.LineSegments(new THREE.EdgesGeometry(box), new THREE.LineBasicMaterial({ color: VOLUME_COLOR, transparent: true, opacity: 0.6 }));
@@ -144,9 +162,14 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
 
     // `current` is what is drawn, `target` what was last asked for; each
     // tick moves current a fraction of the way -- a tween that finishes in
-    // about a third of a second whatever the distance.
-    const current = { x: 0, y: 0, z: 0 };
-    const target = { x: 0, y: 0, z: 0 };
+    // about a third of a second whatever the distance. Both start at the part's
+    // own axes (its kinematics' rest), where its pieces are drawn, and the marker
+    // is not drawn until a position is known (`known`).
+    const rest = frame && frame.kinematics && frame.kinematics.rest;
+    const current = rest ? { x: rest.x || 0, y: rest.y || 0, z: rest.z || 0 } : { x: 0, y: 0, z: 0 };
+    const target = { ...current };
+    let known = false;
+    nozzle.visible = false;
     function place() {
         // A bed that carries Y is moved so the work's Y under the tool is the poll's.
         const y = bedMovesY === null ? current.y : bedMovesY;
@@ -181,7 +204,7 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
         // front-left corner, where its probe went); a printer's grid is placed by estimate.
         const bounds = record.area
             ? { min: { x: record.area.min.x, y: record.area.min.y }, max: { x: record.area.max.x, y: record.area.max.y } }
-            : meshBounds(printer.build_volume, record.probe_offset);
+            : meshBounds(frame.volume, record.probe_offset);
         const stepX = nCols > 1 ? (bounds.max.x - bounds.min.x) / (nCols - 1) : 0;
         const stepY = nRows > 1 ? (bounds.max.y - bounds.min.y) / (nRows - 1) : 0;
         // Vertices in the printer's frame: the bed at the volume's floor, the
@@ -279,6 +302,7 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
 
     return {
         group,
+        frame,
         volumeOrigin,
         setToolpath,
         // What is drawn of a file's path: for the page's status, and its tests.
@@ -293,11 +317,16 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
             path.updateWorldMatrix(true, false);
             return new THREE.Box3().setFromObject(path);
         },
+        // A place for the tool, or null for none known: the marker goes until one is.
+        // The first place after none is jumped to, not tweened from wherever it was.
         setPosition(p, { immediate = false } = {}) {
-            if (!p) return;
+            if (!p) { known = false; nozzle.visible = false; return; }
             for (const k of ["x", "y", "z"]) if (typeof p[k] === "number") target[k] = p[k];
-            if (immediate) { Object.assign(current, target); place(); }
+            if (immediate || !known) { Object.assign(current, target); place(); }
+            known = true;
+            nozzle.visible = true;
         },
+        known() { return known; },
         // A step of the tween, and whether the nozzle moved: within a thousandth of a
         // millimetre it is where it was asked to be, and stays (the page draws only
         // while something moves).
@@ -320,7 +349,7 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
         mesh() { return meshDrawn ? JSON.parse(JSON.stringify(meshDrawn)) : null; },
         volume() {
             if (!hasVolume) return null;
-            const [vx, vy, vz] = printer.build_volume;
+            const [vx, vy, vz] = frame.volume;
             return { min: { ...volumeOrigin }, max: { x: volumeOrigin.x + vx, y: volumeOrigin.y + vy, z: volumeOrigin.z + vz } };
         },
         destroy() {
