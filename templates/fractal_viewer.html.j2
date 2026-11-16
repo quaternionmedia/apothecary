@@ -2402,7 +2402,7 @@
                     Object.assign(node.position, start.node);
                     this.recomputeWorldBounds(node);
                     for (const axis of ['x', 'y', 'z']) {
-                        const input = document.getElementById(`pos-${axis}`);
+                        const input = this.selectedBodyEl.querySelector(`#pos-${axis}`);
                         if (input) input.value = node.position[axis];
                     }
                     if (mesh && mesh.userData.camera) this.pictureMarks.posePreview(mesh.userData.camera, null);
@@ -4230,15 +4230,17 @@
                     ${this.zoomInAffordanceHtml(node)}
                 `;
                 this.bindDetailAffordance();
+                // Looked up in Selected's own body, which is out of the document while the
+                // window is closed: a piece chosen then is drawn there all the same.
                 for (const axis of ['x', 'y', 'z']) {
-                    document.getElementById(`pos-${axis}`).addEventListener('change', (e) => {
+                    this.selectedBodyEl.querySelector(`#pos-${axis}`).addEventListener('change', (e) => {
                         node.position[axis] = parseFloat(e.target.value) || 0;
                         this.recomputeWorldBounds(node);
                         this.rebuildSingleMesh(node);
                         this.submitLayout();
                     });
                 }
-                const statusSelect = document.getElementById('status-select');
+                const statusSelect = this.selectedBodyEl.querySelector('#status-select');
                 if (statusSelect) {
                     statusSelect.addEventListener('change', (e) => this.submitStatus(node.name, e.target.value));
                 }
@@ -7097,7 +7099,7 @@
                     this.pictureMarks.posePreview(mesh.userData.camera, { position: [node.position.x, node.position.y, node.position.z] });
                     this.showCameraHandles(mesh.userData.camera);
                     for (const axis of ['x', 'y', 'z']) {
-                        const input = document.getElementById(`pos-${axis}`);
+                        const input = this.selectedBodyEl.querySelector(`#pos-${axis}`);
                         if (input) input.value = node.position[axis];
                     }
                     return;
@@ -7123,7 +7125,7 @@
                 this.recomputeWorldBounds(node);
                 // Every frame of a drag: only the numbers move, not the panel.
                 for (const axis of ['x', 'y', 'z']) {
-                    const input = document.getElementById(`pos-${axis}`);
+                    const input = this.selectedBodyEl.querySelector(`#pos-${axis}`);
                     if (input) input.value = node.position[axis];
                 }
             }

@@ -425,3 +425,23 @@ def test_pinned_takes_back_another_sites_pins_without_switching(
     expect(page.locator("#site-crumb")).to_be_hidden()
     expect(status).not_to_have_class(re.compile(r"\berror\b"))
     assert errors == []
+
+
+@pytest.mark.e2e
+def test_a_piece_chosen_while_selected_is_closed_is_there_when_it_opens(page, base_url: str):
+    """Selected closed, a piece chosen from its row -- as a tour's stage chooses one --
+    throws nothing, and Selected opened again shows it, its position boxes bound."""
+    errors: list = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    _open(page, base_url)
+    windows.close(page, "selected")
+    _row(page, "footpedal").click()
+    page.wait_for_function("() => window.fractalViewer.selectedName === 'footpedal'")
+    assert errors == []
+    windows.open_window(page, "selected")
+    body = page.locator("#selected-body")
+    expect(body).to_contain_text("footpedal")
+    expect(body.locator("#pos-x")).to_have_value(
+        str(page.evaluate("() => window.fractalViewer.nodeByPath('footpedal').position.x"))
+    )
+    assert errors == []
