@@ -1,5 +1,6 @@
-"""The universe in a browser (apothecary/universe.py): the site ``apothecary``, every
-registered part a leaf of it and every other site one piece.
+"""The universe in a browser (apothecary/universe.py): the site ``apothecary``, a sphere
+of nested shells, every registered part a leaf of it on the shell its composition depth
+gives it, facing outward, and every other site one piece on the outermost.
 
 A site's piece is drawn in miniature from boxes the site's tree carries, with nothing
 rendered for it; Selected says it is a site and how large the site really is, and
@@ -78,6 +79,64 @@ def _tree(page: Page, base_url: str) -> dict:
     return page.request.get(f"{base_url}/sites/{UNIVERSE}").json()["tree"]
 
 
+# The sphere as the page holds it: how far each node's middle is from the site's origin,
+# where the camera stands, how near it may come, whether the whole of it is in view, and
+# whether the floor grid is drawn.
+SPHERE = """() => {
+    const v = window.fractalViewer;
+    const nodes = Object.values(v.renderNodeByKey).filter((n) => n.world_bounds);
+    const middle = (n) => n.world_bounds.min.map((m, i) => (m + n.world_bounds.max[i]) / 2);
+    const radius = (n) => Math.hypot(...middle(n));
+    const radii = nodes.map(radius);
+    const inView = nodes.every((n) => {
+        const p = v.sceneAt(...middle(n)).project(v.camera);
+        return Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1 && p.z <= 1;
+    });
+    return {
+        outermost: Math.max(...radii),
+        innermost: Math.min(...radii),
+        camera: v.camera.position.length(),
+        nearest: v.orbitControls.minDistance,
+        inView,
+        grid: v.gridHelper.visible,
+    };
+}"""
+
+# A turned leaf's mesh: whether its up (three.js's +y) points along the ray from the
+# middle of the universe, which is where sceneAt puts the site's origin.
+FACES_OUT = """(key) => {
+    const v = window.fractalViewer, mesh = v.meshByName[key];
+    const q = mesh.quaternion, dir = mesh.position.clone().normalize();
+    const up = mesh.position.clone().set(0, 1, 0).applyQuaternion(q);
+    return { dot: up.dot(dir), turned: !(q.x === 0 && q.y === 0 && q.z === 0 && q.w === 1) };
+}"""
+
+
+@pytest.mark.e2e
+def test_the_universe_opens_as_a_whole_sphere_seen_from_outside_and_the_camera_may_enter(
+    page: Page, base_url: str
+):
+    _at(page, base_url)
+    seen = page.evaluate(SPHERE)
+    assert seen["camera"] > seen["outermost"], f"the camera starts inside the sphere: {seen}"
+    assert seen["inView"], f"some of the sphere is out of the opening view: {seen}"
+    assert seen["nearest"] < seen["innermost"], f"the camera may not come inside: {seen}"
+    assert seen["grid"] is False, "the floor grid cuts through the sphere"
+
+
+@pytest.mark.e2e
+def test_a_part_faces_outward_and_a_site_stands_upright(page: Page, base_url: str):
+    _at(page, base_url)
+    tree = _tree(page, base_url)
+    leaves = [c for c in tree["children"] if c["part_ref"] and c["turn"][1] > 1]
+    assert leaves, "no leaf is turned"
+    for leaf in leaves[:6]:
+        facing = page.evaluate(FACES_OUT, leaf["name"])
+        assert facing["turned"] and facing["dot"] > 0.999, f"{leaf['name']} faces {facing}"
+    garage = next(c for c in tree["children"] if c["site_ref"] == "garage")
+    assert not page.evaluate(FACES_OUT, garage["name"])["turned"]
+
+
 @pytest.mark.e2e
 def test_every_other_site_is_a_miniature_and_nothing_is_rendered_to_draw_one(
     page: Page, base_url: str
@@ -135,6 +194,11 @@ def _by_its_row(page: Page) -> None:
 
 
 def _by_the_world(page: Page) -> None:
+    # At the opening view the sphere's inner shells and the near side of its outer ones
+    # stand between the camera and most pieces: the piece is framed first, as f does.
+    select(page, PIECE)
+    page.evaluate("() => window.fractalViewer.fitSelected()")
+    settled(page)
     on_it = page.evaluate(ON_PIECE, PIECE)
     assert on_it, "the garage's piece is nowhere under the pointer"
     page.mouse.dblclick(on_it["x"], on_it["y"])
