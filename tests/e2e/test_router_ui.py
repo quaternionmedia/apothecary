@@ -824,6 +824,104 @@ def _command(url: str, line: str) -> None:
     ).raise_for_status()
 
 
+# Where the world draws the router now: its tool's mark, its table piece, and its wire
+# box's middle in the site's frame, with the frame its marks stand in.
+ROUTER_NOW = """() => {
+    const v = window.fractalViewer, m = v.marks['cnc_router'], mesh = v.meshByName['cnc_router'];
+    const box = v.buildVolumeMeshByName['cnc_router'], t = mesh.getObjectByName('piece:table').position;
+    return { mark: m.marks.position(), known: m.marks.known(), frame: m.marks.frame,
+             table: [t.x, t.y, t.z], box: v.siteAt(box.position), size: [box.scale.x, box.scale.y, box.scale.z] };
+}"""
+
+
+@pytest.mark.e2e
+def test_the_world_follows_the_router_with_no_machine_open(page: Page, url: str):
+    """No Machine open: the world polls the router it draws by a watcher of its own, so a
+    jog sent from elsewhere moves the tool's mark, and the table with what rides it --
+    its piece and the wire box of the working volume, by the same amount along Y. The box
+    is the volume the controller says (its $130-$132), and the grid of the router stepped
+    into lies on its table."""
+    _poll_at_rest(url)  # a poll holds the link: the world opens none
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    page.wait_for_function(
+        "() => { const v = window.fractalViewer, m = v.marks['cnc_router'];"
+        " return m && m.marks && m.marks.known() && m.marks.frame.volume_from === 'controller'"
+        " && v.meshByName['cnc_router'].userData.kinematics; }",
+        timeout=60000,
+    )
+    assert page.evaluate("() => window.fractalViewer.machine") is None
+    watchers = page.evaluate(
+        "(port) => [...window.fractalViewer.boards.board(port).watchers.keys()]"
+        ".map((who) => who.world || 'another')",
+        ROUTER,
+    )
+    assert watchers == [ROUTER], watchers
+    httpx.post(
+        f"{url}/firmware/printers/control", json={"port": ROUTER, "armed": True}, timeout=15.0
+    ).raise_for_status()
+    start = _poll_at_rest(url)["tool_position"]
+    at = "(s) => { const p = window.fractalViewer.marks['cnc_router'].marks.position();"
+    at += " return Math.abs(p.x - s.x) < 0.01 && Math.abs(p.y - s.y) < 0.01; }"
+    page.wait_for_function(at, arg=start, timeout=WITHIN_A_POLL)
+    before = page.evaluate(ROUTER_NOW)
+    vx, vy, vz = before["frame"]["volume"]
+    assert before["size"] == pytest.approx([vx, vz, vy]), before  # three.js's y is the site's z
+    dx, dy = (-10, -25) if start["x"] >= 10 and start["y"] >= 25 else (10, 25)
+    for line in (f"$J=G91 G21 X{dx} F1000", f"$J=G91 G21 Y{dy} F1000"):
+        _command(url, line)
+    _poll_at_rest(url)
+    page.wait_for_function(at, arg={"x": start["x"] + dx, "y": start["y"] + dy}, timeout=WITHIN_A_POLL)
+    after = page.evaluate(ROUTER_NOW)
+    # The table carries Y: its piece and the box move together, minus the jog along the
+    # site's Y (three.js's -z for the piece); along X neither moves.
+    table_moved_y = -(after["table"][2] - before["table"][2])
+    box_moved = [a - b for a, b in zip(after["box"], before["box"], strict=True)]
+    assert box_moved == pytest.approx([0, table_moved_y, 0], abs=0.05), (before, after)
+    assert table_moved_y == pytest.approx(-dy, abs=0.05), (before, after)
+
+    page.evaluate("() => window.fractalViewer.zoomIn('cnc_router')")
+    page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'cnc_router'")
+    grid = page.evaluate(
+        "() => { const v = window.fractalViewer, g = v.gridHelper, f = v.marks['cnc_router'].marks.frame;"
+        " return { path: g.userData.path, pitch: g.userData.pitch, z: v.siteAt(g.position)[2], bed: f.bed_z }; }"
+    )
+    assert grid["path"] == "cnc_router" and grid["pitch"] == 10, grid
+    assert grid["z"] == pytest.approx(grid["bed"] + 0.3, abs=0.01), grid
+    for line in (f"$J=G91 G21 X{-dx} F1000", f"$J=G91 G21 Y{-dy} F1000"):
+        _command(url, line)
+    _poll_at_rest(url)
+
+
+@pytest.mark.e2e
+def test_no_tool_is_drawn_while_a_poll_does_not_say_where_it_is_in_the_volume(
+    page: Page, url: str
+):
+    """A router's machine position is a place in its volume only by the way each axis
+    homes, which the server reads from its controller's settings. A poll without that
+    word (no tool_position) draws no tool, rather than one counted as if every axis homed
+    to its maximum; the next poll that says it draws it again."""
+    _poll_at_rest(url)  # a poll holds the link: the world opens none
+    open_garage(page, url, settle=False)
+    wears(page, "cnc_router")
+    known = "() => { const m = window.fractalViewer.marks['cnc_router']; return m && m.marks && m.marks.known(); }"
+    page.wait_for_function(known, timeout=60000)
+
+    def without_its_place(route):
+        answer = route.fetch()
+        body = answer.json()
+        body["tool_position"] = None
+        route.fulfill(response=answer, json=body)
+
+    page.route(re.compile(r".*/firmware/printers/status\?port=.*ttyFAKE3.*"), without_its_place)
+    page.wait_for_function(f"() => !({known})()", timeout=WITHIN_A_POLL)
+    assert not page.evaluate(
+        "() => window.fractalViewer.marks['cnc_router'].marks.group.children[1].visible"
+    )
+    page.unroute(re.compile(r".*/firmware/printers/status\?port=.*ttyFAKE3.*"))
+    page.wait_for_function(known, timeout=WITHIN_A_POLL)
+
+
 # Last in the file: the allowance it keeps stays in this module's state folder, and every
 # toolpath written for cnc_router after it takes it.
 @pytest.mark.e2e

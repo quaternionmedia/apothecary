@@ -574,6 +574,71 @@ def test_the_printer_s_drawing_encloses_its_board_and_its_build_volume(
     assert board["min"]["z"] - origin["z"] == pytest.approx(26, abs=1)
 
 
+# The wire box and the marks of one machine read at one instant, with how far its bed
+# stands along Y from where its frame's origin has it.
+ONE_FRAME = f"""(path) => ({{
+    wire: ({WIRE_VOLUME})(path),
+    marked: ({MARKED_VOLUME})(path),
+    offset: window.fractalViewer.marks[path].marks.bedOffset(),
+}})"""
+
+
+@pytest.mark.e2e
+def test_the_printer_s_wire_box_and_marks_stand_in_one_frame_wherever_the_layout_moves_it(
+    page: Page, printer_url: str
+):
+    """printer_1's wire box and the marks its board's port lays on its bed are drawn from
+    one frame: the box is the marks' volume, moved along Y by what the bed carries. Moved
+    100 mm by its Position, both stand where it now stands. Stepped into, its grid lies
+    on its bed, in lines 10 mm apart from the volume's corner, riding the bed."""
+    _pin(printer_url, BOARD)
+    _identify(printer_url)
+    page.goto(f"{printer_url}/viewer/sites/garage")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
+    page.wait_for_function(
+        "() => { const m = window.fractalViewer.marks['printer_1'];"
+        " return m && m.marks && m.marks.known(); }",
+        timeout=15000,
+    )
+    page.evaluate("() => window.fractalViewer.waveDone")
+
+    def one_frame():
+        seen = page.evaluate(ONE_FRAME, "printer_1")
+        wire, marked, offset = seen["wire"], seen["marked"], seen["offset"]
+        for axis in "xz":
+            for end in ("min", "max"):
+                assert wire[end][axis] == pytest.approx(marked[end][axis], abs=0.01), seen
+        for end in ("min", "max"):
+            assert wire[end]["y"] == pytest.approx(marked[end]["y"] + offset, abs=0.01), seen
+        return seen
+
+    before = one_frame()
+    _select(page, "printer_1")
+    x = page.evaluate("() => window.fractalViewer.nodeByPath('printer_1').position.x")
+    page.locator("#pos-x").fill(str(x + 100))
+    page.locator("#pos-x").dispatch_event("change")
+    expect(page.locator("#status")).to_contain_text("Layout", timeout=10000)
+    after = one_frame()
+    for name in ("wire", "marked"):
+        assert after[name]["min"]["x"] - before[name]["min"]["x"] == pytest.approx(100, abs=0.01)
+
+    page.evaluate("() => window.fractalViewer.zoomIn('printer_1')")
+    page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'printer_1'")
+    grid = page.evaluate(
+        """() => {
+            const v = window.fractalViewer, g = v.gridHelper, m = v.marks['printer_1'].marks;
+            const [x, y, z] = v.siteAt(g.position), at = v.siteAt(m.group.position);
+            const lo = m.volume().min;
+            return { path: g.userData.path, pitch: g.userData.pitch, at: [x, y, z],
+                     bed: [at[0] + lo.x, at[1] + lo.y + m.bedOffset(), at[2] + lo.z] };
+        }"""
+    )
+    assert grid["path"] == "printer_1" and grid["pitch"] == 10, grid
+    assert grid["at"][0] == pytest.approx(grid["bed"][0], abs=0.01), grid
+    assert grid["at"][1] == pytest.approx(grid["bed"][1], abs=0.01), grid
+    assert grid["at"][2] == pytest.approx(grid["bed"][2] + 0.3, abs=0.01), grid
+
+
 @pytest.mark.e2e
 def test_a_poll_answered_after_arming_does_not_disarm_the_page(page: Page, printer_url: str):
     """A poll asked before Control is armed carries the latch as it was then
