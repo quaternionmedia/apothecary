@@ -465,6 +465,15 @@ Keep a hand on each machine's own power switch: it is faster than the deck's sto
       loaded: one click clockwise pushes 1 mm (`M83`, `G1 E1 F200`), counter-clockwise
       pulls it back. Below Marlin's minimum, the board refuses and the log says so.
       The printer's **STOP** halts it (`M112`) and the page's E-STOP does too.
+- [ ] Swipe the strip: draw a finger from its right end to its left, then back. The
+      strip goes knobs, **Progress**, **Status** and back, one screen a swipe, and the
+      events list `drag` with `x` above `x_out` (a finger moving left) and one drag report
+      for the whole stroke, lifted at its end. A swipe is not read twice, and a tap on the
+      strip changes nothing.
+- [ ] Start a print on the printer: the strip brings **Progress** forward once with the
+      file's name, a bar and the stage; swipe to the knobs, which say the print holds the
+      port and the jogs are refused, and the strip stays there. A turn of knob 1 moves
+      nothing. Cancel the print: Progress says *cancelled* until the strip is touched.
 
 ## K. The footpedal
 

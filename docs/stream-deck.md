@@ -135,9 +135,47 @@ plugged in, each is the one board of its kind this server knows, wherever it is 
 Two of a kind and no pin is no machine for the knobs, and both of them for that kind's
 stop key.
 
-The strip says which machine, whether its control is armed and for how long, the chosen
+The strip's first screen, the knobs', says which machine, whether its control is armed and for how long, the chosen
 machine's newest poll, the deck's own or anyone's (X, Y, Z and the fourth quantity), the
 step, and what the last turn did or why it did nothing.
+
+## The strip's screens
+
+The strip has three screens, in this order, and a swipe along it walks them
+(`apothecary/firmware/deck_screens.py` holds what each says and the swipe; `deck_control.py`
+holds which is showing):
+
+- **Knobs**, the one above, which the strip starts on. While a job holds the chosen
+  machine's port -- a print or a cut the host streams, or a bed reading a poll saw a moment
+  ago -- it says so in the words the server refuses a jog with (`PortHeld`) and that the
+  jogs are refused; on a router it adds that knob 4 still turns the spindle, since a cut's
+  dialect lets that through.
+- **Progress**: the part the job makes, else the file it ran, how far it is as a number
+  and as a bar, its stage and how long it has run. Where no job of the host's is running
+  but the printer's card is, it shows the card's progress and the time the card reports.
+  No remaining time is drawn, because neither the job's record nor a poll carries one.
+- **Status**: the machine's state; a printer's hotends and bed, or a router's spindle and
+  feed; and the first thing it asks of a person, from its `todo`, else its alarm. It reads
+  the newest status anyone's poll made, and says how old it is when it is over ten seconds.
+
+A **swipe** is the strip's drag event (`{"kind": "drag", "x", "y", "x_out", "y_out"}`,
+where `x` and `y` are where the finger went down and `x_out` and `y_out` where it came up)
+of 200 pixels or more along the strip's 800: a finger moving left shows the next screen,
+right the one before. It stops at either end and does not wrap. A tap or a long press
+moves nothing. Switching screens draws the strip and nothing more: no line goes to a
+machine, no poll is asked, and no key changes (the stops and the machine keys are the same
+on every screen).
+
+A job begun on the chosen machine brings Progress forward once, for that job: a swipe
+away from it is never undone, and the next job is another. A job begun on the other
+machine brings nothing forward. A job that has ended stays on Progress, saying how it
+ended (done, cancelled or failed, and after how long), until a touch of that screen clears
+it; a touch on another screen leaves it. The screens follow the job's own thread, not a
+poller of their own, and the layout's two-second tick draws the elapsed time.
+
+The Deck window says which screen the strip shows. Dragged along its strip by the mouse,
+a quarter of its length or more, a simulated deck is swiped; a real deck's strip is a
+person's to swipe.
 
 **Nothing the deck sends bypasses what bounds a person's jog.** A jog goes through
 `devices.printer_jog`, the function behind `POST /firmware/printers/jog` and the page's
