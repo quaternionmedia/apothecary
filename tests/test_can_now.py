@@ -83,7 +83,7 @@ class Rig:
         self.file_id = devices.save_print_file("file.gcode", text.encode(), machine=machine).id
 
     def task_on_the_port(self):
-        active = SimpleNamespace(id="t1", title="upload", port=PORT)
+        active = SimpleNamespace(id="t1", title="upload", port=PORT, snapshot=lambda: {"id": "t1"})
         runner = SimpleNamespace(active=active)
         self.monkeypatch.setattr(firmware_api, "get_task_runner", lambda: runner)
         self.monkeypatch.setattr(tasks, "get_task_runner", lambda: runner)
@@ -337,3 +337,32 @@ def test_a_flash_to_a_machines_controller_is_refused_and_a_running_task_too(rig,
 
     monkeypatch.setattr(tasks, "get_task_runner", lambda: SimpleNamespace(active=Busy))
     assert can.can_now(PORT)["flash"]["kind"] == "busy"
+
+
+@pytest.mark.parametrize("rig", KINDS, indirect=True)
+def test_the_status_and_the_info_carry_the_answer_and_a_route_answers_for_a_file(rig):
+    idle_armed(rig)
+    asked = can.can_now(PORT)
+    status = rig.client.get("/firmware/printers/status", params={"port": PORT}).json()
+    info = rig.client.get("/firmware/printers/info", params={"port": PORT}).json()
+    assert status["can"] == asked == info["can"]
+    ok = rig.client.get(
+        "/firmware/printers/can-start", params={"port": PORT, "file_id": rig.file_id}
+    ).json()
+    assert ok == {"ok": True, "why": None, "kind": None}
+    rig.links.control.disarm(PORT)
+    down = rig.client.get(
+        "/firmware/printers/can-start", params={"port": PORT, "file_id": rig.file_id}
+    ).json()
+    assert down["ok"] is False and down["kind"] == "armed"
+    assert (
+        rig.client.get(
+            "/firmware/printers/can-start", params={"port": PORT, "file_id": "nope"}
+        ).json()["kind"]
+        == "file"
+    )
+    # While a task holds the port the poll is refused (409) and the info still answers.
+    rig.task_on_the_port()
+    assert rig.client.get("/firmware/printers/status", params={"port": PORT}).status_code == 409
+    held = rig.client.get("/firmware/printers/info", params={"port": PORT}).json()["can"]
+    assert held["jog"]["kind"] == "held"

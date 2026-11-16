@@ -334,6 +334,7 @@ def firmware_printer_status(port: Port, baud: int = Query(None, ge=300, le=20000
     # a page polling on a schedule learns it without a second request.
     data["held"] = gcode.get_printer_links().get(port) is not None
     data["control"] = _control_state(port)
+    data["can"] = can.can_now(port)
     return data
 
 
@@ -364,6 +365,13 @@ async def firmware_printer_control_arm(body: PrinterControlArmRequest):
 @router.get("/printers/control")
 async def firmware_printer_control_state(port: Port):
     return _control_state(port)
+
+
+@router.get("/printers/can-start")
+def firmware_printer_can_start(port: Port, file_id: str = Query(..., min_length=1)):
+    """Whether the kept file ``file_id`` would be started on ``port`` now, and if not
+    why: what ``POST /printers/print`` would refuse, answered without sending it."""
+    return can.can_start(port, file_id)
 
 
 @router.get("/printers/armed")
@@ -618,6 +626,7 @@ def firmware_printer_info(port: Port):
         "last_status": last.model_dump(mode="json") if last else None,
         "active_task": (get_task_runner().active or None) and get_task_runner().active.snapshot(),
         "control": _control_state(port),
+        "can": can.can_now(port),
     }
 
 

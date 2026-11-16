@@ -666,8 +666,32 @@ GET  /firmware/printers/control?port=…                               → armed
 GET  /firmware/printers/armed                                        → every port armed, and its seconds left
 POST /firmware/printers/command  {"port": …, "command": "M140 S60"}   → 409 unless armed
 POST /firmware/printers/jog      {"port": …, "axis": "X", "mm": -5, "feed": 3000}  → one relative move
+GET  /firmware/printers/can-start?port=…&file_id=…                  → would that file be started now, and if not why
 GET  /firmware/busy                                                  → what a restart would cut into
 ```
+
+#### What a command would be refused for
+
+`GET /firmware/printers/status` and `/info` carry `can`: for each command, whether the
+server would take it from that port right now, as `{"ok", "why", "kind"}`. The commands
+are `jog`, `home` (and `home.X`, `home.Y`, `home.Z` of a router), `off`, `heat`,
+`spindle`, `unlock`, `control` (any line a running job does not allow), `print.start`,
+`print.pause`, `print.resume`, `print.cancel`, `level.probe`, `level.read`, `reconnect`,
+`reset`, `release`, `identify`, `listen`, `probe`, `query` and `flash`; `estop` is always
+ok. `kind` says what stands in the way: `armed` (the latch is down), `held` (a job or a
+task holds the port), `homed` (the port has not shown that axis's switch), `placed` (a
+cut whose tool place is unknown), `busy` (another task runs), `idle` (no print to act
+on), `offline` (no link, and the last poll said so), `alarm` (the controller is in
+alarm; its own refusal, not the server's), `kind` (the other kind of machine, or a
+machine's controller a flash would replace) and `file` (the file does not fit).
+
+Every refusal the seam raises is a predicate in `firmware/can.py` that returns the
+reason, and the routes raise from the same predicates `can_now` reads, so the answer
+and the refusal are one check. `tests/test_can_now.py` puts a simulated printer and
+router in each condition and requires `ok: false` exactly where the route answers 4xx
+or 5xx. A router's `home` is judged from the settings last read from its controller
+(it does not ask for them again for a poll); a line the board objects to after it is
+sent (a bound the dialect checks on the value) is not in the answer.
 
 `M108` and `M410` are written ahead of an exchange in flight, as the stop is: each is
 for a board busy with the line before it. The reply such a line is owed, and the reply
