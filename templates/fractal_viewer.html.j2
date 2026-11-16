@@ -277,6 +277,17 @@
         .panel-ui .question { border-top: 1px solid #2a332a; padding: 0.3rem 0; }
         .panel-ui pre { white-space: pre-wrap; font-size: 0.7rem; color: #aaa; max-height: 200px; overflow: auto; }
         .panel-ui input[type=file] { font-size: 0.72rem; max-width: 100%; }
+        /* Layers (widgets/layers.js): the depth stepper, and a row a layer with its two ticks */
+        .layers-window { padding: 0.5rem 0.75rem; font-size: 0.8rem; color: #bbb; }
+        .layers-depth { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .layers-depth button, .layers-reset button { min-width: 1.8rem; }
+        .layers-depth-value { min-width: 1.2rem; text-align: center; color: #eee; }
+        .layers-table { border-collapse: collapse; width: 100%; }
+        .layers-table th, .layers-table td { padding: 0.15rem 0.4rem; text-align: left; font-weight: normal; }
+        .layers-table thead th { color: #888; }
+        .layers-table td { text-align: center; }
+        .layers-table .layers-kind th { color: #8ab4f8; padding-top: 0.5rem; }
+        .layers-reset { margin-top: 0.6rem; }
         .pin-list { display: flex; flex-direction: column; gap: 0.2rem; }
         .pin-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; padding: 0.15rem 0.3rem; border-radius: 3px; background: #1d221d; }
         .pin-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -895,6 +906,7 @@
         // that kind's marks alone.
         const readingOfKind = (record, kind) => !!record && GCODE_KINDS.includes(kind) && record.machine === kind;
         import { mountPinned } from '/static/widgets/pinned.js';
+        import { mountLayers, layerLabel } from '/static/widgets/layers.js';
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
         import { mountProcedure } from '/static/widgets/procedure.js';
         import { mountFamily } from '/static/widgets/family.js';
@@ -1631,7 +1643,7 @@
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
                     defaultRoot: PAGE_LAYOUT,
-                    known: ['gather', 'models', 'marks', 'working', 'deck', ...knownWindows(SYSTEMS)],
+                    known: ['gather', 'models', 'marks', 'working', 'layers', 'deck', ...knownWindows(SYSTEMS)],
                     transient: ['control', 'lighting', ...transientWindows(SYSTEMS)],
                 });
                 // Pinned is mounted the first time it is in front of a person, and listed
@@ -1894,6 +1906,21 @@
                     body: (slot) => {
                         this.settingsWidget = mountSettings(slot, this.settings, {
                             log: (t, kind) => this.setStatus(t, kind === 'bad' ? 'error' : 'success'),
+                        });
+                    },
+                });
+                // Layers: how deep a click reaches and which layers are shown and selectable
+                // (widgets/layers.js), a tab beside Site, closed until asked for. View › Layers
+                // and Panels › Site › Layers open it.
+                this.layersWidget = null;
+                this.panels.register('layers', {
+                    title: 'Layers', group: 'Site', home: 'site', open: false,
+                    hint: 'How deep a click reaches, and which layers are drawn and which a click can select',
+                    body: (slot) => {
+                        this.layersWidget = mountLayers(slot, {
+                            scope: this.pickScope,
+                            shells: () => this.layerShells(),
+                            categories: () => this.layerCategories(),
                         });
                     },
                 });
@@ -2805,6 +2832,7 @@
                 this.renderMinimap();
                 this.renderCategoryFilters();
                 this.renderContentsList(focus);
+                if (this.layersWidget) this.layersWidget.refresh();
                 this.renderSelectedPanel();
                 this.frameCameraForChildren(renderNodes);
                 this.scheduleWaveLoad(renderNodes);
@@ -3063,6 +3091,41 @@
                 if (this.wallsToggle) this.wallsToggle.checked = this.wallsSelectable;
                 if (what && (what.depth !== undefined || what.reset || what.loaded)) this.renderFocus();
                 this.applyLayers();
+                const said = this.layersSaid(what);
+                if (said) this.setStatus(said, 'success');
+            }
+
+            // What the status line says of a change to the scope.
+            layersSaid(what) {
+                if (!what) return null;
+                if (what.reset) return 'Layers: back to depth 1, every layer shown, every layer selectable but walls';
+                if (what.depth !== undefined) return `Depth: ${what.depth} level${what.depth === 1 ? '' : 's'} below this one, drawn and reached by a click`;
+                if (what.layer === WALL_LAYER && what.selectable !== undefined) return this.wallsSaid();
+                if (what.shown !== undefined) return `${layerLabel(what.layer)}: ${what.shown ? 'shown' : 'hidden, and a click passes through it'}`;
+                if (what.selectable !== undefined) return `${layerLabel(what.layer)}: ${what.selectable ? 'a click picks it' : 'a click passes through it'}`;
+                return null;
+            }
+
+            // The shells the loaded site's pieces are on, innermost first, and the
+            // categories they are of: the rows of the Layers window.
+            layerShells() { return this.layerKinds().shells; }
+            layerCategories() { return this.layerKinds().categories; }
+            layerKinds() {
+                const shells = new Set(), categories = new Set();
+                const walk = (node) => {
+                    if (Number.isInteger(node.shell)) shells.add(node.shell);
+                    if (node.category) categories.add(node.category);
+                    for (const child of node.children || []) walk(child);
+                };
+                if (this.tree) for (const child of this.tree.children || []) walk(child);
+                return { shells: [...shells].sort((a, b) => a - b), categories: [...categories].sort() };
+            }
+
+            // ⚙ View › Layers, and the ring's View › Layers: the Layers window in front.
+            openLayers() {
+                this.viewMenuEl.open = false;
+                this.panels.open('layers');
+                return 'Layers: how deep a click reaches, and which layers are drawn and which a click can select';
             }
 
             // The amber dot over a part drawn from a variant this tab applied: from
@@ -3141,8 +3204,8 @@
             // ⚙ View › Select walls: whether a click in the world picks a wall,
             // for the page's session (a wall's row in Site selects it either way).
             setWallsSelectable(on) {
-                this.pickScope.setSelectable(WALL_LAYER, !!on);
-                this.setStatus(this.wallsSaid(), 'success');
+                // The scope's change says it; a tick that changes nothing says how it stands.
+                if (!this.pickScope.setSelectable(WALL_LAYER, !!on)) this.setStatus(this.wallsSaid(), 'success');
             }
             wallsSaid() {
                 return this.wallsSelectable ? 'Select walls: on, a click in the world picks a wall, until the page is left' : 'Select walls: off, a click in the world passes through them';
@@ -3479,6 +3542,11 @@
                     return `Detail: ${DETAIL_LABELS[this.detailModeEl.value]}`;
                 }
                 if (verb === 'settings') return this.openSettings();
+                if (verb === 'layers') return this.openLayers();
+                if (verb.startsWith('depth:')) {
+                    this.pickScope.setDepth(Number(verb.slice('depth:'.length)));
+                    return this.layersSaid({ depth: this.pickScope.depth() });
+                }
                 return null;
             }
 

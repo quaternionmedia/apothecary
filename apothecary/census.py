@@ -1558,6 +1558,19 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "one listener for the whole control overlay, told which button by what it carries",
     ),
+    # ---- Layers (widgets/layers.js): one listener of each kind on the window's root; ----
+    # its rows (depth, a shown and a selectable tick for each layer) are drawn by it, a
+    # list beside the scene, and are the pick scope's (static/pick_scope.js) to change.
+    "root:change:onChange": (
+        LIST,
+        WHAT_YOU_SEE,
+        "a layer's Shown or Selectable tick, applied at once",
+    ),
+    "root:click:onClick": (
+        LIST,
+        WHAT_YOU_SEE,
+        "the depth stepper's - and +, or Reset, in the Layers window",
+    ),
     # ---- Settings (widgets/settings.js): one listener of each kind on the panel ----
     "settingsEl:click:settingClicked": (
         WIDGET,

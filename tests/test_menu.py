@@ -1175,6 +1175,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("SCAD", "panel:toggle:scad", 9),
         ("Workspace", "panel:toggle:working", 3),
         ("Procedure", None, 1),
+        ("Layers", "panel:toggle:layers", 7),
     ]
     procedure = next(c for c in site.children if c.label == "Procedure")
     assert [(c.label, c.action) for c in procedure.children] == [
@@ -1347,7 +1348,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
 def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
     """The header's ⚙ View menu is ring-backed by View, a cell of the canvas ring's
     own: View › Fit first, then Snap to grid, Detail (Full, Black box, Dot), Outlines,
-    Select walls, and last Settings, so no cell before it moves. At the root and inside
+    Select walls, Settings, and after it Layers and Depth (1 to 4 levels), so no cell before
+    them moves. At the root and inside
     a piece alike the canvas ring holds eight or fewer, View is at 2, seated before
     every cell that comes and goes, and Panels holds no View. The page carries them
     all."""
@@ -1371,6 +1373,8 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
             ("Outlines", "view:outlines", 4),
             ("Select walls", "view:walls", 9),
             ("Settings", "view:settings", 3),
+            ("Layers", "view:layers", 1),
+            ("Depth", None, 7),
         ]
         assert [(c.label, c.action) for c in view.children[2].children] == [
             ("Full", "view:detail:full"),
@@ -1382,6 +1386,14 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
         assert address_of(root, "view:detail:box") == f"{view_cell}26"
         assert address_of(root, "view:walls") == f"{view_cell}9"
         assert address_of(root, "view:settings") == f"{view_cell}3"
+        assert address_of(root, "view:layers") == f"{view_cell}1"
+        assert address_of(root, "view:depth:2") == f"{view_cell}76"
+        assert [(c.label, c.action) for c in view.children[7].children] == [
+            ("1 level", "view:depth:1"),
+            ("2 levels", "view:depth:2"),
+            ("3 levels", "view:depth:3"),
+            ("4 levels", "view:depth:4"),
+        ]
         panels = next(o for o in root.options if o.label == "Panels")
         assert "View" not in [c.label for c in panels.children]
     for action in (
@@ -1391,6 +1403,8 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
         "view:outlines",
         "view:walls",
         "view:settings",
+        "view:layers",
+        "view:depth:3",
     ):
         assert carried_by(action).name == "VIEWER"
 

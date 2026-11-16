@@ -678,6 +678,10 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("pinned", "Pinned"),
     ("jobs", "Jobs"),
     ("scad", "SCAD"),
+    # Layers: how deep a click reaches and which layers are drawn and selectable
+    # (widgets/layers.js), a tab beside Site registered by the page's script and closed
+    # until asked for. View › Layers opens it too.
+    ("layers", "Layers"),
     # Working space: the site as every kind of evidence has it (apothecary/evidence/),
     # a tab of Site's ring registered by the page's script, closed until asked for;
     # a printer's ring opens it on that printer. A ring's label holds twelve
@@ -729,6 +733,7 @@ PANEL_GROUPS = {
     "pinned": "Site",
     "jobs": "Site",
     "scad": "Site",
+    "layers": "Site",
     "working": "Site",
     "procedure": "Family",
     "selected": "Selected",
@@ -758,7 +763,7 @@ JOURNEY_IDS = frozenset(journey.id for journey in JOURNEYS)
 # Machine and its control pad.
 _BEFORE_WINDOWS = ("site", "selected", "pictures", "machine")
 _RINGS = {
-    "site": ("site", "problems", "pinned", "jobs", "scad", "working", "procedure"),
+    "site": ("site", "problems", "pinned", "jobs", "scad", "working", "procedure", "layers"),
     # Models before Gather, so Models keeps its address when Gather goes
     # (docs/plans/ui-coordination-2026-10-31.md).
     # Marks last, so Models and Gather keep their addresses.
@@ -861,9 +866,13 @@ def _view() -> Option:
     lets a click in the world pick a wall, which it otherwise passes through, for
     the page's session. Snap, Outlines and Select walls each turn what they name the
     other way, as their tick-boxes do, and the status line says which way it went;
-    the ring is not told how they stand. Settings, last, opens the Settings panel --
+    the ring is not told how they stand. Settings opens the Settings panel --
     the shortcuts and automatic zoom -- as the menu's Settings does, so no cell
-    before it moves.
+    before it moves. Layers and Depth come after it, in the two cells left: Layers
+    opens the Layers window -- which layers the world draws and a click can select --
+    and Depth is how many levels below this one a click reaches and the world draws,
+    one to four (the window goes further). Select walls is the wall layer's
+    Selectable tick.
     """
     return Option(
         id="view",
@@ -883,6 +892,20 @@ def _view() -> Option:
             Option(id="view:outlines", label="Outlines", action="view:outlines"),
             Option(id="view:walls", label="Select walls", action="view:walls"),
             Option(id="view:settings", label="Settings", action="view:settings"),
+            # After Settings, which keeps its cell: the two cells still free.
+            Option(id="view:layers", label="Layers", action="view:layers"),
+            Option(
+                id="view:depth",
+                label="Depth",
+                children=[
+                    Option(
+                        id=f"view:depth:{n}",
+                        label=f"{n} level{'' if n == 1 else 's'}",
+                        action=f"view:depth:{n}",
+                    )
+                    for n in range(1, 5)
+                ],
+            ),
         ],
     )
 
