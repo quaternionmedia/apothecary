@@ -7126,7 +7126,19 @@
                     overlay.position.set(center[0], center[1], center[2]);
                 }
                 this.updateBuildVolumeIndicator(node);
+                this.placeMarks(key);
                 if (this.selectedName === key) this.showHandles(mesh);
+            }
+
+            // A machine's marks stand at its node: placed again when that node, or a
+            // node it stands in, has moved, with what rides its bed.
+            placeMarks(moved) {
+                for (const [path, m] of Object.entries(this.marks)) {
+                    if (!m.marks || (path !== moved && !path.startsWith(`${moved}.`))) continue;
+                    m.marks.group.position.copy(marksToScene(this.machineOrigin(path, m.marks.frame)));
+                    this.followBed(path);
+                    this.invalidate();
+                }
             }
 
             // ---------------------------------------------------------------
@@ -8712,8 +8724,9 @@
             }
 
             // A printer's marks at its node, laid out by the machine's frame as GET
-            // /firmware/printers/where answers it for its port (asked once per port),
-            // positioned by each poll and wearing the newest bed reading.
+            // /firmware/printers/where answers it for its port (asked once per port, and
+            // again when a poll says another volume: refreshFrame), positioned by each
+            // poll and wearing the newest bed reading.
             ensureMarks(path, row) {
                 const port = row.device.port;
                 const st = row.printer_status;
@@ -8721,7 +8734,7 @@
                 if (have && have.plan) { have.marks?.destroy(); delete this.marks[path]; have = null; }
                 if (have) {
                     if (have.marks && st && st.position) have.marks.setPosition(this.toolPosition(st));
-                    if (have.marks) this.refreshReading(path);
+                    if (have.marks) { this.refreshReading(path); this.refreshFrame(path, st); }
                     return;
                 }
                 if (this.whereByPort[port] === undefined) {
@@ -8824,6 +8837,32 @@
                     piece.position.copy(piece.userData.rest).add(d);
                 }
                 return true;
+            }
+
+            // A machine's frame asked for again when a poll says a volume its marks were not
+            // laid out by: its controller's travel, read once its settings are, where the
+            // marks stand on the site's figure or another travel. Once per travel said; the
+            // marks are made again from the answer (ensureMarks), and an open Machine on
+            // the port is told it (apothecary:where).
+            refreshFrame(path, st) {
+                const m = this.marks[path], travel = st && st.travel;
+                if (!m || !m.marks || !m.port || !travel) return;
+                const said = [travel.x, travel.y, travel.z], frame = m.marks.frame;
+                if (frame.volume_from === 'controller' && said.every((v, i) => v === frame.volume[i])) return;
+                if (m.frameAsked === said.join(',')) return;
+                m.frameAsked = said.join(',');
+                const port = m.port;
+                const asked = fetch(`${BASE_URL}/firmware/printers/where?port=${encodeURIComponent(port)}`)
+                    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+                asked.then((where) => {
+                    const fresh = where && where.printer && where.printer.frame;
+                    if (this.marks[path] !== m || !fresh || fresh.volume_from !== 'controller') return;
+                    this.whereByPort[port] = asked;
+                    m.marks.destroy();
+                    delete this.marks[path];
+                    this.syncWorldMarks();
+                    if (this.machine && this.machine.port === port) window.dispatchEvent(new CustomEvent('apothecary:where', { detail: { ...where, port } }));
+                });
             }
 
             // Where a poll puts the tool in the machine's volume (machine_marks.js): null
