@@ -884,6 +884,7 @@
         import { TransformControls } from 'three/addons/controls/TransformControls.js';
         import { STLLoader } from 'three/addons/loaders/STLLoader.js';
         import { mountAnchors } from '/static/anchors.js';
+        import { makePickScope, WALL as WALL_LAYER } from '/static/pick_scope.js';
         import { mountPanels } from '/static/panels.js';
         import { mountMachine } from '/static/widgets/machine.js';
         import { mountBoards } from '/static/boards.js';
@@ -1363,7 +1364,9 @@
                 this.journey = null;
                 this.snapToggle = document.getElementById('snap-toggle');
                 this.wallsToggle = document.getElementById('walls-toggle');
-                this.wallsSelectable = false;  // for the page's session: never remembered
+                // How deep a click reaches and which layers are shown and selectable
+                // (pick_scope.js), kept per browser; walls selectable alone is the session's.
+                this.pickScope = makePickScope();
                 this.detailModeEl = document.getElementById('detail-mode');
                 this.overlayToggle = document.getElementById('overlay-toggle');
                 this.breadcrumbEl = document.getElementById('breadcrumb');
@@ -3064,6 +3067,9 @@
 
             isWall(node) { return !!node && node.category === WALL_CATEGORY; }
 
+            // Whether a click in the world picks a wall: the wall layer's selectable tick.
+            get wallsSelectable() { return this.pickScope.isSelectable(WALL_LAYER); }
+
             // Faded: seen through, hiding nothing behind it (its depth unwritten) and
             // dimming no badge (anchors.js reads passThrough). Solid: as it was built,
             // which each part (the mesh, its edges) keeps the first time it is faded.
@@ -3084,7 +3090,7 @@
             // ⚙ View › Select walls: whether a click in the world picks a wall,
             // for the page's session (a wall's row in Site selects it either way).
             setWallsSelectable(on) {
-                this.wallsSelectable = !!on;
+                this.pickScope.setSelectable(WALL_LAYER, !!on);
                 this.setStatus(this.wallsSaid(), 'success');
             }
             wallsSaid() {
@@ -9373,9 +9379,10 @@
 
             // The nodes' meshes and the pictures' pick meshes (a mat, an outline)
             // in one depth-sorted cast: the nearest wins, so a printer standing
-            // over an outline is still the printer. A wall is passed through, to
-            // what is behind or inside it, unless the View menu makes walls
-            // selectable. A machine stepped into is drawn around its pieces, so the
+            // over an outline is still the printer. A layer a click passes through
+            // (a wall unless the View menu makes walls selectable, a shell or a
+            // category the Layers window leaves unselectable) is passed through, to
+            // what is behind or inside it. A machine stepped into is drawn around its pieces, so the
             // level's own part gives way to a piece of it on the same ray, and answers
             // only where none is. Answers { key } for a node, { pick: { host, view,
             // index } } for a picture's mark, or null. Every click, drop and
@@ -9398,7 +9405,7 @@
                 this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
                 this.raycaster.setFromCamera(this.pointer, this.camera);
                 return this.raycaster.intersectObjects([...Object.values(this.meshByName), ...this.pictureMarks.pickables()], false)
-                    .filter((hit) => this.wallsSelectable || !this.isWall(this.renderNodeByKey[hit.object.userData.key]));
+                    .filter((hit) => this.pickScope.pickable(this.renderNodeByKey[hit.object.userData.key]));
             }
 
             // A press on the world (or on a badge over it), kept until it is let go: what
