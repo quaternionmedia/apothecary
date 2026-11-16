@@ -1124,7 +1124,19 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     for (const btn of pad.querySelectorAll("button[data-jog], button[data-cmd]")) {
         btn.dataset.can = btn.dataset.jog ? "jog" : verbOfCommand(btn.dataset.cmd);
     }
-    const canNow = { server: null };
+    const canNow = { server: null, start: null, asking: null };
+    // The chosen file asked of the server (GET /firmware/printers/can-start): asked when
+    // the choice, the files or the server's own answer for a start changes, never on a timer.
+    function askStart() {
+        const id = $("print-pick").value, port = state.port;
+        if (!id || !port || !isGcode()) { canNow.start = null; return; }
+        const key = `${port}|${id}|${JSON.stringify(canNow.server && canNow.server["print.start"])}`;
+        if (canNow.asking === key) return;
+        canNow.asking = key;
+        api(`/firmware/printers/can-start?port=${encodeURIComponent(port)}&file_id=${encodeURIComponent(id)}`)
+            .then((v) => { if (canNow.asking === key) { canNow.start = { file: id, verdict: v }; renderCan(); } })
+            .catch(() => { if (canNow.asking === key) canNow.asking = null; });
+    }
     function localCan() {
         const out = { ...withLatch(canNow.server, ctl.armed) };
         const job = prt.job, running = !!(job && job.running);
@@ -1133,8 +1145,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             out["print.start"] = { ok: false, kind: "offline", why: machineAt ? `${machineAt.path} has no board connected: its plan is made here, and ${words().start} is its board's once it is` : "no board is chosen" };
         } else if (running) {
             out["print.start"] = { ok: false, kind: "held", why: `a ${job.kind || "job"} from here is under way` };
-        } else if (chosen && !fits(chosen)) {
-            out["print.start"] = { ok: false, kind: "file", why: `${chosen.name} was kept for a ${chosen.machine}: it is sent to the kind it was kept for alone (Choose File keeps a file for this ${state.kind})` };
+        } else if (chosen && canNow.start && canNow.start.file === chosen.id) {
+            // Whether this file would be started now is the server's to say (can-start).
+            out["print.start"] = canNow.start.verdict;
+        } else if (chosen && canNow.asking) {
+            out["print.start"] = { ok: false, kind: "file", why: "the server is being asked whether this file can be sent" };
         }
         if (running && job.stage !== words().running && job.stage !== "finishing") {
             out["print.pause"] = { ok: false, kind: "idle", why: `the print is ${job.stage}, not running` };
@@ -1142,6 +1157,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         return out;
     }
     function renderCan() {
+        askStart();
         const c = localCan();
         for (const el of everywhere) applyCan(el, c);
     }

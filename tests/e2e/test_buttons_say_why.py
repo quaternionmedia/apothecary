@@ -82,3 +82,22 @@ def test_a_print_greys_the_jog_and_the_reboot_and_never_the_stops(page: Page, ur
     page.locator("#print-cancel").click()
     expect(jog).to_be_enabled(timeout=WITHIN_A_POLL * 2)
     expect(jog).not_to_have_attribute("title", re.compile(r"^Disabled"))
+
+
+@pytest.mark.e2e  # UNRUN when written: a browser test, run with --start-server
+def test_send_asks_the_server_whether_a_chosen_file_fits(page: Page, url: str):
+    """A file kept for a router, chosen on a printer, greys Send with the server's
+    words (GET /firmware/printers/can-start); the page holds no rule of its own."""
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        http.post(
+            "/firmware/printers/prints",
+            params={"name": "cut.nc", "machine": "router"},
+            content=b"G21 G90\nM3 S12000\nM5\n",
+        ).raise_for_status()
+        http.post("/firmware/printers/control", json={"port": PRINTER, "armed": True})
+    page.goto(f"{url}/firmware/monitor?port={PRINTER}")
+    windows.machine_ready(page, "printer")
+    page.locator("#print-pick").select_option(label=re.compile(r"cut\.nc"))
+    send = page.locator("#print-start")
+    expect(send).to_be_disabled(timeout=WITHIN_A_POLL)
+    expect(send).to_have_attribute("title", re.compile(r"^Disabled: cut\.nc was kept for a router"))
