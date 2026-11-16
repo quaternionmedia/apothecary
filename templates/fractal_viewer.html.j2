@@ -3098,7 +3098,7 @@
             // carry its controller's word (GET /firmware/printers/where), else its node's
             // in the tree. Null for anything that is no machine.
             frameOf(path, node = null) {
-                const m = this.marks[path];
+                const m = this.marks && this.marks[path];
                 if (m && m.marks && m.marks.frame) return m.marks.frame;
                 const n = node || this.nodeByPath(path);
                 return (n && n.frame) || null;
@@ -3107,7 +3107,7 @@
             // where its marks put it; without them, where the part's own axes put it, as
             // its pieces are drawn (frames.js bedOffsetAt).
             bedOffsetOf(path, frame) {
-                const m = this.marks[path];
+                const m = this.marks && this.marks[path];
                 if (m && m.marks) return m.marks.bedOffset();
                 return frame ? bedOffsetAt(frame) : 0;
             }
