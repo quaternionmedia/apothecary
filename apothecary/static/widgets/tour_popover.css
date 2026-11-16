@@ -7,7 +7,6 @@
 .tour-pop-name { color: #aab; font-size: 12px; white-space: nowrap; }
 .tour-pop button { cursor: pointer; padding: 0.2rem 0.5rem; font-size: 12px; background: #333; color: #ddd; border: 1px solid #484848; border-radius: 4px; }
 .tour-pop button:hover { background: #484848; }
-.tour-pop button:disabled { opacity: 0.45; cursor: default; }
 .tour-pop-body { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.4rem 0.5rem 0.5rem; }
 .tour-pop.folded .tour-pop-body { display: none; }
 .tour-pop.folded .tour-pop-head { border-radius: 8px; }

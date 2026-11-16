@@ -693,6 +693,18 @@ or 5xx. A router's `home` is judged from the settings last read from its control
 (it does not ask for them again for a poll); a line the board objects to after it is
 sent (a bound the dialect checks on the value) is not in the answer.
 
+The Machine greys a button the answer refuses (`static/can.js`). A button names its
+command in `data-can`; `applyCan(root, can)` sets `disabled` and `aria-disabled` and
+puts `Disabled: <why>. <its own tip>` in its title, keeping its own tip and giving it
+back when the command is ok again. The pad's buttons are tagged from the line they
+send. What only the page knows -- a file kept for the other kind of machine, a send
+from here under way -- is said in the same shape over the server's answer, and the
+latch is counted down on the page, since it lapses with no event. A button a send in
+flight holds (`data-busy`) stays held until both let go. The stops are never greyed:
+E-STOP, the pad's E-STOP and the lines that interrupt (Quickstop, Break wait, Stop
+jog, Hold, Resume, Abort). One rule in `static/tokens.css` greys a disabled button
+everywhere.
+
 `M108` and `M410` are written ahead of an exchange in flight, as the stop is: each is
 for a board busy with the line before it. The reply such a line is owed, and the reply
 of a line whose `ok` did not come in time, is read off before the next exchange's own,

@@ -16,7 +16,6 @@
 }
 .bench-ui button { cursor: pointer; }
 .bench-ui button:hover { background: #2f382f; }
-.bench-ui button:disabled { opacity: 0.45; cursor: not-allowed; }
 .bench-ui select.grow, .bench-ui input.grow { width: 100%; }
 .bench-ui input.esp-chip { width: 6rem; } .bench-ui input.esp-baud { width: 6.5rem; }
 .bench-ui textarea { width: 100%; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; }

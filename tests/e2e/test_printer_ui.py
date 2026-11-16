@@ -1034,9 +1034,11 @@ def test_a_file_is_kept_or_refused_and_nothing_leaves_disarmed(page: Page, print
         label=page.locator("#print-pick option", has_text="slow cube").text_content()
     )
 
-    # Disarmed: nothing leaves the page.
-    page.locator("#print-start").click()
-    expect(page.locator("#log .sys", has_text="arm control first")).to_be_visible(timeout=3000)
+    # Disarmed: the button is greyed and says why, so nothing leaves the page.
+    expect(page.locator("#print-start")).to_be_disabled(timeout=8000)
+    expect(page.locator("#print-start")).to_have_attribute(
+        "title", re.compile(r"^Disabled: .*arm control first")
+    )
     assert not page.evaluate("() => window.apothecaryMachine.print.job().running")
 
 

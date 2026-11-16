@@ -124,21 +124,21 @@ def test_the_machine_says_what_it_needs_and_what_did_not_go(page: Page, url: str
         blank=CHANGING,
     )
 
-    # 2. A jog in alarm: the controller's own objection, kept in the card.
+    # 2. A jog in alarm: the controller would refuse it, so its button is greyed and
+    #    says so, and Unlock and the homes are not.
     machine.locator("#ctl").check()
     pad = page.locator("#control")
     expect(pad).to_be_visible(timeout=5000)
     pad.locator("button[data-step='1']").click()
-    pad.locator("button[data-jog='Z+']").click()
-    expect(needs).to_contain_text("$J=G91 G21 Z1", timeout=WITHIN_A_POLL)
-    expect(needs).to_contain_text("did not go")
-    expect(needs.locator(".need.bad .why")).to_contain_text("error:")
+    jog_z = pad.locator("button[data-jog='Z+']")
+    expect(jog_z).to_be_disabled(timeout=WITHIN_A_POLL)
+    expect(jog_z).to_have_attribute("title", re.compile(r"^Disabled: .*in alarm"))
+    expect(pad.locator("button[data-cmd='$X']")).to_be_enabled()
     needs.scroll_into_view_if_needed()
     story.shows(
-        "A jog in alarm did not go, and the card keeps why",
-        "⚙ Control armed, the pad's step at 1 mm and Z+ pressed. The controller refused "
-        "the jog, and the card keeps the line that did not go with the controller's own "
-        "error beside it until a line goes.",
+        "A jog in alarm is greyed, and its tip says why",
+        "⚙ Control armed and the pad's step at 1 mm. The controller takes no jog in "
+        "alarm, so Z+ is greyed with the reason in its tip; Unlock is not.",
         blank=CHANGING,
     )
 
@@ -146,13 +146,13 @@ def test_the_machine_says_what_it_needs_and_what_did_not_go(page: Page, url: str
     z = pad.locator("#ctl-homing .home-axis[data-axis='Z']")
     expect(z).to_contain_text("seeks +Z · switch ✗ · way ✗", timeout=WITHIN_A_POLL)
     expect(z).to_contain_text("first: jog Z 1 mm toward +Z")
-    expect(pad.locator("button[data-cmd='HOME-Z']")).to_have_class("unproved")
+    expect(pad.locator("button[data-cmd='HOME-Z']")).to_be_disabled()
     pad.locator("#ctl-homing").scroll_into_view_if_needed()
     story.shows(
         "Each axis's home, beside its button: not proved, and what to do first",
         "Under the pad, each axis says which way its home will seek, whether its switch "
         "has been seen and whether the axis has been jogged that way, and what to do "
-        "first. A Home not yet proved is outlined.",
+        "first. A Home not yet proved is greyed.",
         blank=CHANGING,
     )
 
@@ -171,19 +171,20 @@ def test_the_machine_says_what_it_needs_and_what_did_not_go(page: Page, url: str
         blank=CHANGING,
     )
 
-    # 5. A home not proved does not go, and the card says why in the controller's figures.
+    # 5. A home not proved is greyed, and its tip says why in the controller's figures.
     before = _position(url)
-    pad.locator("button[data-cmd='HOME-Z']").click()
-    expect(needs).to_be_visible(timeout=WITHIN_A_POLL)
-    expect(needs).to_contain_text("$HZ did not go")
-    expect(needs.locator(".need.bad .why")).to_contain_text("home refused: Z will seek +Z at")
+    home_z = pad.locator("button[data-cmd='HOME-Z']")
+    expect(home_z).to_be_disabled(timeout=WITHIN_A_POLL)
+    expect(home_z).to_have_attribute(
+        "title", re.compile(r"^Disabled: .*home refused: Z will seek \+Z at")
+    )
     assert _position(url) == before
-    needs.scroll_into_view_if_needed()
+    pad.locator("#ctl-homing").scroll_into_view_if_needed()
     story.shows(
-        "A home not proved does not go, and the card says why",
-        "Home Z pressed before Z has shown its switch or its way. Nothing is sent to the "
-        "controller and the router has not moved; the card says `$HZ` did not go, in the "
-        "controller's own figures for where Z will seek and how fast.",
+        "A home not proved is greyed, and its tip says why",
+        "Home Z before Z has shown its switch or its way is greyed, and its tip says "
+        "so in the controller's own figures for where Z will seek and how fast. Nothing "
+        "is sent to the controller and the router has not moved.",
         blank=CHANGING,
     )
 
@@ -191,12 +192,12 @@ def test_the_machine_says_what_it_needs_and_what_did_not_go(page: Page, url: str
     pad.locator("button[data-jog='Z+']").click()
     expect(z).to_contain_text("switch ✗ · way ✓", timeout=WITHIN_A_POLL)
     expect(needs.locator(".need.bad")).to_have_count(0, timeout=WITHIN_A_POLL)  # the jog went
-    expect(pad.locator("button[data-cmd='HOME-Z']")).to_have_class("unproved")
+    expect(pad.locator("button[data-cmd='HOME-Z']")).to_be_disabled()
     story.shows(
         "Jogged the way it homes, Z has shown its way",
         "Z+ pressed: the jog went, so the card no longer says a line did not go, and "
-        "Z's line says its way is shown. Its switch is not, so its Home is still outlined; a switch is pressed "
-        "by hand at the bench.",
+        "Z's line says its way is shown. Its switch is not, so its Home is still greyed; "
+        "a switch is pressed by hand at the bench.",
         blank=CHANGING,
     )
 

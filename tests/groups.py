@@ -81,10 +81,12 @@ GROUPS = {
             "parts/ender3/*",
             "parts/anolex_4060_evo_ultra_2/*",
             "tests/firmware_helpers.py",
+            "apothecary/static/can.js",
             "walkthrough/19-*",
         ),
         "tests": (
             "test_board_by_part.py",
+            "test_can_js.py",
             "test_can_now.py",
             "test_firmware_api.py",
             "test_firmware_deck.py",

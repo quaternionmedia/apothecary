@@ -86,7 +86,6 @@
 #print-card button { font: inherit; font-size: 0.75rem; background: #232823; color: var(--ink); border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.5rem; cursor: pointer; }
 #print-card button:hover { background: #2f382f; }
 #print-card button.warm { border-color: #7a5a1a; }
-#print-card button:disabled { opacity: 0.45; cursor: default; }
 #print-card select { font: inherit; font-size: 0.75rem; background: #1a1e1a; color: var(--ink); border: 1px solid #3a443a; border-radius: 4px; padding: 0.15rem 0.3rem; max-width: 16rem; }
 #print-card input[type=file] { font-size: 0.72rem; color: var(--ink-2); max-width: 14rem; }
 #print-card .job { color: var(--warn); font-variant-numeric: tabular-nums; }
@@ -193,7 +192,6 @@
 #ctl-homing { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.76rem; color: var(--ink-2); }
 #ctl-homing .home-axis, #ctl-homing .why { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
 #ctl-homing .home-axis.unproved { border-left: 2px solid var(--warn); padding-left: 0.4rem; }
-#control button.unproved { border-color: var(--warn); color: var(--warn); }
 /* The touch plate: its thickness, and how to zero Z with it. */
 #control .plate input { width: 4.6rem; }
 #control details.how { font-size: 0.76rem; color: var(--ink-2); white-space: normal; }

@@ -94,6 +94,7 @@ import { KINDS, kindOf as kindOfBoard } from "/static/machine_words.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
 import { again } from "/static/twice.js";
+import { applyCan, refreshDisabled, setTip, withLatch } from "/static/can.js";
 import { running as knobsRunning, choose as chooseKnobs } from "/static/deck_knobs.js";
 
 const MAX_HISTORY = 300;
@@ -118,18 +119,18 @@ const HEAD = `
     <button type="button" id="poll" class="printer-only gcode">⟳ Poll</button>
     </span>
     <span class="cluster">
-    <button type="button" id="reconnect">⇄ Reconnect</button>
-    <button type="button" id="identify">Identify</button>
-    <button type="button" id="reset" class="danger printer-only gcode" title="Reboot the board with a DTR pulse — never during a job">⏻ Reboot</button>
-    <button type="button" id="release">Release</button>
-    <button type="button" id="listen" class="devkit-only" title="Open the port and stream what the board says into the log. Opening the port may reset the board">Listen</button>
-    <button type="button" id="probe" class="devkit-only" title="Ask esptool for the chip, its MAC and its flash size (an Espressif board; this resets it)">Probe</button>
+    <button type="button" id="reconnect" data-can="reconnect">⇄ Reconnect</button>
+    <button type="button" id="identify" data-can="identify">Identify</button>
+    <button type="button" id="reset" data-can="reset" class="danger printer-only gcode" title="Reboot the board with a DTR pulse — never during a job">⏻ Reboot</button>
+    <button type="button" id="release" data-can="release">Release</button>
+    <button type="button" id="listen" data-can="listen" class="devkit-only" title="Open the port and stream what the board says into the log. Opening the port may reset the board">Listen</button>
+    <button type="button" id="probe" data-can="probe" class="devkit-only" title="Ask esptool for the chip, its MAC and its flash size (an Espressif board; this resets it)">Probe</button>
     </span>
     <span class="cluster">
     <label class="ctl printer-only gcode" id="ctl-label">
         <input type="checkbox" id="ctl"> ⚙ Control <span class="ttl" id="ctl-ttl"></span>
     </label>
-    <button type="button" id="estop" class="printer-only gcode">⏹ E-STOP</button>
+    <button type="button" id="estop" data-can="estop" class="printer-only gcode">⏹ E-STOP</button>
     </span>
 </div>`;
 
@@ -170,8 +171,8 @@ const CARDS = `
     <div class="card wide printer-only gcode" id="level-card">
         <div class="k"><span id="level-title">Bed level</span> <span class="s" id="level-note"></span></div>
         <div class="row">
-            <button type="button" id="level-probe" class="warm" title="G28, G29, then read the mesh, the probe offset and the temperatures; saved as a record. Moves the machine: control must be armed. ⌗ Control › Level › Probe">▤ Probe bed</button>
-            <button type="button" id="level-read" class="printer-only" title="Read the stored mesh (M420 V), the probe offset and the temperatures without moving; saved as a record">Read mesh</button>
+            <button type="button" id="level-probe" data-can="level.probe" class="warm" title="G28, G29, then read the mesh, the probe offset and the temperatures; saved as a record. Moves the machine: control must be armed. ⌗ Control › Level › Probe">▤ Probe bed</button>
+            <button type="button" id="level-read" data-can="level.read" class="printer-only" title="Read the stored mesh (M420 V), the probe offset and the temperatures without moving; saved as a record">Read mesh</button>
             <span class="job" id="level-job"></span>
             <span class="grow"></span>
             <button type="button" data-corner="FL" class="printer-only" title="Move the nozzle to the front-left corner at paper height, for a tramming check">◣ FL</button>
@@ -213,10 +214,10 @@ const CARDS = `
             <span class="s" id="print-measure-said"></span>
         </div>
         <div class="row" id="print-verbs">
-            <button type="button" id="print-start" class="warm">▶ Send</button>
-            <button type="button" id="print-pause">⏸ Pause</button>
-            <button type="button" id="print-resume" title="Feed lines again (control must be armed)">▶ Resume</button>
-            <button type="button" id="print-cancel">■ Cancel</button>
+            <button type="button" id="print-start" data-can="print.start" class="warm">▶ Send</button>
+            <button type="button" id="print-pause" data-can="print.pause">⏸ Pause</button>
+            <button type="button" id="print-resume" data-can="print.resume" title="Feed lines again (control must be armed)">▶ Resume</button>
+            <button type="button" id="print-cancel" data-can="print.cancel">■ Cancel</button>
         </div>
         <div class="row" id="print-progress-row"><span id="print-progress"></span><span class="grow"></span><span class="job" id="print-job"></span></div>
         <div class="bar print" id="print-bar"><i id="b-print" style="width:0"></i></div>
@@ -258,7 +259,7 @@ const CONTROL = `
     <div class="head">🔓 <span id="ctl-who">Control</span> armed: it can <span id="ctl-can">heat and move</span> <span class="ttl" id="ctl-ttl2"></span><span class="grow"></span>
         <span class="sent" id="ctl-sent"></span>
         <span class="unknown" id="ctl-unknown" hidden>not confirmed: the server did not answer</span>
-        <button type="button" id="pad-estop">⏹ E-STOP</button>
+        <button type="button" id="pad-estop" data-can="estop">⏹ E-STOP</button>
         <button type="button" id="ctl-pop"></button>
         <button type="button" id="ctl-disarm">🔒 Disarm</button>
     </div>
@@ -495,23 +496,23 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (changed && onKind) onKind(k);
         const w = words();
         $("identify").textContent = isGcode() ? w.identify : "Identify";
-        $("identify").title = isGcode() ? `Ask ${w.identify} again (no reset)` : "Listen a few seconds for the sketch's hello banner; none heard, ask M115 whether it is a G-code printer (no reset)";
-        $("reconnect").title = isGcode() ? "Release and reopen the serial link (no reset); the remedy for a wedged port" : "Close the serial stream and open it again, while listening";
-        $("release").title = isGcode() ? "Drop the held link so another program can open the port" : "Stop listening, so another program (an upload) can open the port";
+        setTip($("identify"), isGcode() ? `Ask ${w.identify} again (no reset)` : "Listen a few seconds for the sketch's hello banner; none heard, ask M115 whether it is a G-code printer (no reset)");
+        setTip($("reconnect"), isGcode() ? "Release and reopen the serial link (no reset); the remedy for a wedged port" : "Close the serial stream and open it again, while listening");
+        setTip($("release"), isGcode() ? "Drop the held link so another program can open the port" : "Stop listening, so another program (an upload) can open the port");
         if (isGcode()) {
-            $("poll").title = w.poll; $("q").placeholder = w.queries; $("estop").title = w.estop; $("pad-estop").title = w.estop; $("ctl-label").title = w.arm;
+            $("poll").title = w.poll; $("q").placeholder = w.queries; setTip($("estop"), w.estop); setTip($("pad-estop"), w.estop); $("ctl-label").title = w.arm;
             $("ctl-can").textContent = w.can;
             $("print-title").textContent = w.title;
-            $("print-start").textContent = w.start; $("print-start").title = w.startTitle;
-            $("print-pause").title = w.pause; $("print-cancel").title = w.cancel;
+            $("print-start").textContent = w.start; setTip($("print-start"), w.startTitle);
+            setTip($("print-pause"), w.pause); setTip($("print-cancel"), w.cancel);
             $("print-slice").textContent = w.prepare;
             const feed = $("h-feed");  // the jog feed's bound is the machine's
             feed.max = String(w.feedMax);
             if (changed || Number(feed.value) > w.feedMax) feed.value = String(w.feedDefault);
             $("print-file").accept = w.files; $("print-file").title = w.fileTitle;
             $("print-part").title = w.partTitle;
-            for (const b of pad.querySelectorAll('button[data-cmd^="HOME-"]')) b.title = w.homeAxis(b.dataset.cmd.slice(-1));
-            $("level-title").textContent = w.level.card; $("level-probe").textContent = w.level.button; $("level-probe").title = w.level.buttonTitle;
+            for (const b of pad.querySelectorAll('button[data-cmd^="HOME-"]')) setTip(b, w.homeAxis(b.dataset.cmd.slice(-1)));
+            $("level-title").textContent = w.level.card; $("level-probe").textContent = w.level.button; setTip($("level-probe"), w.level.buttonTitle);
         }
         if (changed) state.codesLoaded = false;
         if (changed && state.port) {
@@ -654,16 +655,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
 
     // Each axis's home, beside the buttons that ask for it: which way it will seek, and
     // the two things the port must have shown first. A home not proved is refused by the
-    // server; here it is said before it is asked.
+    // server, and its button is greyed with that reason (renderCan); here is what to do.
     function renderHoming(st) {
         const box = $("ctl-homing"), pad = $("control");
         const homing = (st && st.homing) || [];
-        for (const b of pad.querySelectorAll('button[data-cmd^="HOME-"]')) {
-            const one = homing.find((h) => h.axis === b.dataset.cmd.slice(-1));
-            b.classList.toggle("unproved", !!one && !one.ready);
-        }
-        const all = pad.querySelector('button[data-cmd="HOME"]');
-        if (all) all.classList.toggle("unproved", homing.some((h) => !h.ready));
         const mark = (ok) => (ok ? '<span class="ok">✓</span>' : '<span class="bad">✗</span>');
         box.innerHTML = homing.map((h) => {
             const far = h.search != null ? `up to ${h.search.toFixed(0)} mm` : "";
@@ -740,7 +735,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         } else rows.push(`<b>${esc(state.port)}</b> — not detected`);
         if (pin) rows.push(pinRow());
         rows.push(bd.live ? `serial <b class="ok">listening</b> @ 115200` : (state.listening ? "serial <b>not listening</b> — opening it" : "serial <b>not listening</b> — the port is closed; Listen opens it (that may reset the board)"));
-        $("listen").disabled = state.listening;
+        $("listen").dataset.busy = state.listening ? "1" : ""; refreshDisabled($("listen"));
         $("listen").textContent = state.listening ? "Listening" : "Listen";
         $("c-board").innerHTML = rows.join("<br>");
         const w = sketchWords(bd.expected, bd.observed);
@@ -861,14 +856,18 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
                 tellPreview();  // a work zero set since moves a router's path with it
                 followJob(d.status);
                 if (d.status.control && latchFresh(d.asked)) applyControlState(d.status.control);
+                takeCan(d.status.can);
                 break;
             case "info":
                 if (d.info && latchFresh(d.asked)) applyControlState(d.info.control);
+                if (d.info && !(state.status && state.status.can)) takeCan(d.info.can);
                 applyKind(); renderStatus();
                 break;
             case "error":
                 if (!isGcode()) break;
                 $("dot").className = "dot bad"; $("c-state").innerHTML = '<span class="bad">error</span>'; $("c-state-s").textContent = d.error;
+                // A poll refused while a task holds the port carries no answer; the info does.
+                api(`/firmware/printers/info?port=${encodeURIComponent(state.port)}`).then((i) => takeCan(i.can)).catch(() => {});
                 break;
             case "log":
                 if (d.cleared) renderLog(); else appendLog(d.entries, d.dropped);
@@ -1047,6 +1046,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("ctl-ttl").textContent = ttl + (ctl.unknown ? " ?" : ""); $("ctl-ttl2").textContent = ttl;
         placePad();
         renderLevelVerbs();
+        renderCan();
         clearInterval(ctl.timer); ctl.timer = null;
         if (ctl.armed) ctl.timer = setInterval(renderControl, 1000);
         if (ctl.armed && !knob.timer) { followKnobs(); knob.timer = setInterval(followKnobs, 2000); }
@@ -1082,7 +1082,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!state.port) { $("ctl").checked = false; return; }
         ctl.askedAt = model.tick(); ctl.pending++;
         const port = state.port;
-        try { applyControlState(await post("/firmware/printers/control", { port, armed: on })); }
+        try { applyControlState(await post("/firmware/printers/control", { port, armed: on })); pollNow(); }
         catch (e) {
             // Refused or unanswered, the latch is what the server says it is, never
             // what was asked for: a Disarm that failed leaves the machine armed. Asked
@@ -1101,6 +1101,56 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     function fillTemplate(cmd) {
         return cmd.replace(/\{([a-z-]+)\}/g, (_, id) => $(id).value);
     }
+    // --- what the server would refuse now: greyed, with the reason (can.js) ---------------
+    // The server's answer (`can` on a status and on an info, firmware/can.py) names each
+    // command's verdict; each button names its command in data-can. The pad's buttons
+    // carry the line they send, so they are tagged here, once, from it. What only this page
+    // knows -- a file that is for the other kind, a send from here under way -- is said in
+    // the same shape, over the server's answer; the latch is counted down here, since it
+    // lapses with no event.
+    const OFF_LINES = new Set(["M104 S0", "M140 S0", "M107", "M5", "M25"]);
+    function verbOfCommand(cmd) {
+        if (INTERRUPTS.has(cmd) || cmd === "RESET") return "estop";
+        if (cmd === "HOME") return "home";
+        const axis = /^HOME-([XYZ])$/.exec(cmd);
+        if (axis) return `home.${axis[1]}`;
+        if (/^G28/.test(cmd)) return "home";
+        if (cmd === "$X") return "unlock";
+        if (OFF_LINES.has(cmd)) return "off";
+        if (/^(M104|M140|M106) /.test(cmd)) return "heat";
+        if (/^M3 /.test(cmd)) return "spindle";
+        return "control";
+    }
+    for (const btn of pad.querySelectorAll("button[data-jog], button[data-cmd]")) {
+        btn.dataset.can = btn.dataset.jog ? "jog" : verbOfCommand(btn.dataset.cmd);
+    }
+    const canNow = { server: null };
+    function localCan() {
+        const out = { ...withLatch(canNow.server, ctl.armed) };
+        const job = prt.job, running = !!(job && job.running);
+        const chosen = prt.files.find((f) => f.id === $("print-pick").value);
+        if (!state.port) {
+            out["print.start"] = { ok: false, kind: "offline", why: machineAt ? `${machineAt.path} has no board connected: its plan is made here, and ${words().start} is its board's once it is` : "no board is chosen" };
+        } else if (running) {
+            out["print.start"] = { ok: false, kind: "held", why: `a ${job.kind || "job"} from here is under way` };
+        } else if (chosen && !fits(chosen)) {
+            out["print.start"] = { ok: false, kind: "file", why: `${chosen.name} was kept for a ${chosen.machine}: it is sent to the kind it was kept for alone (Choose File keeps a file for this ${state.kind})` };
+        }
+        if (running && job.stage !== words().running && job.stage !== "finishing") {
+            out["print.pause"] = { ok: false, kind: "idle", why: `the print is ${job.stage}, not running` };
+        }
+        return out;
+    }
+    function renderCan() {
+        const c = localCan();
+        for (const el of everywhere) applyCan(el, c);
+    }
+    function takeCan(c) {
+        if (!c) return;
+        canNow.server = c;
+        renderCan();
+    }
+
     // Every control send that moves, heats or sets goes through one chain, one line
     // answered before the next is sent, and the pad is disabled while it runs. What
     // stops or interrupts -- the stop, and INTERRUPTS -- is sent at once, outside the
@@ -1108,8 +1158,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     let ctlChain = Promise.resolve();
     const neverBusy = (btn) => btn.id === "pad-estop" || INTERRUPTS.has(btn.dataset.cmd);
     function setBusy(on) {
-        for (const btn of $("control").querySelectorAll("button")) btn.disabled = on && !neverBusy(btn);
-        $("estop").disabled = false;  // never
+        for (const btn of $("control").querySelectorAll("button")) {
+            btn.dataset.busy = on && !neverBusy(btn) ? "1" : "";
+            refreshDisabled(btn);
+        }
     }
     // One control request, said in the pad as `said`: whether it was taken.
     async function sendOne(path, body, said) {
@@ -1590,12 +1642,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         $("print-delete").disabled = running && job.file_id === picked;
         $("print-preview-row").hidden = !picked;
         $("print-start").hidden = !picked;
-        $("print-start").disabled = running || !fits(chosen) || !state.port;
-        $("print-start").title = !state.port && machineAt ? `${machineAt.path} has no board connected: its plan is made here, and ${words().start} is its board's once it is`
-            : !chosen || fits(chosen) ? words().startTitle
-            : `${chosen.name} was kept for a ${chosen.machine}: it is sent to the kind it was kept for alone (Choose File keeps a file for this ${state.kind})`;
+        setTip($("print-start"), words().startTitle);
         $("print-pause").hidden = !running || paused;
-        $("print-pause").disabled = !running || (job.stage !== words().running && job.stage !== "finishing");
+        renderCan();
         $("print-resume").hidden = !paused;
         $("print-cancel").hidden = !running;
         $("print-verbs").hidden = !picked && !running;

@@ -29,3 +29,8 @@
 [data-group="Machine"] { --group: var(--group-machine); }
 [data-group="Airgap"] { --group: var(--group-airgap); }
 [data-group="Family"] { --group: var(--group-family); }
+
+/* A button the server would refuse (or that something else holds) is greyed, the same
+ * wherever it is: can.js sets `disabled` and `aria-disabled` and says why in its title.
+ * A widget with a reason of its own to look otherwise says so in its own sheet. */
+button:disabled, button[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }

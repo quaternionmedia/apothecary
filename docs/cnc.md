@@ -170,7 +170,8 @@ controller in alarm takes no jog until Unlock (`$X`) or a home; and `homing`, fo
 axis which way a home will seek, how fast and how far, and whether its switch has been
 seen and the axis jogged that way. The Machine shows the first two in a **Needs you**
 card, there only while there is something, and the third beside the Home buttons, each
-axis with what to do first; a Home not yet proved is outlined. `refused` is a printer's
+axis with what to do first; a Home not yet proved is greyed, with the controller's own
+figures for it in its tip (`can`, docs/firmware.md), and so is a jog while it is in alarm. `refused` is a printer's
 too.
 
 ### The plate's thickness
