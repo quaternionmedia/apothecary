@@ -184,6 +184,7 @@ AREAS = {
             "test_bench.py",
             "test_deck.py",
             "test_deck_jog.py",
+            "test_deck_screens.py",
             "test_the_firmware_loop.py",
             "test_the_made_thing.py",
             "test_onboarding.py",
