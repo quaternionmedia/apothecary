@@ -134,27 +134,38 @@ def _colour(name: Optional[str]) -> str:
     raise ValueError(f"not a colour: {name!r} (one of {', '.join(COLOURS)}, or #rrggbb)")
 
 
-def render(size, text: str, colour: Optional[str] = None, small: Optional[str] = None) -> bytes:
-    """``text`` centred on ``colour`` as a JPEG of ``size``; ``small`` a line under it."""
+def render(
+    size,
+    text: str,
+    colour: Optional[str] = None,
+    small: Optional[str] = None,
+    bar: Optional[float] = None,
+) -> bytes:
+    """``text`` centred on ``colour`` as a JPEG of ``size``; ``small`` a line under it and
+    ``bar`` (0 to 1) a bar along the foot of it, that full."""
     from PIL import Image, ImageDraw
 
     img = Image.new("RGB", size, _colour(colour))
     pen = ImageDraw.Draw(img)
     big = max(12, min(size[1] // 3, size[0] // max(2, len(text) or 1)))
-    pen.text(
-        (size[0] / 2, size[1] / 2 - (size[1] // 10 if small else 0)),
-        text,
-        fill="white",
-        font=_font(big),
-        anchor="mm",
-    )
+    lift = size[1] // 10 if small else 0
+    if bar is not None:
+        lift = size[1] // 5  # the bar takes the foot: the lines move up out of its way
+    pen.text((size[0] / 2, size[1] / 2 - lift), text, fill="white", font=_font(big), anchor="mm")
     if small:
         pen.text(
-            (size[0] / 2, size[1] * 0.82),
+            (size[0] / 2, size[1] * (0.66 if bar is not None else 0.82)),
             small,
             fill="#dddddd",
             font=_font(max(10, size[1] // 7)),
             anchor="mm",
+        )
+    if bar is not None:
+        left, right = size[0] * 0.04, size[0] * 0.96
+        top, foot = size[1] * 0.82, size[1] * 0.94
+        pen.rectangle((left, top, right, foot), outline="white", width=2)
+        pen.rectangle(
+            (left, top, left + (right - left) * max(0.0, min(1.0, bar)), foot), fill="white"
         )
     out = io.BytesIO()
     img.save(out, format="JPEG", quality=90)
@@ -165,8 +176,13 @@ def render_key(text: str, colour: Optional[str] = None, small: Optional[str] = N
     return render(KEY_SIZE, text, colour, small)
 
 
-def render_strip(text: str, colour: Optional[str] = None, small: Optional[str] = None) -> bytes:
-    return render(STRIP_SIZE, text, colour, small)
+def render_strip(
+    text: str,
+    colour: Optional[str] = None,
+    small: Optional[str] = None,
+    bar: Optional[float] = None,
+) -> bytes:
+    return render(STRIP_SIZE, text, colour, small, bar)
 
 
 # --- links: the deck itself, simulated or real --------------------------------------
@@ -323,12 +339,16 @@ class Deck:
         return jpeg
 
     def set_strip(
-        self, text: str, colour: Optional[str] = None, small: Optional[str] = None
+        self,
+        text: str,
+        colour: Optional[str] = None,
+        small: Optional[str] = None,
+        bar: Optional[float] = None,
     ) -> bytes:
-        jpeg = render_strip(text, colour, small)
+        jpeg = render_strip(text, colour, small, bar)
         self._send(lambda link: link.set_strip(jpeg))
         with self._lock:
-            self.strip = {"text": text, "small": small, "colour": colour, "jpeg": jpeg}
+            self.strip = {"text": text, "small": small, "colour": colour, "bar": bar, "jpeg": jpeg}
         return jpeg
 
     def set_brightness(self, percent: int) -> None:

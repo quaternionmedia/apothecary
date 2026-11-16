@@ -24,6 +24,7 @@ class DrawRequest(BaseModel):
     text: str = Field(max_length=40)
     small: Optional[str] = Field(None, max_length=40)
     colour: Optional[str] = Field(None, max_length=9)
+    bar: Optional[float] = Field(None, ge=0, le=1, allow_inf_nan=False)  # the strip's alone
 
 
 class BrightnessRequest(BaseModel):
@@ -112,7 +113,7 @@ def set_key(deck_id: str, index: int, body: DrawRequest):
 def set_strip(deck_id: str, body: DrawRequest):
     deck = _deck(deck_id)
     try:
-        deck.set_strip(body.text, body.colour, body.small)
+        deck.set_strip(body.text, body.colour, body.small, body.bar)
     except ValueError as exc:
         raise _said(exc) from exc
     except DeckUnavailable as exc:

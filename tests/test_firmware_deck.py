@@ -58,6 +58,31 @@ def test_a_key_and_the_strip_are_drawn_as_the_jpegs_the_device_takes():
         deck.render_key("x", "plaid")
 
 
+def test_the_strip_draws_a_bar_filled_as_far_as_it_is_told():
+    """A bar is pixels along the strip's foot: white where it is filled, so a fuller bar
+    has more of them, and a strip with none draws the picture it always did."""
+    def foot_white(jpeg: bytes) -> int:
+        img = Image.open(io.BytesIO(jpeg)).convert("L")
+        return sum(1 for x in range(img.width) if img.getpixel((x, 88)) > 200)
+
+    plain = deck.render_strip("job", "blue", "small")
+    empty = deck.render_strip("job", "blue", "small", 0.0)
+    half = deck.render_strip("job", "blue", "small", 0.5)
+    full = deck.render_strip("job", "blue", "small", 1.0)
+    assert foot_white(plain) == 0 < foot_white(empty) < foot_white(half) < foot_white(full)
+    assert foot_white(half) > foot_white(empty) + 300  # about half of 800 px more
+    assert _size(full) == ("JPEG", (800, 100))
+
+
+def test_a_bar_is_kept_with_the_strip_and_over_the_route(client):
+    one = deck.get_decks().get("SIMDECK0")
+    one.set_strip("job", "blue", "small", 0.25)
+    assert one.strip["bar"] == 0.25
+    sent = client.put("/firmware/decks/SIMDECK0/strip", json={"text": "job", "bar": 0.5})
+    assert sent.status_code == 200 and sent.json()["bar"] == 0.5
+    assert client.put("/firmware/decks/SIMDECK0/strip", json={"text": "x", "bar": 2}).status_code == 422
+
+
 # --- the simulated deck ---------------------------------------------------------------
 
 
