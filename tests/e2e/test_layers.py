@@ -1,0 +1,297 @@
+"""Layers and depth: how deep a click reaches, and which layers are drawn and which a
+click can select (apothecary/static/pick_scope.js, the Layers window beside Site).
+
+In the universe -- a sphere of nested shells, seen from outside -- the outer shell's
+pieces stand in front of the inner ones and the nearest hit wins; with the outer shell
+not selectable a click on it selects what is behind. A shell hidden is neither drawn
+nor hit. Depth 2 lets a click reach a piece of a piece. What was chosen is kept by the
+browser over a reload, and Select walls is the wall layer's Selectable tick.
+Walkthrough page 40 is what it writes.
+
+Runs against a server of its own, so the site it draws is the code's whatever ran before.
+"""
+
+from __future__ import annotations
+
+import pytest
+import windows
+from doc_capture import moments
+from garage import open_garage, said
+from playwright.sync_api import Page, expect
+from viewer_ready import settled
+
+UNIVERSE = "apothecary"
+CHANGING = tuple(moments(".panel", "#status"))
+
+# A point of the world, in page pixels, where the nearest mesh a ray from the camera
+# meets, whatever the scope says, satisfies ``first``, and a mesh behind it satisfies
+# ``behind``: found by casting through a grid of points, as a click there would, where
+# nothing stands over the canvas. ``mode`` 'shell': the nearest is on a shell and a mesh
+# behind it is on an inner shell; 'wall': the nearest is a wall and another piece is
+# behind or inside it.
+FIND = """(mode) => {
+    const v = window.fractalViewer;
+    const rect = v.canvas.getBoundingClientRect();
+    const meshes = Object.values(v.meshByName);
+    const node = (k) => v.renderNodeByKey[k];
+    const shell = (k) => (node(k) && Number.isInteger(node(k).shell) ? node(k).shell : null);
+    for (let gy = 0.1; gy < 0.95; gy += 0.02) {
+        for (let gx = 0.05; gx < 0.95; gx += 0.02) {
+            const x = rect.left + gx * rect.width, y = rect.top + gy * rect.height;
+            if (document.elementFromPoint(x, y) !== v.canvas) continue;
+            v.pointer.set(gx * 2 - 1, -(gy * 2 - 1));
+            v.raycaster.setFromCamera(v.pointer, v.camera);
+            const hits = v.raycaster.intersectObjects(meshes, false).map((h) => h.object.userData.key);
+            const first = hits[0];
+            if (!first) continue;
+            if (mode === 'shell' && shell(first) !== null) {
+                const behind = hits.find((k) => shell(k) !== null && shell(k) < shell(first));
+                if (behind) return { x, y, first, behind, shell: shell(first), inner: shell(behind) };
+            }
+            if (mode === 'wall' && node(first)?.category === 'wall') {
+                const behind = hits.find((k) => k !== first && !k.startsWith(first + '.'));
+                if (behind) return { x, y, first, behind };
+            }
+        }
+    }
+    return null;
+}"""
+
+# What the scope and the drawn world say, at once.
+STATE = """() => {
+    const v = window.fractalViewer;
+    return { scope: v.pickScope.toJSON(), selected: v.selectedName,
+             walls: document.getElementById('walls-toggle').checked };
+}"""
+
+# A mesh: whether the world draws it, and whether a cast reaches it.
+MESH = """(key) => {
+    const v = window.fractalViewer, mesh = v.meshByName[key];
+    return { drawn: !!mesh && mesh.visible };
+}"""
+
+# Whether any ray of a grid over the canvas reaches the piece, as a click would.
+REACHED = """(key) => {
+    const v = window.fractalViewer, r = v.canvas.getBoundingClientRect();
+    for (let i = 1; i < 64; i++) for (let j = 1; j < 64; j++) {
+        const at = { clientX: r.left + (r.width * i) / 64, clientY: r.top + (r.height * j) / 64 };
+        if (v.raycastHits(at).some((h) => h.object.userData.key === key)) return true;
+    }
+    return false;
+}"""
+
+# A point where a click picks `key`: of those a grid finds, the one nearest their middle.
+PICKING = """(key) => {
+    const v = window.fractalViewer, r = v.canvas.getBoundingClientRect();
+    const over = [];
+    for (let i = 1; i < 64; i++) for (let j = 1; j < 64; j++) {
+        const at = { clientX: r.left + (r.width * i) / 64, clientY: r.top + (r.height * j) / 64 };
+        if (document.elementFromPoint(at.clientX, at.clientY) !== v.canvas) continue;
+        const pick = v.raycastPick(at);
+        if (pick && pick.key === key) over.push({ x: at.clientX, y: at.clientY });
+    }
+    if (!over.length) return null;
+    const mx = over.reduce((s, p) => s + p.x, 0) / over.length;
+    const my = over.reduce((s, p) => s + p.y, 0) / over.length;
+    return over.reduce((b, p) => (Math.hypot(p.x - mx, p.y - my) < Math.hypot(b.x - mx, b.y - my) ? p : b));
+}"""
+
+# What a click at a point would pick now.
+PICK_AT = """([x, y]) => {
+    const pick = window.fractalViewer.raycastPick({ clientX: x, clientY: y });
+    return pick && pick.key ? pick.key : null;
+}"""
+
+# A piece of the level that holds pieces of its own, and one of those.
+NESTED = """() => {
+    const v = window.fractalViewer;
+    for (const [key, node] of Object.entries(v.renderNodeByKey)) {
+        if (key.includes('.') || !node.children.length || !node.world_bounds) continue;
+        const inner = node.children.find((c) => c.world_bounds);
+        if (inner) return { outer: key, inner: `${key}.${inner.name}` };
+    }
+    return null;
+}"""
+
+
+@pytest.fixture(scope="module")
+def url(start_server):
+    return start_server()
+
+
+def _universe(page: Page, url: str) -> None:
+    page.goto(f"{url}/viewer/sites/{UNIVERSE}")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
+    settled(page)
+
+
+def _tick(page: Page, layer: str, kind: str):
+    """A layer's Shown or Selectable tick in the Layers window."""
+    return page.locator(
+        f".panel[data-panel='layers'] input[data-layer='{layer}'][data-kind='{kind}']"
+    )
+
+
+@pytest.mark.e2e
+def test_with_the_outer_shell_not_selectable_a_click_on_it_selects_the_piece_behind(
+    page: Page, url: str, walkthrough
+):
+    """A click where an outer shell's piece stands over
+    an inner shell's selects the outer one; with the outer shell's Selectable ticked off
+    in the Layers window it selects what is behind, the outer shell still drawn."""
+    story = walkthrough(
+        ordinal="40",
+        slug="layers-and-depth",
+        title="Layers and depth",
+        intro=(
+            "A click in the world picks the nearest thing under it; in the universe, a "
+            "sphere of shells seen from outside, that is the outer shell. The Layers "
+            "window, a tab beside Site, says which layers a click may pick and which "
+            "the world draws, and how many levels down a click reaches. "
+            "[docs/viewer.md](../docs/viewer.md#layers) is the reference."
+        ),
+        runtime=(
+            "It drives a real browser against a real server of its own, on the universe as "
+            "the code has it. What is chosen is kept by the browser, as a person's settings "
+            "are; nothing is kept on the server."
+        ),
+        does_not_show=[
+            "**Another browser.** The choice is this browser's own.",
+            "**What changes on every run.** Moments are blanked in the pictures.",
+        ],
+        browser_suite_only=True,
+    )
+    _universe(page, url)
+    windows.from_the_windows_menu(page, "layers")
+    settled(page)
+    spot = page.evaluate(FIND, "shell")
+    assert spot, "no point of the sphere where an outer shell stands in front of an inner one"
+    outer = f"shell:{spot['shell']}"
+
+    page.mouse.click(spot["x"], spot["y"])
+    assert page.evaluate("() => window.fractalViewer.selectedName") == spot["first"]
+    story.shows(
+        "A click on the outer shell picks the outer shell's piece",
+        "The Layers window beside Site, every layer shown and selectable; a click where an "
+        "outer shell's piece stands in front of an inner one selects the outer one.",
+        blank=CHANGING,
+    )
+
+    # The outer shell no longer selectable: still drawn, and the click passes through.
+    _tick(page, outer, "selectable").uncheck()
+    said(page, "a click passes through it")
+    assert page.evaluate(MESH, spot["first"])["drawn"] is True
+    assert page.evaluate(PICK_AT, [spot["x"], spot["y"]]) not in (None, spot["first"])
+    page.mouse.click(spot["x"], spot["y"])
+    picked = page.evaluate("() => window.fractalViewer.selectedName")
+    assert picked != spot["first"]
+    assert picked is not None
+    shell = page.evaluate("(k) => window.fractalViewer.renderNodeByKey[k].shell", picked)
+    assert shell != spot["shell"], (picked, shell)
+    expect(_tick(page, outer, "shown")).to_be_checked()
+    story.shows(
+        "With the outer shell not selectable, the click selects what is behind",
+        "The outer shell's Selectable ticked off, its Shown still on: the shell is drawn "
+        "as it was, and the same click selects the piece behind it.",
+        blank=CHANGING,
+    )
+
+
+@pytest.mark.e2e
+def test_a_hidden_shell_is_not_drawn_and_not_hit_and_the_choice_survives_a_reload(
+    page: Page, url: str
+):
+    """Shown ticked off on a shell: its meshes are not drawn and no ray reaches
+    them; Selectable goes with it, and comes back with Shown ticked on again. The scope
+    is the browser's own: after a reload the tick is still off."""
+    _universe(page, url)
+    windows.from_the_windows_menu(page, "layers")
+    settled(page)
+    spot = page.evaluate(FIND, "shell")
+    assert spot
+    outer = f"shell:{spot['shell']}"
+    assert page.evaluate(REACHED, spot["first"]) is True
+
+    _tick(page, outer, "shown").uncheck()
+    said(page, "hidden")
+    expect(_tick(page, outer, "selectable")).not_to_be_checked()
+    assert page.evaluate(MESH, spot["first"])["drawn"] is False
+    assert page.evaluate(REACHED, spot["first"]) is False
+    settled(page)
+
+    page.reload()
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
+    settled(page)
+    assert outer in page.evaluate(STATE)["scope"]["hidden"]
+    assert page.evaluate(MESH, spot["first"])["drawn"] is False
+    windows.from_the_windows_menu(page, "layers")
+    expect(_tick(page, outer, "shown")).not_to_be_checked()
+    expect(_tick(page, outer, "selectable")).not_to_be_checked()
+
+    _tick(page, outer, "shown").check()
+    assert page.evaluate(MESH, spot["first"])["drawn"] is True
+    expect(_tick(page, outer, "selectable")).to_be_checked()
+
+
+@pytest.mark.e2e
+def test_depth_two_lets_a_click_select_a_piece_of_a_piece(page: Page, url: str):
+    """At depth 1 a piece that holds pieces is drawn as one; at depth 2 its own
+    pieces are drawn inside it and a click on one selects it, from the Layers window's
+    stepper and from the ring's View › Depth."""
+    open_garage(page, url)
+    nested = page.evaluate(NESTED)
+    assert nested, "no piece of the level holds pieces of its own"
+    assert page.evaluate("(k) => !!window.fractalViewer.meshByName[k]", nested["inner"]) is False
+
+    windows.from_the_windows_menu(page, "layers")
+    page.locator(".panel[data-panel='layers'] button[data-act='depth-more']").click()
+    said(page, "Depth: 2 levels")
+    settled(page)
+    assert page.evaluate("(k) => !!window.fractalViewer.meshByName[k]", nested["inner"]) is True
+    spot = page.evaluate(PICKING, nested["inner"])
+    assert spot, "no point of the canvas where a click picks the inner piece"
+    page.mouse.click(spot["x"], spot["y"])
+    assert page.evaluate("() => window.fractalViewer.selectedName") == nested["inner"]
+
+    # Back to one level: the inner piece is gone from the world, and the choice is kept.
+    page.locator(".panel[data-panel='layers'] button[data-act='depth-less']").click()
+    said(page, "Depth: 1 level")
+    settled(page)
+    assert page.evaluate("(k) => !!window.fractalViewer.meshByName[k]", nested["inner"]) is False
+    assert page.evaluate(STATE)["scope"]["depth"] == 1
+
+
+@pytest.mark.e2e
+def test_select_walls_is_the_wall_layers_selectable_tick_and_a_click_still_passes_a_wall(
+    page: Page, url: str
+):
+    """A click passes through the garage's faded walls to what is behind; the
+    View menu's Select walls and the Layers window's wall row are one tick, and ticked,
+    a click picks the wall. The wall tick is the session's: a reload puts it back."""
+    open_garage(page, url)
+    windows.from_the_windows_menu(page, "layers")
+    settled(page)
+    spot = page.evaluate(FIND, "wall")
+    assert spot, "no point of the world where a wall stands in front of a piece"
+    wall = "category:wall"
+    expect(_tick(page, wall, "selectable")).not_to_be_checked()
+    page.mouse.click(spot["x"], spot["y"])
+    assert page.evaluate("() => window.fractalViewer.selectedName") == spot["behind"]
+
+    _tick(page, wall, "selectable").check()
+    said(page, "Select walls: on")
+    assert page.evaluate(STATE)["walls"] is True
+    page.mouse.click(spot["x"], spot["y"])
+    assert page.evaluate("() => window.fractalViewer.selectedName") == spot["first"]
+
+    # The View menu's tick unticks the layer's.
+    page.locator("#view-menu > summary").click()
+    page.locator("#walls-toggle").uncheck()
+    said(page, "Select walls: off")
+    expect(_tick(page, wall, "selectable")).not_to_be_checked()
+
+    _tick(page, wall, "selectable").check()
+    page.reload()
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
+    settled(page)
+    assert page.evaluate(STATE)["walls"] is False

@@ -197,8 +197,9 @@ box being typed in keeps its own.
 **Walls are drawn faded**, whatever is in front of them: anything whose
 category is `wall` is see-through, and a click passes through it to what is
 behind or inside. A wall is solid while it is selected. To pick one, tick
-⚙ View › Select walls (the ring's View › Select walls), or click its row
-in Site's tree, which works either way.
+⚙ View › Select walls (the ring's View › Select walls), which is the wall
+layer's Selectable tick in [Layers](#layers), or click its row in Site's
+tree, which works either way.
 
 **Badges** stand over things in the world, their words shown on hover or
 while their thing is selected; three or more that overlap fold into one,
@@ -230,9 +231,45 @@ ring's View is, which adds **Fit**: frame the pieces at this level (Shift+F;
 | Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first); a machine stepped into, the level's own piece, has none |
 | Select walls | A click in the world picks a wall again, until the page is left (off at first) |
 | Settings | Opens the Settings panel, its tab in front ([below](#settings)) |
+| Layers (the ring's View › Layers) | Opens the Layers window, a tab beside Site ([below](#layers)); the menu has no item of its own for it, and ⊞ Windows lists it |
+| Depth (the ring's View › Depth) | One to four levels below the level in view, drawn and reached by a click; the Layers window's stepper goes to eight |
 
 None of the first four is remembered: a reload starts from the defaults.
-Settings are kept by this browser.
+Settings, and the depth and the layers, are kept by this browser.
+
+### Layers
+
+How deep a click reaches, and which layers are drawn and which a click can
+select, are one choice (`apothecary/static/pick_scope.js`), made in the **Layers**
+window, a tab beside Site that opens closed, and read in two places: where a click
+asks what is under it, and where the world is drawn.
+
+**Depth** is how many levels below the level in view are drawn and reached. At 1,
+the first, a level is its own pieces, each a single piece however much it holds;
+at 2 each piece that holds pieces draws them inside it too, and a click on one
+selects it -- the piece around them gives way to a piece of it on the same ray, as
+the part of a machine stepped into does. The pieces of a category expanded from
+Site's chips are drawn at every depth, as before.
+
+A **layer** is a kind of thing the world draws, with a **Shown** tick and a
+**Selectable** tick, selectable always within shown: hiding a layer clears
+Selectable (and showing it restores what was chosen), ticking Selectable shows it.
+
+| Layer | Is | Ticks |
+|---|---|---|
+| Shell N | The parts laid on shell N of the universe's sphere, 0 the innermost and the sites outermost; a row for each shell the loaded site has | Shown, Selectable |
+| A category | The pieces of that category, walls among them | Shown, Selectable (walls start unselectable: View › Select walls is this tick) |
+| Alignment grid | The floor grid and the machines' build-volume boxes | Shown |
+| Machine buttons | The badges a machine wears in the world | Shown |
+
+A piece is on its shell's layer and its category's, and is drawn only if every layer
+it is on is shown and picked only if every one is selectable. A layer not shown is
+neither drawn nor hit; a layer not selectable is drawn, and a click passes through
+it to what is behind, which is how an inner shell is reached from outside the
+sphere. A row in Site's tree selects any piece whatever the layers say. Each change
+is said on the status line. Everything starts shown and selectable, walls aside, at
+depth 1; **Reset** returns to that. What differs is kept by this browser, except
+Select walls, which is the page's session's.
 
 The world is the site's own frame, z up, turned onto the screen and never
 mirrored: a part reads as OpenSCAD draws it, its engraved text the right way
@@ -353,7 +390,7 @@ site built again from its factory, as it was first built: chosen twice); then
 Step out 1 (when stepped in) and Group (each category of the site's pieces:
 expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
 
-- **Panels** › Site › Site, Problems, Pinned, Jobs, SCAD and Workspace (the
+- **Panels** › Site › Site, Problems, Pinned, Jobs, SCAD, Workspace and Layers (the
   Working space, [working-space.md](working-space.md)); Selected;
   Pictures › Pictures, Models (the Models window, then Ask and a person's Colour
   and Material, [models-checklist.md](models-checklist.md)), Gather and Marks (the Marks window, then a person's
