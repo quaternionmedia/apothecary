@@ -40,6 +40,9 @@ takes it there again. **its page**, beside ↻, is the first walkthrough page th
 names, in a tab. The page then does what a person would do to get there, each
 thing only where it is not so already:
 
+- the site the journey stands in opened, where another is, as the banner's ▾ opens
+  it: every journey's pieces and machines are the garage's (`Journey.site`), so a
+  stage is the same whichever site the tour was opened in;
 - what the journey is staged on, then what the stage itself needs (`staged_on` and a
   stage's `puts`, in `apothecary/journeys.py`), from a short list of things the page
   already does:
@@ -50,7 +53,7 @@ thing only where it is not so already:
   | `machine` | a piece's Machine opened, in place of another's; with no board connected, as the site plans it | its badge, or Device › Open |
   | `part` | a piece chosen | its row in Site |
   | `fit` | a piece chosen and framed in the world | `f` |
-  | `file` | the open Machine given a file for a part, where it keeps none | Slice, or a router's Toolpath |
+  | `file` | the open Machine's file made from a part: the one chosen, else the newest kept chosen, else one made; another part's file chosen before is not the stage's | the card's file, Slice, or a router's Toolpath |
   | `edit` | a part's editor opened | Part › Edit |
   | `scad` | a part's SCAD in its window | Part › SCAD |
   | `bench` | the Bench opened on a piece's sketch | Device › Flash sketch |
@@ -63,7 +66,7 @@ thing only where it is not so already:
   header.
 
 So a stage that needs the work of the one before it has it done first: See draws a
-file's path, so with no file kept the piece is sliced for the machine; Marks needs a
+file's path, so with no file of its piece kept the piece is sliced for the machine; Marks needs a
 photograph pinned and its shapes found.
 
 The box keeps what the page did, then what the page said of the stage, folded under

@@ -8084,6 +8084,15 @@
                 if (!journey) return { did: [], said: `There is no journey ${id}`, refused: true };
                 const step = journey.steps.find((x) => x.id === stepId) || journey.steps[0];
                 const did = [];
+                // The site its subjects stand in, opened where another is, as the banner's ▾
+                // does: a stage is the same from wherever the tour is opened.
+                if (journey.site && this.siteName !== journey.site) {
+                    if (!SITE_NAMES.includes(journey.site)) return { did, said: `${journey.name} stands in ${journey.site}, and this server has no site of that name`, refused: true };
+                    const from = this.siteName;
+                    await this.chooseSite(journey.site);
+                    if (this.siteName !== journey.site) return { did, said: `${journey.site} did not open: ${document.getElementById('status').textContent}`, refused: true };
+                    did.push(`${journey.site} opened, where ${journey.name} stands (${from} was open)`);
+                }
                 // The site's own level: a piece is chosen and opened among the site's.
                 if (this.focusPath.length) { this.goUpTo(0, 'the tour'); did.push(`stepped out to ${this.siteName}`); }
                 // A journey with no machine in it: the one open is closed, as its tab's ✕ does.
@@ -8162,8 +8171,13 @@
                     const machine = this.machine, print = machine?.handle?.print;
                     if (!print?.slice) return { refused: `No Machine that makes ${subject} is open` };
                     const who = machine.path || machine.port;
+                    // A file made from the subject: the one chosen, else the newest kept,
+                    // chosen; only where none is kept is one made. Another part's file
+                    // chosen before is not this stage's.
                     const found = await print.show();
-                    if (!found || found.file) return {};
+                    if (!found || found.of.includes(subject)) return {};
+                    const earlier = await print.fileOf(subject);
+                    if (earlier) return { did: `${earlier}, made from ${subject} before, chosen in ${who}'s ${found.card} window` };
                     const router = machine.handle.kind() === 'router';
                     const started = await print.slice(subject);
                     if (started.refused) return { refused: `${subject} was not ${router ? 'given a toolpath' : 'sliced'}: ${started.refused}` };

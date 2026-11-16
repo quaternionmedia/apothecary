@@ -55,11 +55,12 @@ def test_each_journey_is_named_once_and_apart_from_the_systems():
 
 def test_the_page_is_taken_to_a_stage_by_verbs_it_has_on_pieces_the_simulated_server_s_site_has():
     """What the tour does to stand on a stage is from the page's own short list, and its
-    subjects are pieces of the simulated server's site."""
-    pieces = {
-        child.name for child in create_example_site().children
-    }  # the simulated server's garage
+    subjects are pieces of the site each journey names, which is the simulated server's,
+    so the tour opens it from any other."""
+    site = create_example_site()  # the simulated server's garage
+    pieces = {child.name for child in site.children}
     for journey in JOURNEYS:
+        assert journey.site == site.name.lower(), journey.id
         for verb, subject in [*journey.staged_on, *(p for s in journey.steps for p in s.puts)]:
             assert verb in PUTS, (journey.id, verb)
             piece, _, what = subject.partition(":")

@@ -288,7 +288,7 @@ AREAS = {
             "apothecary/journeys.py",
             "apothecary/simulated.py",
         ),
-        "tests": ("test_tour.py", "test_the_chain.py"),
+        "tests": ("test_tour.py", "test_tour_from_anywhere.py", "test_the_chain.py"),
     },
 }
 

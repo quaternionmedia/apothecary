@@ -44,7 +44,8 @@
  * the ring drives (carry, pairs,
  * device), the world asks to list its site's parts again when a piece is made,
  * rebuilt or dropped (print.loadChoices), to choose the piece a made piece's
- * Print names (print.choose), to slice what is chosen (print.slice) and to draw
+ * Print names (print.choose), to slice what is chosen (print.slice), to choose a
+ * kept file made from a part (print.fileOf) and to draw
  * the chosen file's path for the Machine view (print.show), and the
  * tests read (state, ctl, level, print).
  *
@@ -1412,13 +1413,14 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     }
     // The Machine view's: the chosen file's path drawn where it is not drawn already,
     // all of it -- a slider a person left part way stays there. What it found, for the
-    // host to say: the card's name and what a group is called, the file and whether
-    // its path is drawn and how far (`where`), why not (`refused`), or with no file
-    // of this machine's kept why there is none (`none`) and how one comes to be
-    // (`how`). Null on a devkit, which has no file.
+    // host to say: the card's name and what a group is called, the file, what its
+    // slice or toolpath was made from (`of`: a piece's path and a part's name), and
+    // whether its path is drawn and how far (`where`), why not (`refused`), or with
+    // no file of this machine's kept why there is none (`none`) and how one comes to
+    // be (`how`). Null on a devkit, which has no file.
     async function showPreview() {
         if (!(state.port || planning()) || !isGcode()) return null;
-        const w = words(), found = { card: w.verb, word: w.slice ? "layer" : "pass", file: null, drawn: false, where: null, refused: null, none: null, how: null };
+        const w = words(), found = { card: w.verb, word: w.slice ? "layer" : "pass", file: null, of: [], drawn: false, where: null, refused: null, none: null, how: null };
         await loadPrintFiles();
         const id = $("print-pick").value || null;
         const name = id ? (prt.files.find((f) => f.id === id) || { name: id }).name : null;
@@ -1433,6 +1435,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             return found;
         }
         found.file = name;
+        found.of = madeFrom(id);
         // A router's file stands at its work zero: its working area and a poll are
         // waited for, so the path is drawn where it will stay.
         if (w.dialect === "grbl" && state.port) {
@@ -1447,6 +1450,22 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (found.drawn) { found.word = d.word; found.where = at >= d.groups.length ? "all of it" : d.groups[at - 1].label; }
         else found.refused = refusals > before ? lastRefusal : d ? "this file moves nothing" : "its path could not be read";
         return found;
+    }
+    // What a kept file's slice or toolpath was made from: the piece's path in its
+    // site and the part's name, or nothing for a file no slice or toolpath made.
+    function madeFrom(id) {
+        const r = id && prt.slices[id];
+        if (!r) return [];
+        return r.toolpath ? [r.part] : [...new Set([r.made.path, r.made.name].filter(Boolean))];
+    }
+    // The newest file kept for this kind of machine that was made from `path`, chosen
+    // in the card: its name, or null where none is kept.
+    async function chooseFileOf(path) {
+        await loadPrintFiles();
+        const kept = prt.files.find((f) => fits(f) && madeFrom(f.id).includes(path));
+        if (!kept) return null;
+        await loadPrintFiles(kept.id);
+        return kept.name;
     }
     function showChosenSlice() {
         const id = $("print-pick").value || null;
@@ -2002,7 +2021,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         kind: () => state.kind,
         device, carry, pairs, pad: togglePad, padBack,
         level: { start: startLevel, corner: (which) => enqueue(cornerLines(which)), lines: cornerLines, records: () => level.records, shown: () => level.shown, load: loadLevel },
-        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart, slice: slicePart, slices: () => prt.slices, slicing: () => slc.running, show: showPreview },
+        print: { start: startPrint, verb: printVerb, keep: keepPrintFile, job: () => prt.job, files: () => prt.files, jobs: () => prt.jobs, choices: () => prt.choices, load: loadPrintFiles, loadJobs: loadPrintJobs, loadChoices, choose: choosePart, slice: slicePart, fileOf: chooseFileOf, slices: () => prt.slices, slicing: () => slc.running, show: showPreview },
         plan: { keep: keepPlan, load: loadPlan, shown: () => pl.plan, planning },
         destroy() {
             if (state.port || machineAt) emit("apothecary:toolpath", { port: state.port, path: machineAt ? machineAt.path : null, preview: null, upto: 0, origin: null });

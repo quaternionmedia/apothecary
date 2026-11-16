@@ -24,7 +24,9 @@ a drawing photographed into pieces, which are parts to design.
 
 The tour takes the page to a stage by its ``puts``: what the page does to stand where
 the stage is, each a verb the page already has and its subject, done only where it is
-not so already (the template's ``stagePut``). None arms, starts or sends anything, and
+not so already (the template's ``stagePut``). Each journey names the site its subjects
+stand in, which the tour opens first where another is open, so a stage is the same
+from wherever a person opens the tour. None arms, starts or sends anything, and
 none supplies what is a person's to bring -- a board plugged in, a photograph taken:
 where that is missing the rest is left, the stage is entered all the same, and the
 page says what the stage needs.
@@ -94,6 +96,11 @@ PUTS = (
 )
 
 
+# The site every journey is staged in: the bench's own, whose pieces and machines
+# their puts name.
+SITE = "garage"
+
+
 @dataclass(frozen=True)
 class Journey:
     id: str
@@ -116,6 +123,9 @@ class Journey:
     # its entry in ⊞ Windows › Views. That ring is full, so only the first journey has
     # one: the others are entered from ⊞ Windows › Journeys and the tour.
     cell: str = ""
+    # The site its subjects stand in -- the pieces and machines its puts name -- which
+    # the tour opens first where another is open.
+    site: str = SITE
 
 
 def _machine_view(*beside_the_machine: str, active: str) -> Layout:
@@ -698,6 +708,7 @@ def manifest(journeys: Tuple[Journey, ...] = JOURNEYS) -> List[Dict[str, Any]]:
             "view": j.view,
             "name": j.name,
             "staged_on": [list(put) for put in j.staged_on],
+            "site": j.site,
             "steps": [
                 {
                     "id": s.id,
