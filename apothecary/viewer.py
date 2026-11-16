@@ -44,3 +44,12 @@ def render_fractal_viewer_page(
         universe=UNIVERSE,
         universe_shown=UNIVERSE_SHOWN,
     )
+
+
+def render_projector_page(site: str, path: str, base_url: str) -> str:
+    """The projector's page for the machine at ``path`` of ``site``: a black page and one
+    canvas, for a second display aimed at the machine's bed (static/projector.js draws it;
+    routes/projector.py serves it)."""
+    return _ENV.get_template("projector.html.j2").render(
+        site=site, path=path, base_url=base_url.rstrip("/")
+    )

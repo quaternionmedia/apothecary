@@ -1852,6 +1852,7 @@ def test_a_printer_a_board_drives_opens_its_working_space_under_its_camera():
         assert [(c.label, c.action) for c in camera.children] == [
             ("Add here", "camera:add-here"),
             ("Workspace", "working:open"),
+            ("Projector", "projector:open"),
         ]
         assert [o.label for o in ring.options] == [
             o.label for o in on("printer_1", [], device).options
@@ -1860,6 +1861,30 @@ def test_a_printer_a_board_drives_opens_its_working_space_under_its_camera():
     for path in ("workbench", "printer_1"):
         bare = _group(on(path, []), "Camera")
         assert [c.label for c in bare.children] == ["Add here"], path
+
+
+def test_a_machine_opens_its_projector_s_page_under_its_camera():
+    """Projector is a machine's, last under its Camera: a printer a board drives, a
+    router planned or driven; the page opens the projector's page for it, and nothing is
+    changed. No other host has it, and no cell of the ring moves for it."""
+    from apothecary.menu import PictureContext, carried_by
+
+    site = _garage()
+
+    def camera_on(path, **told):
+        context = Context(pointing=Pointing.NODE, targets=[path])
+        return _group(resolve(context, site, picture=PictureContext(**told)), "Camera")
+
+    router = camera_on("cnc_router", routers=["cnc_router"])
+    assert [(c.label, c.action) for c in router.children] == [
+        ("Add here", "camera:add-here"),
+        ("Projector", "projector:open"),
+    ]
+    assert [c.label for c in camera_on("cnc_router").children] == ["Add here"]
+    assert [c.label for c in camera_on("workbench", routers=["cnc_router"]).children] == [
+        "Add here"
+    ]
+    assert carried_by("projector:open").name == "VIEWER"
 
 
 def test_a_made_piece_has_picture_with_word_and_drop_and_no_camera():

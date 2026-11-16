@@ -211,7 +211,10 @@ def test_an_uncalibrated_machine_answers_its_frame_and_says_what_it_does_not_kno
         "carries_y": True,
     }
     assert picture["toolpath"] is None and picture["source"] is None
-    assert picture["said"] == ["nothing streams on this machine, and no plan names a file"]
+    assert picture["said"] == [
+        "nothing streams on this machine, and no plan names a file",
+        "not calibrated: four points of the bed are marked on the projector's page (C there)",
+    ]
     # No poll kept: no tool, no bed's place, and the band says so rather than guess.
     assert got["moving"] == {
         "tool": None,
@@ -224,6 +227,7 @@ def test_an_uncalibrated_machine_answers_its_frame_and_says_what_it_does_not_kno
             "needs": [],
             "lines": ["no poll kept: this machine's state is not known here"],
         },
+        "said": ["the bed carries Y and no poll has said where it stands: nothing on it is drawn"],
     }
 
 

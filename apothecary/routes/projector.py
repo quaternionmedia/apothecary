@@ -8,6 +8,8 @@
   the machine's calibration; answers as GET does. A bed that carries Y is calibrated
   where its last poll says it stands, and refused while no poll has said.
 - ``DELETE /sites/{s}/machines/{path}/projector``: the calibration forgotten.
+- ``GET /projector/sites/{s}/machines/{path}``: the projector's page, black and one canvas,
+  for a second display (``templates/projector.html.j2``, ``static/projector.js``).
 
 The answer's parts:
 
@@ -37,7 +39,8 @@ import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from .. import jobs, machine_plans, projector, sites, surfaces
@@ -53,6 +56,11 @@ STREAMED = ("print", "cut")
 CIRCLE_SIDES = 48
 # Millimetres are given to a hundredth.
 PLACES = 2
+# What is said where nothing can be drawn: no calibration; a bed whose place is not known.
+NOT_CALIBRATED = (
+    "not calibrated: four points of the bed are marked on the projector's page (C there)"
+)
+BED_UNKNOWN = "the bed carries Y and no poll has said where it stands: nothing on it is drawn"
 
 
 class CalibrationIn(BaseModel):
@@ -298,6 +306,8 @@ def _picture(site_name, site, path, kind, frame, status, calibration) -> Dict[st
         if toolpath is None:
             said.append(f"{file['name'] or file['id']} is no longer kept")
     cuts = _cuts(site, plan, origin) if kind == "router" else None
+    if calibration is None:
+        said.append(NOT_CALIBRATED)
     picture = {
         "bed": {
             "outline": [[0.0, 0.0], [vx, 0.0], [vx, vy], [0.0, vy]],
@@ -338,11 +348,13 @@ def moving(site_name: str, path: str, frame: Dict[str, Any], status) -> Dict[str
     if tool is not None:
         y = frame["bed_moves_y"] if _carries_y(frame) else tool["y"]
         at = [_mm(tool["x"]), _mm(y)]
+    offset = bed_offset(frame, status)
     return {
         "tool": at,
-        "bed_offset": bed_offset(frame, status),
+        "bed_offset": offset,
         "current": _current(site_name, path, status),
         "status": band(status),
+        "said": [BED_UNKNOWN] if offset is None else [],
     }
 
 
@@ -429,6 +441,16 @@ def forget(name: str, path: str):
     forgotten = projector.clear(name, path)
     _say_moved(name, path)
     return {"forgotten": forgotten}
+
+
+@router.get("/projector/sites/{name}/machines/{path}", include_in_schema=False)
+def projector_page(name: str, path: str, request: Request):
+    """The projector's page: black, one canvas, for a second display aimed at the machine's
+    bed (static/projector.js). 404 for no such node, 400 for one with no working volume."""
+    from ..viewer import render_projector_page
+
+    _machine(name, path)
+    return HTMLResponse(render_projector_page(name, path, str(request.base_url)))
 
 
 # --- the projector's picture, as a surface ----------------------------------------------------

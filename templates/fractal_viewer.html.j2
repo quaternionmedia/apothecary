@@ -10285,6 +10285,17 @@
                     }
                     if (action === 'device:pin') { viewer.setStatus(`${intent.label}: choose the piece to pin ${port} to, and pin it from Selected${tail}`, 'error'); return; }
                 }
+                // A machine's Projector: the projector's page for it, in a window of its own
+                // for a second display (routes/projector.py). Opened before anything is
+                // awaited, so the browser counts the ring's press as the gesture it asks for.
+                if (action === 'projector:open') {
+                    const machine = viewer.bearerPathFor(path);
+                    const at = `${BASE}/projector/sites/${encodeURIComponent(viewer.siteName)}/machines/${encodeURIComponent(machine)}`;
+                    const opened = window.open(at, `apothecary-projector-${machine}`);
+                    if (opened) viewer.setStatus(`${intent.label}: ${machine}'s projector page, opened in a window of its own${tail}`, 'success');
+                    else viewer.setStatus(`${intent.label}: the browser kept ${machine}'s projector page from opening; it is at ${at}${tail}`, 'error');
+                    return;
+                }
                 // A printer's Workspace: the Working space opened on it.
                 if (action === 'working:open') {
                     const said = await viewer.openWorkingSpace(path);

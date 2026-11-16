@@ -1232,17 +1232,22 @@ def _is_host(site: Optional[Assembly], path: str, not_hosts: Sequence[str]) -> b
     return node is not None and node.world_bounds() is not None
 
 
-def _camera_group(floor: bool, printer: bool = False) -> Option:
+def _camera_group(floor: bool, printer: bool = False, machine: bool = False) -> Option:
     """Camera at a host or the floor: Add here, a camera part standing above the
     middle of this place, looking straight down. The server adds it. On a printer a
     board drives, Workspace too: the Working space opened on it, where the frames its
-    cameras keep with its polls are (widgets/working_space.js)."""
+    cameras keep with its polls are (widgets/working_space.js). On a machine -- a printer
+    a board drives, or a router, planned or driven -- Projector last: the light that goes
+    the other way from a camera's, the projector's page for this machine opened in a
+    window of its own for a second display (routes/projector.py)."""
     tail = f":{FLOOR_MARK}" if floor else ""
     children = [
         Option(id=f"camera:add-here{tail}", label="Add here", action=f"camera:add-here{tail}")
     ]
     if printer:
         children.append(Option(id="working", label="Workspace", action="working:open"))
+    if machine:
+        children.append(Option(id="projector", label="Projector", action="projector:open"))
     return Option(id=f"camera{tail}", label="Camera", group="Pictures", children=children)
 
 
@@ -1645,7 +1650,13 @@ def _node_ring(
     # has a camera added above it and holds views; a made piece has its word and
     # can be dropped; a camera has its own verbs, its device first.
     if _is_host(site, path, [*picture.made, *picture.camera_parts]):
-        options.append(_camera_group(floor=False, printer=path in picture.printers))
+        options.append(
+            _camera_group(
+                floor=False,
+                printer=path in picture.printers,
+                machine=path in picture.printers or path in picture.routers,
+            )
+        )
         host_pictures = _picture_group(picture, floor=False)
         assert host_pictures is not None  # a host's always holds Add
         options.append(host_pictures)
@@ -2064,6 +2075,9 @@ CARRIED_BY: Dict[str, Carries] = {
     # A printer's Working space: the page opens the window on the printer, watches
     # its board and keeps frames with its polls (widgets/working_space.js).
     "working": Carries.VIEWER,
+    # A machine's projector: the page opens the projector's page for it in a window of
+    # its own, for a second display (static/projector.js); nothing is changed.
+    "projector": Carries.VIEWER,
     # GO and Start over: the page hands each to the Procedure window, which fires
     # through the family's hub (widgets/procedure.js).
     "procedure": Carries.VIEWER,
