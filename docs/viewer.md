@@ -349,6 +349,10 @@ Machine open: only while the server holds the machine's link, so the world opens
 no port and a link released stays released, and never while a Machine is open on
 the port, whose own polls and auto-poll tick-box decide there.
 
+A projector aimed at a machine's bed draws in the same frame, on a page of its own for
+a second display: Camera › Projector on the machine's ring opens it ([The
+projector](projector.md)).
+
 ## The ring
 
 `m` opens the ring at the middle of the screen, Shift+M the canvas ring
