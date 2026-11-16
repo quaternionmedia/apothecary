@@ -1060,6 +1060,18 @@ BY_SHAPE: Sequence[Tuple[re.Pattern, str]] = (
 # The third part is load-bearing: without it two buttons in the same row of a
 # list are one entry, and a new control can be added to that row unnoticed.
 LISTENING: Dict[str, Tuple[str, str, str]] = {
+    # A drag along a simulated deck's strip is the swipe a real deck reports: the layout
+    # changes the screen the strip shows (knobs, Progress, Status).
+    "strip:pointerdown:startSwipe": (
+        GESTURE,
+        NOTHING,
+        "pressing the Deck window's strip: where a swipe along it would begin",
+    ),
+    "strip:pointerup:endSwipe": (
+        GESTURE,
+        WHAT_YOU_SEE,
+        "a drag along the Deck window's strip, a swipe: the deck's strip shows the next screen",
+    ),
     # Make, the header's button
     "makeHereEl:click:makeNow": (
         WIDGET,

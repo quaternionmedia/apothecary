@@ -21,6 +21,7 @@
 import { esc } from "/static/board_text.js";
 import { armedWords, choose, knobsOf, turn } from "/static/deck_knobs.js";
 
+const SWIPE_PX = 200; // of the strip's 800: what the server reads as a swipe (deck_screens.py)
 const KEYS = 8, KNOBS = 4, STRIP = [800, 100], EVERY_MS = 1500, HEAR_MS = 250, LIT_MS = 1200, KEPT = 200;
 
 const MARKUP = `
@@ -59,7 +60,7 @@ export function mountDeck(root, { base = "", log = null } = {}) {
 
     $(".deck-keys").innerHTML = Array.from({ length: KEYS }, (_, i) =>
         `<button type="button" class="deck-key" data-key="${i}" title="Key ${i}: pressed and released as a deck reports it"><img alt="" hidden><span class="deck-none">–</span></button>`).join("");
-    $(".deck-strip").innerHTML = `<button type="button" class="deck-strip-tap" title="The touch strip: tapped where it is pressed"><img alt="" hidden><span class="deck-none">–</span><span class="deck-touch" hidden></span></button>`;
+    $(".deck-strip").innerHTML = `<button type="button" class="deck-strip-tap" title="The touch strip: tapped where it is pressed; dragged a quarter of its length or more it is a swipe, which changes the screen the layout shows"><img alt="" hidden><span class="deck-none">–</span><span class="deck-touch" hidden></span></button>`;
     $(".deck-knobs").innerHTML = Array.from({ length: KNOBS }, (_, i) =>
         `<div class="deck-knob" data-knob="${i}">${[-1, 1].map((d) => `<button type="button" class="deck-turn" data-dir="${d}" title="Knob ${i} turned one step ${d > 0 ? "clockwise" : "counter-clockwise"}">${d > 0 ? "↻" : "↺"}</button>`).join("")}<button type="button" class="deck-press" title="Knob ${i} pressed and released">●</button></div>`).join("");
 
@@ -116,7 +117,8 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         const machines = knobs.machines.map((m) => `<button type="button" class="deck-machine" data-machine="${esc(m)}" aria-pressed="${m === knobs.machine}" title="The knobs move ${esc(m)}, as its key on the deck chooses it. ⌗ Panels › Machine › Knobs › Machine">${esc(m)}</button>`).join("");
         const steps = knobs.steps_mm.map((mm) => `<button type="button" class="deck-step" data-mm="${mm}" aria-pressed="${mm === knobs.step_mm}" title="A knob's step moves ${mm} mm, as the deck's STEP key cycles it. ⌗ Panels › Machine › Knobs › Step">${mm}</button>`).join("");
         box.innerHTML = `<div class="row">${run}${machines}</div><div class="row"><span class="meta">step</span>${steps}<span class="meta">mm</span></div>`
-            + `<div class="meta deck-knobs-said">${esc(knobs.machine)} · ${esc(armedWords(knobs))} · ${esc(knobs.said)}</div>`;
+            + `<div class="meta deck-knobs-said">${esc(knobs.machine)} · ${esc(armedWords(knobs))} · ${esc(knobs.said)}</div>`
+            + `<div class="meta deck-screen">strip screen: ${esc(knobs.screen)} (${knobs.screens.indexOf(knobs.screen) + 1}/${knobs.screens.length}) · a swipe along the strip walks ${knobs.screens.map(esc).join(", ")}</div>`;
     }
 
     function render() {
@@ -211,6 +213,25 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         try { knobs = await change(); } catch (e) { say(`Knobs: ${e.message}`, "bad"); }
         await load();
     }
+    // A drag along the strip is a swipe: the event a real deck reports for a finger drawn
+    // across it, from where it went down to where it came up. Its click is not a tap.
+    let down = null, swiped = false;
+    const strip = $(".deck-strip-tap");
+    const place = (ev) => {
+        const box = strip.getBoundingClientRect();
+        return { x: Math.round((ev.clientX - box.left) / box.width * STRIP[0]), y: Math.round((ev.clientY - box.top) / box.height * STRIP[1]) };
+    };
+    function startSwipe(ev) { swiped = false; down = deck && deck.simulated ? place(ev) : null; }
+    async function endSwipe(ev) {
+        const from = down; down = null;
+        if (!from || !deck || !deck.simulated) return;
+        const to = place(ev);
+        if (Math.abs(to.x - from.x) < SWIPE_PX) return;
+        swiped = true;
+        await give(["touch", 0, { kind: "drag", x: from.x, y: from.y, x_out: Math.max(0, Math.min(STRIP[0], to.x)), y_out: Math.max(0, Math.min(STRIP[1], to.y)) }]);
+    }
+    strip.addEventListener("pointerdown", startSwipe);
+    strip.addEventListener("pointerup", endSwipe);
     root.addEventListener("click", async (ev) => {
         const b = ev.target.closest("button");
         if (b && deck && b.classList.contains("deck-run")) {
@@ -224,6 +245,7 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         else if (b.classList.contains("deck-turn")) await give(["knob-turn", +b.closest(".deck-knob").dataset.knob, +b.dataset.dir]);
         else if (b.classList.contains("deck-press")) { const i = +b.closest(".deck-knob").dataset.knob; await give(["knob-press", i, true], ["knob-press", i, false]); }
         else if (b.classList.contains("deck-strip-tap")) {
+            if (swiped) { swiped = false; return; }
             const box = b.getBoundingClientRect();
             await give(["touch", 0, { kind: "short", x: Math.round((ev.clientX - box.left) / box.width * STRIP[0]), y: Math.round((ev.clientY - box.top) / box.height * STRIP[1]) }]);
         }
