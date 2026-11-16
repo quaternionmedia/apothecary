@@ -146,12 +146,24 @@ last said, and the pieces inside it by name. There it has no Detail and no
 level, and a double-click on it says it is already the level in view.
 `?focus=<machine>` arrives there with it selected.
 
-**Apothecary is the universe.** The site `apothecary` holds every registered
-part as a leaf on a catalog grid, and every other site as one piece, in a cell
-of its own in the row in front of them; a site added while the server runs
-gets its piece, and the universe does not hold itself. A site's piece is drawn
+**Apothecary is the universe.** The site `apothecary` is a sphere of nested
+shells, the orbitals of complexity. Every registered part is a leaf on the shell
+its composition depth gives it: a part built from no other registered part is on
+the innermost, and each shell outward holds the parts compounded from those inside
+it. Depth is read from a part's SCAD `include` and `use` of another registered
+part and from sites that hold one part in another, and a part's own `parts` list
+in `part.json` wins ([parts-authoring.md](parts-authoring.md#what-a-part-is-built-from)).
+The shells are dense, so none is empty, and each stands clear of the one inside it.
+A leaf faces outward, its up along the ray from the middle; the tree gives each
+node its `shell`, its `depth` and its `turn` (`[rx, ry, rz]` degrees, OpenSCAD's
+rotate order, null for a node not turned). Every other site is one piece, upright
+on the shell outside the parts'; a site added while the server runs gets its piece
+there and moves no part, and the universe does not hold itself. The layout is made
+again each time the universe is drawn, so a piece moved by hand returns. The page
+frames the whole sphere from outside, draws no floor grid there, and the camera may
+travel inside it. A site's piece is drawn
 in miniature: its site's top-level pieces as boxes, coloured as the site
-colours them, a wall faded, scaled into the cell and never larger than they
+colours them, a wall faded, scaled to fit and never larger than they
 are, from the site as it stands. Nothing is rendered to draw one. It is not to
 scale beside the parts, so Selected says it is a site and how large the site
 really is, and offers "⤵ Step into"; it has no parameters and wears no move
@@ -159,7 +171,7 @@ arrows. A double-click on it, Page Down, or that button opens its site as the
 banner's site crumb would, so Back returns. Page Up or Backspace at a site's
 own level goes to the universe, as the banner's first crumb does, the site's
 piece selected there. The wheel steps within
-a site and never from one to another. A building is left off the grid while a
+a site and never from one to another. A building is left out of the shells while a
 site's piece stands for it: the theatre is the theatre site's.
 
 **Automatic zoom** is the wheel's step: once the camera is as near the level's

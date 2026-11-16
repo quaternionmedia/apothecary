@@ -1640,6 +1640,8 @@ def _assembly_tree(
         # How the node is turned about its own origin: [rx, ry, rz] degrees, OpenSCAD's
         # rotate order, or None for a node that is not turned (the footprint is then
         # in the world's axes). world_bounds is the box that contains the turned footprint.
+        "depth": node.depth,
+        "shell": node.shell,
         "turn": [node.turn.x, node.turn.y, node.turn.z] if node.turn is not None else None,
         "footprint": _bounds_dict(node.footprint),
         "world_bounds": _bounds_dict(world_bounds),

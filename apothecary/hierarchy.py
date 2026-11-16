@@ -100,6 +100,11 @@ class Assembly(BaseModel):
     world frame does not carry the turn into what it holds, so only a node that holds
     nothing is turned in the universe.
 
+    ``depth`` and ``shell``, when set, say where the universe (``universe.py``) lays the
+    node: how deep its part is composed (0: built from no other registered part) and
+    which spherical shell that puts it on (0 innermost, a dense rank among the depths
+    that occur; the sites' pieces stand on the outermost). None everywhere else.
+
     ``category``, when set, names the subsystem this node belongs to (a
     viewer's domain, e.g. "wall"/"furniture"/"mechanical"/"fluid"/
     "electrical" -- a project invents its own vocabulary, same as ``role``).
@@ -126,6 +131,8 @@ class Assembly(BaseModel):
     role: str = "assembly"
     position: Vector3D = Field(default_factory=Vector3D)
     turn: Optional[Vector3D] = None
+    depth: Optional[int] = None
+    shell: Optional[int] = None
     footprint: Optional[BoundingBox3D] = None
     material: Optional[str] = None
     build_volume: Optional[Vector3D] = None
