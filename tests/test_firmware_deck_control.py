@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
 
+from apothecary import jobs
 from apothecary.api import app
 from apothecary.firmware import deck, deck_control, devices, gcode, grbl
 from apothecary.firmware.toolchains import PortHeld, ToolchainError
@@ -843,3 +845,194 @@ def test_a_stop_of_the_move_is_sent_ahead_of_turns_that_wait_and_they_are_not_se
     gate.set()
     assert controller.settle(10)
     assert sent == ["JOG-CANCEL"], sent
+
+
+# --- the strip's screens: Progress and Status, and the swipe between them ----------------------
+
+
+def _swipe(one, direction):
+    """A finger drawn along the strip, as the deck reports a drag: left is forward."""
+    start, end = (700, 100) if direction > 0 else (100, 700)
+    one.inject("touch", 0, {"kind": "drag", "x": start, "y": 50, "x_out": end, "y_out": 50})
+
+
+def _tap(one):
+    one.inject("touch", 0, {"kind": "short", "x": 400, "y": 50})
+
+
+def _job(job_id="j1", outcome="running", progress=0.42, stage="printing", kind="print"):
+    began = datetime.now(timezone.utc) - timedelta(seconds=754)
+    return jobs.Job(
+        id=job_id,
+        kind=kind,
+        machine=jobs.JobMachine(kind="printer", port=PRINTER),
+        input=jobs.JobInput(name="benchy.gcode"),
+        started_at=began,
+        finished_at=None if outcome == "running" else began + timedelta(seconds=800),
+        outcome=outcome,
+        progress=progress,
+        detail={"stage": stage},
+    )
+
+
+def _on(controller, port, job):
+    """The host's job on ``port`` is ``job``, as the print's own thread would say."""
+    controller.job = lambda asked: job if asked == port else None
+
+
+def _wire(links):
+    return len(links.log_for(PRINTER).since(0)["entries"]), len(
+        links.log_for(ROUTER).since(0)["entries"]
+    )
+
+
+def test_a_swipe_along_the_strip_walks_the_screens_and_stops_at_each_end(bench):
+    controller, one, links = bench
+    assert controller.state()["screen"] == "knobs"
+    before = one.strip["text"]
+    _swipe(one, -1)  # nothing before the knobs
+    assert controller.state()["screen"] == "knobs" and one.strip["text"] == before
+    _swipe(one, +1)
+    assert controller.state()["screen"] == "progress"
+    assert one.strip["text"] == "printer_1 · no job"
+    _swipe(one, +1)
+    assert controller.state()["screen"] == "status" and one.strip["text"].startswith("printer_1 ·")
+    status_text = one.strip["small"]
+    _swipe(one, +1)  # nothing after the last
+    assert controller.state()["screen"] == "status" and one.strip["small"] == status_text
+    _swipe(one, -1)
+    _swipe(one, -1)
+    assert controller.state()["screen"] == "knobs" and one.strip["text"] == before
+    assert controller.state()["screens"] == ["knobs", "progress", "status"]
+
+
+def test_a_tap_or_a_short_drag_changes_no_screen_and_a_swipe_sends_nothing_to_a_machine(bench):
+    controller, one, links = bench
+    links.control.arm(ROUTER)  # armed, so a stray send would be accepted
+    controller.send = controller.poll = controller.jog = lambda *a: pytest.fail(
+        "a machine was asked"
+    )
+    wire = _wire(links)
+    _tap(one)
+    one.inject("touch", 0, {"kind": "long", "x": 400, "y": 50})
+    one.inject("touch", 0, {"kind": "drag", "x": 400, "y": 50, "x_out": 500, "y_out": 50})
+    assert controller.state()["screen"] == "knobs"
+    for direction in (+1, +1, -1, -1, +1):
+        _swipe(one, direction)
+    assert controller.sent == [] and _wire(links) == wire
+    assert links.control.armed(ROUTER)  # a touch arms and disarms nothing
+
+
+def test_progress_shows_the_job_its_part_its_stage_how_far_and_how_long(bench):
+    controller, one, links = bench
+    _on(controller, PRINTER, _job(progress=0.42))
+    _swipe(one, +1)
+    assert one.strip["text"] == "benchy.gcode · 42%"
+    assert one.strip["small"].startswith("printer_1 · printing · elapsed 12:")
+    assert one.strip["bar"] == 0.42 and one.strip["colour"] == "blue"
+    assert "left" not in one.strip["small"] and "remaining" not in one.strip["small"]
+
+
+def test_status_shows_the_machines_state_and_what_it_reads(bench):
+    controller, one, links = bench
+    devices.printer_status(PRINTER)  # a poll anyone made: the deck shows the newest
+    _swipe(one, +1)
+    _swipe(one, +1)
+    assert one.strip["text"] == "printer_1 · idle"
+    assert one.strip["small"].startswith("hotend ") and " · bed " in one.strip["small"]
+    assert one.strip["small"].endswith("3/3")
+
+
+def test_a_print_beginning_brings_progress_forward_once_and_never_fights_a_swipe(bench):
+    controller, one, links = bench
+    assert controller.state()["screen"] == "knobs"
+    running = _job("j1")
+    _on(controller, PRINTER, running)
+    for listener in list(jobs.LISTENERS):  # the machine's thread tells the jobs it began
+        listener(running)
+    assert controller.settle()
+    assert controller.state()["screen"] == "progress"
+    _swipe(one, -1)  # a person goes back to the knobs
+    controller.draw()
+    controller.draw()
+    assert controller.state()["screen"] == "knobs"  # not brought forward again
+    _swipe(one, +1)
+    _swipe(one, +1)
+    controller.draw()
+    assert controller.state()["screen"] == "status"  # nor pulled off the screen they chose
+    _swipe(one, -1)
+    _swipe(one, -1)
+    _on(controller, PRINTER, _job("j2"))  # the next print is another job
+    controller.draw()
+    assert controller.state()["screen"] == "progress"
+
+
+def test_a_job_on_the_machine_not_chosen_brings_nothing_forward(bench):
+    controller, one, links = bench
+    controller.job = lambda port: _job("cut1", kind="cut") if port == ROUTER else None
+    controller.draw()
+    assert controller.state()["screen"] == "knobs"  # printer_1 is chosen
+    _choose_router(one)  # the cut began before it was chosen: noted, not a new one
+    controller.draw()
+    assert controller.state()["screen"] == "knobs"
+
+
+def test_a_job_that_ended_stays_on_progress_until_a_touch_of_it(bench):
+    controller, one, links = bench
+    _on(controller, PRINTER, _job("j1"))
+    controller.draw()
+    assert controller.state()["screen"] == "progress"
+    for outcome, word in (("done", "done"), ("cancelled", "cancelled"), ("failed", "failed")):
+        _on(
+            controller,
+            PRINTER,
+            _job("j1", outcome=outcome, progress=1.0 if word == "done" else 0.6),
+        )
+        controller.draw()
+        assert f"· {word} after 13:20" in one.strip["small"], one.strip["small"]
+        controller.draw()  # and it stays, tick after tick
+        assert f"· {word} after" in one.strip["small"]
+    _tap(one)  # a touch of that screen clears it
+    assert one.strip["text"] == "printer_1 · no job"
+    assert controller.state()["screen"] == "progress"  # and moves nothing else
+    _on(controller, PRINTER, _job("j3"))  # a job after it is shown again
+    controller.draw()
+    assert one.strip["text"] == "benchy.gcode · 42%"
+
+
+def test_a_job_ended_is_not_cleared_by_a_touch_on_another_screen(bench):
+    controller, one, links = bench
+    _on(controller, PRINTER, _job("j1", outcome="done", progress=1.0))
+    _tap(one)  # on the knobs: the result has not been seen
+    _swipe(one, +1)
+    assert "done after" in one.strip["small"]
+
+
+def test_the_knobs_of_a_machine_a_job_holds_say_so_in_the_servers_words_and_move_nothing(bench):
+    controller, one, links = bench
+    _on(controller, PRINTER, _job("j1"))
+    controller.draw()
+    controller.screens.show("knobs")
+    controller.draw()
+    with pytest.raises(PortHeld) as refusal:  # the words the server refuses a jog with
+        devices._job_allows({"kind": "print", "port": PRINTER, "stage": "printing"}, "G91")
+    assert one.strip["text"] == "printer_1 · held"
+    assert one.strip["small"].startswith(str(refusal.value))
+    assert "jogs refused" in one.strip["small"] and one.strip["colour"] == "amber"
+    controller.job = lambda port: None  # the job ended: the knobs are live again
+    controller.draw()
+    assert one.strip["text"].startswith("printer_1 · ") and "held" not in one.strip["text"]
+    assert "X " in one.strip["small"]
+
+
+def test_a_cut_that_holds_the_router_still_lets_the_spindle_knob_say_it_turns(bench):
+    controller, one, links = bench
+    _choose_router(one)
+    controller.job = (
+        lambda port: _job("c1", kind="cut", stage="running") if port == ROUTER else None
+    )
+    controller.draw()
+    controller.screens.show("knobs")
+    controller.draw()
+    assert "a cut holds the port (running)" in one.strip["small"]
+    assert "knob 4 still turns the spindle" in one.strip["small"]

@@ -19,6 +19,16 @@ One layout, on every deck it is started for (``Deck`` in ``firmware/deck.py``):
 - the strip says which machine, whether its control is armed and for how long, the
   chosen machine's newest poll (X, Y, Z and the fourth quantity), the step, and what the
   last turn did or why it did nothing;
+- the strip has three screens, which a swipe along it walks (``firmware/deck_screens.py``):
+  the knobs' own, described above and the one it starts on; Progress, the file or part the
+  chosen machine's job runs, its stage, how far it is and how long it has run; and Status,
+  the machine's state, its temperatures or its spindle and feed, and the first thing it
+  asks of a person. A swipe stops at either end, a tap changes nothing, and none of it
+  sends a line to a machine or asks one for a reading. A job begun on the chosen machine
+  brings Progress forward once, and never again for that job, whatever a hand does after;
+  a job that has ended stays on Progress, how it ended, until a touch of that screen. While
+  a job holds the port the knobs' screen says so in the server's own words, and that the
+  jogs are refused;
 - knobs one to three jog X, Y and Z by so many steps; the fourth turns the spindle's
   speed in steps of 1000 rpm (only while it turns, from a reading no older than
   ``READING_MAX_AGE_S``, and never to nothing: off is the Machine's, or a stop) or
@@ -73,7 +83,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Deque, Dict, List, Optional, Tuple
 
+from .. import jobs
 from . import deck as decks
+from . import deck_screens as screens
 from . import devices, gcode, grbl
 from .toolchains import PortHeld, ToolchainError
 
@@ -172,6 +184,14 @@ def machine_ports(kind: Optional[str] = None) -> List[str]:
     return ports
 
 
+def host_job(port: str) -> Optional[jobs.Job]:
+    """The print or cut the host streams on ``port`` as it stands -- running, or as it
+    ended, until the next one begins -- from the machine's own thread: no line is sent
+    and no file is read."""
+    held = devices.print_job(port)
+    return held.now() if held is not None else None
+
+
 def look() -> None:
     """A scan for ports, unless one was made within its own short life: how a board
     plugged in since the last is found when no page is asking."""
@@ -200,8 +220,10 @@ class DeckController:
         disarm: Optional[Callable[[str], None]] = None,
         jog: Optional[Callable[[str, str, float, int], object]] = None,
         others: Callable[[Optional[str]], List[str]] = machine_ports,
+        job: Callable[[str], Optional[jobs.Job]] = host_job,
     ):
         self.deck = deck
+        self.job = job  # the host's job on a port, running or ended, or None
         self.resolve = resolve
         self.others = others  # every port a stop is for, of a kind or of any
         self.send = send or (lambda port, line: devices.printer_control(port, line))
@@ -212,6 +234,9 @@ class DeckController:
         self.armed = armed or (lambda port: gcode.get_printer_links().control.seconds_left(port))
         self.disarm = disarm or (lambda port: gcode.get_printer_links().control.disarm(port))
         self.machine = MACHINES[0]
+        self.screens = screens.Screens(screens.screens_for(self.machine.kind))
+        self._forwarded: set = set()  # ids of the jobs Progress has been brought forward for
+        self._cleared: set = set()  # ids of ended jobs a touch has cleared from Progress
         self.step = 1  # an index into STEPS_MM
         self.said: Tuple[str, str] = ("ready", "grey")
         self.last: Optional[object] = None  # the chosen machine's last poll
@@ -242,6 +267,7 @@ class DeckController:
         self._worker = threading.Thread(target=self._work, name="deck-events", daemon=True)
         self._worker.start()
         self._stop_listening = self.deck.listen(self.hear, self.settle)
+        jobs.LISTENERS.append(self._job_told)
         self.draw()
         self._ticker = threading.Thread(target=self._tick, name="deck-control", daemon=True)
         self._ticker.start()
@@ -250,6 +276,8 @@ class DeckController:
     def stop(self) -> None:
         self._alive.clear()
         self._stopped.set()
+        if self._job_told in jobs.LISTENERS:
+            jobs.LISTENERS.remove(self._job_told)
         if self._stop_listening:
             self._stop_listening()
             self._stop_listening = None
@@ -261,6 +289,13 @@ class DeckController:
         for thread in (self._ticker, self._worker):
             if thread is not None and thread is not threading.current_thread():
                 thread.join(timeout=STOP_S)
+
+    def _job_told(self, job: jobs.Job) -> None:
+        """A job began or ended somewhere: the strip is drawn again on the layout's own
+        thread, so a print's start or end shows at once and not at the next tick."""
+        with self._turn:
+            self._redraw = True
+            self._turn.notify_all()
 
     def _look(self) -> None:
         """A machine whose board is not found is looked for, here and nowhere else."""
@@ -400,13 +435,78 @@ class DeckController:
                         self._jog(AXES[event.index], int(event.value))
                     elif event.index == KNOB_FOURTH:
                         self._fourth(int(event.value))
+                elif event.kind == decks.TOUCH:
+                    self._first_long = None
+                    self._touch(event.value)
             except Exception as exc:  # noqa: BLE001 -- the strip says it, the loop goes on
                 self.said = (f"{type(exc).__name__}: {exc}", "red")
             self.draw()
 
     def _choose(self, index: int) -> None:
         self.machine = MACHINES[KEY_MACHINE.index(index)]
+        self.screens.reorder(screens.screens_for(self.machine.kind))
         self.last = None
+
+    # -- the strip's screens ---------------------------------------------------------------
+
+    def _touch(self, touch: object) -> None:
+        """The strip touched. A swipe walks the screens; a tap or a long press moves
+        nothing. Any touch of Progress clears a job that has ended from it: its result
+        was there to be read until then. Nothing here is sent to a machine."""
+        if self.screens.current == screens.PROGRESS:
+            ended = self._job_here()
+            if ended is not None and not ended.running:
+                self._cleared.add(ended.id)
+        direction = screens.swipe_of(touch)
+        if direction:
+            self.screens.swipe(direction)
+
+    def _job_of(self, machine: Machine) -> Optional[jobs.Job]:
+        try:
+            port = self.resolve(machine)
+            return self.job(port) if port else None
+        except Exception:  # noqa: BLE001 -- no board pinned, no job to show
+            return None
+
+    def _job_here(self) -> Optional[jobs.Job]:
+        """The chosen machine's job, unless it ended and a touch has cleared it."""
+        job = self._job_of(self.machine)
+        return None if job is not None and job.id in self._cleared else job
+
+    def _follow(self) -> None:
+        """Progress brought forward when a job begins on the chosen machine: once for
+        each job, never again, so a swipe away from it is not undone at the next tick. A
+        job begun on the other machine is noted and brings nothing forward, and a job
+        seen already ended never does."""
+        for machine in MACHINES:
+            job = self._job_of(machine)
+            if job is None or not job.running or job.id in self._forwarded:
+                continue
+            self._forwarded.add(job.id)
+            if machine is self.machine:
+                self.screens.show(screens.PROGRESS)
+
+    def _holding(self) -> Optional[str]:
+        """What holds the chosen machine's port, in the words the server refuses a jog
+        with (``PortHeld``): the host's own print or cut, or a long exchange a poll saw
+        a moment ago (a bed reading)."""
+        port = self._port_quiet()
+        if not port:
+            return None
+        job = self.job(port)
+        if job is not None and job.running:
+            held = {"kind": job.kind, "port": port, "stage": job.detail.get("stage")}
+        else:
+            status = self._newest()
+            held = getattr(status, "job", None)
+            polled = getattr(status, "polled_at", None)
+            fresh = (
+                polled is not None
+                and (datetime.now(timezone.utc) - polled).total_seconds() <= screens.READING_FRESH_S
+            )
+            if not held or not fresh:
+                return None
+        return f"{port}: {devices.what_holds(held)} holds the port ({held.get('stage')})"
 
     # -- chosen from the page -----------------------------------------------------------
 
@@ -778,12 +878,14 @@ class DeckController:
         spindle = getattr(status, "spindle", None)
         return "S", (f"{spindle.rpm:.0f} rpm" if spindle is not None and spindle.on else "off")
 
-    def _put(self, slot, text: str, colour: str, small: Optional[str]) -> None:
-        wanted = (text, colour, small)
+    def _put(
+        self, slot, text: str, colour: str, small: Optional[str], bar: Optional[float] = None
+    ) -> None:
+        wanted = (text, colour, small, bar)
         if self._drawn.get(slot) == wanted:
             return
         if slot == "strip":
-            self.deck.set_strip(text, colour, small)
+            self.deck.set_strip(text, colour, small, bar)
         else:
             self.deck.set_key(slot, text, colour, small)
         self._drawn[slot] = wanted
@@ -792,6 +894,7 @@ class DeckController:
         """Every key and the strip as the layout has them; what was drawn already is not sent
         again."""
         with self._lock:
+            self._follow()
             for index, machine in zip(KEY_MACHINE, MACHINES, strict=True):
                 chosen = machine is self.machine
                 self._put(index, machine.kind.upper(), "green" if chosen else "grey", machine.name)
@@ -810,20 +913,43 @@ class DeckController:
                 self._put(KEY_UNLOCK, STOP_MOVE[self.machine.kind][0], "amber", self.machine.name)
             else:
                 self._put(KEY_UNLOCK, "UNLOCK", "amber", self.machine.name)
-            name, small = self._fourth_readout()
-            readout = (
-                "  ".join(f"{axis} {self._readout(axis)}" for axis in AXES) + f"  {name} {small}"
+            strip = self._strip()
+            self._put("strip", strip.text, strip.colour, strip.small, strip.bar)
+
+    def _strip(self) -> screens.Strip:
+        """The strip as the screen showing has it."""
+        shown = self.screens.current
+        position = self.screens.position
+        if shown == screens.PROGRESS:
+            return screens.progress_strip(
+                self.machine.name,
+                self._job_here(),
+                self._newest(),
+                datetime.now(timezone.utc),
+                position,
             )
-            port = self._port_quiet()
-            left = self.armed(port) if port else 0.0
-            armed = f"armed {int(left) // 60}:{int(left) % 60:02d}" if left > 0 else "disarmed"
-            text, colour = self.said
-            self._put(
-                "strip",
-                f"{self.machine.name} · {armed}",
-                "green" if left > 0 else "grey",
-                f"{readout} · {_mm(self.step_mm)} mm · {text}" if colour != "red" else text,
+        if shown == screens.STATUS:
+            return screens.status_strip(
+                self.machine.name,
+                self.machine.kind,
+                self._newest(),
+                datetime.now(timezone.utc),
+                position,
             )
+        held = self._holding()
+        if held:
+            return screens.held_strip(self.machine.name, self.machine.kind, held, position)
+        name, small = self._fourth_readout()
+        readout = "  ".join(f"{axis} {self._readout(axis)}" for axis in AXES) + f"  {name} {small}"
+        port = self._port_quiet()
+        left = self.armed(port) if port else 0.0
+        armed = f"armed {int(left) // 60}:{int(left) % 60:02d}" if left > 0 else "disarmed"
+        text, colour = self.said
+        return screens.Strip(
+            f"{self.machine.name} · {armed}",
+            f"{readout} · {_mm(self.step_mm)} mm · {text}" if colour != "red" else text,
+            "green" if left > 0 else "grey",
+        )
 
     def state(self) -> dict:
         with self._lock:
@@ -836,6 +962,8 @@ class DeckController:
                 "machine": self.machine.name,
                 "port": port,
                 "step_mm": self.step_mm,
+                "screen": self.screens.current,
+                "screens": list(self.screens.order),
                 "armed_s": self.armed(port) if port else 0.0,
                 "said": self.said[0],
                 "sent": list(self.sent[-20:]),
