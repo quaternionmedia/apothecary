@@ -2192,14 +2192,18 @@ def printer_where(port: str):
 
 def _pinned_at(port: str) -> Optional[tuple[str, Assembly, str]]:
     """Where the board on ``port`` is pinned: its site's name, the site, and the
-    pinned node's path -- the first pin naming it whose site and node exist.
+    pinned node's path -- the newest pin naming it whose site and node exist.
+
+    A pin replaces only an earlier pin of its own node, so a board pinned to one
+    node and then to another has both pins kept; it is where it was pinned last.
+    The pins are kept in the order they were made (``FirmwareState.set_binding``).
 
     Every pin, not just the loaded sites': a link to a board's Machine is often
     the first page opened after the server starts, and a pin names its site.
     """
     state = firmware_devices.get_state()
     known = firmware_devices.known_device(port, state)
-    for binding in state.bindings():
+    for binding in reversed(state.bindings()):
         if not same_device(binding.identity, port, known, binding.kind):
             continue
         if binding.site not in sites.store.names():

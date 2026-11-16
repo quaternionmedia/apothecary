@@ -469,6 +469,13 @@ the board has no key of its own. A board probed after it was pinned or flashed b
 its make, its MAC read, is the same board. No sketch is expected of a board that
 answers as a printer or a router: nothing here flashes it.
 
+A board pinned to one node and then to another is where it was pinned last. A pin
+replaces only an earlier pin of its own node, so the board's pin elsewhere is kept,
+listed in Panels › Site › Pinned and taken back from there; its port answers for the
+newest pin: where the board stands (`GET /firmware/printers/where`), the site
+`/firmware/monitor` opens on, the place of a job it starts, and the printer a slice
+by its port is for.
+
 ### In the viewer: one Machine per board
 
 A pinned board has one surface in the viewer, its **Machine**

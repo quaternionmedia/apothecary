@@ -401,7 +401,8 @@ class FirmwareState:
         self, site: str, path: str, identity: str, kind: Optional[str] = None
     ) -> ManualBinding:
         """Pin ``identity`` to the node, its board of ``kind`` when that is known;
-        replaces any earlier pin for that node."""
+        replaces any earlier pin for that node, and goes after every other pin, so
+        the pins are kept in the order they were made."""
         binding = ManualBinding(
             site=site,
             path=path,

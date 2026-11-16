@@ -17,6 +17,7 @@ from apothecary import sites
 from apothecary.api import app
 from apothecary.firmware import devices
 from apothecary.hierarchy import Structure
+from apothecary.site_names import UNIVERSE
 from apothecary.slicer import service
 from apothecary.vision import views as viewing
 
@@ -220,6 +221,37 @@ def test_the_printer_of_a_port_is_the_one_its_pin_stands_under(
     }
     r = client.post("/slicer/slice", json={"part": "calibration_cube", "port": "/dev/ttyFAKE0"})
     assert r.status_code == 422 and "no printer that keeps a slicer profile" in r.json()["detail"]
+
+
+def test_a_port_slices_for_the_printer_its_board_was_pinned_under_last(
+    fake_orcaslicer, parts_built, monkeypatch
+):
+    """A board pinned first to its own part's leaf in the universe, then to the garage
+    printer's mainboard, is the garage printer's: its port slices for the printer above
+    the newest pin, and never for the board's own part, which keeps no slicer profile."""
+    from apothecary.firmware.models import DeviceInfo
+
+    state = devices.get_state()
+    state.set_binding(UNIVERSE, "creality_v422", "A106ZTEU", "printer")
+    state.set_binding("garage", BOARD, "A106ZTEU", "printer")
+    plugged = [DeviceInfo(port="/dev/ttyFAKE1", serial_number="A106ZTEU")]
+    monkeypatch.setattr(devices, "detected_devices", lambda *a, **k: list(plugged))
+    done = _slice({"part": "calibration_cube", "port": "/dev/ttyFAKE1"})
+    assert done["status"] == "succeeded", done["lines"]
+    assert done["slice"]["record"]["printer"] == {
+        "part": "ender3",
+        "name": "printer_1",
+        "site": "garage",
+        "path": "printer_1",
+        "port": "/dev/ttyFAKE1",
+    }
+    # The Machine the port opens stands in the same place.
+    where = client.get("/firmware/printers/where", params={"port": "/dev/ttyFAKE1"}).json()
+    assert (where["site"], where["board"]["path"], where["printer"]["path"]) == (
+        "garage",
+        BOARD,
+        "printer_1",
+    )
 
 
 @pytest.mark.parametrize(
