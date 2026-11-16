@@ -333,6 +333,7 @@ GROUPS = {
             "test_lighting_routes.py",
             "test_menu.py",
             "test_menu_routes.py",
+            "test_pick_scope.py",
             "test_readiness.py",
             "test_stays_local.py",
             "test_group_colours.py",
