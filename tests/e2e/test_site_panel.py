@@ -106,6 +106,7 @@ def test_site_is_a_window_beside_the_world_and_the_retired_panels_are_gone(page,
         *(f"airgap-{sid}" for sid in windows.AIRGAP_SECTIONS),
         "family-members",  # the family's own, closed until asked for
         "family-deliveries",
+        "layers",  # the Layers window, beside the world, closed until asked for
         "working",  # the Working space, closed until asked for
         "procedure",  # the Procedure, closed until asked for
         "deck",  # the Deck, closed until asked for
