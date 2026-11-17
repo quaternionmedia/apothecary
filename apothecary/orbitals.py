@@ -14,6 +14,11 @@ and draws what comes back.
   inside.
 - A piece's **point** on its shell is one of a Fibonacci lattice, each shell turned a
   golden angle from the one inside so points do not line up along a ray.
+- **Which** point is its (``seat``): the pieces of one category take neighbouring
+  points, a cluster; a piece built into one on an outer shell takes the point of its
+  cluster nearest under that one, and its cluster gathers under the pieces its members
+  are built into. The shells are seated from the outside in, so a piece's place
+  follows the pieces outside it that it is built into and nothing else outside it.
 - A piece's **turn** stands its up (+z) along the ray from the centre, in OpenSCAD's
   ``rotate([rx, ry, rz])`` order and degrees.
 """
@@ -21,7 +26,7 @@ and draws what comes back.
 from __future__ import annotations
 
 import math
-from typing import Dict, Iterable, List, Mapping, NamedTuple, Sequence, Set, Tuple
+from typing import Dict, Iterable, List, Mapping, NamedTuple, Optional, Sequence, Set, Tuple
 
 Point = Tuple[float, float, float]
 
@@ -160,22 +165,170 @@ def shell_radii(sizes: Sequence[Sequence[float]], gap: float = GAP) -> List[floa
     return radii
 
 
+def _direction(vector: Sequence[float]) -> Optional[Point]:
+    length = math.sqrt(sum(c * c for c in vector))
+    if length == 0.0:
+        return None
+    return (vector[0] / length, vector[1] / length, vector[2] / length)
+
+
+def least_cost_assignment(cost: Sequence[Sequence[float]]) -> List[int]:
+    """For a square matrix, the column each row takes, every column once, at the least
+    total cost: the Hungarian method, in its shortest-augmenting-path form. The rows
+    and columns are walked in order, so the same matrix gives the same answer."""
+    n = len(cost)
+    infinity = math.inf
+    u = [0.0] * (n + 1)
+    v = [0.0] * (n + 1)
+    row_at = [0] * (n + 1)  # row_at[j]: the row column j holds, counted from 1; 0 none
+    way = [0] * (n + 1)
+    for row in range(1, n + 1):
+        row_at[0] = row
+        column = 0
+        least = [infinity] * (n + 1)
+        used = [False] * (n + 1)
+        while True:
+            used[column] = True
+            here, delta, nxt = row_at[column], infinity, 0
+            for j in range(1, n + 1):
+                if used[j]:
+                    continue
+                reduced = cost[here - 1][j - 1] - u[here] - v[j]
+                if reduced < least[j]:
+                    least[j], way[j] = reduced, column
+                if least[j] < delta:
+                    delta, nxt = least[j], j
+            for j in range(n + 1):
+                if used[j]:
+                    u[row_at[j]] += delta
+                    v[j] -= delta
+                else:
+                    least[j] -= delta
+            column = nxt
+            if row_at[column] == 0:
+                break
+        while column:
+            before = way[column]
+            row_at[column] = row_at[before]
+            column = before
+    taken = [0] * n
+    for j in range(1, n + 1):
+        taken[row_at[j] - 1] = j - 1
+    return taken
+
+
+def seat(
+    names: Iterable[str],
+    lattice: Sequence[Point],
+    category_of: Mapping[str, Optional[str]],
+    toward: Mapping[str, Point],
+) -> Dict[str, int]:
+    """Which point of ``lattice`` (unit directions) each of ``names`` takes on one shell.
+
+    The names of one category (``category_of``; one with none is a category of its own)
+    take neighbouring points, a region about the category's **centre**:
+
+    - a member that ``toward`` gives a direction (the piece it is built into, on a
+      shell outside) pulls its category's centre to the middle of every such pull;
+    - a category nothing pulls is centred on the lattice point farthest from every
+      centre already chosen, so clusters spread over the sphere (the first on a shell
+      nothing pulls starts at the lattice's first point);
+    - the points are shared out so that each category holds as many as it has members
+      and the points stand, all told, as near their categories' centres as they can
+      (the least sum of squared chords: ``least_cost_assignment``), which makes each
+      region one piece of the sphere.
+
+    Within its region a pulled member takes the point nearest its pull, and the others
+    take what is left, nearest the centre first. Categories go pulled first, then the
+    larger first, then by name; members by name; a tie between points goes to the
+    lower index. The same input gives the same seats, whatever order it came in."""
+    groups: Dict[Optional[str], List[str]] = {}
+    for name in sorted(set(names)):
+        groups.setdefault(category_of.get(name), []).append(name)
+
+    def pulled(members: Sequence[str]) -> List[str]:
+        return [m for m in members if m in toward]
+
+    order = sorted(
+        groups,
+        key=lambda c: (not pulled(groups[c]), -len(groups[c]), c is None, c or ""),
+    )
+    centres: List[Point] = []
+    for category in order:
+        pulls = [toward[m] for m in pulled(groups[category])]
+        if pulls:
+            centres.append(_direction([sum(p[i] for p in pulls) for i in range(3)]) or pulls[0])
+        elif centres:
+            far = max(
+                range(len(lattice)),
+                key=lambda i: (min(_distance(lattice[i], c) for c in centres), -i),
+            )
+            centres.append(lattice[far])
+        else:
+            centres.append(lattice[0])
+
+    # A slot for each member: category k's, as many as it has members.
+    slots = [k for k, category in enumerate(order) for _ in groups[category]]
+    cost = [[_distance(point, centres[k]) ** 2 for k in slots] for point in lattice]
+    held: List[List[int]] = [[] for _ in order]
+    for i, slot in enumerate(least_cost_assignment(cost)):
+        held[slots[slot]].append(i)
+
+    taken: Dict[str, int] = {}
+    for k, category in enumerate(order):
+        members, left = groups[category], list(held[k])
+        for member in pulled(members):
+            point = min(left, key=lambda i: (_distance(lattice[i], toward[member]), i))
+            taken[member] = point
+            left.remove(point)
+        left.sort(key=lambda i: (_distance(lattice[i], centres[k]), i))
+        rest = [m for m in members if m not in toward]
+        for member, point in zip(rest, left, strict=True):
+            taken[member] = point
+    return taken
+
+
 def lay_out(
-    shell_of: Mapping[str, int], size_of: Mapping[str, float], gap: float = GAP
+    shell_of: Mapping[str, int],
+    size_of: Mapping[str, float],
+    gap: float = GAP,
+    category_of: Optional[Mapping[str, Optional[str]]] = None,
+    parent_of: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Placement]:
     """A placement for each name of ``shell_of``, a shell being any integer rank.
 
-    ``size_of`` is each name's bounding-sphere radius. Shells are taken in rank order,
-    their pieces by name, so the same input gives the same layout, and a shell's
-    pieces and radius depend on the shells inside it and on its own pieces, never on
-    one outside: a piece added to the outermost shell moves nothing inside it."""
+    ``size_of`` is each name's bounding-sphere radius; ``category_of`` each name's
+    category, whose pieces sit together on their shell; ``parent_of`` the name each
+    stands under, a piece on a shell outside it that it is built into (a name on its own
+    shell or inside it is not one). The points are seated from the outermost shell in
+    (``seat``), each shell's pieces by name, so the same input gives the same layout;
+    the radii are then found from the inside out (``shell_radii``), so a shell's radius
+    depends on the shells inside it and on its own pieces, never on one outside. A piece
+    added to the outermost shell that no piece inside is built into moves nothing
+    inside it."""
+    category_of = category_of or {}
+    parent_of = parent_of or {}
     ranks = sorted(set(shell_of.values()))
-    members = [sorted(n for n, s in shell_of.items() if s == rank) for rank in ranks]
-    sizes = [[size_of[n] for n in names] for names in members]
-    radii = shell_radii(sizes, gap)
+    phase = {rank: index * GOLDEN_ANGLE for index, rank in enumerate(ranks)}
+    direction: Dict[str, Point] = {}
+    laid: Dict[int, List[str]] = {}
+    for rank in reversed(ranks):
+        names = sorted(n for n, s in shell_of.items() if s == rank)
+        lattice = fibonacci_sphere(len(names), 1.0, phase[rank])
+        # Only the shells outside this one are seated yet: a parent on this shell or
+        # inside it has no direction to pull toward.
+        toward = {
+            name: direction[parent_of[name]] for name in names if parent_of.get(name) in direction
+        }
+        seated = seat(names, lattice, category_of, toward)
+        at = {index: name for name, index in seated.items()}
+        laid[rank] = [at[index] for index in range(len(names))]
+        for name, index in seated.items():
+            direction[name] = lattice[index]
+    radii = shell_radii([[size_of[n] for n in laid[rank]] for rank in ranks], gap)
     placed: Dict[str, Placement] = {}
-    for index, (rank, names) in enumerate(zip(ranks, members, strict=True)):
-        points = fibonacci_sphere(len(names), radii[index], index * GOLDEN_ANGLE)
-        for name, point in zip(names, points, strict=True):
-            placed[name] = Placement(rank, radii[index], point, outward_turn(point))
+    for rank, radius in zip(ranks, radii, strict=True):
+        for name in laid[rank]:
+            point = tuple(radius * c for c in direction[name])
+            placed[name] = Placement(rank, radius, point, outward_turn(point))
     return placed
