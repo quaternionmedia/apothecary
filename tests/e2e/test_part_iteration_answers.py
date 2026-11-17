@@ -3,7 +3,8 @@ front where this OpenSCAD cannot build a part, the server's integers, choices an
 drawn, a saved variant renamed, duplicated, restored from its history, deleted to the
 trash and back, and the trash emptied only when asked twice, in the part's Variants
 window, which alone lists them and which the ring's cells and a Save open; two variants
-compared, overlaid and side by side, with what differs; a render waiting its turn said
+compared, overlaid and side by side, with what differs, the part's own mesh hidden under
+the comparison and under its shell's layer each on its own; a render waiting its turn said
 to be queued; Download SCAD giving the edit; and Slice and the readiness checklist
 following the variant drawn. A part in a submodule, edited as its overlay, is
 tests/e2e/test_text_tied.py's.
@@ -444,6 +445,39 @@ def test_two_variants_are_compared_overlaid_and_side_by_side_with_what_differs(
     expect(view).to_be_hidden()
     assert page.evaluate("() => window.fractalViewer.compareMeshes.length") == 0
     assert page.evaluate("() => window.fractalViewer.meshByName['calibration_cube'].visible")
+
+
+@pytest.mark.e2e
+def test_a_part_hidden_by_a_comparison_and_by_its_shell_is_shown_only_when_both_let_go(
+    page: Page, url, cube_as_it_was, variants_cleared
+):
+    """The part's own mesh is hidden while a comparison is drawn in its place, and while its
+    shell is hidden in Layers; each reason is let go on its own: the shell shown again
+    leaves it hidden under the comparison, and the comparison closed leaves it hidden
+    under the shell, until both have let go."""
+    own = CUBE.source_file.read_text()
+    _save(page, url, "low-top", own.rstrip("\n") + "\n" + TALLER + "\n", {"size": 16})
+    _open(page, url)
+    _edit(page)
+    expect(page.locator(".scad-editor .cm-content")).to_be_visible(timeout=20000)
+    _ring(page, PART, "Part", "Variants", "low-top", "Compare")
+    page.wait_for_function("() => window.fractalViewer.compareMeshes.length === 2", timeout=90000)
+    shown = f"() => window.fractalViewer.meshByName['{PART}'].visible"
+    assert page.evaluate(shown) is False
+    shell = page.evaluate(f"() => window.fractalViewer.renderNodeByKey['{PART}'].shell")
+    windows.from_the_windows_menu(page, "layers")
+    tick = page.locator(
+        f".panel[data-panel='layers'] input[data-layer='shell:{shell}'][data-kind='shown']"
+    )
+    tick.uncheck()
+    tick.check()
+    assert page.evaluate(shown) is False, "the shell shown again showed what the comparison hides"
+    tick.uncheck()
+    page.locator("#part-compare .compare-close").click()
+    expect(page.locator("#part-compare")).to_be_hidden()
+    assert page.evaluate(shown) is False, "the comparison closed showed what the shell hides"
+    tick.check()
+    assert page.evaluate(shown) is True
 
 
 # --- the queue, Download, Slice and the checklist ----------------------------------------

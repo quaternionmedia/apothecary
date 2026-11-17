@@ -3073,12 +3073,18 @@
             // as it was. Only what the layers hid is shown again: a mesh hidden for
             // another reason (a failure's, a comparison's) stays so.
             hideByLayer(object, hide) {
-                if (hide) {
-                    if (!object.userData.layerHidden) { object.userData.layerHidden = true; object.visible = false; }
-                } else if (object.userData.layerHidden) {
-                    object.userData.layerHidden = false;
-                    object.visible = true;
-                }
+                this.hideFor(object, 'layer', hide);
+            }
+
+            // Whether a drawn thing is shown, decided in one place: hidden while any reason
+            // holds it -- a layer not shown, a failed render drawn in its place, a
+            // comparison drawn in its place -- each reason taken back on its own, so letting
+            // one go shows the thing only when no other still holds it.
+            hideFor(object, reason, hide) {
+                const by = object.userData.hiddenBy || (object.userData.hiddenBy = new Set());
+                if (hide) by.add(reason);
+                else by.delete(reason);
+                object.visible = by.size === 0;
             }
 
             // Every drawn thing put as the layers say: pieces and the outlines round
@@ -6469,7 +6475,7 @@
                 mesh.userData.passThrough = true;
                 this.scene.add(mesh);
                 const drawn = this.meshByName[key];
-                if (drawn) drawn.visible = false;
+                if (drawn) this.hideFor(drawn, 'failure', true);
                 this.failures[ref] = { mesh, key, partial };
                 const mark = `failed:${ref}`;
                 const top = () => {
@@ -6503,7 +6509,7 @@
                 disposeDeep(failure.mesh);
                 this.anchors.remove(`failed:${ref}`);
                 const drawn = this.meshByName[failure.key];
-                if (drawn) drawn.visible = true;
+                if (drawn) this.hideFor(drawn, 'failure', false);
                 const line = this.partEl('#part-envelope');
                 if (line) { line.classList.remove('failed'); delete line.dataset.failed; }
                 this.invalidate();
@@ -6744,7 +6750,7 @@
                 }
                 this.compareMeshes = [ma, mb].filter(Boolean);
                 for (const m of this.compareMeshes) this.scene.add(m);
-                if (this.meshByName[key]) this.meshByName[key].visible = false;
+                if (this.meshByName[key]) this.hideFor(this.meshByName[key], 'comparison', true);
                 this.compareHidden = key;
                 // Both in view: the box round the two, framed.
                 if (this.compareMeshes.length) {
@@ -6758,7 +6764,7 @@
             dropComparisonMeshes() {
                 for (const m of this.compareMeshes ?? []) { this.scene.remove(m); disposeDeep(m); }
                 this.compareMeshes = [];
-                if (this.compareHidden && this.meshByName[this.compareHidden] && !Object.values(this.failures).some((f) => f.key === this.compareHidden)) this.meshByName[this.compareHidden].visible = true;
+                if (this.compareHidden && this.meshByName[this.compareHidden]) this.hideFor(this.meshByName[this.compareHidden], 'comparison', false);
                 this.compareHidden = null;
                 this.invalidate();
             }
