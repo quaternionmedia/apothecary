@@ -92,7 +92,9 @@ def _after(sent, line):
 
 
 def _heats(sent):
-    return [ln for ln in sent if ln.startswith(("M104 S", "M140 S", "M303")) and not ln.endswith(" S0")]
+    return [
+        ln for ln in sent if ln.startswith(("M104 S", "M140 S", "M303")) and not ln.endswith(" S0")
+    ]
 
 
 STEP = dict(base_c=180, step_c=5, settle_s=300.0, after_s=240.0)
@@ -103,7 +105,12 @@ STEP = dict(base_c=180, step_c=5, settle_s=300.0, after_s=240.0)
 
 class TestTheSimulatedHeaters:
     def _board(self, at):
-        sim = gcode.SimulatedPrinter("/dev/ttySIM", 115200, heaters=gcode.simulated_heaters("/dev/ttySIM"), clock=lambda: at[0])
+        sim = gcode.SimulatedPrinter(
+            "/dev/ttySIM",
+            115200,
+            heaters=gcode.simulated_heaters("/dev/ttySIM"),
+            clock=lambda: at[0],
+        )
         return sim, gcode.GcodeLink("/dev/ttySIM", 115200, sim)
 
     def test_a_heater_full_on_follows_its_plant(self):
@@ -140,7 +147,9 @@ class TestTheSimulatedHeaters:
 
     def test_an_autotune_says_the_classic_gains_of_its_relay(self):
         fast = Fast(400)
-        sim = gcode.SimulatedPrinter("/dev/ttySIM", 115200, heaters=gcode.simulated_heaters("/dev/ttySIM"), clock=fast.now)
+        sim = gcode.SimulatedPrinter(
+            "/dev/ttySIM", 115200, heaters=gcode.simulated_heaters("/dev/ttySIM"), clock=fast.now
+        )
         link = gcode.GcodeLink("/dev/ttySIM", 115200, sim)
         lines = link.watch("M303 E0 S200 C5", lambda line: None, silence=15, limit=600)
         said = gcode.parse_autotune(lines)
@@ -208,17 +217,36 @@ class TestTheLines:
             gcode.normalise_autotune("M303 S200")
 
     def test_the_parsers_read_the_forms_they_name(self):
-        lines = ["echo:; PID settings:", "echo:  M301 P22.20 I1.08 D114.00", "echo:  M304 P70.00 I1.50 D800.00", "ok"]
-        assert gcode.parse_gains(lines)["hotend 0"] == {"kp": 22.2, "ki": 1.08, "kd": 114.0, "line": lines[1].strip()}
+        lines = [
+            "echo:; PID settings:",
+            "echo:  M301 P22.20 I1.08 D114.00",
+            "echo:  M304 P70.00 I1.50 D800.00",
+            "ok",
+        ]
+        assert gcode.parse_gains(lines)["hotend 0"] == {
+            "kp": 22.2,
+            "ki": 1.08,
+            "kd": 114.0,
+            "line": lines[1].strip(),
+        }
         assert gcode.parse_gains(["echo:  M301 E1 P1 I2 D3"])["hotend 1"]["kd"] == 3.0
         said = gcode.parse_autotune(
-            [" T:200.10 /200.00 @:127", " Ku: 31.92 Tu: 25.27", " Kp: 19.15 Ki: 1.52 Kd: 60.49",
-             "PID Autotune finished! Put the last Kp, Ki and Kd constants from below into Configuration.h",
-             "#define DEFAULT_Kp 19.16", "#define DEFAULT_Ki 1.52", "#define DEFAULT_Kd 60.49"]
+            [
+                " T:200.10 /200.00 @:127",
+                " Ku: 31.92 Tu: 25.27",
+                " Kp: 19.15 Ki: 1.52 Kd: 60.49",
+                "PID Autotune finished! Put the last Kp, Ki and Kd constants from below into Configuration.h",
+                "#define DEFAULT_Kp 19.16",
+                "#define DEFAULT_Ki 1.52",
+                "#define DEFAULT_Kd 60.49",
+            ]
         )
         assert said["values"] == {"ku": 31.92, "tu": 25.27, "kp": 19.16, "ki": 1.52, "kd": 60.49}
         assert said["finished"] and said["temperatures"][0]["hotends"][0].actual == 200.1
-        assert gcode.parse_autotune(["PID Autotune failed! Temperature too high"])["failed"] == "Temperature too high"
+        assert (
+            gcode.parse_autotune(["PID Autotune failed! Temperature too high"])["failed"]
+            == "Temperature too high"
+        )
 
 
 # ---- plans ---------------------------------------------------------------------------------
@@ -229,18 +257,93 @@ class TestPlans:
         "args, says",
         [
             (dict(heater="hotend", kind="step", ceiling_c=400, max_duration_s=900, **STEP), "cap"),
-            (dict(heater="bed", kind="step", ceiling_c=60, max_duration_s=900, base_c=50, step_c=15, settle_s=300, after_s=300), "above the ceiling"),
-            (dict(heater="hotend", kind="step", ceiling_c=200, max_duration_s=500, **STEP), "longer than the longest"),
-            (dict(heater="hotend", kind="step", ceiling_c=200, max_duration_s=9000, **STEP), "longest time is"),
-            (dict(heater="hotend", kind="step", ceiling_c=200, max_duration_s=900, base_c=180), "needs"),
-            (dict(heater="hotend", kind="autotune", ceiling_c=203, max_duration_s=900, target_c=200, cycles=5), "above its target"),
-            (dict(heater="hotend", kind="perturbation", ceiling_c=210, max_duration_s=3000, centre_c=200, amplitude_c=2, period_s=61, periods=3, settle_s=300), "even number"),
-            (dict(heater="hotend", kind="perturbation", ceiling_c=210, max_duration_s=3000, centre_c=200, amplitude_c=2, period_s=60, periods=1, settle_s=300), "two periods"),
-            (dict(heater="hotend", index=1, kind="step", ceiling_c=200, max_duration_s=900, **STEP), "hotend 0"),
-            (dict(heater="chamber", kind="step", ceiling_c=60, max_duration_s=900, **STEP), "hotend's or the bed's"),
+            (
+                dict(
+                    heater="bed",
+                    kind="step",
+                    ceiling_c=60,
+                    max_duration_s=900,
+                    base_c=50,
+                    step_c=15,
+                    settle_s=300,
+                    after_s=300,
+                ),
+                "above the ceiling",
+            ),
+            (
+                dict(heater="hotend", kind="step", ceiling_c=200, max_duration_s=500, **STEP),
+                "longer than the longest",
+            ),
+            (
+                dict(heater="hotend", kind="step", ceiling_c=200, max_duration_s=9000, **STEP),
+                "longest time is",
+            ),
+            (
+                dict(heater="hotend", kind="step", ceiling_c=200, max_duration_s=900, base_c=180),
+                "needs",
+            ),
+            (
+                dict(
+                    heater="hotend",
+                    kind="autotune",
+                    ceiling_c=203,
+                    max_duration_s=900,
+                    target_c=200,
+                    cycles=5,
+                ),
+                "above its target",
+            ),
+            (
+                dict(
+                    heater="hotend",
+                    kind="perturbation",
+                    ceiling_c=210,
+                    max_duration_s=3000,
+                    centre_c=200,
+                    amplitude_c=2,
+                    period_s=61,
+                    periods=3,
+                    settle_s=300,
+                ),
+                "even number",
+            ),
+            (
+                dict(
+                    heater="hotend",
+                    kind="perturbation",
+                    ceiling_c=210,
+                    max_duration_s=3000,
+                    centre_c=200,
+                    amplitude_c=2,
+                    period_s=60,
+                    periods=1,
+                    settle_s=300,
+                ),
+                "two periods",
+            ),
+            (
+                dict(
+                    heater="hotend", index=1, kind="step", ceiling_c=200, max_duration_s=900, **STEP
+                ),
+                "hotend 0",
+            ),
+            (
+                dict(heater="chamber", kind="step", ceiling_c=60, max_duration_s=900, **STEP),
+                "hotend's or the bed's",
+            ),
         ],
-        ids=["over-the-cap", "target-over-ceiling", "schedule-too-long", "longest-over-the-seam",
-             "missing-parameters", "autotune-headroom", "odd-period", "one-period", "second-hotend", "no-such-heater"],
+        ids=[
+            "over-the-cap",
+            "target-over-ceiling",
+            "schedule-too-long",
+            "longest-over-the-seam",
+            "missing-parameters",
+            "autotune-headroom",
+            "odd-period",
+            "one-period",
+            "second-hotend",
+            "no-such-heater",
+        ],
     )
     def test_a_plan_off_its_bounds_is_refused_before_anything_is_sent(self, args, says):
         args = {"index": 0, **args}
@@ -250,7 +353,18 @@ class TestPlans:
     def test_a_plan_says_its_targets_and_when(self):
         step = loops.plan("hotend", 0, "step", 200, 900, **STEP)
         assert step.changes == ((0.0, 180), (300.0, 185)) and step.end_s == 540.0
-        wave = loops.plan("bed", 0, "perturbation", 70, 3000, centre_c=60, amplitude_c=2, period_s=120, periods=2, settle_s=600)
+        wave = loops.plan(
+            "bed",
+            0,
+            "perturbation",
+            70,
+            3000,
+            centre_c=60,
+            amplitude_c=2,
+            period_s=120,
+            periods=2,
+            settle_s=600,
+        )
         assert [t for _, t in wave.changes] == [60, 62, 58, 62, 58, 60]
         assert wave.target_line(62) == "M140 S62"
         tune = loops.plan("bed", 0, "autotune", 70, 3000, target_c=60, cycles=5)
@@ -281,7 +395,12 @@ class TestExperiments:
         time. The data comes from the model it is fitted to, so this holds the pipeline --
         the job, the record, the document -- and says nothing of a machine."""
         board.links.control.arm(PORT)
-        job = _run(board, loops.plan("hotend", 0, "step", 200, 1200, base_c=180, step_c=5, settle_s=600, after_s=400))
+        job = _run(
+            board,
+            loops.plan(
+                "hotend", 0, "step", 200, 1200, base_c=180, step_c=5, settle_s=600, after_s=400
+            ),
+        )
         doc = loops.document(job.experiment.id, rule="simc", read_board=True)
         p, true = doc.plant, board.sim.heaters["T"].plant
         assert p.gain == pytest.approx(true.gain, rel=0.15)
@@ -307,7 +426,16 @@ class TestExperiments:
     def test_a_perturbation_gives_the_frequency_response(self, board):
         board.links.control.arm(PORT)
         plan = loops.plan(
-            "hotend", 0, "perturbation", 210, 3000, centre_c=200, amplitude_c=2, period_s=60, periods=4, settle_s=600
+            "hotend",
+            0,
+            "perturbation",
+            210,
+            3000,
+            centre_c=200,
+            amplitude_c=2,
+            period_s=60,
+            periods=4,
+            settle_s=600,
         )
         job = _run(board, plan, wait=90)
         assert job.outcome == "done", job.error
@@ -324,14 +452,24 @@ class TestExperiments:
 
 def _scripted(monkeypatch, replies=None, cls=ScriptedTransport):
     ScriptedTransport.instances.clear()
-    links = gcode.PrinterLinks(factory=lambda port, baud: cls(port, baud, replies=replies or REPLIES))
+    links = gcode.PrinterLinks(
+        factory=lambda port, baud: cls(port, baud, replies=replies or REPLIES)
+    )
     monkeypatch.setattr(gcode, "_LINKS", links)
     devices.printer_status(PORT)
     links.control.arm(PORT)
     return links, ScriptedTransport.instances[0]
 
 
-HOT = {**REPLIES, "M104 S180": ["ok"], "M104 S185": ["ok"], "M104 S0": ["ok"], "M140 S0": ["ok"], "M107": ["ok"], "M84": ["ok"]}
+HOT = {
+    **REPLIES,
+    "M104 S180": ["ok"],
+    "M104 S185": ["ok"],
+    "M104 S0": ["ok"],
+    "M140 S0": ["ok"],
+    "M107": ["ok"],
+    "M84": ["ok"],
+}
 
 
 class TestEveryWayOut:
@@ -344,8 +482,12 @@ class TestEveryWayOut:
         fast = Fast(speed)
         return loops.start(PORT, self._plan(), clock=fast.now, sleep=fast.sleep)
 
-    def test_a_reading_over_the_ceiling_ends_it(self, fake_arduino_cli, fresh_task_runner, monkeypatch):
-        links, board = _scripted(monkeypatch, {**HOT, "M105": ["ok T:250.00 /180.00 B:23.00 /0.00 @:255 B@:0"]})
+    def test_a_reading_over_the_ceiling_ends_it(
+        self, fake_arduino_cli, fresh_task_runner, monkeypatch
+    ):
+        links, board = _scripted(
+            monkeypatch, {**HOT, "M105": ["ok T:250.00 /180.00 B:23.00 /0.00 @:255 B@:0"]}
+        )
         job = self._start()
         job.thread.join(10)
         assert job.outcome == "failed" and "over the ceiling" in job.error
@@ -356,7 +498,14 @@ class TestEveryWayOut:
         links.stop_all()
 
     def test_a_board_that_objects_ends_it(self, fake_arduino_cli, fresh_task_runner, monkeypatch):
-        links, board = _scripted(monkeypatch, {**HOT, "M104 S180": ["Error:Heating failed"], "M105": ["ok T:23.00 /0.00 B:23.00 /0.00 @:0 B@:0"]})
+        links, board = _scripted(
+            monkeypatch,
+            {
+                **HOT,
+                "M104 S180": ["Error:Heating failed"],
+                "M105": ["ok T:23.00 /0.00 B:23.00 /0.00 @:0 B@:0"],
+            },
+        )
         job = self._start()
         job.thread.join(10)
         assert job.outcome == "failed" and "Heating failed" in job.error
@@ -374,14 +523,18 @@ class TestEveryWayOut:
                     if Restarts.reads == 5:
                         self.pending += b"start\n"
 
-        links, board = _scripted(monkeypatch, {**HOT, "M105": ["ok T:23.00 /0.00 B:23.00 /0.00 @:0 B@:0"]}, Restarts)
+        links, board = _scripted(
+            monkeypatch, {**HOT, "M105": ["ok T:23.00 /0.00 B:23.00 /0.00 @:0 B@:0"]}, Restarts
+        )
         job = self._start()
         job.thread.join(10)
         assert job.outcome == "failed" and "restarted" in job.error
         assert board.sent[-5:] == [*OFF, "M105"]
         links.stop_all()
 
-    def test_a_board_that_says_no_temperature_ends_it(self, fake_arduino_cli, fresh_task_runner, monkeypatch):
+    def test_a_board_that_says_no_temperature_ends_it(
+        self, fake_arduino_cli, fresh_task_runner, monkeypatch
+    ):
         links, board = _scripted(monkeypatch, {**HOT, "M105": ["ok"]})
         job = self._start()
         job.thread.join(10)
@@ -390,7 +543,9 @@ class TestEveryWayOut:
         assert board.sent[-6:] == [*OFF, "M105", "M112"] and "stop was sent" in job.heater_off
         links.stop_all()
 
-    def test_a_lost_link_ends_it_and_says_the_heater_is_not_known_off(self, fake_arduino_cli, fresh_task_runner, monkeypatch):
+    def test_a_lost_link_ends_it_and_says_the_heater_is_not_known_off(
+        self, fake_arduino_cli, fresh_task_runner, monkeypatch
+    ):
         class Unplugged(ScriptedTransport):
             gone = False
 
@@ -401,7 +556,9 @@ class TestEveryWayOut:
                 if data.decode().strip() == "M104 S180":
                     Unplugged.gone = True
 
-        links, board = _scripted(monkeypatch, {**HOT, "M105": ["ok T:23.00 /0.00 B:23.00 /0.00 @:0 B@:0"]}, Unplugged)
+        links, board = _scripted(
+            monkeypatch, {**HOT, "M105": ["ok T:23.00 /0.00 B:23.00 /0.00 @:0 B@:0"]}, Unplugged
+        )
         job = self._start()
         job.thread.join(10)
         assert job.outcome == "failed" and "disconnected" in job.error
@@ -441,7 +598,9 @@ class TestEveryWayOut:
     def test_an_autotune_past_its_ceiling_is_broken_and_the_heater_turned_off(self, board):
         """A heater with a long dead time swings a relay wide: ``K d (1 - e^(-theta/tau))``,
         about 19 degC each way here, past a ceiling 5 degC over the target."""
-        board.sim.heaters["T"] = gcode.SimulatedHeater(cl.FOPDT(1.0, 60.0, 10.0), 23.0, (10.0, 0.1, 20.0), seed="wide")
+        board.sim.heaters["T"] = gcode.SimulatedHeater(
+            cl.FOPDT(1.0, 60.0, 10.0), 23.0, (10.0, 0.1, 20.0), seed="wide"
+        )
         board.links.control.arm(PORT)
         job = _run(board, loops.plan("hotend", 0, "autotune", 205, 1800, target_c=200, cycles=5))
         sent = board.sim.sent
@@ -466,7 +625,9 @@ class TestTheLatchAndTheMemory:
             loops.start(PORT, loops.plan("hotend", 0, "step", 200, 900, **STEP))
         with pytest.raises(gcode.ControlNotArmed):
             loops.set_gains(PORT, "hotend", 0, 10, 0.5, 20)
-        assert _heats(board.sim.sent) == [] and not any(ln.startswith("M301") for ln in board.sim.sent)
+        assert _heats(board.sim.sent) == [] and not any(
+            ln.startswith("M301") for ln in board.sim.sent
+        )
 
     def test_gains_set_are_read_back_and_not_saved(self, board):
         board.links.control.arm(PORT)
@@ -493,7 +654,14 @@ class TestTheLatchAndTheMemory:
 
 # ---- can_now and the routes --------------------------------------------------------------------
 
-STEP_BODY = {"port": PORT, "heater": "hotend", "kind": "step", "ceiling_c": 200, "max_duration_s": 900, **STEP}
+STEP_BODY = {
+    "port": PORT,
+    "heater": "hotend",
+    "kind": "step",
+    "ceiling_c": 200,
+    "max_duration_s": 900,
+    **STEP,
+}
 VERBS = ["tune.start", "tune.cancel", "tune.read", "tune.set", "tune.save"]
 
 
@@ -506,7 +674,10 @@ def _ask(client, verb):
     if verb == "tune.read":
         return post("/firmware/printers/loops/read", json={"port": PORT})
     if verb == "tune.set":
-        return post("/firmware/printers/loops/set", json={"port": PORT, "heater": "hotend", "kp": 10, "ki": 0.5, "kd": 20})
+        return post(
+            "/firmware/printers/loops/set",
+            json={"port": PORT, "heater": "hotend", "kp": 10, "ki": 0.5, "kd": 20},
+        )
     return post("/firmware/printers/loops/save", json={"port": PORT})
 
 
@@ -529,11 +700,18 @@ def _task(board, monkeypatch):
 def _tuning(board, monkeypatch):
     board.links.control.arm(PORT)
     slow = Fast(1)  # real time: it is still running when the route is asked
-    loops.start(PORT, loops.plan("hotend", 0, "step", 200, 900, **STEP), clock=slow.now, sleep=slow.sleep)
+    loops.start(
+        PORT, loops.plan("hotend", 0, "step", 200, 900, **STEP), clock=slow.now, sleep=slow.sleep
+    )
     time.sleep(0.2)
 
 
-CONDITIONS = {"armed-and-idle": _idle, "latch-down": _down, "a-task-holds-the-port": _task, "an-experiment-runs": _tuning}
+CONDITIONS = {
+    "armed-and-idle": _idle,
+    "latch-down": _down,
+    "a-task-holds-the-port": _task,
+    "an-experiment-runs": _tuning,
+}
 
 
 @pytest.mark.parametrize("condition", list(CONDITIONS))
@@ -571,15 +749,21 @@ def test_the_relay_in_the_simulator_sits_near_the_plant_s_ultimate_point():
     plant's true one and its Tu within a fifth of the true period, the difference the
     relation's, the five-second hold's and the bias's moving."""
     fast = Fast(400)
-    sim = gcode.SimulatedPrinter("/dev/ttySIM", 115200, heaters=gcode.simulated_heaters("/dev/ttySIM"), clock=fast.now)
+    sim = gcode.SimulatedPrinter(
+        "/dev/ttySIM", 115200, heaters=gcode.simulated_heaters("/dev/ttySIM"), clock=fast.now
+    )
     link = gcode.GcodeLink("/dev/ttySIM", 115200, sim)
-    v = gcode.parse_autotune(link.watch("M303 E0 S200 C6", lambda line: None, silence=15, limit=900))["values"]
+    v = gcode.parse_autotune(
+        link.watch("M303 E0 S200 C6", lambda line: None, silence=15, limit=900)
+    )["values"]
     true = cl.ultimate_of(sim.heaters["T"].plant)
     assert v["ku"] < true.gain
     assert v["tu"] == pytest.approx(true.period, rel=0.2)
 
 
-def test_an_orphaned_experiment_is_ended_and_its_machine_made_safe(fake_arduino_cli, fresh_task_runner, monkeypatch):
+def test_an_orphaned_experiment_is_ended_and_its_machine_made_safe(
+    fake_arduino_cli, fresh_task_runner, monkeypatch
+):
     """An experiment kept as running that nothing runs (the server died under it): when
     its port is next opened the heaters are turned off, as an orphaned print's are."""
     started = jobs.Job(

@@ -444,7 +444,9 @@ class Identified:
     fit_rms: Optional[float] = None
 
 
-def _crossing(t: Sequence[float], y: Sequence[float], level: float, rising: bool) -> Optional[float]:
+def _crossing(
+    t: Sequence[float], y: Sequence[float], level: float, rising: bool
+) -> Optional[float]:
     """The first time ``y`` reaches ``level`` going the way ``rising`` says, interpolated
     linearly between samples."""
     for i in range(1, len(y)):
@@ -459,9 +461,9 @@ def _ends(t, y, step_time: float, tail: float) -> Tuple[float, float]:
     the samples before it, ten at least, so a record that begins with a heat-up is read
     where it had settled) and at the end (the mean of the last ``tail`` fraction of the
     record)."""
-    before = [v for s, v in zip(t, y) if s <= step_time]
+    before = [v for s, v in zip(t, y, strict=True) if s <= step_time]
     if before:
-        before = before[-max(10, int(len(before) * tail)):]
+        before = before[-max(10, int(len(before) * tail)) :]
     initial = sum(before) / len(before) if before else y[0]
     n = max(1, int(len(y) * tail))
     final = sum(y[-n:]) / n
@@ -516,9 +518,9 @@ def areas(
     if change == 0 or input_change == 0:
         raise ValueError("no change to identify from")
     ts = [s - step_time for s in t if s >= step_time]
-    ys = [(v - initial) / change for s, v in zip(t, y) if s >= step_time]
+    ys = [(v - initial) / change for s, v in zip(t, y, strict=True) if s >= step_time]
     a0 = _trapezoid(ts, [1 - v for v in ys])
-    upto = [(s, v) for s, v in zip(ts, ys) if s <= a0]
+    upto = [(s, v) for s, v in zip(ts, ys, strict=True) if s <= a0]
     if len(upto) < 2:
         raise ValueError("too few samples before the residence time")
     # The last piece, from the last sample before a0 to a0, interpolated.
@@ -548,7 +550,9 @@ class RelayPoint:
     ultimate_period: Optional[float]
 
 
-def relay_point(amplitude: float, oscillation: float, period: float, hysteresis: float = 0.0) -> RelayPoint:
+def relay_point(
+    amplitude: float, oscillation: float, period: float, hysteresis: float = 0.0
+) -> RelayPoint:
     """The describing-function relation of a relay of ``amplitude`` d (half the input's
     swing) that holds the output in an oscillation of ``oscillation`` a (half its peak to
     peak) and ``period``. It keeps only the first harmonic of the relay's square wave, so
@@ -590,11 +594,11 @@ def oscillation(t: Sequence[float], y: Sequence[float], about: float, last: int 
             ups.append(t[i - 1] + (t[i] - t[i - 1]) * (about - y[i - 1]) / (y[i] - y[i - 1]))
     if len(ups) < 2:
         raise ValueError("fewer than one whole cycle about the level")
-    ups = ups[-(last + 1):]
-    periods = [b - a for a, b in zip(ups, ups[1:])]
+    ups = ups[-(last + 1) :]
+    periods = [b - a for a, b in zip(ups, ups[1:], strict=False)]
     highs, lows = [], []
-    for a, b in zip(ups, ups[1:]):
-        inside = [v for s, v in zip(t, y) if a <= s <= b]
+    for a, b in zip(ups, ups[1:], strict=False):
+        inside = [v for s, v in zip(t, y, strict=True) if a <= s <= b]
         highs.append(max(inside))
         lows.append(min(inside))
     period = sum(periods) / len(periods)
@@ -625,11 +629,13 @@ def _solve3(m: List[List[float]], v: List[float]) -> Optional[List[float]]:
 def _least_squares(rows: List[List[float]], ys: List[float]) -> Optional[List[float]]:
     n = len(rows[0])
     m = [[sum(r[i] * r[j] for r in rows) for j in range(n)] for i in range(n)]
-    v = [sum(r[i] * y for r, y in zip(rows, ys)) for i in range(n)]
+    v = [sum(r[i] * y for r, y in zip(rows, ys, strict=True)) for i in range(n)]
     return _solve3(m, v)
 
 
-def _arx(u: Sequence[float], y: Sequence[float], dt: float, top: int) -> Optional[Tuple[float, float, float]]:
+def _arx(
+    u: Sequence[float], y: Sequence[float], dt: float, top: int
+) -> Optional[Tuple[float, float, float]]:
     """The equation-error start of ``fit_fopdt``: least squares on ``y[k+1] = a y[k] + b1
     u[k-d] + b2 u[k-d-1] + c`` for each whole dead time ``d``; its time constant and dead
     time, or None when no ``d`` gives a stable lag."""
@@ -646,7 +652,9 @@ def _arx(u: Sequence[float], y: Sequence[float], dt: float, top: int) -> Optiona
         a, b1, b2, _ = coef
         if not 0 < a < 1 or b1 + b2 == 0:
             continue
-        res = [ys[i] - sum(c * x for c, x in zip(coef, rows[i])) for i in range(len(rows))]
+        res = [
+            ys[i] - sum(c * x for c, x in zip(coef, rows[i], strict=True)) for i in range(len(rows))
+        ]
         rms = math.sqrt(sum(e * e for e in res) / len(res))
         if best is None or rms < best[0] - 1e-15:
             gain = (b1 + b2) / (1 - a)
@@ -679,41 +687,47 @@ def _output_error(u, y, dt, tau, theta) -> Tuple[float, float, float]:
     n = len(y)
     sx, sy = sum(x), sum(y)
     sxx = sum(v * v for v in x)
-    sxy = sum(a * b for a, b in zip(x, y))
+    sxy = sum(a * b for a, b in zip(x, y, strict=True))
     det = n * sxx - sx * sx
     if det == 0:
         return 0.0, sy / n, INF
     gain = (n * sxy - sx * sy) / det
     offset = (sy - gain * sx) / n
-    rms = math.sqrt(sum((b - offset - gain * a) ** 2 for a, b in zip(x, y)) / n)
+    rms = math.sqrt(sum((b - offset - gain * a) ** 2 for a, b in zip(x, y, strict=True)) / n)
     return gain, offset, rms
 
 
-def _nelder_mead(f: Callable[[List[float]], float], start: List[float], step: List[float], iters: int = 300) -> List[float]:
+def _nelder_mead(
+    f: Callable[[List[float]], float], start: List[float], step: List[float], iters: int = 300
+) -> List[float]:
     """The least of ``f`` near ``start``, by the Nelder-Mead simplex."""
-    pts = [start] + [[s + (step[i] if i == j else 0.0) for j, s in enumerate(start)] for i in range(len(start))]
+    pts = [start] + [
+        [s + (step[i] if i == j else 0.0) for j, s in enumerate(start)] for i in range(len(start))
+    ]
     vals = [f(p) for p in pts]
     for _ in range(iters):
         order = sorted(range(len(pts)), key=vals.__getitem__)
         pts, vals = [pts[i] for i in order], [vals[i] for i in order]
         centre = [sum(p[j] for p in pts[:-1]) / (len(pts) - 1) for j in range(len(start))]
         worst = pts[-1]
-        refl = [c + (c - w) for c, w in zip(centre, worst)]
+        refl = [c + (c - w) for c, w in zip(centre, worst, strict=True)]
         fr = f(refl)
         if fr < vals[0]:
-            exp = [c + 2 * (c - w) for c, w in zip(centre, worst)]
+            exp = [c + 2 * (c - w) for c, w in zip(centre, worst, strict=True)]
             fe = f(exp)
             pts[-1], vals[-1] = (exp, fe) if fe < fr else (refl, fr)
         elif fr < vals[-2]:
             pts[-1], vals[-1] = refl, fr
         else:
-            con = [c + 0.5 * (w - c) for c, w in zip(centre, worst)]
+            con = [c + 0.5 * (w - c) for c, w in zip(centre, worst, strict=True)]
             fc = f(con)
             if fc < vals[-1]:
                 pts[-1], vals[-1] = con, fc
             else:
                 best = pts[0]
-                pts = [best] + [[b + 0.5 * (p - b) for b, p in zip(best, q)] for q in pts[1:]]
+                pts = [best] + [
+                    [b + 0.5 * (p - b) for b, p in zip(best, q, strict=True)] for q in pts[1:]
+                ]
                 vals = [vals[0]] + [f(p) for p in pts[1:]]
         if max(vals) - min(vals) < 1e-14 * (1 + abs(min(vals))):
             break
@@ -805,7 +819,9 @@ class FrequencyPoint:
         return math.degrees(cmath.phase(self.value))
 
 
-def resample(t: Sequence[float], v: Sequence[float], dt: float, start: Optional[float] = None) -> Tuple[List[float], List[float]]:
+def resample(
+    t: Sequence[float], v: Sequence[float], dt: float, start: Optional[float] = None
+) -> Tuple[List[float], List[float]]:
     """``v`` read every ``dt`` from ``start`` (the first time) to the last, linearly
     between the samples it was taken at: polls are about a second apart, not exactly."""
     t0 = t[0] if start is None else start
@@ -977,7 +993,9 @@ def _simc(p: Plant, kind: str, closed_loop_time: Optional[float] = None, **_) ->
     th = p.dead_time
     tc = th if closed_loop_time is None else closed_loop_time
     if tc <= 0:
-        raise ValueError("SIMC needs a closed-loop time more than zero (it is the dead time by default)")
+        raise ValueError(
+            "SIMC needs a closed-loop time more than zero (it is the dead time by default)"
+        )
     t1 = p.lags[0] if len(p.lags) == 1 else max(p.lags)
     kc = t1 / (p.gain * (tc + th))
     ti = min(t1, 4 * (tc + th))
@@ -1175,7 +1193,7 @@ def ultimate_of(plant: Plant, hi: float = 1e3) -> Ultimate:
 def _root(f: Callable[[float], float], lo: float, hi: float, n: int = 400) -> Optional[float]:
     """The first root of ``f`` on a logarithmic grid from ``lo`` to ``hi``, by bisection."""
     grid = [lo * (hi / lo) ** (i / n) for i in range(n + 1)]
-    for a, b in zip(grid, grid[1:]):
+    for a, b in zip(grid, grid[1:], strict=False):
         fa, fb = f(a), f(b)
         if fa == 0:
             return a
@@ -1431,7 +1449,7 @@ def step_measures(
     if change == 0:
         raise ValueError("no change to measure")
     rising = change > 0
-    after = [(s, v) for s, v in zip(t, y) if s >= step_time]
+    after = [(s, v) for s, v in zip(t, y, strict=True) if s >= step_time]
     ts = [s for s, _ in after]
     ys = [v for _, v in after]
     t10 = _crossing(ts, ys, initial + 0.1 * change, rising)
@@ -1448,7 +1466,7 @@ def step_measures(
         over = max(0.0, (final - ys[i]) / -change)
     peak_time = ts[i] - step_time if over > 0 else None
     width = band if band is not None else abs(change) * band_fraction
-    outside = [s for s, v in zip(ts, ys) if abs(v - final) > width]
+    outside = [s for s, v in zip(ts, ys, strict=True) if abs(v - final) > width]
     if not outside:
         settling = 0.0
     elif outside[-1] >= ts[-1]:
@@ -1457,10 +1475,8 @@ def step_measures(
         settling = outside[-1] - step_time
     err = iae = None
     if setpoint is not None:
-        rs = [r for s, r in zip(t, setpoint) if s >= step_time]
+        rs = [r for s, r in zip(t, setpoint, strict=True) if s >= step_time]
         n = max(1, int(len(ys) * tail))
-        err = sum(r - v for r, v in zip(rs[-n:], ys[-n:])) / n
-        iae = _trapezoid(ts, [abs(r - v) for r, v in zip(rs, ys)])
-    return StepMeasures(
-        initial, final, change, rise, over, peak_time, settling, width, err, iae
-    )
+        err = sum(r - v for r, v in zip(rs[-n:], ys[-n:], strict=True)) / n
+        iae = _trapezoid(ts, [abs(r - v) for r, v in zip(rs, ys, strict=True)])
+    return StepMeasures(initial, final, change, rise, over, peak_time, settling, width, err, iae)

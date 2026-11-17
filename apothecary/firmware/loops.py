@@ -126,8 +126,14 @@ def plan(
         raise ValueError("the sample period is 0.5 s to 10 s")
     T = sample_period_s
     p = {k: v for k, v in p.items() if v is not None}
-    base = dict(heater=heater, index=index, kind=kind, ceiling_c=float(ceiling_c),
-                max_duration_s=float(max_duration_s), sample_period_s=float(T))
+    base = dict(
+        heater=heater,
+        index=index,
+        kind=kind,
+        ceiling_c=float(ceiling_c),
+        max_duration_s=float(max_duration_s),
+        sample_period_s=float(T),
+    )
 
     def under(target: int, what: str) -> int:
         if target <= 0:
@@ -180,7 +186,9 @@ def plan(
     else:
         raise ValueError(f"no experiment {kind!r}: a step, an autotune or a perturbation")
     if end > max_duration_s:
-        raise ValueError(f"the schedule takes {end:.0f} s, longer than the longest time, {max_duration_s:.0f} s")
+        raise ValueError(
+            f"the schedule takes {end:.0f} s, longer than the longest time, {max_duration_s:.0f} s"
+        )
     for _, target in changes:
         Plan(**base).target_line(target)  # bounded by the dialect too
     return Plan(**base, changes=changes, end_s=end, parameters={k: float(v) for k, v in p.items()})
@@ -333,7 +341,8 @@ class LoopJob:
     def _guard(self, actual: float) -> None:
         if actual > self.plan.ceiling_c:
             raise _Ended(
-                "failed", f"{actual:.1f} degC read, over the ceiling of {self.plan.ceiling_c:g} degC"
+                "failed",
+                f"{actual:.1f} degC read, over the ceiling of {self.plan.ceiling_c:g} degC",
             )
 
     # -- reading ------------------------------------------------------------------------
@@ -400,7 +409,9 @@ class LoopJob:
             if self._read(link) is not None:
                 heard = self.clock()
             elif self.clock() - heard > SILENCE_S:
-                raise _Ended("failed", f"no temperature of {self.plan.loop.label} for {SILENCE_S:.0f} s")
+                raise _Ended(
+                    "failed", f"no temperature of {self.plan.loop.label} for {SILENCE_S:.0f} s"
+                )
             self._same_boot(link, boots)
             if self._elapsed() >= self.plan.end_s:
                 return
@@ -427,7 +438,11 @@ class LoopJob:
         self.stage = "running"
         self._announce()
         lines = link.watch(
-            self.plan.autotune, each, silence=SILENCE_S, limit=self.plan.max_duration_s, origin=TUNE.kind
+            self.plan.autotune,
+            each,
+            silence=SILENCE_S,
+            limit=self.plan.max_duration_s,
+            origin=TUNE.kind,
         )
         said = gcode.parse_autotune(lines)
         if said["failed"]:
@@ -450,7 +465,9 @@ class LoopJob:
         said += devices.safe_off(link, "printer", TUNE.kind)
         try:
             lines = link.command("M105", timeout=10.0, origin=TUNE.kind)
-            heater = self._heater_of(gcode.parse_m105(next((ln for ln in lines if gcode.is_temperature_line(ln)), "")))
+            heater = self._heater_of(
+                gcode.parse_m105(next((ln for ln in lines if gcode.is_temperature_line(ln)), ""))
+            )
             if heater is None or heater.target != 0:
                 raise ToolchainError("the target did not read back as off")
             self.heater_off = "heater off: its target read back as 0"
@@ -496,7 +513,9 @@ class LoopJob:
         link.log.add("sys", f"{self.what} {outcome}" + (f": {reason}" if reason else ""), TUNE.kind)
         self._finish(link, reason, tail)
 
-    def _finish(self, link: Optional[gcode.GcodeLink], reason: Optional[str] = None, tail: List[str] = ()) -> None:
+    def _finish(
+        self, link: Optional[gcode.GcodeLink], reason: Optional[str] = None, tail: List[str] = ()
+    ) -> None:
         try:
             self.experiment = keep(self)
         except (OSError, ValueError) as exc:
@@ -552,7 +571,9 @@ def keep(job: LoopJob) -> loop_document.Experiment:
         outcome=job.outcome or "failed",
         reason=job.error or (job.outcome if job.outcome == "cancelled" else None),
         job=job.job.id,
-        samples=loop_document.Samples(t=s["t"], target=s["target"], actual=s["actual"], power=s["power"]),
+        samples=loop_document.Samples(
+            t=s["t"], target=s["target"], actual=s["actual"], power=s["power"]
+        ),
         lines=job.lines[-LINES_KEPT:],
     )
     path = claim(private_folder(loops_dir()), exp.id, ".json")
@@ -668,7 +689,9 @@ def gains_line(heater: str, index: int, kp: float, ki: float, kd: float) -> str:
 
 
 def read_gains(
-    port: str, state: Optional[devices.FirmwareState] = None, links: Optional[gcode.PrinterLinks] = None
+    port: str,
+    state: Optional[devices.FirmwareState] = None,
+    links: Optional[gcode.PrinterLinks] = None,
 ) -> dict:
     """The gains the board holds, as ``M503`` says them, by loop, and every line it said."""
     result = devices.printer_query(port, "M503", state, links)
@@ -699,9 +722,14 @@ def set_gains(
     back = read_gains(port, state, links)
     name = loop_document.LoopName(heater=heater, index=index).label
     got = back["gains"].get(name)
-    sent = {"kp": float(line.split(" P")[1].split()[0]), "ki": float(line.split(" I")[1].split()[0]),
-            "kd": float(line.split(" D")[1].split()[0])}
-    matches = got is not None and all(abs(got[k] - sent[k]) <= 0.0051 + 1e-6 * abs(sent[k]) for k in sent)
+    sent = {
+        "kp": float(line.split(" P")[1].split()[0]),
+        "ki": float(line.split(" I")[1].split()[0]),
+        "kd": float(line.split(" D")[1].split()[0]),
+    }
+    matches = got is not None and all(
+        abs(got[k] - sent[k]) <= 0.0051 + 1e-6 * abs(sent[k]) for k in sent
+    )
     return {
         "port": port,
         "loop": name,
@@ -757,7 +785,9 @@ def document(
     port = body.get("port", "")
     exp = loop_document.Experiment.model_validate(body)
     params = exp.parameters
-    loop = loop_document.LoopName(heater=str(params.get("heater", "hotend")), index=int(params.get("index", 0)))
+    loop = loop_document.LoopName(
+        heater=str(params.get("heater", "hotend")), index=int(params.get("index", 0))
+    )
     machine = loop_document.Machine(
         kind="printer",
         port=port,
@@ -770,7 +800,10 @@ def document(
         said = read_gains(port, state, links)
         got = said["gains"].get(loop.label)
         read = loop_document.Experiment(
-            id=f"{exp.id}-read", kind="read", started_at=said["read_at"], sample_period_s=exp.sample_period_s,
+            id=f"{exp.id}-read",
+            kind="read",
+            started_at=said["read_at"],
+            sample_period_s=exp.sample_period_s,
             lines=said["lines"] or ["(nothing said)"],
         )
         if got is not None:
@@ -778,6 +811,13 @@ def document(
                 kp=got["kp"], ki=got["ki"], kd=got["kd"], basis="measured", source=read.id
             )
     return loop_document.build(
-        exp, machine, loop, rule=rule, kind=kind, closed_loop_time=closed_loop_time,
-        on_machine=on_machine, read=read, autotune=body.get("result"),
+        exp,
+        machine,
+        loop,
+        rule=rule,
+        kind=kind,
+        closed_loop_time=closed_loop_time,
+        on_machine=on_machine,
+        read=read,
+        autotune=body.get("result"),
     )

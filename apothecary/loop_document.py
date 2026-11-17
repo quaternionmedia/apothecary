@@ -132,7 +132,7 @@ class Samples(BaseModel):
             raise ValueError("t, target, actual and power are of one length")
         for v in (*self.t, *self.target, *self.actual, *(p for p in self.power if p is not None)):
             _finite(v)
-        if any(b < a for a, b in zip(self.t, self.t[1:])):
+        if any(b < a for a, b in zip(self.t, self.t[1:], strict=False)):
             raise ValueError("t does not go back")
         return self
 
@@ -184,7 +184,9 @@ class PlantModel(BaseModel):
 
     def plant(self) -> cl.Plant:
         if self.model == "sopdt":
-            return cl.SOPDT(self.gain, self.time_constant, self.second_time_constant, self.dead_time)
+            return cl.SOPDT(
+                self.gain, self.time_constant, self.second_time_constant, self.dead_time
+            )
         return cl.FOPDT(self.gain, self.time_constant, self.dead_time)
 
 
@@ -276,7 +278,9 @@ class LoopDocument(BaseModel):
             parts = source.split("+")
             for part in parts:
                 if part not in PARTS:
-                    raise ValueError(f"{what} is computed from {part!r}: not one of {', '.join(PARTS)}")
+                    raise ValueError(
+                        f"{what} is computed from {part!r}: not one of {', '.join(PARTS)}"
+                    )
                 if not have[part]:
                     raise ValueError(f"{what} is computed from {part}, which this document lacks")
 
@@ -321,7 +325,9 @@ def now() -> str:
 def _figure(key, label, value, unit, basis, source, note="") -> Figure:
     if isinstance(value, float) and not math.isfinite(value):
         value, note = None, note or "not finite"
-    return Figure(key=key, label=label, value=value, unit=unit, basis=basis, source=source, note=note)
+    return Figure(
+        key=key, label=label, value=value, unit=unit, basis=basis, source=source, note=note
+    )
 
 
 def plant_model(found: cl.Identified, source: str, ambient: Optional[float] = None) -> PlantModel:
@@ -339,7 +345,9 @@ def plant_model(found: cl.Identified, source: str, ambient: Optional[float] = No
     )
 
 
-def gains_of(pid: cl.PID, basis: Basis, source: str, rule: Optional[str] = None, **parameters: float) -> Gains:
+def gains_of(
+    pid: cl.PID, basis: Basis, source: str, rule: Optional[str] = None, **parameters: float
+) -> Gains:
     return Gains(
         kp=pid.kp,
         ki=pid.ki,
@@ -353,7 +361,9 @@ def gains_of(pid: cl.PID, basis: Basis, source: str, rule: Optional[str] = None,
     )
 
 
-def figures(doc: LoopDocument, step_of: Optional[str] = None, step_time: Optional[float] = None) -> List[FigureGroup]:
+def figures(
+    doc: LoopDocument, step_of: Optional[str] = None, step_time: Optional[float] = None
+) -> List[FigureGroup]:
     """The document's figures, computed from what it carries: the plant's parameters, the
     controller's two forms, the loop's margins from the plant with each controller it has,
     and the step response of the experiment ``step_of`` (its setpoint stepped at
@@ -369,7 +379,9 @@ def figures(doc: LoopDocument, step_of: Optional[str] = None, step_time: Optiona
             ("ambient", "ambient", pm.ambient, doc.units.get("temperature", "°C")),
         ):
             if value is not None:
-                groups["plant"].append(_figure(key, label, value, unit, pm.basis, pm.source, pm.method))
+                groups["plant"].append(
+                    _figure(key, label, value, unit, pm.basis, pm.source, pm.method)
+                )
     for name in ("designed", "on_machine"):
         g = getattr(doc.controller, name)
         if g is None:
@@ -381,15 +393,32 @@ def figures(doc: LoopDocument, step_of: Optional[str] = None, step_time: Optiona
             ("kd", "Kd", g.kd, "power·s per °C"),
         ):
             groups["controller"].append(
-                _figure(f"{key}_{name}", f"{label} {where}", value, unit, g.basis, g.source, g.rule or "")
+                _figure(
+                    f"{key}_{name}",
+                    f"{label} {where}",
+                    value,
+                    unit,
+                    g.basis,
+                    g.source,
+                    g.rule or "",
+                )
             )
         if g.kp:
             std = g.pid().standard()
             src = f"controller.{name}"
             groups["controller"].append(
-                _figure(f"ti_{name}", f"Ti {where}", None if math.isinf(std.ti) else std.ti, "s", "computed", src)
+                _figure(
+                    f"ti_{name}",
+                    f"Ti {where}",
+                    None if math.isinf(std.ti) else std.ti,
+                    "s",
+                    "computed",
+                    src,
+                )
             )
-            groups["controller"].append(_figure(f"td_{name}", f"Td {where}", std.td, "s", "computed", src))
+            groups["controller"].append(
+                _figure(f"td_{name}", f"Td {where}", std.td, "s", "computed", src)
+            )
         if pm is not None and g.kp:
             src = f"plant+controller.{name}"
             m = cl.loop_margins(cl.Loop(pm.plant(), g.pid(), sampled=g.dt is not None))
@@ -401,14 +430,18 @@ def figures(doc: LoopDocument, step_of: Optional[str] = None, step_time: Optiona
                 ("ms", "peak of the sensitivity", m.ms, ""),
                 ("mt", "peak of the complementary sensitivity", m.mt, ""),
             ):
-                groups["loop"].append(_figure(f"{key}_{name}", f"{label}, {where}", value, unit, "computed", src))
+                groups["loop"].append(
+                    _figure(f"{key}_{name}", f"{label}, {where}", value, unit, "computed", src)
+                )
     exp = next((e for e in doc.experiments if e.id == step_of), None)
     if exp is not None and exp.samples is not None and exp.samples.t:
         s = exp.samples
         m = None
         if step_time is not None:
             try:
-                m = cl.step_measures(s.t, s.actual, step_time=step_time, setpoint=s.target, band=1.0)
+                m = cl.step_measures(
+                    s.t, s.actual, step_time=step_time, setpoint=s.target, band=1.0
+                )
             except ValueError:
                 m = None
         if m is not None:
@@ -469,20 +502,43 @@ def render_markdown(doc: LoopDocument) -> str:
         out.append(f"Firmware: {doc.machine.firmware}")
     out.append("")
     if doc.experiments:
-        out += ["## Experiments", "", "| Id | Kind | Outcome | Sample period | Ceiling | Samples |", "|---|---|---|---|---|---|"]
+        out += [
+            "## Experiments",
+            "",
+            "| Id | Kind | Outcome | Sample period | Ceiling | Samples |",
+            "|---|---|---|---|---|---|",
+        ]
         for e in doc.experiments:
-            n = len(e.samples.t) if e.samples else (f"job `{e.job}`" if e.job else f"{len(e.lines)} lines")
+            n = (
+                len(e.samples.t)
+                if e.samples
+                else (f"job `{e.job}`" if e.job else f"{len(e.lines)} lines")
+            )
             ceiling = f"{e.ceiling_c:g} °C" if e.ceiling_c is not None else "—"
             outcome = e.outcome + (f": {e.reason}" if e.reason else "")
-            out.append(f"| `{e.id}` | {e.kind} | {outcome} | {e.sample_period_s:g} s | {ceiling} | {n} |")
+            out.append(
+                f"| `{e.id}` | {e.kind} | {outcome} | {e.sample_period_s:g} s | {ceiling} | {n} |"
+            )
         out.append("")
     for g in doc.groups:
-        out += [f"## {g.title}", "", "| Figure | Value | Basis | From | Note |", "|---|---|---|---|---|"]
+        out += [
+            f"## {g.title}",
+            "",
+            "| Figure | Value | Basis | From | Note |",
+            "|---|---|---|---|---|",
+        ]
         for f in g.figures:
-            out.append(f"| {f.label} (`{g.id}.{f.key}`) | {format_value(f)} | {f.basis} | `{f.source}` | {f.note} |")
+            out.append(
+                f"| {f.label} (`{g.id}.{f.key}`) | {format_value(f)} | {f.basis} | `{f.source}` | {f.note} |"
+            )
         out.append("")
     if doc.frequency:
-        out += ["## Frequency response", "", "| ω | Magnitude | Phase | Coherence | Trust |", "|---|---|---|---|---|"]
+        out += [
+            "## Frequency response",
+            "",
+            "| ω | Magnitude | Phase | Coherence | Trust |",
+            "|---|---|---|---|---|",
+        ]
         for p in doc.frequency:
             out.append(
                 f"| {p.frequency:.4g} rad/s | {p.magnitude:.4g} | {p.phase_deg:.1f}° | {p.coherence:.2f} | {p.trust}: {p.why} |"
@@ -524,7 +580,12 @@ def build(
     s = experiment.samples
     dt = experiment.sample_period_s
     p = experiment.parameters
-    if s is not None and len(s.t) >= 8 and all(v is not None for v in s.power) and experiment.kind != "autotune":
+    if (
+        s is not None
+        and len(s.t) >= 8
+        and all(v is not None for v in s.power)
+        and experiment.kind != "autotune"
+    ):
         _, u = cl.resample(s.t, [float(v) for v in s.power], dt)
         _, y = cl.resample(s.t, s.actual, dt)
         try:
@@ -538,7 +599,9 @@ def build(
             period = float(p["period_s"])
             skip = int(round((float(p.get("settle_s", 0)) + period) / dt))
             try:
-                points = cl.frequency_response(u, y, dt, period, (1, 3, 5, 7), reference=r, skip=skip)
+                points = cl.frequency_response(
+                    u, y, dt, period, (1, 3, 5, 7), reference=r, skip=skip
+                )
             except ValueError:
                 points = []
             doc.frequency = [
@@ -559,16 +622,24 @@ def build(
     designed = None
     if autotune and {"kp", "ki", "kd"} <= set(autotune):
         designed = Gains(
-            kp=autotune["kp"], ki=autotune["ki"], kd=autotune["kd"], basis="identified",
-            source=experiment.id, rule="firmware_autotune",
+            kp=autotune["kp"],
+            ki=autotune["ki"],
+            kd=autotune["kd"],
+            basis="identified",
+            source=experiment.id,
+            rule="firmware_autotune",
             parameters={k: v for k, v in autotune.items() if k in ("ku", "tu")},
         )
     elif rule and doc.plant is not None:
         # For the board's PID, whose sample time is the board's and not known here: the
         # gains carry none, and the margins are of the continuous controller, as the
         # board's own gains' are.
-        d = cl.design(rule, plant=doc.plant.plant(), kind=kind, dt=dt, closed_loop_time=closed_loop_time)
-        designed = gains_of(d.pid, "computed", "plant", rule=rule, closed_loop_time=closed_loop_time)
+        d = cl.design(
+            rule, plant=doc.plant.plant(), kind=kind, dt=dt, closed_loop_time=closed_loop_time
+        )
+        designed = gains_of(
+            d.pid, "computed", "plant", rule=rule, closed_loop_time=closed_loop_time
+        )
         designed.dt = None
     doc.controller = Controller(designed=designed, on_machine=on_machine)
     step_time = float(p["settle_s"]) if experiment.kind == "step" and "settle_s" in p else None
@@ -584,6 +655,7 @@ POWER_UNIT = "the board's @: figure, taken as 0 to 255 (assumed)"
 def samples_from_columns(rows: Sequence[Dict[str, str]]) -> Samples:
     """Samples from rows with the columns ``t``, ``target``, ``actual`` and ``power`` (a CSV
     as ``csv.DictReader`` reads it); an empty power is null."""
+
     def num(v: Optional[str]) -> Optional[float]:
         return None if v is None or v.strip() == "" else float(v)
 
@@ -595,4 +667,6 @@ def samples_from_columns(rows: Sequence[Dict[str, str]]) -> Samples:
             power=[num(r.get("power")) for r in rows],
         )
     except KeyError as exc:
-        raise ValueError(f"a recorded loop has the columns t, target, actual, power: no {exc}") from exc
+        raise ValueError(
+            f"a recorded loop has the columns t, target, actual, power: no {exc}"
+        ) from exc

@@ -1695,7 +1695,7 @@ def normalise_control(command: str) -> str:
         if cmd.startswith("M106") and m.group(1) and int(m.group(1)) > 255:
             raise OutOfBounds(f"fan speed above 255: {command!r}")
         if cmd.startswith(("M301", "M304")):
-            for name, figure in zip("PID", m.groups()):
+            for name, figure in zip("PID", m.groups(), strict=True):
                 if not GAIN_FIGURE.match(figure):
                     raise ValueError(f"{name} is a plain decimal of four places at most: {command!r}")
                 if float(figure) > GAIN_MAX[name]:

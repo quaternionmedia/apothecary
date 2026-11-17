@@ -69,7 +69,9 @@ class TestPlants:
         g = p.response(1 / 60)
         assert abs(g) == pytest.approx(2 / math.sqrt(2))
         assert math.degrees(p.phase(1 / 60)) == pytest.approx(-45 - math.degrees(8 / 60))
-        assert _wrap(math.degrees(cmath.phase(g))) == pytest.approx(_wrap(math.degrees(p.phase(1 / 60))))
+        assert _wrap(math.degrees(cmath.phase(g))) == pytest.approx(
+            _wrap(math.degrees(p.phase(1 / 60)))
+        )
 
     @pytest.mark.parametrize(
         "plant, h",
@@ -184,7 +186,9 @@ class TestMargins:
 
     def test_the_sensitivity_peak_is_the_densest_grid_s(self):
         m = margins(self._integrator, None, 1e-3, 1e2)
-        dense = max(abs(1 / (1 + self._integrator(1e-3 * 1e5 ** (i / 200000)))) for i in range(200001))
+        dense = max(
+            abs(1 / (1 + self._integrator(1e-3 * 1e5 ** (i / 200000)))) for i in range(200001)
+        )
         assert m.ms == pytest.approx(dense, rel=1e-6)
 
     def test_simc_with_its_default_closed_loop_time_is_its_published_loop(self):
@@ -210,7 +214,15 @@ class TestMargins:
 
     def test_bode_curves_cover_the_span(self):
         curves = bode(Loop(HEATER, PID(kp=1.0, ki=0.02, dt=1.0)), n=50)
-        assert set(curves) == {"w", "plant_mag", "plant_phase", "loop_mag", "loop_phase", "s_mag", "t_mag"}
+        assert set(curves) == {
+            "w",
+            "plant_mag",
+            "plant_phase",
+            "loop_mag",
+            "loop_phase",
+            "s_mag",
+            "t_mag",
+        }
         assert all(len(v) == 50 for v in curves.values())
         assert curves["w"][-1] < math.pi  # half the sampling rate, at one sample a second
 
@@ -231,10 +243,14 @@ class TestIdentification:
         y = [HEATER.step(s) for s in t]
         for method in (two_point, areas):
             p = method(t, y, 1.0).plant
-            assert (p.gain, p.time_constant, p.dead_time) == pytest.approx((2.0, 60.0, 8.0), rel=2e-3)
+            assert (p.gain, p.time_constant, p.dead_time) == pytest.approx(
+                (2.0, 60.0, 8.0), rel=2e-3
+            )
 
     @pytest.mark.parametrize(
-        "method, tau_tol, theta_tol", [(two_point, 0.05, 1.5), (areas, 0.02, 0.6)], ids=["two-point", "areas"]
+        "method, tau_tol, theta_tol",
+        [(two_point, 0.05, 1.5), (areas, 0.02, 0.6)],
+        ids=["two-point", "areas"],
     )
     def test_one_sample_a_second_with_noise_is_recovered_within_a_stated_tolerance(
         self, method, tau_tol, theta_tol
@@ -270,8 +286,14 @@ class TestIdentification:
         pid = design("simc", plant=HEATER, kind="pi", dt=0.1).pid
         for seed in range(10):
             trace = closed_loop(
-                HEATER, pid, lambda s: 200.0 if s < 60 else 205.0, 900,
-                ambient=25.0, sample=1.0, noise=0.05, seed=seed,
+                HEATER,
+                pid,
+                lambda s: 200.0 if s < 60 else 205.0,
+                900,
+                ambient=25.0,
+                sample=1.0,
+                noise=0.05,
+                seed=seed,
             )
             p = fit_fopdt(trace.u, trace.y, 1.0).plant
             assert p.gain == pytest.approx(2.0, rel=0.1)
@@ -320,8 +342,16 @@ class TestTheRelay:
         25 % of what the relation says -- the first harmonic, a second's late switching
         and the noise between them."""
         trace = relay_run(
-            HEATER, setpoint=0.0, bias=0.0, amplitude=50.0, duration=1800, hysteresis=1.0,
-            h=0.05, decide_every=1.0, noise=0.2, seed=7,
+            HEATER,
+            setpoint=0.0,
+            bias=0.0,
+            amplitude=50.0,
+            duration=1800,
+            hysteresis=1.0,
+            h=0.05,
+            decide_every=1.0,
+            noise=0.2,
+            seed=7,
         )
         found = oscillation(trace.t, trace.y, 0.0, last=5)
         point = relay_point(50.0, found.amplitude, found.period, hysteresis=1.0)
@@ -378,7 +408,9 @@ class TestFrequencyResponse:
 
     def test_one_period_says_nothing_of_its_coherence_and_nyquist_is_the_edge(self):
         tr = self._trace(0.1, periods=2)
-        points = frequency_response(tr.u, tr.y, 1.0, self.P, (1, 3, 60, 61), reference=tr.r, skip=120)
+        points = frequency_response(
+            tr.u, tr.y, 1.0, self.P, (1, 3, 60, 61), reference=tr.r, skip=120
+        )
         assert [q.trust for q in points] == ["unknown", "unknown"]  # 60 and 61: at or past Nyquist
         with pytest.raises(ValueError, match="whole number of samples"):
             frequency_response(tr.u, tr.y, 1.0, 120.5)
@@ -485,26 +517,37 @@ class TestStepMeasures:
         assert m.rise_time == pytest.approx(tau * math.log(9), abs=2 * dt)
         assert m.settling_time == pytest.approx(tau * math.log(50), abs=2 * dt)
         assert m.overshoot == 0 and m.peak_time is None
-        assert m.iae == pytest.approx(tau, rel=1e-4) and m.steady_error == pytest.approx(0, abs=1e-6)
+        assert m.iae == pytest.approx(tau, rel=1e-4) and m.steady_error == pytest.approx(
+            0, abs=1e-6
+        )
 
     def test_a_second_order_step_overshoots_by_its_damping(self):
         zeta, wn, dt = 0.3, 0.5, 0.01
         wd = wn * math.sqrt(1 - zeta**2)
         t = [i * dt for i in range(20001)]
         y = [
-            1 - math.exp(-zeta * wn * s) * (math.cos(wd * s) + zeta / math.sqrt(1 - zeta**2) * math.sin(wd * s))
+            1
+            - math.exp(-zeta * wn * s)
+            * (math.cos(wd * s) + zeta / math.sqrt(1 - zeta**2) * math.sin(wd * s))
             for s in t
         ]
         m = step_measures(t, y, tail=0.05)
-        assert m.overshoot == pytest.approx(math.exp(-math.pi * zeta / math.sqrt(1 - zeta**2)), abs=1e-4)
+        assert m.overshoot == pytest.approx(
+            math.exp(-math.pi * zeta / math.sqrt(1 - zeta**2)), abs=1e-4
+        )
         assert m.peak_time == pytest.approx(math.pi / wd, abs=dt)
 
     def test_a_proportional_loop_leaves_its_steady_error(self):
         """P alone round a plant of gain 2 with kp 4: the error settles at ``1/(1 + 8)`` of
         the step."""
         trace = closed_loop(
-            FOPDT(2.0, 5.0), PID(kp=4.0, dt=0.01), lambda s: 0.0 if s < 1 else 9.0, 60,
-            low=-1e6, high=1e6, settled=False,
+            FOPDT(2.0, 5.0),
+            PID(kp=4.0, dt=0.01),
+            lambda s: 0.0 if s < 1 else 9.0,
+            60,
+            low=-1e6,
+            high=1e6,
+            settled=False,
         )
         m = step_measures(trace.t, trace.y, step_time=1.0, setpoint=trace.r)
         assert m.steady_error == pytest.approx(1.0, rel=1e-3)
