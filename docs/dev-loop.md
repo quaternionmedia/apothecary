@@ -56,16 +56,21 @@ Each worktree has its own `.venv`; run `uv sync` in it once.
 ## Testing
 
 ```bash
-uv run apothecary test changed       # the loop, before each commit: the walkthrough, the unit groups and browser areas the change reaches
+uv run apothecary test changed       # the loop, before each commit: the walkthrough, the unit groups and browser areas the change reaches, less what is unchanged since it passed
 uv run apothecary test group NAME    # one unit group (tests/groups.py); no name lists them
 uv run apothecary test run           # the ordinary command: the unit tests and the walkthrough
 uv run apothecary test all           # before a merge, once, on the stack's head: every browser test too
 uv run ruff check apothecary tests   # kept clean; format only the files the change touches
 ```
 
-`test changed` is the loop and is never the gate; `--workers N` runs it in parallel.
-The gate is `test all` on the head of the stack being pulled, which carries every
-level beneath it ([CONTRIBUTING.md](../CONTRIBUTING.md#the-loop),
+`test changed` is the loop and is never the gate. It leaves out a unit file, or the
+walkthrough, unchanged since a run in which it passed, and says so on lines of their
+own (`not run: unchanged since green at` a time); `--even-unchanged` runs them too, and
+[CONTRIBUTING.md](../CONTRIBUTING.md#the-loop) says what unchanged is. `test run`,
+`test changed` and `test group` run the unit part on a core fewer than the machine has;
+`--workers 1` runs it in one process. The gate is `test all` on the head of the stack
+being pulled, which carries every level beneath it
+([CONTRIBUTING.md](../CONTRIBUTING.md#the-loop),
 [the integration checklist](integration-checklist.md)). Every test has a time
 bound, here as in CI, so a hang ends with its stack written.
 
