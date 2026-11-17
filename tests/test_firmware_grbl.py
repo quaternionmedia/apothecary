@@ -314,6 +314,7 @@ def test_a_move_takes_its_time_and_a_hold_stops_it_where_it_is(router_links, mon
 
 
 def test_the_simulated_engine_picks_the_router_for_its_ports(monkeypatch):
+    monkeypatch.setenv("APOTHECARY_SIMULATED_SPEED", "0")  # its homing instant, as router_links'
     monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "simulated")
     monkeypatch.setenv("APOTHECARY_SIMULATED_ROUTER", "/dev/ttyFAKE3, /dev/ttyFAKE4")
     assert isinstance(gcode.open_transport("/dev/ttyFAKE3", 115200), grbl.SimulatedRouter)
