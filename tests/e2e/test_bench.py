@@ -226,7 +226,7 @@ def test_the_firmware_address_opens_the_viewer_with_the_bench(page: Page, url: s
         expect(page.locator(gone)).to_have_count(0)
 
 
-@pytest.mark.e2e  # UNRUN when written: a browser test, run with --start-server
+@pytest.mark.e2e
 def test_a_flash_to_a_machines_controller_is_greyed_with_the_reason(page: Page, url: str):
     """A port that answered as a printer is a machine's controller: the server's
     ``can.flash`` refuses it, and the Bench's upload and raw flash buttons are greyed

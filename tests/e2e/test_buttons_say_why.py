@@ -46,7 +46,7 @@ def _as_it_starts(url):
     start_over()
 
 
-@pytest.mark.e2e  # UNRUN when written: a browser test, run with --start-server
+@pytest.mark.e2e
 def test_a_print_greys_the_jog_and_the_reboot_and_never_the_stops(page: Page, url: str):
     with httpx.Client(base_url=url, timeout=15.0) as http:
         kept = http.post(
@@ -87,7 +87,7 @@ def test_a_print_greys_the_jog_and_the_reboot_and_never_the_stops(page: Page, ur
     expect(jog).not_to_have_attribute("title", re.compile(r"^Disabled"))
 
 
-@pytest.mark.e2e  # UNRUN when written: a browser test, run with --start-server
+@pytest.mark.e2e
 def test_send_asks_the_server_whether_a_chosen_file_fits(page: Page, url: str):
     """A file kept for a router, chosen on a printer, greys Send with the server's
     words (GET /firmware/printers/can-start); the page holds no rule of its own."""
