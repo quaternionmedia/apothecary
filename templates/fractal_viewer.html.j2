@@ -1400,6 +1400,7 @@
                 this.cameraAt = new THREE.Vector3();       // the view before the orbit's update:
                 this.cameraTurn = new THREE.Quaternion();  // animate(), no allocation a frame
                 this.cameraAim = new THREE.Vector3();
+                this.cameraDrawn = null;  // the camera's place and turn as the last frame drawn had them
 
                 this.tree = null;            // full recursive tree for the loaded site
                 this.siteName = null;
@@ -2256,7 +2257,13 @@
                 // What moves by itself is drawn whole, and on slow frames one part in
                 // IDLE_SHARE of the time, so the page answers a hand between frames: held
                 // back, neither it nor what it moved in the scene is a frame to draw yet.
-                const held = byItself && slow && !viewMoved && now - this.drawnWhen < IDLE_SHARE * this.frameCost;
+                // A view that stands elsewhere than in the last frame drawn is a view moved,
+                // by whatever moved it between frames (a script, a re-centre set at once): it
+                // is drawn at the next frame, never held back with what moves by itself.
+                const drawnView = this.cameraDrawn;
+                const viewElsewhere = !drawnView || c.position.distanceToSquared(drawnView.position) > ORBIT_EPS
+                    || 8 * (1 - Math.abs(c.quaternion.dot(drawnView.quaternion))) > ORBIT_EPS;
+                const held = byItself && slow && !viewMoved && !viewElsewhere && now - this.drawnWhen < IDLE_SHARE * this.frameCost;
                 if (byItself && !held) this.frameWanted = true;
                 this.sizeCameraHandles();
                 if (this.frameWanted || (!held && this.sceneChanged())) {
@@ -2265,6 +2272,9 @@
                     this.renderer.render(this.scene, this.camera);
                     this.drewLastFrame = true;
                     this.drawnWhen = now;
+                    if (!this.cameraDrawn) this.cameraDrawn = { position: new THREE.Vector3(), quaternion: new THREE.Quaternion() };
+                    this.cameraDrawn.position.copy(c.position);
+                    this.cameraDrawn.quaternion.copy(c.quaternion);
                     this.framesDrawn += 1;
                     this.drawnAt = [this.canvas.width, this.canvas.height];  // the size the last frame was drawn at
                     // Read again after drawing: what the drawing itself settles (the

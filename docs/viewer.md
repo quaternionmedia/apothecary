@@ -344,7 +344,8 @@ and clicks wait behind every one. The page measures what a frame costs it, and w
 that is slow, the frames drawn while the view turns are drawn coarser -- fewer
 pixels, stretched over the canvas -- and the frame the view comes to rest on is
 drawn whole; what moves by itself, a machine's tool while it prints, is drawn whole
-and about one part in three of the time. Where frames are quick none of this
+and about one part in three of the time; a view moved meanwhile is drawn at the
+next frame, not held back with it. Where frames are quick none of this
 happens. A browser draws in software when it has no use of the graphics card: its
 own page for that (`chrome://gpu`, `about:support`) says which.
 
