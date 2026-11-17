@@ -20,6 +20,9 @@
  *                                or overlap, and which of the two it was
  *   nearestWithin(points, x, y, radius)   the vertex nearest a pointer, within a radius
  *   length(mm)                   a length as it is written
+ *   fieldMm(mm)                  a number as a field shows it, to two places at the most
+ *   layLabels(labels, canvas)    where each label of a measurement stands on screen, past
+ *                                its line's far end and clear of the others
  */
 
 export const AXES = ["x", "y", "z"];
