@@ -49,6 +49,7 @@ KIND_OWNER = {
     "broken": APOTHECARY,
     "contested": HUMAN,
     "disagree": APOTHECARY,
+    "misfit": APOTHECARY,
     "drift": APOTHECARY,
     "unbounded": APOTHECARY,
     "unmeasured": MEASUREMENT,
@@ -167,6 +168,57 @@ def _readiness_problems(part, report) -> List[Problem]:
     return problems
 
 
+def _interface_problems(part) -> List[Problem]:
+    """Interfaces whose numbers are a stub's: a fit computed from them is a guess
+    until the real thing is measured (docs/connections.md)."""
+    return [
+        Problem(
+            id=f"unmeasured:{part.name}:interface-{interface.name}",
+            kind="unmeasured",
+            subject=part.name,
+            summary=f"{part.name}.{interface.name}: its numbers are a stub's",
+            owner=KIND_OWNER["unmeasured"],
+            closes_with=(
+                "measure the real thing and set the interface's source to measured, "
+                "or cite the datasheet or standard it is drawn to"
+            ),
+            detail=interface.notes or "",
+        )
+        for interface in part.interfaces()
+        if interface.is_stub
+    ]
+
+
+def _connection_problems(name: str, site) -> List[Problem]:
+    """Connections in a site that do not fit or do not stand where they meet."""
+    from .connections import check
+
+    found: List[Problem] = []
+    stack = [("", site)]
+    while stack:
+        path, node = stack.pop()
+        stack.extend((f"{path}.{c.name}" if path else c.name, c) for c in node.children)
+        if not node.connections:
+            continue
+        report = check(node)
+        wrong = [(j.connection, p) for j in report.joints for p in j.problems]
+        wrong += [(node.name, p) for p in report.problems]
+        for index, (subject, problem) in enumerate(wrong):
+            found.append(
+                Problem(
+                    id=f"misfit:{name}:{path or node.name}:{index}",
+                    kind="misfit",
+                    subject=name,
+                    summary=f"{name}: {subject}",
+                    owner=KIND_OWNER["misfit"],
+                    closes_with="change the connection or the parts, or place the site's "
+                    "parts by their connections (connections.place)",
+                    detail=problem,
+                )
+            )
+    return found
+
+
 def _site_problems(name: str, report) -> List[Problem]:
     """Layouts that do not close."""
     return [
@@ -217,6 +269,7 @@ def problems(build_volume: Optional[tuple] = None) -> List[Problem]:
         try:
             open_here = _contested_problems(part)
             open_here += _readiness_problems(part, assess(part, build_volume=build_volume))
+            open_here += _interface_problems(part)
         except Exception as exc:  # any failure to read a part is the problem to report
             open_here = [_broken(entry.name, exc)]
         found.extend(open_here)
@@ -228,6 +281,7 @@ def problems(build_volume: Optional[tuple] = None) -> List[Problem]:
         try:
             site = sites.store.get(name)
             found.extend(_site_problems(name, sites.store.validator(name)(site)))
+            found.extend(_connection_problems(name, site))
         except Exception as exc:  # any failure to build or check a site is the problem
             found.append(_broken(name, exc))
 

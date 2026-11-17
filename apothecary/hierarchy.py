@@ -33,9 +33,9 @@ depth including a single ``Feature``.
 from __future__ import annotations
 
 import itertools
-from typing import List, Optional
+from typing import Iterable, List, Optional, Tuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .booleans import Difference, Union
 from .core import OpenSCADObject
@@ -67,6 +67,34 @@ def part_stl_path(part_ref: str) -> Optional[str]:
                 return None
             return (stl.relative_to(ROOT) if stl.is_relative_to(ROOT) else stl).as_posix()
     return None
+
+
+class Connection(BaseModel):
+    """Two of a node's children meeting, an interface of each: ``a`` and ``b`` are
+    ``child.interface``, the child by its name among its siblings and the interface
+    by its name on the child's part. A connection is no composition -- neither part
+    is built from the other -- and it moves nothing by itself: ``connections.place``
+    puts the parts where their interfaces meet, ``connections.check`` says whether
+    they do and how they fit (docs/connections.md)."""
+
+    a: str
+    b: str
+
+    @field_validator("a", "b")
+    @classmethod
+    def _child_dot_interface(cls, value: str) -> str:
+        node, _, interface = value.rpartition(".")
+        if not node or not interface:
+            raise ValueError(f"{value!r} is not child.interface")
+        return value
+
+    def ends(self) -> Tuple[Tuple[str, str], Tuple[str, str]]:
+        """((child, interface), (child, interface))."""
+        a, b = self.a.rpartition("."), self.b.rpartition(".")
+        return (a[0], a[2]), (b[0], b[2])
+
+    def __str__(self) -> str:
+        return f"{self.a} ↔ {self.b}"
 
 
 class Assembly(BaseModel):
@@ -119,6 +147,12 @@ class Assembly(BaseModel):
     sitting on the bench. A ``part_ref`` node needs no ``sketch_ref``: its
     part folder's sketch is found automatically (``firmware.bindings``).
 
+    ``connections``, when any, pair an interface of one child with an interface of
+    another (``Connection``): how two parts that stand side by side meet, which
+    ``connections.place`` turns into the children's positions and turns. Children a
+    connection joins are not checked for overlap with each other: one goes into the
+    other by design. Empty everywhere else.
+
     ``build_origin``, on a node with a ``build_volume``, says where that
     volume's (0, 0, 0) is in the node's own frame -- where the nozzle stands
     at home, on the bed's surface. A machine drawn as it is (an Ender 3's
@@ -147,6 +181,7 @@ class Assembly(BaseModel):
     site_ref: Optional[str] = None
     category: Optional[str] = None
     sketch_ref: Optional[str] = None
+    connections: List[Connection] = Field(default_factory=list)
 
     def world_bounds(self) -> Optional[BoundingBox3D]:
         """This node's ``footprint``, offset by ``position`` into the parent's frame.
@@ -327,7 +362,9 @@ def _path(parent: str, name: str) -> str:
     return f"{parent}.{name}" if parent else name
 
 
-def check_no_overlaps(nodes: List["Assembly"], parent: str = "") -> List[LayoutViolation]:
+def check_no_overlaps(
+    nodes: List["Assembly"], parent: str = "", joined: Iterable[Iterable[str]] = ()
+) -> List[LayoutViolation]:
     """Pairwise overlap check between every sibling node that carries a footprint.
 
     A node without a ``footprint`` is skipped, not treated as
@@ -335,13 +372,17 @@ def check_no_overlaps(nodes: List["Assembly"], parent: str = "") -> List[LayoutV
     merely touch (e.g. one resting on another's surface) are not violations;
     see :func:`_penetrates`. ``parent`` is the siblings' parent's dotted path
     from the site ("" for the site's own pieces), so each violation names its
-    pieces by path as well as by name.
+    pieces by path as well as by name. ``joined`` names pairs of siblings a
+    connection joins, which overlap by design: a spigot is in its socket.
     """
     bounded = [(n, n.world_bounds()) for n in nodes]
     bounded = [(n, b) for n, b in bounded if b is not None]
+    pairs = {frozenset(pair) for pair in joined}
 
     violations: List[LayoutViolation] = []
     for (node_a, bounds_a), (node_b, bounds_b) in itertools.combinations(bounded, 2):
+        if frozenset((node_a.name, node_b.name)) in pairs:
+            continue
         if _penetrates(bounds_a, bounds_b):
             violations.append(
                 LayoutViolation(
@@ -357,7 +398,8 @@ def check_no_overlaps(nodes: List["Assembly"], parent: str = "") -> List[LayoutV
 def _validate_tree(assembly: "Assembly", path: str = "") -> LayoutReport:
     """Every level's siblings checked; ``path`` is ``assembly``'s from the root
     being validated ("" for the root itself)."""
-    violations = list(check_no_overlaps(assembly.children, path))
+    joined = [(a[0], b[0]) for a, b in (c.ends() for c in assembly.connections)]
+    violations = list(check_no_overlaps(assembly.children, path, joined))
     for child in assembly.children:
         violations.extend(_validate_tree(child, _path(path, child.name)).violations)
     return LayoutReport(violations=violations)
@@ -515,6 +557,7 @@ class Feature:
 
 __all__ = [
     "Assembly",
+    "Connection",
     "LayoutViolation",
     "LayoutReport",
     "check_no_overlaps",

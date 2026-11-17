@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from apothecary.core import OpenSCADObject
 from apothecary.fittings import WALL, Profile, Section
-from apothecary.models import BoundingBox3D, Color, Vector3D
+from apothecary.models import BoundingBox3D, Color, PrintSettings, Vector3D
 from apothecary.models.interfaces import InterfaceBase
 from apothecary.projects.parts.base import BasePart
 from apothecary.projects.parts.skeleton import ROOT
@@ -169,6 +169,10 @@ def create(metadata_root: Path) -> HoseAdapterPart:
         tags=["dust", "hose", "adapter", "python"],
         readme_path=metadata_root / "parts" / "dust" / "README.md",
         preview_color=Color(r=0.85, g=0.45, b=0.1),
+        # printer_1's nozzle and layers; a wall of five lines.
+        print_settings=PrintSettings(
+            nozzle_diameter=0.4, layer_height=0.2, wall_thickness=WALL, tolerance=0.2
+        ),
     )
 
 
