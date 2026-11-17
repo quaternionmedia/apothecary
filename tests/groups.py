@@ -347,6 +347,7 @@ GROUPS = {
             "test_lighting.py",
             "test_lighting_routes.py",
             "test_menu.py",
+            "test_measure.py",
             "test_menu_routes.py",
             "test_pick_scope.py",
             "test_projector_page.py",

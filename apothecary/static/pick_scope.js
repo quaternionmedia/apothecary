@@ -6,8 +6,11 @@
  *   category:NAME    the pieces of a category (walls among them)
  *   grid             the alignment grid: the floor grid and the machines' build volumes
  *   machine-buttons  the badges standing on a machine in the world
- * The grid and the machine buttons are only ever shown or not: a click never picks
- * either, so they have no selectable tick.
+ *   measure          the measurement layer: dimension lines on the selection, and a click
+ *                    in the world drops a point to measure between rather than selecting
+ * The grid, the machine buttons and the measurement are only ever shown or not: a click
+ * never picks the first two, and the third is a mode, so none has a selectable tick.
+ * Measure is off at first, and, like walls selectable, the session's: never kept.
  *
  * Depth is a separate number: how many levels below the level in view a click reaches
  * and the world draws. 1 is a level's own pieces.
@@ -29,7 +32,8 @@ export const WALL = "category:wall";
 export const GRID = "grid";
 export const MACHINE_BUTTONS = "machine-buttons";
 // Layers a click never picks: only their being shown is the person's to say.
-export const SHOWN_ONLY = new Set([GRID, MACHINE_BUTTONS]);
+export const MEASURE = "measure";
+export const SHOWN_ONLY = new Set([GRID, MACHINE_BUTTONS, MEASURE]);
 
 export const shellLayer = (n) => `shell:${n}`;
 export const categoryLayer = (name) => `category:${name}`;
@@ -59,14 +63,15 @@ export function makePickScope({ storage = null, storageKey = PICK_SCOPE_KEY } = 
         try { return globalThis.localStorage || null; } catch (e) { return null; }
     };
     let depth = 1;
-    const hidden = new Set();              // layers not shown
+    const hidden = new Set([MEASURE]);     // layers not shown
     const unselectable = new Set([WALL]);  // layers the person made a click pass through
     const listeners = new Set();
 
     function keep() {
         const kept = {};
         if (depth !== 1) kept.depth = depth;
-        if (hidden.size) kept.hidden = [...hidden].sort();
+        const away = [...hidden].filter((id) => id !== MEASURE).sort();
+        if (away.length) kept.hidden = away;
         const passed = [...unselectable].filter((id) => id !== WALL).sort();
         if (passed.length) kept.unselectable = passed;
         try {
@@ -85,12 +90,13 @@ export function makePickScope({ storage = null, storageKey = PICK_SCOPE_KEY } = 
     function fromJSON(value) {
         depth = 1;
         hidden.clear();
+        hidden.add(MEASURE);
         unselectable.clear();
         unselectable.add(WALL);
         if (!value || typeof value !== "object") return;
         if (value.depth !== undefined) depth = clampDepth(value.depth);
         const ids = (list) => (Array.isArray(list) ? list.filter((x) => typeof x === "string" && x.length <= 80) : []);
-        for (const id of ids(value.hidden)) hidden.add(id);
+        for (const id of ids(value.hidden)) hidden.add(id);  // measure is off whatever was kept
         for (const id of ids(value.unselectable)) if (!SHOWN_ONLY.has(id)) unselectable.add(id);
     }
 
@@ -144,7 +150,7 @@ export function makePickScope({ storage = null, storageKey = PICK_SCOPE_KEY } = 
         toJSON() {
             return {
                 depth,
-                hidden: [...hidden].sort(),
+                hidden: [...hidden].filter((id) => id !== MEASURE).sort(),
                 unselectable: [...unselectable].filter((id) => id !== WALL).sort(),
             };
         },

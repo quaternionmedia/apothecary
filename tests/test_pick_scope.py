@@ -19,7 +19,7 @@ NODE = shutil.which("node") or str(Path.home() / ".local" / "bin" / "node")
 pytestmark = pytest.mark.skipif(not Path(NODE).exists(), reason="node is not installed")
 
 SCRIPT = """
-import { makePickScope, WALL, GRID, MACHINE_BUTTONS, layersOf } from "%(module)s";
+import { makePickScope, WALL, GRID, MACHINE_BUTTONS, MEASURE, layersOf } from "%(module)s";
 const store = () => { const m = new Map(); return {
     getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k), m }; };
 const out = {};
@@ -43,6 +43,14 @@ s.setShown("shell:3", false);
 s.setSelectable("shell:3", true);
 out.tickedShows = { shown: s.isShown("shell:3"), selectable: s.isSelectable("shell:3") };
 out.shownOnly = { refused: s.setSelectable(GRID, true), selectable: s.isSelectable(GRID) };
+// Measure is a shown-only layer, off at first, and never kept.
+const mm = makePickScope({ storage: store() });
+out.measure = { first: mm.isShown(MEASURE), refused: mm.setSelectable(MEASURE, true), json: mm.toJSON() };
+mm.setShown(MEASURE, true);
+out.measure.on = mm.isShown(MEASURE); out.measure.keptOn = mm.toJSON();
+mm.reset(); out.measure.reset = mm.isShown(MEASURE);
+const kept2 = store(); const m2 = makePickScope({ storage: kept2 }); m2.setShown(MEASURE, true); m2.setDepth(2);
+out.measure.after = makePickScope({ storage: kept2 }).isShown(MEASURE);
 // Depth is clamped to a whole number of at least one.
 out.depths = [s.setDepth(0), s.depth(), s.setDepth(2.9), s.depth(), s.setDepth(999), s.depth(), s.setDepth("x"), s.depth()];
 // Told once of a change, and not of a no-change.
@@ -129,3 +137,15 @@ def test_storage_that_is_damaged_or_refused_leaves_the_defaults(result):
         "d": 2,
     }
     assert result["layers"] == ["shell:2", "category:part"]
+
+
+def test_measure_is_off_at_first_shown_only_and_never_kept(result):
+    assert result["measure"] == {
+        "first": False,
+        "refused": False,
+        "json": {"depth": 1, "hidden": [], "unselectable": []},
+        "on": True,
+        "keptOn": {"depth": 1, "hidden": [], "unselectable": []},
+        "reset": False,
+        "after": False,
+    }
