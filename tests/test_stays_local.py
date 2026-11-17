@@ -186,27 +186,77 @@ def test_importing_the_geometry_library_leaves_the_network_as_it_found_it():
     assert run.stdout.strip() == "left as found"
 
 
+# Each install point imported in an interpreter that has imported apothecary and nothing
+# else of the package: a fresh one, or, where there is fork, a copy of one forked for each
+# point, which is the same interpreter at the same moment without its start and the
+# package's import paid again. Each says what its import did, in a line of its own.
 GUARDS_THE_PROCESS = """
-import importlib, socket, sys
+import importlib, json, os, socket, sys
 import apothecary
 from apothecary import stays_local
 assert not stays_local.guard_installed(), "import apothecary installed the guard"
-before = id(socket.socket)  # an id: the guard rebinds every name for the class itself
-importlib.import_module(sys.argv[1])
-assert stays_local.guard_installed(), f"importing {sys.argv[1]} did not install the guard"
-assert id(socket.socket) != before
-try:
-    socket.create_connection(("203.0.113.1", 80), timeout=1)
-except stays_local.LeftTheMachine:
-    print("guarded")
+
+
+def guarded(point):
+    before = id(socket.socket)  # an id: the guard rebinds every name for the class itself
+    importlib.import_module(point)
+    if not stays_local.guard_installed():
+        return f"importing {point} did not install the guard"
+    if id(socket.socket) == before:
+        return f"importing {point} left socket.socket as it was"
+    try:
+        socket.create_connection(("203.0.113.1", 80), timeout=1)
+    except stays_local.LeftTheMachine:
+        return "guarded"
+    return "connected"
+
+
+def forked(point):
+    read, write = os.pipe()
+    child = os.fork()
+    if child == 0:
+        os.close(read)
+        try:
+            said = guarded(point)
+        except BaseException as failed:
+            said = f"{type(failed).__name__}: {failed}"
+        os.write(write, said.encode())
+        os._exit(0)
+    os.close(write)
+    with os.fdopen(read, "rb") as heard:
+        said = heard.read().decode()
+    os.waitpid(child, 0)
+    return said
+
+
+if hasattr(os, "fork"):
+    for point in sys.argv[1:]:
+        print(json.dumps([point, forked(point)]))
+else:
+    print(json.dumps([sys.argv[1], guarded(sys.argv[1])]))
 """
 
 
+@pytest.fixture(scope="module")
+def guards():
+    """What importing each install point did to a process of its own."""
+    import json
+
+    runs = (
+        [_fresh(GUARDS_THE_PROCESS, *INSTALL_POINTS)]
+        if hasattr(os, "fork")
+        else [_fresh(GUARDS_THE_PROCESS, point) for point in INSTALL_POINTS]
+    )
+    said = {}
+    for run in runs:
+        assert run.returncode == 0, run.stderr
+        said.update(json.loads(line) for line in run.stdout.splitlines())
+    return said
+
+
 @pytest.mark.parametrize("point", list(INSTALL_POINTS))
-def test_importing_an_install_point_puts_the_guard_on_the_process(point):
-    run = _fresh(GUARDS_THE_PROCESS, point)
-    assert run.returncode == 0, run.stderr
-    assert run.stdout.strip() == "guarded"
+def test_importing_an_install_point_puts_the_guard_on_the_process(guards, point):
+    assert guards[point] == "guarded"
 
 
 def test_a_test_session_is_under_the_guard_before_its_first_test_is_collected():
