@@ -127,8 +127,18 @@ def colour_of(layer: str) -> str:
     raise KeyError(f"{layer!r} names no layer: shell:N, category:NAME, {', '.join(WORLD)}")
 
 
+# A node is read for what it holds: a site's tree is Assemblies, and anything else handed
+# in for one (a stand-in a test builds) gives what it has and nothing it lacks.
 def _composed(node) -> list:
-    return [*node.children, *node.additions, *node.subtractions]
+    return [
+        *getattr(node, "children", ()),
+        *getattr(node, "additions", ()),
+        *getattr(node, "subtractions", ()),
+    ]
+
+
+def _field(node, name: str):
+    return getattr(node, name, None)
 
 
 def layers_in(site) -> Tuple[List[int], List[str]]:
@@ -140,17 +150,18 @@ def layers_in(site) -> Tuple[List[int], List[str]]:
     categories: Set[str] = set()
 
     def visit(node, inherited: Optional[str]) -> None:
-        category = node.category if node.category is not None else inherited
-        if node.shell is not None:
+        own = _field(node, "category")
+        category = own if own is not None else inherited
+        if _field(node, "shell") is not None:
             shells.add(node.shell)
         if category:
             categories.add(category)
-        if node.site_ref is None:
+        if _field(node, "site_ref") is None:
             for child in _composed(node):
                 visit(child, category)
 
     for child in _composed(site):
-        visit(child, site.category)
+        visit(child, _field(site, "category"))
     return sorted(shells), _chip_order(categories)
 
 
@@ -165,8 +176,8 @@ def _drawn_small(site) -> Set[str]:
     found: Set[str] = set()
 
     def visit(node) -> None:
-        if node.site_ref is not None:
-            found.update(box.category for box in node.children if box.category)
+        if _field(node, "site_ref") is not None:
+            found.update(box.category for box in _composed(node) if _field(box, "category"))
             return
         for child in _composed(node):
             visit(child)
