@@ -138,18 +138,24 @@ class ScriptedTransport:
 def held_until_asked_for(gate, held, longest=5.0):
     """Hold a line on the wire -- a transport's ``write`` that has not returned -- until
     ``gate`` opens, until anything else asks for the link, or ``longest`` seconds at
-    most. Asking is an exchange waiting its turn for the link, or anything the comms log
-    gains while the line is held: a line written ahead of the exchange (``ahead``, the
-    stop) logs itself before it waits to be written. So a route that needs the wire gets
-    it as soon as it asks, as it would once the hold ran out, and one that refuses first
-    finds the line still held. ``held["link"]`` is the link the line is on, set by whoever
-    started what writes it."""
-    end, mark = time.monotonic() + longest, None
+    most. Asking is an exchange waiting its turn for the link, or a line the comms log
+    says was sent since the hand-over: a line written ahead of the exchange (``ahead``,
+    the stop) logs itself before it waits to be written. The print's own entries (its
+    start, said as it begins) are no line sent, and ask nothing. So a route that needs
+    the wire gets it as soon as it asks, as it would once the hold ran out, and one that
+    refuses first finds the line still held. Whoever started what writes the line hands it over with
+    ``hand_over``: from then on, asking lets it go."""
+    end = time.monotonic() + longest
     while not gate.wait(0.005) and time.monotonic() < end:
-        link = held.get("link")
+        link, mark = held.get("link"), held.get("mark")
         if link is None:
             continue
-        if mark is None:
-            mark = link.log.next_index
-        if link._turn.locked() or link.waiters or link.log.next_index > mark:
+        sent = (e["kind"] == "tx" for e in link.log.since(mark)["entries"])
+        if link._turn.locked() or link.waiters or any(sent):
             return
+
+
+def hand_over(held, link):
+    """The link a held line is on, and what its comms log held when it was handed over:
+    a line sent after that is someone asking for the link."""
+    held.update(mark=link.log.next_index, link=link)

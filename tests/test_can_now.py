@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from firmware_helpers import PRINTING, ScriptedTransport, held_until_asked_for
+from firmware_helpers import PRINTING, ScriptedTransport, hand_over, held_until_asked_for
 
 from apothecary.api import app
 from apothecary.firmware import api as firmware_api
@@ -133,7 +133,7 @@ class Rig:
             self.keep_a_file("G1 X1\nG1 X2\nG1 X3\n")
             self.arm()
             self.job = devices.start_print(PORT, self.file_id)
-            held["link"] = self.links.get(PORT)
+            hand_over(held, self.links.get(PORT))
             time.sleep(0.2)
 
     def unproved(self):

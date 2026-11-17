@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 import pytest
 from click.testing import CliRunner
 from fastapi.testclient import TestClient
-from firmware_helpers import BOOT, PRINTING, REPLIES, ScriptedTransport, held_until_asked_for
+from firmware_helpers import BOOT, PRINTING, REPLIES, ScriptedTransport
 
 from apothecary import jobs, sites
 from apothecary.api import app
@@ -1887,12 +1887,12 @@ def test_release_reconnect_reset_and_upload_are_refused_mid_print(
 ):
     c = TestClient(app)
     port = "/dev/ttyFAKE1"
-    gate, held = threading.Event(), {}
+    gate = threading.Event()
 
     class HeldTransport(ScriptedTransport):
         def write(self, data):
             if data.decode().strip() == "G1 X2":
-                held_until_asked_for(gate, held)
+                gate.wait(5)
             super().write(data)
 
     scripted_links.factory = HeldTransport
@@ -1923,9 +1923,7 @@ def test_release_reconnect_reset_and_upload_are_refused_mid_print(
         c.post("/firmware/printers/print/resume", json={"port": port}).json()["stage"] == "printing"
     )
     # Cancel while G1 X2 is still unanswered: once the gate opens, the last two
-    # lines can finish the print before a cancel arrives, and that is a 409. The
-    # cancel's M108, written ahead, is the first thing the held line lets go for.
-    held["link"] = scripted_links.get(port)
+    # lines can finish the print before a cancel arrives, and that is a 409.
     r = c.post("/firmware/printers/print/cancel", json={"port": port})
     assert r.json()["stage"] == "cancelling"
     gate.set()
