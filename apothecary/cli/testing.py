@@ -36,6 +36,22 @@ def _pytest_argv(*args: str) -> list[str]:
 # waiting on the crashed file forever.
 FILES_WHOLE = ["--dist", "loadfile", "--max-worker-restart", "0"]
 
+# The unit part's workers when --workers names none (`test run`, `test changed`, `test
+# group`): one fewer than the machine's cores, at least one and at most
+# UNIT_WORKERS_AT_MOST. A core is left to what shares the machine -- a browser run, a
+# server's own test loop -- and a browser part keeps one worker unless --workers names more.
+UNIT_WORKERS_AT_MOST = 4
+A_CORE_LEFT = "a core fewer than the machine has, 1 to 4"
+
+
+def unit_workers(named: int | None = None, cores: int | None = None) -> int:
+    """The unit part's workers: ``named``, else one fewer than ``cores`` (this
+    machine's), at least one and at most UNIT_WORKERS_AT_MOST."""
+    if named is not None:
+        return named
+    cores = cores if cores is not None else (os.cpu_count() or 1)
+    return max(1, min(UNIT_WORKERS_AT_MOST, cores - 1))
+
 
 def unit_command(
     slow: bool = False,
@@ -148,6 +164,10 @@ HELP = """Run the test suite, exiting as pytest does.
                         the walkthrough
   uv run pytest         the quick inner loop, browser tests skipped
 
+`test run`, `test changed` and `test group` run the unit part on a core fewer
+than the machine has (pytest-xdist, a file's tests together); --workers 1
+runs it in one process.
+
 The walkthrough's demonstration and every browser test drive Chromium:
 `uv run playwright install chromium` once per machine. CONTRIBUTING.md has the rest.
 """
@@ -173,16 +193,17 @@ def _every_browser_test_is_test_all(ctx, param, value):
 @click.option(
     "--workers",
     type=click.IntRange(min=1),
-    default=1,
-    show_default=True,
-    help="The unit part in parallel, a file's tests together (pytest-xdist).",
+    default=None,
+    show_default=A_CORE_LEFT,
+    help="The unit part on this many workers, a file's tests together (pytest-xdist); "
+    "1 runs it in one process.",
 )
 # Every browser test is `test all`'s; the flag stays, hidden, to say so.
 @click.option(
     "--e2e", is_flag=True, hidden=True, expose_value=False, callback=_every_browser_test_is_test_all
 )
 @click.argument("pytest_args", nargs=-1, type=click.UNPROCESSED)
-def test_run(slow: bool, workers: int, pytest_args: tuple[str, ...]):
+def test_run(slow: bool, workers: int | None, pytest_args: tuple[str, ...]):
     """The ordinary command: the unit tests and the walkthrough, whose demonstration
     drives Chromium in a pytest of its own; further arguments go to pytest.
 
@@ -190,7 +211,8 @@ def test_run(slow: bool, workers: int, pytest_args: tuple[str, ...]):
     selects no test is not a failure when the other ran some.
     """
     kept = Kept.before(pytest_args)
-    codes = [_pytest(argv + list(pytest_args)) for argv in run_commands(slow=slow, workers=workers)]
+    commands = run_commands(slow=slow, workers=unit_workers(workers))
+    codes = [_pytest(argv + list(pytest_args)) for argv in commands]
     _say(kept.keep([WALKTHROUGH, *unit_files()], codes[0], pytest_args))
     raise SystemExit(_first_failure(codes))
 
@@ -457,9 +479,9 @@ def unchanged_said(
 @click.option(
     "--workers",
     type=click.IntRange(min=1),
-    default=1,
-    show_default=True,
-    help="Both parts in parallel, a file's tests together (pytest-xdist).",
+    default=None,
+    show_default=f"the unit part on {A_CORE_LEFT}, the browser part on one",
+    help="Both parts on this many workers, a file's tests together (pytest-xdist).",
 )
 @click.option(
     "--even-unchanged",
@@ -470,7 +492,7 @@ def unchanged_said(
 def test_changed(
     since: str | None,
     only_list: bool,
-    workers: int,
+    workers: int | None,
     even_unchanged: bool,
     pytest_args: tuple[str, ...],
 ):
@@ -518,11 +540,14 @@ def test_changed(
     codes, ran = [], []
     if run or walked:
         whole = every and not left  # the ordinary argv, which names no file
-        unit = unit_command(files=None if whole else run, workers=workers, walkthrough=walked)
+        unit = unit_command(
+            files=None if whole else run, workers=unit_workers(workers), walkthrough=walked
+        )
         codes.append(_pytest(unit + list(pytest_args)))
         ran = ([WALKTHROUGH] if walked else []) + (files if whole else run)
     if browser:
-        codes.append(_pytest(browser_files_command(browser, workers=workers) + list(pytest_args)))
+        argv = browser_files_command(browser, workers=workers or 1)
+        codes.append(_pytest(argv + list(pytest_args)))
     if ran:
         said.append(kept.keep(ran, codes[0], pytest_args))
     click.echo("\n".join(line for line in said if line))
@@ -534,11 +559,12 @@ def test_changed(
 @click.option(
     "--workers",
     type=click.IntRange(min=1),
-    default=1,
-    show_default=True,
-    help="Unit files in parallel, a file's tests together (pytest-xdist).",
+    default=None,
+    show_default=A_CORE_LEFT,
+    help="Unit files on this many workers, a file's tests together (pytest-xdist); 1 runs "
+    "them in one process.",
 )
-def test_group(names: tuple[str, ...], workers: int):
+def test_group(names: tuple[str, ...], workers: int | None):
     """The walkthrough and the unit files of the groups NAMES (tests/groups.py): one part
     of the package at a time, as quick as that part. Without a name, the groups, each
     with what it holds. Further pytest arguments follow `--`."""
@@ -555,6 +581,6 @@ def test_group(names: tuple[str, ...], workers: int):
     except KeyError as unknown:
         raise click.ClickException(unknown.args[0]) from None
     kept = Kept.before(pytest_args)
-    code = _pytest(unit_command(files=files, workers=workers) + pytest_args)
+    code = _pytest(unit_command(files=files, workers=unit_workers(workers)) + pytest_args)
     _say(kept.keep([WALKTHROUGH, *files], code, pytest_args))
     raise SystemExit(code)

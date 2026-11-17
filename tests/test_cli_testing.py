@@ -63,7 +63,8 @@ def test_run_exits_with_the_first_failure(pytest_exits, unit, browser, code):
     ran = pytest_exits(unit, browser)
     result = CliRunner().invoke(cli, ["test", "run", "-x"])
     assert result.exit_code == code
-    assert ran == [argv + ["-x"] for argv in testing.run_commands()]
+    every = testing.run_commands(workers=testing.unit_workers())
+    assert ran == [argv + ["-x"] for argv in every]
 
 
 @pytest.mark.parametrize(
@@ -118,6 +119,7 @@ def test_help_says_what_run_and_all_each_do():
     assert "every browser test" in said
     assert "uv run playwright install chromium" in said
     assert "not run, unchanged since green, and --even-unchanged runs it too" in said
+    assert "on a core fewer than the machine has" in said and "--workers 1" in said
 
 
 @pytest.mark.parametrize("name", ["setup-e2e", "validate-e2e", "run-e2e"])
@@ -377,6 +379,42 @@ def test_group_lists_the_groups_and_runs_the_named_ones(pytest_exits):
     refused = CliRunner().invoke(cli, ["test", "group", "nowhere"])
     assert refused.exit_code != 0 and "no group named nowhere" in refused.output
     assert len(ran) == 1
+
+
+@pytest.mark.parametrize(
+    "cores, workers", [(1, 1), (2, 1), (3, 2), (4, 3), (5, 4), (16, 4), (None, None)]
+)
+def test_the_unit_part_runs_on_a_core_fewer_than_the_machine_has(cores, workers):
+    """One core is left to what shares the machine, a browser run or a server's own
+    test loop; a worker is not started for no gain past four."""
+    import os
+
+    assert testing.unit_workers(cores=cores) == (workers or max(1, min(4, os.cpu_count() - 1)))
+    assert testing.unit_workers(1, cores=cores) == 1 and testing.unit_workers(6, cores=4) == 6
+
+
+def test_the_ordinary_commands_run_the_unit_part_on_those_workers_and_the_browser_on_one(
+    pytest_exits, monkeypatch
+):
+    monkeypatch.setattr(testing, "unit_workers", lambda named=None, cores=None: named or 3)
+    monkeypatch.setattr(testing, "changed_paths", lambda since: GCODE)
+    commands = (
+        (["run"], (0, 0)),
+        (["changed", "--even-unchanged"], (0, 0)),
+        (["group", "cli"], (0,)),
+    )
+    for command, codes in commands:
+        ran = pytest_exits(*codes)
+        assert CliRunner().invoke(cli, ["test", *command]).exit_code == 0
+        assert _args(ran[0])[-6:] == ["-n", "3", *testing.FILES_WHOLE], command
+        assert all("-n" not in argv for argv in ran[1:]), command
+    for command, codes in commands:
+        ran = pytest_exits(*codes)
+        CliRunner().invoke(cli, ["test", *command, "--workers", "1"])
+        assert len(ran) == len(codes) and all("-n" not in argv for argv in ran), command
+    ran = pytest_exits(0, 0)
+    CliRunner().invoke(cli, ["test", "changed", "--workers", "2"])
+    assert all(argv[argv.index("-n") + 1] == "2" for argv in ran)  # both parts, when named
 
 
 def test_run_takes_workers_for_its_unit_part(pytest_exits):
