@@ -777,7 +777,8 @@ SCAD with it.
 measured as it rests, at its piece, so a part grown is drawn where it grew,
 standing on what it stood on. Beside the envelope the part declares is what its
 drawn STL measures; when the two differ the line turns amber and says by how
-much, and a part reaching below the floor says how far. Selected's Footprint is
+much, and a part reaching below the floor says how far (in the universe, which has
+no floor, below its own ground, its own z 0). Selected's Footprint is
 what the variant drawn measures, the declared one beside it. The readiness
 checklist is of the variant drawn, its fit judged by what it measures the way up
 it prints, against the build volume of the printer pinned in the site, and

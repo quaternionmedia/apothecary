@@ -5995,12 +5995,18 @@
 
             // How far under the floor (z 0) the part being edited reaches as drawn: its
             // measured bounds placed where it stands, else its declared ones; null when
-            // it does not.
+            // it does not. The universe has no floor: a part on its sphere stands on its
+            // own ground, its own z 0, and what reaches under that is read in its own frame.
             belowTheFloor(target) {
                 if (!target?.part) return null;
                 const key = this.editedKey(target.part);
                 const node = key && this.renderNodeByKey[key];
                 if (!node) return null;
+                if (this.siteName === UNIVERSE) {
+                    const record = this.variantByPart[target.part] ? this.variantRecords[target.part] : null;
+                    const low = record?.measured?.min_point ? record.measured.min_point.z : node.footprint?.min[2];
+                    return low !== undefined && low < -DIFFERS_MM ? -low : null;
+                }
                 const box = this.drawnWorldBox(node) || envelopeBounds(node);
                 if (!box) return null;
                 return box.min[2] < -DIFFERS_MM ? -box.min[2] : null;
