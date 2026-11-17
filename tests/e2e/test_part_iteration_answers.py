@@ -31,7 +31,7 @@ from garage import status as _status
 from playwright.sync_api import Page, expect
 from rings import press as _press
 from slicer_helpers import write_fake_orcaslicer
-from viewer_ready import settled
+from viewer_ready import origin, settled
 
 from apothecary.projects.parts.calibration_cube import DEFAULT as CUBE
 from apothecary.projects.parts.stl_renderer import params_sidecar_path
@@ -425,12 +425,20 @@ def test_two_variants_are_compared_overlaid_and_side_by_side_with_what_differs(
     expect(view.locator(".compare-params")).to_contain_text("size: 16 → its default")
     # a to b: what the part's own lacks of tall-top's SCAD.
     expect(view.locator(".variant-diff pre")).to_contain_text(f"-{TALLER}")
-    meshes = """() => window.fractalViewer.compareMeshes.map((m) => {
-        const box = new m.position.constructor(); m.geometry.computeBoundingBox();
-        return [m.position.x, m.position.y, m.position.z]; })"""
+    # Each compared mesh's own origin corner in the world: the least x, y and z of the
+    # part's own frame, three.js's least x and y and greatest z.
+    corners = """() => window.fractalViewer.compareMeshes.map((m) => {
+        m.geometry.computeBoundingBox();
+        const { min, max } = m.geometry.boundingBox;
+        const at = m.localToWorld(new m.position.constructor(min.x, min.y, max.z));
+        return [at.x, at.y, at.z]; })"""
     page.wait_for_function("() => window.fractalViewer.compareMeshes.length === 2", timeout=30000)
-    overlaid = page.evaluate(meshes)
-    assert overlaid[0][0] == pytest.approx(overlaid[1][0], abs=4)
+    # Overlaid: both grown from the part's own origin corner where it stands, whichever
+    # way the universe's sphere turns it; their middles stand apart by the turned
+    # difference of their halves.
+    overlaid = page.evaluate(corners)
+    assert overlaid[0] == pytest.approx(overlaid[1], abs=0.05)
+    assert overlaid[0] == pytest.approx(origin(page, PART), abs=0.05)
     assert not page.evaluate("() => window.fractalViewer.meshByName['calibration_cube'].visible")
     _both_in_view(page)
     view.locator("select.compare-mode").select_option("side by side")
