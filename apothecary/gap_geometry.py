@@ -353,8 +353,8 @@ def _crossings(polygon: Polygon, theta: float, centre: Point) -> List[float]:
         bx, by = polygon[(i + 1) % n][0] - cx, polygon[(i + 1) % n][1] - cy
         ex, ey = bx - ax, by - ay
         denom = ux * ey - uy * ex
-        if abs(denom) < 1e-15:
-            continue
+        if abs(denom) <= 1e-9 * math.hypot(ex, ey):
+            continue  # along the ray: the edges either side cross it at its ends
         t = (ax * ey - ay * ex) / denom  # along the ray
         s = (ax * uy - ay * ux) / denom  # along the edge
         if t >= 0 and -1e-12 <= s <= 1 + 1e-12:

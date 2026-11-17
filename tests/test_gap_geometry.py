@@ -119,6 +119,30 @@ class TestOneGapAllRound:
         assert spun.kind == UNIFORM and all(g is None for g in spun.gaps)
 
 
+def test_a_ray_along_an_edge_meets_the_boundary_where_that_edge_begins():
+    """A post's flank runs along a ray from the axis; that ray meets the free space's
+    boundary at the post's tip, where the flank begins, and nowhere nearer. The post
+    stands from 208 to 238 degrees, its tip on a circle of 14, in a ring of 34: arcs
+    sampled as a part's SCAD samples them, so the flank's two ends are on the ray only
+    to within rounding."""
+
+    def arc(radius, a0, a1, facets=180):
+        n = max(1, math.ceil(abs(a1 - a0) * facets / 360))
+        return [
+            (
+                radius * math.cos(math.radians(a0 + (a1 - a0) * i / n)),
+                radius * math.sin(math.radians(a0 + (a1 - a0) * i / n)),
+            )
+            for i in range(n + 1)
+        ]
+
+    cavity = arc(14.0, 208, 238) + arc(34.0, 238, 208 + 360)
+    g = radial_gap(cavity, circle(10.0, 360), 360)
+    assert g.gaps[238] == pytest.approx(4.0) and g.gaps[208] == pytest.approx(4.0)
+    assert 4.0 - sagitta(14.0, 180) - 1e-9 <= g.minimum <= 4.0
+    assert g.maximum == pytest.approx(24.0)
+
+
 class TestAnEccentricCircle:
     """A rotor of radius r whose centre stands e from the axis, at angle alpha."""
 
