@@ -6,7 +6,8 @@ It is given in the part's own frame -- its SCAD's, the pose it prints in -- by a
 ``position`` on the part and a ``normal`` pointing out of the part, toward
 whatever meets it. Its ``source`` says where its numbers came from, as a black
 box's does (``models/blackbox.py``): a stub is guessed, measured is measured, a
-standard is cited (``cite``) rather than copied (docs/fitting-a-part.md).
+standard is cited (``cite``) rather than copied (docs/fitting-a-part.md), and
+drawn is the part's own drawing, which apothecary makes it to.
 
 ``fit(a, b)`` answers for two interfaces whether they meet and where, by the rule
 for that pair of types. A spigot and a socket have one (``SPIGOT_SOCKET``); the
@@ -27,7 +28,11 @@ from pydantic import BaseModel, Field, TypeAdapter, field_validator, model_valid
 
 from .vectors import Vector3D
 
-Source = Literal["stub", "measured", "datasheet", "standard"]
+# stub: guessed, until the real thing is measured. measured: measured on the real
+# thing. datasheet: a maker's drawing. standard: a standard, named in cite. drawn:
+# the part's own drawing -- what apothecary makes it to, built from the same
+# numbers as its geometry, and held to its render by parts verify.
+Source = Literal["stub", "measured", "datasheet", "standard", "drawn"]
 
 # Within this, two lengths in millimetres are the same length.
 EPSILON = 1e-6
@@ -53,7 +58,7 @@ class InterfaceBase(BaseModel):
     source: Source = Field(
         "stub",
         description="where its numbers came from: stub (guessed), measured, datasheet, "
-        "standard (then cite says which)",
+        "standard (then cite says which), drawn (the part's own drawing)",
     )
     cite: Optional[str] = Field(None, description="the standard or drawing its numbers are from")
     excludes: List[str] = Field(

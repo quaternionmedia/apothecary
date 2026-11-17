@@ -1,0 +1,55 @@
+{
+  "name": "dust_hose_40",
+  "description": "A stand-in for a smooth 40 mm bore dust hose, rubber or PVC, until it is measured: 100 mm of it, its end a socket that opens 5% when pushed.",
+  "category": "dust",
+  "tags": [
+    "dust",
+    "hose",
+    "stub"
+  ],
+  "preview_color": [
+    0.15,
+    0.15,
+    0.15
+  ],
+  "readme": "../README.md",
+  "source": {
+    "title": "dust_hose_40 from nominal sizes",
+    "author": "Quaternion Media",
+    "license": "MIT",
+    "note": "A stand-in drawn in OpenSCAD from nominal sizes; nothing here is measured yet."
+  },
+  "bounds": {
+    "min": [
+      -24.0,
+      -24.0,
+      0.0
+    ],
+    "max": [
+      24.0,
+      24.0,
+      100.0
+    ]
+  },
+  "interfaces": [
+    {
+      "name": "end",
+      "type": "socket",
+      "source": "stub",
+      "position": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 100.0
+      },
+      "normal": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 1.0
+      },
+      "diameter": 40.0,
+      "depth": 100.0,
+      "stretch": 0.05,
+      "notes": "Guessed: measure the bore and how far the hose opens by hand."
+    }
+  ]
+}

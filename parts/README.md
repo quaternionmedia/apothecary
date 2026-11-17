@@ -13,6 +13,9 @@ parts/
 ├── cameras/                a category: the library's webcam, and mounts for it
 │   ├── webcam/             webcam.scad and part.json
 │   └── webcam_desk_stand/  part.json tags it a stub, as it does the clamp arm and the ceiling mount
+├── dust/                   a category: a hose adapter, and stand-ins for the hose and ports it fits
+│   ├── hose_adapter/       hose_adapter.scad, written from its Python, which declares its interfaces
+│   └── dust_hose_40/       dust_hose_40.scad and part.json, its interface a stub's
 ├── stream_deck_plus/
 │   └── stream_deck_plus.scad   the Stream Deck + at the bench, from the maker's published size
 ├── anolex_4060_evo_ultra_2/
