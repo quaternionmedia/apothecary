@@ -1351,6 +1351,9 @@
                 this.contentsEl = document.getElementById('contents-list');
                 this.selectedBodyEl = document.getElementById('selected-body');
                 this.toolpathByPort = {};
+                // The same, by node, for a machine planned: its marks may be made after the path is told.
+                this.toolpathByPath = {};
+                this.planPending = null;
                 this.problemsNoneEl = document.getElementById('site-problems-none');
                 this.problemListEl = document.getElementById('problem-list');
                 this.validityEl = document.getElementById('validity-indicator');
@@ -2151,6 +2154,7 @@
                 window.addEventListener('apothecary:toolpath', (ev) => {
                     if (!ev.detail) return;
                     if (ev.detail.port) this.toolpathByPort[ev.detail.port] = ev.detail;
+                    if (ev.detail.path) this.toolpathByPath[ev.detail.path] = ev.detail;
                     // By its port, or by its node: a machine planned has no port.
                     for (const [key, m] of Object.entries(this.marks)) {
                         const its = (ev.detail.port && ev.detail.port === m.port) || (ev.detail.path && ev.detail.path === key);
@@ -8702,6 +8706,7 @@
                 if (!found || this.machine !== machine) return null;
                 const who = machine.path || machine.port;
                 if (!found.file) return { said: `No path is drawn: ${found.none}. In ${who}'s ${found.card}, ${found.how}` };
+                if (machine.plan && this.planPending) await this.planPending;
                 if (!found.drawn) return { said: `${found.file}'s path is not drawn: ${found.refused}`, refused: true };
                 // Drawn where the machine's marks stand: one with no volume in this site
                 // has none, and its file's path nowhere to be.
@@ -9135,7 +9140,11 @@
             // A plan opened: the machine's marks stand on its node as a board's would --
             // its volume, its table or bed -- with no position to follow, so the path its
             // Machine draws has somewhere to stand (GET /sites/{name}/machines/{path}).
-            async planOpened(planned) {
+            planOpened(planned) {
+                this.planPending = this.makePlanMarks(planned).finally(() => { this.planPending = null; });
+                return this.planPending;
+            }
+            async makePlanMarks(planned) {
                 if (this.marks[planned.path]) return;
                 let answer = null;
                 try {
@@ -9149,6 +9158,9 @@
                 marks.group.userData.key = planned.path;
                 this.scene.add(marks.group);
                 this.marks[planned.path] = { marks, port: null, where: { printer: view }, kind: planned.kind, plan: true, readingAt: 0, readingId: null };
+                // A path told while the marks were on their way is drawn on them now.
+                const told = this.toolpathByPath[planned.path];
+                if (told && told.preview) marks.setToolpath(told.preview, told);
                 this.invalidate();
             }
             // The Bench's body: its three modules over one task log. A task's end asks
