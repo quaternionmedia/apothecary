@@ -107,7 +107,10 @@ It answers 201 with the observation as kept, `format` `apothecary.contributed/1`
 server's `recorded_at` added; it is relayed on the stream as a change of `contributed`
 keyed by the surface it is about. The newest 200 of each surface are kept in the state
 folder's `surfaces/contributed.json`, written whole under one lock, and read back by
-`GET /surfaces/contributed?surface=&by=`, newest first.
+`GET /surfaces/contributed?surface=&by=`, newest first. A file that does not read whole is
+never read as fewer: a read of it answers 503 and leaves it, and a post moves it aside as
+`surfaces/contributed.unreadable-<time>.json`, answers 503 naming that file, and keeps
+nothing; the next post starts a file of its own.
 
 The route is under the app's guard as every route is (`apothecary/stays_local.py`): it
 answers this machine alone, and no page of another origin may post to it. `by` is what
