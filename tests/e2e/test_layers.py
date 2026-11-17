@@ -1,9 +1,10 @@
 """Layers and depth: how deep a click reaches, and which layers are drawn and which a
-click can select (apothecary/static/pick_scope.js, the Layers window beside Site).
+click can select (apothecary/static/pick_scope.js, the Layers window beside the world).
 
-In the universe -- a sphere of nested shells, seen from outside -- the outer shell's
-pieces stand in front of the inner ones and the nearest hit wins; with the outer shell
-not selectable a click on it selects what is behind. A shell hidden is neither drawn
+In the universe -- a sphere of nested shells, seen from outside -- the shells are sparse,
+so the view is turned until a piece of an outer shell stands in front of one of an inner
+shell, as a person orbits to line them up; the nearest hit wins, and with the outer
+shell not selectable a click on it selects what is behind. A shell hidden is neither drawn
 nor hit. Depth 2 lets a click reach a piece of a piece. What was chosen is kept by the
 browser over a reload, and Select walls is the wall layer's Selectable tick.
 Walkthrough page 40 is what it writes.
@@ -55,6 +56,30 @@ FIND = """(mode) => {
         }
     }
     return null;
+}"""
+
+# The view turned, as a person orbits it, until a piece of one shell stands in front of
+# a piece of the shell inside it: the camera on the line from the inner one's middle
+# through the outer one's, beyond the outer by half again its size, looking at the
+# inner. The two are the largest of the two innermost shells, so a grid of points finds
+# the one over the other. At the opening view the shells are too sparse for that.
+LINE_UP = """() => {
+    const v = window.fractalViewer;
+    const on = Object.entries(v.renderNodeByKey)
+        .filter(([key, n]) => Number.isInteger(n.shell) && n.world_bounds && v.meshByName[key]);
+    const middle = (n) => v.sceneAt(...n.world_bounds.min.map((m, i) => (m + n.world_bounds.max[i]) / 2));
+    const across = (n) => Math.hypot(...n.world_bounds.max.map((m, i) => m - n.world_bounds.min[i]));
+    const shells = [...new Set(on.map(([, n]) => n.shell))].sort((a, b) => a - b);
+    if (shells.length < 2) return null;
+    const largest = (s) => on.filter(([, n]) => n.shell === s).sort(([, a], [, b]) => across(b) - across(a))[0];
+    const [[innerKey, inner], [outerKey, outer]] = [largest(shells[0]), largest(shells[1])];
+    const from = middle(inner), through = middle(outer);
+    const ray = through.clone().sub(from).normalize();
+    v.orbitControls.target.copy(from);
+    v.camera.position.copy(through.clone().addScaledVector(ray, 1.5 * across(outer)));
+    v.orbitControls.update();
+    v.invalidate();
+    return { inner: innerKey, outer: outerKey };
 }"""
 
 # What the scope and the drawn world say, at once.
@@ -125,6 +150,16 @@ def _universe(page: Page, url: str) -> None:
     settled(page)
 
 
+def _lined_up(page: Page) -> dict:
+    """The view turned until an outer shell's piece stands in front of an inner one's,
+    and drawn so; where a click lands on the one in front, the other behind it."""
+    assert page.evaluate(LINE_UP), "the site has fewer than two shells"
+    settled(page)
+    spot = page.evaluate(FIND, "shell")
+    assert spot, "no point of the sphere where an outer shell stands in front of an inner one"
+    return spot
+
+
 def _tick(page: Page, layer: str, kind: str):
     """A layer's Shown or Selectable tick in the Layers window."""
     return page.locator(
@@ -145,8 +180,9 @@ def test_with_the_outer_shell_not_selectable_a_click_on_it_selects_the_piece_beh
         title="Layers and depth",
         intro=(
             "A click in the world picks the nearest thing under it; in the universe, a "
-            "sphere of shells seen from outside, that is the outer shell. The Layers "
-            "window, a tab beside Site, says which layers a click may pick and which "
+            "sphere of shells, where the view lines a piece of an outer shell up in front "
+            "of one of an inner shell, that is the outer one. The Layers window, beside "
+            "the world, says which layers a click may pick and which "
             "the world draws, and how many levels down a click reaches. "
             "[docs/viewer.md](../docs/viewer.md#layers) is the reference."
         ),
@@ -163,17 +199,16 @@ def test_with_the_outer_shell_not_selectable_a_click_on_it_selects_the_piece_beh
     )
     _universe(page, url)
     windows.from_the_windows_menu(page, "layers")
-    settled(page)
-    spot = page.evaluate(FIND, "shell")
-    assert spot, "no point of the sphere where an outer shell stands in front of an inner one"
+    spot = _lined_up(page)
     outer = f"shell:{spot['shell']}"
 
     page.mouse.click(spot["x"], spot["y"])
     assert page.evaluate("() => window.fractalViewer.selectedName") == spot["first"]
     story.shows(
         "A click on the outer shell picks the outer shell's piece",
-        "The Layers window beside Site, every layer shown and selectable; a click where an "
-        "outer shell's piece stands in front of an inner one selects the outer one.",
+        "The Layers window beside the world, every layer shown and selectable; the view "
+        "turned until an outer shell's piece stands in front of an inner one, a click "
+        "there selects the outer one.",
         blank=CHANGING,
     )
 
@@ -206,9 +241,7 @@ def test_a_hidden_shell_is_not_drawn_and_not_hit_and_the_choice_survives_a_reloa
     is the browser's own: after a reload the tick is still off."""
     _universe(page, url)
     windows.from_the_windows_menu(page, "layers")
-    settled(page)
-    spot = page.evaluate(FIND, "shell")
-    assert spot
+    spot = _lined_up(page)
     outer = f"shell:{spot['shell']}"
     assert page.evaluate(REACHED, spot["first"]) is True
 
