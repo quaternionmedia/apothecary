@@ -55,6 +55,7 @@ at page 00.
 | [37 — Marks worn in the world](../walkthrough/37-marks-worn-in-the-world.md) | A whiteboard's marks sorted in the Marks window and worn over its picture in the world, a person's word read back by its shapes, and a note's ✎ opening its box and offering the size it states; written by the browser suite |
 | [38 — A whiteboard's corners](../walkthrough/38-a-whiteboard-s-corners.md) | A photograph from one side with the whiteboard's corners found on it, a corner nudged with the arrow keys and the whiteboard squared again; written by the browser suite |
 | [39 — The chain, a stage at a time](../walkthrough/39-the-chain-a-stage-at-a-time.md) | Every journey in the chain's order, the page taken to each stage by the tour, on simulated machines as a person starts them: a part designed, made, cut, its board, a deck's knobs, the site brought up and watched, a drawing read into shapes; what the page did to stand on each, and nothing armed, started or made; written by the browser suite |
+| [41 — The deck while a print streams](../walkthrough/41-the-deck-while-a-print-streams.md) | The Stream Deck +'s touch strip while a print streams on the simulated printer: Progress brought forward once, a swipe along the Deck window's strip back to the knobs, which say the print holds the port, on to Status, and a cancelled print kept on Progress until a touch; written by the browser suite |
 
 ## The checklists
 
