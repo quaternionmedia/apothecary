@@ -776,3 +776,52 @@ class DeviceAttachRequest(BaseModel):
 
 # DeviceInfo names PrinterInfo before it is defined; finish the model now that it is.
 DeviceInfo.model_rebuild()
+
+
+# --- a heater loop's requests (firmware/loops.py) ------------------------------------------
+
+
+class LoopRequest(ProbeRequest):
+    """Which loop of the printer on ``port``: a hotend by its number, or the bed."""
+
+    heater: Literal["hotend", "bed"] = "hotend"
+    index: int = Field(0, ge=0, le=7)
+
+
+class LoopExperimentRequest(LoopRequest):
+    """An experiment on a loop. The ceiling and the longest it may run are said by the
+    caller, every time; what each kind takes is ``firmware.loops.plan``'s."""
+
+    kind: Literal["step", "autotune", "perturbation"]
+    ceiling_c: float = Field(..., gt=0)
+    max_duration_s: float = Field(..., gt=0)
+    sample_period_s: float = Field(1.0, ge=0.5, le=10)
+    base_c: Optional[int] = None  # a step's temperature before it
+    step_c: Optional[int] = None  # and how far it steps
+    settle_s: Optional[float] = None  # the time at the first target before the step or the wave
+    after_s: Optional[float] = None  # a step's time after it
+    target_c: Optional[int] = None  # an autotune's target
+    cycles: Optional[int] = None  # an autotune's cycles
+    centre_c: Optional[int] = None  # a perturbation's middle
+    amplitude_c: Optional[int] = None  # its half swing
+    period_s: Optional[float] = None  # its period
+    periods: Optional[int] = None  # how many
+
+
+class LoopGainsRequest(LoopRequest):
+    kp: float = Field(..., ge=0)
+    ki: float = Field(..., ge=0)
+    kd: float = Field(..., ge=0)
+
+
+class LoopSaveRequest(ProbeRequest):
+    # The board's memory is written only when this says so, in these words.
+    write_board_memory: bool = False
+
+
+class LoopDocumentRequest(BaseModel):
+    experiment_id: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9_.\-]{0,119}$")
+    rule: Optional[str] = "simc"
+    kind: Literal["p", "pi", "pid"] = "pi"
+    closed_loop_time: Optional[float] = Field(None, gt=0)
+    read_board: bool = False  # the gains the board holds read now (M503), as on_machine

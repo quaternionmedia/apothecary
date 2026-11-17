@@ -24,10 +24,11 @@ from typing import List, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from fastapi.routing import APIRoute
 
-from . import can, devices, gcode, service
+from .. import loop_document
+from . import can, devices, gcode, loops, service
 from .installer import InstallSpec, env_for_arduino
 from .models import (
     CompileRequest,
@@ -37,6 +38,10 @@ from .models import (
     LevelingRequest,
     LibraryInstallRequest,
     ListenRequest,
+    LoopDocumentRequest,
+    LoopExperimentRequest,
+    LoopGainsRequest,
+    LoopSaveRequest,
     ModuleInstallRequest,
     PlateRequest,
     Port,
@@ -592,6 +597,104 @@ def firmware_print_resume(body: ProbeRequest):
 def firmware_print_cancel(body: ProbeRequest):
     """Stop feeding and send the safe-off (heaters and fan off, motors free). No latch needed."""
     return _print_verb(body.port, "cancel")
+
+
+# -- a heater's loop (firmware/loops.py) --------------------------------------------------
+
+
+@router.post("/printers/loops/read")
+def firmware_loops_read(body: ProbeRequest):
+    """The gains the board holds, as ``M503`` says them (report-only), by loop."""
+    _busy_guard(body.port)
+    can.raise_for_refusal(can.read_refusal(can.facts_of(body.port)))
+    return loops.read_gains(body.port)
+
+
+@router.post("/printers/loops/start", status_code=202)
+def firmware_loops_start(body: LoopExperimentRequest):
+    """Start an experiment on a loop -- a step of the target, the firmware's autotune, or a
+    square wave of the target about an operating temperature -- as a job that holds the
+    port (latch required), with the ceiling and the longest time the request states."""
+    _busy_guard(body.port)
+    params = body.model_dump(exclude={"port", "heater", "index", "kind", "ceiling_c", "max_duration_s", "sample_period_s"})
+    plan = loops.plan(
+        body.heater, body.index, body.kind, body.ceiling_c, body.max_duration_s, body.sample_period_s, **params
+    )
+    return loops.start(body.port, plan).snapshot()
+
+
+@router.get("/printers/loops/job")
+async def firmware_loops_job(port: Port, series: bool = False):
+    """The current (or last) experiment on ``port``, with its samples so far when
+    ``series`` asks for them."""
+    job = loops.tuning_job(port)
+    return job.snapshot(samples=series) if job else {"port": port, "running": False, "stage": None}
+
+
+@router.post("/printers/loops/cancel")
+def firmware_loops_cancel(body: ProbeRequest):
+    """End the running experiment: the heater off and read back, as at every end. No latch."""
+    can.raise_for_refusal(can.tune_cancel_refusal(can.facts_of(body.port)))
+    job = loops.tuning_job(body.port)
+    job.cancel()
+    return job.snapshot()
+
+
+@router.post("/printers/loops/set")
+def firmware_loops_set(body: LoopGainsRequest):
+    """Set a loop's gains (``M301``/``M304``, latch required), read back and compared. Set,
+    not saved."""
+    _busy_guard(body.port)
+    return loops.set_gains(body.port, body.heater, body.index, body.kp, body.ki, body.kd)
+
+
+@router.post("/printers/loops/save")
+def firmware_loops_save(body: LoopSaveRequest):
+    """``M500``, the board's memory written: refused unless ``write_board_memory`` is true."""
+    _busy_guard(body.port)
+    return loops.save_settings(body.port, body.write_board_memory)
+
+
+@router.get("/printers/loops/experiments")
+async def firmware_loops_experiments(port: PortOrAll = ""):
+    """The kept experiments, newest first, without their samples."""
+    return loops.experiments(port or None)
+
+
+@router.get("/printers/loops/experiments/{experiment_id}")
+async def firmware_loops_experiment(experiment_id: str):
+    """One kept experiment, its samples and what the firmware said."""
+    body = loops.experiment(experiment_id)
+    if body is None:
+        raise HTTPException(status_code=404, detail="no such experiment")
+    return body
+
+
+@router.post("/printers/loops/document")
+def firmware_loops_document(body: LoopDocumentRequest, format: Literal["json", "md"] = "json"):
+    """The ``control/loop/1`` document of a kept experiment: its plant identified, a
+    controller designed by ``rule``, the margins and the measures; with ``read_board`` the
+    gains the board holds read now."""
+    doc = loops.document(
+        body.experiment_id, body.rule, body.kind, body.closed_loop_time, body.read_board
+    )
+    if format == "md":
+        return PlainTextResponse(loop_document.render_markdown(doc))
+    return doc.model_dump(mode="json", by_alias=True)
+
+
+@router.get("/loops/schema")
+async def firmware_loops_schema():
+    """The JSON Schema of ``control/loop/1``, the published contract."""
+    return loop_document.LoopDocument.model_json_schema(by_alias=True)
+
+
+@router.post("/loops/validate")
+async def firmware_loops_validate(doc: loop_document.LoopDocument, format: Literal["json", "md"] = "json"):
+    """A loop document read back normalized, or as Markdown; 422 names what is wrong."""
+    if format == "md":
+        return PlainTextResponse(loop_document.render_markdown(doc))
+    return doc.model_dump(mode="json", by_alias=True)
 
 
 @router.get("/printers/queries")

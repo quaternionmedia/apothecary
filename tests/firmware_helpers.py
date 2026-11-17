@@ -27,7 +27,7 @@ def _isolate_firmware_state(monkeypatch, tmp_path):
     """Flash records / cached probes go to a per-test file, never ~/.apothecary."""
     from apothecary import jobs
     from apothecary.evidence import printers as evidence_printers
-    from apothecary.firmware import devices
+    from apothecary.firmware import devices, loops
 
     monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setattr(devices, "_STATE", None)
@@ -38,6 +38,7 @@ def _isolate_firmware_state(monkeypatch, tmp_path):
     monkeypatch.setattr(devices, "_LAST_STATUS", {})
     monkeypatch.setattr(devices, "_LEVELING", {})  # a bed reading's job is per process
     monkeypatch.setattr(devices, "_PRINTS", {})
+    monkeypatch.setattr(loops, "_TUNING", {})  # a loop's experiment is per process too
     monkeypatch.setattr(jobs, "_LIVE", {})  # a running job is read from its thread, per process
     # What the evidence log last wrote is per state folder: a new folder hears it all again.
     monkeypatch.setattr(evidence_printers, "COLLECTOR", evidence_printers.Collector())

@@ -1068,6 +1068,9 @@ def printer_status(
 
 # The jobs that stream a file over the link: a print (Marlin) and a cut (GRBL).
 STREAMED = ("print", "cut")
+# The jobs whose machine is made safe when one is found running with nothing running it:
+# those streamed, and a loop's experiment (firmware/loops.py), which heats.
+MADE_SAFE = (*STREAMED, "tune")
 
 
 def busy_word(kind: str) -> str:
@@ -1262,6 +1265,9 @@ def _control(
         reading = _LEVELING.get(port)
         if reading is not None and reading.finished is None:
             reading.cancel(quiet=True)
+        for tuning in _tuning():
+            if tuning.port == port:
+                tuning.cancel(quiet=True)  # the board halts, its heaters off; nothing more is sent
     if streaming and cmd in ("HOLD", "RESUME"):
         # A hold typed at a cut is the cut's pause, and a resume its resume: the job
         # that streams is told, so it neither feeds a held controller nor stays
@@ -1591,7 +1597,9 @@ def _start_leveling(
     links: gcode.PrinterLinks,
     grid: Optional[TableGrid],
 ) -> LevelingJob:
-    can.raise_for(can.level_start_blocked(port, _LEVELING.get(port), _PRINTS.get(port)), "held")
+    can.raise_for(
+        can.level_start_blocked(port, _LEVELING.get(port), _PRINTS.get(port), _tuning_on(port)), "held"
+    )
     if probe:
         can.raise_for(
             can.not_armed(
@@ -2120,8 +2128,11 @@ def safe_off(link: gcode.GcodeLink, machine: str, origin: str) -> List[str]:
 
 _PRINTS: Dict[str, PrintJob] = {}
 # One start at a time: whether a job holds the port is asked and answered as one act,
-# so two starts at once are one job and one refusal, never two files on one port.
+# so two starts at once are one job and one refusal, never two files on one port. Every
+# kind of job takes it to start: a print or a cut, a bed reading, a loop's experiment
+# (firmware/loops.py, as ``STARTING``).
 _STARTING = threading.Lock()
+STARTING = _STARTING
 
 
 def at_work(links: Optional[gcode.PrinterLinks] = None) -> List[str]:
@@ -2142,8 +2153,22 @@ def at_work(links: Optional[gcode.PrinterLinks] = None) -> List[str]:
         for job in list(_LEVELING.values())
         if job.finished is None
     ]
+    said += [f"{job.port}: {job.what} is {job.stage}" for job in _tuning()]
     said += [f"{port}: control is armed" for port in links.control.armed_ports()]
     return said
+
+
+def _tuning() -> list:
+    """The loop experiments running (firmware/loops.py), which import this module."""
+    from . import loops
+
+    return loops.running()
+
+
+def _tuning_on(port: str):
+    from . import loops
+
+    return loops.tuning_job(port)
 
 
 def stop_jobs(timeout: float = 20.0) -> List[str]:
@@ -2156,10 +2181,11 @@ def stop_jobs(timeout: float = 20.0) -> List[str]:
     said: List[str] = []
     streaming = [job for job in list(_PRINTS.values()) if job.finished is None]
     reading = [job for job in list(_LEVELING.values()) if job.finished is None]
-    for job in (*streaming, *reading):
+    tuning = _tuning()
+    for job in (*streaming, *reading, *tuning):
         job.cancel()
     end = time.monotonic() + timeout
-    for job in (*streaming, *reading):
+    for job in (*streaming, *reading, *tuning):
         job.thread.join(max(0.0, end - time.monotonic()))
         what = job.op.kind if isinstance(job, PrintJob) else job.what
         if not job.thread.is_alive():
@@ -2185,7 +2211,7 @@ def _end_orphans(
     for job in jobs.orphaned(port, cached.identity if cached is not None else None):
         op = jobs.operation(job.kind)
         did = "nothing was sent"
-        if op is not None and op.kind in STREAMED:
+        if op is not None and op.kind in MADE_SAFE:
             if op.machine == grbl.MACHINE:
                 if status.state == "idle":
                     try:
@@ -2284,7 +2310,9 @@ def _start_print(
         ),
         "armed",
     )
-    can.raise_for(can.print_start_blocked(port, _PRINTS.get(port), _LEVELING.get(port)), "held")
+    can.raise_for(
+        can.print_start_blocked(port, _PRINTS.get(port), _LEVELING.get(port), _tuning_on(port)), "held"
+    )
     if links.get(port) is None:
         printer_status(port, state=state, links=links)
     link = links.get(port)

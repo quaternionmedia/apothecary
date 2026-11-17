@@ -112,6 +112,7 @@ GROUPS = {
             "test_jobs.py",
             "test_job_api.py",
             "test_loop_document.py",
+            "test_loop_tuning.py",
             "test_machine_frame.py",
             "test_machine_plans.py",
             "test_machine_words.py",

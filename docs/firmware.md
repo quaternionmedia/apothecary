@@ -887,8 +887,50 @@ opening its machine. `GET /jobs/choices?machine=PORT` says what a job there
 would record and which parts it can name.
 
 A kind of job belongs to a kind of machine: a printer offers `print`
-(`jobs.PRINT`), and a mill or a laser would register its own operation with
-`jobs.register` and start its jobs from its own card in the same way.
+(`jobs.PRINT`) and `tune` (a heater loop's experiment, below), and a mill or a
+laser would register its own operation with `jobs.register` and start its jobs
+from its own card in the same way.
+
+### Heater loops
+
+A printer's heaters are loops: a hotend's and the bed's PID, as the board
+holds them. `apothecary/firmware/loops.py` reads, sets and experiments on them
+through the seam's rules and adds none of its own; the maths is
+`apothecary/control_loops.py` and the document of a loop `apothecary/loop_document.py`.
+
+- **Read** is `M503`, report-only, parsed for its `M301` and `M304` lines
+  (`gcode.parse_gains`).
+- **Set** is `M301 P.. I.. D..` (hotend 0) or `M304 P.. I.. D..` (the bed), a
+  control line: the latch armed, each figure a plain decimal under the
+  seam's own bound (`gcode.GAIN_MAX`, a typo's guard), no job on the port.
+  The gains are read back by `M503` and compared. Set, not saved.
+- **Save** is `M500`, the board's memory written. It is no control line and
+  no query, a streamed file may not carry it, and the loop's save refuses it
+  unless the request says `write_board_memory: true` in so many words; then
+  as a gain line is.
+- **An experiment** is a `tune` job that holds the port: a step of the target,
+  the firmware's own autotune (`M303 E<n> S<target> C<cycles>`, sent by the job
+  alone, never a control line, watched line by line with
+  `GcodeLink.watch`), or a square wave of the target about an operating
+  temperature. Each states a ceiling and a longest time, and ends -- done,
+  over its ceiling, past its longest time, a cancel, the stop, the server
+  stopping, a board that restarts or falls silent or goes, an objection --
+  with the safe-off a cancelled print sends, the target read back; a target
+  that does not read back off gets the stop. While one runs, polls answer from
+  its readings, and queries and control lines get `409`, as under a bed reading.
+
+`can_now` answers `tune.start`, `tune.cancel`, `tune.read`, `tune.set` and
+`tune.save` from the predicates the routes raise from:
+`/firmware/printers/loops/read`, `start`, `job`, `cancel`, `set`, `save`,
+`experiments`, `document`, and `/firmware/loops/schema` and `validate`.
+
+The simulated printer's heaters follow a thermal model when
+`APOTHECARY_SIMULATED_HEATERS=model` (`gcode.SimulatedHeater`): a first-order
+plus dead time plant from the heater's power to its rise over ambient, a PID
+round it, and a relay autotune answering `M303`, on a clock
+`APOTHECARY_SIMULATED_HEATER_SPEED` runs faster than real time. Otherwise a
+heater sits at its target, as it always has. Its numbers are the simulator's
+and no machine's.
 
 ## Serial engines
 

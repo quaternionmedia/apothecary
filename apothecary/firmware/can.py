@@ -11,8 +11,9 @@ what stands in the way: ``armed`` (the control latch is down), ``held`` (a job o
 task holds the port), ``homed`` (a home the port has not shown its switch for),
 ``placed`` (a cut with the tool's place unknown), ``busy`` (another task runs),
 ``idle`` (nothing to act on), ``offline`` (no link, and the last poll said so),
-``alarm`` (the controller is in alarm), ``kind`` (the wrong kind of machine) and
-``file`` (the file does not fit the machine).
+``alarm`` (the controller is in alarm), ``kind`` (the wrong kind of machine),
+``file`` (the file does not fit the machine) and ``asked`` (an act that writes the board's
+memory, not asked for by name).
 
 The emergency stop has no predicate: it is always ok.
 """
@@ -43,6 +44,11 @@ class Refusal(NamedTuple):
 def raise_for(why: Optional[str], kind: str) -> None:
     if why:
         raise Refusal(kind, why).error()
+
+
+def raise_for_refusal(refusal: Optional[Refusal]) -> None:
+    if refusal is not None:
+        raise refusal.error()
 
 
 # -- the predicates: a reason, or None ----------------------------------------------
@@ -118,22 +124,42 @@ def file_problem(file: Any, file_id: str) -> Optional[str]:
     return None
 
 
-def print_start_blocked(port: str, printing: Any, leveling: Any) -> Optional[str]:
-    """A job already has the machine: a print, or a bed reading."""
+def print_start_blocked(port: str, printing: Any, leveling: Any, tuning: Any = None) -> Optional[str]:
+    """A job already has the machine: a print, a bed reading, a loop's experiment."""
     for running in (printing, leveling):
         if running and running.finished is None:
             what = running.op.kind if running is printing else "bed reading"
             return f"{port}: a {what} already holds the port ({running.stage})"
-    return None
+    return tune_holds(port, tuning)
 
 
-def level_start_blocked(port: str, leveling: Any, printing: Any) -> Optional[str]:
+def level_start_blocked(port: str, leveling: Any, printing: Any, tuning: Any = None) -> Optional[str]:
     running = leveling
     if running and running.finished is None:
         return f"{port}: {running.what} is already {running.stage}"
     if printing and printing.finished is None:
         return f"{port}: a print holds the port ({printing.stage})"
+    return tune_holds(port, tuning)
+
+
+def tune_holds(port: str, tuning: Any) -> Optional[str]:
+    """A loop's experiment holds the port (firmware/loops.py)."""
+    if tuning is not None and tuning.finished is None:
+        return f"{port}: {tuning.what} holds the port ({tuning.stage}) -- cancel it first"
     return None
+
+
+# The board's memory, written by M500, only when the caller says so in these words.
+SAVE_FLAG = "write_board_memory"
+
+
+def save_unasked(port: str, asked: bool) -> Optional[str]:
+    if asked:
+        return None
+    return (
+        f"{port}: M500 writes the board's memory, and the gains with it: it is sent only when "
+        f"asked for by name ({SAVE_FLAG})"
+    )
 
 
 def card_printing(port: str, last: Any) -> Optional[str]:
@@ -187,6 +213,8 @@ LINES = {
     "quickstop": {"printer": "M410", "router": "JOG-CANCEL"},
     "card.pause": {"printer": "M25"},
     "control": {"printer": "M84", "router": "G0 X0 Y0"},
+    # A loop's gains set (firmware/loops.py): a printer's alone.
+    "gains": {"printer": "M301 P1 I1 D1"},
 }
 AXES = "XYZ"
 
@@ -204,10 +232,11 @@ class Facts(NamedTuple):
     last: Any  # the last poll
     kind: Optional[str]  # "printer" / "router" / None
     firmware: Optional[str]
+    tuning: Any = None  # a loop's experiment on the port (firmware/loops.py)
 
 
 def facts_of(port: str, state=None, links=None, runner=None) -> Facts:
-    from . import devices
+    from . import devices, loops
     from .tasks import get_task_runner
 
     state = state or devices.get_state()
@@ -225,6 +254,7 @@ def facts_of(port: str, state=None, links=None, runner=None) -> Facts:
         last=devices.last_statuses().get(port),
         kind=devices.machine_kind(cached),
         firmware=cached.printer.firmware_name if cached and cached.printer else None,
+        tuning=loops.tuning_job(port),
     )
 
 
@@ -301,7 +331,7 @@ def start_refusal(f: Facts, file: Any = None, file_id: Optional[str] = None):
     )
     if why:
         return Refusal("armed", why)
-    why = print_start_blocked(f.port, f.printing, f.leveling)
+    why = print_start_blocked(f.port, f.printing, f.leveling, f.tuning)
     if why:
         return Refusal("held", why)
     why = _offline(f)
@@ -339,7 +369,7 @@ def level_refusal(f: Facts, probe: bool) -> Optional[Refusal]:
     why = task_holds(f.port, f.task)
     if why:
         return Refusal("held", why)
-    why = level_start_blocked(f.port, f.leveling, f.printing)
+    why = level_start_blocked(f.port, f.leveling, f.printing, f.tuning)
     if why:
         return Refusal("held", why)
     if probe:
@@ -385,6 +415,55 @@ def _query(f: Facts) -> Optional[Refusal]:
     return Refusal("held", why) if why else None
 
 
+def tune_refusal(f: Facts) -> Optional[Refusal]:
+    """The checks of ``loops.start``: a task on the port, a machine that is no printer, the
+    latch, another job on the port, no link, the card printing."""
+    why = task_holds(f.port, f.task)
+    if why:
+        return Refusal("held", why)
+    if f.kind is not None and f.kind != "printer":
+        return Refusal("kind", f"{f.port}: a {f.kind} has no heater loop")
+    why = not_armed(f.port, f.armed, "an experiment heats the machine -- arm control first")
+    if why:
+        return Refusal("armed", why)
+    why = tune_holds(f.port, f.tuning) or print_start_blocked(f.port, f.printing, f.leveling)
+    if why:
+        return Refusal("held", why)
+    why = gcode.job_holds_link(f.port, f.job)
+    if why:
+        return Refusal("held", why)
+    why = _offline(f)
+    if why:
+        return why
+    why = card_printing(f.port, f.last)
+    return Refusal("held", why) if why else None
+
+
+def tune_cancel_refusal(f: Facts) -> Optional[Refusal]:
+    return _tune_running(f)
+
+
+def _tune_running(f: Facts) -> Optional[Refusal]:
+    if f.tuning is None or f.tuning.finished is not None:
+        return Refusal("idle", f"{f.port}: no experiment is running")
+    return None
+
+
+def read_refusal(f: Facts) -> Optional[Refusal]:
+    """The gains read (M503, a printer's report-only query)."""
+    if f.kind is not None and f.kind != "printer":
+        return Refusal("kind", f"{f.port}: a {f.kind} has no heater loop")
+    return _query(f)
+
+
+def save_refusal(f: Facts, asked: bool = False) -> Optional[Refusal]:
+    """M500: not unless asked for by name, and then as a gain line is."""
+    why = save_unasked(f.port, asked)
+    if why:
+        return Refusal("asked", why)
+    return line_refusal(f, "gains")
+
+
 def can_now(port: str, state=None, links=None, runner=None) -> Dict[str, Dict[str, Any]]:
     """Per command, whether the server would take it from ``port`` right now."""
     f = facts_of(port, state, links, runner)
@@ -415,6 +494,11 @@ def can_now(port: str, state=None, links=None, runner=None) -> Dict[str, Dict[st
         "probe": _verdict(_port_free(f)),
         "query": _verdict(_query(f)),
         "flash": _verdict(flash_refusal(f)),
+        "tune.start": _verdict(tune_refusal(f)),
+        "tune.cancel": _verdict(tune_cancel_refusal(f)),
+        "tune.read": _verdict(read_refusal(f)),
+        "tune.set": _verdict(line_refusal(f, "gains")),
+        "tune.save": _verdict(save_refusal(f)),
     }
     if f.kind == grbl.MACHINE:
         for axis in AXES:

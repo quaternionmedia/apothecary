@@ -117,7 +117,8 @@ def test_the_openapi_shows_the_jobs_routes():
 def test_the_choices_say_where_a_machine_stands_and_what_its_job_can_name(
     fake_arduino_cli, monkeypatch
 ):
-    """A printer pinned in the garage offers print, and a print there can name the
+    """A printer pinned in the garage offers print and tune (a heater loop's experiment,
+    which runs no file), and a print there can name the
     garage's parts and pieces: every node built from a part, and every piece made
     from a picture, but nothing of the printer itself. Pinned nowhere, it names none;
     a board that is no machine offers nothing."""
@@ -135,7 +136,8 @@ def test_the_choices_say_where_a_machine_stands_and_what_its_job_can_name(
     }
     assert loose["site"] is None and loose["parts"] == []
     assert loose["operations"] == [
-        {"kind": "print", "label": "Print", "inputs": [".gcode", ".gco", ".g"]}
+        {"kind": "print", "label": "Print", "inputs": [".gcode", ".gco", ".g"]},
+        {"kind": "tune", "label": "Tune", "inputs": []},
     ]
 
     garage = sites.store.get("garage")

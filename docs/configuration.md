@@ -24,6 +24,8 @@ needed: each has a default.
 | `APOTHECARY_SIMULATED_PRINTER` | With the simulated engine, `printing` starts the simulated printer part way through a print | Idle | [firmware.md](firmware.md) |
 | `APOTHECARY_SIMULATED_PROGRESS` | With the simulated engine, holds a print at this fraction, 0 to 1, so pictures of it are the same on every run | The print goes round | `tests/e2e/README.md` |
 | `APOTHECARY_SIMULATED_SPEED` | Multiplies the simulated printer's every dwell (`G4`): 1 is real time, 0 skips them | 1 | |
+| `APOTHECARY_SIMULATED_HEATERS` | With the simulated engine, `model` makes the simulated printer's heaters follow a thermal model with a PID round each, answering `M303`; otherwise a heater sits at its target | A heater sits at its target | [firmware.md](firmware.md#heater-loops) |
+| `APOTHECARY_SIMULATED_HEATER_SPEED` | The modelled heaters' simulated seconds to a real second | 1 | [firmware.md](firmware.md#heater-loops) |
 | `APOTHECARY_SIMULATED_DEVKIT` | With the simulated engine, the ports the Rust module finds, each a pretend devkit (comma-separated) | None | [firmware.md](firmware.md#setup) |
 | `APOTHECARY_SIMULATED_DECK` | With the simulated engine, the Stream Deck + decks found, each a pretend deck that keeps the images it is sent and hears the events it is given (comma-separated) | None | [stream-deck.md](stream-deck.md#simulated) |
 | `APOTHECARY_DECK_CONTROL` | `1`, `true`, `yes` or `on`: the server starts the Stream Deck + layout (its knobs jog the machines) on every deck found at start; a real deck is opened by it, which takes it from any other program. Unset, a layout is started by `POST /firmware/decks/{id}/control` alone. `serve --simulated` sets it | Unset | [stream-deck.md](stream-deck.md#the-controller) |
