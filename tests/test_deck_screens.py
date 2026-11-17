@@ -5,15 +5,33 @@ has a deck, a machine or a port."""
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
 from apothecary import jobs
+from apothecary.firmware import deck
 from apothecary.firmware import deck_screens as screens
 from apothecary.firmware.models import Heater, PrinterStatus, Spindle
 
 NOW = datetime(2026, 11, 16, 12, 0, 0, tzinfo=timezone.utc)
+
+
+DECK_JS = Path(__file__).resolve().parents[1] / "apothecary" / "static" / "widgets" / "deck.js"
+
+
+def test_the_deck_window_sends_a_swipe_where_the_server_reads_one():
+    """The Deck window sends a drag along its strip only when it is a swipe, by its own
+    SWIPE_PX of a strip of STRIP pixels: the server's figures (SWIPE_MIN_PX, and the
+    strip's size), so a drag the window sends is one the server reads as a swipe."""
+    js = DECK_JS.read_text(encoding="utf-8")
+    swipe = re.search(r"const SWIPE_PX = (\d+);", js)
+    strip = re.search(r"STRIP = \[(\d+), (\d+)\]", js)
+    assert swipe and strip, "deck.js no longer says SWIPE_PX or STRIP as this test reads them"
+    assert int(swipe.group(1)) == screens.SWIPE_MIN_PX
+    assert (int(strip.group(1)), int(strip.group(2))) == deck.STRIP_SIZE
 
 
 def _drag(x, x_out, y=50, y_out=50):
