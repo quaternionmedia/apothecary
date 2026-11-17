@@ -39,7 +39,9 @@ not answer `/health` stops the run.
 | `--headed`, `--slowmo 500`, `--tracing on` | pytest-playwright's own flags, for debugging. Open a trace with `uv run playwright show-trace test-results/<test>/trace.zip`. |
 
 Every server comes from one factory, the `start_server` fixture in
-`conftest.py`, on a free port with state of its own. A module whose tests change
+`conftest.py`, on a free port with state of its own. One asked for with nothing named
+starts the next such server as it is handed out, so a later module's is up when it asks:
+a spare nothing touches until then, stopped unused at the end of the run. A module whose tests change
 what a server holds -- a pin, an armed latch, a flash, a print, a saved
 variant -- or need a bench of their own asks it for servers of its own, so what
 they do stays off the session's server (`grep -l start_server

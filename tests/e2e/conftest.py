@@ -264,10 +264,24 @@ def start_server(tmp_path_factory, every_stl_built):
     is named. So no
     test opens a real serial port, reads ``~/.apothecary``, or sees a real board. All of
     them stop when the session ends.
+
+    A server takes about 3 s to start, most of it the app's imports. One asked for with
+    nothing named -- the commonest -- starts the next such server as it is handed out,
+    so that one is up by the time a later module asks: a spare, of its own temp folders,
+    which nothing has touched until it is handed out, and stopped unused at the end.
     """
     started: list[subprocess.Popen] = []
+    spare: list[tuple[subprocess.Popen, str]] = []
 
     def _start(env_overrides: dict | None = None, port: int | str | None = None) -> str:
+        plain = not env_overrides and port is None
+        proc, url = spare.pop() if plain and spare else _launch(env_overrides, port)
+        url = _answering(proc, url)
+        if plain:
+            spare.append(_launch(None, None))
+        return url
+
+    def _launch(env_overrides: dict | None, port: int | str | None):
         tmp = tmp_path_factory.mktemp("server")
         (tmp / "pictures").mkdir()
         # A variant saved from the page is a ref in git (projects/parts/saved.py):
@@ -334,6 +348,9 @@ def start_server(tmp_path_factory, every_stl_built):
             stderr=subprocess.DEVNULL,
         )
         started.append(proc)
+        return proc, url
+
+    def _answering(proc: subprocess.Popen, url: str) -> str:
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
             if proc.poll() is not None:
