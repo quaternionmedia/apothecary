@@ -174,3 +174,21 @@ describe things apothecary places but does not author: a board, a connector, a
 module. Their module docstring, `apothecary/models/blackbox.py`, says how a
 provider is swapped; `apothecary/projects/parts/datum_core.py` derives a tray
 from one.
+
+## Interfaces
+
+`Spigot`, `Socket`, `BoltHole` and `Slot` are the places where one part meets
+another, each named and given in the part's own frame by a position and a
+normal pointing out of the part; `fit(a, b)` says whether two meet and where,
+by the rule for their pair of types. docs/connections.md is their reference,
+and `apothecary/models/interfaces.py` holds the rule.
+
+```pycon
+>>> from apothecary.models import Socket, Spigot, fit
+>>> end = Spigot(name="end", position={}, normal={"z": 1}, d_base=32.6, d_tip=31.4, length=25)
+>>> port = Socket(name="port", position={}, normal={"z": 1}, diameter=32.0, depth=30)
+>>> f = fit(end, port)
+>>> f.verdict, f.seat
+('seats', 12.5)
+
+```

@@ -177,6 +177,7 @@ GROUPS = {
             "test_following_a_variant.py",
             "test_geometry_from_elsewhere.py",
             "test_gridfinity.py",
+            "test_interfaces.py",
             "test_lighter_and_faster.py",
             "test_openscad_installer.py",
             "test_openscad_messages.py",
