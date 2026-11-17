@@ -90,3 +90,36 @@ def test_a_stage_opens_its_site_and_draws_its_own_piece_s_file(page: Page, url: 
     )
     expect(box.locator(".tour-pop-did li").last).to_contain_text("path is drawn on printer_1")
     assert errors == []
+
+
+@pytest.mark.e2e
+def test_a_stage_opens_a_planned_machine_once_its_site_s_machines_answer(page: Page, url: str):
+    """The garage's machines (GET /sites/garage/machines) answering after its boards
+    are scanned: printer_1 is chosen, and its Machine waits for them rather than saying
+    it has no board pinned; once they answer it opens as the garage plans it, and the
+    footpedal is chosen."""
+    errors: list = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    box = page.locator(BOX)
+    open_garage(page, url, settle=False)
+    to_site(page, "apothecary")
+    held: list = []
+    page.route("**/sites/garage/machines", lambda route: held.append(route))
+
+    page.locator("#tour-pop-open").click()
+    expect(box).to_be_visible()
+    journeys = page.request.get(f"{url}/tour").json()["journeys"]
+    at = next(i for i, j in enumerate(journeys) if j["name"] == "Print a part")
+    box.locator(".tour-pop-journeys").select_option(value=str(at))
+    page.wait_for_function(
+        "() => window.fractalViewer.siteName === 'garage'"
+        " && window.fractalViewer.selectedName === 'printer_1'"
+    )
+    assert len(held) == 1
+    held[0].continue_()
+    _taken_to(page, "choose")
+    assert page.locator(f"{BOX} .tour-pop-needs").text_content() == ""
+    planned = "printer_1's Machine opened with no board connected: what it makes is planned there"
+    assert planned in _did(page)
+    assert page.evaluate("() => window.fractalViewer.selectedName") == "footpedal"
+    assert errors == []

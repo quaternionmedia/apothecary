@@ -2014,8 +2014,10 @@
                 this.following = {};   // port -> the world's own watch of a machine it draws (followMachines)
                 this.leavingSite = false;  // a site left while the next loads: nothing of it is followed
                 // The site's machines by the part each is drawn from (GET /sites/{name}/machines):
-                // what a machine with no board connected is planned as.
+                // what a machine with no board connected is planned as; `machinesLoaded`
+                // settles once the site in view's have answered (loadMachinesHere).
                 this.machinesHere = [];
+                this.machinesLoaded = Promise.resolve();
 
                 this.raycaster = new THREE.Raycaster();
                 this.pointer = new THREE.Vector2();
@@ -2572,7 +2574,7 @@
                     // for after the scene is on screen, never before; its event
                     // redraws what shows the boards.
                     this.boards.scan();
-                    this.loadMachinesHere(name);
+                    this.machinesLoaded = this.loadMachinesHere(name);
                     this.makers = {};
                     this.siteJobs = [];
                     this.renderSiteJobs();
@@ -8852,6 +8854,9 @@
                         && (port ? this.machine.port === port : this.machine.plan && this.machine.path === subject);
                     if (open()) return {};
                     await choose(subject);
+                    // Not connected, it opens as the site plans it: the site's machines,
+                    // asked for as it loaded and answering apart from its boards, first.
+                    if (!port) await this.machinesLoaded;
                     if (!this.openMachine(subject) || !(await until(open, 15000))) {
                         return { refused: port ? `${subject}'s Machine did not open: ${document.getElementById('status').textContent}` : this.noMachine(subject) };
                     }
