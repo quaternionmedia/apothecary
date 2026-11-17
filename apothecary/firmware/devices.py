@@ -1806,6 +1806,7 @@ class PrintJob:
         # its flow control.
         self._room = grbl.PlannerRoom() if self.grbl else None
         self._paused_from: Optional[str] = None
+        self._pauses = 0  # pauses landed: one during a wait for room is why it gave up
         self.running_stage = self.op.busy or kind
         self.stage = "starting"
         self.sent = 0
@@ -1883,6 +1884,7 @@ class PrintJob:
         # is still running on the controller (``finishing``): it is held the same.
         if self.finished is None and self.stage in (self.running_stage, "finishing"):
             self._paused_from = self.stage
+            self._pauses += 1
             self._go.clear()
             self.stage = "paused"
             self._realtime("HOLD")  # a router stops where it is; a printer finishes its queue
@@ -1925,9 +1927,13 @@ class PrintJob:
                     return False
             if self._stop.is_set():
                 return False
+            pauses = self._pauses
             if self._room is None or self._room.wait(link, cmd, self._interrupted):
                 return True
-            if not self._interrupted():
+            # A pause that landed during the wait gave it up, though a resume may
+            # have followed before this line: the line waits out the pause, if any
+            # is left, and asks again.
+            if not self._interrupted() and self._pauses == pauses:
                 raise ToolchainError(
                     f"{self.port}: the planner had no room for {cmd} within "
                     f"{grbl.JOB_MOVE_TIMEOUT_S:.0f}s: the cut is stopped there"

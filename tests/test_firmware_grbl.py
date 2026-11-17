@@ -979,6 +979,35 @@ def test_a_cut_paused_while_it_waits_for_the_planner_sends_every_line(
     assert [line for line in rec.log if line.startswith("> G1")] == [f"> {m}" for m in moves]
 
 
+def test_a_cut_paused_and_resumed_while_it_waits_for_the_planner_sends_every_line(
+    fake_arduino_cli, router_links, monkeypatch
+):
+    """A pause and a resume that both land while a line waits for room -- a person's two
+    presses, or a resume read back before the wait gives up -- keep that line too: the
+    wait gave up for the pause, not for want of room."""
+    moves = [f"G1 X-{n} F800" for n in range(10, 60, 10)]
+    kept = devices.save_print_file("row.nc", ("\n".join(moves) + "\n").encode(), machine="router")
+    router_links.control.arm(PORT)
+    held: list = []
+
+    def wait(self, link, cmd, abandoned):
+        if cmd == moves[2] and not held:
+            held.append(cmd)
+            job = abandoned.__self__  # the cut whose wait this is
+            job.pause()
+            job.resume()
+            return False  # as the room said when the pause landed
+        return True
+
+    monkeypatch.setattr(grbl.PlannerRoom, "wait", wait)
+    job = devices.start_print(PORT, kept.id)
+    job.thread.join(5)
+    rec = job.record
+    assert held == [moves[2]]
+    assert rec.outcome == "done" and rec.detail["sent"] == len(moves), rec.reason
+    assert [line for line in rec.log if line.startswith("> G1")] == [f"> {m}" for m in moves]
+
+
 def test_a_cut_whose_planner_never_has_room_fails_and_is_held_and_reset(
     fake_arduino_cli, router_links, monkeypatch
 ):
