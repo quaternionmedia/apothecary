@@ -147,6 +147,7 @@ GROUPS = {
         "sources": (
             "apothecary/projects/*",
             "apothecary/meshes.py",
+            "apothecary/fittings.py",
             "apothecary/spaces.py",
             "apothecary/airgap_metrics.py",
             "apothecary/datum_core_site.py",
@@ -174,6 +175,7 @@ GROUPS = {
             "test_datum_core_site.py",
             "test_defaults_are_the_scad.py",
             "test_failed_renders.py",
+            "test_fittings.py",
             "test_following_a_variant.py",
             "test_geometry_from_elsewhere.py",
             "test_gridfinity.py",
