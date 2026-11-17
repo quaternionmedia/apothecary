@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from firmware_helpers import PRINTING, ScriptedTransport
+from firmware_helpers import PRINTING, ScriptedTransport, held_until_asked_for
 
 from apothecary.api import app
 from apothecary.firmware import api as firmware_api
@@ -120,12 +120,12 @@ class Rig:
                     break
                 time.sleep(0.02)
         else:
-            gate = self.gate
+            gate, held = self.gate, {}
 
             class Held(ScriptedTransport):
                 def write(self, data):
                     if data.decode().strip() == "G1 X2":
-                        gate.wait(5)
+                        held_until_asked_for(gate, held)
                     super().write(data)
 
             self.links.factory = Held
@@ -133,6 +133,7 @@ class Rig:
             self.keep_a_file("G1 X1\nG1 X2\nG1 X3\n")
             self.arm()
             self.job = devices.start_print(PORT, self.file_id)
+            held["link"] = self.links.get(PORT)
             time.sleep(0.2)
 
     def unproved(self):
@@ -274,6 +275,8 @@ CASES = [
 def test_can_now_agrees_with_the_route(rig, condition, verb):
     CONDITIONS[condition][0](rig)
     verdict = can.can_now(PORT)[verb]
+    if rig.job is not None:  # the print is still under way when the route is asked
+        assert rig.job.finished is None, f"{rig.kind}/{condition}/{verb}: the print ended first"
     answer = rig.request(verb)
     said = f"{rig.kind}/{condition}/{verb}: can said {verdict}, route said {answer.status_code} {answer.text[:200]}"
     if verdict["ok"]:
