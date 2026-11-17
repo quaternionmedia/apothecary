@@ -6027,8 +6027,13 @@
             // part's own frame, placed at its piece -- a variant grown is drawn where it
             // grew, not centred on the envelope it had. Null when it is drawn as saved.
             drawnWorldBox(node) {
+                return this.placedBox(node, this.drawnMeasured(node));
+            }
+            // What a part drawn from a variant measured, in the part's own frame, as
+            // { min_point, max_point }; null when it is drawn as saved.
+            drawnMeasured(node) {
                 const record = node?.part_ref && this.variantByPart[node.part_ref] ? this.variantRecords[node.part_ref] : null;
-                return this.placedBox(node, record?.measured);
+                return record?.measured ?? null;
             }
 
             // A turned node's (a part on the universe's sphere) is the box round the measured
@@ -6065,9 +6070,12 @@
             footprintText(node) {
                 const size = (b) => b.max.map((v, i) => (v - b.min[i]).toFixed(0)).join(' × ') + ' mm';
                 const declared = node.footprint ? size(node.footprint) : '—';
-                const drawn = this.drawnWorldBox(node);
-                if (!drawn) return declared;
-                const now = size(drawn);
+                // Both in the part's own frame, so a part turned where it stands (on the
+                // universe's sphere) is compared along its own axes.
+                const measured = this.drawnMeasured(node);
+                if (!measured?.min_point || !measured?.max_point) return declared;
+                const xyz = (q) => [q.x, q.y, q.z];
+                const now = size({ min: xyz(measured.min_point), max: xyz(measured.max_point) });
                 return now === declared ? `${now}, as the variant drawn measures` : `${now}, as the variant drawn measures (declared ${declared})`;
             }
 
