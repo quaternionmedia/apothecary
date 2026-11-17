@@ -469,7 +469,13 @@ class Travel:
     signed and unwrapped step by step; ``path_*`` how far along each body's boundary,
     as the sum of the steps' chords. A step must be small enough that the point moves
     less than half a turn round either body between two poses. A cycle is given with
-    its end: the poses of one orbit run from 0 to 360 degrees, both included."""
+    its end: the poses of one orbit run from 0 to 360 degrees, both included.
+
+    The point followed is wherever the gap is least at each pose. Where several
+    places come nearly as close -- a rotor with lobes in a toothed bore -- it jumps
+    between them, and ``kind`` describes that jumping point's path, not a contact
+    sliding: a rigid rotor of three lobes turning in a toothed bore can read as
+    slipping."""
 
     approaches: Tuple[Optional[Approach], ...]
     travel_outer: float
