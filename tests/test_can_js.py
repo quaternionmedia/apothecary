@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from apothecary.firmware import dialects
+from apothecary.firmware import can, dialects
 
 CAN_JS = Path(__file__).resolve().parents[1] / "apothecary" / "static" / "can.js"
 
@@ -151,3 +151,59 @@ def test_a_pad_line_is_greyed_for_the_latch_exactly_when_the_server_wants_the_la
         )
     assert verbs["RESUME"] == "resume"
 
+
+ROOT = CAN_JS.parents[2]
+
+
+def _verbs_the_server_answers(monkeypatch) -> set:
+    """Every command can_now answers, for a printer and for a router."""
+    verbs = set()
+    for kind in ("printer", "router"):
+        facts = can.Facts(
+            port="/dev/x",
+            task=None,
+            armed=True,
+            link=None,
+            job=None,
+            printing=None,
+            leveling=None,
+            last=None,
+            kind=kind,
+            firmware=None,
+        )
+        monkeypatch.setattr(can, "facts_of", lambda *a, _f=facts, **k: _f)
+        verbs |= set(can.can_now("/dev/x"))
+    return verbs
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_every_verb_the_page_names_is_one_the_server_answers(monkeypatch):
+    """A button whose data-can names no verb of can_now is never greyed (verdictOf finds
+    nothing and leaves it): each verb machine.js, sketches.js and the templates write, each
+    can.js gives a pad's line, and each the latch lapsing refuses, is one the server
+    answers."""
+    answers = _verbs_the_server_answers(monkeypatch)
+    pages = [
+        MACHINE_JS,
+        CAN_JS.parent / "widgets" / "sketches.js",
+        *sorted((ROOT / "templates").glob("*.j2")),
+    ]
+    written = {v for p in pages for v in re.findall(r'data-can="([^"<>]+)"', p.read_text("utf-8"))}
+    pad = sorted(set(re.findall(r'data-cmd="([^"]+)"', MACHINE_JS.read_text(encoding="utf-8"))))
+    script = (
+        f"import {{ verbOfLine, NEEDS_THE_LATCH }} from {json.dumps(CAN_JS.as_uri())};\n"
+        f"console.log(JSON.stringify([{json.dumps(pad)}.map(verbOfLine), NEEDS_THE_LATCH]));"
+    )
+    run = subprocess.run(
+        ["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60
+    )
+    assert run.returncode == 0, run.stderr
+    of_lines, latched = json.loads(run.stdout)
+    assert written and of_lines and latched
+    for where, verbs in (
+        ("data-can", written),
+        ("verbOfLine", of_lines),
+        ("NEEDS_THE_LATCH", latched),
+    ):
+        unanswered = sorted(set(verbs) - answers)
+        assert not unanswered, f"{where} names {unanswered}, which can_now does not answer"
