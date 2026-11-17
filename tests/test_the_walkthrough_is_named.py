@@ -24,27 +24,52 @@ DEMONSTRATION_MODULES = {
 
 
 @functools.cache
+def _begun(argv: tuple[str, ...]) -> subprocess.Popen:
+    """One pytest's collection, begun once per command for the module's tests."""
+    return subprocess.Popen(
+        [*argv, "--collect-only"],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
+@functools.cache
+def _ended(argv: tuple[str, ...]) -> tuple[int, str, str]:
+    """That collection's exit code, listing and errors, once it has ended."""
+    begun = _begun(argv)
+    out, err = begun.communicate()
+    return begun.returncode, out, err
+
+
 def _listing(argv: tuple[str, ...]) -> str:
-    """One pytest's collection, made once per command for the module's tests."""
-    done = subprocess.run([*argv, "--collect-only"], cwd=ROOT, capture_output=True, text=True)
-    assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
-    return done.stdout
+    code, out, err = _ended(argv)
+    assert code == 0, out[-2000:] + err[-2000:]
+    return out
 
 
 def _collected(every: bool = False) -> str:
-    """What `apothecary test run` collects (with ``every``, `test all`), its pytests'
-    listings one after the other."""
-    commands = testing.run_commands()
+    """What the browser part of `apothecary test run` collects (with ``every``, of `test
+    all`). The unit part ignores tests/e2e, which the test below holds, so it collects
+    none of the runs these tests name, and is not collected here."""
+    _, browser = testing.run_commands()
     if every:
-        commands = [testing.unit_command(), testing.browser_command(every=True)]
-    return "\n".join(_listing(tuple(argv)) for argv in commands)
+        browser = testing.browser_command(every=True)
+    return _listing(tuple(browser))
+
+
+def _named(module: Path, run: str) -> str:
+    """A run's node id as a listing prints it, from the root."""
+    return f"{module.relative_to(ROOT).as_posix()}::{run}"
 
 
 def test_the_command_collects_the_run_that_writes_the_page():
     """Collection, not the argv's text: the marker expression is what selects the run."""
     collected = _collected()
     for module, run in DEMONSTRATION_MODULES.items():
-        assert run in collected, f"`test run` does not collect {module.name}::{run}"
+        named = _named(module, run)
+        assert named in collected, f"`test run` does not collect {named}"
 
 
 # A loop's page is written by the browser suite alone, so
@@ -81,8 +106,9 @@ LOOP_PAGES = {
 def test_a_loop_s_page_is_written_by_the_browser_suite_alone():
     quick, browser = _collected(), _collected(every=True)
     for module, (run, page) in LOOP_PAGES.items():
-        assert run not in quick, f"`test run` collects {module.name}::{run}"
-        assert run in browser, f"`test all` does not collect {module.name}::{run}"
+        named = _named(module, run)
+        assert named not in quick, f"`test run` collects {named}"
+        assert named in browser, f"`test all` does not collect {named}"
         assert page.is_file(), f"{page.name} is not written"
         # The page says who writes it, and how to run it alone.
         text = page.read_text(encoding="utf-8")
@@ -97,17 +123,31 @@ def test_the_command_supplies_what_the_demonstration_needs():
     assert "--ignore=tests/e2e" in unit
 
 
+# The `docs`-marked runs among the modules that write pages.
+DOCS = (
+    sys.executable,
+    "-m",
+    "pytest",
+    "-m",
+    "docs",
+    *map(str, [*DEMONSTRATION_MODULES, *LOOP_PAGES]),
+)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _collections_begun_together():
+    """Each collection the tests read is a pytest of its own, and none waits on another:
+    they are begun together, and each test reads the one it names."""
+    _, browser = testing.run_commands()
+    commands = [tuple(browser), tuple(testing.browser_command(every=True)), DOCS]
+    for argv in commands:
+        _begun(argv)
+    yield
+    for argv in commands:
+        _ended(argv)
+
+
 def test_the_demonstration_is_not_a_docs_workflow():
     """`docs`-marked runs render into docs/generated/, a second page about the same path."""
-    argv = [
-        sys.executable,
-        "-m",
-        "pytest",
-        "--collect-only",
-        "-m",
-        "docs",
-        *DEMONSTRATION_MODULES,
-        *LOOP_PAGES,
-    ]
-    collected = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True)
-    assert collected.returncode == pytest.ExitCode.NO_TESTS_COLLECTED, collected.stdout[-2000:]
+    code, out, _ = _ended(DOCS)
+    assert code == pytest.ExitCode.NO_TESTS_COLLECTED, out[-2000:]
