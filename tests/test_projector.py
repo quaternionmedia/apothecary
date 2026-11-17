@@ -9,6 +9,7 @@ from the polls kept, never by asking a port."""
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -315,6 +316,56 @@ def test_the_file_streaming_is_drawn_in_the_bed_s_millimetres_with_its_band(pinn
     planned = pinned.get("/sites/garage/machines/printer_1/projector").json()
     assert planned["picture"]["source"] == "plan" and planned["moving"]["current"] is None
     assert planned["picture"]["key"] != picture["key"]
+
+
+DOCS = Path(__file__).resolve().parents[1] / "docs"
+
+
+def _keys(value) -> set:
+    """The keys of a documented object, its "..." (what the docs leave out) not one."""
+    return set(value) - {"..."}
+
+
+def test_the_answer_docs_projector_md_shows_has_the_keys_a_real_answer_has(pinned):
+    """docs/projector.md's answer is written by hand: each object of it carries the keys a
+    real answer's does -- calibrated, a print streaming -- so a key renamed here turns
+    this red rather than the docs quietly wrong."""
+    shown = json.loads(
+        re.search(
+            r"```json\n(.*?)\n```", (DOCS / "projector.md").read_text(encoding="utf-8"), re.S
+        )[1]
+    )
+    kept = devices.save_print_file("square.gcode", SQUARE.encode(), "printer")
+    job = {"kind": "print", "file_id": kept.id, "name": "square.gcode", "stage": "printing"}
+    job.update(sent=7, total=11, progress=7 / 11, running=True)
+    _poll(
+        state="printing",
+        position={"x": 60.0, "y": 40.0, "z": 0.2},
+        tool_position={"x": 60.0, "y": 40.0, "z": 0.2},
+        job=job,
+    )
+    # Calibrated where that poll says the bed stands, which a bed that carries Y needs.
+    assert pinned.put("/sites/garage/machines/printer_1/projector", json=PUT).status_code == 200
+    real = pinned.get("/sites/garage/machines/printer_1/projector").json()
+    for where in (
+        "",
+        "calibration",
+        "picture",
+        "picture.bed",
+        "picture.file",
+        "picture.toolpath",
+        "moving",
+        "moving.status",
+    ):
+        doc, got = shown, real
+        for part in filter(None, where.split(".")):
+            doc, got = doc[part], got[part]
+        assert _keys(doc) == set(got), (
+            f"{where or 'the answer'}: docs {sorted(_keys(doc))}, real {sorted(got)}"
+        )
+    assert _keys(shown["frame"]) <= set(real["frame"])
+    assert _keys(shown["moving"]["status"]["job"]) <= set(real["moving"]["status"]["job"])
+    projector.clear("garage", "printer_1")
 
 
 def test_a_router_s_toolpath_and_cuts_stand_at_the_work_zero_its_controller_reports(

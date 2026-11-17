@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import threading
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 import serial
@@ -355,6 +357,37 @@ def test_a_kept_file_that_does_not_read_is_set_aside_and_said_never_written_over
     rows["observations"].append({"by": "joe"})
     kept.write_text(json.dumps(rows), encoding="utf-8")
     assert client.get("/surfaces/contributed").status_code == 503
+
+
+DOCS = Path(__file__).resolve().parents[1] / "docs" / "surfaces.md"
+
+
+def test_the_shapes_docs_surfaces_md_shows_have_the_keys_real_ones_have(members, kept):
+    """docs/surfaces.md writes a read, a change on the stream and an observation by
+    hand: each carries the keys the real one does, so a key renamed turns this red."""
+    text = DOCS.read_text(encoding="utf-8")
+    read_shown, observation_shown = (
+        json.loads(b) for b in re.findall(r"```json\n(.*?)\n```", text, re.S)
+    )
+    stream = re.search(r"```text\n(.*?)\n```", text, re.S)[1]
+    change_shown = json.loads(" ".join(stream.split("event: change\ndata: ", 1)[1].splitlines()))
+    read = client.get("/surfaces/projector", params={"site": "garage", "path": "printer_1"})
+    assert set(read_shown) == set(read.json())
+    assert set(read_shown["words"]) == set(read.json()["words"])
+
+    async def one_change():
+        following = surfaces.subscribe(["jobs"])
+        try:
+            surfaces.changed("jobs", key="j", body={"seen": True})
+            got, _ = await following.next(1.0)
+            return got[0]
+        finally:
+            following.close()
+
+    assert set(change_shown) == set(asyncio.run(one_change()))
+    kept_answer = client.post("/surfaces/contributed", json=observation_shown)
+    assert kept_answer.status_code == 201, kept_answer.text
+    assert set(kept_answer.json()) == set(observation_shown) | {"format", "recorded_at"}
 
 
 def test_only_a_member_writes_and_only_of_a_surface_in_a_frame(members, monkeypatch):
