@@ -275,7 +275,9 @@ server sends with the site (`layer_colours`, beside `tree`), so the page writes 
 its own: a category's pieces are drawn in it, the build volumes in the grid's, the
 measurement in its own, and a machine's badges wear the Machine group's, which is the
 machine buttons' layer's. A category nobody wrote down, a picture's word, takes a
-colour from its name, the same every time.
+colour from its name, the same every time. The Layers window's rows wear their layers'
+colours, a legend, and a tick, the stepper's - and + and Reset each name in their tip
+the address of the ring's cell that does the same.
 
 **Each layer has a ring of its own**, under the canvas ring's View › Layers: Window 8
 (the Layers window), World 6 (the grid's, the machine buttons' and the measurement's

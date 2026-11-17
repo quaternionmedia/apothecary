@@ -10,4 +10,6 @@
 .layers-table td { text-align: center; }
 .layers-table .layers-kind th { color: #8ab4f8; padding-top: 0.5rem; }
 .layers-reset { margin-top: 0.6rem; }
-.layers-reading { margin: 0.6rem 0 0; white-space: pre-wrap; user-select: text; color: #ffb347; font-size: 0.75rem; }
+.layers-reading { margin: 0.6rem 0 0; white-space: pre-wrap; user-select: text; color: #d8e0d8; font-size: 0.75rem; }
+/* A row's layer's colour, the colour the world draws it in and its ring's cells wear. */
+.layers-swatch { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%; margin-right: 0.4rem; vertical-align: -0.05rem; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25); }

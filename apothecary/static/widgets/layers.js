@@ -11,11 +11,16 @@
  * With Measure shown, what it reads (the selection's size, the distance between two points,
  * the gap between two pieces, each with its source) is written below the rows as text.
  *
- * mountLayers(root, { scope, shells, categories }) draws the rows into root from the
- * pick scope (pick_scope.js) and keeps them as it changes; refresh() reads the shells
- * and categories again, as the page calls it when a site is drawn. The rows are this
- * window's own, drawn afresh each time, so one listener of each kind on the root
- * serves them all.
+ * Each row wears its layer's colour (colourOf: the one table, static/layer_colours.js),
+ * the colour the world draws the layer in and its cells of the ring wear: the legend. A
+ * tick, the stepper and Reset each say in their title the address of the ring's cell that
+ * does what they do (addressOf, given the action), as the page's buttons do.
+ *
+ * mountLayers(root, { scope, shells, categories, colourOf, addressOf }) draws the rows into
+ * root from the pick scope (pick_scope.js) and keeps them as it changes; refresh() reads
+ * the shells, categories, colours and addresses again, as the page calls it when a site
+ * is drawn or its ring is resolved. The rows are this window's own, drawn afresh each
+ * time, so one listener of each kind on the root serves them all.
  */
 
 import { GRID, MACHINE_BUTTONS, MEASURE, DEPTH_MAX, shellLayer, categoryLayer } from "/static/pick_scope.js";
@@ -32,13 +37,18 @@ export function layerLabel(id) {
     return id;
 }
 
-export function mountLayers(root, { scope, shells = () => [], categories = () => [], readings = () => [] }) {
+export function mountLayers(root, { scope, shells = () => [], categories = () => [], readings = () => [], colourOf = () => null, addressOf = () => null }) {
     root.classList.add("layers-window");
+
+    // " · ⌗NN" for the cell that does what `action` does, or nothing.
+    const taught = (action) => { const at = addressOf(action); return at ? ` · ⌗${at}` : ""; };
 
     function row(id, label, hint, selectable) {
         const shown = scope.isShown(id);
-        const tick = (kind, on) => `<input type="checkbox" class="layers-tick" data-layer="${esc(id)}" data-kind="${kind}"${on ? " checked" : ""} aria-label="${esc(label)}: ${kind}">`;
-        return `<tr data-row="${esc(id)}"><th scope="row" title="${esc(hint)}">${esc(label)}</th>`
+        const tick = (kind, on) => `<input type="checkbox" class="layers-tick" data-layer="${esc(id)}" data-kind="${kind}"${on ? " checked" : ""} aria-label="${esc(label)}: ${kind}" title="${esc(`${label}: ${kind}${taught(`layer:${kind}:${id}`)}`)}">`;
+        const colour = colourOf(id);
+        const swatch = colour ? `<span class="layers-swatch" style="background: ${esc(colour)}"></span>` : "";
+        return `<tr data-row="${esc(id)}"${colour ? ` data-colour="${esc(colour)}"` : ""}><th scope="row" title="${esc(hint)}">${swatch}${esc(label)}</th>`
             + `<td>${tick("shown", shown)}</td><td>${selectable ? tick("selectable", scope.isSelectable(id)) : ""}</td></tr>`;
     }
 
@@ -60,7 +70,8 @@ export function mountLayers(root, { scope, shells = () => [], categories = () =>
     function reading() {
         const lines = scope.isShown(MEASURE) ? readings() : [];
         if (!lines.length) return "";
-        return `<pre class="layers-reading" tabindex="0" aria-label="Measurements">${esc(lines.join("\n"))}</pre>`;
+        const colour = colourOf(MEASURE);
+        return `<pre class="layers-reading" tabindex="0" aria-label="Measurements"${colour ? ` style="color: ${esc(colour)}"` : ""}>${esc(lines.join("\n"))}</pre>`;
     }
 
     function paint() {
@@ -75,9 +86,9 @@ export function mountLayers(root, { scope, shells = () => [], categories = () =>
             ? "Walls: drawn faded; Selectable here is View > Select walls" : `The pieces of the ${c} category`, true));
         root.innerHTML = `<div class="layers-depth">
     <span class="layers-depth-label" title="How many levels below the level in view a click reaches and the world draws: 1 is the level's own pieces">Depth</span>
-    <button type="button" class="layers-depth-less" data-act="depth-less" aria-label="One level less"${depth <= 1 ? " disabled" : ""}>-</button>
+    <button type="button" class="layers-depth-less" data-act="depth-less" aria-label="One level less" title="One level less${taught("view:depth:less")}"${depth <= 1 ? " disabled" : ""}>-</button>
     <output class="layers-depth-value" aria-live="polite">${depth}</output>
-    <button type="button" class="layers-depth-more" data-act="depth-more" aria-label="One level more"${depth >= DEPTH_MAX ? " disabled" : ""}>+</button>
+    <button type="button" class="layers-depth-more" data-act="depth-more" aria-label="One level more" title="One level more${taught("view:depth:more")}"${depth >= DEPTH_MAX ? " disabled" : ""}>+</button>
 </div>
 <table class="layers-table"><thead><tr><th scope="col">Layer</th><th scope="col">Shown</th><th scope="col">Selectable</th></tr></thead>
 ${section("Parts, by shell", shellRows)}${section("Categories", categoryRows)}${section("The world", [
@@ -86,7 +97,7 @@ ${section("Parts, by shell", shellRows)}${section("Categories", categoryRows)}${
             row(MEASURE, layerLabel(MEASURE), "While shown, a click in the world drops a point to measure between and selects nothing; the selection reads its size", false),
         ])}</table>
 ${reading()}
-<div class="layers-reset"><button type="button" class="layers-reset-all" data-act="reset" title="Depth 1, every layer shown, every layer selectable but walls">Reset</button></div>`;
+<div class="layers-reset"><button type="button" class="layers-reset-all" data-act="reset" title="Depth 1, every layer shown, every layer selectable but walls${taught("layer:reset")}">Reset</button></div>`;
     }
 
     function onChange(event) {
