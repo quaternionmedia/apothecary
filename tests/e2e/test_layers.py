@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 import windows
 from doc_capture import moments
-from garage import open_garage, said
+from garage import open_garage, row, said
 from playwright.sync_api import Page, expect
 from viewer_ready import settled
 
@@ -125,6 +125,14 @@ PICKING = """(key) => {
 PICK_AT = """([x, y]) => {
     const pick = window.fractalViewer.raycastPick({ clientX: x, clientY: y });
     return pick && pick.key ? pick.key : null;
+}"""
+
+# The level's grid: whether it is drawn, whether it is a machine's bed's, and how many
+# build-volume boxes are drawn.
+GRID = """() => {
+    const v = window.fractalViewer;
+    return { drawn: v.gridHelper.visible, bed: v.gridHelper.userData.path === v.focusPath.join('.'),
+             volumes: Object.values(v.buildVolumeMeshByName).filter((m) => m.visible).length };
 }"""
 
 # A piece of the level that holds pieces of its own, and one of those.
@@ -328,3 +336,28 @@ def test_select_walls_is_the_wall_layers_selectable_tick_and_a_click_still_passe
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
     settled(page)
     assert page.evaluate(STATE)["walls"] is False
+
+
+@pytest.mark.e2e
+def test_the_alignment_grid_hidden_is_no_grid_on_a_machines_bed_either(page: Page, url: str):
+    """The Alignment grid's Shown ticked off: the floor grid and the build volumes are not
+    drawn, and a machine stepped into lays its bed's grid by the same tick, so none is
+    drawn there either until the tick is on again."""
+    open_garage(page, url)
+    windows.from_the_windows_menu(page, "layers")
+    assert page.evaluate(GRID)["drawn"] is True
+    _tick(page, "grid", "shown").uncheck()
+    said(page, "Alignment grid: hidden")
+    seen = page.evaluate(GRID)
+    assert seen["drawn"] is False and seen["volumes"] == 0, seen
+
+    row(page, "printer_1").dblclick()
+    said(page, "Stepped into printer_1")
+    settled(page)
+    seen = page.evaluate(GRID)
+    assert seen["bed"] is True, seen
+    assert seen["drawn"] is False, f"the bed's grid is drawn with the grid layer hidden: {seen}"
+
+    _tick(page, "grid", "shown").check()
+    seen = page.evaluate(GRID)
+    assert seen["bed"] is True and seen["drawn"] is True, seen

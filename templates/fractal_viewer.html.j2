@@ -3088,17 +3088,19 @@
                 for (const [key, mesh] of Object.entries(this.meshByName)) this.hideByLayer(mesh, !scope.drawn(this.renderNodeByKey[key]));
                 for (const [key, overlay] of Object.entries(this.compoundOverlayByKey)) this.hideByLayer(overlay, !scope.drawn(this.renderNodeByKey[key]));
                 for (const box of Object.values(this.buildVolumeMeshByName)) this.hideByLayer(box, !scope.isShown(GRID_LAYER));
-                this.gridHelper.visible = this.gridWanted() && scope.isShown(GRID_LAYER);
+                this.gridHelper.visible = this.gridWanted();
                 this.anchors.touch();
                 if (!scope.isShown(MEASURE_LAYER)) this.measure.points = [];
                 this.measureSoon(false);
                 this.invalidate();
             }
 
-            // Whether the level has a floor grid at all: the universe's own level, a sphere
-            // of shells a floor would cut through, has none.
+            // Whether the level's grid is drawn -- the floor's, or a machine's bed's when one
+            // is stepped into -- the one rule every grid is drawn by: the alignment grid
+            // layer shown (Layers), and a level with a floor at all: the universe's own
+            // level, a sphere of shells a floor would cut through, has none.
             gridWanted() {
-                return !(this.siteName === UNIVERSE && this.focusPath.length === 0);
+                return this.pickScope.isShown(GRID_LAYER) && !(this.siteName === UNIVERSE && this.focusPath.length === 0);
             }
 
             // The pick scope changed: a depth redraws the level; a layer is put as it says,
@@ -3577,7 +3579,7 @@
                 this.gridHelper.position.set(gridX, floor, gridZ);
                 // The universe's own level is a sphere of shells, which a floor would cut
                 // through: no grid there. A part stepped into stands on it, as any level.
-                this.gridHelper.visible = this.gridWanted() && this.pickScope.isShown(GRID_LAYER);
+                this.gridHelper.visible = this.gridWanted();
                 this.scene.add(this.gridHelper);
 
                 // The axes stand at the site's origin while it is on the grid, else at the
@@ -3607,6 +3609,7 @@
                 }
                 this.gridHelper = makeBedGrid(this.frameOf(path).volume, BED_GRID_MM);
                 this.gridHelper.userData.path = path;
+                this.gridHelper.visible = this.gridWanted();
                 this.scene.add(this.gridHelper);
                 this.axesHelper = new THREE.AxesHelper(Math.max(20, span * 0.4));
                 this.axesHelper.rotation.x = -Math.PI / 2;
@@ -3625,6 +3628,7 @@
                     disposeDeep(this.gridHelper);
                     this.gridHelper = makeBedGrid(frame.volume, BED_GRID_MM);
                     this.gridHelper.userData.path = path;
+                    this.gridHelper.visible = this.gridWanted();
                     this.scene.add(this.gridHelper);
                 }
                 const at = this.machineOrigin(path, frame), bedOffset = this.bedOffsetOf(path, frame);
