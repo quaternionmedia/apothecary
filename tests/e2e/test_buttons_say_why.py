@@ -6,8 +6,9 @@ refused by the server (409); both are greyed with the server's words
 (``can`` on the status, ``firmware/can.py``), while E-STOP, the pad's E-STOP and
 Quickstop are not. When the print is cancelled the jog is allowed again.
 
-Runs against a server of its own with the simulated printer on ``/dev/ttyFAKE1``,
-slowed so a print lasts; nothing here opens a real port.
+Runs against a server of its own with the simulated printer idle on ``/dev/ttyFAKE1``
+(not printing from its card, which the server would name first), slowed so a print
+lasts; nothing here opens a real port.
 """
 
 from __future__ import annotations
@@ -26,7 +27,9 @@ SLOW_PRINT = "G28\n" + "G4 P500\n" * 40 + "G1 X1\n"
 
 @pytest.fixture(scope="module")
 def url(start_server):
-    return start_server(env_overrides={"APOTHECARY_SIMULATED_SPEED": "0.5"})
+    return start_server(
+        env_overrides={"APOTHECARY_SIMULATED_PRINTER": "idle", "APOTHECARY_SIMULATED_SPEED": "0.5"}
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -97,7 +100,9 @@ def test_send_asks_the_server_whether_a_chosen_file_fits(page: Page, url: str):
         http.post("/firmware/printers/control", json={"port": PRINTER, "armed": True})
     page.goto(f"{url}/firmware/monitor?port={PRINTER}")
     windows.machine_ready(page, "printer")
-    page.locator("#print-pick").select_option(label=re.compile(r"cut\.nc"))
+    kept = page.locator("#print-pick option", has_text="cut.nc")
+    expect(kept).to_have_count(1, timeout=WITHIN_A_POLL)
+    page.locator("#print-pick").select_option(kept.get_attribute("value"))
     send = page.locator("#print-start")
     expect(send).to_be_disabled(timeout=WITHIN_A_POLL)
     expect(send).to_have_attribute("title", re.compile(r"^Disabled: cut\.nc was kept for a router"))
