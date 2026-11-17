@@ -188,6 +188,10 @@ CUT = register(
         busy="running",
     )
 )
+# A printer's heater loop is experimented on (firmware/loops.py): a tune holds the port as
+# a print does and takes no file. It registers here with the others, so what a printer
+# offers does not depend on which module was imported first.
+TUNE = register(Operation(kind="tune", machine="printer", label="Tune"))
 
 
 # --- where a machine stands ------------------------------------------------------------------

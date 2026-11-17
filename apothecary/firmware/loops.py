@@ -47,7 +47,7 @@ from ..state_folder import private_folder, state_dir
 from . import can, devices, gcode
 from .toolchains import ToolchainError
 
-TUNE = jobs.register(jobs.Operation(kind="tune", machine="printer", label="Tune"))
+TUNE = jobs.TUNE
 
 MAX_DURATION_S = 2 * 3600.0  # the longest any experiment may be asked to run
 SILENCE_S = 15.0  # an experiment that has read no temperature for this long ends

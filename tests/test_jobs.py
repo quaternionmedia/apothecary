@@ -56,10 +56,12 @@ def _run(job: jobs.Job, outcome="done", reason=None) -> jobs.Job:
 
 
 def test_a_printer_offers_print_and_a_router_a_cut():
-    (only,) = jobs.operations("printer")
+    only, tune = jobs.operations("printer")
     assert (only.kind, only.machine, only.label) == ("print", "printer", "Print")
     assert ".gcode" in only.inputs
     assert jobs.operation("print") is only
+    # A heater loop's experiment is a printer's too; it takes no file.
+    assert (tune.kind, tune.machine, tune.label, tune.inputs) == ("tune", "printer", "Tune", ())
     (cut,) = jobs.operations("router")
     assert (cut.kind, cut.machine, cut.label, cut.busy) == ("cut", "router", "Cut", "running")
     assert ".nc" in cut.inputs and ".gcode" in cut.inputs
@@ -71,7 +73,7 @@ def test_a_second_kind_registers_and_lists_beside_print():
     kept and listed the same way, and a kind is one machine's."""
     mill = jobs.register(jobs.Operation(kind="mill", machine="mill", label="Mill", inputs=(".nc",)))
     assert jobs.operations("mill") == [mill]
-    assert [op.kind for op in jobs.operations()] == ["print", "cut", "mill"]
+    assert [op.kind for op in jobs.operations()] == ["print", "cut", "tune", "mill"]
     assert jobs.machine_kinds() == ["printer", "router", "mill"]
     assert jobs.register(jobs.Operation(kind="mill", machine="mill", label="Mill", inputs=(".nc",)))
     with pytest.raises(ValueError, match="already"):
