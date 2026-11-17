@@ -2527,6 +2527,9 @@
 
             async loadSite(name, focusPathStr = '') {
                 if (!name) return;
+                // The site before's machines followed no more, before its Machine closes and
+                // would hand them to the world's own watch on the way out (followMachines).
+                if (name !== this.siteName) this.followMachines(new Map());
                 // A board armed in the site before is disarmed, said again once it loads.
                 const disarmed = this.closeMachine();
                 const first = disarmed ? `${disarmed} · ` : '';
