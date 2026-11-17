@@ -7,6 +7,7 @@ checks the code against them."""
 from __future__ import annotations
 
 import ast
+import functools
 import re
 from pathlib import Path
 
@@ -45,23 +46,40 @@ def _module(path: Path) -> str:
     return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
 
 
+# Each scan below reads the same files; the package is not written while the suite runs,
+# so each file is parsed, and each name looked up, once.
+@functools.cache
 def _is_module(name: str) -> bool:
     path = ROOT.joinpath(*name.split("."))
     return path.with_suffix(".py").is_file() or (path / "__init__.py").is_file()
 
 
-def _imported(path: Path, at_import: bool = False) -> set[str]:
+@functools.cache
+def _tree(path: Path) -> ast.Module:
+    return ast.parse(path.read_text(encoding="utf-8"))
+
+
+def _imported(path: Path, at_import: bool = False) -> frozenset[str]:
     """Every module ``path`` imports, at the top or inside a function (``at_import``: at
     the top alone), by a statement, by ``import_module``/``__import__``, by a string that
     names a module of the package, or by an attribute of the name ``apothecary``."""
+    return _scanned(path, at_import)
+
+
+@functools.cache
+def _scanned(path: Path, at_import: bool) -> frozenset[str]:
     module = _module(path)
     package = module.split(".") if path.name == "__init__.py" else module.split(".")[:-1]
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    docstrings = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Expr)}
+    nodes = list(ast.walk(_tree(path)))
+    docstrings = {id(n.value) for n in nodes if isinstance(n, ast.Expr)}
     functions = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
-    later = {id(n) for f in ast.walk(tree) if isinstance(f, functions) for n in ast.walk(f)}
+    later = (
+        {id(n) for f in nodes if isinstance(f, functions) for n in ast.walk(f)}
+        if at_import
+        else set()
+    )
     found = set()
-    for node in ast.walk(tree):
+    for node in nodes:
         if at_import and id(node) in later:
             continue
         if isinstance(node, ast.Import):
@@ -105,11 +123,12 @@ def _imported(path: Path, at_import: bool = False) -> set[str]:
             for item in getattr(given.get("fromlist"), "elts", []):
                 if _is_module(f"{name}.{getattr(item, 'value', '')}"):
                     found.add(f"{name}.{item.value}")
-    return found
+    return frozenset(found)
 
 
-def _sources() -> list[Path]:
-    return sorted(p for p in PACKAGE.rglob("*.py") if "__pycache__" not in p.parts)
+@functools.cache
+def _sources() -> tuple[Path, ...]:
+    return tuple(sorted(p for p in PACKAGE.rglob("*.py") if "__pycache__" not in p.parts))
 
 
 def _unit(module: str) -> str:
@@ -127,14 +146,15 @@ def _layers() -> dict[str, int]:
     return layer
 
 
-def _edges(at_import: bool = False) -> set[tuple[str, str, str]]:
+@functools.cache
+def _edges(at_import: bool = False) -> frozenset[tuple[str, str, str]]:
     edges = set()
     for path in _sources():
         here = _unit(_module(path))
         for name in _imported(path, at_import):
             if name.split(".")[0] == "apothecary" and _unit(name) != here:
                 edges.add((here, _unit(name), str(path.relative_to(ROOT))))
-    return edges
+    return frozenset(edges)
 
 
 def test_every_unit_of_the_package_is_in_one_layer():
@@ -209,18 +229,20 @@ def _dotted(node: ast.AST) -> str:
     return ".".join([node.id, *reversed(names)]) if isinstance(node, ast.Name) else ""
 
 
-def _underscore_names_taken(text: str, module: str, package: list[str]) -> set[tuple[str, str]]:
+def _underscore_names_taken(
+    text: str, module: str, package: list[str], tree: ast.Module | None = None
+) -> set[tuple[str, str]]:
     """Each underscore name the module ``text`` is takes from another module of the
     package, with that module: by a ``from`` import, as an attribute of a name an import
     bound to such a module, by ``getattr`` of one with the name written out, or by
     importing a module whose own name begins with an underscore. A module is followed
     through a function of this module that returns it and a name such a call is
     assigned to, and no further: not through an argument, a container or
-    ``sys.modules``."""
-    tree = ast.parse(text)
+    ``sys.modules``. ``tree`` is ``text`` parsed, where the caller has it."""
+    nodes = list(ast.walk(tree or ast.parse(text)))
     bound: dict[str, str] = {}  # a name this module reads a module of the package by
     taken = set()
-    for node in ast.walk(tree):
+    for node in nodes:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name.split(".")[0] != "apothecary":
@@ -253,18 +275,18 @@ def _underscore_names_taken(text: str, module: str, package: list[str]) -> set[t
         return ""
 
     returned: dict[str, str] = {}  # a function of this module, and the module it returns
-    for node in ast.walk(tree):
+    for node in nodes:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             for inner in ast.walk(node):
                 if isinstance(inner, ast.Return) and inner.value is not None:
                     if owner(inner.value):
                         returned[node.name] = owner(inner.value)
-    for node in ast.walk(tree):
+    for node in nodes:
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
             if owner(node.value):
                 bound.update({_dotted(target): owner(node.value) for target in node.targets})
 
-    for node in ast.walk(tree):
+    for node in nodes:
         if isinstance(node, ast.Attribute) and _is_private(node.attr) and owner(node.value):
             taken.add((owner(node.value), node.attr))
         elif isinstance(node, ast.Call) and getattr(node.func, "id", "") == "getattr":
@@ -321,6 +343,6 @@ def test_no_module_takes_an_underscore_name_from_another():
         module = _module(path)
         package = module.split(".") if path.name == "__init__.py" else module.split(".")[:-1]
         text = path.read_text(encoding="utf-8")
-        for source, name in _underscore_names_taken(text, module, package):
+        for source, name in _underscore_names_taken(text, module, package, tree=_tree(path)):
             taken.add((str(path.relative_to(ROOT)), source, name))
     assert sorted(taken) == []
