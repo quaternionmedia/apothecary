@@ -2616,7 +2616,7 @@ def _sent_by_poll(link, **kw):
     return status, board.sent[before:]
 
 
-def test_an_idle_poll_asks_for_all_and_a_streaming_poll_for_temperatures_and_position(
+def test_an_idle_poll_asks_for_all_and_a_streaming_poll_for_all_but_the_card(
     scripted_links,
 ):
     link = scripted_links.open("/dev/ttyPOLL", 115200)
@@ -2624,16 +2624,17 @@ def test_an_idle_poll_asks_for_all_and_a_streaming_poll_for_temperatures_and_pos
     assert sent == ["M105", "M114", "M27", "M119"]
     assert status.endstops["y_min"] == "TRIGGERED" and status.filament_present is True
     status, sent = _sent_by_poll(link, streaming=True)
-    assert sent == ["M105", "M114"]
+    assert sent == ["M105", "M114", "M119"]
     assert status.hotends and status.position is not None
-    assert status.endstops == {} and status.filament_present is None
+    # The runout sensor answers with the endstops, and a print is when filament runs out.
+    assert status.endstops["y_min"] == "TRIGGERED" and status.filament_present is True
     assert (status.sd_printing, status.sd_progress, status.print_time_s) == (False, None, None)
     # A card print adds the time it has run, and only a poll that asks for the card.
     scripted_links.close("/dev/ttyPOLL")
     scripted_links.factory = lambda p, b: ScriptedTransport(p, b, replies=PRINTING)
     link = scripted_links.open("/dev/ttyPOLL", 115200)
     assert _sent_by_poll(link)[1] == ["M105", "M114", "M27", "M119", "M31"]
-    assert _sent_by_poll(link, streaming=True)[1] == ["M105", "M114"]
+    assert _sent_by_poll(link, streaming=True)[1] == ["M105", "M114", "M119"]
 
 
 class _Paced(ScriptedTransport):
@@ -2666,22 +2667,20 @@ def _stream_with_polls(port, scripted_links, lines=300):
     return first, during, board.sent[mark:], job
 
 
-def test_a_poll_made_while_a_print_streams_sends_neither_endstops_nor_card_progress(
+def test_a_poll_made_while_a_print_streams_reads_the_endstops_and_not_the_card(
     scripted_links,
 ):
     port = "/dev/ttyPOLL"
     first, during, sent, job = _stream_with_polls(port, scripted_links)
     assert job.stage == "done"
     assert sent.count("M105") >= 2, "no poll came between two streamed lines"
-    assert {"M105", "M114"} <= set(sent) and not {"M27", "M119", "M31"} & set(sent)
+    assert {"M105", "M114", "M119"} <= set(sent) and not {"M27", "M31"} & set(sent)
     # The fields it did not ask for are the full poll's, each with when it was read.
     streamed = [s for s in during if s.job is not None and s.raw]
     assert streamed and all(s.state == "printing" for s in streamed)
     for s in streamed:
         assert s.endstops == first.endstops and s.filament_present is first.filament_present
         assert set(s.held) == {
-            "endstops",
-            "filament_present",
             "sd_printing",
             "sd_progress",
             "print_time_s",

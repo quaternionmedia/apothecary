@@ -600,10 +600,6 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         } else { $("c-sd").textContent = "not printing"; $("c-sd-s").textContent = ""; $("b-sd").style.width = "0"; }
         const chips = Object.entries(st.endstops).map(([k, v]) => `<span class="chip ${v === "TRIGGERED" ? "hit" : ""}">${esc(k)} ${v === "TRIGGERED" ? "▮" : "▯"}</span>`);
         if (st.filament_present != null) chips.push(`<span class="chip ${st.filament_present ? "hit" : "bad"}">filament ${st.filament_present ? "present" : "OUT"}</span>`);
-        // A poll made while a job streams does not read the switches: they are the last
-        // full poll's, and say when.
-        const readAt = st.held && (st.held.endstops || st.held.filament_present);
-        if (readAt) chips.push(`<span class="empty">read ${esc(new Date(readAt).toLocaleTimeString())}, not during a job</span>`);
         $("c-stops").innerHTML = chips.join("") || '<span class="empty">—</span>';
         renderBoard();
     }

@@ -859,11 +859,9 @@ def _poll(
 
 
 # What a poll made while a job streams does not ask for (``gcode.poll_printer``,
-# ``grbl.poll_router``): a printer's endstops, runout sensor and card progress, a
-# router's programmed spindle speed.
+# ``grbl.poll_router``): a printer's card progress, a router's programmed spindle
+# speed. A printer's endstops and runout sensor are read on every poll.
 UNREAD_WHILE_STREAMING = (
-    "endstops",
-    "filament_present",
     "sd_printing",
     "sd_progress",
     "print_time_s",

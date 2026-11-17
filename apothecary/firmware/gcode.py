@@ -1622,9 +1622,10 @@ def poll_printer(
     ``wait`` bounds each exchange's queueing behind a print's stream (see
     ``GcodeLink.command``); a poll between two streamed lines is how a host
     keeps its temperatures fresh mid-print. While a job streams (``streaming``) the
-    poll asks for ``M105`` and ``M114`` only: the endstops and the card's progress
-    are not asked for, because the host holds the port and the card cannot be
-    printing, and each exchange taken from the stream slows the print.
+    poll does not ask for the card's progress: the host holds the port, so the card
+    cannot be printing, and each exchange taken from the stream slows the print. The
+    endstops are still asked for, because the runout sensor answers with them and a
+    print is when filament runs out.
     """
     raw: List[str] = []
     temps = link.command("M105", wait=wait)
@@ -1639,7 +1640,7 @@ def poll_printer(
         raw += sd_lines
         sd = parse_m27(sd_lines)
     stops: dict = {}
-    if endstops and not streaming:
+    if endstops:
         stop_lines = link.command("M119", wait=wait)
         raw += stop_lines
         stops = parse_m119(stop_lines)
