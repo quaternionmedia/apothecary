@@ -458,6 +458,18 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "pinned-view-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one view, in any site"),
     "pinned-board-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one board's pin back"),
+    # ---- Layers, apothecary/static/widgets/layers.js ----------------------
+    # Tick-boxes and a stepper that set the pick scope (static/pick_scope.js): no cell of
+    # the ring does exactly what one does (View › Depth sets the depth by name, and
+    # Select walls is one layer's tick), so none is ring-backed.
+    "layers-tick": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a tick-box of a layer, Shown or Selectable, one in each row of the Layers window",
+    ),
+    "layers-depth-less": (WIDGET, WHAT_YOU_SEE, "a button that reaches one level less deep"),
+    "layers-depth-more": (WIDGET, WHAT_YOU_SEE, "a button that reaches one level deeper"),
+    "layers-reset-all": (WIDGET, WHAT_YOU_SEE, "a button that puts depth and every layer back as they began"),
     # ---- Deck, apothecary/static/widgets/deck.js --------------------------
     # The Stream Deck + as drawn from here: a simulated deck is pressed, turned and
     # tapped from its window, each the event a real deck reports (a real deck's are off);
@@ -1571,15 +1583,16 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "one listener for the whole control overlay, told which button by what it carries",
     ),
     # ---- Layers (widgets/layers.js): one listener of each kind on the window's root; ----
-    # its rows (depth, a shown and a selectable tick for each layer) are drawn by it, a
-    # list beside the scene, and are the pick scope's (static/pick_scope.js) to change.
+    # its rows (depth, a shown and a selectable tick for each layer) are drawn by it and
+    # are the pick scope's (static/pick_scope.js) to change: tick-boxes and a stepper, as
+    # Settings' are, not a list of the scene's things.
     "root:change:onChange": (
-        LIST,
+        WIDGET,
         WHAT_YOU_SEE,
         "a layer's Shown or Selectable tick, applied at once",
     ),
     "root:click:onClick": (
-        LIST,
+        WIDGET,
         WHAT_YOU_SEE,
         "the depth stepper's - and +, or Reset, in the Layers window",
     ),
