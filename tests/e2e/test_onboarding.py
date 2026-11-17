@@ -283,12 +283,18 @@ def test_a_site_chosen_from_the_banner_keeps_the_address_for_a_reload_and_back(
     page.locator("#site-menu .site-item[data-site='datum_core']").click()
     page.wait_for_url(f"{url}/viewer/sites/datum_core", timeout=10000)
     expect(page.locator("#site-level")).to_have_text("datum_core")
+    # The address changes as a site starts to load, so each step waits for the site's
+    # name in the banner: the first crumb below steps out of the site in view, and
+    # selects the piece it left once the universe has loaded.
     page.go_back()
     page.wait_for_url(re.compile(r"/viewer/sites/garage\?focus=workbench"), timeout=10000)
+    expect(page.locator("#site-level")).to_have_text("garage", timeout=20000)
     page.go_forward()
     page.wait_for_url(f"{url}/viewer/sites/datum_core", timeout=10000)
+    expect(page.locator("#site-level")).to_have_text("datum_core", timeout=20000)
     page.locator("#universe-crumb").click()
     page.wait_for_url(f"{url}/viewer/sites/apothecary", timeout=10000)
+    _said(page, "Stepped out of the site datum_core")
 
     # The ring's Site chooses the same way.
     _canvas_ring(page)
