@@ -25,6 +25,7 @@ from apothecary.loop_document import (
     Machine,
     LoopName,
     Samples,
+    build,
     figures,
     format_value,
     gains_of,
@@ -169,3 +170,40 @@ class TestTheView:
         assert s.power == [None, 80.0]
         with pytest.raises(ValueError, match="columns"):
             samples_from_columns([{"t": "0"}])
+
+
+class TestTheBuilder:
+    """``build``: one experiment's samples to a document, its figures computed on them."""
+
+    def _experiment(self, kind, setpoint, duration, **params):
+        pid = cl.design("simc", plant=HEATER, kind="pi", dt=0.1).pid
+        tr = cl.closed_loop(HEATER, pid, setpoint, duration, ambient=25.0, sample=1.0)
+        return Experiment(
+            id=f"{kind}-1", kind=kind, started_at=now(), sample_period_s=1.0, parameters=params,
+            samples=Samples(t=tr.t, target=tr.r, actual=tr.y, power=tr.u),
+        )
+
+    def test_a_step_is_fitted_designed_for_and_measured(self):
+        exp = self._experiment("step", lambda s: 200.0 if s < 300.5 else 205.0, 900, settle_s=300.0)
+        doc = build(exp, Machine(kind="printer", port="(a recorded file)"), LoopName(heater="hotend"))
+        assert doc.plant.gain == pytest.approx(2.0, rel=0.02)
+        assert doc.controller.designed.rule == "simc" and doc.controller.designed.dt is None
+        assert doc.get("response.steady_error").value == pytest.approx(0.0, abs=0.05)
+        assert doc.get("plant.time_constant").basis == "identified"
+
+    def test_a_perturbation_carries_its_frequency_response(self):
+        square = lambda s: 200.0 + (2.0 if ((s - 600.5) % 120) < 60 else -2.0) if s >= 600.5 else 200.0  # noqa: E731
+        exp = self._experiment("perturbation", square, 600 + 120 * 5, settle_s=600.0, period_s=120.0)
+        doc = build(exp, Machine(kind="printer", port="x"), LoopName(heater="hotend"))
+        first = doc.frequency[0]
+        assert first.segments == 4 and first.trust == "good"
+        assert first.magnitude == pytest.approx(abs(HEATER.response(first.frequency)), rel=0.03)
+        assert render_markdown(doc).count("## Frequency response") == 1
+
+    def test_an_autotune_s_own_gains_are_the_designed_controller(self):
+        exp = self._experiment("autotune", lambda s: 200.0, 120)
+        doc = build(exp, Machine(kind="printer", port="x"), LoopName(heater="bed"),
+                    autotune={"kp": 19.15, "ki": 1.52, "kd": 60.49, "ku": 31.9, "tu": 25.3})
+        assert doc.plant is None  # a relay names a point of the plant, not the plant
+        g = doc.controller.designed
+        assert (g.kp, g.basis, g.rule, g.parameters["tu"]) == (19.15, "identified", "firmware_autotune", 25.3)

@@ -455,9 +455,13 @@ def _crossing(t: Sequence[float], y: Sequence[float], level: float, rising: bool
 
 
 def _ends(t, y, step_time: float, tail: float) -> Tuple[float, float]:
-    """The output before ``step_time`` (its mean) and at the end (the mean of the last
-    ``tail`` fraction of the record)."""
+    """The output just before ``step_time`` (the mean of the last ``tail`` fraction of
+    the samples before it, ten at least, so a record that begins with a heat-up is read
+    where it had settled) and at the end (the mean of the last ``tail`` fraction of the
+    record)."""
     before = [v for s, v in zip(t, y) if s <= step_time]
+    if before:
+        before = before[-max(10, int(len(before) * tail)):]
     initial = sum(before) / len(before) if before else y[0]
     n = max(1, int(len(y) * tail))
     final = sum(y[-n:]) / n

@@ -403,12 +403,14 @@ def figures(doc: LoopDocument, step_of: Optional[str] = None, step_time: Optiona
             ):
                 groups["loop"].append(_figure(f"{key}_{name}", f"{label}, {where}", value, unit, "computed", src))
     exp = next((e for e in doc.experiments if e.id == step_of), None)
-    if exp is not None and exp.samples is not None and step_time is not None:
+    if exp is not None and exp.samples is not None and exp.samples.t:
         s = exp.samples
-        try:
-            m = cl.step_measures(s.t, s.actual, step_time=step_time, setpoint=s.target, band=1.0)
-        except ValueError:
-            m = None
+        m = None
+        if step_time is not None:
+            try:
+                m = cl.step_measures(s.t, s.actual, step_time=step_time, setpoint=s.target, band=1.0)
+            except ValueError:
+                m = None
         if m is not None:
             for key, label, value, unit in (
                 ("rise_time", "rise time, 10 to 90 %", m.rise_time, "s"),
@@ -469,7 +471,7 @@ def render_markdown(doc: LoopDocument) -> str:
     if doc.experiments:
         out += ["## Experiments", "", "| Id | Kind | Outcome | Sample period | Ceiling | Samples |", "|---|---|---|---|---|---|"]
         for e in doc.experiments:
-            n = len(e.samples.t) if e.samples else f"job `{e.job}`"
+            n = len(e.samples.t) if e.samples else (f"job `{e.job}`" if e.job else f"{len(e.lines)} lines")
             ceiling = f"{e.ceiling_c:g} °C" if e.ceiling_c is not None else "—"
             outcome = e.outcome + (f": {e.reason}" if e.reason else "")
             out.append(f"| `{e.id}` | {e.kind} | {outcome} | {e.sample_period_s:g} s | {ceiling} | {n} |")
@@ -487,6 +489,96 @@ def render_markdown(doc: LoopDocument) -> str:
             )
         out.append("")
     return "\n".join(out).rstrip() + "\n"
+
+
+def build(
+    experiment: Experiment,
+    machine: Machine,
+    loop: LoopName,
+    *,
+    rule: Optional[str] = "simc",
+    kind: str = "pi",
+    closed_loop_time: Optional[float] = None,
+    on_machine: Optional[Gains] = None,
+    read: Optional[Experiment] = None,
+    autotune: Optional[Dict[str, float]] = None,
+    units: Optional[Dict[str, str]] = None,
+) -> LoopDocument:
+    """A document of one experiment, its figures computed here.
+
+    A step or a perturbation with the heater's power in its samples has its plant fitted
+    (``control_loops.fit_fopdt``, the samples read onto an even grid of its sample
+    period) and a controller designed by ``rule``; a perturbation adds the frequency
+    response at the odd harmonics of its period, against its target; a step adds its step
+    measures. An autotune's own gains (``autotune``, as the firmware said them) are the
+    designed controller, identified from it. ``on_machine`` and ``read`` are the gains the
+    board answered with and the read they rest on."""
+    exps = [experiment] + ([read] if read is not None else [])
+    doc = LoopDocument(
+        generated_at=now(),
+        machine=machine,
+        loop=loop,
+        units=units or {"temperature": "°C", "time": "s", "power": POWER_UNIT},
+        experiments=exps,
+    )
+    s = experiment.samples
+    dt = experiment.sample_period_s
+    p = experiment.parameters
+    if s is not None and len(s.t) >= 8 and all(v is not None for v in s.power) and experiment.kind != "autotune":
+        _, u = cl.resample(s.t, [float(v) for v in s.power], dt)
+        _, y = cl.resample(s.t, s.actual, dt)
+        try:
+            found = cl.fit_fopdt(u, y, dt)
+            if found.plant.gain > 0:
+                doc.plant = plant_model(found, experiment.id, ambient=found.initial)
+        except ValueError:
+            pass
+        if experiment.kind == "perturbation" and "period_s" in p:
+            _, r = cl.resample(s.t, s.target, dt)
+            period = float(p["period_s"])
+            skip = int(round((float(p.get("settle_s", 0)) + period) / dt))
+            try:
+                points = cl.frequency_response(u, y, dt, period, (1, 3, 5, 7), reference=r, skip=skip)
+            except ValueError:
+                points = []
+            doc.frequency = [
+                FrequencyPoint(
+                    frequency=q.frequency,
+                    magnitude=q.magnitude,
+                    phase_deg=q.phase_deg,
+                    coherence=min(1.0, q.coherence),
+                    segments=q.segments,
+                    above_noise=q.above_noise if math.isfinite(q.above_noise) else None,
+                    trust=q.trust,
+                    why=q.why,
+                    source=experiment.id,
+                )
+                for q in points
+                if math.isfinite(q.magnitude)
+            ]
+    designed = None
+    if autotune and {"kp", "ki", "kd"} <= set(autotune):
+        designed = Gains(
+            kp=autotune["kp"], ki=autotune["ki"], kd=autotune["kd"], basis="identified",
+            source=experiment.id, rule="firmware_autotune",
+            parameters={k: v for k, v in autotune.items() if k in ("ku", "tu")},
+        )
+    elif rule and doc.plant is not None:
+        # For the board's PID, whose sample time is the board's and not known here: the
+        # gains carry none, and the margins are of the continuous controller, as the
+        # board's own gains' are.
+        d = cl.design(rule, plant=doc.plant.plant(), kind=kind, dt=dt, closed_loop_time=closed_loop_time)
+        designed = gains_of(d.pid, "computed", "plant", rule=rule, closed_loop_time=closed_loop_time)
+        designed.dt = None
+    doc.controller = Controller(designed=designed, on_machine=on_machine)
+    step_time = float(p["settle_s"]) if experiment.kind == "step" and "settle_s" in p else None
+    doc.groups = figures(doc, step_of=experiment.id, step_time=step_time)
+    return LoopDocument.model_validate(doc.model_dump(by_alias=True))
+
+
+# What the heater's power is counted in: the board's `@:` figure. Taken to run 0 to 255, as
+# the PID's output does; that is assumed, and a heater held full on reads its top.
+POWER_UNIT = "the board's @: figure, taken as 0 to 255 (assumed)"
 
 
 def samples_from_columns(rows: Sequence[Dict[str, str]]) -> Samples:
