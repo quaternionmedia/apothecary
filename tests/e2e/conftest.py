@@ -449,6 +449,27 @@ def browser_type_launch_args(browser_type_launch_args, request):
 
 
 @pytest.fixture(scope="session")
+def session_browser(launch_browser):
+    """The session's browser, drawing without multisampling: the one a test's ``page``
+    opens in, and a module's ``module_page``."""
+    browser = launch_browser()
+    yield browser
+    browser.close()
+
+
+@pytest.fixture(scope="module")
+def module_page(session_browser):
+    """A page the tests of one module share, in a context of its own with the viewport a
+    test's ``page`` has, closed after the module: for tests that only read what a page
+    shows once it has loaded, or change what none of the others reads, so it is loaded
+    once for them and not once each. Each test sharing it passes alone and in any order
+    (tests/e2e/README.md, "What each layer holds")."""
+    context = session_browser.new_context()
+    yield context.new_page()
+    context.close()
+
+
+@pytest.fixture(scope="session")
 def _antialiased_browser(launch_browser, browser_type_launch_args):
     """The browser a test that records pictures opens its page in: the session's,
     antialiased."""
@@ -463,12 +484,12 @@ def _records_pictures(request) -> bool:
 
 
 @pytest.fixture
-def browser(browser, request):
+def browser(session_browser, request):
     """The browser the test's ``page`` opens in: the session's, drawing without
     multisampling, or the antialiased one for a test that records pictures."""
     if _records_pictures(request):
         return request.getfixturevalue("_antialiased_browser")
-    return browser
+    return session_browser
 
 
 @pytest.fixture

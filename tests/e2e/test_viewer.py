@@ -14,10 +14,21 @@ def _open(page: Page, url: str) -> None:
     expect(page.locator("#status")).to_contain_text("Loaded", timeout=20000)
 
 
+@pytest.fixture(scope="module")
+def garage(module_page: Page, base_url: str):
+    """The garage as the viewer opens it, loaded once for the tests that read it so, and
+    what the page has said to its console as an error since before it loaded. A test
+    here that changes what is open puts it back."""
+    errors: list[str] = []
+    module_page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
+    _open(module_page, f"{base_url}/viewer/sites/garage")
+    return module_page, errors
+
+
 @pytest.mark.e2e
-def test_viewer_page_loads(page: Page, base_url: str):
+def test_viewer_page_loads(garage):
     """Test that the fractal viewer page loads successfully."""
-    page.goto(f"{base_url}/viewer/sites/garage")
+    page, _ = garage
 
     expect(page).to_have_title("Apothecary Fractal Viewer")
     heading = page.locator(".toolbar h1")
@@ -25,24 +36,27 @@ def test_viewer_page_loads(page: Page, base_url: str):
 
 
 @pytest.mark.e2e
-def test_the_site_crumb_lists_the_other_sites(page: Page, base_url: str):
+def test_the_site_crumb_lists_the_other_sites(garage):
     """The banner's site crumb names the site in view; under its ▾, every site but the
     universe, which is the banner's first crumb."""
-    _open(page, f"{base_url}/viewer/sites/garage")
+    page, _ = garage
 
     expect(page.locator("#site-level")).to_have_text("garage")
     page.locator("#site-menu > summary").click()
-    listed = page.locator("#site-menu .site-item").evaluate_all(
-        "(items) => items.map((i) => i.dataset.site)"
-    )
+    # The menu is filled as it opens (its toggle event, a task after the click).
+    items = page.locator("#site-menu .site-item")
+    expect(items).to_have_count(3)
+    listed = items.evaluate_all("(items) => items.map((i) => i.dataset.site)")
     assert listed == ["datum_core", "garage", "theatre"]
     expect(page.locator("#site-menu .site-item.open")).to_have_text("● garage")
+    page.locator("#site-menu > summary").click()
+    expect(page.locator("#site-menu")).not_to_have_attribute("open", "")
 
 
 @pytest.mark.e2e
-def test_viewer_has_canvas(page: Page, base_url: str):
+def test_viewer_has_canvas(garage):
     """Test that the 3D viewer canvas exists and renders with real dimensions."""
-    page.goto(f"{base_url}/viewer/sites/garage")
+    page, _ = garage
 
     canvas = page.locator("#viewer-canvas")
     expect(canvas).to_be_visible()
@@ -53,20 +67,22 @@ def test_viewer_has_canvas(page: Page, base_url: str):
 
 
 @pytest.mark.e2e
-def test_viewer_has_code_panel(page: Page, base_url: str):
+def test_viewer_has_code_panel(garage):
     """The site's generated OpenSCAD is Site's SCAD window, a tab beside Site, shown when
     its tab is pressed."""
-    page.goto(f"{base_url}/viewer/sites/garage")
+    page, _ = garage
 
     windows.show(page, "scad")
     code_content = page.locator("#code-content")
     expect(code_content).to_be_visible()
+    windows.show(page, "site")
+    expect(code_content).to_be_hidden()
 
 
 @pytest.mark.e2e
-def test_viewer_dark_theme(page: Page, base_url: str):
+def test_viewer_dark_theme(garage):
     """Test that the viewer uses dark theme."""
-    page.goto(f"{base_url}/viewer/sites/garage")
+    page, _ = garage
 
     body = page.locator("body")
     bg_color = body.evaluate("el => getComputedStyle(el).backgroundColor")
@@ -76,7 +92,7 @@ def test_viewer_dark_theme(page: Page, base_url: str):
 
 
 @pytest.mark.e2e
-def test_viewer_shows_contents_for_the_loaded_site(page: Page, base_url: str):
+def test_viewer_shows_contents_for_the_loaded_site(garage):
     """Test that the garage site's top-level structures appear in Contents:
     the workbench and its printer, plus the building shell, utility
     fixture stubs, storage, the CNC router, the stand it sits on and the coupon
@@ -84,7 +100,7 @@ def test_viewer_shows_contents_for_the_loaded_site(page: Page, base_url: str):
     devkit, the footpedal, an Uno, a Pi, a Teensy), the Stream Deck + and the
     whiteboard on the wall.
     """
-    _open(page, f"{base_url}/viewer/sites/garage")
+    page, _ = garage
 
     expect(page.locator("#contents-list .contents-item")).to_have_count(18)
     contents = page.locator("#contents-list")
@@ -175,14 +191,12 @@ def test_selecting_a_part_leaf_shows_the_absorbed_part_view(page: Page, base_url
 
 
 @pytest.mark.e2e
-def test_viewer_integrated_loads_without_critical_errors(page: Page, base_url: str):
+def test_viewer_integrated_loads_without_critical_errors(garage):
     """No console errors from loading the garage: its tree, its geometry and its
     device bindings."""
-    console_errors = []
-    page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+    page, console_errors = garage
 
     # The viewer's own signals, not networkidle.
-    _open(page, f"{base_url}/viewer/sites/garage")
     page.evaluate("() => window.fractalViewer.waveDone")
     page.wait_for_function("() => window.fractalViewer.bindingsLoaded")
 
@@ -490,10 +504,10 @@ def _load_garage(page: Page, base_url: str) -> dict:
 
 
 @pytest.mark.e2e
-def test_far_plane_clears_the_furthest_the_camera_can_dolly(page: Page, base_url: str):
+def test_far_plane_clears_the_furthest_the_camera_can_dolly(garage):
     """Pulled back as far as the dolly clamp allows, the world is still inside the
     far plane."""
-    state = _load_garage(page, base_url)
+    state = _viewer_state(garage[0])
 
     assert state["far"] > state["maxDolly"], (
         f"far plane {state['far']} is inside the dolly clamp {state['maxDolly']}; "

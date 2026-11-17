@@ -135,7 +135,7 @@ and a feature's test does not break when the layout around it changes:
 | Focused systems (`test_focused_systems.py`) | Every system the registry names, in the viewer, parameterized over the registry: it opens its main window alone, each section shows its part, a ring verb opens the section it acts on, its view lays everything out, a reload keeps or forgets it | the browser suite |
 | Features and loops (the rest) | What a person does with a part, a board, a picture, end to end, and the walkthrough pages and pictures the loops write | the browser suite |
 
-Five rules keep it so:
+Six rules keep it so:
 
 - **A feature's test asserts what the feature does, not where a window stands.**
   It opens what it needs through the shared helpers -- `windows.py` (a window, a
@@ -165,6 +165,12 @@ Five rules keep it so:
 - **A case is a parameter, not a copy.** Where a behaviour has variants -- a
   window's home, a verb and the section it opens, which window a remembered stack
   had in front -- they are one parameterized test, each case named.
+- **A page is shared only by tests that read it.** A test has a `page` of its own,
+  loaded for it. Where several tests of a module only read what one page shows once it
+  has loaded -- or change only what none of the others reads, or put back what they
+  change -- they share the conftest's `module_page`, loaded once (the universe as it
+  opens in `test_the_universe.py`, the garage in `test_viewer.py`), and each passes
+  alone and with the module's tests in reverse order.
 
 ## The two recorders
 

@@ -79,6 +79,17 @@ def _tree(page: Page, base_url: str) -> dict:
     return page.request.get(f"{base_url}/sites/{UNIVERSE}").json()["tree"]
 
 
+@pytest.fixture(scope="module")
+def opened(module_page: Page, base_url: str):
+    """The universe as it opens, loaded once for the tests that read it so, and each
+    request the page has made since before it loaded. Of them only Selected's test
+    changes anything, the selection, which no other reads."""
+    asked: list[str] = []
+    module_page.on("request", lambda request: asked.append(request.url))
+    _at(module_page, base_url)
+    return module_page, asked
+
+
 # The sphere as the page holds it: how far each node's middle is from the site's origin,
 # where the camera stands, how near it may come, whether the whole of it is in view, and
 # whether the floor grid is drawn.
@@ -113,10 +124,8 @@ FACES_OUT = """(key) => {
 
 
 @pytest.mark.e2e
-def test_the_universe_opens_as_a_whole_sphere_seen_from_outside_and_the_camera_may_enter(
-    page: Page, base_url: str
-):
-    _at(page, base_url)
+def test_the_universe_opens_as_a_whole_sphere_seen_from_outside_and_the_camera_may_enter(opened):
+    page, _ = opened
     seen = page.evaluate(SPHERE)
     assert seen["camera"] > seen["outermost"], f"the camera starts inside the sphere: {seen}"
     assert seen["inView"], f"some of the sphere is out of the opening view: {seen}"
@@ -125,8 +134,8 @@ def test_the_universe_opens_as_a_whole_sphere_seen_from_outside_and_the_camera_m
 
 
 @pytest.mark.e2e
-def test_a_part_faces_outward_and_a_site_stands_upright(page: Page, base_url: str):
-    _at(page, base_url)
+def test_a_part_faces_outward_and_a_site_stands_upright(opened, base_url: str):
+    page, _ = opened
     tree = _tree(page, base_url)
     leaves = [c for c in tree["children"] if c["part_ref"] and c["turn"][1] > 1]
     assert leaves, "no leaf is turned"
@@ -138,12 +147,8 @@ def test_a_part_faces_outward_and_a_site_stands_upright(page: Page, base_url: st
 
 
 @pytest.mark.e2e
-def test_every_other_site_is_a_miniature_and_nothing_is_rendered_to_draw_one(
-    page: Page, base_url: str
-):
-    asked = []
-    page.on("request", lambda request: asked.append(request.url))
-    _at(page, base_url)
+def test_every_other_site_is_a_miniature_and_nothing_is_rendered_to_draw_one(opened, base_url: str):
+    page, asked = opened
     tree = _tree(page, base_url)
     pieces = {child["site_ref"]: child for child in tree["children"] if child["site_ref"]}
     assert set(pieces) == set(SITES)
@@ -165,8 +170,8 @@ def test_every_other_site_is_a_miniature_and_nothing_is_rendered_to_draw_one(
 
 
 @pytest.mark.e2e
-def test_selected_on_a_sites_piece_says_it_is_a_site_and_its_real_size(page: Page, base_url: str):
-    _at(page, base_url)
+def test_selected_on_a_sites_piece_says_it_is_a_site_and_its_real_size(opened, base_url: str):
+    page, _ = opened
     select(page, PIECE)
     piece = next(c for c in _tree(page, base_url)["children"] if c["site_ref"] == "garage")
     real = " × ".join(f"{side:.0f}" for side in piece["site_size"]) + " mm"
@@ -257,8 +262,8 @@ def test_a_step_out_of_a_sites_own_level_goes_to_the_universe(
 
 
 @pytest.mark.e2e
-def test_the_universe_has_nothing_above_it(page: Page, base_url: str):
-    _at(page, base_url)
+def test_the_universe_has_nothing_above_it(opened):
+    page, _ = opened
     page.locator("#viewer-canvas").focus()
     page.keyboard.press("PageUp")
     expect(status(page)).to_contain_text("Already at the top of apothecary")
