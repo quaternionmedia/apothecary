@@ -688,7 +688,9 @@ full; the others are entered from ⊞ Windows › Journeys and from the
   its piece, at its level), what is **Pinned** in every site (each with its
   Remove or Unpin), the site's **Jobs** (its tab counts them and the running
   ones; a row opens its machine) and its **SCAD**, generated from the tree.
-- **Selected**: the selected piece -- its name, place and footprint, a
+- **Selected**: the selected piece -- its name, place (each field to two places
+  at the most; the place itself is kept whole, and a field changes it only when
+  typed in) and footprint, a
   compound piece's Detail, "⤵ Step into" for one with children (a site's
   piece in the universe: that it is a site, its real size, and the step into
   it) -- then its

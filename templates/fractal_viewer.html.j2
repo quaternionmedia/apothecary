@@ -888,7 +888,7 @@
         import { makePickScope, kindOf, WALL as WALL_LAYER, GRID as GRID_LAYER, MACHINE_BUTTONS as BUTTONS_LAYER, MEASURE as MEASURE_LAYER } from '/static/pick_scope.js';
         import { takeLayerColours, layerColour, layerHex, categoriesInOrder } from '/static/layer_colours.js';
         import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf } from '/static/orbits.js';
-        import { ownExtents, sizeFromSceneBox, turnedExtents, turnRowsInScene, turnedBounds, between, gap as gapBetween, nearestWithin, length as mmText, layLabels } from '/static/measure.js';
+        import { ownExtents, sizeFromSceneBox, turnedExtents, turnRowsInScene, turnedBounds, between, gap as gapBetween, nearestWithin, length as mmText, fieldMm, layLabels } from '/static/measure.js';
         import { mountPanels } from '/static/panels.js';
         import { mountMachine } from '/static/widgets/machine.js';
         import { mountBoards } from '/static/boards.js';
@@ -2452,7 +2452,7 @@
                     this.recomputeWorldBounds(node);
                     for (const axis of ['x', 'y', 'z']) {
                         const input = this.selectedBodyEl.querySelector(`#pos-${axis}`);
-                        if (input) input.value = node.position[axis];
+                        if (input) input.value = fieldMm(node.position[axis]);
                     }
                     if (mesh && mesh.userData.camera) this.pictureMarks.posePreview(mesh.userData.camera, null);
                 }
@@ -4827,9 +4827,9 @@
                     <div class="prop-row"><label>Name</label><span>${esc(node.name)}</span></div>
                     ${statusRow}
                     <div class="prop-row pos-row"><label${at}>Position</label>
-                        <span class="axis">X</span><input type="number" id="pos-x" aria-label="X in mm" step="10" value="${node.position.x}">
-                        <span class="axis">Y</span><input type="number" id="pos-y" aria-label="Y in mm" step="10" value="${node.position.y}">
-                        <span class="axis">Z</span><input type="number" id="pos-z" aria-label="Z in mm" step="10" value="${node.position.z}">
+                        <span class="axis">X</span><input type="number" id="pos-x" aria-label="X in mm" step="10" value="${fieldMm(node.position.x)}">
+                        <span class="axis">Y</span><input type="number" id="pos-y" aria-label="Y in mm" step="10" value="${fieldMm(node.position.y)}">
+                        <span class="axis">Z</span><input type="number" id="pos-z" aria-label="Z in mm" step="10" value="${fieldMm(node.position.z)}">
                         <span class="axis">mm</span>
                     </div>
                     ${facts}
@@ -7744,7 +7744,7 @@
                     this.showCameraHandles(mesh.userData.camera);
                     for (const axis of ['x', 'y', 'z']) {
                         const input = this.selectedBodyEl.querySelector(`#pos-${axis}`);
-                        if (input) input.value = node.position[axis];
+                        if (input) input.value = fieldMm(node.position[axis]);
                     }
                     return;
                 }
@@ -7770,7 +7770,7 @@
                 // Every frame of a drag: only the numbers move, not the panel.
                 for (const axis of ['x', 'y', 'z']) {
                     const input = this.selectedBodyEl.querySelector(`#pos-${axis}`);
-                    if (input) input.value = node.position[axis];
+                    if (input) input.value = fieldMm(node.position[axis]);
                 }
             }
 

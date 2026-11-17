@@ -117,6 +117,16 @@ export function length(mm) {
     return `${(Math.abs(mm) < 0.005 ? 0 : mm).toFixed(2)} mm`;
 }
 
+/* A number as a field shows it: to two places at the most, no trailing zeros, so 1200
+ * reads 1200 and 1663.4219857 reads 1663.42; the value the field stands for is kept
+ * whole where it is held. */
+export function fieldMm(mm) {
+    const v = Number(mm);
+    if (!Number.isFinite(v)) return "0";
+    const shown = Number(v.toFixed(2));
+    return String(Object.is(shown, -0) ? 0 : shown);
+}
+
 /* Whether two boxes ({ cx, cy, w, h }, pixels) come nearer than `gap` to each other. */
 function crowds(a, b, gap) {
     return Math.abs(a.cx - b.cx) < (a.w + b.w) / 2 + gap && Math.abs(a.cy - b.cy) < (a.h + b.h) / 2 + gap;

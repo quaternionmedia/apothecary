@@ -55,6 +55,7 @@ const turns = %(turns)s, vectors = %(vectors)s;
 out.turned = turns.map((t) => vectors.map((v) => m.turned(t, v)));
 out.inScene = turns.map((t) => m.turnRowsInScene(t));
 out.boxes = turns.map((t) => m.turnedBounds(box([-5, -10, 0], [15, 10, 30]), t, [100, -200, 300]));
+out.fields = [1200, 1663.4219857129313, -0.004, -12.3456, 0.1 + 0.2, "x", 2.006].map(m.fieldMm);
 // A small part's three dimension lines end a few pixels apart: each label is put past its
 // line's end, and none crowds another; a line seen end on puts its label below its end.
 const small = [
@@ -179,6 +180,10 @@ def test_a_turned_box_is_the_box_the_server_reports(result):
         want = node.world_bounds()
         _close(got["min"], [want.min_point.x, want.min_point.y, want.min_point.z])
         _close(got["max"], [want.max_point.x, want.max_point.y, want.max_point.z])
+
+
+def test_a_field_shows_two_places_at_the_most(result):
+    assert result["fields"] == ["1200", "1663.42", "0", "-12.35", "0.3", "0", "2.01"]
 
 
 def _box(laid, label, gap=0):
