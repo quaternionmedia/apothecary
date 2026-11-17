@@ -459,9 +459,8 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "pinned-view-unpin": (WIDGET, WHAT_IS_THERE, "a button that unpins one view, in any site"),
     "pinned-board-unpin": (WIDGET, WHAT_IS_THERE, "a button that takes one board's pin back"),
     # ---- Layers, apothecary/static/widgets/layers.js ----------------------
-    # Tick-boxes and a stepper that set the pick scope (static/pick_scope.js): no cell of
-    # the ring does exactly what one does (View › Depth sets the depth by name, and
-    # Select walls is one layer's tick), so none is ring-backed.
+    # Tick-boxes and a stepper that set the pick scope (static/pick_scope.js), each the
+    # act of a cell under View › Layers or View › Depth (RING_BACKED).
     "layers-tick": (
         WIDGET,
         WHAT_YOU_SEE,
@@ -1007,6 +1006,16 @@ RING_BACKED: Dict[str, str] = {
     "deck-machine": "deck:machine",
     "deck-step": "deck:step",
     "deck-here": "deck:here",
+    # The Layers window's controls are the cells of View › Layers and View › Depth: a
+    # layer's Shown or Selectable tick its ring's Shown or Selectable (each layer has
+    # its own; the grid's is in every site's), the stepper One less and One more, Reset
+    # Reset.
+    "layers-tick": "layer:shown:grid",
+    "root:change:onChange": "layer:shown:grid",
+    "layers-depth-less": "view:depth:less",
+    "layers-depth-more": "view:depth:more",
+    "layers-reset-all": "layer:reset",
+    "root:click:onClick": "view:depth:more",
     "ws-hour": "working:open",
     "ws-add-camera": "camera:add-here",
     "ws-choose": "camera:device",

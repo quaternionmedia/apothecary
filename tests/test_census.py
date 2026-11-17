@@ -378,7 +378,7 @@ def test_the_viewers_ring_backed_share_is_at_least_its_floor():
     `apothecary census` gives the share."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 144 / 247, f"{backed} of {own} ring-backed"
+    assert backed / own >= 148 / 247, f"{backed} of {own} ring-backed"
 
 
 def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address():
@@ -591,3 +591,38 @@ def test_the_knobs_controls_are_cells_of_panels_machine_knobs():
         ("deck-open", "panel:toggle:deck"),
     ):
         assert by_name[name].ring_action == cell and cell in on_the_ring, name
+
+
+def test_the_layers_windows_controls_are_cells_the_ring_produces():
+    """A layer's tick, the depth stepper and Reset each do what a cell of View › Layers
+    or View › Depth does, and the canvas ring produces that cell for a site with no
+    shells and for the universe alike."""
+    from apothecary import sites
+    from apothecary.menu import Context, Pointing, resolve
+
+    taken = census.take()
+    by_name = {f.name: f for f in taken.controls_of_its_own()}
+    backed = {
+        name: by_name[name].ring_action
+        for name in ("layers-tick", "layers-depth-less", "layers-depth-more", "layers-reset-all")
+    }
+    assert backed == {
+        "layers-tick": "layer:shown:grid",
+        "layers-depth-less": "view:depth:less",
+        "layers-depth-more": "view:depth:more",
+        "layers-reset-all": "layer:reset",
+    }
+
+    def actions(options) -> set:
+        found = set()
+        for option in options:
+            if option.action:
+                found.add(option.action)
+            found |= actions(option.children or [])
+        return found
+
+    for site in ("garage", "apothecary"):
+        produced = actions(
+            resolve(Context(pointing=Pointing.CANVAS), sites.store.get(site)).options
+        )
+        assert set(backed.values()) <= produced, site
