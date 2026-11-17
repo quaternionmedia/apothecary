@@ -1208,7 +1208,7 @@ def test_a_poll_while_a_cut_streams_is_the_report_alone_and_holds_the_programmed
 def test_a_cut_polled_between_its_lines_sends_no_parser_state_request(
     fake_arduino_cli, router_links, monkeypatch
 ):
-    monkeypatch.setenv("APOTHECARY_SIMULATED_SPEED", "0.2")
+    monkeypatch.setenv("APOTHECARY_SIMULATED_SPEED", "0.05")  # a two-second cut, polled throughout
     devices.identify_printer(PORT)
     full = devices.printer_status(PORT)
     kept = devices.save_print_file(
