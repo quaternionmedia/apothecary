@@ -59,6 +59,7 @@ at page 00.
 | [41 — The deck while a print streams](../walkthrough/41-the-deck-while-a-print-streams.md) | The Stream Deck +'s touch strip while a print streams on the simulated printer: Progress brought forward once, a swipe along the Deck window's strip back to the knobs, which say the print holds the port, on to Status, and a cancelled print kept on Progress until a touch; written by the browser suite |
 | [42 — Measuring in the world](../walkthrough/42-measuring-in-the-world.md) | Measure ticked in the Layers window: the calibration cube reading its size along its own axes, each number saying where it comes from, then two of its corners clicked for the distance between them and dx, dy and dz; written by the browser suite |
 | [43 — Parts that meet](../walkthrough/43-parts-that-meet.md) | A dust hose adapter's interfaces, how each fits the hose and two ports, the three placed where they meet by their connections, both fitting ends in use refused, and what is still a stub |
+| [44 — A gap that travels](../walkthrough/44-a-gap-that-travels.md) | A gap that is not one number: two circles, an eccentric read along a ray and to its nearest point, the airgap's cam sweeping, the rolling rotor rolling, the flexure rotor's flank gap closing to its stop and its leaves' bending |
 
 ## The checklists
 
