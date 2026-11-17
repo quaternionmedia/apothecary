@@ -263,7 +263,12 @@ def test_every_system_and_section_has_a_line_here():
 
 @pytest.mark.e2e
 @pytest.mark.parametrize("case", CASES)
-def test_a_system_opens_its_main_window_with_what_it_is_opened_for(page: Page, url: str, case: str):
+def test_a_system_opens_its_main_window_and_each_section_opened_from_windows_shows_its_part(
+    page: Page, url: str, case: str
+):
+    """Opened, its main window shows with the one section it is opened for, and every
+    other section of its subject's kind is a window closed until asked for; then each,
+    opened from ⊞ Windows, shows its part of the subject."""
     _opened(page, url, case)
     system, sections = _sections(case)
     if case in WITH:
@@ -282,14 +287,6 @@ def test_a_system_opens_its_main_window_with_what_it_is_opened_for(page: Page, u
         if section not in sections:
             assert windows.state(page, system.window(section.id)) is None, section.id
 
-
-@pytest.mark.e2e
-@pytest.mark.parametrize("case", CASES)
-def test_each_section_opened_from_windows_shows_its_part_of_the_subject(
-    page: Page, url: str, case: str
-):
-    _opened(page, url, case)
-    system, sections = _sections(case)
     for section in sections:
         window = system.window(section.id)
         windows.from_the_windows_menu(page, window)
