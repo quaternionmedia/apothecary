@@ -116,3 +116,48 @@ export function nearestWithin(points, x, y, radius) {
 export function length(mm) {
     return `${(Math.abs(mm) < 0.005 ? 0 : mm).toFixed(2)} mm`;
 }
+
+/* Whether two boxes ({ cx, cy, w, h }, pixels) come nearer than `gap` to each other. */
+function crowds(a, b, gap) {
+    return Math.abs(a.cx - b.cx) < (a.w + b.w) / 2 + gap && Math.abs(a.cy - b.cy) < (a.h + b.h) / 2 + gap;
+}
+
+/* Where each label of a measurement stands on screen: at the far end of its line, out
+ * along the line past its end by `gap` pixels, so it is off the line and off what the
+ * line measures from; nudged further out, then across, until it crowds no label placed
+ * before it and covers no line's end; kept inside the canvas. `labels` is [{ x, y, dx, dy, w, h }]: the line's far
+ * end, its direction on screen from its near end, and the label's size, in pixels (y
+ * down). A line seen end on (no direction) puts its label below its end. Answers
+ * [{ cx, cy }], each label's middle, in the order given. */
+export function layLabels(labels, { width = Infinity, height = Infinity, gap = 6 } = {}) {
+    const placed = [];
+    const inside = (box) => ({
+        ...box,
+        cx: Math.min(Math.max(box.cx, box.w / 2), Math.max(box.w / 2, width - box.w / 2)),
+        cy: Math.min(Math.max(box.cy, box.h / 2), Math.max(box.h / 2, height - box.h / 2)),
+    });
+    for (const label of labels) {
+        const n = Math.hypot(label.dx, label.dy);
+        const [dx, dy] = n > 1e-6 ? [label.dx / n, label.dy / n] : [0, 1];
+        // How far from its middle the box reaches along the line's direction.
+        const reach = Math.min(dx ? label.w / 2 / Math.abs(dx) : Infinity, dy ? label.h / 2 / Math.abs(dy) : Infinity);
+        const at = (along, aside) => inside({
+            cx: label.x + dx * along - dy * aside,
+            cy: label.y + dy * along + dx * aside,
+            w: label.w,
+            h: label.h,
+        });
+        // Clear of every label placed before it, and of every line's end.
+        const clear = (box) => !placed.some((p) => crowds(p, box, gap))
+            && !labels.some((l) => crowds({ cx: l.x, cy: l.y, w: 0, h: 0 }, box, gap));
+        let box = at(reach + gap, 0);
+        const step = label.h + gap;
+        for (let k = 1; k <= 40 && !clear(box); k++) {
+            // Out along the line first, then to either side of it, a label's height at a time.
+            const out = reach + gap + step * Math.ceil(k / 3);
+            box = at(out, k % 3 === 0 ? 0 : (k % 3 === 1 ? 1 : -1) * step * Math.ceil(k / 3));
+        }
+        placed.push(box);
+    }
+    return placed.map(({ cx, cy }) => ({ cx, cy }));
+}

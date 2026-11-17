@@ -888,7 +888,7 @@
         import { makePickScope, kindOf, WALL as WALL_LAYER, GRID as GRID_LAYER, MACHINE_BUTTONS as BUTTONS_LAYER, MEASURE as MEASURE_LAYER } from '/static/pick_scope.js';
         import { takeLayerColours, layerColour, layerHex, categoriesInOrder } from '/static/layer_colours.js';
         import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf } from '/static/orbits.js';
-        import { ownExtents, sizeFromSceneBox, turnedExtents, turnRowsInScene, turnedBounds, between, gap as gapBetween, nearestWithin, length as mmText } from '/static/measure.js';
+        import { ownExtents, sizeFromSceneBox, turnedExtents, turnRowsInScene, turnedBounds, between, gap as gapBetween, nearestWithin, length as mmText, layLabels } from '/static/measure.js';
         import { mountPanels } from '/static/panels.js';
         import { mountMachine } from '/static/widgets/machine.js';
         import { mountBoards } from '/static/boards.js';
@@ -1105,6 +1105,11 @@
         // relief (0.4 up).
         const BED_GRID_MM = 10;
         const MEASURE_SNAP_PX = 12;      // a measured point snaps to a vertex this near the pointer
+        // A measurement's lines, the points at their ends and its labels' text, in pixels
+        // on screen whatever the distance: drawn thick enough to read over a mesh.
+        const MEASURE_ROD_PX = 3;
+        const MEASURE_END_PX = 7;
+        const MEASURE_LABEL_PX = 13;
         // The universe's orbitals (drawOrbits): how faint a shell's rings, a cluster's outline
         // and the line from a part to what it is built from are drawn, that line's colour,
         // and how near a click must land to a ring or an outline to open its layer's ring.
@@ -2243,6 +2248,7 @@
                 const held = byItself && slow && !viewMoved && !viewElsewhere && now - this.drawnWhen < IDLE_SHARE * this.frameCost;
                 if (byItself && !held) this.frameWanted = true;
                 this.sizeCameraHandles();
+                this.placeMeasure();
                 if (this.frameWanted || (!held && this.sceneChanged())) {
                     this.frameWanted = false;
                     this.anchors.update();
@@ -3291,10 +3297,18 @@
                 if (!node || !mesh || mesh.userData.isDot) return null;
                 const geometry = mesh.geometry;
                 if (!geometry.boundingBox) geometry.computeBoundingBox();
-                const box = geometry.boundingBox;
+                // A machine drawn as its pieces measures all of them: the moving ones hang
+                // from the still one, in its frame, wherever its tool has them now.
+                const box = geometry.boundingBox.clone();
+                const moving = (mesh.userData.kinematics && mesh.userData.kinematics.pieces) || [];
+                for (const piece of moving) {
+                    if (!piece.geometry.boundingBox) piece.geometry.computeBoundingBox();
+                    piece.updateMatrix();
+                    box.union(piece.geometry.boundingBox.clone().applyMatrix4(piece.matrix));
+                }
                 mesh.updateWorldMatrix(true, false);
                 const scene = [0, 1, 2].map((i) => (box.max.getComponent(i) - box.min.getComponent(i)) * Math.abs(mesh.scale.getComponent(i)));
-                const source = !mesh.userData.isPlaceholder ? 'the drawn mesh, as loaded'
+                const source = !mesh.userData.isPlaceholder ? (moving.length ? `the drawn mesh, as loaded, its ${moving.length} moving piece${moving.length === 1 ? '' : 's'} with it` : 'the drawn mesh, as loaded')
                     : node.footprint ? 'declared footprint'
                     : envelopeBounds(node) ? 'envelope of its pieces' : 'a stand-in box, no size declared';
                 const corner = box.min.clone().applyMatrix4(mesh.matrixWorld);
@@ -3332,7 +3346,7 @@
                     lines.push(line);
                     // A site's piece is its site drawn small: the reading says so, and how large.
                     if (node.site_ref && node.site_size) lines.push(`${key} is the site ${node.site_ref} in miniature, not to scale beside the parts: the site itself measures ${sized({ x: node.site_size[0], y: node.site_size[1], z: node.site_size[2] })} (its pieces' extent)`);
-                    if (node.footprint && source === 'the drawn mesh, as loaded') lines.push(`${key} declares ${sized(ownExtents(node.footprint))} (declared footprint); the mesh above is what is drawn, and the two can differ`);
+                    if (node.footprint && source.startsWith('the drawn mesh')) lines.push(`${key} declares ${sized(ownExtents(node.footprint))} (declared footprint); the mesh above is what is drawn, and the two can differ`);
                     const frame = this.frameOf(key, node);
                     if (frame && frame.volume) lines.push(`${key}'s working volume ${frame.volume.map(mmText).join(' × ')} (its frame, from ${frame.volume_from === 'controller' ? "the machine's controller" : "the site's declaration"})`);
                 } else if (this.selectedName && this.renderNodeByKey[this.selectedName]) {
@@ -3347,47 +3361,97 @@
                 const m = this.measure;
                 if (m.group) { this.scene.remove(m.group); disposeDeep(m.group); m.group = null; }
                 m.lines = [];
+                m.rods = [];
+                m.labels = [];
                 if (this.measureOn()) {
                     const selection = this.selectedName ? this.measureSelection() : null;
                     const group = new THREE.Group();
-                    const line = (a, b) => group.add(new THREE.Line(
-                        new THREE.BufferGeometry().setFromPoints([a, b]),
-                        new THREE.LineBasicMaterial({ color: layerColour(MEASURE_LAYER, DEFAULT_COLOR), depthTest: false })));
-                    const label = (text, at) => {
+                    const colour = layerColour(MEASURE_LAYER, DEFAULT_COLOR);
+                    // A line a few pixels thick at any distance: a rod, its thickness set each
+                    // frame (placeMeasure), with a point at each end.
+                    const line = (a, b) => {
+                        const rod = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 8, 1, true),
+                            new THREE.MeshBasicMaterial({ color: colour, depthTest: false }));
+                        rod.position.copy(a).lerp(b, 0.5);
+                        rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+                        rod.userData.span = a.distanceTo(b);
+                        group.add(rod);
+                        m.rods.push(rod);
+                        group.add(new THREE.Points(new THREE.BufferGeometry().setFromPoints([a, b]),
+                            new THREE.PointsMaterial({ color: colour, size: MEASURE_END_PX, sizeAttenuation: false, depthTest: false })));
+                    };
+                    // A label on a dark ground, its text in the layer's colour, the size of the
+                    // page's own text whatever the distance; where it stands is placeMeasure's,
+                    // past the far end of its line.
+                    const label = (text, from, to) => {
                         const canvas = document.createElement('canvas');
-                        canvas.width = 384; canvas.height = 48;
                         const ctx = canvas.getContext('2d');
-                        ctx.font = '26px sans-serif'; ctx.fillStyle = 'rgba(20,20,20,0.8)'; ctx.fillRect(0, 0, 384, 48);
-                        ctx.fillStyle = layerHex(MEASURE_LAYER) || '#ffffff'; ctx.textBaseline = 'middle'; ctx.fillText(text, 8, 25, 368);
-                        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, sizeAttenuation: false }));
-                        sprite.scale.set(0.3, 0.0375, 1);
-                        sprite.position.copy(at);
+                        const font = `600 ${MEASURE_LABEL_PX * 2}px sans-serif`;
+                        ctx.font = font;
+                        canvas.width = Math.ceil(ctx.measureText(text).width) + 20;
+                        canvas.height = MEASURE_LABEL_PX * 2 + 14;
+                        ctx.font = font;
+                        ctx.fillStyle = 'rgba(16,18,16,0.88)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.strokeStyle = layerHex(MEASURE_LAYER) || '#ffffff'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+                        ctx.fillStyle = layerHex(MEASURE_LAYER) || '#ffffff'; ctx.textBaseline = 'middle'; ctx.fillText(text, 10, canvas.height / 2 + 1);
+                        const texture = new THREE.CanvasTexture(canvas);
+                        texture.colorSpace = THREE.SRGBColorSpace;
+                        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, sizeAttenuation: false }));
+                        sprite.userData = { from: from.clone(), to: to.clone(), w: canvas.width / 2, h: canvas.height / 2 };
                         group.add(sprite);
+                        m.labels.push(sprite);
                     };
                     if (selection) {
                         const token = selection.source.startsWith('the drawn') ? 'mesh' : selection.source.split(' ')[0];
                         for (const e of selection.edges) {
                             line(e.from, e.to);
-                            label(`${e.letter} ${mmText(e.mm)} · ${token}`, e.from.clone().lerp(e.to, 0.5));
+                            label(`${e.letter} ${mmText(e.mm)} · ${token}`, e.from, e.to);
                         }
                     }
                     const p = m.points;
                     if (p.length) {
                         group.add(new THREE.Points(
                             new THREE.BufferGeometry().setFromPoints(p.map((q) => q.at)),
-                            new THREE.PointsMaterial({ color: layerColour(MEASURE_LAYER, DEFAULT_COLOR), size: 9, sizeAttenuation: false, depthTest: false })));
+                            new THREE.PointsMaterial({ color: colour, size: 9, sizeAttenuation: false, depthTest: false })));
                     }
                     if (p.length === 2) {
                         line(p[0].at, p[1].at);
-                        label(`${mmText(between(p[0].site, p[1].site).length)} · ${p.map((q) => q.kind).join(', ')}`, p[0].at.clone().lerp(p[1].at, 0.5));
+                        label(`${mmText(between(p[0].site, p[1].site).length)} · ${p.map((q) => q.kind).join(', ')}`, p[0].at, p[1].at);
                     }
                     group.traverse((o) => { o.renderOrder = 10; o.raycast = () => {}; });  // seen over the world, never hit
                     this.scene.add(group);
                     m.group = group;
                     m.lines = this.measureReadings(selection);
+                    this.placeMeasure();
                 }
                 if (this.layersWidget) this.layersWidget.refresh();
                 this.invalidate();
+            }
+
+            // Each frame, before it is drawn: the measurement's rods MEASURE_ROD_PX thick on
+            // screen, and its labels past the far ends of their lines, clear of each other
+            // (measure.js's layLabels), the size of the page's text.
+            placeMeasure() {
+                const m = this.measure;
+                if (!m.group) return;
+                const cam = this.camera, h = this.canvas.clientHeight || 1, w = this.canvas.clientWidth || 1;
+                const perPixel = (at) => (2 * Math.tan((cam.fov * Math.PI) / 360) * at.distanceTo(cam.position)) / h;
+                for (const rod of m.rods) {
+                    const r = (MEASURE_ROD_PX / 2) * perPixel(rod.position);
+                    rod.scale.set(r, rod.userData.span, r);
+                }
+                const screen = (v) => { const s = v.clone().project(cam); return { x: ((s.x + 1) / 2) * w, y: ((1 - s.y) / 2) * h, z: s.z }; };
+                const ends = m.labels.map((sprite) => {
+                    const a = screen(sprite.userData.from), b = screen(sprite.userData.to);
+                    return { x: b.x, y: b.y, dx: b.x - a.x, dy: b.y - a.y, w: sprite.userData.w, h: sprite.userData.h, z: b.z };
+                });
+                const laid = layLabels(ends, { width: w, height: h, gap: 6 });
+                const k = (2 * Math.tan((cam.fov * Math.PI) / 360)) / h;
+                m.labels.forEach((sprite, i) => {
+                    const at = laid[i], z = Math.min(0.999, ends[i].z);
+                    sprite.position.copy(new THREE.Vector3((at.cx / w) * 2 - 1, 1 - (at.cy / h) * 2, z).unproject(cam));
+                    sprite.scale.set(sprite.userData.w * k, sprite.userData.h * k, 1);
+                });
             }
 
             openLayers() {

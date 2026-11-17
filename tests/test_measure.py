@@ -55,6 +55,17 @@ const turns = %(turns)s, vectors = %(vectors)s;
 out.turned = turns.map((t) => vectors.map((v) => m.turned(t, v)));
 out.inScene = turns.map((t) => m.turnRowsInScene(t));
 out.boxes = turns.map((t) => m.turnedBounds(box([-5, -10, 0], [15, 10, 30]), t, [100, -200, 300]));
+// A small part's three dimension lines end a few pixels apart: each label is put past its
+// line's end, and none crowds another; a line seen end on puts its label below its end.
+const small = [
+    { x: 400, y: 300, dx: 30, dy: 2, w: 120, h: 20 },
+    { x: 396, y: 296, dx: -20, dy: 12, w: 120, h: 20 },
+    { x: 392, y: 288, dx: 0, dy: -25, w: 120, h: 20 },
+    { x: 395, y: 292, dx: 0, dy: 0, w: 90, h: 20 },
+];
+out.laid = m.layLabels(small, { width: 800, height: 600, gap: 6 });
+out.edge = m.layLabels([{ x: 790, y: 5, dx: 1, dy: -1, w: 120, h: 20 }], { width: 800, height: 600, gap: 6 });
+out.small = small;
 console.log(JSON.stringify(out));
 """
 
@@ -168,3 +179,36 @@ def test_a_turned_box_is_the_box_the_server_reports(result):
         want = node.world_bounds()
         _close(got["min"], [want.min_point.x, want.min_point.y, want.min_point.z])
         _close(got["max"], [want.max_point.x, want.max_point.y, want.max_point.z])
+
+
+def _box(laid, label, gap=0):
+    return (
+        laid["cx"] - label["w"] / 2 - gap,
+        laid["cy"] - label["h"] / 2 - gap,
+        laid["cx"] + label["w"] / 2 + gap,
+        laid["cy"] + label["h"] / 2 + gap,
+    )
+
+
+def test_a_measurements_labels_stand_past_their_lines_ends_and_clear_of_one_another(result):
+    """Dimension lines that end a few pixels apart, as a small part's do: each label is
+    beyond its line's far end, off the end itself, and no two labels come within the gap
+    of each other."""
+    small, laid = result["small"], result["laid"]
+    boxes = [_box(at, label) for at, label in zip(laid, small, strict=True)]
+    for a, b in [(i, j) for i in range(len(boxes)) for j in range(i + 1, len(boxes))]:
+        x0, y0, x1, y1 = _box(laid[a], small[a], 3)
+        u0, v0, u1, v1 = _box(laid[b], small[b], 3)
+        assert x1 <= u0 or u1 <= x0 or y1 <= v0 or v1 <= y0, (a, b)
+    for (x0, y0, x1, y1), label, at in zip(boxes, small, laid, strict=True):
+        for end in small:
+            assert not (x0 <= end["x"] <= x1 and y0 <= end["y"] <= y1), (label, end)
+        if label["dx"] or label["dy"]:
+            ahead = (at["cx"] - label["x"]) * label["dx"] + (at["cy"] - label["y"]) * label["dy"]
+            assert ahead > 0, label
+    assert laid[3]["cy"] > small[3]["y"]
+
+
+def test_a_label_near_the_canvas_edge_stays_on_it(result):
+    (at,) = result["edge"]
+    assert 60 <= at["cx"] <= 800 - 60 and 10 <= at["cy"] <= 600 - 10

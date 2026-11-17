@@ -322,15 +322,19 @@ measurement is a reading of the model and of the mesh drawn, not of the made par
 printed part differs by what the printer does. Every number says where it comes from.
 
 - **The selection reads its size.** The selected piece wears a dimension line along
-  each of its own axes, the length written on it in millimetres. A turned piece, such
+  each of its own axes, a few pixels thick in the measurement's colour whatever the
+  distance, and the length written past the line's far end, in millimetres, at the
+  size of the page's own text, each label kept clear of the others and of every
+  line's end. A turned piece, such
   as a part on the universe's sphere, is measured along its own axes, not the
   world's, and its world box is said beside it. The source is written on each label
   and in the reading: the part's *declared footprint*, the *envelope of its pieces*
   (a piece with no footprint of its own), *the drawn mesh, as loaded* (the STL's own
   bounds, once it is in) or *a stand-in box* where nothing is declared. The two main
   sources can differ, and where the mesh is what is drawn the reading gives the declared
-  footprint as well. A machine also reads its working volume from its frame, saying
-  whether its controller or the site gave it. A site's piece in the universe reads
+  footprint as well. A machine drawn as its pieces is measured whole, its moving pieces
+  with its still one, wherever its tool has them, and says so. A machine also reads its
+  working volume from its frame, saying whether its controller or the site gave it. A site's piece in the universe reads
   the miniature drawn and says so, with how large the site itself is. A piece that is
   not drawn here has nothing to measure.
 - **Any two points.** With Measure shown, a click in the world drops a point on the
