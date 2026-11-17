@@ -394,7 +394,11 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     assert {s["origin"] for s in settings.values()} == {"printer"}
     expect(said.locator(".slice-settings")).to_contain_text("layer_height")
     expect(said.locator(".slice-settings")).to_contain_text("start")
-    expect(machine.locator("#print-start")).to_be_enabled()
+    # ▶ Print is there for the G-code chosen; control is armed at step 8, and until then
+    # the server would refuse it, so it is greyed saying so.
+    send = machine.locator("#print-start")
+    expect(send).to_be_visible()
+    expect(send).to_have_attribute("title", re.compile(r"^Disabled: .*arm control first"))
     # Maximised from its stack, to see the whole card.
     maximise = page.locator(".lm_stack", has=print_window).locator(".lm_maximise")
     maximise.click()
