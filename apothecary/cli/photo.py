@@ -568,7 +568,7 @@ def fit_marks(examples: tuple, out: Optional[Path], count: int):
     from APOTHECARY_MARKS_TABLE, so a fit is used only where a person points to it.
     """
     from ..vision import marks
-    from ..vision.bench import run_sorting
+    from ..vision.bench import run_sortings
 
     gathered = []
     for path in examples:
@@ -580,8 +580,8 @@ def fit_marks(examples: tuple, out: Optional[Path], count: int):
         raise click.ClickException("no examples in those files: `photo marks --say` keeps them")
 
     fitted, before, after = marks.fit(gathered)
-    drawn_before = run_sorting(count=count).right_rate
-    drawn_after = run_sorting(count=count, thresholds=fitted).right_rate
+    in_use, refitted = run_sortings([None, fitted], count=count)
+    drawn_before, drawn_after = in_use.right_rate, refitted.right_rate
     click.echo(
         f"{len(gathered)} example(s): {before:.0%} sorted as their person did, {after:.0%} fitted"
     )
