@@ -330,6 +330,33 @@ def test_a_member_s_observation_is_kept_and_relayed(members):
     assert len(on_disk["observations"]) == 2
 
 
+def test_a_kept_file_that_does_not_read_is_set_aside_and_said_never_written_over(members):
+    """The observations kept, damaged: a read says so and leaves the file; a write keeps
+    it aside, as it was, refuses the observation saying where it went, and the next
+    write starts a file of its own."""
+    folder = members / "surfaces"
+    folder.mkdir(exist_ok=True)
+    kept = folder / "contributed.json"
+    damaged = '{"format": "apothecary.contributed/1", "observations": [{"by": "alfred", '
+    kept.write_text(damaged, encoding="utf-8")
+    read = client.get("/surfaces/contributed")
+    assert read.status_code == 503 and "does not read" in read.json()["detail"], read.text
+    assert kept.read_text(encoding="utf-8") == damaged
+    refused = client.post("/surfaces/contributed", json=_found())
+    assert refused.status_code == 503 and "kept aside as" in refused.json()["detail"]
+    [aside] = folder.glob("contributed.unreadable-*.json")
+    assert aside.name in refused.json()["detail"]
+    assert aside.read_text(encoding="utf-8") == damaged and not kept.exists()
+    assert client.post("/surfaces/contributed", json=_found()).status_code == 201
+    every = client.get("/surfaces/contributed").json()["snapshot"]["observations"]
+    assert [o["by"] for o in every] == ["alfred"]
+    # One row that is no observation does not read either: nothing of it is dropped.
+    rows = json.loads(kept.read_text(encoding="utf-8"))
+    rows["observations"].append({"by": "joe"})
+    kept.write_text(json.dumps(rows), encoding="utf-8")
+    assert client.get("/surfaces/contributed").status_code == 503
+
+
 def test_only_a_member_writes_and_only_of_a_surface_in_a_frame(members, monkeypatch):
     stranger = client.post("/surfaces/contributed", json=_found(by="mallory"))
     assert stranger.status_code == 403 and "no member of the family's hub" in stranger.text

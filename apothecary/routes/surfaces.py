@@ -121,6 +121,8 @@ def contribute(body: surfaces.Observation):
         return surfaces.contribute(body).model_dump(mode="json")
     except surfaces.UnknownSurface as exc:
         raise HTTPException(status_code=404, detail=exc.args[0]) from None
+    except surfaces.KeptUnreadable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
 
 
 @router.get("/surfaces/{name}")
@@ -133,6 +135,8 @@ def one_surface(name: str, request: Request):
         raise HTTPException(status_code=404, detail=exc.args[0]) from None
     except surfaces.Unasked as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
+    except surfaces.KeptUnreadable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
     return {
         "surface": name,
         "frame": surface.frame,

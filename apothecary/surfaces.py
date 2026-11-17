@@ -43,7 +43,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from .state_folder import state_dir, write_whole
 
@@ -287,21 +287,44 @@ def _kept_file() -> Path:
     return state_dir() / "surfaces" / "contributed.json"
 
 
-def _kept() -> Dict[str, List[Observation]]:
-    """Every surface's observations kept, oldest first; a file missing or unreadable holds
-    none, and one that does not read is left out."""
+class KeptUnreadable(RuntimeError):
+    """The observations kept do not read: nothing is written over them."""
+
+
+def _kept(set_aside: bool = False) -> Dict[str, List[Observation]]:
+    """Every surface's observations kept, oldest first; none while there is no file.
+
+    A file that does not read whole -- not JSON, not a list of observations, or one row
+    that is no observation -- is ``KeptUnreadable``, and never read as fewer: the next
+    write would keep only what was read. With ``set_aside`` (a write) it is first moved
+    aside beside itself, kept as it was, and the error names where."""
+    path = _kept_file()
     try:
-        data = json.loads(_kept_file().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return {}
     kept: Dict[str, List[Observation]] = {}
-    rows = data.get("observations", []) if isinstance(data, dict) else []
-    for row in rows if isinstance(rows, list) else []:
-        try:
+    try:
+        data = json.loads(text)
+        rows = data.get("observations") if isinstance(data, dict) else None
+        if not isinstance(rows, list):
+            raise ValueError("it holds no list of observations")
+        for row in rows:
             said = Observation.model_validate(row)
-        except ValidationError:
-            continue
-        kept.setdefault(said.surface, []).append(said)
+            kept.setdefault(said.surface, []).append(said)
+    except ValueError as exc:  # ValidationError is a ValueError
+        why = str(exc).splitlines()[0]
+        if not set_aside:
+            raise KeptUnreadable(f"{path} does not read ({why}): it is left as it is") from None
+        aside = path.with_name(
+            f"{path.stem}.unreadable-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}.json"
+        )
+        path.replace(aside)
+        log.error("surfaces: %s did not read (%s) and is kept aside as %s", path, why, aside)
+        raise KeptUnreadable(
+            f"{path} did not read ({why}): it is kept aside as {aside.name}, nothing was "
+            "written over it, and this observation was not kept -- send it again"
+        ) from None
     return kept
 
 
@@ -312,7 +335,7 @@ def contribute(said: Observation) -> Observation:
     get(said.surface)
     said = said.model_copy(update={"recorded_at": datetime.now(timezone.utc)})
     with _KEPT_LOCK:
-        kept = _kept()
+        kept = _kept(set_aside=True)
         held = kept.setdefault(said.surface, [])
         held.append(said)
         del held[:-KEPT]
