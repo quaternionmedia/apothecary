@@ -500,6 +500,30 @@ def test_poll_syncs_bound_printer_node(fake_arduino_cli, fresh_task_runner, scri
     assert body["synced"] == [] and printer_1.status == "offline"
 
 
+def test_a_poll_lays_out_no_site_it_is_pinned_nowhere_in(
+    fake_arduino_cli, fresh_task_runner, scripted_links, garage, monkeypatch
+):
+    """A server that has run a while has the universe built in its store, and each fetch
+    of the universe lays its pieces out again (``SiteStore.get``). A poll's listeners --
+    the site sync and the evidence -- fetch only a site with a pin answering to the
+    poll's port: printer_1's poll drives it in the garage, and the universe is not laid
+    out once for it."""
+    from apothecary import universe
+
+    sites.store.get("apothecary")
+    laid = []
+    real = universe.represent
+    monkeypatch.setattr(universe, "represent", lambda *a: laid.append(a) or real(*a))
+    c = TestClient(app)
+    c.put("/sites/garage/nodes/printer_1/device", json={"identity": "/dev/ttyFAKE1"})
+    laid.clear()
+    now = datetime.now(timezone.utc)
+    polled = gcode.PrinterStatus(port="/dev/ttyFAKE1", polled_at=now, state="printing")
+    assert [row["path"] for row in devices.notify_status(polled).synced] == ["printer_1"]
+    assert laid == []
+    c.delete("/sites/garage/nodes/printer_1/device")
+
+
 def test_a_pinned_poll_is_kept_as_evidence(
     fake_arduino_cli, fresh_task_runner, scripted_links, garage
 ):

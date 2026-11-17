@@ -61,7 +61,7 @@ from .firmware.api import device_view as firmware_device_view
 from .firmware.api import router as firmware_router
 from .firmware.bindings import bindings_for_site, device_for_identity, same_device
 from .firmware.deck_api import router as firmware_deck_router
-from .firmware.models import DeviceAttachRequest, validate_port
+from .firmware.models import DeviceAttachRequest, ManualBinding, validate_port
 from .firmware.toolchains import ToolchainError
 from .hierarchy import Assembly, find_node_by_path
 from .layer_colours import layer_colours
@@ -2684,25 +2684,37 @@ def _sync_printer_status(status) -> List[Dict[str, object]]:
         return out
     state = firmware_devices.get_state()
     known = firmware_devices.known_device(status.port, state)
-    for site_name in sites.store.loaded():
+    for site_name, binding in _pins_answering(status.port, known, state):
         site = sites.store.get(site_name)
-        for binding in state.bindings(site_name):
-            if not same_device(binding.identity, status.port, known, binding.kind):
-                continue
-            target = status_bearer_for(site, binding.path)
-            if target is None:
-                continue
-            node = find_node_by_path(site, target)
-            row: Dict[str, object] = {"site": site_name, "path": target}
-            if target != binding.path:
-                row["via"] = binding.path
-            if node.status == "maintenance":
-                out.append({**row, "status": node.status, "changed": False, "held": True})
-                continue
-            changed = node.status != status.state
-            node.status = status.state
-            out.append({**row, "status": node.status, "changed": changed})
+        target = status_bearer_for(site, binding.path)
+        if target is None:
+            continue
+        node = find_node_by_path(site, target)
+        row: Dict[str, object] = {"site": site_name, "path": target}
+        if target != binding.path:
+            row["via"] = binding.path
+        if node.status == "maintenance":
+            out.append({**row, "status": node.status, "changed": False, "held": True})
+            continue
+        changed = node.status != status.state
+        node.status = status.state
+        out.append({**row, "status": node.status, "changed": changed})
     return out
+
+
+def _pins_answering(port: str, known, state) -> List[tuple[str, ManualBinding]]:
+    """Each pin, in the sites built so far, that answers to the board on ``port``, with
+    its site's name. The pins are read once, from the firmware state, and only a site
+    with one is fetched from the store by a poll's listeners: a fetch of the universe
+    lays it out again (``SiteStore.get``), which a poll pinned nowhere in it has no
+    need of."""
+    pins = state.bindings()
+    return [
+        (site_name, binding)
+        for site_name in sites.store.loaded()
+        for binding in pins
+        if binding.site == site_name and same_device(binding.identity, port, known, binding.kind)
+    ]
 
 
 firmware_devices.STATUS_LISTENERS.append(_sync_printer_status)
@@ -2718,14 +2730,9 @@ def _record_printer_poll(status) -> List[Dict[str, object]]:
     known = firmware_devices.known_device(status.port, state)
     identity = known.identity if known is not None else status.port
     pins: List[evidence_printers.Pin] = []
-    for site_name in sites.store.loaded():
-        site = sites.store.get(site_name)
-        for binding in state.bindings(site_name):
-            if same_device(binding.identity, status.port, known, binding.kind):
-                bearer = status_bearer_for(site, binding.path)
-                pins.append(
-                    evidence_printers.Pin(site_name, binding.path, bearer, binding.identity)
-                )
+    for site_name, binding in _pins_answering(status.port, known, state):
+        bearer = status_bearer_for(sites.store.get(site_name), binding.path)
+        pins.append(evidence_printers.Pin(site_name, binding.path, bearer, binding.identity))
     try:
         status.poll = evidence_printers.record_poll(status, pins, identity)
     except OSError as exc:
