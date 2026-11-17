@@ -371,7 +371,7 @@ class TestBuildStl:
             ]
             if shown:
                 offered[part.name] = shown
-        assert sorted(declared) == ["fifel", "footpedal", "solderfan"]
+        assert sorted(declared) == ["fifel", "footpedal", "rolling_rotor", "solderfan"]
         assert offered == {}
 
     def test_the_rest_definitions_reach_the_scad_beside_the_parameters(self, tmp_path):
