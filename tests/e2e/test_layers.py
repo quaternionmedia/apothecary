@@ -273,6 +273,13 @@ def test_a_hidden_shell_is_not_drawn_and_not_hit_and_the_choice_survives_a_reloa
     assert page.evaluate(MESH, spot["first"])["drawn"] is True
     expect(_tick(page, outer, "selectable")).to_be_checked()
 
+    # A mesh whose node the level no longer holds, a stale one, is drawn and never
+    # picked: what the scope cannot place is not picked past it.
+    assert page.evaluate(REACHED, spot["first"]) is True
+    page.evaluate("(k) => { delete window.fractalViewer.renderNodeByKey[k]; }", spot["first"])
+    assert page.evaluate(MESH, spot["first"])["drawn"] is True
+    assert page.evaluate(REACHED, spot["first"]) is False
+
 
 @pytest.mark.e2e
 def test_depth_two_lets_a_click_select_a_piece_of_a_piece(page: Page, url: str):

@@ -9730,7 +9730,20 @@
                 this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
                 this.raycaster.setFromCamera(this.pointer, this.camera);
                 return this.raycaster.intersectObjects([...Object.values(this.meshByName), ...this.pictureMarks.pickables()], false)
-                    .filter((hit) => this.pickScope.pickable(this.renderNodeByKey[hit.object.userData.key]));
+                    .filter((hit) => this.pickableHit(hit));
+            }
+
+            // Whether a click may pick what a ray met: a piece of the level as the pick scope
+            // says; a picture's mark (a mat, an outline) as the piece it lies on, and on the
+            // floor always; anything else -- a mesh whose node the level no longer holds --
+            // never, so nothing the scope cannot place is picked past it.
+            pickableHit(hit) {
+                const node = this.renderNodeByKey[hit.object.userData.key];
+                if (node) return this.pickScope.pickable(node);
+                const pick = this.pictureMarks.picked(hit.object);
+                if (!pick) return false;
+                const host = pick.host && this.renderNodeByKey[pick.host];
+                return host ? this.pickScope.pickable(host) : true;
             }
 
             // A press on the world (or on a badge over it), kept until it is let go: what
