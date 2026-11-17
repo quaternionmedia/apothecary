@@ -920,8 +920,8 @@ def _canvas_ring(page: Page) -> dict:
 @pytest.mark.e2e
 def test_the_canvas_rings_constant_cells_keep_one_address_everywhere(page: Page, url: str):
     """Pieces 8, Site 6, View 2, Panels 4, Pictures 9 and Rebuild 3 at the garage's root,
-    stepped into a piece, at a leaf, and in a site with no groups; Step out and Group,
-    which come and go, after them."""
+    stepped into a piece, in the universe, whose parts' categories are its groups, and at
+    a leaf of it; Step out and Group, which come and go, after them."""
     constant = {
         "Pieces": "8",
         "Site": "6",
@@ -940,7 +940,8 @@ def test_the_canvas_rings_constant_cells_keep_one_address_everywhere(page: Page,
     page.goto(f"{url}/viewer/sites/apothecary")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     library = _canvas_ring(page)
-    assert {k: library[k] for k in constant} == constant and "Group" not in library
+    assert {k: library[k] for k in constant} == constant and library["Group"] == "1"
+    assert "Step out" not in library
     page.locator(ROW.format("calibration_cube")).dblclick()
     page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'calibration_cube'")
     leaf = _canvas_ring(page)
