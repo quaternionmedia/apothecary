@@ -178,11 +178,33 @@ def test_the_board_view_takes_the_controller_s_word_from_the_port_s_last_poll(
         assert frame["homing"] == {"x": "max", "y": "max", "z": "max"}
         assert frame["origin"] == [115.0, 165.0, 100.0] and frame["bed_moves_y"] == 300.0
         assert router_links.log_for(PORT).next_index == sent  # the port was asked nothing
-        # The tree has no controller's word: the site's figure, labelled so.
+        # The tree has no controller's word: the site's figure, labelled so. The tree is
+        # built without reading any port's poll, so whose figure the volume is
+        # (`volume_from`) and the way each axis homes (`homing`, the controller's alone)
+        # are the two keys the two answers may say differently; everything else is one
+        # frame -- the volume included, because the simulated controller's travel is the
+        # site's figure.
         tree_frame = _node(c.get("/sites/garage").json()["tree"], "cnc_router")["frame"]
         assert tree_frame["volume_from"] == "site" and tree_frame["homing"] is None
-        assert {k: v for k, v in tree_frame.items() if k not in ("volume_from", "homing")} == {
-            k: v for k, v in frame.items() if k not in ("volume_from", "homing")
-        }
+        assert _but_the_controller_s_word(tree_frame) == _but_the_controller_s_word(frame)
+
+        # Moved by the layout, the router's frame moves in both answers, the controller's
+        # word kept in the board view's.
+        was = frame["bed_origin"]
+        at = _node(c.get("/sites/garage").json()["tree"], "cnc_router")["position"]
+        moved = {"x": at["x"] - 100.0, "y": at["y"] + 50.0, "z": at["z"]}
+        tree = c.post("/sites/garage/layout", json={"positions": {"cnc_router": moved}}).json()[
+            "tree"
+        ]
+        frame = c.get("/firmware/printers/where", params={"port": PORT}).json()["printer"]["frame"]
+        assert frame["bed_origin"] == [was[0] - 100.0, was[1] + 50.0, was[2]]
+        assert frame["volume_from"] == "controller" and frame["homing"]["x"] == "max"
+        assert _but_the_controller_s_word(_node(tree, "cnc_router")["frame"]) == (
+            _but_the_controller_s_word(frame)
+        )
     finally:
         c.delete(f"/sites/garage/nodes/{CONTROLLER}/device")
+
+
+def _but_the_controller_s_word(frame: dict) -> dict:
+    return {k: v for k, v in frame.items() if k not in ("volume_from", "homing")}
