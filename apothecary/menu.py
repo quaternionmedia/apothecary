@@ -679,8 +679,8 @@ PANELS: Sequence[Tuple[str, str]] = (
     ("jobs", "Jobs"),
     ("scad", "SCAD"),
     # Layers: how deep a click reaches and which layers are drawn and selectable
-    # (widgets/layers.js), a tab beside Site registered by the page's script and closed
-    # until asked for. View › Layers opens it too.
+    # (widgets/layers.js), a window beside the world registered by the page's script
+    # and closed until asked for. View › Layers opens it too.
     ("layers", "Layers"),
     # Working space: the site as every kind of evidence has it (apothecary/evidence/),
     # a tab of Site's ring registered by the page's script, closed until asked for;

@@ -231,7 +231,7 @@ ring's View is, which adds **Fit**: frame the pieces at this level (Shift+F;
 | Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first); a machine stepped into, the level's own piece, has none |
 | Select walls | A click in the world picks a wall again, until the page is left (off at first) |
 | Settings | Opens the Settings panel, its tab in front ([below](#settings)) |
-| Layers (the ring's View › Layers) | Opens the Layers window, a tab beside Site ([below](#layers)); the menu has no item of its own for it, and ⊞ Windows lists it |
+| Layers (the ring's View › Layers) | Opens the Layers window, beside the world ([below](#layers)); the menu has no item of its own for it, and ⊞ Windows lists it |
 | Depth (the ring's View › Depth) | One to four levels below the level in view, drawn and reached by a click; the Layers window's stepper goes to eight |
 
 None of the first four is remembered: a reload starts from the defaults.
@@ -241,8 +241,9 @@ Settings, and the depth and the layers, are kept by this browser.
 
 How deep a click reaches, and which layers are drawn and which a click can
 select, are one choice (`apothecary/static/pick_scope.js`), made in the **Layers**
-window, a tab beside Site that opens closed, and read in two places: where a click
-asks what is under it, and where the world is drawn.
+window, beside the world, which opens closed and leaves Site's rows in view, and
+read in two places: where a click asks what is under it, and where the world is
+drawn.
 
 **Depth** is how many levels below the level in view are drawn and reached. At 1,
 the first, a level is its own pieces, each a single piece however much it holds;

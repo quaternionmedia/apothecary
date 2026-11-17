@@ -1917,11 +1917,12 @@
                     },
                 });
                 // Layers: how deep a click reaches and which layers are shown and selectable
-                // (widgets/layers.js), a tab beside Site, closed until asked for. View › Layers
-                // and Panels › Site › Layers open it.
+                // (widgets/layers.js), a window beside the world, closed until asked for, so
+                // Site's rows -- where a piece is selected while Measure is shown -- stay in
+                // view beside it. View › Layers and Panels › Site › Layers open it.
                 this.layersWidget = null;
                 this.panels.register('layers', {
-                    title: 'Layers', group: 'Site', home: 'site', open: false,
+                    title: 'Layers', group: 'Site', home: 'beside', open: false,
                     hint: 'How deep a click reaches, and which layers are drawn and which a click can select',
                     body: (slot) => {
                         this.layersWidget = mountLayers(slot, {

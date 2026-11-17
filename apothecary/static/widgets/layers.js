@@ -1,6 +1,6 @@
 /* Layers: how deep a click in the world reaches, and which layers the world draws and
- * a click can select (docs/viewer.md, "Layers"). A window in the Site group, a tab
- * beside Site.
+ * a click can select (docs/viewer.md, "Layers"). A window in the Site group, beside
+ * the world, so Site's rows stay in view while it is open.
  *
  * Depth is a stepper: how many levels below the level in view are drawn and reached.
  * Each layer is a row with a Shown tick and a Selectable tick -- selectable only
