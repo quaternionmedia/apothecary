@@ -27,6 +27,7 @@ Groups are a contract (``GroupId``); keys inside a group are open.
 
 from __future__ import annotations
 
+import bisect
 import json
 import math
 from datetime import datetime, timezone
@@ -645,6 +646,60 @@ def build(
     step_time = float(p["settle_s"]) if experiment.kind == "step" and "settle_s" in p else None
     doc.groups = figures(doc, step_of=experiment.id, step_time=step_time)
     return LoopDocument.model_validate(doc.model_dump(by_alias=True))
+
+
+# The rate a model's PID is run at when its step is drawn: the board's own is not known
+# here, so this is a stand-in, said beside the curves it draws.
+MODEL_PID_DT = 0.1
+
+
+def curves(doc: LoopDocument, n: int = 120) -> Dict[str, object]:
+    """What a page draws of a loop, computed here so the page computes nothing: the
+    plant's and each controller's open loop over frequency (``control_loops.bode``),
+    and, for an experiment with samples, the measured temperature beside the model's
+    step through the same targets with each controller the document carries, its PID
+    run every ``MODEL_PID_DT`` seconds. Empty parts where the document lacks what they
+    need."""
+    out: Dict[str, object] = {"model_pid_dt": MODEL_PID_DT, "bode": {}, "step": None}
+    if doc.plant is None:
+        return out
+    plant = doc.plant.plant()
+    ambient = doc.plant.ambient or 0.0
+    for name in ("designed", "on_machine"):
+        g = getattr(doc.controller, name)
+        if g is not None and g.kp:
+            out["bode"][name] = cl.bode(cl.Loop(plant, g.pid(MODEL_PID_DT), sampled=False), n=n)
+    exp = next((e for e in doc.experiments if e.samples is not None and e.samples.t), None)
+    if exp is None:
+        return out
+    s = exp.samples
+    times, targets = s.t, s.target
+
+    def setpoint(t: float) -> float:
+        i = max(0, min(len(times) - 1, bisect.bisect_right(times, t) - 1))
+        return targets[i]
+
+    step: Dict[str, object] = {
+        "t": list(times),
+        "target": list(targets),
+        "measured": list(s.actual),
+    }
+    for name in ("designed", "on_machine"):
+        g = getattr(doc.controller, name)
+        if g is None or not g.kp:
+            continue
+        run = cl.closed_loop(
+            plant,
+            g.pid(MODEL_PID_DT),
+            setpoint,
+            times[-1],
+            ambient=ambient,
+            sample=exp.sample_period_s,
+        )
+        step[f"model_{name}"] = run.y
+        step[f"model_{name}_t"] = run.t
+    out["step"] = step
+    return out
 
 
 # What the heater's power is counted in: the board's `@:` figure. Taken to run 0 to 255, as

@@ -26,6 +26,7 @@ from apothecary.loop_document import (
     Machine,
     Samples,
     build,
+    curves,
     figures,
     format_value,
     gains_of,
@@ -264,4 +265,31 @@ class TestTheBuilder:
             "identified",
             "firmware_autotune",
             25.3,
+        )
+
+
+class TestTheCurves:
+    def test_a_page_s_curves_are_computed_here_from_the_document(self):
+        """The model's step through the experiment's own targets, beside what was
+        measured: with the plant the data came from it lies on the measurement, to the
+        noise-free record's own hundredths; and the open loop over frequency."""
+        doc = _built()
+        drawn = curves(doc)
+        step = drawn["step"]
+        assert len(step["measured"]) == len(step["t"]) and "model_designed" in step
+        pid = doc.controller.on_machine
+        assert pid.kp == 1.875
+        error = max(
+            abs(a - b) for a, b in zip(step["model_on_machine"], step["measured"], strict=False)
+        )
+        assert error < 0.1
+        assert set(drawn["bode"]) == {"designed", "on_machine"}
+        assert drawn["model_pid_dt"] == 0.1
+        assert (
+            curves(
+                LoopDocument.model_validate(
+                    {**doc.model_dump(by_alias=True), "plant": None, "groups": [], "controller": {}}
+                )
+            )["step"]
+            is None
         )

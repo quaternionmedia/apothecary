@@ -407,6 +407,15 @@ class TestExperiments:
         assert p.time_constant == pytest.approx(true.time_constant, rel=0.15)
         assert p.dead_time == pytest.approx(true.dead_time, abs=2.0)
         assert doc.controller.on_machine.basis == "measured"
+        client = TestClient(app)
+        body = {"experiment_id": job.experiment.id, "rule": "simc"}
+        md = client.post("/firmware/printers/loops/document?format=md", json=body)
+        assert md.status_code == 200 and md.text.startswith("# Control loop: hotend 0")
+        drawn = client.post("/firmware/printers/loops/curves", json=body).json()
+        assert len(drawn["step"]["measured"]) == len(job.experiment.samples.t)
+        assert "designed" in drawn["bode"]
+        listed = client.get("/firmware/printers/loops/experiments", params={"port": PORT}).json()
+        assert [e["id"] for e in listed] == [job.experiment.id] and "samples" not in listed[0]
         assert doc.get("loop.phase_margin_designed").basis == "computed"
         assert doc.get("response.overshoot").basis == "measured"
         assert doc.machine.simulated is False or doc.machine.port == PORT

@@ -683,6 +683,17 @@ def firmware_loops_document(body: LoopDocumentRequest, format: Literal["json", "
     return doc.model_dump(mode="json", by_alias=True)
 
 
+@router.post("/printers/loops/curves")
+def firmware_loops_curves(body: LoopDocumentRequest):
+    """What a page draws of a kept experiment's loop, computed here: the open loop over
+    frequency with each controller, and the measured temperature beside the model's
+    step through the same targets."""
+    doc = loops.document(
+        body.experiment_id, body.rule, body.kind, body.closed_loop_time, body.read_board
+    )
+    return loop_document.curves(doc)
+
+
 @router.get("/loops/schema")
 async def firmware_loops_schema():
     """The JSON Schema of ``control/loop/1``, the published contract."""

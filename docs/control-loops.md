@@ -220,8 +220,10 @@ after itself.
 from the predicates the routes raise from, so a page greys what the server would
 refuse; `tune.save` is refused, kind `asked`, until a request asks for the board's
 memory by name. The routes are `POST /firmware/printers/loops/read`, `start`, `cancel`,
-`set`, `save` and `document`, and `GET /firmware/printers/loops/job` (with `series`, its
-samples so far) and `experiments`. A kept experiment is in the state folder's `loops/`,
+`set`, `save`, `document` and `curves` (what a page draws of a loop, computed here: the
+open loop over frequency with each controller, and the measured temperature beside the
+model's step through the same targets, its PID run at a stated stand-in rate), and
+`GET /firmware/printers/loops/job` (with `series`, its samples so far) and `experiments`. A kept experiment is in the state folder's `loops/`,
 under its job's id.
 
 ### What is established and what is assumed
