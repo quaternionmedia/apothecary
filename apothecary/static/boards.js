@@ -226,12 +226,15 @@ export function mountBoards({ base = "", site = () => null } = {}) {
     }
     // `who` is the watcher (any object), `kind` what it takes the board for:
     // "printer" and "router" are polled, "devkit" listened to; `live` false keeps it
-    // watched and quiet. A first live polled watcher polls at once.
+    // watched and quiet. A live polled watcher that was not live before -- the first, or
+    // a Machine opened while the world follows the board -- polls at once, sharing a poll
+    // in flight: what opens a board wants its state now, whoever else watches it.
     function watch(port, who, { kind = "printer", interval: ms = 2000, live: on = true } = {}) {
         const b = board(port);
+        const had = b.watchers.get(who);
         const was = live(b, kind).length;
         b.watchers.set(who, { kind, interval: ms, live: on });
-        follow(b, !was && on);
+        follow(b, on && (!was || !(had && had.live)));
         return () => unwatch(port, who);
     }
     function setWatch(port, who, patch) {
