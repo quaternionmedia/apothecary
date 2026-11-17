@@ -3248,7 +3248,8 @@
                     const { key, node, size, source } = selection;
                     const sized = (b) => ['x', 'y', 'z'].map((k) => `${k} ${mmText(b[k])}`).join(' × ');
                     let line = `${key} measures ${sized(size)} along its own axes (${source})`;
-                    if (node.turn) line += `; turned [${node.turn.join(', ')}] degrees, its world box ${sized(turnedExtents(size, node.turn))}`;
+                    // The turn to a hundredth of a degree, as a length is to a hundredth of a mm.
+                    if (node.turn) line += `; turned [${node.turn.map((a) => +a.toFixed(2)).join(', ')}] degrees, its world box ${sized(turnedExtents(size, node.turn))}`;
                     lines.push(line);
                     if (node.footprint && source === 'the drawn mesh, as loaded') lines.push(`${key} declares ${sized(ownExtents(node.footprint))} (declared footprint); the mesh above is what is drawn, and the two can differ`);
                     const frame = this.frameOf(key, node);
