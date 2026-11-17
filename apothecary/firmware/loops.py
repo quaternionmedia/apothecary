@@ -455,13 +455,18 @@ class LoopJob:
     def _off(self, link: gcode.GcodeLink) -> List[str]:
         """The heater off, whatever ended the experiment: an autotune's wait broken first,
         then the safe-off a cancelled print sends, each line tried, then the target read
-        back. A target that is not off, or a board that does not answer, gets the stop."""
+        back. A target that is not off, or a board that does not answer, gets the stop;
+        so does an autotune that answers nothing to the break of its wait, at once, since
+        a board still in its autotune would hold an off line behind it."""
         said: List[str] = []
         if self.plan.autotune:
             try:
-                said += link.interrupt("M108", wait=10.0, origin=TUNE.kind)
+                broke = link.interrupt("M108", wait=10.0, origin=TUNE.kind)
             except ToolchainError as exc:
-                said.append(f"(M108 not written: {exc})")
+                broke = [f"(M108 not written: {exc})"]
+            said += broke
+            if not any(gcode.OK_RE.match(line) for line in broke):
+                return said + self._stop(link, "the autotune did not answer the break of its wait")
         said += devices.safe_off(link, "printer", TUNE.kind)
         try:
             lines = link.command("M105", timeout=10.0, origin=TUNE.kind)
@@ -472,15 +477,21 @@ class LoopJob:
                 raise ToolchainError("the target did not read back as off")
             self.heater_off = "heater off: its target read back as 0"
         except ToolchainError as exc:
-            try:
-                said += link.emergency_stop()
-                self.heater_off = f"the stop was sent ({exc}): the board halts with its heaters off"
-            except ToolchainError as stop_said:
-                self.heater_off = (
-                    f"not confirmed: {exc}; the stop was not written either ({stop_said}). "
-                    "The board's own thermal protection is what is left"
-                )
+            said += self._stop(link, str(exc))
         return said
+
+    def _stop(self, link: gcode.GcodeLink, why: str) -> List[str]:
+        """The stop (``M112``), which halts the board with its heaters off, said with why."""
+        try:
+            said = link.emergency_stop()
+            self.heater_off = f"the stop was sent ({why}): the board halts with its heaters off"
+            return said
+        except ToolchainError as stop_said:
+            self.heater_off = (
+                f"not confirmed: {why}; the stop was not written either ({stop_said}). "
+                "The board's own thermal protection is what is left"
+            )
+            return []
 
     def _run(self) -> None:
         link = self.links.get(self.port)

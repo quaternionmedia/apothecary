@@ -209,7 +209,9 @@ a cancel, the stop, or the server stopping -- and every end but the stop sends t
 safe-off a cancelled print sends (`M104 S0`, `M140 S0`, `M107`, `M84`), each line tried,
 after an autotune's wait is broken (`M108`), and reads the target back. A target that
 does not read back as off, or a board that does not answer, is sent the stop (`M112`),
-which halts the board with its heaters off until it is reset. A board that has gone
+which halts the board with its heaters off until it is reset. An autotune whose board
+answers nothing to the break of its wait gets the stop at once, with no off line first:
+a board still in its autotune would hold an off line behind it. A board that has gone
 cannot be told anything: the job says the heater is not known to be off, and the
 board's own thermal protection is what is left. An experiment the server was running
 when it died is found by the next poll of its port, ended as failed, and its heaters

@@ -617,6 +617,41 @@ class TestEveryWayOut:
         assert _after(sent, "M303 E0 S200 C5")[-6:] == ["M108", *OFF, "M105"]
         assert job.heater_off.startswith("heater off") and board.sim.heaters["T"].target == 0
 
+    def test_an_autotune_that_does_not_answer_its_break_gets_the_stop_at_once(
+        self, fake_arduino_cli, fresh_task_runner, monkeypatch
+    ):
+        """A board that says a few temperatures, then nothing, and does not parse ``M108``
+        early: it may still be in its autotune, where an off line would wait behind it, so
+        the stop goes at once and no off line is sent first."""
+
+        class Stubborn(ScriptedTransport):
+            def write(self, data):
+                cmd = data.decode().strip()
+                if cmd == "M108":
+                    self.sent.append(cmd)  # heard, and nothing said
+                    return
+                super().write(data)
+
+        replies = {
+            **HOT,
+            "M105": ["ok T:23.00 /0.00 B:23.00 /0.00 @:0 B@:0"],
+            "M303 E0 S200 C5": [" T:150.00 /200.00 @:255", " T:160.00 /200.00 @:255"],
+            "M112": ["Error:Printer halted. kill() called!"],
+        }
+        links, board = _scripted(monkeypatch, replies, Stubborn)
+        fast = Fast(200)
+        job = loops.start(
+            PORT,
+            loops.plan("hotend", 0, "autotune", 230, 1800, target_c=200, cycles=5),
+            clock=fast.now,
+            sleep=fast.sleep,
+        )
+        job.thread.join(10)
+        assert job.outcome == "failed" and "nothing said" in job.error
+        assert _after(board.sent, "M303 E0 S200 C5") == ["M108", "M112"]
+        assert "did not answer the break" in job.heater_off
+        links.stop_all()
+
     def test_an_experiment_past_its_longest_time_is_ended(self, board):
         board.links.control.arm(PORT)
         tune = loops.plan("hotend", 0, "autotune", 260, 60, target_c=200, cycles=5)
