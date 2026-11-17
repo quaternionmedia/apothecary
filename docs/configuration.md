@@ -36,6 +36,7 @@ needed: each has a default.
 | `APOTHECARY_CARLOS_SITE` | The site whose wiring `serve --carlos` sends | `garage` | [the plan](plans/qm-family-carlos-2026-10-29.md#the-demo) |
 | `APOTHECARY_QMCP` | qmcp, through which image models are asked about the shape chosen on a mat, only when a person asks (Models, and `apothecary vision`): an address on this machine, reached over MCP, or `simulated`, a qmcp in process (`simulated:slow`, `:empty`, `:broken`, `:down` for each way it can fail); `off` is the same as unset. `apothecary serve --simulated` sets `simulated` unless another is named | Unset: nothing is asked, and the plain reader still reads a colour | [the plan](plans/image-models-through-qmcp-2026-10-30.md), [the checklist](models-checklist.md) |
 | `APOTHECARY_SIMULATED` | The simulated machines' folder, set by `apothecary serve --simulated` in its server's environment; the page's banner reads it. Not set by hand | Unset | [viewer.md](viewer.md#the-header) |
+| `APOTHECARY_GREEN_RECORD` | The file `apothecary test` keeps what passed in, which `apothecary test changed` leaves out while it is unchanged. The test session sets its own, so a test's run of the command keeps nothing for the checkout | `.cache/test-changed/green.json` in the checkout | [dev-loop.md](dev-loop.md#testing) |
 
 ## Other variables Apothecary reads
 

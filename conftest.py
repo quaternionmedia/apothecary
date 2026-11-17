@@ -10,7 +10,9 @@ test connects to nothing past this machine whichever module it imports.
 
 The state folder is the run's own too: a site a test builds is given the
 cameras recorded in the state folder, and a person's own (``~/.apothecary``)
-must neither appear in a test's site nor be written by one.
+must neither appear in a test's site nor be written by one. So is the record of
+what was green, which `apothecary test changed` reads: a test's pass is not the
+checkout's.
 
 Every test has a time bound, run here or in CI: each phase of it -- its setup,
 its call, its teardown -- ends at the ceiling below, twice the longest test the
@@ -60,6 +62,20 @@ def _state_folder_of_the_runs_own(tmp_path_factory):
         os.environ.pop("APOTHECARY_STATE_DIR", None)
     else:
         os.environ["APOTHECARY_STATE_DIR"] = previous
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _green_record_of_the_runs_own(tmp_path_factory):
+    """What `apothecary test` keeps as green (apothecary/cli/green.py) goes to a file of
+    the run's own: a test that runs the command stands its pytest in, and that pass is
+    not the checkout's."""
+    previous = os.environ.get("APOTHECARY_GREEN_RECORD")
+    os.environ["APOTHECARY_GREEN_RECORD"] = str(tmp_path_factory.mktemp("green") / "green.json")
+    yield
+    if previous is None:
+        os.environ.pop("APOTHECARY_GREEN_RECORD", None)
+    else:
+        os.environ["APOTHECARY_GREEN_RECORD"] = previous
 
 
 @pytest.fixture(autouse=True)

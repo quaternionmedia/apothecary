@@ -415,6 +415,7 @@ GROUPS = {
             "test_preflight_staging.py",
             "test_stamped.py",
             "test_the_port.py",
+            "test_unchanged_since_green.py",
         ),
     },
     "repository": {
@@ -580,6 +581,21 @@ def reached(changed) -> list | str:
     return [f"{TESTS}/{name}" for name in held if name in found] + sorted(
         f"{TESTS}/{name}" for name in found - set(held)
     )
+
+
+def reaching(paths) -> tuple[set[str], dict[str, set[str]]]:
+    """``reached`` turned round: of ``paths``, those a change to which reaches every unit
+    file, and for each unit file the others a change to which reaches it. What a unit
+    file stands on, by the same rules that choose what a change runs."""
+    shared, each = set(), {}
+    for path in paths:
+        found = reached([path])
+        if found == ALL:
+            shared.add(path)
+            continue
+        for test in found:
+            each.setdefault(test, set()).add(path)
+    return shared, each
 
 
 def main(argv=None) -> int:

@@ -7,7 +7,7 @@ import sys
 import pytest
 from click.testing import CliRunner
 
-from apothecary.cli import cli, testing
+from apothecary.cli import cli, green, testing
 from apothecary.projects.parts.skeleton import ROOT
 
 
@@ -18,14 +18,25 @@ def pytest_exits(monkeypatch):
     def exits_with(*codes: int) -> list[list[str]]:
         ran, remaining = [], list(codes)
 
-        def run(argv, **kwargs):
+        def run(argv, env=None):
             ran.append(argv)
-            return subprocess.CompletedProcess(argv, remaining.pop(0))
+            return remaining.pop(0)
 
-        monkeypatch.setattr(testing.subprocess, "run", run)
+        monkeypatch.setattr(testing, "_pytest", run)
         return ran
 
     return exits_with
+
+
+@pytest.fixture(autouse=True)
+def digests(monkeypatch, tmp_path):
+    """The record of what was green is this test's own, over a checkout that holds
+    still: each unit file's digest and the walkthrough's, which a test may change."""
+    monkeypatch.setenv(green.RECORD_ENV, str(tmp_path / "green.json"))
+    held = {name: "as it was" for name in [testing.WALKTHROUGH, *testing.unit_files()]}
+    monkeypatch.setattr(green, "digests", lambda root, groups: dict(held))
+    monkeypatch.setattr(green, "environment", lambda root: {"Python": "this one"})
+    return held
 
 
 def _args(argv: list[str]) -> list[str]:
@@ -106,6 +117,7 @@ def test_help_says_what_run_and_all_each_do():
     assert "apothecary test run" in said and "apothecary test all" in said
     assert "every browser test" in said
     assert "uv run playwright install chromium" in said
+    assert "not run, unchanged since green, and --even-unchanged runs it too" in said
 
 
 @pytest.mark.parametrize("name", ["setup-e2e", "validate-e2e", "run-e2e"])
@@ -169,16 +181,158 @@ def test_changed_exits_with_the_first_failing_code_and_lists_without_running(
 ):
     monkeypatch.setattr(testing, "changed_paths", lambda since: ["apothecary/lighting.py"])
     ran = pytest_exits(0, 1)
-    done = CliRunner().invoke(cli, ["test", "changed"])
-    assert done.exit_code == 1 and len(ran) == 2
-    assert "tests/e2e/test_lighting_overlay.py" in _args(ran[1])
     listed = CliRunner().invoke(cli, ["test", "changed", "--list"])
     assert listed.exit_code == 0
     assert listed.output.splitlines() == [
         *testing._groups().files(["viewer", "borders"]),
         "tests/e2e/test_lighting_overlay.py",
     ]
-    assert len(ran) == 2  # --list ran nothing
+    assert ran == []  # --list ran nothing
+    done = CliRunner().invoke(cli, ["test", "changed"])
+    assert done.exit_code == 1 and len(ran) == 2
+    assert "tests/e2e/test_lighting_overlay.py" in _args(ran[1])
+
+
+GCODE = ["apothecary/firmware/gcode.py"]  # reaches the machines group and the borders
+
+
+def _changed(*args: str):
+    done = CliRunner().invoke(cli, ["test", "changed", *args])
+    return done.exit_code, done.output.splitlines()
+
+
+def _unit(ran) -> list[str]:
+    """The unit files and walkthrough a run's unit pytest named, if it ran one."""
+    named = [a for a in _args(ran[0]) if a == "walkthrough" or a.startswith("tests/test_")]
+    return named if "--start-server" not in ran[0] else []
+
+
+def test_changed_leaves_out_what_is_unchanged_since_green_and_says_it_apart(
+    pytest_exits, monkeypatch, digests
+):
+    """A unit file, or the walkthrough, whose digest is the one a passing run kept is not
+    run; each group of them is said on a line of its own, counted apart from what ran,
+    with the command that runs them too."""
+    monkeypatch.setattr(testing, "changed_paths", lambda since: GCODE)
+    machines, borders = testing._groups().files(["machines"]), ["tests/test_boundaries.py"]
+    ran = pytest_exits(0, 0)
+    code, said = _changed()
+    assert code == 0 and _unit(ran) == ["walkthrough", *machines, *borders]
+    assert said[0].startswith("nothing left out as unchanged: no record of a run that passed")
+    assert f"kept as green: {len(machines) + 1} unit file(s) and the walkthrough" in said[-1]
+    # Nothing moved since: only the browser part runs, and the rest is said not run.
+    ran = pytest_exits(0)
+    code, said = _changed()
+    assert code == 0 and len(ran) == 1 and "--start-server" in ran[0]
+    assert [line.split(": ", 2)[2] for line in said if line.startswith("not run")] == [
+        f"machines ({len(machines)} files)",
+        "borders (1 files)",
+        "the walkthrough",
+    ]
+    assert (
+        "unit groups the change reaches: 0 ran; 2 not run, unchanged since green "
+        "(machines, borders); the walkthrough not run, unchanged since green"
+    ) in said
+    assert f"`{testing.EVERY_ONE_REACHED}` runs what was not run too" in said
+    # One file moves: it alone runs, and its group is said to have run the part that moved.
+    digests["tests/test_jobs.py"] = "moved"
+    ran = pytest_exits(0, 0)
+    code, said = _changed()
+    assert _unit(ran) == ["tests/test_jobs.py"]
+    summary = next(line for line in said if line.startswith("unit groups"))
+    assert summary.startswith("unit groups the change reaches: 1 ran (machines), files unchanged")
+    assert f"machines {len(machines) - 1} of {len(machines)}" in summary
+    assert "1 not run, unchanged since green (borders)" in summary
+    # --even-unchanged runs every one the change reaches, and says nothing is left out.
+    ran = pytest_exits(0, 0)
+    code, said = _changed("--even-unchanged")
+    assert _unit(ran) == ["walkthrough", *machines, *borders]
+    assert not any(line.startswith("not run") for line in said)
+    # --list names what would run, and what would not.
+    listed = CliRunner().invoke(cli, ["test", "changed", "--list"]).output.splitlines()
+    assert listed[0] == "no unit file" and listed[-1].endswith(": the walkthrough")
+
+
+def test_changed_with_nothing_to_run_runs_no_pytest_and_passes(pytest_exits, monkeypatch):
+    monkeypatch.setattr(testing, "changed_paths", lambda since: ["tests/test_jobs.py"])
+    pytest_exits(0)
+    assert _changed()[0] == 0
+    ran = pytest_exits()
+    code, said = _changed()
+    assert code == 0 and ran == []
+    assert "not run: unchanged since green at" in said[0] and said[0].endswith("machines (1 files)")
+
+
+@pytest.mark.parametrize(
+    "codes, args, kept",
+    [
+        ((1, 0), [], False),  # the unit part failed
+        ((0, 1), [], True),  # the browser part failed: the unit files passed
+        ((0, 0), ["-k", "gcode"], False),  # narrowed
+        ((0, 0), ["tests/test_jobs.py"], False),  # narrowed to a path
+        ((0, 0), ["-x"], True),  # stops at a failure, and none came
+        ((5, 0), [], False),  # the unit part collected nothing
+    ],
+    ids=["unit-failed", "browser-failed", "narrowed", "a-path", "exitfirst", "nothing-collected"],
+)
+def test_changed_keeps_as_green_only_a_unit_part_that_passed_unnarrowed(
+    pytest_exits, monkeypatch, codes, args, kept
+):
+    monkeypatch.setattr(testing, "changed_paths", lambda since: GCODE)
+    pytest_exits(*codes)
+    _, said = _changed(*args)
+    assert any(line.startswith("kept as green") for line in said) is kept
+    if args and not kept:
+        assert "not kept as green: further pytest arguments may have narrowed the run" in said
+    ran = pytest_exits(0, 0)
+    _changed()
+    assert bool(_unit(ran)) is not kept  # what was kept is not run again
+
+
+def test_run_all_and_group_keep_what_their_unit_part_passed(pytest_exits, monkeypatch):
+    """`test run`, `test all` and `test group` run what they name whatever the record
+    holds, and keep what a passing unit part ran, as `test changed` does."""
+    monkeypatch.setattr(testing, "changed_paths", lambda since: GCODE)
+    every = [testing.WALKTHROUGH, *testing.unit_files()]
+    for command, codes in ((["run"], (0, 0)), (["all"], (0, 0)), (["group", "making"], (0,))):
+        ran = pytest_exits(*codes)
+        done = CliRunner().invoke(cli, ["test", *command])
+        assert done.exit_code == 0 and len(ran) == len(codes)
+        assert "kept as green:" in done.output
+        # Kept: run again, it runs what it names all the same.
+        ran = pytest_exits(*codes)
+        CliRunner().invoke(cli, ["test", *command])
+        assert len(ran) == len(codes) and _args(ran[0])[1] == "walkthrough"
+    record = green.read(ROOT, green.environment(ROOT))
+    assert all(record.unchanged(name, "as it was") for name in every)
+    ran = pytest_exits(0)
+    _changed()
+    assert len(ran) == 1 and "--start-server" in ran[0]  # every unit file kept
+
+
+def test_a_whole_run_that_fails_keeps_nothing(pytest_exits, monkeypatch):
+    pytest_exits(1, 0)
+    assert "kept as green" not in CliRunner().invoke(cli, ["test", "run"]).output
+    pytest_exits(0, 0)
+    said = CliRunner().invoke(cli, ["test", "run", "-k", "cli"]).output
+    assert "not kept as green: further pytest arguments may have narrowed the run" in said
+    assert not green.record_path(ROOT).exists()
+
+
+def test_what_changed_says_counts_groups_that_ran_apart_from_those_unchanged():
+    group_of = {"tests/a.py": "one", "tests/b.py": "one", "tests/c.py": "two"}
+    files = list(group_of)
+    said = testing.unchanged_said(files, {}, group_of, walked=True)
+    assert said == ["unit groups the change reaches: 2 ran (one, two); 0 not run, unchanged "
+                    "since green; the walkthrough ran"]  # fmt: skip
+    left = {"tests/b.py": "2026-11-17T09:00:00", "tests/c.py": "2026-11-17T08:00:00"}
+    said = testing.unchanged_said(files, left, group_of, walked=True)
+    assert said == [
+        "not run: unchanged since green at 2026-11-17T08:00:00: two (1 files)",
+        "unit groups the change reaches: 1 ran (one), files unchanged since green not run in "
+        "one 1 of 2; 1 not run, unchanged since green (two); the walkthrough ran",
+        f"`{testing.EVERY_ONE_REACHED}` runs what was not run too",
+    ]
 
 
 def test_changed_says_what_to_name_when_there_is_nothing_to_compare_with():
