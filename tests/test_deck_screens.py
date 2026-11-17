@@ -145,6 +145,17 @@ def test_progress_of_an_ended_job_says_how_it_ended_until_a_touch(outcome, colou
     assert (reason is None) or reason in strip.small
 
 
+def test_an_ended_job_s_reason_does_not_say_its_end_twice():
+    """A host's cancel is recorded with the word the strip says before it: said once."""
+    job = _job(0.3, outcome="cancelled", reason="cancelled; heaters and fan off, motors free")
+    strip = screens.progress_strip("p", job, None, NOW, "2/3")
+    assert "· cancelled (heaters and fan off, motors free) after" in strip.small, strip.small
+    other = screens.progress_strip(
+        "p", _job(0.3, outcome="failed", reason="the board stopped"), None, NOW, "2/3"
+    )
+    assert "· failed (the board stopped) after" in other.small
+
+
 def test_progress_with_no_job_but_a_card_print_reads_the_card_and_with_neither_says_so():
     card = _status(sd_printing=True, sd_progress=0.5, print_time_s=125)
     strip = screens.progress_strip("printer_1", None, card, NOW, "2/3")

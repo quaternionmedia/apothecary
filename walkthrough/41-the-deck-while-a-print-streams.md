@@ -48,7 +48,7 @@ The print was cancelled. The strip says how it ended and after how long, and kee
 
 ```
 bench_coupon.gcode · 0%
-printer_1 · cancelled (cancelled; heaters and fan off, motors free) after ‒:‒‒ · tap to clear · 2/3
+printer_1 · cancelled (heaters and fan off, motors free) after ‒:‒‒ · tap to clear · 2/3
 ```
 
 ## What this page does not show

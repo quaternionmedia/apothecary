@@ -143,6 +143,15 @@ _ENDED = {
 }
 
 
+def _said_once(reason: str, word: str) -> str:
+    """A job's reason without the word the strip already says before it: a host's cancel
+    is recorded "cancelled; heaters and fan off, motors free", which the strip would say
+    as "cancelled (cancelled; ...)"."""
+    if reason.lower().startswith(word):
+        return reason[len(word) :].lstrip(" ;:,-")
+    return reason
+
+
 def progress_strip(machine: str, job, status, now: datetime, position: str) -> Strip:
     """The Progress screen of ``machine``: ``job`` is the host's job record (a print, a
     cut) as it stands, running or ended, or None; ``status`` the machine's newest poll,
@@ -157,7 +166,8 @@ def progress_strip(machine: str, job, status, now: datetime, position: str) -> S
             small = f"{machine} · {stage} · elapsed {clock(elapsed)} · {position}"
         else:
             word, colour = _ENDED.get(job.outcome, (job.outcome, "grey"))
-            why = f" ({job.reason})" if job.reason and job.outcome != "done" else ""
+            reason = _said_once(job.reason or "", word)
+            why = f" ({reason})" if reason and job.outcome != "done" else ""
             small = f"{machine} · {word}{why} after {clock(elapsed)} · tap to clear · {position}"
         return Strip(
             f"{job_name(job)} · {percent}%", small, colour, max(0.0, min(1.0, job.progress))
