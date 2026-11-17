@@ -15,17 +15,20 @@ the seam's own rules and adds no shortcut of its own:
   print does: started only with the latch armed and nothing else on the port, with a
   ceiling and a longest time the caller states every time (``plan``). It reads the
   temperature once a sample period; a reading over the ceiling, the longest time passed,
-  no reading for ``SILENCE_S``, the board restarting, a lost link, a cancel, the stop and
-  the server stopping each end it, and every end sends the safe-off a cancelled print
-  sends (``devices.safe_off``) and reads the target back; a target that is not off then
-  gets the stop (``M112``), which halts the board with its heaters off.
+  no reading for ``SILENCE_S``, its end come with a target of its schedule not set, the
+  board restarting, a lost link, a cancel, the stop and the server stopping each end it,
+  and every end sends the safe-off a cancelled print sends (``devices.safe_off``) and
+  reads the target back; a target that is not off then gets the stop (``M112``), which
+  halts the board with its heaters off.
 
 The experiments: **a step** of the target (closed loop: in this dialect a heater is told
 a target, ``M104``/``M140``, and no line sets its power), **an autotune** (the firmware's
 own relay, ``M303``, watched line by line) and **a perturbation** (a square wave of the
 target about an operating temperature, for the frequency response). A target changes half
-a sample period after a reading, so a reading never falls on a change. Only hotend 0 and
-the bed: ``M104`` here names no tool.
+a sample period after a reading, so a reading never falls on a change, and by the clock,
+not by readings counted: readings slower than the sample period are fewer samples, and
+each target is still set after the first reading past its time. Only hotend 0 and the
+bed: ``M104`` here names no tool.
 
 What the board says to ``M303``, and how its ``@:`` power is scaled, are assumed, not
 established (``gcode.py``'s notes on heater loops); the reference page lists them.
@@ -414,7 +417,18 @@ class LoopJob:
                 )
             self._same_boot(link, boots)
             if self._elapsed() >= self.plan.end_s:
+                unset = [(when, t) for when, t in changes if when < self.plan.end_s]
+                if unset:
+                    when, target = unset[0]
+                    raise _Ended(
+                        "failed",
+                        f"its end came before its target of {target} degC, due at {when:g} s, "
+                        "was set",
+                    )
                 return
+            # The sample period this reading ended in, by the clock: readings slower than
+            # the period move the schedule on with them rather than fall behind it.
+            k = max(k, int(self._elapsed() // T))
             self._sleep_until(self._t0 + (k + 0.5) * T)
             while changes and changes[0][0] <= (k + 0.5) * T:
                 _, target = changes.pop(0)

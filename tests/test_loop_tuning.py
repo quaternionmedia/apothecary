@@ -100,6 +100,53 @@ def _heats(sent):
 STEP = dict(base_c=180, step_c=5, settle_s=300.0, after_s=240.0)
 
 
+class Stepped:
+    """Simulated seconds that pass only as the job sleeps them or a reading takes them:
+    a board as slow as a test says, with no real time spent and nothing else running
+    in the process able to change it."""
+
+    def __init__(self):
+        self.t = 0.0
+
+    def now(self) -> float:
+        return self.t
+
+    def sleep(self, s: float) -> None:
+        self.t += s
+
+
+@pytest.fixture
+def slow_board(fake_arduino_cli, fresh_task_runner, monkeypatch):
+    """The simulated printer of ``board`` on a ``Stepped`` clock, each ``M105`` taking
+    ``slow.reading_s(t)`` simulated seconds, ``t`` the clock as it is written."""
+    clock = Stepped()
+    slow = SimpleNamespace(clock=clock, reading_s=lambda t: 0.0)
+    made = {}
+
+    class SlowReadings(Recorded):
+        def write(self, data):
+            if data.decode().strip() == "M105":
+                clock.t += slow.reading_s(clock.t)
+            super().write(data)
+
+    def factory(port, baud):
+        made["board"] = SlowReadings(
+            port, baud, heaters=gcode.simulated_heaters(port), clock=clock.now
+        )
+        return made["board"]
+
+    links = gcode.PrinterLinks(factory=factory)
+    monkeypatch.setattr(gcode, "_LINKS", links)
+    devices.printer_status(PORT)
+    links.control.arm(PORT)
+    slow.links, slow.sim = links, made["board"]
+    yield slow
+    for job in loops.running():
+        job.cancel()
+        job.thread.join(5)
+    links.stop_all()
+
+
 # ---- the simulated board's heaters --------------------------------------------------------
 
 
@@ -462,6 +509,42 @@ class TestExperiments:
         assert first.segments == 3 and first.trust in ("good", "fair")
         g = gcode.simulated_heaters(PORT)["T"].plant.response(first.frequency)
         assert first.magnitude == pytest.approx(abs(g), rel=0.25)
+
+    def test_readings_slower_than_the_sample_period_set_each_target_at_its_time(self, slow_board):
+        """Each reading takes two sample periods: fewer samples, and the step is still
+        set at 300 s, with the reading after it -- not after 300 readings, which take
+        600 s and come after the step's end at 540 s."""
+        slow_board.reading_s = lambda t: 2.0
+        clock = slow_board.clock
+        plan = loops.plan("hotend", 0, "step", 200, 900, **STEP)
+        job = loops.start(PORT, plan, clock=clock.now, sleep=clock.sleep)
+        job.thread.join(60)
+        sent = slow_board.sim.sent
+        assert job.outcome == "done", job.error
+        assert _heats(sent) == ["M104 S180", "M104 S185"]
+        s = job.samples
+        stepped = next(t for t, target in zip(s["t"], s["target"], strict=True) if target == 185)
+        assert 300 < stepped <= 306
+        assert len(s["t"]) < 540 / 2
+        assert _after(sent, "M104 S185")[-5:] == [*OFF, "M105"]
+        assert job.heater_off.startswith("heater off")
+
+    def test_an_end_that_comes_before_a_target_is_set_ends_it_failed_and_off(self, slow_board):
+        """The reading begun at 299 s takes 250 s: the step's end has come with its step
+        never set. It is no step, so it is not done: it fails saying so, the heater off."""
+        clock = slow_board.clock
+        start = clock.t
+        slow_board.reading_s = lambda t: 250.0 if 299 <= t - start < 300 else 0.0
+        plan = loops.plan("hotend", 0, "step", 200, 900, **STEP)
+        job = loops.start(PORT, plan, clock=clock.now, sleep=clock.sleep)
+        job.thread.join(60)
+        sent = slow_board.sim.sent
+        assert job.outcome == "failed"
+        assert "its end came before its target of 185 degC, due at 300 s, was set" in job.error
+        assert _heats(sent) == ["M104 S180"]
+        assert _after(sent, "M104 S180")[-5:] == [*OFF, "M105"]
+        assert job.heater_off.startswith("heater off")
+        assert job.error in jobs.get(job.job.id).reason
 
 
 # ---- every way out ---------------------------------------------------------------------------

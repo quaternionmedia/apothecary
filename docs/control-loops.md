@@ -200,13 +200,16 @@ here names no tool.
 In this dialect a heater is told a target and no line sets its power, so a step is a
 step of the setpoint in closed loop, and the plant is fitted from the power the board
 reports. While a step or a perturbation runs, the job reads `M105` once a sample
-period and changes a target half a period after a reading. While an autotune runs, the
-board answers nothing else; the job reads the temperatures the board says as it goes.
+period and changes a target half a period after a reading. Its schedule is kept by the
+clock, not by readings counted: readings slower than the period are fewer samples, and
+each target is still set after the first reading past its time. While an autotune runs,
+the board answers nothing else; the job reads the temperatures the board says as it goes.
 
 An experiment ends -- done, a reading over its ceiling, its longest time passed, no
-temperature read for fifteen seconds, the board restarting, an objection, a lost link,
-a cancel, the stop, or the server stopping -- and every end but the stop sends the
-safe-off a cancelled print sends (`M104 S0`, `M140 S0`, `M107`, `M84`), each line tried,
+temperature read for fifteen seconds, its end come with a target of its schedule not
+set, the board restarting, an objection, a lost link, a cancel, the stop, or the server
+stopping -- and every end but the stop sends the safe-off a cancelled print sends
+(`M104 S0`, `M140 S0`, `M107`, `M84`), each line tried,
 after an autotune's wait is broken (`M108`), and reads the target back. A target that
 does not read back as off, or a board that does not answer, is sent the stop (`M112`),
 which halts the board with its heaters off until it is reset. An autotune whose board
