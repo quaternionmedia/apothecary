@@ -1091,7 +1091,7 @@ def test_a_file_is_kept_or_refused_and_nothing_leaves_disarmed(page: Page, print
         "slow cube.gcode · 6000 lines", timeout=8000
     )
     expect(page.locator("#log .sys", has_text="kept slow cube.gcode: 6000 lines")).to_be_visible()
-    expect(page.locator("#print-start")).to_be_enabled()
+    expect(page.locator("#print-start")).to_be_visible()  # shown for a kept file; greyed below
     # A file the seam refuses is kept, said so, and never sent.
     page.locator("#print-file").set_input_files(
         {"name": "eeprom.gcode", "mimeType": "text/plain", "buffer": b"G28\nM500\n"}
