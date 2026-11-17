@@ -180,6 +180,7 @@ GROUPS = {
             "test_dust_parts.py",
             "test_failed_renders.py",
             "test_fittings.py",
+            "test_flexure_rotor_part.py",
             "test_following_a_variant.py",
             "test_gap_geometry.py",
             "test_geometry_from_elsewhere.py",
