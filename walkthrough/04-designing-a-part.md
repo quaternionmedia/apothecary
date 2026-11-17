@@ -40,7 +40,7 @@ size = 30;              // [10:1:50] Cube size in mm
 
 ## 3. Apply draws the variant, marked as not saved
 
-Apply: the text rendered, its size in it and nothing passed beside it, into the cache of variants, and drawn in this tab at that size, grown from where the part stood on the floor rather than centred on the envelope it had, and measured beside the envelope the part declares, Selected's Footprint following it. The editor's amber edge and its words, and an amber dot over the part in the world, say it is an applied variant and not the saved part; the status line says so too.
+Apply: the text rendered, its size in it and nothing passed beside it, into the cache of variants, and drawn in this tab at that size, grown from where the part stood rather than centred on the envelope it had, and measured beside the envelope the part declares, Selected's Footprint following it. The editor's amber edge and its words, and an amber dot over the part in the world, say it is an applied variant and not the saved part; the status line says so too.
 
 ![Apply draws the variant, marked as not saved](screenshots/04-03-apply-draws-the-variant-marked-as-not-saved.png)
 

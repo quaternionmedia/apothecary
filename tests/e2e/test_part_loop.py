@@ -44,6 +44,7 @@ from viewer_ready import (
     MARKED_LINE_FIRST,
     STAGE_BAR_AT_THE_TOP,
     by_hand,
+    origin,
     settled,
 )
 
@@ -92,9 +93,10 @@ MESH = """(key) => {
     g.computeBoundingBox();
     const s = g.boundingBox.max.clone().sub(g.boundingBox.min);
     const edges = mesh.getObjectByName('edges');
+    // Its own origin corner: the part's least x, y and z, three.js's z running along -y.
     const world = new mesh.position.constructor();
-    mesh.localToWorld(world.copy(g.boundingBox.min));
-    return { size: [s.x, s.y, s.z], bottom: world.y, placeholder: !!mesh.userData.isPlaceholder,
+    mesh.localToWorld(world.set(g.boundingBox.min.x, g.boundingBox.min.y, g.boundingBox.max.z));
+    return { size: [s.x, s.y, s.z], corner: [world.x, world.y, world.z], placeholder: !!mesh.userData.isPlaceholder,
              variant: !!mesh.userData.drawnFromVariant,
              glow: mesh.material.emissive.getHex(),
              edge: edges ? edges.material.color.getHex() : null };
@@ -375,7 +377,7 @@ def _a_round(
 ) -> float:
     """Move the size -- the slider dragged, or ``typed`` in its box -- see the check,
     Apply -- the editor's, or Part › Apply -- and see the variant drawn and measured,
-    standing on the floor where it grew. With ``story``, the page's steps for them,
+    standing where it grew. With ``story``, the page's steps for them,
     each said after what it says is asserted."""
     validations = []
     listen = lambda r: validations.append(r.url) if r.url.endswith("/validate") else None  # noqa: E731
@@ -415,8 +417,9 @@ def _a_round(
     assert _side(page) == pytest.approx(side, abs=0.05)
     assert _measured(page) == pytest.approx(side, abs=0.05)
     assert _declared(page) == pytest.approx(side, abs=0.05)
-    # Drawn where it stands: grown from the floor, not centred on the envelope it had.
-    assert _mesh(page)["bottom"] == pytest.approx(0, abs=0.05)
+    # Drawn where it stands: grown from its own origin at its node's place, not centred on
+    # the envelope it had.
+    assert _mesh(page)["corner"] == pytest.approx(origin(page, PART), abs=0.05)
     # Measured as declared: the envelope's line stays green, and Selected's Footprint
     # is what the variant drawn measures.
     expect(page.locator("#part-envelope")).not_to_have_class(re.compile(r"\bdiffers\b"))
@@ -434,7 +437,7 @@ def _a_round(
                 "Apply draws the variant, marked as not saved",
                 "Apply: the text rendered, its size in it and nothing passed beside it, into "
                 "the cache of variants, and drawn in this tab at that "
-                "size, grown from where the part stood on the floor rather than "
+                "size, grown from where the part stood rather than "
                 "centred on the envelope it had, and measured beside the envelope the part "
                 "declares, Selected's Footprint following it. The editor's amber edge and "
                 "its words, and an amber dot over the part in the world, say it is an "

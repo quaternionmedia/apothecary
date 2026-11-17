@@ -73,6 +73,20 @@ SIGHTED = """(key) => {
              rotateSpeed: v.orbitControls.rotateSpeed };
 }"""
 
+# Where a piece's own origin stands, in three.js's frame: its node's position through
+# sceneAt. A part grows from it, wherever it stands -- on a site's floor, or turned on
+# the universe's sphere.
+ORIGIN = """(key) => {
+    const v = window.fractalViewer, p = v.renderNodeByKey[key].position;
+    return v.sceneAt(p.x, p.y, p.z).toArray();
+}"""
+
+
+def origin(page: Page, key: str) -> list:
+    """Where ``key``'s own origin stands in the world, as three.js's [x, y, z]."""
+    return page.evaluate(ORIGIN, key)
+
+
 # One notch of a mouse wheel, as Chromium reports it, and what it does to the orbit's
 # distance (OrbitControls: 0.95 to the zoom speed times the notch over a hundred).
 NOTCH = 120
