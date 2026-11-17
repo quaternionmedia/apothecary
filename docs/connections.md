@@ -1,0 +1,192 @@
+# Connections
+
+How one part meets another: the **interfaces** a part declares, the **fit** two
+interfaces make, and the **connections** that place parts standing side by side
+where their interfaces meet. `parts/dust/` is the worked example: a stepped hose
+adapter and stand-ins for the hose and the ports it goes into.
+[Walkthrough 43](../walkthrough/43-parts-that-meet.md) runs it.
+
+| Word | What it is | Where |
+|---|---|---|
+| interface | a named place on a part where another part meets it | `apothecary/models/interfaces.py` |
+| fit | what the rule for a pair of interface types says of two | `fit(a, b)` there |
+| connection | an interface of one child of a node paired with one of another child | `hierarchy.Connection`, `Assembly.connections` |
+| profile | a round part as a stack of sections, giving its solid and its interfaces | `apothecary/fittings.py` |
+
+A connection is not composition. `composition.py` says what a part is built from,
+which sets its depth and its shell in the universe; a connection says how two
+parts that stand side by side meet, and changes neither.
+
+## An interface
+
+An interface is given in the part's own frame, the one its SCAD draws it in (the
+pose it prints in), by a `position` on the part and a `normal`: a unit vector
+pointing out of the part, toward whatever meets it. Every interface has:
+
+| Field | |
+|---|---|
+| `name` | one per part |
+| `type` | `spigot`, `socket`, `bolt_hole`, `slot` |
+| `version` | the interface's own revision |
+| `position`, `normal` | where it is and which way it faces; the normal is kept as a unit vector |
+| `source` | where its numbers came from: `stub` (guessed), `measured`, `datasheet`, `standard` (then `cite` names it), `drawn` (the part's own drawing, which apothecary makes it to) |
+| `excludes` | interfaces of the same part that cannot be in use with this one |
+| `notes` | what a reader needs to know of it: what to measure, say |
+
+A standard's numbers are cited, never copied in as though they were the part's
+own: `source: standard` without `cite` is refused.
+
+| Type | Its sizes |
+|---|---|
+| `spigot` | round, goes in: `d_base` across at `position`, `d_tip` at `position + normal * length`; a taper when the tip is narrower. Past its base the part widens, so it goes in no further than `length`. `reach` is how far the part goes on past `position` along the normal; what lies past the tip leads it in, at most `lead_d` across |
+| `socket` | round, takes a spigot: a bore of `diameter` at the mouth (`position`) that holds over `depth`; `floor`, the narrowest opening past the depth (none: nothing stops a spigot there); `stretch`, the fraction the bore opens when pushed (0: rigid) |
+| `bolt_hole` | `diameter`; declared and placed, no fit rule yet |
+| `slot` | `width`, `length`; declared and placed, no fit rule yet |
+
+## A fit
+
+`fit(a, b)` takes the pair in either order and applies the rule for their pair
+of types. A spigot and a socket have one; two spigots or two sockets `do not
+mate`; any other pair has `no rule` yet.
+
+A spigot goes into a socket tip first. It touches the bore where its diameter at
+the mouth reaches the bore, and goes on, opening a compliant socket, until it is
+as wide as the bore opens to, its shoulder reaches the mouth, or a floor past the
+socket's depth stops its tip or what leads it.
+
+| Verdict | When |
+|---|---|
+| `seats` | it touches the bore within the socket's depth, and stops |
+| `loose` | it is narrower than the bore all along: nothing touches |
+| `will not enter` | its tip, or what leads it, is wider than the bore opens to |
+| `shallow` | it would touch the bore only past the depth the bore holds over |
+| `tip blocked` | a floor stops it before it touches the bore |
+
+A fit that seats says `seat`, how far the tip goes past the mouth; `gap`, how far
+the spigot's shoulder then stands from the mouth; `interference`, how much wider
+than the bore the spigot is at the mouth, in mm across; and `stretch`, that as a
+fraction of the bore. Each verdict carries its `reason` in words.
+
+A seated spigot points into its socket with its tip `seat` past the mouth: its
+position is the socket's plus the socket's normal times its length less the
+seat, and its normal is the socket's reversed (`seated_frame`). A round
+interface has no clocking: turning it about its normal changes nothing.
+
+## A round part, built with its interfaces
+
+`fittings.Profile` holds a round part as a stack of `Section`s along +Z, section
+0 on the bed, each a frustum with its outer diameter and its bore at its bottom
+and its top (no bore: solid). From the one stack:
+
+| | |
+|---|---|
+| `solid()` | each section's outside a cylinder, the bore cut out of the whole, cleared past each open end; cylinders under a difference, which OpenSCAD, JSCAD and the viewer draw with nothing new |
+| `spigot(name, first, last, up=)` | the spigot a run of sections makes, pointing up or down, led by what lies past its tip |
+| `socket(name, top=)` | the socket the bore makes at a mouth: its diameter there, how far it holds at it, and the narrowest past that |
+| `problems(wall, overhang)` | what would not print as it stands: a wall under `WALL` (2.0, five lines of a 0.4 nozzle); an outside leaning out, or a bore closing in, past `OVERHANG` (45 degrees from vertical); a ledge facing down; a flat ceiling over a bore; a facet count that leaves a flat more than `SAGITTA` (0.01 mm) inside the widest circle |
+
+The geometry and the interfaces come from the same numbers, so they cannot
+disagree. `hose_adapter`'s `Params` refuses a set whose profile would not print,
+with what would not.
+
+## Declaring them
+
+A wrapper overrides `BasePart.interfaces(params)` (default: none); a part built
+from a profile returns the profile's. A described part lists them in its
+`part.json`, at its defaults:
+
+```json
+"interfaces": [
+  {"name": "port", "type": "socket", "source": "stub",
+   "position": {"x": 0, "y": 0, "z": 30}, "normal": {"x": 0, "y": 0, "z": 1},
+   "diameter": 32.0, "depth": 30.0,
+   "notes": "Guessed: measure the bore at the mouth and 20 mm in."}
+]
+```
+
+`part.interface(name)` finds one, and names the part's own when it is not there.
+Names are one per part and `excludes` names only the part's own: a sidecar that
+breaks either is no part description.
+
+## Held to the render
+
+`apothecary parts verify` reads each round interface across the part's render,
+`READ_IN` (0.5 mm) in from each end, square to its normal and about the line
+through its position: a spigot's outside at its base and its tip, a socket's bore
+at its mouth and its depth (`fittings.readings`, over `meshes.section_radii`). A
+diameter more than `--interface-tolerance` (`INTERFACE_TOLERANCE`, 0.05 mm) from
+the one declared fails, and so does a part drawn off the axis it declares. It is
+the gate for the pair interface ↔ rendered geometry, beside bounds ↔ rendered
+geometry. A reading takes the widest and the nearest the cut comes to the axis,
+so it is a round part's: anything else the plane cuts at that height reads as
+part of the interface.
+
+## Connections in an assembly
+
+A node's `connections` each pair `child.interface` with `child.interface`, two of
+its children, each a registered part:
+
+```python
+Assembly(
+    name="dust_hose_32",
+    children=[
+        Assembly(name="hose", part_ref="dust_hose_40"),
+        Assembly(name="adapter", part_ref="hose_adapter"),
+        Assembly(name="port", part_ref="dust_port_32"),
+    ],
+    connections=[
+        Connection(a="hose.end", b="adapter.hose"),
+        Connection(a="adapter.fitting_32", b="port.port"),
+    ],
+)
+```
+
+`connections.check(node)` answers each connection's fit, names each interface
+whose numbers are a stub's, and names what is wrong: a child or an interface that
+is not there, a pair that does not seat, two children standing apart from where
+their connection puts them (more than `PLACED_WITHIN`, 0.01 mm, or not facing),
+an interface in two connections, and two interfaces of one part that exclude each
+other in use together.
+
+`connections.place(node)` returns the node with its connected children placed,
+and `check`'s report on it. The first child of each connected group, in the
+node's order, stays where it stands, turned as it is. Each child joined to a
+placed one by a connection that seats is turned so its interface faces the
+other's, by the smallest turn that does (`turn_toward`, as OpenSCAD's `rotate`),
+and moved so its interface stands where the fit puts it; its `footprint` is its
+part's bounds, where it had none. A connection between two children already
+placed closes a loop, and is checked, not solved again. One that does not seat
+places nothing.
+
+Two children a connection joins are not checked for overlap with each other in
+`Assembly.validate()`: a spigot is in its socket by design.
+
+`apothecary/projects/assemblies/dust_hose.py` builds the example: the hose stays
+where it is, its end up; the adapter stands on it, pushed all the way in; the
+port is turned over and stands on the adapter's step as far as it goes.
+
+## Asking
+
+| | Command line | HTTP |
+|---|---|---|
+| a part's interfaces | `apothecary parts interfaces NAME` (`--json-out`, `-p`) | `GET /parts/{name}/interfaces` |
+| how two fit | `apothecary parts fit PART[.INTERFACE] PART[.INTERFACE]` | `GET /parts/{name}/interfaces/{interface}/fit?to=part.interface` |
+| on the render | `apothecary parts verify NAME` | |
+
+`parts fit` with a part named alone tries each of its interfaces against each of
+the other's, those that seat first, and exits 1 when nothing seats.
+
+## In the problems index
+
+`apothecary problems` lists an interface whose numbers are a stub's as
+`unmeasured`, a measurement's to close, and a site's connection that does not
+fit or does not stand where it meets as `misfit`, apothecary's to close
+(`apothecary/spaces.py`).
+
+## Not yet
+
+The viewer draws no interface and makes no connection; a site's connections are
+not placed when it loads; a node carries no parameters of its own, so a
+connection meets a part at its defaults; and the types with a rule are the
+spigot and the socket. A thread, a DIN rail, a VESA pattern or a bolt pattern is
+a type with a rule of its own, each citing its standard.

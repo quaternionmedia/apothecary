@@ -328,6 +328,17 @@ such a part lives in `Params` and in the code;
 `tests/test_parameter_coverage.py` fails on one that leaves the generated
 SCAD unchanged.
 
+`interfaces(params)` is where another part meets this one: a list of
+`apothecary.models.interfaces` objects (a spigot, a socket, a bolt hole, a
+slot), each named and given in the part's own frame by a position and a normal
+pointing out of the part. A part nothing meets returns none, the default. A part
+built from a `fittings.Profile` returns the profile's, so they come from the same
+numbers as its solid; `hose_adapter` is one. A described part lists them under
+`interfaces` in its `part.json`. `apothecary parts verify` reads each round one
+on the render and fails on drift, `apothecary parts interfaces NAME` lists them,
+and [connections.md](connections.md) says how two fit and how parts are placed by
+them.
+
 ## A piece made from a picture is a part
 
 A shape a finder saw in a picture and a person made into a piece

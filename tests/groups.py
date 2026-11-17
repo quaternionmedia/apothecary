@@ -163,6 +163,7 @@ GROUPS = {
             "tests/scripted_openscad.py",
             "tests/rendered_parts.py",
             "tests/assignment_cases.json",
+            "walkthrough/43-*",
         ),
         "tests": (
             "test_airgap_metrics.py",

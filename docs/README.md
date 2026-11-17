@@ -58,6 +58,7 @@ at page 00.
 | [40 — Layers and depth](../walkthrough/40-layers-and-depth.md) | The universe's sphere turned until a piece of an outer shell stands in front of one of an inner shell, a click selecting the outer one, then the outer shell made not selectable in the Layers window beside the world and the same click selecting the piece behind; written by the browser suite |
 | [41 — The deck while a print streams](../walkthrough/41-the-deck-while-a-print-streams.md) | The Stream Deck +'s touch strip while a print streams on the simulated printer: Progress brought forward once, a swipe along the Deck window's strip back to the knobs, which say the print holds the port, on to Status, and a cancelled print kept on Progress until a touch; written by the browser suite |
 | [42 — Measuring in the world](../walkthrough/42-measuring-in-the-world.md) | Measure ticked in the Layers window: the calibration cube reading its size along its own axes, each number saying where it comes from, then two of its corners clicked for the distance between them and dx, dy and dz; written by the browser suite |
+| [43 — Parts that meet](../walkthrough/43-parts-that-meet.md) | A dust hose adapter's interfaces, how each fits the hose and two ports, the three placed where they meet by their connections, both fitting ends in use refused, and what is still a stub |
 
 ## The checklists
 
@@ -84,6 +85,7 @@ suites hold everything else.
 | [Scene JSON format](scene-json.md) | Scenes, primitives, booleans and transforms as JSON |
 | [Parts authoring](parts-authoring.md) | How to add a part, override its parameters, and check it |
 | [Fitting a part](fitting-a-part.md) | The seam between a consumer and this repository as built: black boxes, a part's parameters and the validator, a gate per pair of descriptions, the pin, and who owns each open problem |
+| [Connections](connections.md) | How one part meets another: the interfaces a part declares, the fit two make, a round part built with its interfaces, the render held to them, and parts placed side by side where their interfaces meet |
 | [Borders and handoffs](boundaries.md) | Where apothecary ends and another repository begins, the package's layers and the imports that reach up one, and what crosses at each handoff of the loops, held by a test |
 | [Geometry models](models.md) | Vectors, bounds, colors, shapes and units |
 | [Geometry made elsewhere](geometry-from-elsewhere.md) | An STL or OBJ as a part (`apothecary parts import`), and a part described by a sidecar |
