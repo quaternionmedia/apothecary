@@ -149,6 +149,29 @@ def test_a_reader_that_falls_behind_is_told_how_many_it_missed(monkeypatch):
     assert asyncio.run(follow()) == (["2", "3", "4"], 2)
 
 
+def test_a_stream_dropped_before_or_after_its_first_frame_leaves_nobody_following():
+    """A reader that goes before the stream's first frame is never a follower, and one
+    that goes after it is let go: no follower is left for whom every change would be
+    made."""
+    from apothecary.routes.surfaces import surface_events
+
+    class Reader:
+        async def is_disconnected(self):
+            return False
+
+    async def opened_then_dropped():
+        before = len(surfaces._FOLLOWING)
+        answer = await surface_events(Reader(), names="projector", seconds=None)
+        assert len(surfaces._FOLLOWING) == before and not surfaces.listening("projector")
+        frames = answer.body_iterator
+        assert "event: surfaces" in await frames.__anext__()
+        assert surfaces.listening("projector")
+        await frames.aclose()
+        assert len(surfaces._FOLLOWING) == before and not surfaces.listening("projector")
+
+    asyncio.run(opened_then_dropped())
+
+
 @pytest.fixture
 def held_link(monkeypatch):
     """A link held open to a simulated printer, every byte written to it counted, and

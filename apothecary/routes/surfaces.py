@@ -71,10 +71,13 @@ async def surface_events(
 ):
     """Every change an owner says of the surfaces named, as it says it."""
     wanted = _named(names)
-    following = surfaces.subscribe(wanted)
     ends = time.monotonic() + seconds if seconds is not None else None
 
     async def frames():
+        # Followed from the first frame, inside the generator whose ``finally`` lets it
+        # go: a reader gone before the stream starts leaves no follower behind, whose
+        # being there would have every change's body made for nobody.
+        following = surfaces.subscribe(wanted)
         try:
             yield _frame("surfaces", {"following": wanted or surfaces.names()})
             quiet = 0.0
