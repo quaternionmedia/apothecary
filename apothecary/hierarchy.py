@@ -131,7 +131,10 @@ class Assembly(BaseModel):
     ``depth`` and ``shell``, when set, say where the universe (``universe.py``) lays the
     node: how deep its part is composed (0: built from no other registered part) and
     which spherical shell that puts it on (0 innermost, a dense rank among the depths
-    that occur; the sites' pieces stand on the outermost). None everywhere else.
+    that occur; the sites' pieces stand on the outermost). ``built_from`` names the
+    registered parts it is built from that the universe holds (``composition.py``), so
+    the universe can stand them under it and a viewer can draw what joins them. None
+    everywhere else.
 
     ``category``, when set, names the subsystem this node belongs to (a
     viewer's domain, e.g. "wall"/"furniture"/"mechanical"/"fluid"/
@@ -167,6 +170,7 @@ class Assembly(BaseModel):
     turn: Optional[Vector3D] = None
     depth: Optional[int] = None
     shell: Optional[int] = None
+    built_from: Optional[List[str]] = None
     footprint: Optional[BoundingBox3D] = None
     material: Optional[str] = None
     build_volume: Optional[Vector3D] = None

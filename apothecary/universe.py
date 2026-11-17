@@ -10,8 +10,11 @@ navigating down to it and a site by stepping into its piece:
   part is innermost, and each shell outward holds the parts compounded from the shells
   inside it. The shells are dense, so none is empty. A leaf stands on its shell facing
   outward: its ``turn`` stands its up along the ray from the middle of the universe,
-  and its footprint's middle is on the shell. The layout is a catalog, not a build:
-  nothing constrains it (``validate_universe``);
+  and its footprint's middle is on the shell. A leaf carries its part's ``category``,
+  and the leaves of one category sit together on their shell; it carries what it is
+  ``built_from``, and each of those stands as nearly under it as its shell allows --
+  under the first by name, of the leaves that are built from one. The layout is a
+  catalog, not a build: nothing constrains it (``validate_universe``);
 - every other registered site is one piece (``role="site"``, ``site_ref`` naming it),
   on the shell outside every part's, upright. It is drawn in miniature: its site's
   top-level pieces as boxes, scaled to fit, never larger than they are. The boxes are
@@ -176,15 +179,24 @@ def arrange(universe: Assembly) -> None:
     """Every leaf and every piece of ``universe`` on its shell, from their footprints.
 
     A leaf's shell is its ``depth`` ranked among the depths that occur; the pieces
-    stand on the shell outside the last. Nothing already placed is read, so a hand-moved
-    node goes back, and the pieces, being outermost, move no leaf."""
+    stand on the shell outside the last. On a shell the nodes of one ``category`` sit
+    together, and a leaf another is ``built_from`` stands under it -- under the first by
+    name, where several are built from it (``orbitals.lay_out``). Nothing already placed
+    is read, so a hand-moved node goes back, and the pieces, being outermost and built
+    into nothing, move no leaf."""
     leaves = [c for c in universe.children if c.part_ref and c.footprint is not None]
     pieces = [c for c in universe.children if c.site_ref and c.footprint is not None]
     shells = dense_shells({leaf.name: leaf.depth or 0 for leaf in leaves})
     outermost = max(shells.values(), default=-1) + 1
     shell_of = {**shells, **{piece.name: outermost for piece in pieces}}
     size_of = {node.name: _bounding_radius(node.footprint) for node in (*leaves, *pieces)}
-    placed = lay_out(shell_of, size_of)
+    category_of = {node.name: node.category for node in (*leaves, *pieces)}
+    built_into: dict = {}
+    for leaf in leaves:
+        for child in leaf.built_from or ():
+            built_into.setdefault(child, []).append(leaf.name)
+    parent_of = {child: min(parents) for child, parents in built_into.items()}
+    placed = lay_out(shell_of, size_of, category_of=category_of, parent_of=parent_of)
     for node in (*leaves, *pieces):
         where = placed[node.name]
         # The middle of the footprint, turned with the node, lands on the shell's point.
@@ -240,13 +252,16 @@ def create_universe_site(sites: Optional[Mapping[str, Assembly]] = None) -> Asse
         for item, part in load_parts(ROOT).parts
         if not (part.category in NOT_ON_THE_BENCH and item.name in theirs)
     }
-    depths = composition_depths(part_children(parts, sites.values()))
+    children = part_children(parts, sites.values())
+    depths = composition_depths(children)
     leaves = [
         Assembly(
             name=name,
             role="part",
             part_ref=name,
+            category=parts[name].category,
             depth=depths[name],
+            built_from=children[name] or None,
             footprint=parts[name].get_bounds() or FALLBACK_BOUNDS,
         )
         for name in sorted(parts)

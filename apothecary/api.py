@@ -1654,6 +1654,9 @@ def _assembly_tree(
         # in the world's axes). world_bounds is the box that contains the turned footprint.
         "depth": node.depth,
         "shell": node.shell,
+        # The parts a universe's leaf is built from, by name, each another leaf: what a
+        # viewer joins it to. None for any other node.
+        "built_from": node.built_from,
         "turn": [node.turn.x, node.turn.y, node.turn.z] if node.turn is not None else None,
         "footprint": _bounds_dict(node.footprint),
         "world_bounds": _bounds_dict(world_bounds),

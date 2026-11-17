@@ -154,9 +154,14 @@ it. Depth is read from a part's SCAD `include` and `use` of another registered
 part and from sites that hold one part in another, and a part's own `parts` list
 in `part.json` wins ([parts-authoring.md](parts-authoring.md#what-a-part-is-built-from)).
 The shells are dense, so none is empty, and each stands clear of the one inside it.
+A leaf carries its part's category, and on a shell the parts of one category sit
+together, a cluster; a part stands as nearly under the part built from it as its
+shell allows, and a part several are built from stands under the first of them by
+name, so its cluster gathers under theirs (`apothecary/orbitals.py`).
 A leaf faces outward, its up along the ray from the middle; the tree gives each
-node its `shell`, its `depth` and its `turn` (`[rx, ry, rz]` degrees, OpenSCAD's
-rotate order, null for a node not turned). Every other site is one piece, upright
+node its `shell`, its `depth`, its `built_from` (the parts it is built from, by
+name) and its `turn` (`[rx, ry, rz]` degrees, OpenSCAD's rotate order, null for a
+node not turned). Every other site is one piece, upright
 on the shell outside the parts'; a site added while the server runs gets its piece
 there and moves no part, and the universe does not hold itself. The layout is made
 again each time the universe is drawn, so a piece moved by hand returns. The page

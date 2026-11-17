@@ -132,6 +132,74 @@ def test_a_leaf_stands_on_the_shell_its_composition_depth_gives_it():
     assert depth["creality_v422"] == 0 and depth["ender3"] == 1
 
 
+def test_a_leaf_carries_its_parts_category_and_the_leaves_it_is_built_from():
+    universe = create_universe_site(_others())
+    parts = {item.name: part for item, part in load_parts(ROOT).parts}
+    leaves = {leaf.name: leaf for leaf in _leaves(universe)}
+    for name, leaf in leaves.items():
+        assert leaf.category == parts[name].category, name
+        assert set(leaf.built_from or ()) <= set(leaves), name
+    assert leaves["ender3"].built_from == ["creality_v422"]
+    assert leaves["webcam"].built_from is None
+    assert all(piece.built_from is None for piece in _pieces(universe))
+
+
+def _angle(a, b) -> float:
+    dot = sum(x * y for x, y in zip(a, b, strict=True)) / (math.hypot(*a) * math.hypot(*b))
+    return math.acos(max(-1.0, min(1.0, dot)))
+
+
+def test_the_leaves_of_a_category_are_one_piece_of_their_shell():
+    """Each leaf joined to those of its category among its six nearest on its shell,
+    the neighbours a point of the lattice has about it: every category of every shell
+    is one piece."""
+    universe = sites.store.get(UNIVERSE)
+    by_shell = {}
+    for leaf in _leaves(universe):
+        by_shell.setdefault(leaf.shell, []).append(leaf)
+    clusters = 0
+    for leaves in by_shell.values():
+        nearest = {
+            a.name: [
+                b.name
+                for b in sorted(
+                    (b for b in leaves if b is not a), key=lambda b: _angle(_middle(a), _middle(b))
+                )[:6]
+            ]
+            for a in leaves
+        }
+        kind = {leaf.name: leaf.category for leaf in leaves}
+        for category in set(kind.values()):
+            members = [n for n in kind if kind[n] == category]
+            seen, stack = {members[0]}, [members[0]]
+            while stack:
+                for m in nearest[stack.pop()]:
+                    if kind[m] == category and m not in seen:
+                        seen.add(m)
+                        stack.append(m)
+            assert seen == set(members), (category, sorted(members), sorted(seen))
+            clusters += len(members) > 1
+    assert clusters >= 3
+
+
+def test_a_leaf_stands_under_the_first_by_name_of_the_leaves_built_from_it():
+    """Of every node on the shell of the leaves built from it, the first of them by name
+    is the nearest above it: the webcam under webcam_ceiling_mount, of its three."""
+    universe = sites.store.get(UNIVERSE)
+    nodes = universe.children
+    into = {}
+    for leaf in _leaves(universe):
+        for child in leaf.built_from or ():
+            into.setdefault(child, []).append(leaf)
+    assert len(into["webcam"]) == 3
+    for child, parents in into.items():
+        first = min(parents, key=lambda p: p.name)
+        around = [n for n in nodes if n.shell == first.shell]
+        below = _middle(next(n for n in nodes if n.name == child))
+        nearest = min(around, key=lambda n: _angle(_middle(n), below))
+        assert nearest.name == first.name, (child, nearest.name, first.name)
+
+
 def test_a_shell_is_a_sphere_about_the_origin_and_each_clears_the_one_inside():
     leaves = _leaves(sites.store.get(UNIVERSE))
     radius = {}
