@@ -360,6 +360,7 @@ GROUPS = {
             "test_menu.py",
             "test_measure.py",
             "test_menu_routes.py",
+            "test_orbits_drawn.py",
             "test_pick_scope.py",
             "test_projector_page.py",
             "test_readiness.py",

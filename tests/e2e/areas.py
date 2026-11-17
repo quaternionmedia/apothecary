@@ -98,6 +98,7 @@ AREAS = {
             "test_docs_fractal_viewer.py",
             "test_the_universe.py",
             "test_layers.py",
+            "test_orbitals_in_the_world.py",
             "test_measure.py",
             "test_view_banner.py",
             "test_journeys.py",

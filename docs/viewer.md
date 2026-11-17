@@ -166,7 +166,15 @@ on the shell outside the parts'; a site added while the server runs gets its pie
 there and moves no part, and the universe does not hold itself. The layout is made
 again each time the universe is drawn, so a piece moved by hand returns. The page
 frames the whole sphere from outside, draws no floor grid there, and the camera may
-travel inside it. A part stepped into is drawn as it is made, upright and not turned
+travel inside it. At the universe's own level it draws the orbitals
+(`apothecary/static/orbits.js`): each shell's three rings, faint, in the shell's
+colour, the same three planes for every shell so the shells' rings nest; round each
+category's cluster on a shell, an outline in the category's colour; and from a part to
+each part it is built from, a faint line. None of them is a piece: a click passes
+through them, and they hide nothing. Each is drawn while the layers it is drawn for
+are shown, a line while both its parts are; and a still click that meets no piece and
+lands on a ring or an outline opens that layer's ring ([Layers](#layers)) where it
+landed, as Ctrl+right-click there does. A part stepped into is drawn as it is made, upright and not turned
 as the sphere stands it, on a grid laid under it. A site's piece is drawn
 in miniature: its site's top-level pieces as boxes, coloured as the site
 colours them, a wall faded, scaled to fit and never larger than they

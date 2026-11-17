@@ -887,6 +887,7 @@
         import { mountAnchors } from '/static/anchors.js';
         import { makePickScope, kindOf, WALL as WALL_LAYER, GRID as GRID_LAYER, MACHINE_BUTTONS as BUTTONS_LAYER, MEASURE as MEASURE_LAYER } from '/static/pick_scope.js';
         import { takeLayerColours, layerColour, layerHex, categoriesInOrder } from '/static/layer_colours.js';
+        import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf } from '/static/orbits.js';
         import { ownExtents, sizeFromSceneBox, turnedExtents, turnRowsInScene, turnedBounds, between, gap as gapBetween, nearestWithin, length as mmText } from '/static/measure.js';
         import { mountPanels } from '/static/panels.js';
         import { mountMachine } from '/static/widgets/machine.js';
@@ -1104,6 +1105,14 @@
         // relief (0.4 up).
         const BED_GRID_MM = 10;
         const MEASURE_SNAP_PX = 12;      // a measured point snaps to a vertex this near the pointer
+        // The universe's orbitals (drawOrbits): how faint a shell's rings, a cluster's outline
+        // and the line from a part to what it is built from are drawn, that line's colour,
+        // and how near a click must land to a ring or an outline to open its layer's ring.
+        const ORBIT_RING_OPACITY = 0.5;
+        const ORBIT_OUTLINE_OPACITY = 0.85;
+        const ORBIT_LINK_OPACITY = 0.5;
+        const ORBIT_LINK_COLOR = 0xb8c4b8;
+        const ORBIT_PICK_PX = 6;
         const BED_GRID_LIFT_MM = 0.3;
         // How often the world polls a machine it draws while no Machine is open on it
         // (followMachines): a Machine's own default.
@@ -2812,6 +2821,7 @@
                 // Before the meshes and the tree, which are both marked by it.
                 this.renderProblems({ list: false });
                 this.buildChildMeshes(renderNodes);
+                this.drawOrbits();
                 this.renderBreadcrumb();
                 this.renderMinimap();
                 this.renderCategoryFilters();
@@ -2830,6 +2840,7 @@
 
             clearScene() {
                 this.hideHandles();
+                this.dropOrbits();
                 this.dropGhostMesh();
                 for (const ref of Object.keys(this.failures)) this.clearFailure(ref);
                 if (this.comparing) this.closeComparison();
@@ -2844,6 +2855,92 @@
                 this.meshByName = {};
                 this.buildVolumeMeshByName = {};
                 this.compoundOverlayByKey = {};
+            }
+
+            // ---- The universe's orbitals --------------------------------------------------
+            //
+            // At the universe's own level the world draws what makes the sphere read as
+            // nested shells (static/orbits.js): each shell's rings, faint, in its layer's
+            // colour; round each category's cluster on a shell, an outline in the
+            // category's; and from a part to each part it is built from, a faint line. None
+            // is a piece: none is in meshByName, a ray passes through each, and a line
+            // hides nothing inside it. Each is drawn while the layers it is drawn for are
+            // shown (a link while both its pieces are drawn), and a still click that meets
+            // no piece and lands on a ring or an outline opens that layer's ring.
+            drawOrbits() {
+                this.dropOrbits();
+                if (this.siteName !== UNIVERSE || this.focusPath.length || !this.tree) return;
+                const nodes = Object.entries(this.renderNodeByKey)
+                    .filter(([key]) => !key.includes('.'))
+                    .map(([key, node]) => ({ ...node, key }));
+                const group = new THREE.Group();
+                const draw = (points, colour, opacity, closed) => {
+                    const geometry = new THREE.BufferGeometry().setFromPoints(points.map((p) => sceneAt(...p)));
+                    const material = new THREE.LineBasicMaterial({ color: colour, transparent: true, opacity, depthWrite: false });
+                    const line = closed ? new THREE.LineLoop(geometry, material) : new THREE.Line(geometry, material);
+                    line.raycast = () => {};
+                    group.add(line);
+                    return line;
+                };
+                const loops = [];
+                for (const { shell, radius } of shellsOf(nodes)) {
+                    const layer = `shell:${shell}`;
+                    for (const ring of ringsOf(radius)) {
+                        loops.push({ layer, layers: [layer], points: ring, object: draw(ring, layerColour(layer, DEFAULT_COLOR), ORBIT_RING_OPACITY, true) });
+                    }
+                }
+                for (const cluster of clustersOf(nodes)) {
+                    const layer = `category:${cluster.category}`;
+                    const outline = capOutline(cluster);
+                    loops.push({ layer, layers: [`shell:${cluster.shell}`, layer], points: outline, object: draw(outline, layerColour(layer, DEFAULT_COLOR), ORBIT_OUTLINE_OPACITY, true) });
+                }
+                const links = linksOf(nodes).map((link) => ({
+                    ...link,
+                    object: draw([middleOf(this.renderNodeByKey[link.from]), middleOf(this.renderNodeByKey[link.to])], ORBIT_LINK_COLOR, ORBIT_LINK_OPACITY, false),
+                }));
+                group.name = 'orbits';
+                this.scene.add(group);
+                this.orbits = { group, loops, links };
+                this.applyOrbits();
+            }
+
+            dropOrbits() {
+                if (!this.orbits) return;
+                this.scene.remove(this.orbits.group);
+                disposeDeep(this.orbits.group);
+                this.orbits = null;
+            }
+
+            applyOrbits() {
+                if (!this.orbits) return;
+                const scope = this.pickScope;
+                for (const loop of this.orbits.loops) loop.object.visible = loop.layers.every((id) => scope.isShown(id));
+                for (const link of this.orbits.links) link.object.visible = [link.from, link.to].every((key) => scope.drawn(this.renderNodeByKey[key]));
+            }
+
+            // The layer of the drawn ring or outline under the pointer, within ORBIT_PICK_PX
+            // of it on screen; null where none is drawn.
+            orbitAt(event) {
+                if (!this.orbits) return null;
+                const rect = this.canvas.getBoundingClientRect();
+                const shown = this.orbits.loops.filter((loop) => loop.object.visible);
+                const onScreen = shown.map((loop) => loop.points.map((p) => {
+                    const v = sceneAt(...p).project(this.camera);
+                    return { sx: ((v.x + 1) / 2) * rect.width, sy: ((1 - v.y) / 2) * rect.height, off: v.z > 1 || v.z < -1 };
+                }));
+                const at = nearestLoop(onScreen, event.clientX - rect.left, event.clientY - rect.top, ORBIT_PICK_PX);
+                return at === -1 ? null : shown[at].layer;
+            }
+
+            // A drawn ring or outline under a click that meets no piece: its layer's ring,
+            // where the click landed. False where there is none.
+            openLayerAt(event) {
+                const layer = this.orbitAt(event);
+                const ring = window.apothecaryRing;
+                if (!layer || !ring || !ring.openLayer) return false;
+                ring.openLayer(layer, { x: event.clientX, y: event.clientY });
+                this.setStatus(`${layerLabel(layer)}: its ring, drawn in its colour, as View › Layers holds it`, 'success');
+                return true;
             }
 
             // A box of the site's frame as three.js draws it: its size along three.js's
@@ -3065,6 +3162,7 @@
                 for (const [key, mesh] of Object.entries(this.meshByName)) this.hideByLayer(mesh, !scope.drawn(this.renderNodeByKey[key]));
                 for (const [key, overlay] of Object.entries(this.compoundOverlayByKey)) this.hideByLayer(overlay, !scope.drawn(this.renderNodeByKey[key]));
                 for (const box of Object.values(this.buildVolumeMeshByName)) this.hideByLayer(box, !scope.isShown(GRID_LAYER));
+                this.applyOrbits();
                 this.gridHelper.visible = this.gridWanted();
                 this.anchors.touch();
                 if (!scope.isShown(MEASURE_LAYER)) this.measure.points = [];
@@ -9856,7 +9954,7 @@
                 // The measurement layer shown, a click drops a point and selects nothing.
                 if (this.measureOn()) { this.measureClick(event); return; }
                 const hit = this.raycastPick(event);
-                if (!hit) { this.deselect(); return; }
+                if (!hit) { if (!this.openLayerAt(event)) this.deselect(); return; }
                 if (!hit.pick) { this.selectChild(hit.key); return; }
                 const { host, view, index } = hit.pick;
                 this.selectPlace(host);
@@ -10476,7 +10574,9 @@
                 if (!opening) return 'world';
                 const key = viewer.raycastChild(event);
                 if (key) { viewer.selectChild(key); return nodeSpec(key, at); }
-                return canvasSpec(at);
+                // A drawn ring or outline of the universe: its layer's ring.
+                const layer = viewer.orbitAt(event);
+                return layer ? { ...canvasSpec(at), into: `layer:${layer}` } : canvasSpec(at);
             }
             return null;
         }
@@ -11002,6 +11102,10 @@
         // Pictures › Floor, entered down to the option `into` names (an id), where
         // the last ring stood: a camera's Allow hands over to its Device this way
         // when the browser named several cameras.
+        // A layer's ring, under the canvas ring's View › Layers, where the drawn ring or
+        // outline it is drawn in was clicked.
+        window.apothecaryRing.openLayer = (layer, at = null) =>
+            window.apothecaryRing.open({ ...canvasSpec(at), into: `layer:${layer}` }, at);
         window.apothecaryRing.openOn = (host, into, at = null) =>
             window.apothecaryRing.open({ ...(host === '' ? canvasSpec(at) : nodeSpec(host, at)), into }, at);
     })();
