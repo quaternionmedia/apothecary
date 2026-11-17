@@ -60,7 +60,7 @@ export function mountDeck(root, { base = "", log = null } = {}) {
 
     $(".deck-keys").innerHTML = Array.from({ length: KEYS }, (_, i) =>
         `<button type="button" class="deck-key" data-key="${i}" title="Key ${i}: pressed and released as a deck reports it"><img alt="" hidden><span class="deck-none">–</span></button>`).join("");
-    $(".deck-strip").innerHTML = `<button type="button" class="deck-strip-tap" title="The touch strip: tapped where it is pressed; dragged a quarter of its length or more it is a swipe, which changes the screen the layout shows"><img alt="" hidden><span class="deck-none">–</span><span class="deck-touch" hidden></span></button>`;
+    $(".deck-strip").innerHTML = `<button type="button" class="deck-strip-tap" title="The touch strip: tapped where it is pressed; dragged a quarter of its length or more it is a swipe, which changes the screen the layout shows"><img alt="" hidden draggable="false"><span class="deck-none">–</span><span class="deck-touch" hidden></span></button>`;
     $(".deck-knobs").innerHTML = Array.from({ length: KNOBS }, (_, i) =>
         `<div class="deck-knob" data-knob="${i}">${[-1, 1].map((d) => `<button type="button" class="deck-turn" data-dir="${d}" title="Knob ${i} turned one step ${d > 0 ? "clockwise" : "counter-clockwise"}">${d > 0 ? "↻" : "↺"}</button>`).join("")}<button type="button" class="deck-press" title="Knob ${i} pressed and released">●</button></div>`).join("");
 
