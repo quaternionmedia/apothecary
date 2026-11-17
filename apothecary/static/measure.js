@@ -7,6 +7,12 @@
  *   ownExtents(bounds)           a box's size along its own axes: for a turned node, its
  *                                footprint, which is in the node's own frame
  *   sizeFromSceneBox(size)       three.js's box size read in the site's letters
+ *   turnRows(turn)               the rotation of a node's turn, [rx, ry, rz] degrees in
+ *                                OpenSCAD's rotate order, by rows: apothecary.orbitals'
+ *                                turn_matrix, the one copy the page has of it
+ *   turned(turn, point)          a point turned about the origin
+ *   turnRowsInScene(turn)        the same rotation in three.js's frame (y up)
+ *   turnedBounds(bounds, turn, at)   the box round a box turned about the origin, moved
  *   turnedExtents(size, turn)    the size of the box that contains a box turned by
  *                                [rx, ry, rz] degrees, OpenSCAD's rotate order
  *   between(a, b)                the straight distance between two points, and dx, dy, dz
@@ -38,6 +44,33 @@ export function turnRows(turn) {
         [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx],
         [-sy, cy * sx, cy * cx],
     ];
+}
+
+/* `point` ([x, y, z]) turned about the origin by `turn`: apothecary.orbitals' turned. */
+export function turned(turn, point) {
+    return turnRows(turn).map((row) => row[0] * point[0] + row[1] * point[1] + row[2] * point[2]);
+}
+
+/* The rotation of `turn` in three.js's frame, which sceneAt (frames.js) turns the site's
+ * into: S R S^-1, with S (x, y, z) = (x, z, -y). By rows. */
+export function turnRowsInScene(turn) {
+    const r = turnRows(turn);
+    const rows = [r[0], r[2], r[1].map((v) => -v)];
+    return rows.map((row) => [row[0], row[2], -row[1]]);
+}
+
+/* The box { min, max } round the eight corners of `bounds` turned about the origin by
+ * `turn` and moved by `at`: a turned node's world bounds from its footprint and its
+ * position, as apothecary/hierarchy.py makes them. */
+export function turnedBounds(bounds, turn, at = [0, 0, 0]) {
+    const corners = [];
+    for (const x of [bounds.min[0], bounds.max[0]])
+        for (const y of [bounds.min[1], bounds.max[1]])
+            for (const z of [bounds.min[2], bounds.max[2]]) corners.push(turned(turn, [x, y, z]).map((v, i) => v + at[i]));
+    return {
+        min: [0, 1, 2].map((i) => Math.min(...corners.map((c) => c[i]))),
+        max: [0, 1, 2].map((i) => Math.max(...corners.map((c) => c[i]))),
+    };
 }
 
 /* The size { x, y, z } of the box that contains `size`, a box about its own middle,

@@ -897,7 +897,7 @@
         import { STLLoader } from 'three/addons/loaders/STLLoader.js';
         import { mountAnchors } from '/static/anchors.js';
         import { makePickScope, WALL as WALL_LAYER, GRID as GRID_LAYER, MACHINE_BUTTONS as BUTTONS_LAYER, MEASURE as MEASURE_LAYER } from '/static/pick_scope.js';
-        import { ownExtents, sizeFromSceneBox, turnedExtents, between, gap as gapBetween, nearestWithin, length as mmText } from '/static/measure.js';
+        import { ownExtents, sizeFromSceneBox, turnedExtents, turnRowsInScene, turnedBounds, between, gap as gapBetween, nearestWithin, length as mmText } from '/static/measure.js';
         import { mountPanels } from '/static/panels.js';
         import { mountMachine } from '/static/widgets/machine.js';
         import { mountBoards } from '/static/boards.js';
@@ -1248,26 +1248,11 @@
 
         // A node's turn (Assembly.turn in apothecary/hierarchy.py): [rx, ry, rz] degrees, about
         // the node's own origin in OpenSCAD's rotate order (x, then y, then z), or null for a
-        // node not turned. turnMatrix is that rotation in the site's frame, by rows;
-        // turnQuaternion is the same rotation in three.js's frame, which sceneAt turns the
-        // site's into: S R S^-1 with S (x, y, z) = (x, z, -y).
-        function turnMatrix(turn) {
-            const [rx, ry, rz] = turn.map((a) => (a * Math.PI) / 180);
-            const [cx, sx, cy, sy, cz, sz] = [Math.cos(rx), Math.sin(rx), Math.cos(ry), Math.sin(ry), Math.cos(rz), Math.sin(rz)];
-            return [
-                [cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx],
-                [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx],
-                [-sy, cy * sx, cy * cx],
-            ];
-        }
-        function turnMatrixInScene(turn) {
-            const r = turnMatrix(turn);
-            const rows = [r[0], r[2], r[1].map((v) => -v)];
-            return rows.map((row) => [row[0], row[2], -row[1]]);
-        }
+        // node not turned. turnQuaternion is that rotation in three.js's frame, from
+        // measure.js's rows (turnRowsInScene), the page's one copy of the arithmetic.
         function turnQuaternion(turn) {
             if (!turn) return null;
-            const m = turnMatrixInScene(turn);
+            const m = turnRowsInScene(turn);
             return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().set(
                 m[0][0], m[0][1], m[0][2], 0,
                 m[1][0], m[1][1], m[1][2], 0,
@@ -7450,16 +7435,7 @@
                 const at = [node.position.x, node.position.y, node.position.z];
                 if (node.turn) {
                     // The box round the footprint's eight corners turned about the origin.
-                    const r = turnMatrix(node.turn);
-                    const corners = [];
-                    for (const x of [node.footprint.min[0], node.footprint.max[0]])
-                        for (const y of [node.footprint.min[1], node.footprint.max[1]])
-                            for (const z of [node.footprint.min[2], node.footprint.max[2]])
-                                corners.push(r.map((row, i) => row[0] * x + row[1] * y + row[2] * z + at[i]));
-                    node.world_bounds = {
-                        min: [0, 1, 2].map((i) => Math.min(...corners.map((c) => c[i]))),
-                        max: [0, 1, 2].map((i) => Math.max(...corners.map((c) => c[i]))),
-                    };
+                    node.world_bounds = turnedBounds(node.footprint, node.turn, at);
                     return;
                 }
                 node.world_bounds = {

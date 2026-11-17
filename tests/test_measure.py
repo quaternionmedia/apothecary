@@ -2,6 +2,10 @@
 its own axes and turned, the distance between two points and its components, the gap
 between two boxes, and the vertex nearest a pointer. The module is pure, so node runs it
 here.
+
+It is also the page's one copy of a node's turn: the rotation, a point turned, the same
+rotation in three.js's frame and a turned box, each held against what the server makes
+of the same turn (apothecary.orbitals.turned, Assembly.world_bounds).
 """
 
 from __future__ import annotations
@@ -12,6 +16,11 @@ import subprocess
 from pathlib import Path
 
 import pytest
+
+from apothecary.hierarchy import Assembly
+from apothecary.models.bounds import BoundingBox3D
+from apothecary.models.vectors import Vector3D
+from apothecary.orbitals import turned
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = ROOT / "apothecary" / "static" / "measure.js"
@@ -42,8 +51,31 @@ const points = [{ sx: 10, sy: 10, id: "a" }, { sx: 14, sy: 10, id: "b" }, { sx: 
 out.near = [m.nearestWithin(points, 13, 10, 8), m.nearestWithin(points, 100, 100, 8), m.nearestWithin(points, 12, 10, 8), m.nearestWithin([], 0, 0, 8)]
     .map((p) => (p ? p.id : null));
 out.written = [m.length(12.3456), m.length(-0.001), m.length(0)];
+const turns = %(turns)s, vectors = %(vectors)s;
+out.turned = turns.map((t) => vectors.map((v) => m.turned(t, v)));
+out.inScene = turns.map((t) => m.turnRowsInScene(t));
+out.boxes = turns.map((t) => m.turnedBounds(box([-5, -10, 0], [15, 10, 30]), t, [100, -200, 300]));
 console.log(JSON.stringify(out));
 """
+
+# Turns as the universe makes them ([0, polar, azimuth]) and turns about every axis at
+# once, with vectors along each axis and one along none.
+TURNS = [
+    (0, 0, 0),
+    (90, 0, 0),
+    (0, 90, 0),
+    (0, 0, 90),
+    (30, 45, 60),
+    (-20, 110, 200),
+    (0, 43.049079800236335, 52.5232921501135),
+    (12.5, -33, 271),
+]
+VECTORS = [(1, 0, 0), (0, 1, 0), (0, 0, 1), (3, -4, 5)]
+
+
+def _scene(p):
+    """frames.js's sceneAt: the site's (x, y, z) in three.js's frame."""
+    return (p[0], p[2], -p[1])
 
 
 @pytest.fixture(scope="module")
@@ -52,7 +84,11 @@ def result(tmp_path_factory):
     module = folder / "measure.mjs"
     module.write_text(MODULE.read_text(encoding="utf-8"), encoding="utf-8")
     script = folder / "run.mjs"
-    script.write_text(SCRIPT % {"module": module.as_uri()}, encoding="utf-8")
+    script.write_text(
+        SCRIPT
+        % {"module": module.as_uri(), "turns": json.dumps(TURNS), "vectors": json.dumps(VECTORS)},
+        encoding="utf-8",
+    )
     done = subprocess.run(
         [NODE, str(script)], capture_output=True, text=True, timeout=60, check=False
     )
@@ -102,3 +138,33 @@ def test_the_vertex_nearest_the_pointer_within_the_radius_is_chosen(result):
 
 def test_lengths_are_written_to_two_places(result):
     assert result["written"] == ["12.35 mm", "0.00 mm", "0.00 mm"]
+
+
+def test_a_point_is_turned_as_the_server_turns_it(result):
+    for turn, got in zip(TURNS, result["turned"], strict=True):
+        for vector, point in zip(VECTORS, got, strict=True):
+            _close(point, turned(turn, vector))
+
+
+def test_the_turn_in_threes_frame_turns_a_point_sceneat_put_there(result):
+    for turn, rows in zip(TURNS, result["inScene"], strict=True):
+        for vector in VECTORS:
+            at = _scene(vector)
+            got = [sum(r * v for r, v in zip(row, at, strict=True)) for row in rows]
+            _close(got, _scene(turned(turn, vector)))
+
+
+def test_a_turned_box_is_the_box_the_server_reports(result):
+    footprint = BoundingBox3D(
+        min_point=Vector3D(x=-5, y=-10, z=0), max_point=Vector3D(x=15, y=10, z=30)
+    )
+    for turn, got in zip(TURNS, result["boxes"], strict=True):
+        node = Assembly(
+            name="n",
+            footprint=footprint,
+            position=Vector3D(x=100, y=-200, z=300),
+            turn=Vector3D(x=turn[0], y=turn[1], z=turn[2]),
+        )
+        want = node.world_bounds()
+        _close(got["min"], [want.min_point.x, want.min_point.y, want.min_point.z])
+        _close(got["max"], [want.max_point.x, want.max_point.y, want.max_point.z])
