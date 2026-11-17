@@ -277,18 +277,6 @@
         .panel-ui .question { border-top: 1px solid #2a332a; padding: 0.3rem 0; }
         .panel-ui pre { white-space: pre-wrap; font-size: 0.7rem; color: #aaa; max-height: 200px; overflow: auto; }
         .panel-ui input[type=file] { font-size: 0.72rem; max-width: 100%; }
-        /* Layers (widgets/layers.js): the depth stepper, and a row a layer with its two ticks */
-        .layers-window { padding: 0.5rem 0.75rem; font-size: 0.8rem; color: #bbb; }
-        .layers-depth { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
-        .layers-depth button, .layers-reset button { min-width: 1.8rem; }
-        .layers-depth-value { min-width: 1.2rem; text-align: center; color: #eee; }
-        .layers-table { border-collapse: collapse; width: 100%; }
-        .layers-table th, .layers-table td { padding: 0.15rem 0.4rem; text-align: left; font-weight: normal; }
-        .layers-table thead th { color: #888; }
-        .layers-table td { text-align: center; }
-        .layers-table .layers-kind th { color: #8ab4f8; padding-top: 0.5rem; }
-        .layers-reset { margin-top: 0.6rem; }
-        .layers-reading { margin: 0.6rem 0 0; white-space: pre-wrap; user-select: text; color: #ffb347; font-size: 0.75rem; }
         .pin-list { display: flex; flex-direction: column; gap: 0.2rem; }
         .pin-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; padding: 0.15rem 0.3rem; border-radius: 3px; background: #1d221d; }
         .pin-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -865,6 +853,7 @@
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/airgap.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/models.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/marks.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/layers.css">
     <script type="importmap">
     {
         "imports": {

@@ -1,0 +1,13 @@
+/* Layers (widgets/layers.js): the depth stepper, and a row a layer with its two ticks,
+ * and what the Measure layer reads. Scoped to .layers-window and its own classes. */
+.layers-window { padding: 0.5rem 0.75rem; font-size: 0.8rem; color: #bbb; }
+.layers-depth { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.layers-depth button, .layers-reset button { min-width: 1.8rem; }
+.layers-depth-value { min-width: 1.2rem; text-align: center; color: #eee; }
+.layers-table { border-collapse: collapse; width: 100%; }
+.layers-table th, .layers-table td { padding: 0.15rem 0.4rem; text-align: left; font-weight: normal; }
+.layers-table thead th { color: #888; }
+.layers-table td { text-align: center; }
+.layers-table .layers-kind th { color: #8ab4f8; padding-top: 0.5rem; }
+.layers-reset { margin-top: 0.6rem; }
+.layers-reading { margin: 0.6rem 0 0; white-space: pre-wrap; user-select: text; color: #ffb347; font-size: 0.75rem; }
