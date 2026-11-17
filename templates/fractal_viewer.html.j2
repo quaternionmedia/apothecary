@@ -6005,11 +6005,15 @@
                 return this.placedBox(node, record?.measured);
             }
 
+            // A turned node's (a part on the universe's sphere) is the box round the measured
+            // one turned about the node's origin, whose middle is where its mesh, turned
+            // about its own middle, stands.
             placedBox(node, measured) {
                 if (!measured?.min_point || !measured?.max_point || !node?.position) return null;
                 const at = [node.position.x, node.position.y, node.position.z];
                 const low = [measured.min_point.x, measured.min_point.y, measured.min_point.z];
                 const high = [measured.max_point.x, measured.max_point.y, measured.max_point.z];
+                if (node.turn) return turnedBounds({ min: low, max: high }, node.turn, at);
                 return { min: low.map((v, i) => v + at[i]), max: high.map((v, i) => v + at[i]) };
             }
 
@@ -9177,7 +9181,10 @@
                     const edges = still.getObjectByName('edges');
                     kinematics.pieces.forEach((p, k) => {
                         const piece = moving[k];
-                        piece.position.sub(still.position);
+                        // Hung from the still piece, in its frame: a turned machine's pieces
+                        // are turned with it, once, by the still piece's own turn.
+                        piece.position.sub(still.position).applyQuaternion(still.quaternion.clone().invert());
+                        piece.quaternion.identity();
                         piece.material.dispose();
                         piece.material = still.material;  // coloured, faded and selected with it
                         const own = piece.getObjectByName('edges');
