@@ -161,7 +161,8 @@ on the shell outside the parts'; a site added while the server runs gets its pie
 there and moves no part, and the universe does not hold itself. The layout is made
 again each time the universe is drawn, so a piece moved by hand returns. The page
 frames the whole sphere from outside, draws no floor grid there, and the camera may
-travel inside it. A site's piece is drawn
+travel inside it. A part stepped into is drawn as it is made, upright and not turned
+as the sphere stands it, on a grid laid under it. A site's piece is drawn
 in miniature: its site's top-level pieces as boxes, coloured as the site
 colours them, a wall faded, scaled to fit and never larger than they
 are, from the site as it stands. Nothing is rendered to draw one. It is not to

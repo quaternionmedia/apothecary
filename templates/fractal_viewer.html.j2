@@ -2763,7 +2763,7 @@
                 // pieces of its own inside it -- draws its part too, whole, and its
                 // pieces inside it as any level draws its pieces, each a step further
                 // in (raycastPick takes a piece before the part around it).
-                const nodes = this.drawsItself(focus) ? [{ ...focus, _path: focusPrefix }] : [];
+                const nodes = this.drawsItself(focus) ? [{ ...this.upright(focus), _path: focusPrefix }] : [];
                 // Depth (the Layers window): a piece's own pieces are drawn too, as many
                 // levels down as it says; 1 is the level's own pieces alone.
                 const depth = this.pickScope.depth();
@@ -2805,7 +2805,7 @@
                 // Same reason as currentRenderNodes: a focused leaf, or a machine
                 // drawn as its part, is its own render node, so it needs a key or
                 // selecting it finds nothing.
-                if (this.drawsItself(focus)) this.renderNodeByKey[focusPrefix] = { ...focus, _path: focusPrefix };
+                if (this.drawsItself(focus)) this.renderNodeByKey[focusPrefix] = { ...this.upright(focus), _path: focusPrefix };
             }
 
             // Whether a level draws its own piece: a leaf, which holds nothing, and a
@@ -2813,6 +2813,16 @@
             // every level draws.
             drawsItself(focus) {
                 return !focus.children.length || !!focus.part_ref;
+            }
+
+            // The level in view's own piece as it is made, not turned: a part stepped into
+            // from the universe's sphere, where it faces outward, stands upright at its
+            // place, its world bounds its footprint there (recomputeWorldBounds).
+            upright(node) {
+                if (!node.turn || !node.footprint) return node;
+                const flat = { ...node, turn: null };
+                this.recomputeWorldBounds(flat);
+                return flat;
             }
 
             // Whether `key` is the piece the level in view was stepped into. It is
@@ -3495,7 +3505,11 @@
                 this.orbitControls.update();
 
                 this.updateCameraClipping(maxSpan);
-                this.updateHelpersForSpan(maxSpan, { x: target.x, z: target.z });
+                // The universe has no floor: a level of it -- a part stepped into, anywhere on
+                // the sphere -- stands on a grid laid under its lowest point. A site's level
+                // stands on its floor, z = 0.
+                const floor = this.siteName === UNIVERSE && this.focusPath.length ? sceneAt(0, 0, minZ).y : 0;
+                this.updateHelpersForSpan(maxSpan, { x: target.x, z: target.z, floor });
             }
 
             // How near and how far the camera may dolly at this level: Settings'
@@ -3542,7 +3556,7 @@
             // beneath the level's middle (three.js x, z), its lines on whole
             // cells of the site's frame, where snapping puts things. A level
             // far from the origin -- a part in the universe -- stands on it.
-            updateHelpersForSpan(span, middle = { x: 0, z: 0 }) {
+            updateHelpersForSpan(span, middle = { x: 0, z: 0, floor: 0 }) {
                 const machine = this.levelMachine();
                 if (machine) { this.layBedGrid(machine, span); return; }
                 // Six times the span, so the ground plane does not end mid-view
@@ -3558,7 +3572,8 @@
                 const half = gridSize / 2, cell = gridSize / gridDivisions;
                 const onCell = (v) => Math.round((v - half) / cell) * cell + half;
                 const [gridX, gridZ] = [onCell(middle.x), onCell(middle.z)];
-                this.gridHelper.position.set(gridX, 0, gridZ);
+                const floor = middle.floor || 0;
+                this.gridHelper.position.set(gridX, floor, gridZ);
                 // The universe's own level is a sphere of shells, which a floor would cut
                 // through: no grid there. A part stepped into stands on it, as any level.
                 this.gridHelper.visible = this.gridWanted() && this.pickScope.isShown(GRID_LAYER);
@@ -3567,12 +3582,12 @@
                 // The axes stand at the site's origin while it is on the grid, else at the
                 // grid's middle, so they are in view with what they orient. They are the
                 // site's, turned as sceneAt turns it: red x, green y, blue z up.
-                const originOnGrid = Math.abs(gridX) <= half && Math.abs(gridZ) <= half;
+                const originOnGrid = floor === 0 && Math.abs(gridX) <= half && Math.abs(gridZ) <= half;
                 this.scene.remove(this.axesHelper);
                 disposeDeep(this.axesHelper);
                 this.axesHelper = new THREE.AxesHelper(Math.max(20, span * 0.4));
                 this.axesHelper.rotation.x = -Math.PI / 2;
-                if (!originOnGrid) this.axesHelper.position.set(gridX, 0, gridZ);
+                if (!originOnGrid) this.axesHelper.position.set(gridX, floor, gridZ);
                 this.scene.add(this.axesHelper);
             }
 
