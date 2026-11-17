@@ -36,6 +36,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .hierarchy import Assembly, find_node_by_path
 from .journeys import JOURNEYS
 from .journeys import by_id as journey_by_id
+from .layer_colours import CATEGORY, GRID, MACHINE_BUTTONS, MEASURE, SHELL, colour_of, layers_in
 from .site_names import UNIVERSE, UNIVERSE_SHOWN
 from .systems import SYSTEMS, by_id
 
@@ -232,10 +233,20 @@ class Option(BaseModel):
     # the way into one: the wedge wears that group's colour, as its windows do
     # (static/tokens.css).
     group: Optional[str] = None
+    # The layer of the world whose acts it is (View › Layers): the wedge wears that
+    # layer's colour, the colour the world draws the layer in (apothecary/layer_colours.py).
+    colour: Optional[str] = None
     children: Optional[List["Option"]] = None
     cell: Optional[int] = None
 
     model_config = ConfigDict(validate_assignment=True)
+
+    @field_validator("colour")
+    @classmethod
+    def _a_colour_is_written_as_the_table_writes_one(cls, colour):
+        if colour is not None and not re.fullmatch(r"#[0-9a-f]{6}", colour):
+            raise ValueError(f"{colour!r} is no colour: #rrggbb, as layer_colours.py writes one")
+        return colour
 
     @field_validator("label")
     @classmethod
@@ -856,7 +867,7 @@ def _panels() -> Option:
     )
 
 
-def _view() -> Option:
+def _view(site: Optional[Assembly] = None) -> Option:
     """View, cell 2 of the canvas ring: how the world is drawn.
 
     Its cells are the header's ⚙ View menu's items. Fit, first, frames the pieces
@@ -868,11 +879,11 @@ def _view() -> Option:
     other way, as their tick-boxes do, and the status line says which way it went;
     the ring is not told how they stand. Settings opens the Settings panel --
     the shortcuts and automatic zoom -- as the menu's Settings does, so no cell
-    before it moves. Layers and Depth come after it, in the two cells left: Layers
-    opens the Layers window -- which layers the world draws and a click can select --
-    and Depth is how many levels below this one a click reaches and the world draws,
-    one to four (the window goes further). Select walls is the wall layer's
-    Selectable tick.
+    before it moves. Layers and Depth come after it, in the two cells left: Layers is
+    a ring of ``site``'s layers, each a ring of its own acts (``_layers``), and Depth
+    is how many levels below this one a click reaches and the world draws, one to four
+    by name and one more or less, as the Layers window's stepper (to eight). Select
+    walls is the wall layer's Selectable tick.
     """
     return Option(
         id="view",
@@ -893,7 +904,7 @@ def _view() -> Option:
             Option(id="view:walls", label="Select walls", action="view:walls"),
             Option(id="view:settings", label="Settings", action="view:settings"),
             # After Settings, which keeps its cell: the two cells still free.
-            Option(id="view:layers", label="Layers", action="view:layers"),
+            _layers(site),
             Option(
                 id="view:depth",
                 label="Depth",
@@ -904,10 +915,102 @@ def _view() -> Option:
                         action=f"view:depth:{n}",
                     )
                     for n in range(1, 5)
+                ]
+                # The Layers window's stepper: a level more or less, up to eight.
+                + [
+                    Option(id="view:depth:less", label="One less", action="view:depth:less"),
+                    Option(id="view:depth:more", label="One more", action="view:depth:more"),
                 ],
             ),
         ],
     )
+
+
+# The world's own layers, and the words their cells say. The grid and the machines'
+# buttons are a kind of their own, among which Only this and All act; the measurement
+# is a mode, so it is only ever shown or not.
+WORLD_LAYERS: Tuple[Tuple[str, str], ...] = (
+    (GRID, "Grid"),
+    (MACHINE_BUTTONS, "Buttons"),
+    (MEASURE, "Measure"),
+)
+
+
+def _layer_ring(layer: str, label: str) -> Option:
+    """One layer's ring, in its colour: Shown, then Selectable where a click can pick
+    what it draws (a shell's, a category's), then Only this and All -- this layer shown
+    and the others of its kind hidden, and every one of its kind shown -- where it has
+    a kind (not the measurement). Each does what its row of the Layers window does, or
+    the same over its kind (``layer:<verb>:<layer>``, the page's)."""
+    colour = colour_of(layer)
+
+    def act(verb: str, said: str) -> Option:
+        return Option(
+            id=f"layer:{verb}:{layer}", label=said, action=f"layer:{verb}:{layer}", colour=colour
+        )
+
+    acts = [act("shown", "Shown")]
+    if layer.startswith((SHELL, CATEGORY)):
+        acts.append(act("selectable", "Selectable"))
+    if layer != MEASURE:
+        acts += [act("only", "Only this"), act("all", "All")]
+    return Option(id=f"layer:{layer}", label=label, colour=colour, children=acts)
+
+
+def _in_order(prefix: str, label: str, rings: Sequence[Option]) -> Option:
+    """A ring of rings, in the order given; more than eight are split into groups of at
+    most eight, each named for its first, as any long list is (``_bucket``), in order."""
+    if len(rings) <= MOST_OPTIONS:
+        return Option(id=prefix, label=label, children=list(rings))
+    per = -(-len(rings) // MOST_OPTIONS)
+    chunks = [list(rings[start : start + per]) for start in range(0, len(rings), per)]
+    heads = distinct([chunk[0].label for chunk in chunks])
+    return Option(
+        id=prefix,
+        label=label,
+        children=[
+            Option(id=f"{prefix}:group{i}", label=head, children=chunk)
+            for i, (head, chunk) in enumerate(zip(heads, chunks, strict=True))
+        ],
+    )
+
+
+def _layers(site: Optional[Assembly]) -> Option:
+    """View › Layers: the Layers window, the world's own layers, Reset (depth 1, every
+    layer shown and selectable but walls, as the window's Reset), then the layers that
+    come and go with the site -- its shells, then its categories, as the window lists
+    them (``layer_colours.layers_in``) -- each a ring of its acts (``_layer_ring``). A
+    layer's drawn ring in the world opens the ring of its acts here."""
+    shells, categories = layers_in(site) if site is not None else ([], [])
+    children = [
+        Option(id="view:layers:window", label="Window", action="view:layers"),
+        Option(
+            id="layers:world",
+            label="World",
+            children=[_layer_ring(layer, said) for layer, said in WORLD_LAYERS],
+        ),
+        Option(id="layer:reset", label="Reset", action="layer:reset"),
+    ]
+    if shells:
+        children.append(
+            _in_order(
+                "layers:shells",
+                "Shells",
+                [_layer_ring(f"{SHELL}{n}", f"Shell {n}") for n in shells],
+            )
+        )
+    if categories:
+        children.append(
+            _in_order(
+                "layers:categories",
+                "Categories",
+                [
+                    _layer_ring(f"{CATEGORY}{name}", said)
+                    for name, said in zip(categories, distinct(categories), strict=True)
+                ],
+            )
+        )
+    return Option(id="view:layers", label="Layers", children=children)
 
 
 # The colours a lead, a plug or a part most often is, each a cell of Models › Colour;
@@ -1606,7 +1709,7 @@ def _canvas_ring(
                 lambda name: f"site:{name}",
                 shown={UNIVERSE: UNIVERSE_SHOWN},
             ),
-            _view(),
+            _view(site),
             _panels(),
             _pictures(picture),
             Option(id="reset", label="Rebuild", action="reset", destructive=True, twice=True),
@@ -2087,6 +2190,9 @@ CARRIED_BY: Dict[str, Carries] = {
     # How the world is drawn: the header's View menu (snapping, detail, outlines,
     # whether a click picks a wall).
     "view": Carries.VIEWER,
+    # A layer's acts, under View › Layers: the page's pick scope (static/pick_scope.js),
+    # which the Layers window's ticks and the world read too.
+    "layer": Carries.VIEWER,
     # The Bench's verbs: its buttons, each acting on what the Bench has chosen.
     # The tasks they start are the firmware routes' (POST /firmware/install,
     # /cores/install, /libraries/install, /sketches/{name}/compile and /upload,

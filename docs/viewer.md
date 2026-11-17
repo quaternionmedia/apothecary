@@ -237,8 +237,8 @@ ring's View is, which adds **Fit**: frame the pieces at this level (Shift+F;
 | Outlines | Outlines each compound piece's whole extent, so a subassembly reads as one thing (on at first); a machine stepped into, the level's own piece, has none |
 | Select walls | A click in the world picks a wall again, until the page is left (off at first) |
 | Settings | Opens the Settings panel, its tab in front ([below](#settings)) |
-| Layers (the ring's View › Layers) | Opens the Layers window, beside the world ([below](#layers)); the menu has no item of its own for it, and ⊞ Windows lists it |
-| Depth (the ring's View › Depth) | One to four levels below the level in view, drawn and reached by a click; the Layers window's stepper goes to eight |
+| Layers (the ring's View › Layers) | A ring of the site's layers ([below](#layers)): Window opens the Layers window, beside the world (the menu has no item of its own for it, and ⊞ Windows lists it), then each layer's own acts |
+| Depth (the ring's View › Depth) | One to four levels below the level in view, drawn and reached by a click, and One less and One more, the Layers window's stepper, which goes to eight |
 
 None of the first four is remembered: a reload starts from the defaults.
 Settings, and the depth and the layers, are kept by this browser.
@@ -277,6 +277,24 @@ measurement in its own, and a machine's badges wear the Machine group's, which i
 machine buttons' layer's. A category nobody wrote down, a picture's word, takes a
 colour from its name, the same every time.
 
+**Each layer has a ring of its own**, under the canvas ring's View › Layers: Window 8
+(the Layers window), World 6 (the grid's, the machine buttons' and the measurement's
+rings), Reset 2 (the window's Reset), then the site's own -- Shells 4 in the universe,
+and its Categories after them -- listed as the window lists them, more than eight
+grouped as any list is. A layer's ring wears its colour, and holds what its row does
+and two acts over its kind (the shells, the categories, or the grid and the machine
+buttons):
+
+| Cell | Does |
+|---|---|
+| Shown | Shows the layer, or hides it: the row's Shown tick |
+| Selectable | A click picks what it draws, or passes through it: the row's Selectable tick (a shell's and a category's) |
+| Only this | This layer shown and the others of its kind hidden, what was chosen selectable kept |
+| All | Every layer of its kind shown |
+
+The measurement's ring has Shown alone: it is a mode. The ring, the window's ticks and
+the world read and write the one choice, so whichever is used, the other two follow.
+
 A piece is on its shell's layer and its category's, and is drawn only if every layer
 it is on is shown and picked only if every one is selectable. A layer not shown is
 neither drawn nor hit; a layer not selectable is drawn, and a click passes through
@@ -288,8 +306,8 @@ Select walls and Measure, which are the page's session's.
 
 #### Measure
 
-Ticking **Measure** (the Layers window's last row; the ring's View has no free cell
-for it, so the window alone) lets a person read any dimension in the world. A
+Ticking **Measure** (the Layers window's last row, or the ring's View › Layers › World ›
+Measure › Shown) lets a person read any dimension in the world. A
 measurement is a reading of the model and of the mesh drawn, not of the made part: a
 printed part differs by what the printer does. Every number says where it comes from.
 

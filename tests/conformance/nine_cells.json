@@ -652,6 +652,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": [
             {
               "id": "control:hotend-on",
@@ -662,6 +663,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 8
             },
@@ -674,6 +676,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 6
             },
@@ -686,6 +689,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 2
             },
@@ -698,6 +702,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 4
             },
@@ -710,6 +715,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 9
             },
@@ -722,6 +728,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 3
             }
@@ -737,6 +744,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": [
             {
               "id": "control:home:all",
@@ -747,6 +755,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 8
             },
@@ -759,6 +768,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 6
             },
@@ -771,6 +781,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 2
             },
@@ -783,6 +794,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 4
             },
@@ -795,6 +807,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 9
             }
@@ -810,6 +823,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": [
             {
               "id": "control:jog:Y+",
@@ -820,6 +834,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 8
             },
@@ -832,6 +847,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 6
             },
@@ -844,6 +860,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 2
             },
@@ -856,6 +873,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 4
             },
@@ -868,6 +886,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 9
             },
@@ -880,6 +899,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 3
             }
@@ -895,6 +915,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": [
             {
               "id": "level:probe",
@@ -905,6 +926,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 8
             },
@@ -917,6 +939,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 6
             },
@@ -929,6 +952,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 2
             },
@@ -941,6 +965,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 4
             },
@@ -953,6 +978,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 9
             },
@@ -965,6 +991,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 3
             },
@@ -977,6 +1004,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 1
             },
@@ -989,6 +1017,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 7
             }
@@ -1004,6 +1033,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": [
             {
               "id": "control:sd-resume",
@@ -1014,6 +1044,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 8
             },
@@ -1026,6 +1057,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 6
             },
@@ -1038,6 +1070,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 2
             },
@@ -1050,6 +1083,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 4
             },
@@ -1062,6 +1096,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 9
             },
@@ -1074,6 +1109,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 3
             },
@@ -1086,6 +1122,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 1
             }
@@ -1101,6 +1138,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": [
             {
               "id": "control:motors-off",
@@ -1111,6 +1149,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 8
             },
@@ -1123,6 +1162,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 6
             },
@@ -1135,6 +1175,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 2
             }
@@ -1150,6 +1191,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": null,
           "cell": 1
         },
@@ -1162,6 +1204,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": null,
           "cell": 7
         }
@@ -1179,6 +1222,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": null,
           "cell": 8
         },
@@ -1191,6 +1235,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": null,
           "cell": 6
         },
@@ -1203,6 +1248,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": null,
           "cell": 2
         },
@@ -1215,6 +1261,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": null,
           "cell": 4
         },
@@ -1227,6 +1274,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": null,
           "cell": 9
         },
@@ -1239,6 +1287,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": null,
           "cell": 3
         },
@@ -1251,6 +1300,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": [
             {
               "id": "device:reconnect",
@@ -1261,6 +1311,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 8
             },
@@ -1273,6 +1324,7 @@
               "twice": true,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 6
             },
@@ -1285,6 +1337,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 2
             }
@@ -1300,6 +1353,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": [
             {
               "id": "control:heat",
@@ -1310,6 +1364,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": [
                 {
                   "id": "control:hotend-on",
@@ -1320,6 +1375,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 8
                 },
@@ -1332,6 +1388,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 6
                 },
@@ -1344,6 +1401,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 2
                 },
@@ -1356,6 +1414,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 4
                 },
@@ -1368,6 +1427,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 9
                 },
@@ -1380,6 +1440,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 3
                 }
@@ -1395,6 +1456,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": [
                 {
                   "id": "control:home:all",
@@ -1405,6 +1467,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 8
                 },
@@ -1417,6 +1480,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 6
                 },
@@ -1429,6 +1493,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 2
                 },
@@ -1441,6 +1506,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 4
                 },
@@ -1453,6 +1519,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 9
                 }
@@ -1468,6 +1535,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": [
                 {
                   "id": "control:jog:Y+",
@@ -1478,6 +1546,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 8
                 },
@@ -1490,6 +1559,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 6
                 },
@@ -1502,6 +1572,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 2
                 },
@@ -1514,6 +1585,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 4
                 },
@@ -1526,6 +1598,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 9
                 },
@@ -1538,6 +1611,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 3
                 }
@@ -1553,6 +1627,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": [
                 {
                   "id": "level:probe",
@@ -1563,6 +1638,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 8
                 },
@@ -1575,6 +1651,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 6
                 },
@@ -1587,6 +1664,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 2
                 },
@@ -1599,6 +1677,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 4
                 },
@@ -1611,6 +1690,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 9
                 },
@@ -1623,6 +1703,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 3
                 },
@@ -1635,6 +1716,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 1
                 },
@@ -1647,6 +1729,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 7
                 }
@@ -1662,6 +1745,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": [
                 {
                   "id": "control:sd-resume",
@@ -1672,6 +1756,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 8
                 },
@@ -1684,6 +1769,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 6
                 },
@@ -1696,6 +1782,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 2
                 },
@@ -1708,6 +1795,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 4
                 },
@@ -1720,6 +1808,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 9
                 },
@@ -1732,6 +1821,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 3
                 },
@@ -1744,6 +1834,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 1
                 }
@@ -1759,6 +1850,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": [
                 {
                   "id": "control:motors-off",
@@ -1769,6 +1861,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 8
                 },
@@ -1781,6 +1874,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 6
                 },
@@ -1793,6 +1887,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 2
                 }
@@ -1808,6 +1903,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 1
             },
@@ -1820,6 +1916,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 7
             }
@@ -1840,6 +1937,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": null,
           "cell": 8
         },
@@ -1852,6 +1950,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": null,
           "cell": 6
         },
@@ -1864,6 +1963,7 @@
           "twice": false,
           "marked": false,
           "group": null,
+          "colour": null,
           "children": null,
           "cell": 2
         },
@@ -1876,6 +1976,7 @@
           "twice": false,
           "marked": false,
           "group": "Machine",
+          "colour": null,
           "children": [
             {
               "id": "device:open",
@@ -1886,6 +1987,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 8
             },
@@ -1898,6 +2000,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 6
             },
@@ -1910,6 +2013,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 2
             },
@@ -1922,6 +2026,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 4
             },
@@ -1934,6 +2039,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 9
             },
@@ -1946,6 +2052,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": null,
               "cell": 3
             },
@@ -1958,6 +2065,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": [
                 {
                   "id": "device:reconnect",
@@ -1968,6 +2076,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 8
                 },
@@ -1980,6 +2089,7 @@
                   "twice": true,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 6
                 },
@@ -1992,6 +2102,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 2
                 }
@@ -2007,6 +2118,7 @@
               "twice": false,
               "marked": false,
               "group": null,
+              "colour": null,
               "children": [
                 {
                   "id": "control:heat",
@@ -2017,6 +2129,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": [
                     {
                       "id": "control:hotend-on",
@@ -2027,6 +2140,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 8
                     },
@@ -2039,6 +2153,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 6
                     },
@@ -2051,6 +2166,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 2
                     },
@@ -2063,6 +2179,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 4
                     },
@@ -2075,6 +2192,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 9
                     },
@@ -2087,6 +2205,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 3
                     }
@@ -2102,6 +2221,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": [
                     {
                       "id": "control:home:all",
@@ -2112,6 +2232,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 8
                     },
@@ -2124,6 +2245,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 6
                     },
@@ -2136,6 +2258,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 2
                     },
@@ -2148,6 +2271,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 4
                     },
@@ -2160,6 +2284,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 9
                     }
@@ -2175,6 +2300,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": [
                     {
                       "id": "control:jog:Y+",
@@ -2185,6 +2311,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 8
                     },
@@ -2197,6 +2324,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 6
                     },
@@ -2209,6 +2337,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 2
                     },
@@ -2221,6 +2350,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 4
                     },
@@ -2233,6 +2363,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 9
                     },
@@ -2245,6 +2376,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 3
                     }
@@ -2260,6 +2392,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": [
                     {
                       "id": "level:probe",
@@ -2270,6 +2403,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 8
                     },
@@ -2282,6 +2416,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 6
                     },
@@ -2294,6 +2429,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 2
                     },
@@ -2306,6 +2442,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 4
                     },
@@ -2318,6 +2455,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 9
                     },
@@ -2330,6 +2468,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 3
                     },
@@ -2342,6 +2481,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 1
                     },
@@ -2354,6 +2494,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 7
                     }
@@ -2369,6 +2510,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": [
                     {
                       "id": "control:sd-resume",
@@ -2379,6 +2521,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 8
                     },
@@ -2391,6 +2534,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 6
                     },
@@ -2403,6 +2547,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 2
                     },
@@ -2415,6 +2560,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 4
                     },
@@ -2427,6 +2573,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 9
                     },
@@ -2439,6 +2586,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 3
                     },
@@ -2451,6 +2599,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 1
                     }
@@ -2466,6 +2615,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": [
                     {
                       "id": "control:motors-off",
@@ -2476,6 +2626,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 8
                     },
@@ -2488,6 +2639,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 6
                     },
@@ -2500,6 +2652,7 @@
                       "twice": false,
                       "marked": false,
                       "group": null,
+                      "colour": null,
                       "children": null,
                       "cell": 2
                     }
@@ -2515,6 +2668,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 1
                 },
@@ -2527,6 +2681,7 @@
                   "twice": false,
                   "marked": false,
                   "group": null,
+                  "colour": null,
                   "children": null,
                   "cell": 7
                 }

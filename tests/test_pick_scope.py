@@ -19,7 +19,7 @@ NODE = shutil.which("node") or str(Path.home() / ".local" / "bin" / "node")
 pytestmark = pytest.mark.skipif(not Path(NODE).exists(), reason="node is not installed")
 
 SCRIPT = """
-import { makePickScope, WALL, GRID, MACHINE_BUTTONS, MEASURE, layersOf } from "%(module)s";
+import { makePickScope, WALL, GRID, MACHINE_BUTTONS, MEASURE, layersOf, kindOf } from "%(module)s";
 const store = () => { const m = new Map(); return {
     getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k), m }; };
 const out = {};
@@ -73,6 +73,22 @@ const throwing = { getItem() { throw new Error("no"); }, setItem() { throw new E
 const d = makePickScope({ storage: throwing }); d.setDepth(2);
 out.damaged = { c: c.toJSON(), d: d.depth() };
 out.layers = layersOf({ shell: 2, category: "part" });
+// Only this and All: among a layer's kind, told once, selectable as it was chosen.
+const site = { shells: [0, 1, 2], categories: ["bolt", "board"] };
+out.kinds = [kindOf("shell:1", site), kindOf("category:board", site), kindOf(GRID, site),
+    kindOf(MACHINE_BUTTONS, site), kindOf(MEASURE, site), kindOf("shell:7", site)];
+const o = makePickScope({ storage: store() });
+let heard = []; o.onChange((what) => heard.push(what));
+o.setSelectable("shell:1", false);
+out.only = { did: o.showOnly("shell:1", kindOf("shell:1", site)), again: o.showOnly("shell:1", kindOf("shell:1", site)),
+    shown: [0, 1, 2].map((n) => o.isShown(`shell:${n}`)), selectable1: o.isSelectable("shell:1"),
+    categories: o.isShown("category:bolt"), json: o.toJSON() };
+out.all = { did: o.showAll(kindOf("shell:0", site)), again: o.showAll(kindOf("shell:0", site)),
+    shown: [0, 1, 2].map((n) => o.isShown(`shell:${n}`)), selectable1: o.isSelectable("shell:1"),
+    selectable0: o.isSelectable("shell:0") };
+o.showOnly(GRID, kindOf(GRID, site));
+out.world = { grid: o.isShown(GRID), buttons: o.isShown(MACHINE_BUTTONS), measure: o.isShown(MEASURE) };
+out.heard = heard;
 console.log(JSON.stringify(out));
 """
 
@@ -149,3 +165,38 @@ def test_measure_is_off_at_first_shown_only_and_never_kept(result):
         "reset": False,
         "after": False,
     }
+
+
+def test_only_this_and_all_act_among_a_layers_kind(result):
+    """Only this shows one layer of its kind and hides the others; All shows every one;
+    each told once, nothing done twice, and what was chosen selectable kept."""
+    assert result["kinds"] == [
+        ["shell:0", "shell:1", "shell:2"],
+        ["category:bolt", "category:board"],
+        ["grid", "machine-buttons"],
+        ["grid", "machine-buttons"],
+        ["measure"],
+        ["shell:0", "shell:1", "shell:2", "shell:7"],
+    ]
+    assert result["only"] == {
+        "did": True,
+        "again": False,
+        "shown": [False, True, False],
+        "selectable1": False,
+        "categories": True,
+        "json": {"depth": 1, "hidden": ["shell:0", "shell:2"], "unselectable": ["shell:1"]},
+    }
+    assert result["all"] == {
+        "did": True,
+        "again": False,
+        "shown": [True, True, True],
+        "selectable1": False,
+        "selectable0": True,
+    }
+    assert result["world"] == {"grid": True, "buttons": False, "measure": False}
+    assert result["heard"] == [
+        {"layer": "shell:1", "selectable": False},
+        {"layer": "shell:1", "only": True},
+        {"layers": ["shell:0", "shell:1", "shell:2"], "all": True},
+        {"layer": "grid", "only": True},
+    ]

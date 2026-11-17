@@ -885,7 +885,7 @@
         import { TransformControls } from 'three/addons/controls/TransformControls.js';
         import { STLLoader } from 'three/addons/loaders/STLLoader.js';
         import { mountAnchors } from '/static/anchors.js';
-        import { makePickScope, WALL as WALL_LAYER, GRID as GRID_LAYER, MACHINE_BUTTONS as BUTTONS_LAYER, MEASURE as MEASURE_LAYER } from '/static/pick_scope.js';
+        import { makePickScope, kindOf, WALL as WALL_LAYER, GRID as GRID_LAYER, MACHINE_BUTTONS as BUTTONS_LAYER, MEASURE as MEASURE_LAYER } from '/static/pick_scope.js';
         import { takeLayerColours, layerColour, layerHex, categoriesInOrder } from '/static/layer_colours.js';
         import { ownExtents, sizeFromSceneBox, turnedExtents, turnRowsInScene, turnedBounds, between, gap as gapBetween, nearestWithin, length as mmText } from '/static/measure.js';
         import { mountPanels } from '/static/panels.js';
@@ -3099,6 +3099,8 @@
                         ? 'Measure: on. A click in the world drops a point and selects nothing, a second reads the distance, a third starts again (Escape too); the selection reads its size'
                         : 'Measure: off, a click selects again';
                 }
+                if (what.only) return `${layerLabel(what.layer)} alone of its kind shown: the others hidden, and a click passes through them`;
+                if (what.all) return `Every one shown: ${what.layers.map(layerLabel).join(', ')}`;
                 if (what.shown !== undefined) return `${layerLabel(what.layer)}: ${what.shown ? 'shown' : 'hidden, and a click passes through it'}`;
                 if (what.selectable !== undefined) return `${layerLabel(what.layer)}: ${what.selectable ? 'a click picks it' : 'a click passes through it'}`;
                 return null;
@@ -3716,10 +3718,37 @@
                 }
                 if (verb === 'settings') return this.openSettings();
                 if (verb === 'layers') return this.openLayers();
+                // One level more or less, as the Layers window's stepper.
+                if (verb === 'depth:less' || verb === 'depth:more') {
+                    const was = this.pickScope.depth();
+                    this.pickScope.setDepth(was + (verb === 'depth:more' ? 1 : -1));
+                    const now = this.pickScope.depth();
+                    return now === was ? `Depth: already ${now} level${now === 1 ? '' : 's'}, the ${now === 1 ? 'least' : 'most'} it goes` : this.layersSaid({ depth: now });
+                }
                 if (verb.startsWith('depth:')) {
                     this.pickScope.setDepth(Number(verb.slice('depth:'.length)));
                     return this.layersSaid({ depth: this.pickScope.depth() });
                 }
+                return null;
+            }
+
+            // A cell of View › Layers: a layer's acts (layer:<verb>:<layer>) and Reset, done to
+            // the pick scope the Layers window's ticks and the world read. Answers what the
+            // status line says.
+            layerVerb(rest) {
+                const scope = this.pickScope;
+                if (rest === 'reset') { scope.reset(); return this.layersSaid({ reset: true }); }
+                const at = rest.indexOf(':');
+                const verb = rest.slice(0, at), id = rest.slice(at + 1);
+                const kind = kindOf(id, { shells: this.layerShells(), categories: this.layerCategories() });
+                const name = layerLabel(id);
+                if (verb === 'shown') { scope.setShown(id, !scope.isShown(id)); return this.layersSaid({ layer: id, shown: scope.isShown(id) }); }
+                if (verb === 'selectable') {
+                    if (!scope.setSelectable(id, !scope.isSelectable(id))) return `${name}: a click never picks what it draws`;
+                    return this.layersSaid({ layer: id, selectable: scope.isSelectable(id) });
+                }
+                if (verb === 'only') return scope.showOnly(id, kind) ? this.layersSaid({ layer: id, only: true }) : `${name}: already the only one of its kind shown`;
+                if (verb === 'all') return scope.showAll(kind) ? this.layersSaid({ layers: kind, all: true }) : `${name}: every one of its kind is shown already`;
                 return null;
             }
 
@@ -10738,6 +10767,10 @@
                 } else if (action === 'move') {
                     if (viewer.renderNodeByKey[path]) viewer.selectChild(path);
                     viewer.setStatus(viewer.transformControls.object ? `Drag the handle to move ${path}${tail}` : `${path} cannot be moved from here: only a direct child of the site can${tail}`, 'success');
+                } else if (action.startsWith('layer:')) {
+                    // View › Layers: a layer's acts, on the pick scope the Layers window shows.
+                    const said = viewer.layerVerb(action.slice('layer:'.length));
+                    viewer.setStatus(said ? `${said}${tail}` : `${intent.label}: no such act of a layer${tail}`, said ? 'success' : 'error');
                 } else if (action.startsWith('view:')) {
                     // The View menu's items, as a person changes them there.
                     const said = viewer.viewVerb(action.slice('view:'.length));

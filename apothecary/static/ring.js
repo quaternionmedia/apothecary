@@ -199,6 +199,8 @@ const STYLE = `
 .apothecary-ring .wedge.destructive { fill: #3a2020; }
 .apothecary-ring .wedge.hot { fill: #4c6a4c; }
 .apothecary-ring .wedge[data-group].hot { fill: color-mix(in srgb, var(--group) 50%, #2a2f2a); }
+.apothecary-ring .wedge[data-colour] { fill: color-mix(in srgb, var(--group) 26%, #2a2f2a); }
+.apothecary-ring .wedge[data-colour].hot { fill: color-mix(in srgb, var(--group) 50%, #2a2f2a); }
 .apothecary-ring .wedge.destructive.hot { fill: #7a2a2a; }
 .apothecary-ring .wedge.marked { fill: #23384a; stroke: #6fb3e8; }
 .apothecary-ring .wedge.marked.hot { fill: #33557a; }
@@ -364,11 +366,14 @@ class RingInstance {
             parts.push(
                 `<path id="ring-cell-${cell}" class="${cls.join(" ")}" data-cell="${cell}" role="menuitem"`
                 + (option && option.group ? ` data-group="${esc(option.group)}"` : "")
+                + (option && option.colour ? ` data-colour="${esc(option.colour)}" style="--group: ${esc(option.colour)}"` : "")
                 + ` aria-label="${option ? esc(armed ? `again to ${option.label.toLowerCase()}` : option.label) : "empty"}"`
                 + (option && option.marked ? ' aria-current="true"' : "")
                 + `${option ? "" : ' aria-disabled="true"'} d="${wedgePath(slot, r0, r1)}"></path>`
                 // Whose it is: tinted with its group's colour, the colour itself along its outer edge (tokens.css).
                 + (option && option.group ? `<path class="rim" data-group="${esc(option.group)}" d="${wedgePath(slot, r1 - 4, r1)}"></path>` : "")
+                // A layer's cell: the colour the world draws that layer in (apothecary/layer_colours.py).
+                + (option && option.colour ? `<path class="rim" style="--group: ${esc(option.colour)}" d="${wedgePath(slot, r1 - 4, r1)}"></path>` : "")
                 + (option ? words : "")
                 + `<circle class="digit-key${option ? "" : " empty-digit"}" cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="8.5"></circle>`
                 + `<text class="digit${option ? "" : " empty-digit"}" x="${dx.toFixed(1)}" y="${(dy + 4).toFixed(1)}">${cell}</text>`

@@ -1348,11 +1348,11 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
 def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
     """The header's ⚙ View menu is ring-backed by View, a cell of the canvas ring's
     own: View › Fit first, then Snap to grid, Detail (Full, Black box, Dot), Outlines,
-    Select walls, Settings, and after it Layers and Depth (1 to 4 levels), so no cell before
-    them moves. At the root and inside
-    a piece alike the canvas ring holds eight or fewer, View is at 2, seated before
-    every cell that comes and goes, and Panels holds no View. The page carries them
-    all."""
+    Select walls, Settings, and after it Layers (a ring: the window first) and Depth (1
+    to 4 levels, then one less and one more), so no cell before them moves. At the root
+    and inside a piece alike the canvas ring holds eight or fewer, View is at 2, seated
+    before every cell that comes and goes, and Panels holds no View. The page carries
+    them all."""
     from apothecary.menu import carried_by
 
     for targets, view_cell in (([], "2"), (["printer_1"], "2")):
@@ -1373,7 +1373,7 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
             ("Outlines", "view:outlines", 4),
             ("Select walls", "view:walls", 9),
             ("Settings", "view:settings", 3),
-            ("Layers", "view:layers", 1),
+            ("Layers", None, 1),
             ("Depth", None, 7),
         ]
         assert [(c.label, c.action) for c in view.children[2].children] == [
@@ -1387,12 +1387,15 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
         assert address_of(root, "view:walls") == f"{view_cell}9"
         assert address_of(root, "view:settings") == f"{view_cell}3"
         assert address_of(root, "view:layers") == f"{view_cell}1"
+        assert address_of(root, "view:layers:window") == f"{view_cell}18"
         assert address_of(root, "view:depth:2") == f"{view_cell}76"
         assert [(c.label, c.action) for c in view.children[7].children] == [
             ("1 level", "view:depth:1"),
             ("2 levels", "view:depth:2"),
             ("3 levels", "view:depth:3"),
             ("4 levels", "view:depth:4"),
+            ("One less", "view:depth:less"),
+            ("One more", "view:depth:more"),
         ]
         panels = next(o for o in root.options if o.label == "Panels")
         assert "View" not in [c.label for c in panels.children]
@@ -1405,8 +1408,119 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
         "view:settings",
         "view:layers",
         "view:depth:3",
+        "view:depth:more",
     ):
         assert carried_by(action).name == "VIEWER"
+
+
+def _layer_ring_of(ring, layer):
+    """The ring of one layer's acts, wherever it is under View › Layers."""
+    found = []
+
+    def walk(options):
+        for option in options or []:
+            if option.id == f"layer:{layer}":
+                found.append(option)
+            walk(option.children)
+
+    walk(ring.options)
+    assert len(found) == 1, (layer, len(found))
+    return found[0]
+
+
+def test_view_layers_holds_the_window_the_worlds_layers_reset_and_the_sites_own():
+    """View › Layers: Window 8, World 6, Reset 2 always; then the layers the site has,
+    as the Layers window lists them -- the garage's categories at 4, and in the universe
+    its shells at 4 and its categories at 9 -- each a ring of its own acts, every cell
+    wearing its layer's colour."""
+    from apothecary import sites
+    from apothecary.layer_colours import colour_of
+    from apothecary.menu import carried_by
+
+    garage = resolve(Context(pointing=Pointing.CANVAS), _garage())
+    layers = _group(garage, "View", "Layers")
+    assert [(c.label, c.cell) for c in layers.children] == [
+        ("Window", 8),
+        ("World", 6),
+        ("Reset", 2),
+        ("Categories", 4),
+    ]
+    assert layers.children[0].action == "view:layers"
+    assert layers.children[2].action == "layer:reset"
+    assert [c.label for c in layers.children[1].children] == ["Grid", "Buttons", "Measure"]
+    assert "wall" in [c.label for c in layers.children[3].children]
+
+    universe = resolve(
+        Context(pointing=Pointing.CANVAS),
+        sites.store.get("apothecary"),
+        site_names=sorted(sites.store.names()),
+    )
+    layers = _group(universe, "View", "Layers")
+    assert [(c.label, c.cell) for c in layers.children] == [
+        ("Window", 8),
+        ("World", 6),
+        ("Reset", 2),
+        ("Shells", 4),
+        ("Categories", 9),
+    ]
+    assert [c.label for c in layers.children[3].children] == ["Shell 0", "Shell 1", "Shell 2"]
+    assert address_of(universe, "layer:shown:shell:1") == "21468"
+    # Seventeen categories and more: grouped, nothing lost.
+    listed = [
+        ring.id
+        for group in layers.children[4].children
+        for ring in (group.children if group.children[0].children else [group])
+    ]
+    assert "layer:category:machine" in listed and "layer:category:electrical" in listed
+    for layer in ("shell:2", "category:machine", "grid", "measure"):
+        ring = _layer_ring_of(universe, layer)
+        assert ring.colour == colour_of(layer)
+        assert {c.colour for c in ring.children} == {colour_of(layer)}
+        for cell in ring.children:
+            assert carried_by(cell.action).name == "VIEWER"
+
+
+def test_a_layers_ring_holds_the_acts_its_kind_has():
+    """A shell's and a category's: Shown, Selectable, Only this, All. The grid's and the
+    buttons': Shown, Only this, All, a click never picking what they draw. The
+    measurement's, a mode: Shown alone."""
+    from apothecary import sites
+
+    universe = resolve(Context(pointing=Pointing.CANVAS), sites.store.get("apothecary"))
+    acts = {
+        layer: [(c.label, c.action, c.cell) for c in _layer_ring_of(universe, layer).children]
+        for layer in ("shell:0", "category:electrical", "grid", "machine-buttons", "measure")
+    }
+    assert acts["shell:0"] == [
+        ("Shown", "layer:shown:shell:0", 8),
+        ("Selectable", "layer:selectable:shell:0", 6),
+        ("Only this", "layer:only:shell:0", 2),
+        ("All", "layer:all:shell:0", 4),
+    ]
+    assert [a[0] for a in acts["category:electrical"]] == [
+        "Shown",
+        "Selectable",
+        "Only this",
+        "All",
+    ]
+    assert acts["grid"] == [
+        ("Shown", "layer:shown:grid", 8),
+        ("Only this", "layer:only:grid", 6),
+        ("All", "layer:all:grid", 2),
+    ]
+    assert [a[0] for a in acts["machine-buttons"]] == ["Shown", "Only this", "All"]
+    assert acts["measure"] == [("Shown", "layer:shown:measure", 8)]
+
+
+def test_an_option_wears_a_colour_only_as_the_table_writes_one():
+    from pydantic import ValidationError
+
+    from apothecary.menu import Option
+
+    assert Option(id="x", label="X", action="x", colour="#3d7eff").colour == "#3d7eff"
+    for bad in ("red", "#3D7EFF", "#3d7eff; background: url(x)", "3d7eff"):
+        with pytest.raises(ValidationError):
+            Option(id="x", label="X", action="x", colour=bad)
 
 
 # --- pictures and cameras on the ring --------------------------------------------------

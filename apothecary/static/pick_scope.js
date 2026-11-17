@@ -22,6 +22,10 @@
  * selectable shows it. Walls selectable is the page's session's, never
  * kept, as the View menu's Select walls always was.
  *
+ * A layer's ring (View › Layers) also shows one layer alone of its kind, or every one of
+ * its kind (showOnly, showAll, kindOf): the shells, the categories, or the grid and the
+ * machine buttons.
+ *
  * Plain ES module, no dependencies and no listeners of its own: the page asks it
  * (pickable, drawn) and is told (onChange).
  */
@@ -50,6 +54,16 @@ export function layersOf(node) {
 /* The one layer a row in a list names a node by: its shell's, else its category's. */
 export function layerOf(node) {
     return layersOf(node)[0] ?? null;
+}
+
+/* The layers of `id`'s kind, `id` among them, which Only this and All act among: the
+ * shells the site has, its categories, or the grid and the machines' buttons. The
+ * measurement is a mode, a kind of its own. */
+export function kindOf(id, { shells = [], categories = [] } = {}) {
+    if (id.startsWith("shell:")) return [...new Set([...shells.map(shellLayer), id])];
+    if (id.startsWith("category:")) return [...new Set([...categories.map(categoryLayer), id])];
+    if (id === GRID || id === MACHINE_BUTTONS) return [GRID, MACHINE_BUTTONS];
+    return [id];
 }
 
 const clampDepth = (n) => {
@@ -139,6 +153,23 @@ export function makePickScope({ storage = null, storageKey = PICK_SCOPE_KEY } = 
             if (!!on === api.isSelectable(id)) return false;
             if (on) { unselectable.delete(id); hidden.delete(id); } else unselectable.add(id);
             told({ layer: id, selectable: !!on });
+            return true;
+        },
+        /* `id` shown and every other layer of `kind` (kindOf) hidden, at once: told once.
+         * What was chosen selectable stays chosen. False when it was so already. */
+        showOnly(id, kind) {
+            const others = kind.filter((k) => k !== id);
+            if (!hidden.has(id) && others.every((k) => hidden.has(k))) return false;
+            hidden.delete(id);
+            for (const k of others) hidden.add(k);
+            told({ layer: id, only: true });
+            return true;
+        },
+        /* Every layer of `kind` shown, at once: told once. False when all were. */
+        showAll(kind) {
+            if (kind.every((k) => !hidden.has(k))) return false;
+            for (const k of kind) hidden.delete(k);
+            told({ layers: [...kind], all: true });
             return true;
         },
         /* Everything back to the defaults. */
