@@ -53,7 +53,9 @@ def result(tmp_path_factory):
     module.write_text(MODULE.read_text(encoding="utf-8"), encoding="utf-8")
     script = folder / "run.mjs"
     script.write_text(SCRIPT % {"module": module.as_uri()}, encoding="utf-8")
-    done = subprocess.run([NODE, str(script)], capture_output=True, text=True, timeout=60, check=False)
+    done = subprocess.run(
+        [NODE, str(script)], capture_output=True, text=True, timeout=60, check=False
+    )
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
 

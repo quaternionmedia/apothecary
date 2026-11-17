@@ -261,6 +261,7 @@ Selectable (and showing it restores what was chosen), ticking Selectable shows i
 | A category | The pieces of that category, walls among them | Shown, Selectable (walls start unselectable: View › Select walls is this tick) |
 | Alignment grid | The floor grid and the machines' build-volume boxes | Shown |
 | Machine buttons | The badges a machine wears in the world | Shown |
+| Measure | Dimension lines on the selection, and a click that drops a point to measure between ([below](#measure)) | Shown (off at first) |
 
 A piece is on its shell's layer and its category's, and is drawn only if every layer
 it is on is shown and picked only if every one is selectable. A layer not shown is
@@ -269,7 +270,49 @@ it to what is behind, which is how an inner shell is reached from outside the
 sphere. A row in Site's tree selects any piece whatever the layers say. Each change
 is said on the status line. Everything starts shown and selectable, walls aside, at
 depth 1; **Reset** returns to that. What differs is kept by this browser, except
-Select walls, which is the page's session's.
+Select walls and Measure, which are the page's session's.
+
+#### Measure
+
+Ticking **Measure** (the Layers window's last row; the ring's View has no free cell
+for it, so the window alone) lets a person read any dimension in the world. A
+measurement is a reading of the model and of the mesh drawn, not of the made part: a
+printed part differs by what the printer does. Every number says where it comes from.
+
+- **The selection reads its size.** The selected piece wears a dimension line along
+  each of its own axes, the length written on it in millimetres. A turned piece, such
+  as a part on the universe's sphere, is measured along its own axes, not the
+  world's, and its world box is said beside it. The source is written on each label
+  and in the reading: the part's *declared footprint*, the *envelope of its pieces*
+  (a piece with no footprint of its own), *the drawn mesh, as loaded* (the STL's own
+  bounds, once it is in) or *a stand-in box* where nothing is declared. The two main
+  sources can differ, and where the mesh is what is drawn the reading gives the declared
+  footprint as well. A machine also reads its working volume from its frame, saying
+  whether its controller or the site gave it. A piece that is not drawn here has
+  nothing to measure.
+- **Any two points.** With Measure shown, a click in the world drops a point on the
+  surface, and a second click another; the world draws the line between them and writes
+  the straight distance and dx, dy and dz in the site's millimetres. A point snaps to
+  the nearest vertex of the face under it within 12 pixels of the pointer, and the
+  reading says *vertex* where it did and *surface* where it did not, so a person
+  knows how exact it is. A third click starts again from that point, and Escape lets
+  the points go.
+- **Between two pieces.** Where the two points lie on different pieces the reading also
+  gives the clear distance between their declared bounds (the bounds of the box that
+  contains each, in the site's axes), which is *touching* when they meet and *overlap*
+  when they share volume. It answers whether one fits beside the other.
+- **A click measures while the layer is shown.** Measure is a mode: the layer being
+  shown is the whole of the choice, because a click that sometimes selected and sometimes
+  measured would be a surprise at the moment it matters, and a modifier would be a
+  key to learn. While it is shown a click and a double-click select nothing and step
+  into nothing; a piece is selected from Site's rows, which still work, so the
+  selection can read its size beside the points. A right-click, the camera's buttons
+  and the move arrows are as they were, and unticked, a click selects as before. The
+  point goes where a click would pick, through the one pick path, so a layer a click
+  passes through (a wall, a shell not selectable) is passed through by a measurement too.
+
+The readings are text in the Layers window, under its rows, to read and copy, and each
+change is said on the status line.
 
 The world is the site's own frame, z up, turned onto the screen and never
 mirrored: a part reads as OpenSCAD draws it, its engraved text the right way
