@@ -136,6 +136,7 @@ from .routes import wiring as wiring_routes
 from .routes.airgap import router as airgap_router
 from .routes.cameras import router as cameras_router
 from .routes.evidence import router as evidence_router
+from .routes.interfaces import router as interfaces_router
 from .routes.jobs import router as jobs_router
 from .routes.lighting import router as lighting_router
 from .routes.machines import router as machines_router
@@ -329,6 +330,8 @@ app.include_router(machines_router)
 app.include_router(projector_router)
 # A part's SCAD edited: drafts checked and rendered, and saves as variants in git.
 app.include_router(part_edits_router)
+# A part's interfaces, and how two fit (docs/connections.md).
+app.include_router(interfaces_router)
 app.include_router(lighting_router)
 # The Airgap panel's metrics document: its schema, and a copied document read back.
 app.include_router(airgap_router)

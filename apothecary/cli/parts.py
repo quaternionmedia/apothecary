@@ -413,6 +413,122 @@ def parts_verify(
         raise SystemExit(1)
 
 
+def _xyz(v) -> str:
+    return "(" + ", ".join(f"{c:g}" for c in v.to_list()) + ")"
+
+
+def _sizes(i) -> str:
+    """An interface's sizes in words."""
+    if i.type == "spigot":
+        words = f"{i.d_base:g} across at its base to {i.d_tip:g} at its tip, {i.length:g} long"
+        if i.lead:
+            words += f"; led {i.lead:g} past its tip by up to {i.lead_d:g} across"
+        return words
+    if i.type == "socket":
+        words = f"a {i.diameter:g} bore holding {i.depth:g} deep"
+        if i.floor is not None:
+            words += f", then {i.floor:g} at its narrowest"
+        if i.stretch:
+            words += f"; opens {i.stretch:.0%} when pushed"
+        return words
+    if i.type == "bolt_hole":
+        return f"{i.diameter:g} across"
+    return f"{i.width:g} wide, {i.length:g} long"
+
+
+@parts.command("interfaces", short_help="Where another part meets a part: its interfaces.")
+@click.argument("name")
+@click.option(
+    "--param",
+    "-p",
+    "param_pairs",
+    multiple=True,
+    metavar="NAME=VALUE",
+    help="Override a part parameter first. Repeatable.",
+)
+@click.option("--json-out/--text", default=False, help="As JSON, for a script.")
+def parts_interfaces(name: str, param_pairs: tuple[str, ...], json_out: bool):
+    """The places where another part meets this one (docs/connections.md): each
+    interface's type, where it is and which way it faces in the part's own frame
+    (the frame its SCAD draws it in), its sizes, where its numbers came from, and
+    the interfaces of the same part it cannot be in use with."""
+    part = part_or_die(name)
+    params = parse_param_overrides(part, param_pairs)
+    found = part.interfaces(params or None)
+    if json_out:
+        click.echo(json.dumps([i.model_dump(mode="json") for i in found], indent=2))
+        return
+    if not found:
+        click.echo(f"{part.name} declares no interfaces")
+        return
+    for i in found:
+        click.echo(f"{i.name}: a {i.type.replace('_', ' ')}, {i.source}")
+        click.echo(f"    at {_xyz(i.position)}, facing {_xyz(i.normal)}")
+        click.echo(f"    {_sizes(i)}")
+        if i.excludes:
+            click.echo(f"    not in use with {', '.join(i.excludes)}")
+        if i.cite:
+            click.echo(f"    cites {i.cite}")
+        if i.notes:
+            click.echo(f"    {i.notes}")
+
+
+def _interfaces_named(spec: str):
+    """(part, [interfaces]) for ``part`` or ``part.interface``."""
+    name, _, interface = spec.partition(".")
+    part = part_or_die(name)
+    if interface:
+        try:
+            return part, [part.interface(interface)]
+        except KeyError as exc:
+            raise click.ClickException(str(exc.args[0])) from None
+    found = part.interfaces()
+    if not found:
+        raise click.ClickException(f"{part.name} declares no interfaces")
+    return part, found
+
+
+@parts.command("fit", short_help="How two parts' interfaces fit: whether, and how far in.")
+@click.argument("a", metavar="PART[.INTERFACE]")
+@click.argument("b", metavar="PART[.INTERFACE]")
+@click.option("--json-out/--text", default=False, help="As JSON, for a script.")
+def parts_fit(a: str, b: str, json_out: bool):
+    """How an interface of one part fits an interface of another (docs/connections.md):
+    it seats, is loose, will not enter, is too shallow, or its tip is blocked; how far
+    the spigot goes in, how far its shoulder then stands from the mouth, and how much
+    wider than the bore it is there. A part named without an interface tries each of
+    its interfaces against each of the other's, those that seat first. Exits 1 when
+    nothing seats."""
+    from ..models.interfaces import fit
+
+    part_a, ours = _interfaces_named(a)
+    part_b, theirs = _interfaces_named(b)
+    fits = [
+        (f"{part_a.name}.{x.name}", f"{part_b.name}.{y.name}", fit(x, y))
+        for x in ours
+        for y in theirs
+    ]
+    fits.sort(key=lambda f: not f[2].seats)
+    if json_out:
+        click.echo(
+            json.dumps(
+                [{**f.model_dump(mode="json"), "a": here, "b": there} for here, there, f in fits],
+                indent=2,
+            )
+        )
+    else:
+        for here, there, f in fits:
+            click.echo(f"{here} ↔ {there}: {f.verdict}")
+            if f.seats:
+                click.echo(
+                    f"    {f.seat:g} in, its shoulder {f.gap:g} from the mouth, "
+                    f"{f.interference:g} wider than the bore there ({f.stretch:.1%})"
+                )
+            click.echo(f"    {f.reason}")
+    if not any(f.seats for _, _, f in fits):
+        raise SystemExit(1)
+
+
 @parts.command("checklist")
 @click.argument("name", required=False)
 @click.option("--all", "check_all", is_flag=True, help="Every part with a wrapper")

@@ -342,8 +342,16 @@ def capabilities() -> List[Capability]:
             Capability(
                 name="apothecary parts verify",
                 kind="gate",
-                summary="declared bounds against real geometry; exits non-zero on drift",
+                summary="declared bounds and interfaces against real geometry; exits non-zero "
+                "on drift",
                 addresses=["drift"],
+            ),
+            Capability(
+                name="apothecary parts fit",
+                kind="gate",
+                summary="how two parts' interfaces fit, and why not; exits non-zero when "
+                "nothing seats",
+                addresses=["misfit"],
             ),
             Capability(
                 name="apothecary parts checklist",
