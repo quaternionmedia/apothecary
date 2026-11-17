@@ -487,8 +487,9 @@ def _imported(root: Path, path: str) -> frozenset[str] | None:
     except SyntaxError:
         return None
     named = set()
+    suite = [PurePosixPath(), *map(PurePosixPath, SUITE)]
     for node in ast.walk(tree):
-        bases = [PurePosixPath(), *map(PurePosixPath, SUITE)]
+        bases = suite
         if isinstance(node, ast.Import):
             modules = [alias.name for alias in node.names]
         elif isinstance(node, ast.ImportFrom):
@@ -511,24 +512,34 @@ def _imported(root: Path, path: str) -> frozenset[str] | None:
     return frozenset(named)
 
 
-def _modules(root: Path) -> list[str]:
+@functools.cache
+def _modules(root: Path) -> tuple[str, ...]:
     """The suite's modules, as paths from the root, the root's conftest with them."""
     found = [root / "conftest.py", *(p for d in SUITE for p in sorted((root / d).glob("*.py")))]
-    return [p.relative_to(root).as_posix() for p in found if p.is_file()]
+    return tuple(p.relative_to(root).as_posix() for p in found if p.is_file())
+
+
+@functools.cache
+def _importing(root: Path, target: str) -> frozenset[str]:
+    """The suite's modules whose import statements may name ``target``."""
+    stem = target.rpartition("/")[2].removesuffix(".py")
+    found = set()
+    for module in _modules(root):
+        if stem not in _source(root, module):
+            continue  # a file that never spells the name imports nothing by it
+        imported = _imported(root, module)
+        if imported is None or target in imported:
+            found.add(module)
+    return frozenset(found)
 
 
 def importers(path: str, root: Path = ROOT) -> set[str]:
     """The suite's modules that import ``path``, a module of the suite as a path from the
     root, directly or through other modules of the suite."""
-    modules, found, todo = _modules(root), set(), [path]
+    found, todo = set(), [path]
     while todo:
-        target = todo.pop()
-        stem = target.rpartition("/")[2].removesuffix(".py")
-        for module in modules:
-            if module in found or stem not in _source(root, module):
-                continue  # a file that never spells the name imports nothing by it
-            imported = _imported(root, module)
-            if imported is None or target in imported:
+        for module in _importing(root, todo.pop()):
+            if module not in found:
                 found.add(module)
                 todo.append(module)
     return found - {path}
