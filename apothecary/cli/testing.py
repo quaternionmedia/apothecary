@@ -448,7 +448,8 @@ def unchanged_said(
         if len(out) == len(names):
             not_run.append(group)
             when = min(left[name] for name in out)
-            lines.append(f"not run: unchanged since green at {when}: {group} ({len(out)} files)")
+            files_said = f"{len(out)} file" + ("s" if len(out) != 1 else "")
+            lines.append(f"not run: unchanged since green at {when}: {group} ({files_said})")
         else:
             ran.append(group)
             if out:

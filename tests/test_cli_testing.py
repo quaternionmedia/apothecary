@@ -228,7 +228,7 @@ def test_changed_leaves_out_what_is_unchanged_since_green_and_says_it_apart(
     assert code == 0 and len(ran) == 1 and "--start-server" in ran[0]
     assert [line.split(": ", 2)[2] for line in said if line.startswith("not run")] == [
         f"machines ({len(machines)} files)",
-        "borders (1 files)",
+        "borders (1 file)",
         "the walkthrough",
     ]
     assert (
@@ -262,7 +262,7 @@ def test_changed_with_nothing_to_run_runs_no_pytest_and_passes(pytest_exits, mon
     ran = pytest_exits()
     code, said = _changed()
     assert code == 0 and ran == []
-    assert "not run: unchanged since green at" in said[0] and said[0].endswith("machines (1 files)")
+    assert "not run: unchanged since green at" in said[0] and said[0].endswith("machines (1 file)")
 
 
 @pytest.mark.parametrize(
@@ -330,7 +330,7 @@ def test_what_changed_says_counts_groups_that_ran_apart_from_those_unchanged():
     left = {"tests/b.py": "2026-11-17T09:00:00", "tests/c.py": "2026-11-17T08:00:00"}
     said = testing.unchanged_said(files, left, group_of, walked=True)
     assert said == [
-        "not run: unchanged since green at 2026-11-17T08:00:00: two (1 files)",
+        "not run: unchanged since green at 2026-11-17T08:00:00: two (1 file)",
         "unit groups the change reaches: 1 ran (one), files unchanged since green not run in "
         "one 1 of 2; 1 not run, unchanged since green (two); the walkthrough ran",
         f"`{testing.EVERY_ONE_REACHED}` runs what was not run too",
