@@ -290,8 +290,9 @@ printed part differs by what the printer does. Every number says where it comes 
   bounds, once it is in) or *a stand-in box* where nothing is declared. The two main
   sources can differ, and where the mesh is what is drawn the reading gives the declared
   footprint as well. A machine also reads its working volume from its frame, saying
-  whether its controller or the site gave it. A piece that is not drawn here has
-  nothing to measure.
+  whether its controller or the site gave it. A site's piece in the universe reads
+  the miniature drawn and says so, with how large the site itself is. A piece that is
+  not drawn here has nothing to measure.
 - **Any two points.** With Measure shown, a click in the world drops a point on the
   surface, and a second click another; the world draws the line between them and writes
   the straight distance and dx, dy and dz in the site's millimetres. A point snaps to

@@ -3259,6 +3259,8 @@
                     // The turn to a hundredth of a degree, as a length is to a hundredth of a mm.
                     if (node.turn) line += `; turned [${node.turn.map((a) => +a.toFixed(2)).join(', ')}] degrees, its world box ${sized(turnedExtents(size, node.turn))}`;
                     lines.push(line);
+                    // A site's piece is its site drawn small: the reading says so, and how large.
+                    if (node.site_ref && node.site_size) lines.push(`${key} is the site ${node.site_ref} in miniature, not to scale beside the parts: the site itself measures ${sized({ x: node.site_size[0], y: node.site_size[1], z: node.site_size[2] })} (its pieces' extent)`);
                     if (node.footprint && source === 'the drawn mesh, as loaded') lines.push(`${key} declares ${sized(ownExtents(node.footprint))} (declared footprint); the mesh above is what is drawn, and the two can differ`);
                     const frame = this.frameOf(key, node);
                     if (frame && frame.volume) lines.push(`${key}'s working volume ${frame.volume.map(mmText).join(' × ')} (its frame, from ${frame.volume_from === 'controller' ? "the machine's controller" : "the site's declaration"})`);
