@@ -64,6 +64,7 @@ from .firmware.deck_api import router as firmware_deck_router
 from .firmware.models import DeviceAttachRequest, validate_port
 from .firmware.toolchains import ToolchainError
 from .hierarchy import Assembly, find_node_by_path
+from .layer_colours import layer_colours
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .picture_root import (
@@ -1734,6 +1735,9 @@ def site_payload(site, report) -> Dict[str, object]:
         "name": site.name,
         "structures": [_structure_summary(s) for s in site.children],
         "tree": _assembly_tree(site),
+        # The colour of each layer the site has, the one table (layer_colours.py): the
+        # page draws a layer, its ring cells and its row in it.
+        "layer_colours": layer_colours(site),
         "violations": [v.model_dump() for v in report.violations],
         "is_valid": report.is_valid,
         "scad": scad,

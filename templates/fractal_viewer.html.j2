@@ -886,6 +886,7 @@
         import { STLLoader } from 'three/addons/loaders/STLLoader.js';
         import { mountAnchors } from '/static/anchors.js';
         import { makePickScope, WALL as WALL_LAYER, GRID as GRID_LAYER, MACHINE_BUTTONS as BUTTONS_LAYER, MEASURE as MEASURE_LAYER } from '/static/pick_scope.js';
+        import { takeLayerColours, layerColour, layerHex, categoriesInOrder } from '/static/layer_colours.js';
         import { ownExtents, sizeFromSceneBox, turnedExtents, turnRowsInScene, turnedBounds, between, gap as gapBetween, nearestWithin, length as mmText } from '/static/measure.js';
         import { mountPanels } from '/static/panels.js';
         import { mountMachine } from '/static/widgets/machine.js';
@@ -983,55 +984,21 @@
         // Subsystem colors -- a node's own ``category`` if set, else
         // whatever the nearest ancestor's was (already resolved server-side,
         // see api.py's _assembly_tree docstring on category inheritance).
-        // Distinct from PART_COLOR/SUBTRACTION_COLOR/STATUS_COLORS/
-        // BUILD_VOLUME_COLOR below, which all still take priority over this
-        // (see colorMesh) -- category is what everything *else* falls back
-        // to, before DEFAULT_COLOR.
-        const CATEGORY_COLORS = {
-            wall: 0x9c8f7a,
-            furniture: 0x8a5a3c,
-            mechanical: 0x5b7a99,
-            fluid: 0x2f8fbf,
-            electrical: 0xd8c11a,
-            // A theatre's (theatre_site.py): its rig, warm as a lamp, and its scenery.
-            lighting: 0xe8a33a,
-            scenic: 0x8f7bb5,
-        };
+        // Each is its layer's colour, the one table the server sends with the
+        // site (apothecary/layer_colours.py, static/layer_colours.js): a word
+        // nobody wrote down, a picture's, is given one from its name there, the
+        // same every time. Distinct from PART_COLOR/SUBTRACTION_COLOR/
+        // STATUS_COLORS, which all still take priority over this (see
+        // colorMesh) -- category is what everything *else* falls back to,
+        // before DEFAULT_COLOR.
         const DEFAULT_COLOR = 0x4488cc;
-
-        // A colour for a group nobody wrote down in advance.
-        //
-        // CATEGORY_COLORS above is a fixed list, and groups also come from a
-        // picture: a word is whatever the vocabulary holds, and the vocabulary
-        // grows. A group not on the list takes a colour from its name, so it is
-        // drawn, and filtered, like any other.
-        //
-        // Same name, same colour, every time, so a group does not change colour
-        // between one look and the next.
         function colorForCategory(category) {
-            if (CATEGORY_COLORS[category] !== undefined) return CATEGORY_COLORS[category];
-            let hash = 0;
-            for (let i = 0; i < category.length; i++) {
-                hash = (hash * 31 + category.charCodeAt(i)) >>> 0;
-            }
-            const hue = hash % 360;
-            const [r, g, b] = hslToRgb(hue / 360, 0.42, 0.55);
-            return (r << 16) | (g << 8) | b;
-        }
-
-        function hslToRgb(h, s, l) {
-            const f = (n) => {
-                const k = (n + h * 12) % 12;
-                const a = s * Math.min(l, 1 - l);
-                return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
-            };
-            return [f(0), f(8), f(4)];
+            return layerColour(`category:${category}`, DEFAULT_COLOR);
         }
         const PART_COLOR = 0x66cc66;
         const SUBTRACTION_COLOR = 0xcc7733;
         const SELECTED_EDGE_COLOR = 0xffffff;
         const VIOLATION_COLOR = 0xcc3333;
-        const BUILD_VOLUME_COLOR = 0x33ffdd;
         // A face a step behind the edges drawn on it, so an edge line wins the depth
         // test every time, not by the order the meshes happened to load in.
         const FACE_BEHIND_ITS_EDGES = { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 };
@@ -1137,7 +1104,6 @@
         // relief (0.4 up).
         const BED_GRID_MM = 10;
         const MEASURE_SNAP_PX = 12;      // a measured point snaps to a vertex this near the pointer
-        const MEASURE_COLOR = 0xffb347;
         const BED_GRID_LIFT_MM = 0.3;
         // How often the world polls a machine it draws while no Machine is open on it
         // (followMachines): a Machine's own default.
@@ -1224,7 +1190,7 @@
         // (colorMesh) and a Contents-tree/category-chip swatch: a part's own
         // color, then a subtraction-composed cutout, then operational status,
         // then this node's (inherited) subsystem category, finally the flat
-        // default -- see CATEGORY_COLORS' comment for why category sits below
+        // default -- see colorForCategory's comment for why category sits below
         // status instead of above it.
         function baseColorFor(node) {
             const statusColor = node.status ? STATUS_COLORS[node.status] : undefined;
@@ -2563,6 +2529,7 @@
                     this.leavingSite = false;
                     this.lighting.setSite(name);
                     this.tree = data.tree;
+                    takeLayerColours(data);
                     this.maxDepthValue = maxDepth(this.tree);
                     this.violations = data.violations;
                     this.isValid = data.is_valid;
@@ -3283,13 +3250,13 @@
                     const group = new THREE.Group();
                     const line = (a, b) => group.add(new THREE.Line(
                         new THREE.BufferGeometry().setFromPoints([a, b]),
-                        new THREE.LineBasicMaterial({ color: MEASURE_COLOR, depthTest: false })));
+                        new THREE.LineBasicMaterial({ color: layerColour(MEASURE_LAYER, DEFAULT_COLOR), depthTest: false })));
                     const label = (text, at) => {
                         const canvas = document.createElement('canvas');
                         canvas.width = 384; canvas.height = 48;
                         const ctx = canvas.getContext('2d');
                         ctx.font = '26px sans-serif'; ctx.fillStyle = 'rgba(20,20,20,0.8)'; ctx.fillRect(0, 0, 384, 48);
-                        ctx.fillStyle = '#ffb347'; ctx.textBaseline = 'middle'; ctx.fillText(text, 8, 25, 368);
+                        ctx.fillStyle = layerHex(MEASURE_LAYER) || '#ffffff'; ctx.textBaseline = 'middle'; ctx.fillText(text, 8, 25, 368);
                         const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, sizeAttenuation: false }));
                         sprite.scale.set(0.3, 0.0375, 1);
                         sprite.position.copy(at);
@@ -3306,7 +3273,7 @@
                     if (p.length) {
                         group.add(new THREE.Points(
                             new THREE.BufferGeometry().setFromPoints(p.map((q) => q.at)),
-                            new THREE.PointsMaterial({ color: MEASURE_COLOR, size: 9, sizeAttenuation: false, depthTest: false })));
+                            new THREE.PointsMaterial({ color: layerColour(MEASURE_LAYER, DEFAULT_COLOR), size: 9, sizeAttenuation: false, depthTest: false })));
                     }
                     if (p.length === 2) {
                         line(p[0].at, p[1].at);
@@ -3439,7 +3406,7 @@
                 if (!mesh) {
                     const geometry = new THREE.BoxGeometry(1, 1, 1);
                     const edges = new THREE.EdgesGeometry(geometry);
-                    mesh = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: BUILD_VOLUME_COLOR }));
+                    mesh = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: layerColour(GRID_LAYER, DEFAULT_COLOR) }));
                     this.scene.add(mesh);
                     this.buildVolumeMeshByName[node.name] = mesh;
                 }
@@ -3834,8 +3801,8 @@
                 // then anything else in alphabetical order. Every group present
                 // gets a chip: a group with no chip cannot be filtered, and a
                 // group that cannot be filtered may as well not be there.
-                const known = Object.keys(CATEGORY_COLORS).filter((c) => present.has(c));
-                const rest = [...present].filter((c) => !(c in CATEGORY_COLORS)).sort();
+                const known = categoriesInOrder().filter((c) => present.has(c));
+                const rest = [...present].filter((c) => !known.includes(c)).sort();
                 for (const category of [...known, ...rest]) {
                     const chip = document.createElement('span');
                     const active = this.expandedCategories.has(category);
@@ -4659,7 +4626,7 @@
                         ${node.build_volume
                             ? `<br>${MACHINE_WORDS[this.machineKindAt(this.selectedName)].volume}: `
                               + node.build_volume.map((v) => v.toFixed(0)).join(' × ') + ' mm '
-                              + `<span style="display:inline-block;width:8px;height:8px;border:1px solid #${BUILD_VOLUME_COLOR.toString(16).padStart(6, '0')};vertical-align:middle;"></span>`
+                              + `<span style="display:inline-block;width:8px;height:8px;border:1px solid ${layerHex(GRID_LAYER)};vertical-align:middle;"></span>`
                             : ''}
                     </div>`;
                 const at = camera ? ' title="Where its lens is"' : '';
@@ -7652,6 +7619,7 @@
                     if (!response.ok) throw new Error(`Layout update failed (${response.status})`);
                     const data = await response.json();
                     this.tree = data.tree;
+                    takeLayerColours(data);
                     this.violations = data.violations;
                     this.isValid = data.is_valid;
                     if (data.scad) this.codeContentEl.textContent = data.scad;
@@ -9706,6 +9674,7 @@
                 if (!response.ok) throw new Error(`Failed to refresh site (${response.status})`);
                 const data = await response.json();
                 this.tree = data.tree;
+                takeLayerColours(data);
                 this.violations = data.violations;
                 this.isValid = data.is_valid;
                 if (data.scad) this.codeContentEl.textContent = data.scad;
@@ -9900,6 +9869,7 @@
             // rest of the level as it was, nothing else fetched, the view where it was.
             applyPieceRebuilt(payload, path) {
                 this.tree = payload.tree;
+                takeLayerColours(payload);
                 this.violations = payload.violations;
                 this.isValid = payload.is_valid;
                 if (payload.scad) this.codeContentEl.textContent = payload.scad;
@@ -9915,6 +9885,7 @@
 
             applySite(payload) {
                 this.tree = payload.tree;
+                takeLayerColours(payload);
                 this.violations = payload.violations;
                 this.isValid = payload.is_valid;
                 if (payload.scad) this.codeContentEl.textContent = payload.scad;

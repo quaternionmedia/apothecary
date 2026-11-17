@@ -270,6 +270,13 @@ Selectable (and showing it restores what was chosen), ticking Selectable shows i
 | Machine buttons | The badges a machine wears in the world | Shown |
 | Measure | Dimension lines on the selection, and a click that drops a point to measure between ([below](#measure)) | Shown (off at first) |
 
+**Each layer has one colour**, from one table (`apothecary/layer_colours.py`) the
+server sends with the site (`layer_colours`, beside `tree`), so the page writes none of
+its own: a category's pieces are drawn in it, the build volumes in the grid's, the
+measurement in its own, and a machine's badges wear the Machine group's, which is the
+machine buttons' layer's. A category nobody wrote down, a picture's word, takes a
+colour from its name, the same every time.
+
 A piece is on its shell's layer and its category's, and is drawn only if every layer
 it is on is shown and picked only if every one is selectable. A layer not shown is
 neither drawn nor hit; a layer not selectable is drawn, and a click passes through

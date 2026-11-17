@@ -330,6 +330,7 @@ GROUPS = {
         "sources": (
             "apothecary/viewer.py",
             "apothecary/menu.py",
+            "apothecary/layer_colours.py",
             "apothecary/systems.py",
             "apothecary/census.py",
             "apothecary/docs_site.py",
@@ -364,6 +365,7 @@ GROUPS = {
             "test_readiness.py",
             "test_stays_local.py",
             "test_group_colours.py",
+            "test_layer_colours.py",
             "test_systems.py",
             "test_journeys.py",
             "test_theatre_site.py",
