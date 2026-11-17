@@ -9,6 +9,7 @@ from .evidence import evidence
 from .firmware import firmware
 from .kernels import kernel_reference
 from .lighting import lighting
+from .loop import loop
 from .openscad import openscad
 from .parts import parts
 from .photo import photo
@@ -98,6 +99,7 @@ cli.add_command(openscad)
 cli.add_command(slicer)
 cli.add_command(lighting)
 cli.add_command(airgap)
+cli.add_command(loop)
 cli.add_command(rig)
 cli.add_command(evidence)
 
