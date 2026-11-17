@@ -816,6 +816,7 @@ both, since a reading kept then could not be told whose.
 **Print from here** keeps a sliced G-code file on the host
 (`~/.apothecary/prints/`) and checks it before anything is sent: a file that
 saves settings (`M500`), factory-resets (`M502`), updates firmware (`M997`),
+runs the firmware's autotune (`M303`, a heater loop's experiment, watched as one),
 kills or restarts the board, or exceeds the heater caps is refused with the
 reason. A kept file says the kind of machine it was kept for, and is sent to
 that kind alone: Choose File keeps it for its Machine's kind, a slice for a

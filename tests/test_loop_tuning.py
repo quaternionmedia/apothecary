@@ -207,6 +207,14 @@ class TestTheLines:
                 gcode.normalise_control(line)
         assert gcode.SAVE_SETTINGS not in gcode.QUERY_CODES
 
+    def test_a_streamed_file_may_not_carry_an_autotune(self):
+        """A file streamed line by line gives each line a line's time; an autotune runs for
+        minutes with the heater relay-driven, and is an experiment's, watched as one."""
+        total, problems = gcode.check_gcode("G28\nM303 E0 S200 C5\nM301 P1 I1 D1\n")
+        assert total == 3 and problems == [
+            "line 2: M303 runs the firmware's autotune: a heater loop's experiment, watched as one (firmware/loops.py)"
+        ]
+
     def test_an_autotune_line_is_bounded(self):
         assert gcode.normalise_autotune("m303 e0 s200 c5") == "M303 E0 S200 C5"
         with pytest.raises(gcode.OutOfBounds):

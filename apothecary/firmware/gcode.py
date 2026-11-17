@@ -1977,6 +1977,7 @@ def read_bed(
 # `$` line and a GRBL file no M500, and refusing each in both costs nothing.
 PRINT_REFUSED: Dict[str, str] = {
     "M500": "saves settings to EEPROM",
+    "M303": "runs the firmware's autotune: a heater loop's experiment, watched as one (firmware/loops.py)",
     "M502": "resets settings to the firmware's defaults",
     "M997": "starts a firmware update",
     "M999": "restarts the board after a stop",
