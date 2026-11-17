@@ -219,7 +219,12 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
     )
     for now in ("#print-pick", "#print-delete", "#print-preview-row", "#print-start"):
         expect(card.locator(now)).to_be_visible()
-    expect(card.locator("#print-start")).to_be_enabled()
+    # Control is not armed yet (step 5 arms it): the server would refuse the cut, so ▶ Cut
+    # is greyed with its words.
+    expect(card.locator("#print-start")).to_be_disabled()
+    expect(card.locator("#print-start")).to_have_attribute(
+        "title", re.compile(r"^Disabled: .*arm control first")
+    )
     # The Machine view pressed again lands on the file: its path drawn, all of it, and
     # the world framed on it.
     windows.machine_ready(page, "router", by_hand=True)
@@ -228,7 +233,7 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
         "Toolpath writes the coupon's cut: kept, chosen, said, and drawn on the table",
         "Toolpath writes the cut from what the coupon declares, in GRBL's dialect, keeps "
         "it and chooses it: the file's row, its ✕, the preview and ▶ Cut are there now, "
-        "and the card says each operation with its passes and what it bored to the tool. "
+        "▶ Cut greyed until control is armed, and the card says each operation with its passes and what it bored to the tool. "
         "The Machine view, pressed again, lands on the file: all of its path drawn on the "
         "table from the router's work zero, and the world framed on it.",
         blank=CHANGING,
@@ -283,10 +288,12 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
     card.locator("#print-start").click()
     progress = card.locator("#print-progress")
     expect(progress).to_contain_text(re.compile(r"op \d/4 pass \d/\d: "), timeout=10000)
-    expect(card.locator("#print-pause")).to_be_visible()
-    expect(card.locator("#print-cancel")).to_be_visible()
+    # Pause and Cancel at once, before any poll has said the cut runs: the page knows it.
+    expect(card.locator("#print-pause")).to_be_enabled(timeout=1000)
+    expect(card.locator("#print-cancel")).to_be_enabled(timeout=1000)
     expect(card.locator("#print-resume")).to_be_hidden()
     expect(card.locator("#print-start")).to_be_disabled()
+    expect(machine.locator("#c-state")).to_have_text("running", timeout=WITHIN_A_POLL)
     story.shows(
         "▶ Cut streams it: Pause and Cancel while it runs, the operation named",
         "▶ Cut asks first, then streams the file one line per ok. The progress line names "

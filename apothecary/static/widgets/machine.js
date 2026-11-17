@@ -1151,6 +1151,14 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         } else if (chosen && canNow.asking) {
             out["print.start"] = { ok: false, kind: "file", why: "the server is being asked whether this file can be sent" };
         }
+        if (running) {
+            // A job from here is this page's own news, fresher than the poll the server's
+            // answer was read from: a Pause or a Cancel is not greyed as if nothing ran
+            // between ▶ and the next poll.
+            for (const verb of ["print.pause", "print.cancel"]) {
+                if (out[verb] && !out[verb].ok && out[verb].kind === "idle") out[verb] = { ok: true, why: null, kind: null };
+            }
+        }
         if (running && job.stage !== words().running && job.stage !== "finishing") {
             out["print.pause"] = { ok: false, kind: "idle", why: `the print is ${job.stage}, not running` };
         }
