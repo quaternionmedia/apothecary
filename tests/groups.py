@@ -68,6 +68,7 @@ GROUPS = {
     "machines": {
         "sources": (
             "apothecary/firmware/*",
+            "apothecary/control_loops.py",
             "apothecary/jobs.py",
             "apothecary/machine_plans.py",
             "apothecary/projector.py",
@@ -93,6 +94,7 @@ GROUPS = {
             "test_board_by_part.py",
             "test_can_js.py",
             "test_can_now.py",
+            "test_control_loops.py",
             "test_deck_screens.py",
             "test_firmware_api.py",
             "test_firmware_deck.py",
