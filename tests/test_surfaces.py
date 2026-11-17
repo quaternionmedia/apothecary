@@ -201,15 +201,21 @@ def held_link(monkeypatch):
     links.stop_all()
 
 
+# Longer than a page's poll of a machine it follows (the world's and the projector page's,
+# every 2 s): a stream that polled on that period would be heard doing it.
+LONGER_THAN_A_POLL = 2.6
+
+
 def test_a_reader_with_nobody_polling_causes_no_serial_traffic(kept, held_link):
-    """Following every surface for a while, with a link held and nobody polling it: not a
-    byte is written to the port, no poll is made and no port opened -- and a poll someone
-    else makes meanwhile is relayed as it is kept."""
+    """Following every surface for longer than a page's poll period, with a link held and
+    nobody polling it: not a byte is written to the port, no poll is made and no port
+    opened -- and a poll someone else makes meanwhile is relayed as it is kept. Reading a
+    surface, and the projector's answer, asks the port nothing either."""
     links, written, asked = held_link
     assert links.open_ports == [PORT]
     someone = threading.Timer(0.3, lambda: _poll(state="printing"))
     someone.start()
-    text = client.get("/surfaces/events", params={"seconds": 1.2}).text
+    text = client.get("/surfaces/events", params={"seconds": LONGER_THAN_A_POLL}).text
     someone.join()
     assert written == [] and asked == []
     first = _events(text)[0]
@@ -218,7 +224,15 @@ def test_a_reader_with_nobody_polling_causes_no_serial_traffic(kept, held_link):
     assert [(c["key"], c["body"]["state"]) for c in relayed] == [(PORT, "printing")]
     assert relayed[0]["frame"] == "bed_mm" and relayed[0]["format"] == surfaces.EVENT
     # Quiet: only the hello, and nothing more.
-    assert _events(client.get("/surfaces/events", params={"seconds": 1.0}).text) == [first]
+    quiet = client.get("/surfaces/events", params={"seconds": LONGER_THAN_A_POLL}).text
+    assert _events(quiet) == [first]
+    assert written == [] and asked == []
+    for read in (
+        ("/surfaces/machine_status", {"port": PORT}),
+        ("/surfaces/projector", {"site": "garage", "path": "printer_1"}),
+        ("/sites/garage/machines/printer_1/projector", {}),
+    ):
+        assert client.get(read[0], params=read[1]).status_code == 200, read
     assert written == [] and asked == []
 
 
