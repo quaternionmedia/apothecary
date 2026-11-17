@@ -133,6 +133,10 @@ def test_the_plan_is_chosen_when_its_machine_opens_and_when_its_board_is_connect
         windows.machine_ready(page, "router")
         expect(windows.in_machine(page, "#print-pick")).to_have_value(cut["file_id"], timeout=10000)
         assert newer["id"] != cut["file_id"]
-        expect(windows.in_machine(page, "#print-start")).to_be_enabled()
+        # Its board connected, ▶ Cut is the board's: nothing stands before it but the
+        # latch, which this test does not arm, and it is greyed saying so.
+        send = windows.in_machine(page, "#print-start")
+        expect(send).to_be_visible()
+        expect(send).to_have_attribute("title", re.compile(r"^Disabled: .*arm control first"))
     finally:
         httpx.delete(f"{url}/sites/garage/nodes/{CONTROLLER}/device", timeout=15.0)
