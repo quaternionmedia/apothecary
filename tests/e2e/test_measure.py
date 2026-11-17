@@ -91,7 +91,9 @@ def _measuring(page: Page, url: str, site: str = UNIVERSE) -> None:
 
 
 def _reading(page: Page) -> str:
-    return page.locator(".panel[data-panel='layers'] .layers-reading").inner_text()
+    """What the Layers window reads; empty where it reads nothing, as it then draws no
+    reading at all (nothing selected, no point dropped)."""
+    return "\n".join(page.locator(".panel[data-panel='layers'] .layers-reading").all_inner_texts())
 
 
 @pytest.mark.e2e
@@ -149,11 +151,15 @@ def test_the_selection_reads_its_size_and_where_it_comes_from(page: Page, url: s
     )
     text = _reading(page)
     assert re.search(r"along its own axes " + SOURCES, text), text
+    # Framed, as `f` frames the selection, so its three dimension lines stand apart.
+    page.locator("#viewer-canvas").focus()
+    page.keyboard.press("f")
+    settled(page)
     story.shows(
         "The selection reads its size, with its source",
-        "Measure ticked and the calibration cube selected from Site's rows: a dimension line "
-        "along each of its own axes, each length labelled with where it comes from, and the "
-        "same words as text under the Layers window's rows.",
+        "Measure ticked, the calibration cube selected from Site's rows and framed with `f`: "
+        "a dimension line along each of its own axes, each length labelled with where it "
+        "comes from, and the same words as text under the Layers window's rows.",
         blank=CHANGING,
     )
 

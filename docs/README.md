@@ -57,6 +57,7 @@ at page 00.
 | [39 — The chain, a stage at a time](../walkthrough/39-the-chain-a-stage-at-a-time.md) | Every journey in the chain's order, the page taken to each stage by the tour, on simulated machines as a person starts them: a part designed, made, cut, its board, a deck's knobs, the site brought up and watched, a drawing read into shapes; what the page did to stand on each, and nothing armed, started or made; written by the browser suite |
 | [40 — Layers and depth](../walkthrough/40-layers-and-depth.md) | The universe's sphere turned until a piece of an outer shell stands in front of one of an inner shell, a click selecting the outer one, then the outer shell made not selectable in the Layers window beside the world and the same click selecting the piece behind; written by the browser suite |
 | [41 — The deck while a print streams](../walkthrough/41-the-deck-while-a-print-streams.md) | The Stream Deck +'s touch strip while a print streams on the simulated printer: Progress brought forward once, a swipe along the Deck window's strip back to the knobs, which say the print holds the port, on to Status, and a cancelled print kept on Progress until a touch; written by the browser suite |
+| [42 — Measuring in the world](../walkthrough/42-measuring-in-the-world.md) | Measure ticked in the Layers window: the calibration cube reading its size along its own axes, each number saying where it comes from, then two of its corners clicked for the distance between them and dx, dy and dz; written by the browser suite |
 
 ## The checklists
 
