@@ -9,7 +9,10 @@ from the polls kept, never by asking a port."""
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -357,3 +360,28 @@ def test_forgetting_a_calibration(pinned):
     assert pinned.delete(at).json() == {"forgotten": True}
     assert pinned.delete(at).json() == {"forgotten": False}
     assert pinned.get(at).json()["calibration"] is None
+
+
+def test_the_projector_s_listeners_are_kept_once_however_often_it_is_imported():
+    """routes/projector.py listens to the polls and the jobs from its import: imported
+    again (a reload), it is still one listener of each, not two."""
+    said = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import importlib\n"
+            "import apothecary.routes.projector as p\n"
+            "from apothecary import jobs\n"
+            "from apothecary.firmware import devices\n"
+            "importlib.reload(p)\n"
+            "importlib.reload(p)\n"
+            "print(sum(f.__name__ == '_relay_poll' for f in devices.STATUS_LISTENERS),"
+            " sum(f.__name__ == '_relay_job' for f in jobs.LISTENERS))\n",
+        ],
+        cwd=Path(__file__).resolve().parents[1],  # this checkout's apothecary, first on the path
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert said.returncode == 0, said.stderr[-2000:]
+    assert said.stdout.split() == ["1", "1"]

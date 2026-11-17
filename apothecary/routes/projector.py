@@ -505,8 +505,22 @@ surfaces.register(
         owner=__name__,
     )
 )
-firmware_devices.STATUS_LISTENERS.append(_relay_poll)
-jobs.LISTENERS.append(_relay_job)
+
+
+def _listen(listeners: list, listener) -> None:
+    """``listener`` among ``listeners`` once, however often this module is imported: one
+    of the same name an earlier import of it left there is taken out first."""
+    same = (listener.__module__, listener.__qualname__)
+    listeners[:] = [
+        f
+        for f in listeners
+        if (getattr(f, "__module__", None), getattr(f, "__qualname__", None)) != same
+    ]
+    listeners.append(listener)
+
+
+_listen(firmware_devices.STATUS_LISTENERS, _relay_poll)
+_listen(jobs.LISTENERS, _relay_job)
 
 
 __all__ = [
