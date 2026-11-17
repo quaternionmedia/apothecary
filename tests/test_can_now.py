@@ -34,6 +34,7 @@ LINES = {
         "heat": "M104 S200",
         "spindle": "M3 S1000",
         "unlock": "$X",
+        "resume": "RESUME",
         "control": "M84",
         "query": "M105",
     },
@@ -44,11 +45,12 @@ LINES = {
         "heat": "M104 S200",
         "spindle": "M3 S1000",
         "unlock": "$X",
+        "resume": "RESUME",
         "control": "G0 X0 Y0",
         "query": "$G",
     },
 }
-COMMAND_VERBS = ["home", "home.X", "off", "heat", "spindle", "unlock", "control"]
+COMMAND_VERBS = ["home", "home.X", "off", "heat", "spindle", "unlock", "resume", "control"]
 PORT_VERBS = ["reconnect", "reset", "release"]
 LEVEL_VERBS = ["level.probe", "level.read"]
 PRINT_VERBS = ["print.start", "print.pause", "print.resume", "print.cancel"]

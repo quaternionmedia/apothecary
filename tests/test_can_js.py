@@ -2,11 +2,14 @@
 puts its own tip back, run under node over a few stand-in elements."""
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+
+from apothecary.firmware import dialects
 
 CAN_JS = Path(__file__).resolve().parents[1] / "apothecary" / "static" / "can.js"
 
@@ -108,3 +111,43 @@ def test_a_refused_button_is_greyed_with_the_reason_and_its_own_tip_comes_back()
     # A latch that lapsed refuses what only the latch allowed, and nothing else.
     assert out["latch"]["jog"]["kind"] == "armed" and out["latch"]["off"] == {"ok": True}
     assert out["latch"]["home"] == {"ok": False, "kind": "held", "why": "w"}
+
+
+MACHINE_JS = CAN_JS.parent / "widgets" / "machine.js"
+
+
+def _alternatives(pattern) -> list:
+    """The lines a dialect's ``^(a|b|c)$`` matches, each one."""
+    found = re.fullmatch(r"\^\((.*)\)\$", pattern.pattern)
+    assert found, pattern.pattern
+    return found[1].split("|")
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_a_pad_line_is_greyed_for_the_latch_exactly_when_the_server_wants_the_latch():
+    """can.js verbOfLine names each line a pad sends by the server's command; a line the
+    server takes with the latch down (a dialect's stop, or its ``always``) is a stop
+    (never greyed) or an off, and every other line needs the latch, as the route says.
+    The lines: every pad button's in machine.js, and each the server lists."""
+    pad = set(re.findall(r'data-cmd="([^"]+)"', MACHINE_JS.read_text(encoding="utf-8")))
+    listed = {line for d in dialects.BY_WORD.values() for line in _alternatives(d.always)}
+    lines = sorted(pad | listed | set(dialects.STOPS))
+    script = (
+        f"import {{ verbOfLine }} from {json.dumps(CAN_JS.as_uri())};\n"
+        f"console.log(JSON.stringify(Object.fromEntries({json.dumps(lines)}"
+        ".map((l) => [l, verbOfLine(l)]))));"
+    )
+    run = subprocess.run(
+        ["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60
+    )
+    assert run.returncode == 0, run.stderr
+    verbs = json.loads(run.stdout)
+    for line, verb in verbs.items():
+        free = line in dialects.STOPS or any(
+            d.always.match(line) for d in dialects.BY_WORD.values()
+        )
+        assert (verb in ("estop", "off")) == free, (
+            f"{line}: the page says {verb}, the server {'takes it unarmed' if free else 'wants the latch'}"
+        )
+    assert verbs["RESUME"] == "resume"
+

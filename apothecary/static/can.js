@@ -97,6 +97,28 @@ export function askFlash(call, port) {
     return asking;
 }
 
+// The verb of a line a pad sends (its data-cmd), the command the server's answer names it
+// by (firmware/can.py can_now). What the server takes with the latch down -- each
+// dialect's stop, and its `always` (firmware/gcode.py, grbl.py), what only stops,
+// interrupts or turns something off -- is a stop, never greyed, or the server's "off";
+// everything else needs the latch, a held controller's RESUME included, since it moves
+// the machine again. tests/test_can_js.py holds these lists to the server's.
+export const STOP_LINES = new Set(["M112", "RESET", "M410", "M108", "JOG-CANCEL", "HOLD"]);
+export const OFF_LINES = new Set(["M104 S0", "M140 S0", "M107", "M5", "M25"]);
+export function verbOfLine(cmd) {
+    if (STOP_LINES.has(cmd)) return "estop";
+    if (OFF_LINES.has(cmd)) return "off";
+    if (cmd === "RESUME") return "resume";
+    if (cmd === "HOME") return "home";
+    const axis = /^HOME-([XYZ])$/.exec(cmd);
+    if (axis) return `home.${axis[1]}`;
+    if (/^G28/.test(cmd)) return "home";
+    if (cmd === "$X") return "unlock";
+    if (/^(M104|M140|M106) /.test(cmd)) return "heat";
+    if (/^M3 /.test(cmd)) return "spindle";
+    return "control";
+}
+
 export function applyCan(root, can) {
     for (const btn of root.querySelectorAll("[data-can]")) {
         const verb = btn.dataset.can;
@@ -119,7 +141,7 @@ export function applyCan(root, can) {
 // What a latch that lapses with no event does to an answer read a moment ago: each
 // command that was ok only because the latch was armed is refused once it is not. The
 // server's own `armed` verdicts, and every other reason, are left as they were said.
-export const NEEDS_THE_LATCH = ["jog", "home", "home.X", "home.Y", "home.Z", "heat", "spindle", "unlock", "control", "print.start", "print.resume", "level.probe"];
+export const NEEDS_THE_LATCH = ["jog", "home", "home.X", "home.Y", "home.Z", "heat", "spindle", "unlock", "resume", "control", "print.start", "print.resume", "level.probe"];
 
 export function withLatch(can, armed) {
     if (!can || armed) return can;

@@ -177,6 +177,9 @@ LINES = {
     "heat": {"printer": "M104 S200"},
     "spindle": {"router": "M3 S1000"},
     "unlock": {"router": "$X"},
+    # A held controller run again (GRBL's cycle start): it moves the machine, so it takes
+    # the latch, as Pause's stop does not.
+    "resume": {"router": "RESUME"},
     "control": {"printer": "M84", "router": "G0 X0 Y0"},
 }
 AXES = "XYZ"
@@ -388,6 +391,7 @@ def can_now(port: str, state=None, links=None, runner=None) -> Dict[str, Dict[st
         "heat": _verdict(line_refusal(f, "heat")),
         "spindle": _verdict(line_refusal(f, "spindle")),
         "unlock": _verdict(line_refusal(f, "unlock")),
+        "resume": _verdict(line_refusal(f, "resume")),
         "control": _verdict(line_refusal(f, "control")),
         "print.start": _verdict(start_refusal(f)),
         "print.pause": _verdict(_running(f)),

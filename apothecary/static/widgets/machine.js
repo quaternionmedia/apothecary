@@ -94,7 +94,7 @@ import { KINDS, kindOf as kindOfBoard } from "/static/machine_words.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
 import { again } from "/static/twice.js";
-import { applyCan, refreshDisabled, setTip, withLatch } from "/static/can.js";
+import { applyCan, refreshDisabled, setTip, verbOfLine, withLatch } from "/static/can.js";
 import { running as knobsRunning, choose as chooseKnobs } from "/static/deck_knobs.js";
 
 const MAX_HISTORY = 300;
@@ -1104,25 +1104,13 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // --- what the server would refuse now: greyed, with the reason (can.js) ---------------
     // The server's answer (`can` on a status and on an info, firmware/can.py) names each
     // command's verdict; each button names its command in data-can. The pad's buttons
-    // carry the line they send, so they are tagged here, once, from it. What only this page
+    // carry the line they send, so they are tagged here, once, from it (can.js verbOfLine,
+    // which holds which lines the server takes with the latch down). What only this page
     // knows -- a file that is for the other kind, a send from here under way -- is said in
     // the same shape, over the server's answer; the latch is counted down here, since it
     // lapses with no event.
-    const OFF_LINES = new Set(["M104 S0", "M140 S0", "M107", "M5", "M25"]);
-    function verbOfCommand(cmd) {
-        if (INTERRUPTS.has(cmd) || cmd === "RESET") return "estop";
-        if (cmd === "HOME") return "home";
-        const axis = /^HOME-([XYZ])$/.exec(cmd);
-        if (axis) return `home.${axis[1]}`;
-        if (/^G28/.test(cmd)) return "home";
-        if (cmd === "$X") return "unlock";
-        if (OFF_LINES.has(cmd)) return "off";
-        if (/^(M104|M140|M106) /.test(cmd)) return "heat";
-        if (/^M3 /.test(cmd)) return "spindle";
-        return "control";
-    }
     for (const btn of pad.querySelectorAll("button[data-jog], button[data-cmd]")) {
-        btn.dataset.can = btn.dataset.jog ? "jog" : verbOfCommand(btn.dataset.cmd);
+        btn.dataset.can = btn.dataset.jog ? "jog" : verbOfLine(btn.dataset.cmd);
     }
     const canNow = { server: null, start: null, asking: null };
     // The chosen file asked of the server (GET /firmware/printers/can-start): asked when
