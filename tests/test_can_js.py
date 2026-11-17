@@ -54,6 +54,13 @@ out.verdict = flashVerdict("/dev/x");
 forgetFlash("/dev/x");
 out.forgotten = flashVerdict("/dev/x");
 out.asked = asked;
+const slow = [];
+let answer;
+const later = (path) => { slow.push(path); return new Promise((done) => { answer = done; }); };
+const one = askFlash(later, "/dev/y"), two = askFlash(later, "/dev/y");
+answer({ can: { flash: { ok: false, kind: "kind", why: "a printer's controller" } } });
+out.together = [await one, await two];
+out.together_asked = slow;
 console.log(JSON.stringify(out));
 """
 
@@ -95,6 +102,9 @@ def test_a_refused_button_is_greyed_with_the_reason_and_its_own_tip_comes_back()
     assert out["first"] is True and out["again"] is False
     assert out["verdict"]["kind"] == "kind" and out["forgotten"] is None
     assert out["asked"] == ["/firmware/printers/info?port=%2Fdev%2Fx"]
+    # Two asking of one port while it is answered are both given the answer, asked once.
+    assert out["together"] == [True, True]
+    assert out["together_asked"] == ["/firmware/printers/info?port=%2Fdev%2Fy"]
     # A latch that lapsed refuses what only the latch allowed, and nothing else.
     assert out["latch"]["jog"]["kind"] == "armed" and out["latch"]["off"] == {"ok": True}
     assert out["latch"]["home"] == {"ok": False, "kind": "held", "why": "w"}

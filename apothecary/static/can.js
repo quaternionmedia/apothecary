@@ -67,22 +67,34 @@ export function setReason(btn, why, tip) {
 }
 
 // `can.flash` of a port, asked once when the port is chosen (GET /firmware/printers/info)
-// and kept until `forgetFlash`: no timer. `call(path)` is the page's fetch.
+// and kept until `forgetFlash`: no timer. `call(path)` is the page's fetch. Whoever asks
+// while the answer is on its way is given the same answer when it comes (the Bench's
+// upload and its raw flash ask of one port): true once there is a verdict to read, false
+// when there was nothing new to ask or the asking failed.
 const flashCan = new Map();
+const flashAsking = new Map();
 export const flashVerdict = (port) => flashCan.get(port) || null;
 export const forgetFlash = (port) => flashCan.delete(port);
-export async function askFlash(call, port) {
-    if (!port || flashCan.has(port)) return false;
+export function askFlash(call, port) {
+    if (!port) return Promise.resolve(false);
+    if (flashAsking.has(port)) return flashAsking.get(port);
+    if (flashCan.has(port)) return Promise.resolve(false);
     flashCan.set(port, null);
-    try {
-        const info = await call(`/firmware/printers/info?port=${encodeURIComponent(port)}`);
-        const v = (info.can && info.can.flash) || null;
-        flashCan.set(port, v);
-        return !!v;
-    } catch (e) {
-        flashCan.delete(port);
-        return false;
-    }
+    const asking = (async () => {
+        try {
+            const info = await call(`/firmware/printers/info?port=${encodeURIComponent(port)}`);
+            const v = (info.can && info.can.flash) || null;
+            flashCan.set(port, v);
+            return !!v;
+        } catch (e) {
+            flashCan.delete(port);
+            return false;
+        } finally {
+            flashAsking.delete(port);
+        }
+    })();
+    flashAsking.set(port, asking);
+    return asking;
 }
 
 export function applyCan(root, can) {
