@@ -1066,14 +1066,28 @@ def with_offset(link: GcodeLink, status: dict) -> dict:
     return status
 
 
-def poll_router(link: GcodeLink, wait: Optional[float] = None) -> PrinterStatus:
-    """The status report and the parser state in one exchange each."""
+def poll_router(
+    link: GcodeLink, wait: Optional[float] = None, streaming: bool = False
+) -> PrinterStatus:
+    """The status report and the parser state in one exchange each.
+
+    While a cut streams (``streaming``) the poll is the report alone: it is realtime,
+    takes no place in the stream's queue, and carries the state, positions, pins, feed,
+    overrides and the spindle's speed. ``$G`` is a line the controller answers in its
+    place, and what it adds -- the programmed spindle speed -- is not worth an
+    exchange taken from the stream; the parser state is the last one read.
+    """
     raw: List[str] = []
     status, lines = report(link, wait=wait)
     raw += lines
-    gc_lines = link.command("$G", wait=wait, timeout=5.0)
-    raw += gc_lines
-    parser = parse_parser_state(gc_lines)
+    if streaming:
+        parser = getattr(link, "parser_state", None) or parse_parser_state([])
+        parser = {**parser, "spindle_on": False}
+    else:
+        gc_lines = link.command("$G", wait=wait, timeout=5.0)
+        raw += gc_lines
+        parser = parse_parser_state(gc_lines)
+        link.parser_state = parser
     mstate = status["machine_state"]
     proof_of(link).pins(status["pins"])
     proof_of(link).heard(link)

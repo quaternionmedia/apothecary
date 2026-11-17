@@ -1612,13 +1612,19 @@ def identify_printer(link: GcodeLink, reset: bool = False) -> PrinterInfo:
 
 
 def poll_printer(
-    link: GcodeLink, endstops: bool = True, wait: Optional[float] = None
+    link: GcodeLink,
+    endstops: bool = True,
+    wait: Optional[float] = None,
+    streaming: bool = False,
 ) -> PrinterStatus:
     """Temperatures, position, SD progress and (optionally) endstops in one exchange each.
 
     ``wait`` bounds each exchange's queueing behind a print's stream (see
     ``GcodeLink.command``); a poll between two streamed lines is how a host
-    keeps its temperatures fresh mid-print.
+    keeps its temperatures fresh mid-print. While a job streams (``streaming``) the
+    poll asks for ``M105`` and ``M114`` only: the endstops and the card's progress
+    are not asked for, because the host holds the port and the card cannot be
+    printing, and each exchange taken from the stream slows the print.
     """
     raw: List[str] = []
     temps = link.command("M105", wait=wait)
@@ -1627,11 +1633,13 @@ def poll_printer(
     parsed = parse_m105(temp_line)
     pos_lines = link.command("M114", wait=wait)
     raw += pos_lines
-    sd_lines = link.command("M27", wait=wait)
-    raw += sd_lines
-    sd = parse_m27(sd_lines)
+    sd = {"sd_printing": False, "sd_progress": None}
+    if not streaming:
+        sd_lines = link.command("M27", wait=wait)
+        raw += sd_lines
+        sd = parse_m27(sd_lines)
     stops: dict = {}
-    if endstops:
+    if endstops and not streaming:
         stop_lines = link.command("M119", wait=wait)
         raw += stop_lines
         stops = parse_m119(stop_lines)

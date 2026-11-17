@@ -1174,3 +1174,56 @@ def test_a_stopping_server_holds_and_resets_a_router_under_a_table_map(
     log = [e["text"] for e in router_links.log_for(PORT).since(0)["entries"] if e["kind"] == "tx"]
     assert "HOLD" in log and log.count("RESET") == 1
     assert [line for line in log if line.startswith("G53 G0 X")][1:] == []  # the first point only
+
+
+def _tx_since(links, since):
+    return [e["text"] for e in links.log_for(PORT).since(0)["entries"] if e["kind"] == "tx"][since:]
+
+
+def test_a_poll_while_a_cut_streams_is_the_report_alone_and_holds_the_programmed_speed(
+    fake_arduino_cli, router_links
+):
+    devices.identify_printer(PORT)
+    router_links.control.arm(PORT)
+    assert devices.printer_control(PORT, "M3 S12000")
+    before = len(_tx_since(router_links, 0))
+    idle = devices.printer_status(PORT)
+    assert idle.spindle.target == 12000 and idle.held == {}
+    link = router_links.get(PORT)
+    seen = len(_tx_since(router_links, 0))
+    assert "$G" in _tx_since(router_links, before)  # an idle poll asks for the parser state
+    # Polled mid-cut, the poll is `?` alone; the programmed speed is the last one read.
+    streaming = grbl.poll_router(link, streaming=True)
+    assert _tx_since(router_links, seen) == ["?"]
+    assert streaming.spindle.target == 12000 and streaming.spindle.rpm == 12000
+    assert streaming.position == idle.position and streaming.pins == idle.pins
+    devices._hold_unread(streaming, idle)
+    assert streaming.held == {"spindle.target": idle.polled_at}
+    # The first poll after is a full one.
+    after = grbl.poll_router(link)
+    assert _tx_since(router_links, seen)[-2:] == ["?", "$G"] and after.spindle.target == 12000
+
+
+def test_a_cut_polled_between_its_lines_sends_no_parser_state_request(
+    fake_arduino_cli, router_links, monkeypatch
+):
+    monkeypatch.setenv("APOTHECARY_SIMULATED_SPEED", "0.2")
+    devices.identify_printer(PORT)
+    full = devices.printer_status(PORT)
+    kept = devices.save_print_file(
+        "dw.nc", ("M3 S9000\n" + "G4 P1\n" * 40 + "M5\n").encode(), "router"
+    )
+    router_links.control.arm(PORT)
+    seen = len(_tx_since(router_links, 0))
+    job = devices.start_print(PORT, kept.id)
+    during = []
+    while job.thread.is_alive():
+        during.append(devices.printer_status(PORT))
+        time.sleep(0.02)
+    job.thread.join(10)
+    cut = [s for s in during if s.job is not None and s.raw]
+    sent = _tx_since(router_links, seen)
+    assert cut and "?" in sent and "$G" not in sent
+    assert all(set(s.held) <= {"spindle.target"} for s in cut)
+    assert devices.printer_status(PORT).held == {}
+    assert full.job is None

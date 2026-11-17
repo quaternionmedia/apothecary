@@ -412,6 +412,18 @@ whose `state` is one of the garage site's `PRINTER_STATUSES` (`idle`,
 are written to Marlin's documented replies; RepRapFirmware, Klipper and
 Prusa speak the same line protocol.
 
+A poll made while a job streams to the machine (a print or a cut holds the
+port) asks for less, because each exchange it makes is taken from the stream. A
+printer's is `M105` and `M114`: the card cannot be printing under a host's job, so
+`M27` and `M31` say nothing, and the endstops (`M119`) are not read mid-print. A
+router's is the status report (`?`) alone, which is realtime and carries the
+state, positions, pins, feed, overrides and spindle speed; the parser state (`$G`)
+adds only the programmed spindle speed. What the poll did not ask for is the last
+full poll's value, and `PrinterStatus.held` names each such field with when it was
+read: the Machine window says so beside the endstops. The first poll after the job
+ends is a full one and holds nothing. `can.card_printing` reads `sd_printing` from
+the last poll, so a card that was seen printing still refuses a start.
+
 **Reset is deliberate, never incidental.** Creality boards wire DTR to reset
 and the kernel asserts DTR on every open, so Apothecary opens a printer's
 port once, exclusively, and holds it (`firmware.gcode.PrinterLinks`); leaves

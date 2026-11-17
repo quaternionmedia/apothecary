@@ -20,7 +20,7 @@ from firmware_helpers import BOOT, PRINTING, REPLIES, ScriptedTransport
 from apothecary import jobs, sites
 from apothecary.api import app
 from apothecary.cli import cli
-from apothecary.firmware import devices, gcode
+from apothecary.firmware import can, devices, gcode
 from apothecary.firmware.models import DeviceInfo, PrinterInfo, PrintRequest
 from apothecary.firmware.toolchains import PortHeld, ToolchainError
 from apothecary.state_folder import private_folder, state_dir
@@ -2604,3 +2604,112 @@ def test_a_board_that_boots_as_its_port_is_opened_is_still_identified():
     transport.pending += "".join(line + "\n" for line in BOOT).encode()
     with pytest.raises(ToolchainError, match="restarted before it answered M105"):
         link.command("M105")
+
+
+# --- a poll while a job streams asks for temperatures and position only --------------
+
+
+def _sent_by_poll(link, **kw):
+    board = ScriptedTransport.instances[-1]
+    before = len(board.sent)
+    status = gcode.poll_printer(link, **kw)
+    return status, board.sent[before:]
+
+
+def test_an_idle_poll_asks_for_all_and_a_streaming_poll_for_temperatures_and_position(
+    scripted_links,
+):
+    link = scripted_links.open("/dev/ttyPOLL", 115200)
+    status, sent = _sent_by_poll(link)
+    assert sent == ["M105", "M114", "M27", "M119"]
+    assert status.endstops["y_min"] == "TRIGGERED" and status.filament_present is True
+    status, sent = _sent_by_poll(link, streaming=True)
+    assert sent == ["M105", "M114"]
+    assert status.hotends and status.position is not None
+    assert status.endstops == {} and status.filament_present is None
+    assert (status.sd_printing, status.sd_progress, status.print_time_s) == (False, None, None)
+    # A card print adds the time it has run, and only a poll that asks for the card.
+    scripted_links.close("/dev/ttyPOLL")
+    scripted_links.factory = lambda p, b: ScriptedTransport(p, b, replies=PRINTING)
+    link = scripted_links.open("/dev/ttyPOLL", 115200)
+    assert _sent_by_poll(link)[1] == ["M105", "M114", "M27", "M119", "M31"]
+    assert _sent_by_poll(link, streaming=True)[1] == ["M105", "M114"]
+
+
+class _Paced(ScriptedTransport):
+    """A board that takes a moment per line, so a poll can come between two."""
+
+    def write(self, data):
+        time.sleep(0.002)
+        super().write(data)
+
+
+def _stream_with_polls(port, scripted_links, lines=300):
+    scripted_links.factory = _Paced
+    devices.get_state().remember_device(
+        DeviceInfo(
+            port=port,
+            printer=PrinterInfo(firmware_name="Marlin", identified_at=datetime.now(timezone.utc)),
+        )
+    )
+    first = devices.printer_status(port, links=scripted_links)  # a full poll: the card is idle
+    kept = devices.save_print_file("p.gcode", ("G1 X1\n" * lines).encode(), machine="printer")
+    scripted_links.control.arm(port)
+    board = ScriptedTransport.instances[-1]
+    mark = len(board.sent)
+    job = devices.start_print(port, kept.id, links=scripted_links)
+    during = []
+    while job.thread.is_alive():
+        during.append(devices.printer_status(port, links=scripted_links))
+        time.sleep(0.01)
+    job.thread.join(20)
+    return first, during, board.sent[mark:], job
+
+
+def test_a_poll_made_while_a_print_streams_sends_neither_endstops_nor_card_progress(
+    scripted_links,
+):
+    port = "/dev/ttyPOLL"
+    first, during, sent, job = _stream_with_polls(port, scripted_links)
+    assert job.stage == "done"
+    assert sent.count("M105") >= 2, "no poll came between two streamed lines"
+    assert {"M105", "M114"} <= set(sent) and not {"M27", "M119", "M31"} & set(sent)
+    # The fields it did not ask for are the full poll's, each with when it was read.
+    streamed = [s for s in during if s.job is not None and s.raw]
+    assert streamed and all(s.state == "printing" for s in streamed)
+    for s in streamed:
+        assert s.endstops == first.endstops and s.filament_present is first.filament_present
+        assert set(s.held) == {
+            "endstops",
+            "filament_present",
+            "sd_printing",
+            "sd_progress",
+            "print_time_s",
+        }
+        assert all(at == first.polled_at for at in s.held.values())
+        assert s.polled_at > first.polled_at
+    # The first poll once the job has ended is a full one: all four lines, nothing held.
+    board = ScriptedTransport.instances[-1]
+    before = len(board.sent)
+    after = devices.printer_status(port, links=scripted_links)
+    assert board.sent[before:] == ["M105", "M114", "M27", "M119"]
+    assert after.job is None and after.held == {} and after.state == "idle"
+
+
+def test_the_card_refusal_still_holds_while_a_host_print_streams(scripted_links):
+    port = "/dev/ttyPOLL"
+    first, during, sent, job = _stream_with_polls(port, scripted_links)
+    streamed = [s for s in during if s.job is not None and s.raw]
+    assert streamed
+    # While a host job streams, what ``card_printing`` reads is the last full poll's
+    # ``sd_printing``: the card was idle for the job to start, so it says nothing.
+    assert all(can.card_printing(port, s) is None for s in streamed)
+    # The refusals that hold then are the port's: one job at a time.
+    scripted_links.close(port)
+    # A card that prints, seen by a full poll, refuses a start and names the card.
+    scripted_links.factory = lambda p, b: ScriptedTransport(p, b, replies=PRINTING)
+    assert devices.printer_status(port, links=scripted_links).sd_printing
+    kept = devices.save_print_file("q.gcode", b"G1 X1\n", machine="printer")
+    scripted_links.control.arm(port)
+    with pytest.raises(ToolchainError, match="the card is printing"):
+        devices.start_print(port, kept.id, links=scripted_links)

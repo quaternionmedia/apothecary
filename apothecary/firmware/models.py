@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, List, Literal, Optional
+from typing import Annotated, Dict, List, Literal, Optional
 
 from pydantic import (
     AfterValidator,
@@ -541,6 +541,10 @@ class PrinterStatus(BaseModel):
     sd_progress: Optional[float] = None  # 0..1, from M27
     print_time_s: Optional[int] = None  # from M31
     raw: List[str] = Field(default_factory=list)  # every line the poll received, for the log
+    # A poll made while a job streams to the machine asks for temperatures and position
+    # only (``gcode.poll_printer``): the fields it did not ask for are the last full
+    # poll's, each named here with when it was read, e.g. {"endstops": <time>}.
+    held: Dict[str, datetime] = Field(default_factory=dict)
     synced: List[dict] = Field(default_factory=list)  # scene nodes this poll updated (api.py)
     job: Optional[dict] = None  # a long exchange holding the port (a bed probe): kind, stage, since
     poll: Optional[str] = None  # its id in the evidence log (apothecary/evidence), when kept there

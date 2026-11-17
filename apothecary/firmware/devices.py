@@ -33,6 +33,7 @@ one nothing has probed or identified.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -852,9 +853,41 @@ def query_codes(
 
 
 def _poll(
-    link: gcode.GcodeLink, dialect: Optional[str], wait: Optional[float]
+    link: gcode.GcodeLink, dialect: Optional[str], wait: Optional[float], streaming: bool = False
 ) -> gcode.PrinterStatus:
-    return dialects.by_word(dialect).poll(link, wait=wait)
+    return dialects.by_word(dialect).poll(link, wait=wait, streaming=streaming)
+
+
+# What a poll made while a job streams does not ask for (``gcode.poll_printer``,
+# ``grbl.poll_router``): a printer's endstops, runout sensor and card progress, a
+# router's programmed spindle speed.
+UNREAD_WHILE_STREAMING = (
+    "endstops",
+    "filament_present",
+    "sd_printing",
+    "sd_progress",
+    "print_time_s",
+    "spindle.target",
+)
+
+
+def _hold_unread(status: gcode.PrinterStatus, last: Optional[gcode.PrinterStatus]) -> None:
+    """Carry the last poll's value of each field this poll did not ask for, and say when
+    it was read (``PrinterStatus.held``): the first poll after the job is a full one,
+    which asks for them all again and holds none."""
+    if last is None:
+        return
+    grbl_poll = status.dialect == grbl.DIALECT
+    for name in UNREAD_WHILE_STREAMING:
+        if name == "spindle.target":
+            if not grbl_poll or last.spindle is None or status.spindle is None:
+                continue
+            status.spindle.target = last.spindle.target
+        elif grbl_poll or last.dialect != status.dialect:
+            continue
+        else:
+            setattr(status, name, copy.deepcopy(getattr(last, name)))
+        status.held[name] = last.held.get(name, last.polled_at)
 
 
 def known_device(port: str, state: Optional[FirmwareState] = None) -> Optional[DeviceInfo]:
@@ -1006,7 +1039,11 @@ def printer_status(
     try:
         # Between two streamed lines is where a host polls; a line the
         # firmware is slow to answer (heating) is not worth queueing behind.
-        status = _poll(link, dialect_of(port, state), wait=0.5 if job else None)
+        status = _poll(
+            link, dialect_of(port, state), wait=0.5 if job else None, streaming=bool(job)
+        )
+        if job:
+            _hold_unread(status, _LAST_STATUS.get(port))
     except gcode.LinkBusy:
         return _last_status_with(port, _live_job(port, link.job) or job)
     except ToolchainError as exc:
