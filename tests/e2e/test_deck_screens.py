@@ -16,7 +16,9 @@ shape of a swipe the device reports -- is section J of the bench checklist
 
 from __future__ import annotations
 
+import re
 import time
+from urllib.parse import quote
 
 import httpx
 import pytest
@@ -30,9 +32,18 @@ from windows import DECK
 DECK_ID = "SIMDECK"
 MAINBOARD = "printer_1.frame_system.mainboard"
 FILE_NAME = "bench_coupon.gcode"
-TIME_LEFT_SHOWN = ((DECK, TIME_LEFT),)
-# A print long enough to be paused in: two thousand short moves.
-GCODE = "G90\n" + "".join(f"G1 X{10 + n % 40} Y{10 + n % 30} F6000\n" for n in range(2000))
+# The time an armed latch has left, in the Deck window and on printer_1's row in Site.
+TIME_LEFT_SHOWN = ((DECK, TIME_LEFT), ("#contents-list", TIME_LEFT), (".world-badge", TIME_LEFT))
+# The strip itself, where it carries Progress's clock: the server draws the time into its
+# picture, where no word can be blanked, so it is left out of the picture whole and its
+# words are written under it with the time blanked (_strip_words).
+STRIP_WITH_A_CLOCK = (*TIME_LEFT_SHOWN, f"{DECK} .deck-strip-tap")
+# A print long enough to be paused in: a two-second dwell first, which a pause catches
+# every time, so the print is held at its second line and the tool where it began, and
+# two thousand short moves after it.
+GCODE = "G90\nG4 P2000\n" + "".join(
+    f"G1 X{10 + n % 40} Y{10 + n % 30} F6000\n" for n in range(2000)
+)
 
 
 @pytest.fixture(scope="module")
@@ -42,7 +53,7 @@ def url(start_server):
             "APOTHECARY_SIMULATED_DECK": DECK_ID,
             "APOTHECARY_DECK_CONTROL": "1",
             "APOTHECARY_SIMULATED_PRINTER": "idle",
-            "APOTHECARY_SIMULATED_SPEED": "0.05",
+            "APOTHECARY_SIMULATED_SPEED": "1",  # the dwell lasts the two seconds it says
         }
     )
     with httpx.Client(base_url=url, timeout=15.0) as http:
@@ -65,6 +76,12 @@ def _strip(url: str) -> dict:
     return _drawn(url)["strip_drawn"]
 
 
+def _touches(url: str) -> int:
+    """How many touches of the strip the deck has reported."""
+    events = httpx.get(f"{url}/firmware/decks/{DECK_ID}/events", timeout=15.0).json()["events"]
+    return sum(1 for e in events if e["kind"] == "touch")
+
+
 def _until(check, what: str, seconds: float = 20.0) -> None:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -72,6 +89,30 @@ def _until(check, what: str, seconds: float = 20.0) -> None:
             return
         time.sleep(0.3)
     raise AssertionError(what)
+
+
+def _strip_words(url: str) -> str:
+    """The strip's two lines as the server drew them, its clock blanked as a picture's is."""
+    strip = _strip(url)
+    return f"{strip['text']}\n{re.sub(TIME_LEFT, '‒:‒‒', strip['small'] or '')}"
+
+
+def _window_shows_the_strip(url: str, deck) -> None:
+    """The Deck window shows the strip the server drew last, loaded, and no touch is
+    lit on it: what a picture of it is taken of. The window fetches the strip again when
+    what is drawn on it changes (widgets/deck.js), within its beat."""
+
+    def shown() -> bool:
+        drawn = _strip(url)
+        stamp = "|".join([drawn["text"], drawn["small"] or "", drawn["colour"]])
+        img = deck.locator(".deck-strip-tap img")
+        return (img.get_attribute("src") or "").endswith(
+            "v=" + quote(stamp, safe="-_.!~*'()")
+        ) and img.evaluate("(i) => i.complete && i.naturalWidth > 0")
+
+    _until(shown, "the Deck window showing the strip as drawn")
+    expect(deck.locator(".deck-touch")).to_be_hidden(timeout=5000)
+    expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)
 
 
 def _swipe(page: Page, deck, direction: int) -> None:
@@ -97,7 +138,7 @@ def test_the_deck_shows_a_print_and_a_swipe_walks_its_screens(page: Page, url: s
     its own, with the file's name, a bar and the stage; swiped back to the knobs, it
     says the jogs are refused in the server's words and is not pulled forward again; a
     swipe to Status shows the printer's state; a tap moves nothing; the print is
-    cancelled, and Progress says so until a touch. Walkthrough 40 is what it writes."""
+    cancelled, and Progress says so until a touch. Walkthrough 41 is what it writes."""
     story = walkthrough(
         ordinal="41",
         slug="the-deck-while-a-print-streams",
@@ -115,6 +156,10 @@ def test_the_deck_shows_a_print_and_a_swipe_walks_its_screens(page: Page, url: s
             "HID device or serial port is opened and nothing reaches the network."
         ),
         does_not_show=[
+            "**Progress's clock.** The strip says how long a print has run, which differs on "
+            "every run; the server draws it into the strip's picture, so where Progress shows "
+            "the strip is greyed in the picture and its words are written under it, the time "
+            "as ‒:‒‒.",
             "**A real deck.** What only it shows -- how the device reports a finger drawn "
             "along its strip, and the strip's brightness under a hand -- is section J of "
             "the bench checklist (docs/bench-checklist.md).",
@@ -151,19 +196,24 @@ def test_the_deck_shows_a_print_and_a_swipe_walks_its_screens(page: Page, url: s
     _until(lambda: now().get("stage") == "paused", "the print paused")
     _until(lambda: _screen(url) == "progress", "Progress brought forward")
     _until(lambda: _strip(url)["text"].startswith(FILE_NAME[:20]), "the file named on the strip")
+    # The layout draws the strip at its tick (deck_control.TICK_S): the pause is said at
+    # the next one.
+    _until(lambda: "paused" in (_strip(url)["small"] or ""), "the pause said on the strip")
     strip = _strip(url)
     assert strip["bar"] is not None and "paused" in strip["small"], strip
     assert "remaining" not in strip["small"]
     expect(deck.locator(".deck-screen")).to_contain_text(
         "strip screen: progress (2/3)", timeout=10000
     )
+    _window_shows_the_strip(url, deck)
     story.shows(
         "A print begun brings Progress forward on the strip",
         "The simulated printer is streaming a kept file. The strip names the file, how far "
         "it is as a number and a bar, the stage and how long it has run; no time remaining "
         "is shown, since the job's record carries none. The print is paused where it is "
         "so the picture can be read.",
-        blank=TIME_LEFT_SHOWN,
+        shown=_strip_words(url),
+        blank=STRIP_WITH_A_CLOCK,
     )
 
     # 2. Swiped back to the knobs: the jogs are refused, in the server's words, and
@@ -174,6 +224,7 @@ def test_the_deck_shows_a_print_and_a_swipe_walks_its_screens(page: Page, url: s
     assert _strip(url)["text"] == "printer_1 · held" and "jogs refused" in _strip(url)["small"]
     time.sleep(5)  # two ticks of the layout: nothing pulls the strip forward again
     assert _screen(url) == "knobs"
+    _window_shows_the_strip(url, deck)
     story.shows(
         "Swiped back to the knobs, which say a print holds the port",
         "A drag along the strip, most of its length, is a swipe. The knobs' screen no longer "
@@ -184,13 +235,20 @@ def test_the_deck_shows_a_print_and_a_swipe_walks_its_screens(page: Page, url: s
     )
 
     # 3. A tap moves nothing; a swipe forward twice stops at Status.
+    heard = _touches(url)
     deck.locator(".deck-strip-tap").click(position={"x": 200, "y": 20})
+    _until(lambda: _touches(url) > heard, "the tap heard")
     assert _screen(url) == "knobs"
-    for _ in range(3):  # the third has nowhere to go
+    for screen in ("progress", "status"):
         _swipe(page, deck, +1)
-        time.sleep(0.5)
-    _until(lambda: _screen(url) == "status", "swiped on to Status")
+        _until(lambda wanted=screen: _screen(url) == wanted, f"swiped on to {screen}")
+    heard = _touches(url)
+    _swipe(page, deck, +1)  # the third has nowhere to go
+    _until(lambda: _touches(url) > heard, "the third swipe heard")
+    time.sleep(1)  # taken in the layout's turn, where it moves nothing
+    assert _screen(url) == "status"
     assert _strip(url)["text"].startswith("printer_1 · ")
+    _window_shows_the_strip(url, deck)
     story.shows(
         "On to Status, the last screen",
         "Another swipe forward shows the printer's state, its temperatures and the first "
@@ -206,11 +264,13 @@ def test_the_deck_shows_a_print_and_a_swipe_walks_its_screens(page: Page, url: s
     _until(lambda: "cancelled" in (_strip(url)["small"] or ""), "the end said on the strip")
     time.sleep(5)
     assert "cancelled" in _strip(url)["small"] and _screen(url) == "progress"
+    _window_shows_the_strip(url, deck)
     story.shows(
         "A print that ended stays on Progress until a touch",
         "The print was cancelled. The strip says how it ended and after how long, and keeps "
         "saying it: nothing about the print clears it but a touch of this screen.",
-        blank=TIME_LEFT_SHOWN,
+        shown=_strip_words(url),
+        blank=STRIP_WITH_A_CLOCK,
     )
     deck.locator(".deck-strip-tap").click(position={"x": 200, "y": 20})
     _until(lambda: _strip(url)["text"] == "printer_1 · no job", "the result cleared by a touch")
