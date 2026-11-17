@@ -895,8 +895,8 @@ from its own card in the same way.
 
 A printer's heaters are loops: a hotend's and the bed's PID, as the board
 holds them. `apothecary/firmware/loops.py` reads, sets and experiments on them
-through the seam's rules and adds none of its own; the maths is
-`apothecary/control_loops.py` and the document of a loop `apothecary/loop_document.py`.
+through the seam's rules and adds none of its own; [Control loops](control-loops.md)
+is the reference, the maths and the document of a loop with it.
 
 - **Read** is `M503`, report-only, parsed for its `M301` and `M304` lines
   (`gcode.parse_gains`).
