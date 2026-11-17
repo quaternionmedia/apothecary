@@ -275,25 +275,41 @@ def parts_info(name: str, json_out: bool):
     show_default=True,
     help="Permitted difference per axis, in mm.",
 )
+@click.option(
+    "--interface-tolerance",
+    default=None,
+    type=float,
+    help="Permitted difference in an interface's diameter, in mm "
+    "[default: fittings.INTERFACE_TOLERANCE].",
+)
 @click.option("--timeout", default=120, help="Timeout per part in seconds")
 def parts_verify(
     name: str | None,
     verify_all: bool,
     param_pairs: tuple[str, ...],
     tolerance: float,
+    interface_tolerance: float | None,
     timeout: int,
 ):
-    """Check a part's declared bounds against the geometry OpenSCAD produces.
+    """Check a part's declared bounds and interfaces against the geometry OpenSCAD produces.
 
     A wrapper's get_bounds is hand-written Python beside hand-written
     OpenSCAD, and the two can drift apart. Anything consuming the declared
     envelope -- catalog layout, an assembly sizing itself around the part --
     is wrong by exactly the amount they differ, which this measures.
 
+    Each round interface (a spigot, a socket) is read across the render near
+    each end, about its declared axis, and fails past --interface-tolerance:
+    a fit computed from a diameter the part does not have is wrong
+    (docs/connections.md).
+
     Renders to a temporary file, so the STL you are iterating on is untouched.
     """
+    from ..fittings import INTERFACE_TOLERANCE, readings
     from ..projects.parts.stl_renderer import get_renderer, render_part
 
+    if interface_tolerance is None:
+        interface_tolerance = INTERFACE_TOLERANCE
     if not get_renderer().is_available:
         raise click.ClickException("OpenSCAD not found; cannot measure geometry.")
 
@@ -319,8 +335,13 @@ def parts_verify(
 
         params = parse_param_overrides(part, param_pairs)
         declared = part.get_bounds(params or None)
-        if declared is None:
-            skipped.append((part_name, "declares no bounds"))
+        try:
+            interfaces = part.interfaces(params or None)
+        except (ValueError, KeyError) as exc:
+            skipped.append((part_name, f"its interfaces do not read: {exc}"))
+            continue
+        if declared is None and not interfaces:
+            skipped.append((part_name, "declares no bounds or interfaces"))
             continue
 
         can_build, reason = part.can_generate_stl()
@@ -334,17 +355,39 @@ def parts_verify(
             if not result.success:
                 skipped.append((part_name, f"render failed: {result.error_message}"))
                 continue
-            box = _stl_bounds(measured_stl)
+            try:
+                triangles = read_mesh(measured_stl)
+                box = bounds(triangles)
+            except (OSError, MeshError):
+                triangles, box = [], None
 
         if box is None:
             skipped.append((part_name, "could not measure STL"))
             continue
 
-        lo, hi = box
-        actual = tuple(hi[axis] - lo[axis] for axis in range(3))
-        want = (declared.size.x, declared.size.y, declared.size.z)
-        deltas = [abs(a - w) for a, w in zip(actual, want, strict=False)]
-        ok = all(d <= tolerance for d in deltas)
+        rows, ok = [], True
+        if declared is not None:
+            lo, hi = box
+            actual = tuple(hi[axis] - lo[axis] for axis in range(3))
+            want = (declared.size.x, declared.size.y, declared.size.z)
+            deltas = [abs(a - w) for a, w in zip(actual, want, strict=False)]
+            bounds_ok = all(d <= tolerance for d in deltas)
+            ok = ok and bounds_ok
+            rows.append(f"    {'axis':<6}{'declared':>12}{'measured':>12}{'delta':>10}")
+            for axis, w, a, d in zip("xyz", want, actual, deltas, strict=False):
+                flag = "" if d <= tolerance else "   <-- drift"
+                rows.append(f"    {axis:<6}{w:>12.2f}{a:>12.2f}{d:>10.2f}{flag}")
+        read = [r for i in interfaces for r in readings(i, triangles)]
+        if read:
+            rows.append(f"    {'interface':<22}{'declared':>10}{'measured':>10}{'delta':>8}")
+            for r in read:
+                held = r.holds(interface_tolerance)
+                ok = ok and held
+                got = "nothing" if r.measured is None else f"{r.measured:.3f}"
+                delta = "" if r.drift is None else f"{r.drift:.3f}"
+                flag = "" if held else "   <-- drift"
+                where = f"{r.interface} {r.where}"
+                rows.append(f"    {where:<22}{r.declared:>10.3f}{got:>10}{delta:>8}{flag}")
         checked += 1
 
         if ok:
@@ -354,10 +397,8 @@ def parts_verify(
             status.line("fail", part_name, indent=0)
 
         if not ok or verify_all is False:
-            click.echo(f"    {'axis':<6}{'declared':>12}{'measured':>12}{'delta':>10}")
-            for axis, w, a, d in zip("xyz", want, actual, deltas, strict=False):
-                flag = "" if d <= tolerance else "   <-- drift"
-                click.echo(f"    {axis:<6}{w:>12.2f}{a:>12.2f}{d:>10.2f}{flag}")
+            for row in rows:
+                click.echo(row)
 
     click.echo("")
     for part_name, reason in skipped:

@@ -187,6 +187,7 @@ GROUPS = {
             "test_parameter_coverage.py",
             "test_params_contract.py",
             "test_part_drafts.py",
+            "test_part_interfaces.py",
             "test_part_json_parity.py",
             "test_part_loader.py",
             "test_part_variants.py",

@@ -176,7 +176,12 @@ def read_interfaces(data) -> List[InterfaceBase]:
     """A list of interfaces from plain data (a part.json's, a request's); a
     pydantic ValidationError names what is wrong. Names are one per part, and
     ``excludes`` names only interfaces of the same part."""
-    interfaces = INTERFACES.validate_python(data or [])
+    return check_interfaces(INTERFACES.validate_python(data or []))
+
+
+def check_interfaces(interfaces: List[InterfaceBase]) -> List[InterfaceBase]:
+    """``interfaces`` as one part's: ValueError for a name used twice, or for
+    ``excludes`` naming an interface the part does not have."""
     names = [i.name for i in interfaces]
     doubled = sorted({n for n in names if names.count(n) > 1})
     if doubled:
@@ -187,7 +192,7 @@ def read_interfaces(data) -> List[InterfaceBase]:
             raise ValueError(
                 f"{i.name} excludes {', '.join(unknown)}, which the part does not have"
             )
-    return interfaces
+    return list(interfaces)
 
 
 Verdict = Literal[
@@ -368,6 +373,7 @@ __all__ = [
     "Socket",
     "Source",
     "Spigot",
+    "check_interfaces",
     "fit",
     "read_interfaces",
     "seated_frame",

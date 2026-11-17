@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 import struct
 from pathlib import Path
-from typing import Iterable, List, Sequence, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple
 
 Triangle = Tuple[Tuple[float, float, float], Tuple[float, float, float], Tuple[float, float, float]]
 
@@ -167,6 +167,49 @@ def bounds(
     if lo[0] == math.inf:
         raise MeshError("a mesh with no triangles has no bounds")
     return (lo[0], lo[1], lo[2]), (hi[0], hi[1], hi[2])
+
+
+def section_radii(
+    triangles: Iterable[Triangle],
+    point: Tuple[float, float, float],
+    axis: Tuple[float, float, float],
+) -> Optional[Tuple[float, float]]:
+    """Where the plane through ``point`` square to ``axis`` (a unit vector) cuts the
+    mesh, the nearest and the furthest the cut comes to the line through ``point``
+    along ``axis``: a tube's bore and outside radii, cut across. None where the plane
+    cuts nothing. A corner that lies on the plane counts as cut."""
+    px, py, pz = point
+    ax, ay, az = axis
+    near, far = math.inf, -math.inf
+
+    def radius(q) -> float:
+        dx, dy, dz = q[0] - px, q[1] - py, q[2] - pz
+        along = dx * ax + dy * ay + dz * az
+        rx, ry, rz = dx - along * ax, dy - along * ay, dz - along * az
+        return math.sqrt(rx * rx + ry * ry + rz * rz)
+
+    for triangle in triangles:
+        side = [(c[0] - px) * ax + (c[1] - py) * ay + (c[2] - pz) * az for c in triangle]
+        if min(side) > 0 or max(side) < 0:
+            continue
+        for i in range(3):
+            a, b = triangle[i], triangle[(i + 1) % 3]
+            da, db = side[i], side[(i + 1) % 3]
+            if da == 0:
+                cut = [a]
+            elif da * db < 0:
+                t = da / (da - db)
+                cut = [
+                    (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t)
+                ]
+            else:
+                cut = []
+            for q in cut:
+                r = radius(q)
+                near, far = min(near, r), max(far, r)
+    if far < 0:
+        return None
+    return near, far
 
 
 def transform(triangles: Iterable[Triangle], scale: float = 1.0, up: str = "z") -> List[Triangle]:

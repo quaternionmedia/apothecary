@@ -13,6 +13,7 @@ from apothecary.models import (
     Color,
     PrintSettings,
 )
+from apothecary.models.interfaces import InterfaceBase
 
 from .stl_renderer import find_openscad, openscad_meets, parse_openscad_version, scad_definitions
 
@@ -248,6 +249,28 @@ class BasePart(BaseModel):
     def has_cuts(self) -> bool:
         """Whether this part says how it is cut: its wrapper defines ``cuts``."""
         return type(self).cuts is not BasePart.cuts
+
+    def interfaces(self, params: Optional[Mapping[str, Any]] = None) -> List[InterfaceBase]:
+        """The places where another part meets this one, for already-validated
+        ``params`` (``apothecary.models.interfaces``): each named, in the part's own
+        frame, the frame its SCAD draws it in. Empty for a part nothing meets, which
+        is most of them; a described part reads them from its ``part.json``.
+        docs/connections.md says how two meet."""
+        return []
+
+    @property
+    def has_interfaces(self) -> bool:
+        """Whether this part says where another meets it."""
+        return bool(self.interfaces())
+
+    def interface(self, name: str, params: Optional[Mapping[str, Any]] = None) -> InterfaceBase:
+        """The interface called ``name``; KeyError naming the part's own when it has none."""
+        found = self.interfaces(params)
+        for i in found:
+            if i.name == name:
+                return i
+        names = ", ".join(i.name for i in found) or "none"
+        raise KeyError(f"{self.name} has no interface {name!r}; its interfaces: {names}")
 
     def geometry(self, params: Mapping[str, Any]) -> Optional[OpenSCADObject]:
         """The part built in Python for already-validated ``params``, or None:

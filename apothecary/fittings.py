@@ -19,13 +19,14 @@ down is refused. docs/connections.md is the reference.
 from __future__ import annotations
 
 import math
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from pydantic import BaseModel, Field, model_validator
 
 from .booleans import Difference, Union
 from .core import OpenSCADObject
-from .models.interfaces import EPSILON, Socket, Spigot
+from .meshes import Triangle, section_radii
+from .models.interfaces import EPSILON, InterfaceBase, Socket, Spigot
 from .models.vectors import Vector3D
 from .primitives import Cylinder
 from .transforms import Translate
@@ -216,6 +217,70 @@ class Profile(BaseModel):
         )
 
 
+# How far in from each end of an interface its diameter is read, in mm: clear of the
+# joint with the next section, where a cut would catch both.
+READ_IN = 0.5
+
+# The most a diameter read on a render may differ from the one declared, mm across.
+# A 0.6 mm taper over 25 mm moves its seat 2 mm for each 0.05 here; a flat of the
+# 128-gon reads under 0.01 inside the circle.
+INTERFACE_TOLERANCE = 0.05
+
+
+class Reading(BaseModel):
+    """One diameter of a round interface, as declared and as read on a mesh."""
+
+    interface: str
+    where: str
+    declared: float
+    measured: Optional[float] = None
+
+    @property
+    def drift(self) -> Optional[float]:
+        return None if self.measured is None else abs(self.measured - self.declared)
+
+    def holds(self, tolerance: float = INTERFACE_TOLERANCE) -> bool:
+        return self.drift is not None and self.drift <= tolerance + EPSILON
+
+
+def readings(interface: InterfaceBase, triangles: Sequence[Triangle]) -> List[Reading]:
+    """A round interface's diameters read across the mesh, near each end: a spigot's
+    outside at its base and its tip, a socket's bore at its mouth and its depth. Cut
+    square to the normal about the line through the position along it, so a part
+    drawn off its declared axis reads wrong too. Empty for a type that is not round."""
+    n, at = interface.normal, interface.position
+    if isinstance(interface, Spigot):
+        m = min(READ_IN, interface.length / 4)
+        ends = (("base", m, interface.length - m), ("tip", interface.length - m, m))
+        out = []
+        for where, along, from_tip in ends:
+            cut = section_radii(triangles, (at + n * along).to_list(), n.to_list())
+            out.append(
+                Reading(
+                    interface=interface.name,
+                    where=where,
+                    declared=round(interface.diameter_at(from_tip), 4),
+                    measured=None if cut is None else round(2 * cut[1], 4),
+                )
+            )
+        return out
+    if isinstance(interface, Socket):
+        m = min(READ_IN, interface.depth / 4)
+        out = []
+        for where, along in (("mouth", m), ("depth", interface.depth - m)):
+            cut = section_radii(triangles, (at - n * along).to_list(), n.to_list())
+            out.append(
+                Reading(
+                    interface=interface.name,
+                    where=where,
+                    declared=interface.diameter,
+                    measured=None if cut is None else round(2 * cut[0], 4),
+                )
+            )
+        return out
+    return []
+
+
 def _run_on(s: Section, below: float, above: float) -> Tuple[float, float]:
     """A bore's diameters carried on along its own slope ``below`` and ``above`` its section."""
     slope = (s.bore[1] - s.bore[0]) / s.length
@@ -230,4 +295,17 @@ def _frustum(z0: float, h: float, d: Tuple[float, float], fn: int, label: str) -
     return Translate(v=Vector3D(z=round(z0, 6)), children=[cyl])
 
 
-__all__ = ["CLEAR", "FN", "OVERHANG", "Profile", "SAGITTA", "Section", "WALL", "sagitta"]
+__all__ = [
+    "CLEAR",
+    "FN",
+    "INTERFACE_TOLERANCE",
+    "OVERHANG",
+    "Profile",
+    "READ_IN",
+    "Reading",
+    "SAGITTA",
+    "Section",
+    "WALL",
+    "readings",
+    "sagitta",
+]

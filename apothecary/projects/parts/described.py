@@ -20,9 +20,10 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from apothecary.models import BoundingBox3D, Color, Vector3D
+from apothecary.models.interfaces import Interface, InterfaceBase, check_interfaces
 
 from .base import TURN_REFUSED, BasePart
 
@@ -66,6 +67,16 @@ class Description(BaseModel):
         None, description="a README shared with other parts, relative to this folder"
     )
     source: Optional[Provenance] = None
+    interfaces: List[Interface] = Field(
+        default_factory=list,
+        description="the places where another part meets this one, in its SCAD's frame "
+        "at its defaults (docs/connections.md)",
+    )
+
+    @field_validator("interfaces")
+    @classmethod
+    def _one_part(cls, value: List[InterfaceBase]) -> List[InterfaceBase]:
+        return check_interfaces(value)
 
 
 class DescribedPart(BasePart):
@@ -73,6 +84,12 @@ class DescribedPart(BasePart):
 
     sidecar_path: Optional[Path] = None
     source: Optional[Provenance] = None
+    # Its sidecar's interfaces: at its defaults, since a sidecar holds numbers, not a
+    # rule that moves them with a parameter.
+    declared_interfaces: List[Interface] = Field(default_factory=list)
+
+    def interfaces(self, params=None) -> List[InterfaceBase]:
+        return list(self.declared_interfaces)
 
 
 def sidecar_for(scad_path: Path) -> Optional[Path]:
@@ -117,6 +134,8 @@ def part_from_sidecar(scad_path: Path, sidecar_path: Optional[Path] = None) -> D
     if described.preview_color and len(described.preview_color) == 3:
         r, g, b = described.preview_color
         kwargs["preview_color"] = Color(r=r, g=g, b=b)
+    if described.interfaces:
+        kwargs["declared_interfaces"] = list(described.interfaces)
     if described.parts is not None:
         kwargs["parts"] = list(described.parts)
     if described.rest:
