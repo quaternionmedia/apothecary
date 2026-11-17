@@ -98,15 +98,22 @@ export function askFlash(call, port) {
 }
 
 // The verb of a line a pad sends (its data-cmd), the command the server's answer names it
-// by (firmware/can.py can_now). What the server takes with the latch down -- each
-// dialect's stop, and its `always` (firmware/gcode.py, grbl.py), what only stops,
-// interrupts or turns something off -- is a stop, never greyed, or the server's "off";
-// everything else needs the latch, a held controller's RESUME included, since it moves
-// the machine again. tests/test_can_js.py holds these lists to the server's.
-export const STOP_LINES = new Set(["M112", "RESET", "M410", "M108", "JOG-CANCEL", "HOLD"]);
-export const OFF_LINES = new Set(["M104 S0", "M140 S0", "M107", "M5", "M25"]);
+// by (firmware/can.py can_now). Each dialect's stop is the one line never greyed. What else
+// the server takes with the latch down -- its `always` (firmware/gcode.py, grbl.py), what
+// only interrupts or turns something off -- is named by how a job holding the port treats
+// it: an interrupt (a printer's break, a router's hold) goes while a job streams, a quick
+// stop (Marlin's, a jog cancelled) and a card's pause do not, an off does. Everything else
+// needs the latch, a held controller's RESUME included, since it moves the machine again.
+// tests/test_can_js.py holds these lists to the server's lines, line by line.
+export const STOP_LINES = new Set(["M112", "RESET"]);
+export const INTERRUPT_LINES = new Set(["M108", "HOLD"]);
+export const QUICKSTOP_LINES = new Set(["M410", "JOG-CANCEL"]);
+export const OFF_LINES = new Set(["M104 S0", "M140 S0", "M107", "M5"]);
 export function verbOfLine(cmd) {
     if (STOP_LINES.has(cmd)) return "estop";
+    if (INTERRUPT_LINES.has(cmd)) return "interrupt";
+    if (QUICKSTOP_LINES.has(cmd)) return "quickstop";
+    if (cmd === "M25") return "card.pause";
     if (OFF_LINES.has(cmd)) return "off";
     if (cmd === "RESUME") return "resume";
     if (cmd === "HOME") return "home";

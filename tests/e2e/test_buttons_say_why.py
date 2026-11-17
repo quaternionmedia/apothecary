@@ -1,10 +1,12 @@
 """A button whose command the server would refuse now is greyed, with the reason in
-its title; the buttons that stop are never greyed.
+its title; the emergency stop is never greyed.
 
-A host print holds a printer's port, so the pad's jog and the header's Reboot are
-refused by the server (409); both are greyed with the server's words
-(``can`` on the status, ``firmware/can.py``), while E-STOP, the pad's E-STOP and
-Quickstop are not. When the print is cancelled the jog is allowed again.
+A host print holds a printer's port, so the pad's jog, the header's Reboot and the
+pad's Quickstop (M410: the stream would go on after it, so a print is cancelled, not
+quick-stopped) are refused by the server (409); each is greyed with the server's words
+(``can`` on the status, ``firmware/can.py``), while E-STOP and the pad's E-STOP are not,
+nor Break wait (M108), which a print lets through. When the print is cancelled the jog
+and Quickstop are allowed again.
 
 Runs against a server of its own with the simulated printer idle on ``/dev/ttyFAKE1``
 (not printing from its card, which the server would name first), slowed so a print
@@ -47,7 +49,9 @@ def _as_it_starts(url):
 
 
 @pytest.mark.e2e
-def test_a_print_greys_the_jog_and_the_reboot_and_never_the_stops(page: Page, url: str):
+def test_a_print_greys_the_jog_the_reboot_and_the_quickstop_and_never_the_stop(
+    page: Page, url: str
+):
     with httpx.Client(base_url=url, timeout=15.0) as http:
         kept = http.post(
             "/firmware/printers/prints",
@@ -73,18 +77,22 @@ def test_a_print_greys_the_jog_and_the_reboot_and_never_the_stops(page: Page, ur
     expect(reboot).to_be_disabled()
     expect(reboot).to_have_attribute("title", re.compile(r"^Disabled: .*a print holds the port"))
 
-    for stop in (
+    quickstop = pad.locator("button[data-cmd='M410']")
+    expect(quickstop).to_be_disabled()
+    expect(quickstop).to_have_attribute("title", re.compile(r"^Disabled: .*a print holds the port"))
+    for live in (
         windows.in_machine(page, "#estop"),
         pad.locator("#pad-estop"),
-        pad.locator("button[data-cmd='M410']"),
+        pad.locator("button[data-cmd='M108']"),
     ):
-        expect(stop).to_be_enabled()
-        expect(stop).not_to_have_attribute("aria-disabled", "true")
+        expect(live).to_be_enabled()
+        expect(live).not_to_have_attribute("aria-disabled", "true")
 
     # The print cancelled, the jog is the server's to take again and the page says so.
     page.locator("#print-cancel").click()
     expect(jog).to_be_enabled(timeout=WITHIN_A_POLL * 2)
     expect(jog).not_to_have_attribute("title", re.compile(r"^Disabled"))
+    expect(quickstop).to_be_enabled()
 
 
 @pytest.mark.e2e

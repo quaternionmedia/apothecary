@@ -623,8 +623,8 @@ the board is disarmed then, and the status bar says so.
 
 Popped out, the pad has an **⏹ E-STOP** of its own in its head, the Machine's being in
 another window. What interrupts -- Quickstop, Break wait, Stop jog, Hold and Resume --
-is sent at once and its button is never greyed, while every other line waits its turn
-behind the one in flight. An arm or a disarm that failed is drawn as the server says
+is sent at once and is never held by a line in flight, while every other line waits its
+turn behind the one in flight. An arm or a disarm that failed is drawn as the server says
 the latch is, asked again, and never as what was asked for; with no answer the label is
 marked *not confirmed*. An open Machine follows its port's latch whoever armed it or
 let it go, with auto-poll off too. Once the status its cards are drawn from is more
@@ -703,10 +703,14 @@ back when the command is ok again. The pad's buttons are tagged from the line th
 send. What only the page knows -- a file kept for the other kind of machine, a send
 from here under way -- is said in the same shape over the server's answer, and the
 latch is counted down on the page, since it lapses with no event. A button a send in
-flight holds (`data-busy`) stays held until both let go. The stops are never greyed:
-E-STOP, the pad's E-STOP and the lines that interrupt (Quickstop, Break wait, Stop
-jog, Hold, Resume, Abort). One rule in `static/tokens.css` greys a disabled button
-everywhere.
+flight holds (`data-busy`) stays held until both let go. The emergency stop is never
+greyed: E-STOP and the pad's E-STOP. The pad's lines are named by the command the
+server answers for a line a job treats the same way (`can.js` verbOfLine, held to the
+dialects line by line by `tests/test_can_js.py`): Break wait and Hold go while a job
+streams; Quickstop, Stop jog and the card's Pause do not -- the stream would go on --
+and are greyed with the job's words; Resume moves the machine again and wants the latch.
+One rule in `static/tokens.css` greys a disabled button everywhere, with the
+not-allowed cursor whatever a widget's own rule for its buttons says.
 
 Send reads `GET /firmware/printers/can-start` for the chosen file, so the page holds no
 rule of its own for which file goes to which machine. The Bench's Compile & upload and

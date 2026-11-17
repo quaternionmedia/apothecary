@@ -180,6 +180,12 @@ LINES = {
     # A held controller run again (GRBL's cycle start): it moves the machine, so it takes
     # the latch, as Pause's stop does not.
     "resume": {"router": "RESUME"},
+    # What interrupts and goes with the latch down (each dialect's `always`), as a job
+    # treats it: a printer's break and a router's hold go while a job streams; a quick
+    # stop and a jog cancelled do not (the stream would go on), nor a card's pause.
+    "interrupt": {"printer": "M108", "router": "HOLD"},
+    "quickstop": {"printer": "M410", "router": "JOG-CANCEL"},
+    "card.pause": {"printer": "M25"},
     "control": {"printer": "M84", "router": "G0 X0 Y0"},
 }
 AXES = "XYZ"
@@ -392,6 +398,9 @@ def can_now(port: str, state=None, links=None, runner=None) -> Dict[str, Dict[st
         "spindle": _verdict(line_refusal(f, "spindle")),
         "unlock": _verdict(line_refusal(f, "unlock")),
         "resume": _verdict(line_refusal(f, "resume")),
+        "interrupt": _verdict(line_refusal(f, "interrupt", off=True)),
+        "quickstop": _verdict(line_refusal(f, "quickstop", off=True)),
+        "card.pause": _verdict(line_refusal(f, "card.pause", off=True)),
         "control": _verdict(line_refusal(f, "control")),
         "print.start": _verdict(start_refusal(f)),
         "print.pause": _verdict(_running(f)),

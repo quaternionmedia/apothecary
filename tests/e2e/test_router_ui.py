@@ -255,10 +255,11 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
     # 5. Armed: the pad, the probe offered, and the work zeroed where the tool stands.
     machine.locator("#ctl").check()
     expect(page.locator("#control")).to_be_visible(timeout=5000)
-    # A hold is a stop, never greyed; a resume moves the machine again, so the server
-    # answers for it as for any line that needs the latch (can.js verbOfLine).
+    # A hold interrupts and goes with the latch down; a resume moves the machine again,
+    # so the server answers for it as for any line that needs the latch (can.js
+    # verbOfLine).
     hold, resume = (page.locator(f"#control button[data-cmd='{c}']") for c in ("HOLD", "RESUME"))
-    expect(hold).to_have_attribute("data-can", "estop")
+    expect(hold).to_have_attribute("data-can", "interrupt")
     expect(resume).to_have_attribute("data-can", "resume")
     expect(resume).to_be_enabled(timeout=WITHIN_A_POLL)
     expect(machine.locator("#level-probe")).to_be_visible()

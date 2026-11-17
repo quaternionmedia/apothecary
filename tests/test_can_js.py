@@ -123,12 +123,29 @@ def _alternatives(pattern) -> list:
     return found[1].split("|")
 
 
+# The verbs the server answers without the latch (firmware/can.py, line_refusal's `off`).
+UNLATCHED = {"estop", "off", "interrupt", "quickstop", "card.pause"}
+
+
+def _kinds(line: str) -> dict:
+    """The dialects that take ``line`` (its {...} given a figure), by their machine, with
+    the line as each normalises it."""
+    found = {}
+    for d in dialects.BY_WORD.values():
+        try:
+            found[d.machine] = (d, d.normalise_control(re.sub(r"\{[^}]+\}", "1", line)))
+        except ValueError:
+            continue
+    return found
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
-def test_a_pad_line_is_greyed_for_the_latch_exactly_when_the_server_wants_the_latch():
-    """can.js verbOfLine names each line a pad sends by the server's command; a line the
-    server takes with the latch down (a dialect's stop, or its ``always``) is a stop
-    (never greyed) or an off, and every other line needs the latch, as the route says.
-    The lines: every pad button's in machine.js, and each the server lists."""
+def test_a_pad_line_is_greyed_as_the_server_answers_for_that_very_line():
+    """can.js verbOfLine names each line a pad sends by a command the server answers, and
+    the server answers that command from a line of its own (can.LINES): for every pad
+    line in machine.js and every line a dialect lists, in each dialect that takes it, the
+    line and the server's own go or not alike with the latch down (``always``) and while a
+    job streams (``job_allows``). A dialect's stop is the one line never greyed."""
     pad = set(re.findall(r'data-cmd="([^"]+)"', MACHINE_JS.read_text(encoding="utf-8")))
     listed = {line for d in dialects.BY_WORD.values() for line in _alternatives(d.always)}
     lines = sorted(pad | listed | set(dialects.STOPS))
@@ -142,13 +159,24 @@ def test_a_pad_line_is_greyed_for_the_latch_exactly_when_the_server_wants_the_la
     )
     assert run.returncode == 0, run.stderr
     verbs = json.loads(run.stdout)
+    problems = []
     for line, verb in verbs.items():
-        free = line in dialects.STOPS or any(
-            d.always.match(line) for d in dialects.BY_WORD.values()
-        )
-        assert (verb in ("estop", "off")) == free, (
-            f"{line}: the page says {verb}, the server {'takes it unarmed' if free else 'wants the latch'}"
-        )
+        if (line in dialects.STOPS) != (verb == "estop"):
+            problems.append(f"{line}: {verb}, and only a dialect's stop is never greyed")
+            continue
+        for machine, (d, said) in _kinds(line).items():
+            if verb == "estop":
+                continue
+            ours = can.LINES.get(verb, {}).get(machine)
+            if ours is None:
+                problems.append(f"{line} ({machine}): {verb}, which the server has no line for")
+                continue
+            ours = d.normalise_control(ours)
+            if bool(d.always.match(said)) != (verb in UNLATCHED):
+                problems.append(f"{line} ({machine}): {verb}, but the latch says otherwise")
+            if bool(d.job_allows.match(said)) != bool(d.job_allows.match(ours)):
+                problems.append(f"{line} ({machine}): {verb}, but a job treats it unlike {ours}")
+    assert problems == []
     assert verbs["RESUME"] == "resume"
 
 

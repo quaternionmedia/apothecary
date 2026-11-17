@@ -35,6 +35,9 @@ LINES = {
         "spindle": "M3 S1000",
         "unlock": "$X",
         "resume": "RESUME",
+        "interrupt": "M108",
+        "quickstop": "M410",
+        "card.pause": "M25",
         "control": "M84",
         "query": "M105",
     },
@@ -46,11 +49,26 @@ LINES = {
         "spindle": "M3 S1000",
         "unlock": "$X",
         "resume": "RESUME",
+        "interrupt": "HOLD",
+        "quickstop": "JOG-CANCEL",
+        "card.pause": "M25",
         "control": "G0 X0 Y0",
         "query": "$G",
     },
 }
-COMMAND_VERBS = ["home", "home.X", "off", "heat", "spindle", "unlock", "resume", "control"]
+COMMAND_VERBS = [
+    "home",
+    "home.X",
+    "off",
+    "heat",
+    "spindle",
+    "unlock",
+    "resume",
+    "interrupt",
+    "quickstop",
+    "card.pause",
+    "control",
+]
 PORT_VERBS = ["reconnect", "reset", "release"]
 LEVEL_VERBS = ["level.probe", "level.read"]
 PRINT_VERBS = ["print.start", "print.pause", "print.resume", "print.cancel"]
