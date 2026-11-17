@@ -21,7 +21,7 @@
 .deck-ui button:disabled { opacity: 0.55; cursor: not-allowed; }
 .deck-ui button:not(:disabled):hover { border-color: var(--ink-3); }
 /* A real deck's keys and strip are its picture, not a control that is off. */
-.deck-ui .deck-key:disabled, .deck-ui .deck-strip-tap:disabled { opacity: 1; cursor: default; }
+.deck-ui .deck-key:disabled, .deck-ui .deck-strip-tap:disabled { opacity: 1; cursor: default !important; }
 /* What was heard: held for as long as it is down, lit for a moment after each event. */
 .deck-ui .deck-key.deck-heard, .deck-ui .deck-key.deck-down { border-color: var(--ok); box-shadow: 0 0 0 2px var(--ok); }
 .deck-ui .deck-key.deck-down img { transform: scale(0.9); }

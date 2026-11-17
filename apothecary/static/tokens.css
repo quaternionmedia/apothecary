@@ -32,5 +32,8 @@
 
 /* A button the server would refuse (or that something else holds) is greyed, the same
  * wherever it is: can.js sets `disabled` and `aria-disabled` and says why in its title.
- * A widget with a reason of its own to look otherwise says so in its own sheet. */
-button:disabled, button[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+ * A widget with a reason of its own to look otherwise says so in its own sheet. The
+ * cursor is the one thing a widget's own rule for its buttons (a hand, `cursor:
+ * pointer`, under an id or a class this rule does not outweigh) would otherwise give a
+ * greyed button too; a widget that means it says so with an !important of its own. */
+button:disabled, button[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed !important; }
