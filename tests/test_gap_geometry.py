@@ -291,3 +291,30 @@ class TestWhereTheClosestApproachTravels:
 def test_every_kind_says_what_it_means():
     assert set(KINDS) == {UNIFORM, STILL, ROCKING, SWEEPING, STANDING, ROLLING, SLIPPING}
     assert all(KINDS[k] for k in KINDS)
+
+
+def test_the_airgaps_nominal_gap_is_its_least_clearance_over_a_turn():
+    """The airgap part solves its bore so that the least radial gap over every rotor
+    angle is ``gap``. The least distance between the outlines is never less: the rotor
+    stays within the circle of its largest radius and the bore beyond the circle of its
+    least, which stand ``gap`` apart, and the two touch that pair of circles at the
+    angle where they come closest. Within the bore polygon's sagitta, over a turn."""
+    from apothecary.projects.parts.airgap import Params, build_surfaces
+
+    p = Params()
+    surfaces = build_surfaces(p, nt=360, m=1440)
+
+    def outline(radii):
+        return [
+            (v * p.r0 * math.cos(math.radians(i)), v * p.r0 * math.sin(math.radians(i)))
+            for i, v in enumerate(radii)
+        ]
+
+    turned = follow(
+        outline(surfaces.bore_r),
+        outline(surfaces.rotor_r),
+        [Pose(0.0, 0.0, phi) for phi in range(0, 361, 4)],
+    )
+    least = min(g for g in turned.gaps if g is not None)
+    tol = sagitta(min(surfaces.bore_r) * p.r0, 360)
+    assert p.gap - tol <= least <= p.gap + 0.01
