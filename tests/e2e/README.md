@@ -96,6 +96,13 @@ no walkthrough picture, and it is a quick local run and not the one before a pul
 request, which is the software one, as CI's is. Its frames come sooner, so it also
 finds what a slow frame hides: the level card asked for on a devkit threw on it first.
 
+The browser a test's `page` opens in draws WebGL without multisampling
+(`--webgl-antialiasing-mode=none`, the conftest's `NO_MSAA`): in software a frame of the
+world costs about half, and a page load about a fifth less, and only a picture's edges
+differ. A test that records pictures -- one that asks for `walkthrough` or
+`doc_recorder` -- has its page in a second browser, antialiased, so every recorded
+picture is drawn as a person's browser draws it.
+
 ## What a change reaches
 
 The suite is in areas -- windows, pictures, machine, parts, lighting, the simulated server --

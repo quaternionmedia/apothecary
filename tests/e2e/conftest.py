@@ -431,12 +431,44 @@ def docs_enabled(request) -> bool:
 # software unless told otherwise, and every frame of the world is drawn there.
 GPU = ["--enable-gpu", "--use-angle=gl", "--ignore-gpu-blocklist"]
 
+# WebGL without multisampling: drawn in software, a frame of the world costs about half
+# what it does antialiased, and a page load about a fifth less. Only a picture's edges
+# differ, and no test but a recorded picture looks at them, so the browser a test's
+# page opens in draws so, unless the test records pictures (`walkthrough`,
+# `doc_recorder`): those are drawn as a person's browser draws them, antialiased, in a
+# browser of their own.
+NO_MSAA = ["--webgl-antialiasing-mode=none"]
+
 
 @pytest.fixture(scope="session")
 def browser_type_launch_args(browser_type_launch_args, request):
-    if not request.config.getoption("--gpu"):
-        return browser_type_launch_args
-    return {**browser_type_launch_args, "args": [*browser_type_launch_args.get("args", []), *GPU]}
+    args = [*browser_type_launch_args.get("args", []), *NO_MSAA]
+    if request.config.getoption("--gpu"):
+        args += GPU
+    return {**browser_type_launch_args, "args": args}
+
+
+@pytest.fixture(scope="session")
+def _antialiased_browser(launch_browser, browser_type_launch_args):
+    """The browser a test that records pictures opens its page in: the session's,
+    antialiased."""
+    args = [arg for arg in browser_type_launch_args["args"] if arg not in NO_MSAA]
+    browser = launch_browser(args=args)
+    yield browser
+    browser.close()
+
+
+def _records_pictures(request) -> bool:
+    return any(name in request.fixturenames for name in ("walkthrough", "doc_recorder"))
+
+
+@pytest.fixture
+def browser(browser, request):
+    """The browser the test's ``page`` opens in: the session's, drawing without
+    multisampling, or the antialiased one for a test that records pictures."""
+    if _records_pictures(request):
+        return request.getfixturevalue("_antialiased_browser")
+    return browser
 
 
 @pytest.fixture
