@@ -2452,8 +2452,8 @@ def listen(
             lines.append(item)
             if not item.startswith("[apothecary:"):
                 first_line_at = first_line_at or now
-        origin = first_line_at or started
-        if now - origin >= seconds or now - started >= seconds + 5:
+        heard_for = now - first_line_at if first_line_at is not None else 0.0
+        if heard_for >= seconds or now - started >= seconds + 5:
             stop.set()
     tail = [ln for ln in lines if ln.strip()][-200:]
     return ListenResult(port=port, baud=baud, seconds=seconds, lines=tail, **classify_lines(tail))
