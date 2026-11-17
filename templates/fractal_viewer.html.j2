@@ -2051,6 +2051,7 @@
                 this.marks = {};       // bearer path -> { marks, port, where }
                 this.whereByPort = {}; // port -> Promise of GET /firmware/printers/where
                 this.following = {};   // port -> the world's own watch of a machine it draws (followMachines)
+                this.leavingSite = false;  // a site left while the next loads: nothing of it is followed
                 // The site's machines by the part each is drawn from (GET /sites/{name}/machines):
                 // what a machine with no board connected is planned as.
                 this.machinesHere = [];
@@ -2554,6 +2555,11 @@
                 // A board armed in the site before is disarmed, said again once it loads.
                 const disarmed = this.closeMachine();
                 const first = disarmed ? `${disarmed} · ` : '';
+                // The site left is not followed while the next loads, whatever redraws its
+                // marks meanwhile (followMachines): nothing is left polling its machines. A
+                // site that does not load follows its own again from what it still draws.
+                const leaving = name !== this.siteName;
+                if (leaving) { this.leavingSite = true; this.followMachines(new Map()); }
                 // A printer of the site before is no printer of this one.
                 this.workingOn = null;
                 this.workingSpace?.close();
@@ -2566,6 +2572,7 @@
                     // Another site's pins say nothing here: forgotten until the scan answers.
                     if (name !== this.siteName) this.boards.forget();
                     this.siteName = name;
+                    this.leavingSite = false;
                     this.lighting.setSite(name);
                     this.tree = data.tree;
                     this.maxDepthValue = maxDepth(this.tree);
@@ -2604,6 +2611,7 @@
                 } catch (err) {
                     this.setStatus(`${first}Error: ${err.message}`, 'error');
                     console.error(err);
+                    if (leaving) { this.leavingSite = false; this.syncWorldMarks(); }
                 }
             }
 
@@ -8146,6 +8154,7 @@
             // without it, whether each is live is looked at again. The board model is told
             // only what changes: a watch set again schedules its board's next poll afresh.
             followMachines(followed = null) {
+                if (this.leavingSite) followed = new Map();
                 if (followed) {
                     for (const [port, w] of Object.entries(this.following)) {
                         if (!followed.has(port)) { this.boards.unwatch(port, w.who); delete this.following[port]; }
