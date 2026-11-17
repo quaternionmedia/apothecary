@@ -23,15 +23,15 @@ cnc_router selected in Site, Open in its Device line, then the canvas ring's Pan
 
 ![In alarm, Needs you says what clears it](screenshots/31-01-in-alarm-needs-you-says-what-clears-it.png)
 
-## 2. A jog in alarm did not go, and the card keeps why
+## 2. A jog in alarm is greyed, and its tip says why
 
-⚙ Control armed, the pad's step at 1 mm and Z+ pressed. The controller refused the jog, and the card keeps the line that did not go with the controller's own error beside it until a line goes.
+⚙ Control armed and the pad's step at 1 mm. The controller takes no jog in alarm, so Z+ is greyed with the reason in its tip; Unlock is not.
 
-![A jog in alarm did not go, and the card keeps why](screenshots/31-02-a-jog-in-alarm-did-not-go-and-the-card-keeps-why.png)
+![A jog in alarm is greyed, and its tip says why](screenshots/31-02-a-jog-in-alarm-is-greyed-and-its-tip-says-why.png)
 
 ## 3. Each axis's home, beside its button: not proved, and what to do first
 
-Under the pad, each axis says which way its home will seek, whether its switch has been seen and whether the axis has been jogged that way, and what to do first. A Home not yet proved is outlined.
+Under the pad, each axis says which way its home will seek, whether its switch has been seen and whether the axis has been jogged that way, and what to do first. A Home not yet proved is greyed.
 
 ![Each axis's home, beside its button: not proved, and what to do first](screenshots/31-03-each-axis-s-home-beside-its-button-not-proved-and-.png)
 
@@ -41,15 +41,15 @@ The card's own Unlock sends `$X`. The alarm is cleared and the line that went cl
 
 ![Unlock in the card: the alarm is cleared, and a cut still waits](screenshots/31-04-unlock-in-the-card-the-alarm-is-cleared-and-a-cut-.png)
 
-## 5. A home not proved does not go, and the card says why
+## 5. A home not proved is greyed, and its tip says why
 
-Home Z pressed before Z has shown its switch or its way. Nothing is sent to the controller and the router has not moved; the card says `$HZ` did not go, in the controller's own figures for where Z will seek and how fast.
+Home Z before Z has shown its switch or its way is greyed, and its tip says so in the controller's own figures for where Z will seek and how fast. Nothing is sent to the controller and the router has not moved.
 
-![A home not proved does not go, and the card says why](screenshots/31-05-a-home-not-proved-does-not-go-and-the-card-says-wh.png)
+![A home not proved is greyed, and its tip says why](screenshots/31-05-a-home-not-proved-is-greyed-and-its-tip-says-why.png)
 
 ## 6. Jogged the way it homes, Z has shown its way
 
-Z+ pressed: the jog went, so the card no longer says a line did not go, and Z's line says its way is shown. Its switch is not, so its Home is still outlined; a switch is pressed by hand at the bench.
+Z+ pressed: the jog went, so the card no longer says a line did not go, and Z's line says its way is shown. Its switch is not, so its Home is still greyed; a switch is pressed by hand at the bench.
 
 ![Jogged the way it homes, Z has shown its way](screenshots/31-06-jogged-the-way-it-homes-z-has-shown-its-way.png)
 
