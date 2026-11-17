@@ -16,16 +16,37 @@ STILL = """() => Promise.all(
         .map((a) => a.finished.catch(() => null))
 )"""
 
-# The view at rest: the orbit controls ease a turn or a zoom out over many frames
-# after the hand has stopped, so the camera is watched until two frames in a row
-# leave it where it was (or a few seconds of frames have passed), and the frame it
-# rests on is drawn whole: where frames are slow a turning view is drawn coarser.
+# The view at rest. The orbit controls ease a turn or a pan over a few hundred frames
+# after the hand has stopped (their damping), each a frame of software GL, so the
+# easing is run to its end at once: the page's own frame repeated -- the orbit
+# updated, and the camera put back as it was once an update moves it less than the
+# orbit's own measure (the page's ORBIT_EPS) -- which leaves the view exactly where
+# those frames would, and draws it once. A re-centre (a glide, timed) is left to its
+# frames. Then the camera is watched until two frames in a row leave its place, its
+# turn and its target where they were (or a few seconds of frames have passed), and
+# the frame it rests on is drawn whole: where frames are slow a turning view is drawn
+# coarser. Not its matrix: the orbit's update writes that from a place the page then
+# puts back, and on a view whose target the orbit rounds it differs every frame.
 CAMERA_AT_REST = """() => new Promise((done) => {
     const v = window.fractalViewer;
     if (!v || !v.camera) return done();
+    const c = v.camera, orbit = v.orbitControls, EPS = 0.000001;
+    const at = c.position.clone(), turn = c.quaternion.clone(), aim = orbit.target.clone();
+    const ease = () => {
+        if (v.glide || !orbit.enableDamping) return;
+        for (let n = 0; n < 5000; n++) {
+            at.copy(c.position); turn.copy(c.quaternion); aim.copy(orbit.target);
+            orbit.update();
+            if (c.position.distanceToSquared(at) > EPS || orbit.target.distanceToSquared(aim) > EPS
+                || 8 * (1 - Math.abs(c.quaternion.dot(turn))) > EPS) continue;
+            c.position.copy(at); c.quaternion.copy(turn); orbit.target.copy(aim);
+            return;
+        }
+    };
     let last = null, still = 0, frames = 0;
     const look = () => {
-        const now = [...v.camera.matrixWorld.elements, ...v.orbitControls.target.toArray()].join(',');
+        ease();
+        const now = [...c.position.toArray(), ...c.quaternion.toArray(), ...orbit.target.toArray()].join(',');
         still = now === last ? still + 1 : 0;
         last = now;
         if ((still >= 2 && !v.coarse) || ++frames > 300) return done();

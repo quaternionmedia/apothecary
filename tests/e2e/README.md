@@ -206,4 +206,7 @@ its changed pixels marked, which is what that person looks at.
 Before a screenshot of the viewer, `viewer_ready.settled(page)` waits until the
 level's geometry has loaded (`window.fractalViewer.waveDone`), the camera is at
 rest, the badges' occlusion is tested where it came to rest, nothing is part
-way through an animation, and the canvas has drawn it.
+way through an animation, and the canvas has drawn it. The orbit's easing after a
+turn or a pan is run to its end at once, by the same updates its frames would run,
+so the view rests where they would leave it and is drawn there once, not through a
+few hundred frames of software drawing.
