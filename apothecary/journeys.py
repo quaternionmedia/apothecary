@@ -744,7 +744,7 @@ JOIN = Journey(
             "drawn, and each end's fit said in Selected",
             forward=("selected",),
             owns=("selected",),
-            puts=(("edit", "hose_adapter"),),
+            puts=(("edit", "dust_port"),),
             shown_by=("43-parts-that-meet.md",),
         ),
         Step(

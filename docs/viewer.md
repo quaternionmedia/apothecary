@@ -967,19 +967,23 @@ over it; Defaults lets the preset go.
 
 A part with one round end, a spigot or a socket (`dust_port`), has **⇄ Adapter**
 in Selected, and Part › Adapter on its ring. The first press keeps this end at
-its numbers as staged; the line beside it names the end kept. The other end's
+its numbers as staged; the line beside it names the end kept, and **✕ Let it go**
+lets it go. The kept end is this tab's, held through a reload (sessionStorage). The other end's
 numbers set -- another preset, or the caliper's reading over one -- the second
 press asks the server for the adapter between the two
 ([connections.md](connections.md#the-adapter-between-two-ends)), which derives
 it or refuses, saying why, the end kept still kept. Derived, the adapter is
 chosen where it stands (the universe's `hose_adapter`), its numbers staged in its
-editor and applied, and its Selected lists each end's fit. Each Apply of the
+editor and applied, and its Selected lists each end's fit. Both ends are drawn
+beside it, each at its numbers and where the connections stand them (the two
+fainter meshes, apart in colour), and the three are framed; they are not chosen
+by a click. Each Apply of the
 adapter after that -- an end lengthened, a bore opened by what a print showed --
 asks the server again, and the list says which end no longer seats. ⚒ Make in
 the header then takes the adapter drawn, as the variant applied, to the first
 printer that makes it, and [Print a part](#journeys) goes on from there. The
-ends and the adapter made are this tab's: a reload forgets them, and the adapter
-stays drawn as its variant.
+adapter made is this tab's: a reload forgets it and its two drawn ends, and the
+adapter stays drawn as its variant.
 
 ## The SCAD editor
 

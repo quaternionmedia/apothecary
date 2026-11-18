@@ -269,8 +269,8 @@ fit or does not stand where it meets as `misfit`, apothecary's to close
 ## Not yet
 
 The viewer draws no interface and makes no connection: the adapter it makes is
-drawn alone, not between its two ends, though `Adapter.placed()` says where each
-stands; a site's connections are not placed when it loads; a node's `params` are read by connections and by
+drawn with its two ends stood where `Adapter.placed()` says, and that is the only
+place the viewer places a connection; a site's connections are not placed when it loads; a node's `params` are read by connections and by
 nothing that draws, so a viewer draws its part at the part's defaults; and the
 types with a rule are the spigot and the socket. A thread, a DIN rail, a VESA pattern or a bolt pattern is
 a type with a rule of its own, each citing its standard.

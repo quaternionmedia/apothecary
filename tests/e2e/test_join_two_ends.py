@@ -112,3 +112,50 @@ def test_two_ends_that_meet_already_are_refused_and_the_end_kept_stays_kept(page
     expect(_status(page)).to_contain_text("No adapter: dust_port@outlet_35.end and dust_port@port_32.end (diameter=35) meet without an adapter", timeout=30000)
     expect(_status(page)).to_contain_text("dust_port@outlet_35 is still kept")
     assert page.evaluate("() => window.fractalViewer.selectedName") == "dust_port"
+
+
+@pytest.mark.e2e
+def test_the_kept_end_survives_a_reload_and_a_cross_lets_it_go(page: Page, url):
+    _port(page, url)
+    page.select_option("#part-preset", "outlet_35")
+    page.locator("#join-btn").click()
+    expect(page.locator(f"{JOIN} .join-said")).to_contain_text("dust_port@outlet_35 is kept as one end")
+    expect(page.locator("#join-let-go")).to_be_visible()
+    # A reload forgets the page's state, not this tab's kept end.
+    _port(page, url)
+    expect(page.locator(f"{JOIN} .join-said")).to_contain_text("dust_port@outlet_35 is kept as one end")
+    # Let go, it stays let go across another reload.
+    page.locator("#join-let-go").click()
+    expect(_status(page)).to_contain_text("dust_port@outlet_35 let go")
+    expect(page.locator(f"{JOIN} .join-said")).to_contain_text("⇄ Adapter keeps it")
+    expect(page.locator("#join-let-go")).to_be_hidden()
+    _port(page, url)
+    expect(page.locator(f"{JOIN} .join-said")).to_contain_text("⇄ Adapter keeps it")
+
+
+@pytest.mark.e2e
+def test_both_ends_stand_beside_the_adapter_made_between_them(page: Page, url):
+    _port(page, url)
+    page.select_option("#part-preset", "hose_40")
+    page.locator("#join-btn").click()
+    expect(_status(page)).to_contain_text("dust_port@hose_40 kept as one end")
+    page.select_option("#part-preset", "port_32")
+    page.locator("#join-btn").click()
+    expect(_status(page)).to_contain_text("between its two ends", timeout=180000)
+    # Each end is drawn, and stands against the adapter: the bounding spheres of the two
+    # meshes meet, where the adapter alone was a metre from the port.
+    reach = page.evaluate(
+        """() => {
+            const v = window.fractalViewer;
+            const radius = (m) => { m.geometry.computeBoundingSphere(); return m.geometry.boundingSphere.radius; };
+            const adapter = v.meshByName.hose_adapter;
+            return v.joinEnds.map((end) => ({
+                part: end.userData.joinEnd,
+                apart: end.position.distanceTo(adapter.position),
+                touching: radius(end) + radius(adapter),
+            }));
+        }"""
+    )
+    assert [r["part"] for r in reach] == ["dust_port", "dust_port"]
+    for r in reach:
+        assert 0 < r["apart"] <= r["touching"] + 1, reach

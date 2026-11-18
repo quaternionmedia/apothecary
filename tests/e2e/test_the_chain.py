@@ -266,8 +266,8 @@ STANDS = {
         expect(windows.panel(page, "part-parameters").locator("#part-preset")).to_be_visible(),
     ),
     ("join", "adapter"): lambda page: (
-        _selected("hose_adapter")(page),
-        _says(page, "selected", "hose_adapter"),
+        _selected("dust_port")(page),
+        _says(page, "selected", "dust_port"),
     ),
     ("join", "ready"): lambda page: _shown(page, "part-readiness"),
 }

@@ -154,5 +154,9 @@ def test_join_a_hose_stands_in_the_universe_on_the_port_and_the_adapter():
     assert (join.name, join.site) == ("Join a hose", UNIVERSE)
     assert [s.label for s in join.steps] == ["Ends", "Adapter", "Ready"]
     assert join.steps[0].puts == (("edit", "dust_port"),)
-    assert join.steps[1].puts == (("edit", "hose_adapter"),)
+    # The Adapter stage's words are "⇄ Adapter again at the other end's numbers": ⇄ Adapter
+    # is a port's button (the adapter has no round end of its own), so the port stays chosen;
+    # the adapter is chosen by pressing it, and is what Ready is about.
+    assert join.steps[1].puts == (("edit", "dust_port"),)
+    assert join.steps[2].puts == (("edit", "hose_adapter"),)
     assert JOURNEYS[-1] is join  # last in the chain: no other journey's place moves

@@ -1056,6 +1056,19 @@
         const FAILED_COLOR = 0x8a8a8a;
         const FAILED_EDGE_COLOR = 0xd04848;
         // Two variants compared: a in blue, b in orange.
+        // The two ends beside a derived adapter (⇄ Adapter), apart from it and from each other.
+        const JOIN_END_A_COLOR = 0x6fb3e8;
+        const JOIN_END_B_COLOR = 0xe8b46f;
+        // The end ⇄ Adapter keeps, held by this tab across a reload (sessionStorage: it is
+        // this tab's work, and a new tab starts with none); nothing where this browser
+        // keeps nothing.
+        const KEPT_END_KEY = 'apothecary.join.kept';
+        function readKeptEnd() {
+            try { return JSON.parse(sessionStorage.getItem(KEPT_END_KEY)) || null; } catch (e) { return null; }
+        }
+        function keepEndAcrossReloads(end) {
+            try { if (end) sessionStorage.setItem(KEPT_END_KEY, JSON.stringify(end)); else sessionStorage.removeItem(KEPT_END_KEY); } catch (e) { /* kept for this page's life only */ }
+        }
         const COMPARE_A_COLOR = 0x4a9eff;
         const COMPARE_B_COLOR = 0xe0903e;
         // The queue of OpenSCAD's runs, asked about while a render or check of this page
@@ -2966,6 +2979,7 @@
                 this.dropGhostMesh();
                 for (const ref of Object.keys(this.failures)) this.clearFailure(ref);
                 if (this.comparing) this.closeComparison();
+                this.dropJoinEnds();
                 for (const object of [
                     ...Object.values(this.meshByName),
                     ...Object.values(this.buildVolumeMeshByName),
@@ -5106,7 +5120,7 @@
                     <div class="drawn-from" id="part-drawn"></div>` : ''}
                     <div class="envelope" id="part-envelope"><span class="declared"></span><span class="measured"></span><span class="differs"></span><span class="floor"></span></div>
                     ${target.part ? '<div class="ghost-said" id="part-ghost" hidden></div>' : ''}
-                    ${target.part ? `<div class="part-join" id="part-join" hidden><button type="button" id="join-btn" title="Keep this end at its numbers as staged; with an end kept, the adapter between the two -- derived by the server, drawn, and each end's fit said here (Part › Adapter)">⇄ Adapter</button> <span class="join-said"></span><ul class="join-fits" id="join-fits"></ul></div>` : ''}
+                    ${target.part ? `<div class="part-join" id="part-join" hidden><button type="button" id="join-btn" title="Keep this end at its numbers as staged; with an end kept, the adapter between the two -- derived by the server, drawn, and each end's fit said here (Part › Adapter)">⇄ Adapter</button> <span class="join-said"></span> <button type="button" id="join-let-go" hidden title="Let the kept end go: ⇄ Adapter keeps an end again, from the next end's numbers">✕ Let it go</button><ul class="join-fits" id="join-fits"></ul></div>` : ''}
                     ${target.scadUrl ? `<div class="part-actions"><a class="part-scad-download" href="${target.scadUrl}">💾 Download SCAD</a></div>` : ''}
                     ${target.checklistUrl ? `<div data-section="readiness"><div id="part-checklist">Loading…</div></div>` : ''}
                     <div class="part-stage">
@@ -5749,10 +5763,19 @@
                 const made = this.joined?.made;
                 const adapter = Boolean(made && made.part === target.part);
                 const button = box.querySelector('#join-btn'), said = box.querySelector('.join-said'), fits = box.querySelector('#join-fits');
+                const kept = this.joinState().kept;
                 box.hidden = !(round === 1 || adapter);
                 button.hidden = round !== 1;
                 button.onclick = () => this.joinNow(target).then(({ ok, said: words }) => this.setStatus(words, ok ? 'success' : 'error'));
-                const kept = this.joined?.kept;
+                const letGo = box.querySelector('#join-let-go');
+                letGo.hidden = !kept || round !== 1;
+                letGo.onclick = () => {
+                    const was = this.joinState().kept;
+                    this.joined.kept = null;
+                    keepEndAcrossReloads(null);
+                    this.showJoin(target);
+                    this.setStatus(`${endLabel(was)} let go: ⇄ Adapter keeps an end again`, 'success');
+                };
                 said.textContent = round !== 1 ? ''
                     : kept ? `${endLabel(kept)} is kept as one end: set the other end's numbers -- a preset, or what calipers read -- and ⇄ Adapter makes the adapter between them`
                     : 'its numbers as staged are one end: ⇄ Adapter keeps it; then the other end\'s numbers, and ⇄ Adapter again';
@@ -5787,10 +5810,10 @@
                 if (!stage || !target.part) return { ok: false, said: 'Nothing is being edited: Part › Edit on an end first' };
                 if ((await this.roundEndsOf(target.part)) !== 1) return { ok: false, said: `${target.part} has not one round end, a spigot or a socket, to join` };
                 const here = endOf(target.part, stage.staged, stage.defaults, stage.preset, stage.presets);
-                this.joined ??= { kept: null, made: null };
-                const kept = this.joined.kept;
+                const kept = this.joinState().kept;
                 if (!kept) {
                     this.joined.kept = here;
+                    keepEndAcrossReloads(here);
                     this.showJoin(target);
                     return { ok: true, said: `${endLabel(here)} kept as one end: set the other end's numbers -- choose a preset, or type what calipers read -- and ⇄ Adapter again` };
                 }
@@ -5803,6 +5826,8 @@
                 const body = response ? await response.json().catch(() => ({})) : {};
                 if (!response?.ok) return { ok: false, said: `No adapter: ${body.detail ?? 'the server did not answer'}; ${endLabel(kept)} is still kept` };
                 const end = (e) => ({ part: e.part, ...(e.preset ? { preset: e.preset } : {}), params: e.set ?? {} });
+                keepEndAcrossReloads(null);
+                this.dropJoinEnds();
                 this.joined = { kept: null, made: { part: body.part, a: end(body.a), b: end(body.b), asked: paramsKey(body.params), lines: body.lines, seats: body.seats } };
                 // Chosen among the site's own pieces: the universe holds every part.
                 if (this.focusPath.length) this.goUpTo(0, '⇄ Adapter');
@@ -5819,9 +5844,83 @@
                 this.showStaged(adapter);
                 const refused = await this.applyNow(adapter);
                 if (refused) return { ok: false, said: refused };
-                // Framed, as f does: the universe at its own framing shows a part this small as a speck.
-                this.fitSelected();
-                return { ok: true, said: `${body.lines[0]}: derived and drawn, each end's fit in Selected; ⚒ Make slices it` };
+                // Both ends stood beside it, where the connections place them, and the three
+                // framed: the universe at its own framing shows a part this small as a speck.
+                const stood = await this.standJoinEnds(body);
+                if (!stood) this.fitSelected();
+                return { ok: true, said: `${body.lines[0]}: derived and drawn${stood ? ' between its two ends' : ''}, each end's fit in Selected; ⚒ Make slices it` };
+            }
+
+            // What ⇄ Adapter keeps of an end, in the page's own state; and again after a
+            // reload, from this tab's sessionStorage.
+            joinState() {
+                return (this.joined ??= { kept: readKeptEnd(), made: null });
+            }
+
+            // The adapter's two ends drawn where its connections stand them
+            // (Adapter.placed, answered with it): each end's part rendered at its numbers
+            // (POST /parts/{part}/stl/generate), then moved from the adapter's frame, which
+            // is where the page drew the adapter, to its own. Faint and passed through, so a
+            // click still chooses the adapter. True when both stand.
+            async standJoinEnds(body) {
+                const node = this.renderNodeByKey[body.part], adapterMesh = this.meshByName[body.part];
+                const placed = Object.fromEntries((body.placed ?? []).map((c) => [c.name, c]));
+                if (!node || !adapterMesh || !placed.adapter || !placed.end_a || !placed.end_b) return false;
+                // A point of a site frame (z up) into three.js's (y up): sceneAt's turn.
+                const toSceneFrame = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1);
+                const placement = (at, turn) => {
+                    const m = new THREE.Matrix4();
+                    if (turn) m.makeRotationFromEuler(new THREE.Euler(...turn.map((a) => (a * Math.PI) / 180), 'ZYX'));
+                    return m.setPosition(...at);
+                };
+                const nodeAt = placement([node.position.x, node.position.y, node.position.z], node.turn);
+                const adapterIn = placement(placed.adapter.position, placed.adapter.turn).invert();
+                const meshes = [];
+                try {
+                    for (const [name, color] of [['end_a', JOIN_END_A_COLOR], ['end_b', JOIN_END_B_COLOR]]) {
+                        const c = placed[name];
+                        const page = encodeURIComponent(`${PAGE_ID}-join-${name}`);
+                        const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(c.part)}/stl/generate?page=${page}`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ params: c.params ?? {} }),
+                        });
+                        if (!response.ok) throw new Error(`${c.part}: ${response.status}`);
+                        const drawn = await response.json();
+                        const url = drawn.variant ? this.variantUrl(c.part, drawn.variant) : `${BASE_URL}/parts/${encodeURIComponent(c.part)}/stl`;
+                        const mesh = await this.loadSTLMesh(node, url, drawn.measured);
+                        // In the site's frame the end stands at the node's, turned and moved
+                        // from the adapter's frame; the mesh is centred on its own box.
+                        const world = nodeAt.clone().multiply(adapterIn).multiply(placement(c.position, c.turn));
+                        const frame = toSceneFrame.clone().multiply(world).multiply(toSceneFrame.clone().invert());
+                        const centre = mesh.userData.centredFrom;
+                        frame.multiply(new THREE.Matrix4().makeTranslation(...sceneAt(...centre).toArray()));
+                        frame.decompose(mesh.position, mesh.quaternion, new THREE.Vector3());
+                        mesh.material.dispose();
+                        mesh.material = new THREE.MeshPhongMaterial({ ...FACE_BEHIND_ITS_EDGES, color, transparent: true, opacity: 0.85 });
+                        mesh.getObjectByName('edges')?.material.color.set(color);
+                        mesh.userData.joinEnd = c.part;
+                        mesh.userData.passThrough = true;
+                        meshes.push(mesh);
+                    }
+                } catch (err) {
+                    console.warn('The adapter\'s ends were not drawn:', err);
+                    for (const m of meshes) disposeDeep(m);
+                    return false;
+                }
+                if (this.joined?.made?.part !== body.part) { for (const m of meshes) disposeDeep(m); return false; }
+                this.dropJoinEnds();
+                this.joinEnds = meshes;
+                for (const m of meshes) this.scene.add(m);
+                const box = new THREE.Box3().setFromObject(adapterMesh);
+                for (const m of meshes) box.expandByObject(m);
+                this.frameBox(siteBox(box));
+                this.invalidate();
+                return true;
+            }
+
+            dropJoinEnds() {
+                for (const m of this.joinEnds ?? []) { this.scene.remove(m); disposeDeep(m); }
+                this.joinEnds = [];
+                this.invalidate?.();
             }
 
             // Whether a part is drawn from a variant this tab applied -- its numbers

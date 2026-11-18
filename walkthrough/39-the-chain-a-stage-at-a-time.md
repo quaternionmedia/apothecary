@@ -166,9 +166,9 @@ A part can be made between two others. The universe opens, where every part stan
 ```
 1 Ends: apothecary opened, where Join a hose stands (garage was open); dust_port's editor opened, as Part › Edit does; Join a hose entered, its windows laid out
     Join a hose › 1 Ends (⊞ Windows › Join a hose): each end one part at its numbers: a preset chosen in Parameters, what calipers read typed over it; ⇄ Adapter in Selected keeps the first
-2 Adapter: hose_adapter's editor opened, as Part › Edit does
+2 Adapter: nothing more to do
     Join a hose › 2 Adapter (the tour): ⇄ Adapter again at the other end's numbers: the adapter between them derived, drawn, and each end's fit said in Selected
-3 Ready: nothing more to do
+3 Ready: hose_adapter's editor opened, as Part › Edit does
     Join a hose › 3 Ready (the tour): its numbers adjusted and each fit said again after Apply; whether it is ready to print; ⚒ Make takes it to a printer, where Print a part goes on
 ```
 
