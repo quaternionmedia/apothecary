@@ -509,8 +509,12 @@ def test_with_no_machine_open_loops_says_so_plainly_and_a_refusal_goes_when_it_w
     expect(start).to_have_attribute(
         "title", re.compile(r"^Disabled: .*arm control first"), timeout=10000
     )
-    rings.on_world(page, "Panels", "Machine", "Loops", "Start")
+    # The window's own act, as a live cell of its ring takes it: refused, said in red on
+    # its line. (Its ring's Start is greyed with the button, and a greyed cell chosen
+    # anyway says why on the status line alone: the test above.)
+    page.evaluate("() => window.apothecaryLoops.act('start', { label: 'Start' })")
     expect(said).to_have_class(re.compile(r"\bbad\b"), timeout=10000)
+    expect(said).to_contain_text("arm control first")
     with _http(url) as http:
         http.post("/firmware/printers/control", json={"port": PRINTER, "armed": True})
     expect(said).to_have_text("", timeout=15000)
