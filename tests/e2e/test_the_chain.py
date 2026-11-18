@@ -369,6 +369,7 @@ def test_the_tour_takes_the_page_to_every_stage_of_the_chain(page, simulated, wa
     served = httpx.get(f"{url}/tour", timeout=15.0).json()["journeys"]
     assert [j["id"] for j in served] == [j.id for j in journeys.JOURNEYS]
 
+    made = None
     for at, journey in enumerate(journeys.JOURNEYS):
         said_of = []
         done = []
@@ -409,6 +410,10 @@ def test_the_tour_takes_the_page_to_every_stage_of_the_chain(page, simulated, wa
         marks = {"drawing": (".world-badge",), "hands": (".panel[data-panel='selected']",)}
         marks = marks.get(journey.id, ())
         story.shows(heading, words, shown="\n".join(said_of), blank=(*CHANGING, *marks))
+        # The pieces made from the whiteboard's shapes, read while its site is open: a
+        # journey after it stands in another.
+        if journey.id == "drawing":
+            made = _drawn(page).get("made")
 
     # Nothing armed, nothing started, no piece made, no word given, no real port touched.
     with httpx.Client(base_url=url, timeout=15.0) as http:
@@ -418,6 +423,6 @@ def test_the_tour_takes_the_page_to_every_stage_of_the_chain(page, simulated, wa
             is False
         )
         assert http.get("/tour/feedback").json() == {"feedback": []}
-    assert _drawn(page).get("made") == {}
+    assert made == {}
     assert errors == []
     assert not simulated["touched"].exists() or simulated["touched"].read_text() == ""

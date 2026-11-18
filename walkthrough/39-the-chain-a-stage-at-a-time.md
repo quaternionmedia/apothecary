@@ -9,7 +9,7 @@ opening, the notes under it and the list of what the page does not show
 are the test's fixed words. Editing the page by hand is editing the output
 of a program: the next run puts it back.
 
-Every journey the page has, in the order of the chain it manages, the page taken to each stage by the [tour](34-the-tour.md): a part designed, made on the printer, cut on the router; the board a machine runs on; a deck's knobs on the machines; the site brought up and watched; and a drawing photographed into shapes, which stand up as parts to design. Each journey hands the next what it made. Under each is what the tour's box said the page did to stand on each stage, then what the page said of it. [docs/tour.md](../docs/tour.md) is the reference.
+Every journey the page has, in the order of the chain it manages, the page taken to each stage by the [tour](34-the-tour.md): a part designed, made on the printer, cut on the router; the board a machine runs on; a deck's knobs on the machines; the site brought up and watched; a drawing photographed into shapes, which stand up as parts to design; and two ends joined by an adapter the server derives between them. Each journey hands the next what it made. Under each is what the tour's box said the page did to stand on each stage, then what the page said of it. [docs/tour.md](../docs/tour.md) is the reference.
 
 **Runtime-bound.** It drives a real browser against `apothecary serve --simulated`, started as a person starts it: a simulated printer, router, devkit and Stream Deck, the scripted firmware tools, and a script that answers as OrcaSlicer's command line does. Every Python process of that server refuses a real serial port.
 
@@ -155,6 +155,21 @@ Last, what is seen becomes parts, and the chain closes. The whiteboard is chosen
     Read a drawing › 5 Models (the tour): an image model asked about a shape chosen on the picture, and never trusted
 6 Pieces: nothing more to do
     Read a drawing › 6 Pieces (the tour): Picture › Make stands each shape up as a piece: a part, to design and to make
+```
+
+## 9. Join a hose: two ends, each one part at its numbers, and the adapter between them
+
+A part can be made between two others. The universe opens, where every part stands; the dust port is chosen and its editor opened, its presets above its numbers in Parameters: a hose's end, a port, a tool's stub, each typed over with what calipers read. ⇄ Adapter in Selected keeps one end; at the other end's numbers it asks the server for the adapter between them. Adapter is the adapter's editor, where each end's fit is said; Ready is whether it can be printed, and ⚒ Make takes it on. The picture is Ends: keeping an end, and the numbers measured, are the person's.
+
+![Join a hose: two ends, each one part at its numbers, and the adapter between them](screenshots/39-09-join-a-hose-two-ends-each-one-part-at-its-numbers-.png)
+
+```
+1 Ends: apothecary opened, where Join a hose stands (garage was open); dust_port's editor opened, as Part › Edit does; Join a hose entered, its windows laid out
+    Join a hose › 1 Ends (⊞ Windows › Join a hose): each end one part at its numbers: a preset chosen in Parameters, what calipers read typed over it; ⇄ Adapter in Selected keeps the first
+2 Adapter: hose_adapter's editor opened, as Part › Edit does
+    Join a hose › 2 Adapter (the tour): ⇄ Adapter again at the other end's numbers: the adapter between them derived, drawn, and each end's fit said in Selected
+3 Ready: nothing more to do
+    Join a hose › 3 Ready (the tour): its numbers adjusted and each fit said again after Apply; whether it is ready to print; ⚒ Make takes it to a printer, where Print a part goes on
 ```
 
 ## What this page does not show
