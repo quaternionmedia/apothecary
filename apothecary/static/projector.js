@@ -17,11 +17,19 @@
  * this page's polls are what move it when nothing else polls. It asks no port anything
  * itself.
  *
+ * Which plane is drawn for is the server's too (answer.plane): the bed's outline and a
+ * printer's footprint lie through the bed plane's mapping, the toolpath, the cuts and the
+ * tool through plane.mapping -- the layer's or the stock's height when a second plane is
+ * calibrated, else the bed plane's -- and the band's line names it.
+ *
  * Calibration: C, or ?calibrate, or no calibration kept. Four markers stand for four
  * points of the bed (its calibration's, else the server's starting points); each is
  * dragged until its cross lights its point of the bed, and dropped, the four kept
  * (PUT .../projector) with this canvas's size; a grid every 10 mm of the bed is drawn
  * through the mapping kept, so how true it is shows. A refusal is said in the band.
+ * The second plane is marked the same way with a flat piece of known thickness on the
+ * bed: ?upper=<mm> names its thickness (or one is kept), U marks it, the four kept with
+ * PUT .../projector/upper and the grid drawn through the second plane's own mapping.
  * A click goes full screen, which only a gesture may ask.
  */
 
@@ -38,6 +46,7 @@ export const INK = {
     path: "#2f5a33",
     now: "#6fdb75",
     cuts: "#ffcc66",
+    footprint: "#3f7fa8",
     tool: "#ff8080",
     grid: "#262626",
     gridBold: "#4a4a4a",
@@ -55,9 +64,10 @@ export function apply(m, x, y) {
     return [(m[0][0] * x + m[0][1] * y + m[0][2]) / w, (m[1][0] * x + m[1][1] * y + m[1][2]) / w];
 }
 
-// A point of the frame on this canvas: the output's pixel, scaled to the canvas.
-export function toCanvas(answer, width, height, x, y) {
-    const [u, v] = apply(answer.mapping, x, y);
+// A point of the frame on this canvas: the output's pixel, scaled to the canvas, through the
+// bed plane's mapping unless another is given (the plane's, the second plane's).
+export function toCanvas(answer, width, height, x, y, mapping = answer.mapping) {
+    const [u, v] = apply(mapping, x, y);
     return [(u * width) / answer.size[0], (v * height) / answer.size[1]];
 }
 
@@ -84,6 +94,12 @@ export function gridLines(volume, pitch = GRID_MM) {
     return out;
 }
 
+// The mapping of the plane the toolpath, the cuts and the tool are drawn for: the answer's
+// plane, which is the bed plane's when one calibration is kept.
+export function planeMapping(answer) {
+    return (answer.plane && answer.plane.mapping) || answer.mapping;
+}
+
 // What a change of the stream is to this page: "again" when it is this machine's and its
 // picture is another than the one drawn, "moved" when only what moves has, else null.
 export function take(answer, change, key) {
@@ -96,8 +112,9 @@ export function take(answer, change, key) {
 // to the canvas; with none, the canvas set in by a quarter, the bed's front left at the
 // canvas's bottom left, its order the bed points' (front left, front right, back right,
 // back left).
-export function startingMarkers(answer, width, height) {
+export function startingMarkers(answer, width, height, upper = false) {
     const kept = answer && answer.calibration;
+    if (kept && upper && kept.upper) return kept.upper.pixels.map(([u, v]) => [(u * width) / kept.size[0], (v * height) / kept.size[1]]);
     if (kept) return kept.pixels.map(([u, v]) => [(u * width) / kept.size[0], (v * height) / kept.size[1]]);
     return [
         [width / 4, (3 * height) / 4],
@@ -108,8 +125,20 @@ export function startingMarkers(answer, width, height) {
 }
 
 // The four bed points the markers stand for.
-export function markedPoints(answer) {
+export function markedPoints(answer, upper = false) {
+    if (upper && answer.calibration && answer.calibration.upper) return answer.calibration.upper.bed;
     return answer.calibration ? answer.calibration.bed : answer.starting_points;
+}
+
+// The body a second plane is kept with: the markers' pixels within the canvas, the canvas's
+// size and the thickness of the piece they were marked on; the bed's points are the
+// calibration's unless a second plane already holds others.
+export function upperBody(answer, markers, width, height, mm) {
+    const within = (v, most) => Math.round(Math.min(Math.max(v, 0), most) * 100) / 100;
+    const kept = answer.calibration && answer.calibration.upper;
+    const body = { pixels: markers.map(([u, v]) => [within(u, width), within(v, height)]), size: [width, height], height: mm };
+    if (kept) body.bed = kept.bed;
+    return body;
 }
 
 // The body a calibration is kept with: the four bed points, the markers' pixels within the
@@ -125,17 +154,22 @@ export function calibrationBody(answer, markers, width, height) {
 
 // --- the page ------------------------------------------------------------------------------
 
-export function mountProjector({ canvas, base = "", site, path, calibrate = false }) {
+export function mountProjector({ canvas, base = "", site, path, calibrate = false, upper = null }) {
     const key = `${site}/${path}`;
     const ctx = canvas.getContext("2d");
     const at = `${base}/sites/${encodeURIComponent(site)}/machines/${encodeURIComponent(path)}/projector`;
     const state = {
         answer: null, error: null, refused: null, calibrating: calibrate, markers: null,
+        upperMm: upper > 0 ? Number(upper) : null, upperMarking: upper > 0,
         held: null, dragged: false, port: null, live: false, asking: null, askAgain: false,
-        drawn: { segments: 0, cuts: 0, tool: false, grid: 0 },
+        drawn: { segments: 0, cuts: 0, tool: false, grid: 0, footprint: 0 },
     };
     const who = { projector: key };
     const dpr = () => window.devicePixelRatio || 1;
+    // Whether the markers stand for the second plane: asked for, and the bed plane calibrated.
+    const marking = () => !!(state.upperMarking && state.answer && state.answer.calibration);
+    const upperHeight = () => state.upperMm || (state.answer && state.answer.calibration && state.answer.calibration.upper ? state.answer.calibration.upper.height : null);
+    const markersFor = (a) => startingMarkers(a, canvas.width, canvas.height, marking());
 
     function fit() {
         const width = Math.max(1, Math.round(canvas.clientWidth * dpr()));
@@ -143,7 +177,7 @@ export function mountProjector({ canvas, base = "", site, path, calibrate = fals
         if (canvas.width === width && canvas.height === height) return;
         canvas.width = width;
         canvas.height = height;
-        if (state.answer && state.held === null) state.markers = startingMarkers(state.answer, width, height);
+        if (state.answer && state.held === null) state.markers = markersFor(state.answer);
         draw();
     }
 
@@ -155,7 +189,7 @@ export function mountProjector({ canvas, base = "", site, path, calibrate = fals
         state.answer = body.snapshot;
         state.error = null;
         if (!state.answer.calibration) state.calibrating = true;
-        if (state.held === null) state.markers = startingMarkers(state.answer, canvas.width, canvas.height);
+        if (state.held === null) state.markers = markersFor(state.answer);
         draw();
     }
     function again() {
@@ -171,7 +205,11 @@ export function mountProjector({ canvas, base = "", site, path, calibrate = fals
     function heard(change) {
         const what = take(state.answer, change, key);
         if (what === "again") again();
-        else if (what === "moved") { state.answer.moving = change.body.moving; draw(); }
+        else if (what === "moved") {
+            state.answer.moving = change.body.moving;
+            if (change.body.plane) state.answer.plane = change.body.plane;
+            draw();
+        }
     }
     // Each time the stream opens -- and again after it dropped -- the answer is asked
     // afresh, so a change missed meanwhile is not.
@@ -213,25 +251,35 @@ export function mountProjector({ canvas, base = "", site, path, calibrate = fals
     }
     function segments(a, flat, first, count, colour, width) {
         const { width: w, height: h } = canvas;
+        const m = planeMapping(a);
         ctx.strokeStyle = colour;
         ctx.lineWidth = width;
         ctx.beginPath();
         for (let i = first; i < first + count; i++) {
             const k = i * 4;
-            ctx.moveTo(...toCanvas(a, w, h, ...onBed(a, flat[k], flat[k + 1])));
-            ctx.lineTo(...toCanvas(a, w, h, ...onBed(a, flat[k + 2], flat[k + 3])));
+            ctx.moveTo(...toCanvas(a, w, h, ...onBed(a, flat[k], flat[k + 1]), m));
+            ctx.lineTo(...toCanvas(a, w, h, ...onBed(a, flat[k + 2], flat[k + 3]), m));
         }
         ctx.stroke();
         return count;
     }
     function drawBed(a, line) {
         const { width: w, height: h } = canvas;
-        const bed = (p) => toCanvas(a, w, h, ...onBed(a, p[0], p[1]));
+        const through = (m) => (p) => toCanvas(a, w, h, ...onBed(a, p[0], p[1]), m);
+        const bed = through(a.mapping);
+        const plane = through(planeMapping(a));
         const outline = a.picture.bed.outline;
         stroke([...outline, outline[0]].map(bed), INK.bed, line);
+        const footprint = a.picture.footprint;
+        if (footprint) {
+            stroke(footprint.points.map(bed), INK.footprint, line * 2);
+            state.drawn.footprint = footprint.points.length;
+        }
         if (state.calibrating) {
+            // The second plane's grid lies through its own mapping, the bed plane's through the bed's.
             const grid = gridLines(a.frame.volume);
-            for (const [x0, y0, x1, y1, bold] of grid) stroke([bed([x0, y0]), bed([x1, y1])], bold ? INK.gridBold : INK.grid, line);
+            const on = marking() && a.upper_mapping ? through(a.upper_mapping) : bed;
+            for (const [x0, y0, x1, y1, bold] of grid) stroke([on([x0, y0]), on([x1, y1])], bold ? INK.gridBold : INK.grid, line);
             state.drawn.grid = grid.length;
         }
         const path = a.picture.toolpath;
@@ -243,7 +291,7 @@ export function mountProjector({ canvas, base = "", site, path, calibrate = fals
         }
         const cuts = a.picture.cuts;
         if (cuts && cuts.shapes) {
-            for (const shape of cuts.shapes) stroke(shape.points.map(bed), INK.cuts, line);
+            for (const shape of cuts.shapes) stroke(shape.points.map(plane), INK.cuts, line);
             state.drawn.cuts = cuts.shapes.length;
         }
     }
@@ -252,13 +300,14 @@ export function mountProjector({ canvas, base = "", site, path, calibrate = fals
         const { width: w, height: h } = canvas;
         const [x, y] = a.moving.tool;
         const r = 12 * line;
-        const [cx, cy] = toCanvas(a, w, h, x, y);
+        const [cx, cy] = toCanvas(a, w, h, x, y, planeMapping(a));
         stroke([[cx - r, cy], [cx + r, cy]], INK.tool, line);
         stroke([[cx, cy - r], [cx, cy + r]], INK.tool, line);
         state.drawn.tool = true;
     }
     function drawMarkers(a, line) {
-        const points = markedPoints(a);
+        const points = markedPoints(a, marking());
+        const mm = marking() ? ` @ ${upperHeight() === null ? "?" : upperHeight()} mm up` : "";
         const r = 18 * dpr();
         stroke([...state.markers, state.markers[0]], INK.gridBold, line);
         ctx.font = `${Math.round(14 * dpr())}px sans-serif`;
@@ -269,7 +318,7 @@ export function mountProjector({ canvas, base = "", site, path, calibrate = fals
             ctx.beginPath();
             ctx.arc(x, y, r * 0.6, 0, 2 * Math.PI);
             ctx.stroke();
-            ctx.fillText(`${points[i][0]}, ${points[i][1]} mm`, x + r, y - r);
+            ctx.fillText(`${points[i][0]}, ${points[i][1]} mm${mm}`, x + r, y - r);
         });
     }
     function drawBand(a) {
@@ -279,7 +328,10 @@ export function mountProjector({ canvas, base = "", site, path, calibrate = fals
         if (state.refused) lines.push([state.refused, INK.refused]);
         if (a) {
             for (const text of a.moving.status.lines) lines.push([text, INK.band]);
-            for (const text of [...a.moving.said, ...a.picture.said]) lines.push([text, INK.said]);
+            if (a.plane && a.plane.line) lines.push([a.plane.line, INK.band]);
+            const said = [...(a.plane ? a.plane.said : []), ...a.moving.said, ...a.picture.said];
+            if (marking() && upperHeight() === null) said.push("the second plane's thickness is not named: open the page with ?upper=<mm>");
+            for (const text of said) lines.push([text, INK.said]);
         }
         ctx.font = `${size}px sans-serif`;
         lines.forEach(([text, colour], i) => {
@@ -291,7 +343,7 @@ export function mountProjector({ canvas, base = "", site, path, calibrate = fals
     function draw() {
         const a = state.answer;
         const line = Math.max(1, canvas.width / 960);
-        state.drawn = { segments: 0, cuts: 0, tool: false, grid: 0 };
+        state.drawn = { segments: 0, cuts: 0, tool: false, grid: 0, footprint: 0 };
         ctx.fillStyle = "#000";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         if (a && a.mapping) {
@@ -305,8 +357,12 @@ export function mountProjector({ canvas, base = "", site, path, calibrate = fals
 
     // --- calibrating: four markers dragged and dropped ----------------------------------------
     async function keep() {
-        const body = calibrationBody(state.answer, state.markers, canvas.width, canvas.height);
-        const r = await fetch(at, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const second = marking() && upperHeight() !== null;
+        if (marking() && !second) { state.refused = "the second plane's thickness is not named: open the page with ?upper=<mm>"; draw(); return false; }
+        const body = second
+            ? upperBody(state.answer, state.markers, canvas.width, canvas.height, upperHeight())
+            : calibrationBody(state.answer, state.markers, canvas.width, canvas.height);
+        const r = await fetch(second ? `${at}/upper` : at, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
         const said = await r.json().catch(() => ({}));
         if (!r.ok) { state.refused = typeof said.detail === "string" ? said.detail : r.statusText; draw(); return false; }
         state.refused = null;
@@ -344,10 +400,11 @@ export function mountProjector({ canvas, base = "", site, path, calibrate = fals
         if (asked && asked.catch) asked.catch(() => {});
     });
     window.addEventListener("keydown", (e) => {
-        if (e.key === "c" || e.key === "C") state.calibrating = !state.calibrating;
+        if (e.key === "c" || e.key === "C") { state.calibrating = !state.calibrating; state.upperMarking = false; }
+        else if (e.key === "u" || e.key === "U") { state.upperMarking = !state.upperMarking; state.calibrating = true; }
         else if (e.key === "Escape") state.calibrating = false;
         else return;
-        if (state.answer && state.held === null) state.markers = startingMarkers(state.answer, canvas.width, canvas.height);
+        if (state.answer && state.held === null) state.markers = markersFor(state.answer);
         draw();
     });
     window.addEventListener("resize", fit);
@@ -362,6 +419,8 @@ export function mountProjector({ canvas, base = "", site, path, calibrate = fals
                 key: state.answer ? state.answer.picture.key : null,
                 calibrated: !!(state.answer && state.answer.mapping),
                 calibrating: state.calibrating,
+                marking: marking() ? "upper" : "bed",
+                plane: state.answer && state.answer.plane ? { z: state.answer.plane.z, for: state.answer.plane.for, how: state.answer.plane.how } : null,
                 markers: state.markers ? state.markers.map((p) => [...p]) : null,
                 drawn: { ...state.drawn },
                 band: [...(state.band || [])],

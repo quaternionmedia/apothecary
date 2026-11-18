@@ -160,3 +160,73 @@ def test_the_grid_markers_and_what_a_change_is_to_the_page(tmp_path):
         "size": [800, 400],
     }
     assert got["bodyKept"] == [[1, 2], [3, 4], [5, 6], [7, 9]]
+
+
+@needs_node
+def test_the_page_draws_a_plane_through_the_mapping_the_server_blended(tmp_path):
+    """A plane's mapping is the server's (projector.mapping_at): the page applies it as it
+    applies the bed's, and takes it from the answer, the bed's when it has none."""
+    import math
+
+    from test_projector import LIT, OUTPUT, PROBES, Pinhole  # noqa: PLC0415
+
+    lens = Pinhole()
+    both = lens.calibration(25.0)
+    plane = [list(row) for row in projector.mapping_at(both, 31.0)]
+    bed = [list(row) for row in projector.mapping(both)]
+    answer = {"mapping": bed, "size": list(OUTPUT), "plane": {"mapping": plane}, "moving": {"bed_offset": 0.0}}
+    got = _run(
+        tmp_path,
+        "import * as p from '/static/projector.js';\n"
+        f"const a = {json.dumps(answer)};\n"
+        f"const points = {json.dumps(PROBES)};\n"
+        "console.log(JSON.stringify({\n"
+        "  planeApplied: points.map(([x, y]) => p.apply(p.planeMapping(a), x, y)),\n"
+        "  halved: points.map(([x, y]) => p.toCanvas(a, 960, 540, x, y, p.planeMapping(a))),\n"
+        "  bedOnly: p.planeMapping({ mapping: a.mapping }) === a.mapping,\n"
+        "  bedDefault: points.map(([x, y]) => p.toCanvas(a, 1920, 1080, x, y)),\n"
+        "}));\n",
+    )
+    assert LIT and math.isfinite(sum(plane[0]))
+    for (x, y), js, half in zip(PROBES, got["planeApplied"], got["halved"], strict=True):
+        want = apply(projector.mapping_at(both, 31.0), x, y)
+        assert js == pytest.approx(want, rel=1e-12)
+        assert half == pytest.approx([want[0] / 2, want[1] / 2], rel=1e-12)
+        assert js == pytest.approx(lens.pixel(x, y, 31.0), abs=1e-6)
+    assert got["bedOnly"] is True
+    for (x, y), js in zip(PROBES, got["bedDefault"], strict=True):
+        assert js == pytest.approx(apply(projector.mapping(both), x, y), rel=1e-12)
+
+
+@needs_node
+def test_the_second_plane_s_markers_and_body(tmp_path):
+    kept = {
+        "calibration": {
+            "bed": [[1, 2], [3, 4], [5, 6], [7, 9]], "pixels": [[0, 0], [100, 0], [100, 50], [0, 50]], "size": [200, 100],
+            "upper": {"bed": [[2, 2], [3, 4], [5, 6], [7, 8]], "pixels": [[10, 0], [110, 0], [110, 50], [10, 50]], "height": 20},
+        },
+        "starting_points": [[20, 20], [200, 20], [200, 200], [20, 200]],
+    }
+    without = {"calibration": {**kept["calibration"], "upper": None}, "starting_points": kept["starting_points"]}
+    got = _run(
+        tmp_path,
+        "import * as p from '/static/projector.js';\n"
+        f"const k = {json.dumps(kept)}, w = {json.dumps(without)};\n"
+        "console.log(JSON.stringify({\n"
+        "  bedStart: p.startingMarkers(k, 400, 200), upperStart: p.startingMarkers(k, 400, 200, true),\n"
+        "  upperFirst: p.startingMarkers(w, 400, 200, true),\n"
+        "  points: p.markedPoints(k, true), pointsFirst: p.markedPoints(w, true), bedPoints: p.markedPoints(k),\n"
+        "  body: p.upperBody(k, [[-5, 10], [900, 20], [300.123, 450], [10, 10]], 800, 400, 12.5),\n"
+        "  bodyFirst: p.upperBody(w, [[1, 1], [2, 2], [3, 3], [4, 4]], 800, 400, 12.5),\n"
+        "}));\n",
+    )
+    assert got["bedStart"] == [[0, 0], [200, 0], [200, 100], [0, 100]]
+    assert got["upperStart"] == [[20, 0], [220, 0], [220, 100], [20, 100]]
+    assert got["upperFirst"] == got["bedStart"]  # a second plane starts where the first was marked
+    assert got["points"] == kept["calibration"]["upper"]["bed"]
+    assert got["pointsFirst"] == got["bedPoints"] == kept["calibration"]["bed"]
+    assert got["body"] == {
+        "pixels": [[0, 10], [800, 20], [300.12, 400], [10, 10]],
+        "size": [800, 400], "height": 12.5, "bed": kept["calibration"]["upper"]["bed"],
+    }
+    assert got["bodyFirst"] == {"pixels": [[1, 1], [2, 2], [3, 3], [4, 4]], "size": [800, 400], "height": 12.5}

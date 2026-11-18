@@ -34,9 +34,14 @@ any height between them or a little beyond.
 
 **At the bench.** With the bed calibrated, lay a flat piece of known thickness on it,
 covering the four points (or name four others on its top, `bed` in the `PUT` below), and
-keep the four pixels that light them
-(`PUT .../projector/upper`, below) with the piece's thickness as `height`. Marking the bed plane
-again forgets the second plane, because the projector may have moved.
+open the page with `?calibrate&upper=<thickness in mm>`: the four markers start where the
+bed plane's were and are dragged, without touching the projector, its zoom or its
+keystone, until each cross lights the piece's top over its point. The four are kept with
+that height as the calibration's second plane (`PUT .../projector/upper`, below), and the
+grid is drawn through the second plane's own mapping. U on the page toggles marking it
+(`?upper=` names the thickness; with none named a kept second plane's is used, and with
+neither the band says so). Marking the bed plane again forgets the second plane, because
+the projector may have moved.
 
 **The relation.** A pinhole projector projects a point `(X, Y, Z, 1)` by a 3 × 4 matrix
 `P` with columns `p0 p1 p2 p3`. The plane `Z = z` therefore maps by `[p0 p1 (z·p2 + p3)]`,
@@ -209,7 +214,7 @@ to stroke it.
   extrapolated, weaker`, or `bed plane: the height is refused`), `mapping` the mapping true at
   `z` (the bed plane's when one calibration is kept), `line` the band's sentence naming it, and
   `said` what that leaves out. It moves with a poll (a layer climbs), so a change of the
-  stream carries it with `moving`.
+  stream carries it with `moving`, once the machine is calibrated.
 - `picture` is what changes only when what is made does. `source` is `job` for the file
   streaming on the machine, `plan` for the file its plan names
   ([a machine planned](firmware.md#a-machine-planned-before-its-board-is-connected)), or `null`. `toolpath.segments` are four numbers each, `x0
@@ -255,7 +260,9 @@ floor set in 20 mm (`starting_points`) -- labelled with its millimetres. Each is
 dragged until its cross lights its point on the bed, and dropped; the four are kept with
 the canvas's size (`PUT`), and the grid, a line every 10 mm of the bed with every fifth
 brighter, is drawn through what was kept, so how true it lies on the bed shows. A
-refusal is written in the band. Escape leaves calibrating.
+refusal is written in the band. Escape leaves calibrating. The second plane is marked the same way, the markers standing
+for the same four points on the top of a piece of known thickness
+([A height](#a-height-a-second-plane)).
 
 The pixels kept are the canvas's, with its size; drawn on a canvas of another size they
 are scaled to it, across and down apart. That holds while the canvas fills the
@@ -267,8 +274,8 @@ as they were.
 
 The answer is kept current by the surfaces' one stream
 (`GET /surfaces/events?names=projector`). A change of this machine's carries its
-picture's key and what moves: what moves is taken as it is, and another key has the
-answer asked for again. The server says a change when it learns of one -- a poll of the
+picture's key and what moves (and, once calibrated, `plane`, which a layer climbing moves):
+what moves is taken as it is, and another key has the answer asked for again. The server says a change when it learns of one -- a poll of the
 machine's board, whoever made it, a job of it begun or ended, a calibration kept or
 forgotten -- and polls nothing for the page.
 
@@ -298,6 +305,19 @@ A browser draws the page and a projector lights it; neither runs in the suites. 
 projector aimed at the bed: the grid lying square on the bed's own marks from corner to
 corner after a calibration; the outline of a print following the Ender's bed as it moves
 along Y, a poll behind; the current layer brightening as a print climbs; a router's cuts
-lying where its work zero was set; and what a part's height does to the picture at its
-top (`tests/e2e/test_projector_page.py` holds what a browser can: the page, a drag kept,
-the stream followed, the ring's cell).
+lying where its work zero was set; a printer's planned footprint lying where the slice then
+puts the part's first layer; and what a part's height does to the picture at its top
+(`tests/e2e/test_projector_page.py` holds what a browser can: the page, a drag kept, a second
+plane kept and named in the band, the footprint drawn, the stream followed, the ring's cell).
+
+**The height, with a ruler and a block.** Neither a browser nor a suite has met a projector, and
+the maths guarantees only what its assumption gives: exact for a pinhole, with no lens distortion,
+a flat plane and a projector that stood still between the markings. No accuracy figure for a real
+one is stated here. At the bench: calibrate the bed plane and a block's top, say 20 mm thick; set
+the block's top at a height between (a second block, or the same one on a spacer) and a ruler's
+line on it, ask `?height=` for that plane (`GET ...?height=z`) and see how far the line lies from
+where the picture draws it. Do it again at the second plane's own height (the marked points
+themselves), beyond it up to twice (where the error of marking the second plane is carried
+two times over), and with the block off to one side of the lens and the other, because a lens
+that bends the picture shows at the image's edge first. Measure the lens distortion before
+trusting the picture past the centre; nothing here corrects it.

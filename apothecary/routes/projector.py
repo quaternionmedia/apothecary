@@ -598,16 +598,16 @@ def _now_at(site_name: str, path: str):
 
 def moved(site_name: str, path: str) -> Dict[str, Any]:
     """What a change of the machine's says, without reading its toolpath: its picture's
-    key, so a reader holding another asks again, and what moves."""
+    key, so a reader holding another asks again, what moves, and -- once calibrated -- the
+    plane it is drawn for, which a layer climbing moves."""
     _, kind, _, status, frame = _now_at(site_name, path)
     source, file, origin, plan, _ = _intent(site_name, path, kind, status)
     calibration = projector.load(site_name, path)
     key = _key(source, file, origin, plan, calibration, frame["volume"])
-    return {
-        "key": key,
-        "moving": moving(site_name, path, frame, status),
-        "plane": plane(site_name, path, kind, frame, status, calibration),
-    }
+    said = {"key": key, "moving": moving(site_name, path, frame, status)}
+    if calibration is not None:  # a machine not calibrated has no plane to say
+        said["plane"] = plane(site_name, path, kind, frame, status, calibration)
+    return said
 
 
 def answer(site_name: str, path: str, height: Optional[float] = None) -> Dict[str, Any]:

@@ -21,7 +21,8 @@
             base: {{ base_url | tojson }},
             site: {{ site | tojson }},
             path: {{ path | tojson }},
-            calibrate: new URLSearchParams(location.search).has('calibrate'),
+            calibrate: new URLSearchParams(location.search).has('calibrate') || new URLSearchParams(location.search).has('upper'),
+            upper: new URLSearchParams(location.search).get('upper'),
         });
     </script>
 </body>
