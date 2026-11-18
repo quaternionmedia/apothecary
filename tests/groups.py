@@ -186,6 +186,7 @@ GROUPS = {
             "tests/assignment_cases.json",
             "walkthrough/43-*",
             "walkthrough/44-*",
+            "walkthrough/49-*",
         ),
         "tests": (
             "test_adapters.py",

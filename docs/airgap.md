@@ -157,7 +157,8 @@ neither. Every distance is between polygons, within a circle's sagitta of
 the circle. It knows no field, force or material, and its figures are not in
 the metrics document, whose figures the panel alone computes.
 [Walkthrough page 44](../walkthrough/44-a-gap-that-travels.md) runs it on the
-airgap's eccentric rotor and on the two parts below.
+airgap's eccentric rotor and on the rolling and flexure rotors below, and
+[page 49](../walkthrough/49-a-disc-on-its-pins.md) on the cycloidal disc.
 
 ## Rotors that do not turn on a shaft
 
@@ -166,7 +167,7 @@ and its motion is one rigid turn. Each family below lets one of those go.
 
 | Family | The motion | The gap | Here |
 |---|---|---|---|
-| Rolling and eccentric | The rotor's centre goes round and the rotor turns slowly back under it, rolling on the stator: a rolling rotor, a wobble plate, a cycloidal disc on pins | Closes at one point, or a few, that travels with the orbit | `rolling_rotor` |
+| Rolling and eccentric | The rotor's centre goes round and the rotor turns slowly back under it, rolling on the stator: a rolling rotor, a wobble plate, a cycloidal disc on pins | Closes at one point, or a few, that travels with the orbit | `rolling_rotor`, `cycloidal_disc` |
 | Travelling and strain wave | A flexible ring is pushed into a wave that goes round; the ring creeps by its difference in length or teeth from what it rolls in: a strain-wave gear's flexspline, a peristaltic drive | Closes at the wave's crests, several at once, travelling | the panel's run drives a travelling wave across the yoke (its peristaltic preset); no part |
 | Compliant and flexure-borne | The rotor turns or oscillates a few degrees on printed leaves instead of a bearing; the rotor and the stator are one piece | Unchanged along the rays; a gap at a flank closes to a stop | `flexure_rotor` |
 | Segmented and distributed | Many movers in one stator's field: tiles, a chain, a track; the gap unrolled along a line or wrapped on a cone or a sphere | One gap per mover, each its own function of position | none |
@@ -201,12 +202,101 @@ curvature: for a small turn `a`, `leaf * a * (2 L + 3 hub) / L^2`, with `L`
 its length. It prints flat in one piece; a pocket in each lobe and each post
 takes what is bought.
 
-Neither part declares `kinematics`: that contract moves a machine's pieces
-along x, y and z with its tool's mark ([docs/cnc.md](cnc.md)), and a turn
-about an axis, or a pose that follows one drive angle, is not in it. Each
-part takes its pose as a parameter, `orbit` and `swing`, as the airgap takes
-`phi`, and Part › Edit's control for it moves it. The Airgap panel reads the
-airgap part alone.
+### The cycloidal disc
+
+[`cycloidal_disc`](../parts/cycloidal_disc/README.md) is the rolling rotor
+with teeth. `pins` pins stand in a ring of radius `pin_circle` in the
+stator's floor, and the disc inside them has one lobe fewer. A crank carries
+the disc's centre round a circle of radius `eccentricity`; at `crank` the disc
+has turned `-crank / (pins - 1)`, so `pins - 1` turns of the crank turn it
+once. The rolling rotor's turn back rests on its track not slipping; here a
+disc turned any other way would stand in a pin.
+
+The flank is constructed, not quoted. Seen from the disc as the pose turns
+it, every pin's centre runs on one curve, `c(s) = (R cos s - E cos N s, R sin s
+- E sin N s)` with `R = pin_circle`, `E = eccentricity` and `N = pins`, and the
+flank is that curve's inner parallel at the pin's radius plus `clearance`. So
+each pin stands `clearance` from the flank at every turn of the crank, all of
+them at once, where the curve does not loop (`R > E N`) and its parallel does
+not fold at a lobe's tip; a set that does either is refused. Measured from
+the outlines, at every crank every pin stands the clearance within how far
+the drawn polygon stands from its curve (`profile_sagitta`); the disc can turn
+a little either way about its own centre before it meets a pin, its backlash
+as drawn, and the middle of that is the pose's turn. Those are the part's two
+guards: a flank moved in by 0.02 mm fails the first, a pose turned back by
+the pins' count instead of the lobes' fails both.
+
+Its pitch circles, `E N` and `E (N - 1)`, roll on each other. A fixed pin's
+contact with the flank does not roll: it stays on the pin, sweeping back and
+forth across its face, and goes a lobe round the disc each turn of the crank,
+several times as far along the flank as across the pin: the flank slides on
+the pin. The output's pins, on a disc turning on the axis, each run round the
+wall of a hole a pin's diameter and twice the eccentricity across, their
+centres the eccentricity from the holes' at every crank.
+
+## The motion view
+
+A part whose pieces move against one another as one of its parameters goes
+declares a motion (`BasePart.motion`, [docs/parts-authoring.md](parts-authoring.md#a-part-that-moves)):
+the parameter and its range, the piece that stands still and those that move,
+each drawn by the SCAD alone in its own frame (`piece`), and the wrapper's own
+pose function. `GET /parts/{name}/motion` samples that function at the
+motion's step into one document, `motion/1` (`apothecary/motion.py`): each
+moving piece's pose at each sample -- a turn about the part's z axis and a
+shift across it -- each bent piece's outlines at each sample, and each gap the
+part follows, measured there with `gap_geometry`: its least and where it is on
+each body. The viewer's Motion window (Part › View › Motion on the part's
+ring, a window of the Part group) draws each piece once through OpenSCAD and
+from then on only moves them: Play, Back, Step, Reset and a slider over the
+parameter. No OpenSCAD runs while it plays.
+
+Between two samples the page takes each of x, y and turn in proportion; the
+table says how far that puts any point of a piece from where the part's own
+pose function puts it, the worst over the middle of every step. A gap is read
+as the nearest sample's, as the server measured it; the page computes none.
+The table is sampled rather than declared as a chain of turns and shifts so
+that each part's pose has one source, its wrapper, at the cost of one fetch;
+the gaps have to be measured on the server in any case.
+
+| Part | Its motion | What moves | What is followed |
+|---|---|---|---|
+| `rolling_rotor` | `orbit`, 0 to 360 | The rotor, rolling on its track without slip, as the pose assumes | The rotor on its track, its contact going round; the poles to the rotor |
+| `flexure_rotor` | `swing`, `-stop` to `stop` | The hub and its lobes, turned rigidly; each leaf redrawn at each sample from the model's own cubic -- the drawing's shape, not a simulation of the bending | Each lobe's flank to its post, closing to the stop |
+| `cycloidal_disc` | `crank`, 0 to 360 | The disc, carried round and turned back by its lobes; the output's pins, bought and not drawn, turning with it | Each pin to the disc |
+
+A machine whose pieces ride its axes with its tool's mark keeps `kinematics`
+([docs/cnc.md](cnc.md)); a motion is a part's own, followed by no poll.
+
+### Which view shows which machine
+
+The Airgap panel and its metrics document take the machine to be the airgap
+part: a rigid rotor turning about one axis in a stator that stands still. Its
+gap is `g(θ, φ) = S(θ) - R(θ - φ)`: the bore's radius along the ray at `θ`,
+less the rotor's radius along the same ray in the rotor's own frame, which a
+rigid turn by `φ` shifts round. That one subtraction is the whole of the
+pose: a rotor whose centre moves, or that turns back as it goes round, is not
+a shift of `R` round the axis, and the formula, its document
+(`airgap/metrics/1`) and the record that governs them stop there. So the
+panel shows the airgap part, and the motion view shows the rolling rotor, the
+flexure rotor and the cycloidal disc, each gap measured from their outlines at
+each pose rather than along rays from a fixed rotor.
+
+### What is bought, drawn
+
+Printed plastic carries next to no magnetic flux, so as drawn none of the
+three can pull anything. Each takes inserts in pockets cut from the top: the
+rolling rotor in its teeth and round its rotor's rim (`pole_insert`,
+`rim_insert`), the flexure rotor in its lobes and posts (`pocket`), the
+cycloidal disc under its lobes and in its wall between the pins
+(`lobe_insert`, `pole_insert`), each 0 for none: the flexure rotor's are cut
+at its defaults, the others' are not. The wrapper lists what goes in each
+hole as bought (`BasePart.bought`: each kind's count, an insert's diameter
+0.2 mm under its pocket's, its length, and the interfaces it sits in), with
+the pins, bearings and output pins. The SCAD
+never draws them, so no printed STL holds one; the Motion window draws them
+in a colour of their own, riding the piece each sits in, while its Bought is
+ticked. Their material is the owner's to choose: nothing here says what one
+would pull, or how hard.
 
 ## What is measured, and what is not
 
@@ -216,11 +306,13 @@ it: a closed form, the SCAD's echo, or a render.
 
 | Measured from geometry | Not measured here |
 |---|---|
-| The gap at every point of the stator or the posts, at any orbit or swing, its least and where that is | Force, torque, flux, inductance: no field is solved |
+| The gap at every point of the stator, the posts or the pins, at any orbit, swing or crank, its least and where that is | Force, torque, flux, inductance: no field is solved |
+| Each pin's gap to the cycloidal disc's flank, and how far the disc can turn at a standing crank before it meets one: its backlash as drawn | The backlash of a print on bought pins, and whether its disc runs or binds |
 | Where the closest approach goes through a cycle, on each body, and whether it rolls or slips | Whether a real track rolls without slipping |
 | That nothing touches but what is meant to, through the whole motion, and the swing at which a stop is reached | How hard the stop is met, and what wears |
 | A slot's cross-section, the room its coils share | How many turns of which wire fit, and how warm they run |
 | A leaf's bending strain at a swing | The leaves' stiffness, the hub's ringing, and whether a leaf survives the strain: the filament's and the print's |
+| Where a pin's contact slides along the disc's flank, and how far | What the sliding costs and how the flanks wear |
 | Each piece's solid volume | Its mass, which is that times the filament's density and the slicer's fill |
 
 A textbook relation can say which way a figure goes and not how far: the pull
@@ -247,9 +339,23 @@ What the geometry leaves open is settled on the printed parts:
    with a gauge at several swings, each swing's flank gap read from
    `flank_gap`. That gives the curve of pull against gap for those pieces,
    and whether it beats the leaves before the stop.
+4. **How much does the cycloidal disc's output give?** Hold the crank still
+   and turn the output by hand each way against a dial or a long pointer at
+   a known radius; the angle between the two stops is the backlash of that
+   print on those pins, beside the `free_turn` drawn for its clearance.
+   Again at several cranks, since the drawn one changes with the crank.
+5. **Do the pins bind?** Turn the crank through whole turns of the output,
+   once with bought dowels and once with `printed_pins`, noting where it
+   catches or stops; then with the disc's `clearance` stepped down. That
+   says whether a printed disc runs on its pins at a clearance, and whether
+   printed pins hold their size.
 
 ## What it costs the page
 
 Eleven controls of the viewer's own, seven of them ring-backed, under the
 census ([census.md](census.md)); one cell of the canvas ring's Panels, the
 eighth and last, so no address before it moved.
+
+The Motion window's controls are each a cell of Part › View › Motion, seated
+after Fit, so no cell of View moved; `apothecary census` counts them among
+the viewer's own and the ring-backed.

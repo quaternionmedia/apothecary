@@ -379,6 +379,57 @@ on the render and fails on drift, `apothecary parts interfaces NAME` lists them,
 and [connections.md](connections.md) says how two fit and how parts are placed by
 them.
 
+`bought(params)` is what the part needs and does not print: a list of
+`apothecary.models.bought.Bought`, each kind with its count, its diameter and
+length in mm (a bearing's bore too), and the interfaces it sits in, one in
+each. Nothing listed is in the STL: the SCAD cuts the hole, the list says
+what goes in it. A pocket for a round insert is drawn `INSERT_FIT` wider than
+the insert. `material` is said only where the part's geometry depends on one;
+an insert whose material is the owner's choice says none.
+`tests/test_bought.py` holds every part's list to its interfaces: each place
+named is one, and the item fits it.
+
+### A part that moves
+
+`motion(params)` says how the part's pieces move against one another as one
+of its parameters goes, for a part that is a mechanism rather than one
+solid: an `apothecary.motion.Motion`. A machine whose pieces ride its axes
+with a poll keeps `kinematics` instead. A motion names:
+
+- `param`, `lo`, `hi`, `step`, `unit`: the parameter, its range, and the
+  step the table is sampled at; `cyclic` when the end of the range is its
+  start again (an orbit), so the page goes round again, each piece's turn
+  carried on by what one cycle adds;
+- `piece_param` and `still`: the SCAD's parameter that draws one piece
+  alone, and the piece that stands still;
+- `moving`: each `Piece` that moves, drawn by the SCAD alone in its own frame
+  -- its pose's origin where the part's is, unturned -- with its `reach`
+  from that origin and any `Insert` it carries; a piece that is not `drawn`
+  is bought and carries only its inserts;
+- `pose(value)`: the wrapper's own function, where each moving piece stands,
+  a `gap_geometry.Pose`: a turn about the part's z axis and a shift across
+  it. A motion is planar;
+- `bent`: a piece drawn from the model's outlines at each sample, extruded,
+  for one that bends rather than moves (a flexure's leaves);
+- `gaps`: each `Gap` the motion follows, measured at a value as `Mark`s, the
+  least first, with the point on each body in the part's frame.
+
+`GET /parts/{name}/motion` samples it into `motion/1` (`apothecary.motion.table`),
+and Part › View › Motion plays it ([airgap.md](airgap.md#the-motion-view)).
+The SCAD needs the `piece` parameter, with `all` drawing the whole as before:
+
+```scad
+piece = "all";  // [all, stator, rotor] what to draw: both, or one alone -- the rotor in its own frame
+if (piece != "rotor") stator();
+if (piece != "stator") translate(piece == "rotor" ? [0, 0, base] : rotor_at) rotate(piece == "rotor" ? 0 : turn) rotor();
+```
+
+`tests/test_motion.py` holds every declared motion's table to its wrapper's
+pose function at the samples, the page's way between two samples to within a
+hundredth of a millimetre of it, a cycle to end where it began but for its
+turn, and each moving piece, rendered alone as the part rests, to stand on
+the axis.
+
 ## A piece made from a picture is a part
 
 A shape a finder saw in a picture and a person made into a piece

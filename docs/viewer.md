@@ -694,6 +694,14 @@ A section for another kind of board is left out of it. A window a view leaves
 out is closed, and comes back by a + or ⊞ Windows; the views and the windows in
 them are remembered like any layout.
 
+**A part that moves.** The Motion window, in the Part group and the column
+beside the world, closed until asked for, plays the selected part's motion
+when its wrapper declares one: Part › View › Motion on the part's ring, or ⊞
+Windows. It draws the part's pieces once and from then on moves them --
+Play, Back, Step, Reset, a slider -- each gap the server measured drawn where
+it is least and read with its unit, and what is bought drawn in a colour of
+its own while Bought is ticked ([airgap.md](airgap.md#the-motion-view)).
+
 ### Journeys
 
 A journey is a path a person takes through the windows, a step at a time

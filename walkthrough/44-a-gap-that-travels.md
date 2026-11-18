@@ -133,4 +133,5 @@ the leaves are and how the hub rings are a bench's to say
 | Render the rolling rotor | `apothecary parts generate-stl rolling_rotor` |
 | Render the flexure rotor swung | `apothecary parts generate-stl flexure_rotor -p swing=6` |
 | Check an envelope and its holes are true | `apothecary parts verify rolling_rotor`, `apothecary parts verify flexure_rotor` |
-| See each move | `/viewer/parts/rolling_rotor`, Part › Edit, its `orbit`; `/viewer/parts/flexure_rotor`, its `swing` |
+| See each move | `/viewer/parts/rolling_rotor` or `/viewer/parts/flexure_rotor`, the part's ring, Part › View › Motion › Play: its pieces drawn once and moved, each gap as the server measured it |
+| A disc whose ratio is its teeth's | [page 49](49-a-disc-on-its-pins.md), the cycloidal disc |
