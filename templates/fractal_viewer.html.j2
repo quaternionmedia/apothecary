@@ -893,7 +893,7 @@
         import { mountAnchors } from '/static/anchors.js';
         import { makePickScope, kindOf, WALL as WALL_LAYER, GRID as GRID_LAYER, MACHINE_BUTTONS as BUTTONS_LAYER, MEASURE as MEASURE_LAYER } from '/static/pick_scope.js';
         import { takeLayerColours, layerColour, layerHex, categoriesInOrder } from '/static/layer_colours.js';
-        import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf, shellLabel, facesEye, pieceNear } from '/static/orbits.js';
+        import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf, shellLabel, clusterLabel, limbOf, facesEye, pieceNear } from '/static/orbits.js';
         import { ownExtents, sizeFromSceneBox, turnedExtents, turnRowsInScene, turnedBounds, between, gap as gapBetween, nearestWithin, length as mmText, fieldMm, layLabels } from '/static/measure.js';
         import { ADAPTER, presetStaged, endOf, betweenBody, paramsKey, label as endLabel } from '/static/ends.js';
         import { mountMeasureWorld } from '/static/measure_world.js';
@@ -1138,10 +1138,10 @@
         const ORBIT_PICK_PX = 6;
         // What names the sphere at the opening view: a shell's and a cluster's label, in pixels
         // of text whatever the distance (laid by measure.js's layLabels), how near the pointer
-        // must be to a piece to name it, and how faint a shell's translucent sphere is drawn.
+        // must be to a piece to name it, and how faint the edge of a shell's sphere is drawn.
         const ORBIT_LABEL_PX = 12;
         const ORBIT_NAME_PX = 14;
-        const ORBIT_SPHERE_OPACITY = 0.05;
+        const ORBIT_LIMB_OPACITY = 0.5;
         const BED_GRID_LIFT_MM = 0.3;
         // How often the world polls a machine it draws while no Machine is open on it
         // (followMachines): a Machine's own default.
@@ -3057,20 +3057,25 @@
                     for (const ring of rings) {
                         loops.push({ layer, layers: [layer], points: ring, object: draw(ring, layerColour(layer, DEFAULT_COLOR), ORBIT_RING_OPACITY, true) });
                     }
-                    // The shell as a faint sphere, to be seen through.
-                    const sphere = new THREE.Mesh(
-                        new THREE.SphereGeometry(radius, 48, 24),
-                        new THREE.MeshBasicMaterial({ color: layerColour(layer, DEFAULT_COLOR), transparent: true, opacity: ORBIT_SPHERE_OPACITY, depthWrite: false, side: THREE.DoubleSide }));
-                    sphere.raycast = () => {};
-                    group.add(sphere);
-                    spheres.push({ layers: [layer], object: sphere });
+                    // The shell's sphere as its edge, the circle the eye sees it end at, placed
+                    // each frame (placeOrbitLabels): the shells nest at a glance, nothing inside
+                    // is tinted, and no face is filled. From inside a shell, none.
+                    const circle = [];
+                    for (let k = 0; k < 128; k++) circle.push(new THREE.Vector3(Math.cos((2 * Math.PI * k) / 128), Math.sin((2 * Math.PI * k) / 128), 0));
+                    const limb = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(circle),
+                        new THREE.LineBasicMaterial({ color: layerColour(layer, DEFAULT_COLOR), transparent: true, opacity: ORBIT_LIMB_OPACITY, depthWrite: false }));
+                    limb.raycast = () => {};
+                    limb.visible = false;
+                    group.add(limb);
+                    spheres.push({ layers: [layer], object: limb, radius, shown: true });
                     label(shellLabel(shell, nodes), layer, [layer], rings.flat(), [0, 0, 0]);
                 }
-                for (const cluster of clustersOf(nodes)) {
+                const clusters = clustersOf(nodes);
+                for (const cluster of clusters) {
                     const layer = `category:${cluster.category}`;
                     const outline = capOutline(cluster);
                     loops.push({ layer, layers: [`shell:${cluster.shell}`, layer], points: outline, object: draw(outline, layerColour(layer, DEFAULT_COLOR), ORBIT_OUTLINE_OPACITY, true) });
-                    label(cluster.category, layer, [`shell:${cluster.shell}`, layer], outline,
+                    label(clusterLabel(cluster, clusters), layer, [`shell:${cluster.shell}`, layer], outline,
                         cluster.centre.map((c) => c * cluster.radius * Math.cos(cluster.angle)));
                 }
                 const links = linksOf(nodes).map((link) => ({
@@ -3095,43 +3100,98 @@
                 const scope = this.pickScope;
                 for (const loop of this.orbits.loops) loop.object.visible = loop.layers.every((id) => scope.isShown(id));
                 for (const link of this.orbits.links) link.object.visible = [link.from, link.to].every((key) => scope.drawn(this.renderNodeByKey[key]));
-                for (const sphere of this.orbits.spheres) sphere.object.visible = sphere.layers.every((id) => scope.isShown(id));
+                for (const sphere of this.orbits.spheres) sphere.shown = sphere.layers.every((id) => scope.isShown(id));
+                this.orbits.eye = null;  // the shells' edges placed again
                 for (const label of this.orbits.labels) label.shown = label.layers.every((id) => scope.isShown(id));
             }
 
-            // Each frame, at the universe's own level: each label of a shell or a cluster hung
-            // from its loop, on the side of the sphere that faces the eye, the size of the
-            // page's text, laid clear of the others by measure.js's layLabels; and the names
-            // of the piece under the pointer and the one selected (syncPieceNames).
+            // Each frame, at the universe's own level: each shell's edge as the eye sees it
+            // (placeOrbitLimbs); each label of a shell or a cluster hung from its loop, on the
+            // side of the sphere that faces the eye and on the canvas, the size of the page's
+            // text, laid by measure.js's layLabels clear of the others, of the pieces drawn and
+            // of the hint and the depth ladder, and left out where no place is clear; and the
+            // names of the piece under the pointer and the one selected (syncPieceNames).
             placeOrbitLabels() {
                 this.syncPieceNames();
+                this.placeOrbitLimbs();
                 const o = this.orbits;
                 if (!o || !o.labels.length) return;
                 const cam = this.camera, h = this.canvas.clientHeight || 1, w = this.canvas.clientWidth || 1;
                 const screen = (v) => { const s = v.clone().project(cam); return { x: ((s.x + 1) / 2) * w, y: ((1 - s.y) / 2) * h, z: s.z }; };
+                const onCanvas = (at) => at.z <= 1 && at.z >= -1 && at.x >= 0 && at.x <= w && at.y >= 0 && at.y <= h;
                 const shown = [], ends = [];
                 for (const label of o.labels) {
                     label.sprite.visible = false;
                     if (!label.shown) continue;
-                    // Hung from the top of its loop as the eye sees it: the highest point (up is
-                    // y in the scene) of the loop on the side that faces the eye.
+                    // Hung from the top of its loop as the eye sees it: the highest point on the
+                    // canvas of the loop's side that faces the eye.
                     let top = null;
-                    for (const p of label.loop) if (this.facesEye(p) && (top === null || p.y > top.y)) top = p;
+                    for (const p of label.loop) {
+                        if (!this.facesEye(p)) continue;
+                        const at = screen(p);
+                        if (onCanvas(at) && (top === null || at.y < top.y)) top = at;
+                    }
                     if (!top) continue;
-                    const at = screen(top);
-                    if (at.z > 1 || at.z < -1) continue;
                     const from = screen(label.from);
                     shown.push(label);
-                    ends.push({ x: at.x, y: at.y, dx: at.x - from.x, dy: at.y - from.y, w: label.sprite.userData.w, h: label.sprite.userData.h, z: at.z });
+                    ends.push({ x: top.x, y: top.y, dx: top.x - from.x, dy: top.y - from.y, w: label.sprite.userData.w, h: label.sprite.userData.h, z: top.z });
                 }
-                const laid = layLabels(ends, { width: w, height: h, gap: 6 });
+                const laid = layLabels(ends, { width: w, height: h, gap: 6, avoid: this.orbitLabelsAvoid(w, h), drop: true });
                 const k = (2 * Math.tan((cam.fov * Math.PI) / 360)) / h;
                 shown.forEach((label, i) => {
+                    if (!laid[i]) return;
                     const sprite = label.sprite;
                     sprite.visible = true;
                     sprite.position.copy(new THREE.Vector3((laid[i].cx / w) * 2 - 1, 1 - (laid[i].cy / h) * 2, Math.min(0.999, ends[i].z)).unproject(cam));
                     sprite.scale.set(sprite.userData.w * k, sprite.userData.h * k, 1);
                 });
+            }
+
+            // What a shell's or a cluster's label keeps off, in the canvas's pixels: each piece
+            // drawn on the side of the sphere the eye sees, the box round the sphere that holds
+            // it, and the hint and the depth ladder over the world.
+            orbitLabelsAvoid(w, h) {
+                const boxes = [];
+                const cam = this.camera, k = h / (2 * Math.tan((cam.fov * Math.PI) / 360));
+                for (const [key, node] of Object.entries(this.renderNodeByKey)) {
+                    const middle = key.includes('.') ? null : middleOf(node);
+                    const b = node.footprint || node.world_bounds;
+                    if (!middle || !b || !this.meshByName[key] || !this.pickScope.drawn(node)) continue;
+                    const at = sceneAt(...middle);
+                    if (!this.facesEye(at)) continue;
+                    const v = at.clone().project(cam);
+                    const far = at.distanceTo(cam.position);
+                    if (v.z > 1 || v.z < -1 || far <= 0) continue;
+                    const reach = (Math.hypot(...b.max.map((x, i) => x - b.min[i])) / 2) * (k / far);
+                    const x = ((v.x + 1) / 2) * w, y = ((1 - v.y) / 2) * h;
+                    boxes.push({ l: x - reach, r: x + reach, t: y - reach, b: y + reach });
+                }
+                const base = this.canvas.getBoundingClientRect();
+                for (const el of [this.hintEl, this.minimapEl]) {
+                    if (!el || el.hidden || !el.offsetWidth || parseFloat(getComputedStyle(el).opacity) <= 0.05) continue;
+                    const r = el.getBoundingClientRect();
+                    boxes.push({ l: r.left - base.left, r: r.right - base.left, t: r.top - base.top, b: r.bottom - base.top });
+                }
+                return boxes;
+            }
+
+            // Each shell's edge, where the eye sees its sphere end (orbits.js limbOf): placed
+            // again when the eye has moved, drawn while its shell is shown and the eye is
+            // outside it.
+            placeOrbitLimbs() {
+                const o = this.orbits;
+                if (!o) return;
+                const eye = this.camera.position;
+                if (o.eye && o.eye.equals(eye)) return;
+                o.eye = eye.clone();
+                for (const sphere of o.spheres) {
+                    const limb = limbOf(sphere.radius, [eye.x, eye.y, eye.z]);
+                    sphere.object.visible = Boolean(sphere.shown && limb);
+                    if (!limb) continue;
+                    sphere.object.position.set(...limb.centre);
+                    sphere.object.scale.setScalar(limb.radius);
+                    sphere.object.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...limb.normal));
+                }
             }
 
             // Whether a point of the sphere (scene coordinates) is on the side the eye sees:
@@ -3177,7 +3237,9 @@
                 const selected = this.orbits ? top(this.selectedName) : null;
                 const wanted = { selected, hover: this.orbits && this.hoverName !== selected ? top(this.hoverName) : null };
                 for (const [slot, key] of Object.entries(wanted)) {
-                    if ((marks[slot] || null) === key) continue;
+                    // Kept while it stands; one taken away by another (the machines' badges are
+                    // laid out afresh: syncWorldMarks) is put back.
+                    if ((marks[slot] || null) === key && (!key || this.anchors.has(`piece-name:${slot}`))) continue;
                     const mark = `piece-name:${slot}`;
                     marks[slot] = key;
                     if (!key) { this.anchors.remove(mark); continue; }

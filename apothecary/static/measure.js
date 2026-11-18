@@ -22,7 +22,9 @@
  *   length(mm)                   a length as it is written
  *   fieldMm(mm)                  a number as a field shows it, to two places at the most
  *   layLabels(labels, canvas)    where each label of a measurement stands on screen, past
- *                                its line's far end and clear of the others
+ *                                its line's far end and clear of the others and of what
+ *                                else stands over the world; with `drop`, none where no
+ *                                place is clear
  */
 
 export const AXES = ["x", "y", "z"];
@@ -138,12 +140,16 @@ function crowds(a, b, gap) {
 /* Where each label of a measurement stands on screen: at the far end of its line, out
  * along the line past its end by `gap` pixels, so it is off the line and off what the
  * line measures from; nudged further out, then across, until it crowds no label placed
- * before it and covers no line's end; kept inside the canvas. `labels` is [{ x, y, dx, dy, w, h }]: the line's far
- * end, its direction on screen from its near end, and the label's size, in pixels (y
- * down). A line seen end on (no direction) puts its label below its end. Answers
- * [{ cx, cy }], each label's middle, in the order given. */
-export function layLabels(labels, { width = Infinity, height = Infinity, gap = 6 } = {}) {
+ * before it, covers no line's end and meets none of `avoid` ([{ l, t, r, b }], what else
+ * stands over the world); kept inside the canvas. `labels` is [{ x, y, dx, dy, w, h }]:
+ * the line's far end, its direction on screen from its near end, and the label's size,
+ * in pixels (y down). A line seen end on (no direction) puts its label below its end.
+ * Answers [{ cx, cy }], each label's middle, in the order given; with `drop`, a label no
+ * try laid clear is null, and the labels after it are laid as if it were not there. */
+export function layLabels(labels, { width = Infinity, height = Infinity, gap = 6, avoid = [], drop = false } = {}) {
     const placed = [];
+    const out = [];
+    const boxes = avoid.map((b) => ({ cx: (b.l + b.r) / 2, cy: (b.t + b.b) / 2, w: b.r - b.l, h: b.b - b.t }));
     const inside = (box) => ({
         ...box,
         cx: Math.min(Math.max(box.cx, box.w / 2), Math.max(box.w / 2, width - box.w / 2)),
@@ -160,17 +166,20 @@ export function layLabels(labels, { width = Infinity, height = Infinity, gap = 6
             w: label.w,
             h: label.h,
         });
-        // Clear of every label placed before it, and of every line's end.
+        // Clear of every label placed before it, of every line's end, and of what to avoid.
         const clear = (box) => !placed.some((p) => crowds(p, box, gap))
-            && !labels.some((l) => crowds({ cx: l.x, cy: l.y, w: 0, h: 0 }, box, gap));
+            && !labels.some((l) => crowds({ cx: l.x, cy: l.y, w: 0, h: 0 }, box, gap))
+            && !boxes.some((b) => crowds(b, box, 0));
         let box = at(reach + gap, 0);
         const step = label.h + gap;
         for (let k = 1; k <= 40 && !clear(box); k++) {
             // Out along the line first, then to either side of it, a label's height at a time.
-            const out = reach + gap + step * Math.ceil(k / 3);
-            box = at(out, k % 3 === 0 ? 0 : (k % 3 === 1 ? 1 : -1) * step * Math.ceil(k / 3));
+            const along = reach + gap + step * Math.ceil(k / 3);
+            box = at(along, k % 3 === 0 ? 0 : (k % 3 === 1 ? 1 : -1) * step * Math.ceil(k / 3));
         }
+        if (drop && !clear(box)) { out.push(null); continue; }
         placed.push(box);
+        out.push({ cx: box.cx, cy: box.cy });
     }
-    return placed.map(({ cx, cy }) => ({ cx, cy }));
+    return out;
 }

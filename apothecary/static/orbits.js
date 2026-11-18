@@ -18,6 +18,10 @@
  *                                  from, both drawn
  *   shellLabel(shell, nodes)       what a shell is, in a few words: built from nothing, built
  *                                  from those inside it, or the sites
+ *   clusterLabel(cluster, clusters)   a cluster's category, and its shell where the
+ *                                  category has clusters on more than one
+ *   limbOf(radius, eye)            the edge of a shell's sphere as the eye sees it: a circle,
+ *                                  none from inside
  *   facesEye(eye, point)           whether a point of a sphere is on the side the eye sees
  *   pieceNear(points, x, y, px)    of pieces on screen ({ key, sx, sy, off, depth }), the one
  *                                  nearest (x, y) within `px`; of those about as near, the
@@ -167,6 +171,25 @@ export function shellLabel(shell, nodes) {
     const sites = here.length > 0 && here.every((n) => n.site_ref);
     const what = sites ? "sites" : shell === 0 ? "built from nothing" : "built from those inside";
     return `shell ${shell} \u00b7 ${what}`;
+}
+
+/* What a cluster's outline is labelled: its category, and where the category has a
+ * cluster on more than one shell, which shell this one is on, so two outlines of one
+ * category are told apart. `clusters` is every cluster drawn (clustersOf). */
+export function clusterLabel(cluster, clusters) {
+    const shells = new Set(clusters.filter((c) => c.category === cluster.category).map((c) => c.shell));
+    return shells.size > 1 ? `${cluster.category} · shell ${cluster.shell}` : cluster.category;
+}
+
+/* The circle a sphere of `radius` about the middle shows an eye at `eye` ([x, y, z]):
+ * where its edge is seen, { centre, radius, normal } -- the circle round the eye's line
+ * to the middle, where the lines from the eye touch the sphere; null for an eye inside
+ * the sphere or on it, which sees no edge. */
+export function limbOf(radius, eye) {
+    const d = length(eye);
+    if (!(d > radius)) return null;
+    const normal = eye.map((v) => v / d);
+    return { centre: normal.map((v) => (v * radius * radius) / d), radius: radius * Math.sqrt(1 - (radius * radius) / (d * d)), normal };
 }
 
 /* Whether a point of the sphere is on the side an eye sees (both as [x, y, z] about the

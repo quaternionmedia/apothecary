@@ -24,7 +24,7 @@ NODE = shutil.which("node") or str(Path.home() / ".local" / "bin" / "node")
 pytestmark = pytest.mark.skipif(not Path(NODE).exists(), reason="node is not installed")
 
 SCRIPT = """
-import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf, shellLabel, facesEye, pieceNear } from "%(module)s";
+import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf, shellLabel, clusterLabel, limbOf, facesEye, pieceNear } from "%(module)s";
 import { readFileSync } from "node:fs";
 const tree = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const nodes = tree.children.map((n) => ({ key: n.name, ...n }));
@@ -47,6 +47,9 @@ out.near = [nearestLoop([square, far], 50, 3, 6), nearestLoop([square, far], 302
     nearestLoop([square, far], 200, 50, 6), nearestLoop([square, behind], 302, 50, 6),
     nearestLoop([square, far], 50, 50, 6)];
 out.labels = out.shells.map((s) => shellLabel(s.shell, nodes));
+out.clusterLabels = out.clusters.map((c) => ({ shell: c.shell, category: c.category, label: clusterLabel(c, out.clusters) }));
+// A sphere of radius 3 seen from 5 away along x, and from inside it.
+out.limbs = [limbOf(3, [5, 0, 0]), limbOf(3, [0, 0, 2]), limbOf(3, [0, 3, 0])];
 out.faces = [facesEye([10, 0, 0], [1, 0, 0]), facesEye([10, 0, 0], [-1, 0, 0]), facesEye([10, 0, 0], [0.05, 1, 0]),
     facesEye([0.5, 0, 0], [-1, 0, 0]), facesEye([10, 0, 0], [0.1, 0.99, 0]), facesEye([10, 0, 0], [0.09, 0.99, 0])];
 const seen = [{ key: "a", sx: 100, sy: 100, depth: 5 }, { key: "b", sx: 102, sy: 100, depth: 9 },
@@ -189,3 +192,30 @@ def test_the_piece_under_the_pointer_is_named_at_any_distance(drawn):
     assert named == "d"
     assert behind is None and nothing is None
     assert eye == "q"
+
+
+def test_a_category_on_more_than_one_shell_names_its_shell_in_each_clusters_label(drawn):
+    """The camera's parts stand on two shells, so its two outlines are labelled by shell;
+    a category on one shell is labelled by its name alone."""
+    shells_of: dict = {}
+    for c in drawn["clusterLabels"]:
+        shells_of.setdefault(c["category"], set()).add(c["shell"])
+    assert len(shells_of["camera"]) > 1
+    for c in drawn["clusterLabels"]:
+        if len(shells_of[c["category"]]) > 1:
+            assert c["label"] == f"{c['category']} \u00b7 shell {c['shell']}"
+        else:
+            assert c["label"] == c["category"]
+    labels = [c["label"] for c in drawn["clusterLabels"]]
+    assert len(labels) == len(set(labels)), "two outlines wear one label"
+
+
+def test_a_shells_edge_is_the_circle_the_eye_sees_its_sphere_end_at(drawn):
+    """From 5 away, a sphere of 3 ends where the lines from the eye touch it: a circle of
+    radius 3 * 4 / 5 about a point 9/5 from its middle toward the eye. From inside, or on
+    it, no edge is seen."""
+    seen, inside, on = drawn["limbs"]
+    assert seen["centre"] == pytest.approx([1.8, 0, 0])
+    assert seen["radius"] == pytest.approx(2.4)
+    assert seen["normal"] == pytest.approx([1, 0, 0])
+    assert inside is None and on is None

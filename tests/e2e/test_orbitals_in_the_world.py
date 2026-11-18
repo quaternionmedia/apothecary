@@ -10,6 +10,8 @@ Runs against a server of its own, so the universe it draws is the code's.
 
 from __future__ import annotations
 
+import re
+
 import httpx
 import pytest
 import rings
@@ -297,7 +299,10 @@ def test_each_shell_and_cluster_is_labelled_at_the_universes_level_and_hidden_wi
     assert [lab["text"].split(" · ")[1] for lab in shells][0] == "built from nothing"
     assert [lab["text"].split(" · ")[1] for lab in shells][-1] == "sites"
     categories = {lab["text"] for lab in labels} - {lab["text"] for lab in shells}
-    assert {"machine", "camera"} <= categories
+    assert "machine" in categories
+    # The camera's parts stand on two shells: each of its outlines names its shell.
+    cameras = sorted(t for t in categories if t.startswith("camera"))
+    assert len(cameras) == 2 and all(re.fullmatch(r"camera · shell \d+", t) for t in cameras), cameras
     assert not any(lab["piece"] for lab in labels) and all(lab["inScene"] for lab in labels)
     drawn = [lab for lab in labels if lab["drawn"]]
     assert drawn, "no label is drawn at the opening view"
@@ -360,6 +365,11 @@ def test_the_piece_under_the_pointer_and_the_selected_piece_are_named_and_neithe
     page.wait_for_timeout(500)
     expect(selected).to_be_visible()
     assert "merged" not in (selected.get_attribute("class") or "")
+    # The machines' badges laid out afresh take away every badge not theirs: the name is
+    # put back, so a piece selected at a journey's stage (Join a hose › Ends) wears it.
+    page.evaluate("() => { window.fractalViewer.syncWorldMarks(); window.fractalViewer.invalidate(); }")
+    expect(selected).to_be_visible(timeout=5000)
+    expect(selected).to_contain_text(piece["name"])
     page.mouse.move(piece["x"], piece["y"])
     page.mouse.move(piece["x"] + 1, piece["y"])
     expect(page.locator("[data-anchor='piece-name:hover']")).to_have_count(0)
@@ -376,8 +386,97 @@ def test_the_alignment_grids_row_says_what_it_draws_in_its_colour_and_what_it_do
     assert "build volumes, drawn in this colour" in hint and "faint greys" in hint
 
 
+# Each shell's edge as the world draws it: whether it is drawn, what it is, its colour, and
+# where its circle stands against the sphere's.
+EDGES = """() => {
+    const v = window.fractalViewer, o = v.orbits;
+    let filled = 0;
+    o.group.traverse((x) => { if (x.isMesh && !x.isSprite) filled += 1; });
+    return { filled, edges: o.spheres.map((s) => ({ layer: s.layers[0], drawn: s.object.visible, line: !!s.object.isLineLoop,
+        colour: '#' + s.object.material.color.getHexString(), radius: s.radius, at: s.object.scale.x })) };
+}"""
+
+# The labels drawn, each a box on the canvas, and the boxes of the hint and depth ladder.
+LAID = """() => {
+    const v = window.fractalViewer, r = v.canvas.getBoundingClientRect(), w = v.canvas.clientWidth, h = v.canvas.clientHeight;
+    const boxes = v.orbits.labels.filter((l) => l.sprite.visible).map((l) => {
+        const s = l.sprite.position.clone().project(v.camera), cx = (s.x + 1) / 2 * w, cy = (1 - s.y) / 2 * h;
+        const { w: lw, h: lh } = l.sprite.userData;
+        return { text: l.text, l: cx - lw / 2, r: cx + lw / 2, t: cy - lh / 2, b: cy + lh / 2 };
+    });
+    const furniture = [v.hintEl, v.minimapEl].filter((el) => el && !el.hidden && el.offsetWidth
+        && parseFloat(getComputedStyle(el).opacity) > 0.05).map((el) => {
+        const b = el.getBoundingClientRect();
+        return { l: b.left - r.left, r: b.right - r.left, t: b.top - r.top, b: b.bottom - r.top };
+    });
+    return { boxes, furniture, w, h, shown: v.orbits.labels.filter((l) => l.shown).length };
+}"""
+
+# The eye taken inside the innermost shell, as the wheel takes it, near the middle.
+INSIDE = """() => { const v = window.fractalViewer, c = v.camera, aim = v.orbitControls.target;
+    v.orbitControls.minDistance = Math.min(v.orbitControls.minDistance, 1);
+    c.position.copy(aim.clone().add(c.position.clone().sub(aim).multiplyScalar(0.03))); v.orbitControls.update(); v.invalidate();
+    return c.position.length(); }"""
+
+
 def _clear(a: dict, b: dict) -> bool:
     return a["r"] <= b["l"] or b["r"] <= a["l"] or a["b"] <= b["t"] or b["b"] <= a["t"]
+
+
+def _laid_clear(laid: dict) -> None:
+    boxes = laid["boxes"]
+    for i, a in enumerate(boxes):
+        assert -1 <= a["l"] and a["r"] <= laid["w"] + 1 and -1 <= a["t"] and a["b"] <= laid["h"] + 1, a
+        for b in boxes[i + 1 :]:
+            assert _clear(a, b), (a, b)
+        for f in laid["furniture"]:
+            assert _clear(a, f), (a, f)
+
+
+@pytest.mark.e2e
+def test_each_shell_is_drawn_as_its_edge_from_outside_and_tints_nothing(page: Page, url: str):
+    """No filled sphere: each shell is the circle the eye sees its sphere end at, in the
+    shell's colour, nested inside the next one's; from inside the sphere, none is drawn,
+    and nothing seen is tinted by a shell's colour. A shell hidden hides its edge."""
+    colours = httpx.get(f"{url}/sites/{UNIVERSE}").json()["layer_colours"]
+    _universe(page, url)
+    windows.from_the_windows_menu(page, "layers")
+    seen = page.evaluate(EDGES)
+    assert seen["filled"] == 0, "a shell drawn as a filled sphere"
+    edges = seen["edges"]
+    assert len(edges) >= 3 and all(e["line"] and e["drawn"] for e in edges), edges
+    for e in edges:
+        assert e["colour"] == colours[e["layer"]]
+        assert 0 < e["at"] < e["radius"]
+    assert [e["at"] for e in edges] == sorted(e["at"] for e in edges)
+    _tick(page, "shell:1", "shown").uncheck()
+    said(page, "Shell 1: hidden")
+    page.wait_for_timeout(200)
+    assert [e["drawn"] for e in page.evaluate(EDGES)["edges"]][:3] == [True, False, True]
+    _tick(page, "shell:1", "shown").check()
+    page.evaluate(INSIDE)
+    page.wait_for_timeout(400)
+    assert not any(e["drawn"] for e in page.evaluate(EDGES)["edges"])
+
+
+@pytest.mark.e2e
+def test_the_labels_drawn_stand_clear_of_each_other_and_of_the_depth_ladder_in_and_out(
+    page: Page, url: str
+):
+    """From outside and from inside the sphere, on a small window, every label drawn is on
+    the canvas, in no other's way and off the hint and the depth ladder; one with no clear
+    place is left out rather than laid over another. From inside, some are drawn."""
+    page.set_viewport_size({"width": 1100, "height": 700})
+    _universe(page, url)
+    page.wait_for_timeout(400)
+    outside = page.evaluate(LAID)
+    assert outside["boxes"], outside
+    _laid_clear(outside)
+    page.evaluate(INSIDE)
+    page.wait_for_timeout(600)
+    inside = page.evaluate(LAID)
+    assert inside["boxes"], inside
+    _laid_clear(inside)
 
 
 @pytest.mark.e2e

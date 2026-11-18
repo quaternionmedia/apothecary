@@ -186,14 +186,21 @@ each part it is built from, a faint line. None of them is a piece: a click passe
 through them, and they hide nothing. Each shell wears a label at its top, in its
 layer's colour and in the words of this section (`shell 0 · built from nothing`, `shell 1 ·
 built from those inside`, and `· sites` outermost), and each cluster's outline a label with
-its category's name; the labels are the size of the page's text at any distance, laid clear
-of one another as the measurement's are (`layLabels`, `apothecary/static/measure.js`),
-drawn only for the side of the sphere the eye sees, and belong to the layer they name, so
-hiding it hides its label. They are no piece and no hit, and a part stepped into has none.
+its category's name, and its shell's where the category has clusters on more than one
+(`camera · shell 1`); the labels are the size of the page's text at any distance, hung from
+the highest point of their loop on the canvas, laid clear of one another, of the pieces drawn
+and of the hint and the depth ladder as the measurement's are laid (`layLabels`,
+`apothecary/static/measure.js`), and a label with no clear place is left out rather than
+laid over another; they are drawn only for the side of the sphere the eye sees, and belong
+to the layer they name, so hiding it hides its label. They are no piece and no hit, and a
+part stepped into has none.
 A piece is named at any distance: the one nearest the pointer, within a few pixels, and
 the one selected each wear a small badge with the part's name (the page's badges,
-`apothecary/static/anchors.js`); the badges take no click. Each shell is also drawn as a
-faint sphere (`ORBIT_SPHERE_OPACITY` in the page) in its layer's colour. Each is drawn while the layers it is drawn for
+`apothecary/static/anchors.js`); the badges take no click, and the selected piece's name
+rises above any label of its measurement it would cover. Each shell's sphere is also drawn as
+its edge, the circle the eye sees it end at (`limbOf`), faint in its layer's colour, so the
+shells nest at a glance from outside; it is no filled surface, so nothing inside is tinted,
+and from inside a shell its edge is not drawn. Each is drawn while the layers it is drawn for
 are shown, a line while both its parts are; and a still click that meets no piece and
 lands on a ring or an outline opens that layer's ring ([Layers](#layers)) where it
 landed, as Ctrl+right-click there does. A part stepped into is drawn as it is made, upright and not turned

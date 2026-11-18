@@ -66,6 +66,16 @@ const small = [
 ];
 out.laid = m.layLabels(small, { width: 800, height: 600, gap: 6 });
 out.edge = m.layLabels([{ x: 790, y: 5, dx: 1, dy: -1, w: 120, h: 20 }], { width: 800, height: 600, gap: 6 });
+// Labels hung at the top edge of a small canvas, as the shells' are seen from inside the
+// sphere: laid with `drop`, those with no clear place are left out, never stacked; and a
+// box to avoid (the depth ladder) is covered by none.
+const crowd = Array.from({ length: 8 }, (_, i) => ({ x: 100 + 4 * i, y: 2, dx: 0, dy: -1, w: 120, h: 20 }));
+out.crowd = crowd;
+out.dropped = m.layLabels(crowd, { width: 300, height: 120, gap: 6, drop: true });
+out.stacked = m.layLabels(crowd, { width: 300, height: 120, gap: 6 });
+const ladder = { l: 380, t: 270, r: 460, b: 340 };
+out.ladder = ladder;
+out.avoided = m.layLabels([{ x: 400, y: 300, dx: 1, dy: 0, w: 120, h: 20 }], { width: 800, height: 600, gap: 6, avoid: [ladder], drop: true });
 out.small = small;
 console.log(JSON.stringify(out));
 """
@@ -217,3 +227,32 @@ def test_a_measurements_labels_stand_past_their_lines_ends_and_clear_of_one_anot
 def test_a_label_near_the_canvas_edge_stays_on_it(result):
     (at,) = result["edge"]
     assert 60 <= at["cx"] <= 800 - 60 and 10 <= at["cy"] <= 600 - 10
+
+
+def _overlap(a, b) -> bool:
+    return abs(a[0] - b[0]) < (a[2] + b[2]) / 2 and abs(a[1] - b[1]) < (a[3] + b[3]) / 2
+
+
+def test_labels_with_no_clear_place_are_left_out_rather_than_stacked(result):
+    """Eight labels hung at the top of a small canvas: laid without `drop` some are
+    clamped onto one another; with it, those laid stand clear of each other and the rest
+    are left out."""
+    crowd = result["crowd"]
+    boxes = lambda laid: [  # noqa: E731
+        (at["cx"], at["cy"], c["w"], c["h"]) for at, c in zip(laid, crowd, strict=True) if at
+    ]
+    stacked = boxes(result["stacked"])
+    assert any(_overlap(a, b) for i, a in enumerate(stacked) for b in stacked[i + 1 :])
+    dropped = result["dropped"]
+    assert None in dropped and any(dropped)
+    laid = boxes(dropped)
+    assert not any(_overlap(a, b) for i, a in enumerate(laid) for b in laid[i + 1 :])
+
+
+def test_a_label_keeps_off_what_it_is_told_to_avoid(result):
+    (at,) = result["avoided"]
+    ladder = result["ladder"]
+    assert at is not None
+    box = (at["cx"], at["cy"], 120, 20)
+    middle = ((ladder["l"] + ladder["r"]) / 2, (ladder["t"] + ladder["b"]) / 2)
+    assert not _overlap(box, (*middle, ladder["r"] - ladder["l"], ladder["b"] - ladder["t"]))
