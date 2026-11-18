@@ -24,9 +24,9 @@ from viewer_ready import settled
 
 UNIVERSE = "apothecary"
 PART = "calibration_cube"
-# A dust port: a 32 mm bore its part.json declares as a socket, port. A plate 10 mm thick.
+# A dust port at its defaults: a 32 mm bore the part declares as a socket, end. A plate 10 mm thick.
 # A hose adapter, its flare a cone at 45 degrees.
-PORT = "dust_port_32"
+PORT = "dust_port"
 PLATE = "router_coupon"
 CONE = "hose_adapter"
 CHANGING = tuple(moments(".panel", "#status"))
@@ -264,7 +264,7 @@ def test_the_selection_reads_its_size_and_where_it_comes_from(page: Page, url: s
     reading = page.locator(".panel[data-panel='layers'] .layers-reading")
     expect(reading).to_contain_text(f"point 1 on {PORT}: a hole ⌀ 32.00 mm across its vertices")
     expect(reading).to_contain_text(
-        f"point 1 on {PORT}, declared: port, a socket ⌀ 32.00 mm (its bore at the mouth; "
+        f"point 1 on {PORT}, declared: end, a socket ⌀ 32.00 mm (its bore at the mouth; "
         "the part's interface, source stub); the mesh reads ⌀ 32.00 mm there, the same"
     )
     said(

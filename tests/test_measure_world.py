@@ -345,7 +345,7 @@ const pick = (event) => {
     return raycaster.intersectObjects([port, cube, stand], false);
 };
 const onScreen = (p) => { const s = p.clone().project(camera); return { clientX: ((s.x + 1) / 2) * 800, clientY: ((1 - s.y) / 2) * 600 }; };
-const nodes = { port: { part_ref: "dust_port_32" }, cube: {}, stand: {} };
+const nodes = { port: { part_ref: "dust_port" }, cube: {}, stand: {} };
 const asked = [];
 const scope = makePickScope({ storage: { getItem: () => null, setItem() {}, removeItem() {} } });
 scope.setShown(MEASURE, true);
@@ -399,7 +399,7 @@ def test_a_click_on_a_bore_reads_its_diameter_in_the_parts_frame_beside_the_decl
     assert bore["axis"] == pytest.approx([0, 0, 1], abs=1e-6)
     assert bore["middle"] == pytest.approx([0, 0, 15], abs=1e-3)
     assert bore["frame"] == "the part's own frame"
-    assert bore["asked"] == ["dust_port_32"]
+    assert bore["asked"] == ["dust_port"]
     first, declared, point = bore["lines"]
     assert first.startswith("point 1 on port: a hole ⌀ 32.00 mm across its vertices")
     assert "its wall 3.00 mm thick" in first

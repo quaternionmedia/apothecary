@@ -30,9 +30,9 @@ out.hidden = { seen, reasons: [...o.userData.hiddenBy] };
 
 const s = makePickScope({ storage: store() });
 const at = (site, focusPath) => gridWanted(s, { site, universe: "apothecary", focusPath });
-out.grid = { universe: at("apothecary", []), stepped: at("apothecary", ["dust_port_32"]), garage: at("garage", []), machine: at("garage", ["printer_1"]) };
+out.grid = { universe: at("apothecary", []), stepped: at("apothecary", ["dust_port"]), garage: at("garage", []), machine: at("garage", ["printer_1"]) };
 s.setShown(GRID, false);
-out.grid.hidden = [at("garage", []), at("garage", ["printer_1"]), at("apothecary", ["dust_port_32"])];
+out.grid.hidden = [at("garage", []), at("garage", ["printer_1"]), at("apothecary", ["dust_port"])];
 
 out.kinds = layerKinds({ children: [
     { shell: 2, category: "part", children: [{ shell: 0, category: "bolt", children: [] }] },
