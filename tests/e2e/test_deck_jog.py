@@ -383,8 +383,9 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
 def test_the_deck_window_and_a_control_pad_show_and_steer_the_same_knobs(page: Page, url: str):
     """The knobs are one state, the server's. The Deck window shows the machine they move
     and their step, and chooses each; a key pressed on the deck shows there; the router's
-    Control pad says where the knobs are and points them at the router; the ring's Knobs
-    chooses the step, which both show; the window stops them, and the pad's row goes."""
+    Control pad says where the knobs are and points them at the router, its Knobs here
+    answered by the deck; the ring's Knobs chooses the step, which both show; the window
+    stops them, and the pad's row goes."""
     httpx.put(
         f"{url}/firmware/decks/{DECK_ID}/control",
         json={"machine": "printer_1", "step_mm": 1},
@@ -419,6 +420,9 @@ def test_the_deck_window_and_a_control_pad_show_and_steer_the_same_knobs(page: P
     expect(page.locator("#control")).to_be_visible(timeout=5000)
     said = page.locator("#deck-knobs-on")
     expect(said).to_have_text("knobs on printer_1 · step 10 mm", timeout=10000)
+    # The deck's answer for this port says the knobs can be pointed here (can.here).
+    expect(page.locator("#deck-here")).to_be_enabled()
+    expect(page.locator("#deck-here")).not_to_have_attribute("aria-disabled", "true")
     page.locator("#deck-here").click()
     expect(said).to_have_text("knobs on this machine · step 10 mm", timeout=10000)
     expect(page.locator("#deck-here")).to_be_hidden()
@@ -433,7 +437,8 @@ def test_the_deck_window_and_a_control_pad_show_and_steer_the_same_knobs(page: P
     # 5. Stopped from the window: off on the server, and the pad's row goes.
     knobs.locator(".deck-run").click()
     expect(knobs).to_contain_text("knobs off", timeout=10000)
-    assert _control(url) == {"running": False}
+    off = _control(url)
+    assert off["running"] is False and set(off) == {"running", "can"}
     expect(page.locator("#control .deck-knobs-grp")).to_have_attribute("hidden", "", timeout=10000)
     knobs.locator(".deck-run").click()
     _until(lambda: _control(url)["running"], "the knobs started again")

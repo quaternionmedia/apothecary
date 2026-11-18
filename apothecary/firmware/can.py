@@ -543,3 +543,123 @@ def can_tune(
     if made is None:
         return {**_no("plan", f"{port}: {why}"), "plan": None}
     return {**dict(OK), "plan": loops.plan_view(made)}
+
+
+# -- a deck's answer: the Stream Deck +'s knobs and its window's controls ------------------
+# The deck's routes (firmware/deck_api.py) raise from these predicates, and ``deck_can``
+# reads them, so the Deck window greys what its routes would refuse, as a Machine does a
+# port's. A deck's ``kind``s: ``name`` (no deck's name), ``found`` (no such deck),
+# ``offline`` (the deck cannot be opened or is not answering), ``idle`` (the knobs are
+# not started), ``kind`` (a real deck, which reports for itself) and ``machine`` (no
+# machine of the deck's on that port). Asking opens nothing.
+
+# The HTTP answer each kind of a deck's refusal is.
+DECK_STATUS = {"name": 422, "found": 404, "offline": 503, "idle": 409, "kind": 409, "machine": 422}
+
+
+def deck_refusal(deck_id: str, tried: bool = True) -> Optional[Refusal]:
+    """What stands between a route and the deck ``deck_id``, found without opening it: a
+    name no deck has, the deck library or the HID library missing, a deck not found, or
+    -- with ``tried`` -- one whose last opening failed, while none has worked since (a
+    route opens it again: the failure is what was learned the last time)."""
+    from . import deck as decks
+
+    if not decks.ID_RE.match(deck_id):
+        return Refusal("name", f"not a deck's name: {deck_id!r}")
+    found = decks.get_decks()
+    if found.opened(deck_id) is not None:
+        return None
+    try:
+        listed = found.list()
+    except decks.DeckUnavailable as exc:
+        return Refusal("offline", str(exc))
+    if not any(info.id == deck_id for info in listed):
+        return Refusal("found", f"no deck {deck_id!r}: GET /firmware/decks lists what is found")
+    failed = found.failed(deck_id) if tried else None
+    return Refusal("offline", failed) if failed else None
+
+
+def mended(deck_id: str) -> None:
+    """An open deck lost on USB opened again if it is back, as every route that names it
+    does first (``deck_api._deck``); one that is closed is not opened."""
+    from . import deck as decks
+
+    deck = decks.get_decks().opened(deck_id)
+    if deck is not None and not deck.alive():
+        try:
+            deck.mend()
+        except decks.DeckUnavailable:
+            pass  # not back yet: ``deck_lost`` says so
+
+
+def deck_lost(deck_id: str) -> Optional[Refusal]:
+    """An open deck that is not answering on USB: nothing can be drawn on it until it is
+    back, so knobs are not started on it."""
+    from . import deck as decks
+
+    deck = decks.get_decks().opened(deck_id)
+    if deck is not None and not deck.alive():
+        return Refusal(
+            "offline",
+            f"{deck_id} is not answering on USB: it is looked for, and drawn again when it is back",
+        )
+    return None
+
+
+def knobs_idle(deck_id: str) -> Optional[Refusal]:
+    """The knobs are not started on ``deck_id``: there is nothing to choose for."""
+    from . import deck_control
+
+    if deck_control.running(deck_id) is None:
+        return Refusal(
+            "idle",
+            f"the knobs are not started on {deck_id}: POST /firmware/decks/{deck_id}/control "
+            'with {"on": true} starts them',
+        )
+    return None
+
+
+def real_deck(deck_id: str) -> Optional[Refusal]:
+    """A real deck reports its own events: none is given to it from here."""
+    from . import deck as decks
+
+    found = decks.get_decks()
+    deck = found.opened(deck_id)
+    simulated = deck.info.simulated if deck is not None else None
+    if simulated is None:
+        try:
+            simulated = any(i.id == deck_id and i.simulated for i in found.list())
+        except decks.DeckUnavailable:
+            return None  # the deck's own refusal says why, first
+    if not simulated:
+        return Refusal("kind", f"{deck_id} is a real deck: it reports for itself")
+    return None
+
+
+def not_here(deck_id: str, port: str) -> Optional[Refusal]:
+    """No machine of the knobs' is on ``port``: they cannot be pointed at it."""
+    from . import deck_control
+
+    controller = deck_control.running(deck_id)
+    why = controller.not_here(port) if controller is not None else None
+    return Refusal("machine", why) if why else None
+
+
+def deck_can(deck_id: str, port: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+    """Per control of the Deck window, whether its route would take it now: the knobs
+    started and stopped, the machine and step they are given, an event given to a
+    simulated deck; with ``port``, whether the knobs could be pointed at the machine whose
+    board is there (a Control pad's Knobs here)."""
+    mended(deck_id)
+    found = deck_refusal(deck_id)
+    idle = knobs_idle(deck_id)
+    answer = {
+        "knobs.start": _verdict(found or (deck_lost(deck_id) if idle else None)),
+        "knobs.stop": _verdict(found),
+        "knobs.machine": _verdict(idle),
+        "knobs.step": _verdict(idle),
+        "inject": _verdict(found or real_deck(deck_id)),
+    }
+    if port is not None:
+        answer["here"] = _verdict(idle or not_here(deck_id, port))
+    return answer

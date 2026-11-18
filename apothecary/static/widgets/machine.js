@@ -273,7 +273,7 @@ const CONTROL = `
     <div class="body">
         <div class="grp deck-knobs-grp" hidden>
             <div class="k">Stream Deck +</div>
-            <div class="row"><span id="deck-knobs-on"></span><button type="button" id="deck-here" title="The deck's knobs move this machine, as its key on the deck chooses it. ⌗ Panels › Machine › Knobs › Here">🎛 Knobs here</button></div>
+            <div class="row"><span id="deck-knobs-on"></span><button type="button" id="deck-here" data-can="here" title="The deck's knobs move this machine, as its key on the deck chooses it. ⌗ Panels › Machine › Knobs › Here">🎛 Knobs here</button></div>
         </div>
         <div class="grp printer-only">
             <div class="k">Heaters</div>
@@ -1025,13 +1025,15 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // server then silent on the latch: what is drawn is the last it said, marked so.
     const ctl = { armed: false, until: 0, step: 10, timer: null, askedAt: 0, pending: 0, out: true, unknown: false };
     // The deck's knobs, the server's layout (deck_knobs.js), followed while the pad is shown:
-    // the machine they move and their step; Knobs here points them at this machine.
+    // the machine they move and their step; Knobs here points them at this machine, greyed
+    // as the deck's answer for this port says (`can.here`, firmware/can.py).
     const knob = { now: null, timer: null };
     async function followKnobs() {
         let all = [];
-        try { all = await knobsRunning(BASE); } catch (e) { all = []; }
+        try { all = await knobsRunning(BASE, state.port); } catch (e) { all = []; }
         const k = all.find((c) => c.running) || null;
         knob.now = k;
+        renderCan();
         const grp = $("control").querySelector(".deck-knobs-grp");
         grp.hidden = !k;
         if (!k) return;
@@ -1164,6 +1166,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (running && job.stage !== words().running && job.stage !== "finishing") {
             out["print.pause"] = { ok: false, kind: "idle", why: `the print is ${job.stage}, not running` };
         }
+        // The deck's knobs pointed here: the deck's answer, not the port's.
+        if (knob.now && knob.now.can && knob.now.can.here) out.here = knob.now.can.here;
         return out;
     }
     function renderCan() {

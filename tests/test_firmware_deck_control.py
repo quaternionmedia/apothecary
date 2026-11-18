@@ -411,13 +411,13 @@ def test_the_layout_starts_and_stops_by_a_route_and_by_the_environment(bench, mo
     controller, one, links = bench
     controller.stop()
     client = TestClient(app)
-    assert client.get("/firmware/decks/SIMDECK0/control").json() == {"running": False}
+    off = client.get("/firmware/decks/SIMDECK0/control").json()
+    assert off["running"] is False and set(off) == {"running", "can"}  # with the deck's answer
     started = client.post("/firmware/decks/SIMDECK0/control", json={"on": True}).json()
     assert started["running"] and started["machine"] == "printer_1" and started["sent"] == []
     assert client.get("/firmware/decks/SIMDECK0/control").json()["running"] is True
-    assert client.post("/firmware/decks/SIMDECK0/control", json={"on": False}).json() == {
-        "running": False
-    }
+    stopped = client.post("/firmware/decks/SIMDECK0/control", json={"on": False}).json()
+    assert stopped["running"] is False and set(stopped) == {"running", "can"}
     assert client.post("/firmware/decks/NOPE/control", json={"on": True}).status_code == 404
     assert deck_control.start_all() == []  # asked for by neither the environment nor a route
     monkeypatch.setenv(deck_control.CONTROL_ENV, "1")

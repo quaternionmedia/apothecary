@@ -1,9 +1,11 @@
 /* The Stream Deck +'s knobs as the page reads and steers them: the server's layout on a
  * deck (firmware/deck_control.py) -- whether it runs, the machine its knobs move, their
- * step and that machine's control. There is one such state, the server's, and the Deck
- * window, each Machine's Control pad and the ring's Panels › Machine › Knobs each read
- * and change it, so each shows what the others did. Nothing here moves a machine: the
- * knobs do, through the control latch.
+ * step and that machine's control. There is one such state,
+ * the server's, and the Deck window, each Machine's Control pad and the ring's Panels ›
+ * Machine › Knobs each read and change it, so each shows what the others did. Each answer
+ * carries `can`, what the deck's routes would refuse now (firmware/can.py), which greys
+ * the window's controls and a pad's Knobs here (can.js). Nothing here moves a machine:
+ * the knobs do, through the control latch.
  */
 
 async function call(base, path, opts = {}) {
@@ -14,9 +16,11 @@ async function call(base, path, opts = {}) {
 }
 const at = (deck) => `/firmware/decks/${encodeURIComponent(deck)}/control`;
 
-// Every layout running, one per deck.
-export const running = async (base = "") => (await call(base, "/firmware/decks/control")).controls;
-// One deck's: { running: false } when its knobs are off.
+// Every layout running, one per deck; with `port`, each one's answer says whether its
+// knobs could be pointed at the machine whose board is there (`can.here`).
+export const running = async (base = "", port = null) =>
+    (await call(base, `/firmware/decks/control${port ? `?port=${encodeURIComponent(port)}` : ""}`)).controls;
+// One deck's: { running: false, can } when its knobs are off.
 export const knobsOf = (base, deck) => call(base, at(deck));
 export const turn = (base, deck, on) => call(base, at(deck), { method: "POST", body: JSON.stringify({ on }) });
 // { machine }, { port } or { step_mm }: what the knobs move, or their step.

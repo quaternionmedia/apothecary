@@ -182,17 +182,37 @@ def test_the_deck_is_drawn_from_here_and_what_it_hears_is_listed(page: Page, url
 @pytest.mark.e2e
 def test_a_deck_that_will_not_open_says_why_in_its_window(page: Page, url: str):
     """A deck listed whose state is refused, as a real one's is while this account may not
-    write its USB device, says why in the window's note in place of what the deck is; the
-    note is the deck's again on the first beat the deck answers."""
+    write its USB device, says why in the window's note in place of what the deck is, and
+    every control its routes would refuse -- ▶ Knobs, a key, a knob, the strip -- is greyed
+    with the deck's answer's reason; the note is the deck's again, and the controls live,
+    on the first beat the deck answers."""
     said = (
         "the Stream Deck + is found but would not open (Could not open HID device.): this "
         "account may not write its USB device; docs/stream-deck.md gives the udev rule"
     )
+    refused = {"ok": False, "why": said, "kind": "offline"}
+    knobs = {
+        "running": False,
+        "can": {
+            **{v: refused for v in ("knobs.start", "knobs.stop", "inject")},
+            **{
+                v: {"ok": False, "why": "the knobs are not started", "kind": "idle"}
+                for v in ("knobs.machine", "knobs.step", "knobs.screen")
+            },
+        },
+    }
     state = re.compile(rf".*/firmware/decks/{DECK_ID}$")
+    answer = re.compile(rf".*/firmware/decks/{DECK_ID}/control$")
     page.route(
         state,
         lambda route: route.fulfill(
             status=503, content_type="application/json", body=json.dumps({"detail": said})
+        ),
+    )
+    page.route(
+        answer,
+        lambda route: route.fulfill(
+            status=200, content_type="application/json", body=json.dumps(knobs)
         ),
     )
     open_garage(page, url)
@@ -201,8 +221,17 @@ def test_a_deck_that_will_not_open_says_why_in_its_window(page: Page, url: str):
     deck = page.locator(DECK)
     expect(deck.locator(".deck-note")).to_have_text(said, timeout=10000)
     expect(deck.locator(".deck-events")).to_contain_text("nothing heard yet")
+    run = deck.locator(".deck-run")
+    expect(run).to_be_disabled(timeout=10000)
+    expect(run).to_have_attribute("title", re.compile(rf"^Disabled: {re.escape(said)}\. Start"))
+    for control in (".deck-key[data-key='0']", ".deck-turn >> nth=0", ".deck-strip-tap"):
+        expect(deck.locator(control)).to_be_disabled()
+        expect(deck.locator(control)).to_have_attribute("title", re.compile(r"^Disabled: "))
     page.unroute(state)
+    page.unroute(answer)
     expect(deck.locator(".deck-note")).to_contain_text("a simulated deck", timeout=10000)
+    expect(run).to_be_enabled(timeout=10000)
+    expect(deck.locator(".deck-key[data-key='0']")).to_be_enabled()
 
 
 @pytest.mark.e2e

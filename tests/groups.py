@@ -99,6 +99,7 @@ GROUPS = {
             "test_can_js.py",
             "test_can_now.py",
             "test_control_loops.py",
+            "test_deck_can.py",
             "test_deck_screens.py",
             "test_firmware_api.py",
             "test_firmware_deck.py",

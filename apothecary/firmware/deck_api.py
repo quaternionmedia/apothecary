@@ -2,7 +2,9 @@
 drawn, a key or the strip set, the events heard, and a simulated deck's events given.
 
 Listing opens nothing. Every other route opens the deck it names, once, and keeps it
-open until ``POST /firmware/decks/{id}/release``.
+open until ``POST /firmware/decks/{id}/release``; the knobs' state, which opens nothing,
+carries ``can``: per control of the Deck window, whether its route would take it now,
+read from the predicates the routes raise from (``firmware/can.py``, a deck's answer).
 """
 
 from __future__ import annotations
@@ -13,8 +15,8 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from . import can, deck_control
 from . import deck as decks
-from . import deck_control
 from .deck import DeckUnavailable
 
 router = APIRouter(prefix="/firmware/decks", tags=["firmware"])
@@ -50,9 +52,16 @@ class EventRequest(BaseModel):
     value: object
 
 
+def _refuse(refusal: Optional[can.Refusal]) -> None:
+    """A deck's refusal (``firmware/can.py``), as the HTTP answer its kind is."""
+    if refusal is not None:
+        raise HTTPException(can.DECK_STATUS[refusal.kind], refusal.why)
+
+
 def _deck(deck_id: str):
     """The deck, opened; one that was lost from USB is opened again when it is back, and
     is still the deck -- what it was drawn as, and that it is lost -- while it is not."""
+    _refuse(can.deck_refusal(deck_id, tried=False))
     try:
         deck = decks.get_decks().get(deck_id)
         if not deck.alive():
@@ -84,12 +93,18 @@ def list_decks():
     return {"decks": [d.model_dump() for d in found], "problem": None}
 
 
+def _knobs(deck_id: str, state: dict, port: Optional[str] = None) -> dict:
+    """A deck's knobs as a route answers them: their state and the deck's answer."""
+    return {**state, "can": can.deck_can(deck_id, port)}
+
+
 # Before /{deck_id}, which would take "control" for a deck's name.
 @router.get("/control")
-def controls():
-    """Every layout running on a deck: the machine its knobs move, their step and its
-    control's seconds left. Opens nothing."""
-    return {"controls": deck_control.controls()}
+def controls(port: Optional[str] = Query(None, max_length=200)):
+    """Every layout running on a deck: the machine its knobs move, their step, its
+    control's seconds left and the deck's answer -- with ``port``, whether the knobs
+    could be pointed at the machine there (a Control pad's Knobs here). Opens nothing."""
+    return {"controls": [_knobs(c["deck"], c, port) for c in deck_control.controls()]}
 
 
 @router.get("/{deck_id}")
@@ -156,6 +171,7 @@ def events(deck_id: str, since: int = Query(0, ge=0)):
 @router.post("/{deck_id}/events", status_code=201)
 def give_event(deck_id: str, body: EventRequest):
     deck = _deck(deck_id)
+    _refuse(can.real_deck(deck_id))
     try:
         return deck.inject(body.kind, body.index, body.value).to_json()
     except DeckUnavailable as exc:
@@ -170,10 +186,11 @@ def release(deck_id: str):
 
 
 @router.get("/{deck_id}/control")
-def control_state(deck_id: str):
-    """Whether the layout that jogs the machines runs on this deck, and what it last did."""
+def control_state(deck_id: str, port: Optional[str] = Query(None, max_length=200)):
+    """Whether the layout that jogs the machines runs on this deck, and what it last did,
+    with the deck's answer (``can``). Opens nothing."""
     controller = deck_control.running(deck_id)
-    return controller.state() if controller else {"running": False}
+    return _knobs(deck_id, controller.state() if controller else {"running": False}, port)
 
 
 @router.post("/{deck_id}/control")
@@ -183,9 +200,11 @@ def control(deck_id: str, body: ControlRequest):
     _deck(deck_id)  # a deck that is not there, or cannot be opened, says so first
     if not body.on:
         deck_control.stop(deck_id)
-        return {"running": False}
+        return _knobs(deck_id, {"running": False})
+    if can.knobs_idle(deck_id):
+        _refuse(can.deck_lost(deck_id))
     try:
-        return deck_control.start(deck_id).state()
+        return _knobs(deck_id, deck_control.start(deck_id).state())
     except DeckUnavailable as exc:
         raise HTTPException(503, str(exc)) from exc
 
@@ -194,13 +213,8 @@ def control(deck_id: str, body: ControlRequest):
 def choose(deck_id: str, body: ChoiceRequest):
     """The machine the running layout's knobs move, and their step: the Deck window, a
     Control pad's Knobs here and the ring's Knobs choose here. Nothing is armed."""
+    _refuse(can.knobs_idle(deck_id))
     controller = deck_control.running(deck_id)
-    if controller is None:
-        raise HTTPException(
-            409,
-            f"the knobs are not started on {deck_id}: POST /firmware/decks/{deck_id}/control "
-            'with {"on": true} starts them',
-        )
     try:
         if body.machine is not None or body.port is not None:
             controller.choose(body.machine, body.port)
@@ -208,4 +222,4 @@ def choose(deck_id: str, body: ChoiceRequest):
             controller.set_step(body.step_mm)
     except ValueError as exc:
         raise _said(exc) from exc
-    return controller.state()
+    return _knobs(deck_id, controller.state())

@@ -187,8 +187,11 @@ ROOT = CAN_JS.parents[2]
 
 
 def _verbs_the_server_answers(monkeypatch) -> set:
-    """Every command can_now answers, for a printer and for a router."""
-    verbs = set()
+    """Every command can_now answers, for a printer and for a router, and every control a
+    deck's answer does (can.deck_can, with a port: its Here too)."""
+    monkeypatch.setenv("APOTHECARY_SERIAL_ENGINE", "simulated")
+    monkeypatch.setenv("APOTHECARY_SIMULATED_DECK", "SIMDECK0")
+    verbs = set(can.deck_can("SIMDECK0", port="/dev/x"))
     for kind in ("printer", "router"):
         facts = can.Facts(
             port="/dev/x",
@@ -210,14 +213,15 @@ def _verbs_the_server_answers(monkeypatch) -> set:
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
 def test_every_verb_the_page_names_is_one_the_server_answers(monkeypatch):
     """A button whose data-can names no verb of can_now is never greyed (verdictOf finds
-    nothing and leaves it): each verb machine.js, sketches.js, loops.js and the templates
-    write, each can.js gives a pad's line, and each the latch lapsing refuses, is one the
-    server answers."""
+    nothing and leaves it): each verb machine.js, sketches.js, loops.js, deck.js and the
+    templates write, each can.js gives a pad's line, and each the latch lapsing refuses, is
+    one the server answers -- a port's, or a deck's."""
     answers = _verbs_the_server_answers(monkeypatch)
     pages = [
         MACHINE_JS,
         CAN_JS.parent / "widgets" / "sketches.js",
         CAN_JS.parent / "widgets" / "loops.js",
+        CAN_JS.parent / "widgets" / "deck.js",
         *sorted((ROOT / "templates").glob("*.j2")),
     ]
     written = {v for p in pages for v in re.findall(r'data-can="([^"<>]+)"', p.read_text("utf-8"))}

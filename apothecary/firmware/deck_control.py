@@ -510,6 +510,17 @@ class DeckController:
 
     # -- chosen from the page -----------------------------------------------------------
 
+    def machine_on(self, port: Optional[str]) -> Optional[Machine]:
+        """The deck's machine whose board is on ``port``, or None."""
+        return next((m for m in MACHINES if port and self.resolve(m) == port), None)
+
+    def not_here(self, port: Optional[str]) -> Optional[str]:
+        """Why the knobs cannot be pointed at ``port``: no machine of the deck's is there.
+        The route refuses with it, and the deck's answer (firmware/can.py) reads it."""
+        if self.machine_on(port) is None:
+            return f"{port}: no machine of the deck's has its board there"
+        return None
+
     def choose(self, machine: Optional[str] = None, port: Optional[str] = None) -> None:
         """The machine the knobs move, named or found by the port its board is on, as its
         key on the deck chooses it: the Deck window's machines, a Control pad's Knobs here
@@ -523,13 +534,14 @@ class DeckController:
                         f"no machine {machine!r} on the deck: its machines are {names}"
                     )
             else:
-                found = next((m for m in MACHINES if port and self.resolve(m) == port), None)
-                if found is None:
-                    raise ValueError(f"{port}: no machine of the deck's has its board there")
+                why = self.not_here(port)
+                if why:
+                    raise ValueError(why)
+                found = self.machine_on(port)
             self._first_long = None
             self._choose(KEY_MACHINE[MACHINES.index(found)])
             self.said = (f"{found.name} chosen", "grey")
-            self.draw()
+            self._draw_if_there()
 
     def set_step(self, mm: float) -> None:
         """The knobs' step, one of the deck's own, as its STEP key cycles it."""
@@ -539,7 +551,15 @@ class DeckController:
                 raise ValueError(f"a step of {_mm(mm)} mm: the deck's steps are {steps} mm")
             self.step = STEPS_MM.index(mm)
             self.said = (f"step {_mm(self.step_mm)} mm", "grey")
+            self._draw_if_there()
+
+    def _draw_if_there(self) -> None:
+        """Drawn now where the deck answers. A deck lost on USB is drawn when it is back
+        (the layout's tick draws what was not sent), and what was chosen stands."""
+        try:
             self.draw()
+        except decks.DeckUnavailable:
+            pass
 
     def _machine_key(self, event: decks.DeckEvent) -> None:
         """A machine's key: pressed down, or let go. A short press chooses the machine; a

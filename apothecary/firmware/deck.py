@@ -571,7 +571,18 @@ class Decks:
 
     def __init__(self):
         self._open: Dict[str, Deck] = {}
+        self._failed: Dict[str, str] = {}  # why each deck's last opening failed, until one works
         self._lock = threading.RLock()
+
+    def opened(self, deck_id: str) -> Optional[Deck]:
+        """The deck, if it is open; nothing is opened by asking."""
+        with self._lock:
+            return self._open.get(deck_id)
+
+    def failed(self, deck_id: str) -> Optional[str]:
+        """Why the last opening of ``deck_id`` failed, while none has worked since."""
+        with self._lock:
+            return self._failed.get(deck_id)
 
     def list(self) -> List[DeckInfo]:
         """Every deck found, simulated or real, none of them opened. Raises
@@ -592,7 +603,7 @@ class Decks:
             if _engine() == "simulated":
                 if deck_id not in simulated_ids():
                     raise KeyError(deck_id)
-                deck = Deck(DeckInfo(id=deck_id, simulated=True), SimulatedLink)
+                info, make_link = DeckInfo(id=deck_id, simulated=True), SimulatedLink
             else:
                 if not any(info.id == deck_id for info, _ in _real_devices()):
                     raise KeyError(deck_id)
@@ -605,8 +616,14 @@ class Decks:
                         raise DeckUnavailable(f"{deck_id} is not on USB")
                     return HidLink(device, report)
 
-                deck = Deck(DeckInfo(id=deck_id), link)
+                info, make_link = DeckInfo(id=deck_id), link
+            try:
+                deck = Deck(info, make_link)
+            except DeckUnavailable as exc:
+                self._failed[deck_id] = str(exc)  # what its answer says until it opens
+                raise
             self._open[deck_id] = deck
+            self._failed.pop(deck_id, None)
             return deck
 
     def release(self, deck_id: str) -> bool:

@@ -9,7 +9,8 @@
  *
  * Its knobs, the layout that jogs the garage's machines, are the server's (deck_knobs.js):
  * the window starts and stops them and chooses the machine they move and their step,
- * as the deck's own keys do, and shows what the deck, a Control pad or the ring chose.
+ * as the deck's own keys do, and shows what the deck, a Control pad or the ring chose. Each control is greyed with the reason its route would
+ * refuse it now (`can` on the knobs' state, firmware/can.py; can.js).
  *
  * mountDeck(root, { base, log }) renders into `root` and returns { shown(), close(),
  * load(), state(), destroy() }. shown() loads the first deck found and follows it
@@ -19,10 +20,13 @@
  */
 
 import { esc } from "/static/board_text.js";
+import { applyCan } from "/static/can.js";
 import { armedWords, choose, knobsOf, turn } from "/static/deck_knobs.js";
 
 const SWIPE_PX = 200; // of the strip's 800: what the server reads as a swipe (deck_screens.py)
 const KEYS = 8, KNOBS = 4, STRIP = [800, 100], EVERY_MS = 1500, HEAR_MS = 250, LIT_MS = 1200, KEPT = 200;
+// The controls the deck's answer greys (firmware/can.py deck_can), each by its route.
+const VERBS = ["knobs.start", "knobs.stop", "knobs.machine", "knobs.step", "inject"];
 
 const MARKUP = `
 <div class="deck-ui">
@@ -59,10 +63,10 @@ export function mountDeck(root, { base = "", log = null } = {}) {
     const post = (path, data) => api(path, { method: "POST", body: JSON.stringify(data) });
 
     $(".deck-keys").innerHTML = Array.from({ length: KEYS }, (_, i) =>
-        `<button type="button" class="deck-key" data-key="${i}" title="Key ${i}: pressed and released as a deck reports it"><img alt="" hidden><span class="deck-none">–</span></button>`).join("");
-    $(".deck-strip").innerHTML = `<button type="button" class="deck-strip-tap" title="The touch strip: tapped where it is pressed; dragged a quarter of its length or more it is a swipe, which changes the screen the layout shows"><img alt="" hidden draggable="false"><span class="deck-none">–</span><span class="deck-touch" hidden></span></button>`;
+        `<button type="button" class="deck-key" data-key="${i}" data-can="inject" title="Key ${i}: pressed and released as a deck reports it"><img alt="" hidden><span class="deck-none">–</span></button>`).join("");
+    $(".deck-strip").innerHTML = `<button type="button" class="deck-strip-tap" data-can="inject" title="The touch strip: tapped where it is pressed; dragged a quarter of its length or more it is a swipe, which changes the screen the layout shows"><img alt="" hidden draggable="false"><span class="deck-none">–</span><span class="deck-touch" hidden></span></button>`;
     $(".deck-knobs").innerHTML = Array.from({ length: KNOBS }, (_, i) =>
-        `<div class="deck-knob" data-knob="${i}">${[-1, 1].map((d) => `<button type="button" class="deck-turn" data-dir="${d}" title="Knob ${i} turned one step ${d > 0 ? "clockwise" : "counter-clockwise"}">${d > 0 ? "↻" : "↺"}</button>`).join("")}<button type="button" class="deck-press" title="Knob ${i} pressed and released">●</button></div>`).join("");
+        `<div class="deck-knob" data-knob="${i}">${[-1, 1].map((d) => `<button type="button" class="deck-turn" data-dir="${d}" data-can="inject" title="Knob ${i} turned one step ${d > 0 ? "clockwise" : "counter-clockwise"}">${d > 0 ? "↻" : "↺"}</button>`).join("")}<button type="button" class="deck-press" data-can="inject" title="Knob ${i} pressed and released">●</button></div>`).join("");
 
     // What was heard, shown where it happened. An event older than a few seconds (the
     // history a window opened late is given) marks what is still held and lights nothing.
@@ -112,19 +116,29 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         const box = $(".deck-control");
         if (!deck || !knobs) { box.innerHTML = ""; return; }
         const on = !!knobs.running;
-        const run = `<button type="button" class="deck-run" title="${on ? "Stop the knobs: the keys and strip stay as drawn" : "Start the knobs: the layout that jogs the garage's machines"}. ⌗ Panels › Machine › Knobs › On / off">${on ? "■ Knobs" : "▶ Knobs"}</button>`;
+        const run = `<button type="button" class="deck-run" data-can="knobs.start" title="${on ? "Stop the knobs: the keys and strip stay as drawn" : "Start the knobs: the layout that jogs the garage's machines"}. ⌗ Panels › Machine › Knobs › On / off">${on ? "■ Knobs" : "▶ Knobs"}</button>`;
         if (!on) { box.innerHTML = `<div class="row">${run}<span class="meta">knobs off</span></div>`; return; }
-        const machines = knobs.machines.map((m) => `<button type="button" class="deck-machine" data-machine="${esc(m)}" aria-pressed="${m === knobs.machine}" title="The knobs move ${esc(m)}, as its key on the deck chooses it. ⌗ Panels › Machine › Knobs › Machine">${esc(m)}</button>`).join("");
-        const steps = knobs.steps_mm.map((mm) => `<button type="button" class="deck-step" data-mm="${mm}" aria-pressed="${mm === knobs.step_mm}" title="A knob's step moves ${mm} mm, as the deck's STEP key cycles it. ⌗ Panels › Machine › Knobs › Step">${mm}</button>`).join("");
+        const machines = knobs.machines.map((m) => `<button type="button" class="deck-machine" data-machine="${esc(m)}" data-can="knobs.machine" aria-pressed="${m === knobs.machine}" title="The knobs move ${esc(m)}, as its key on the deck chooses it. ⌗ Panels › Machine › Knobs › Machine">${esc(m)}</button>`).join("");
+        const steps = knobs.steps_mm.map((mm) => `<button type="button" class="deck-step" data-mm="${mm}" data-can="knobs.step" aria-pressed="${mm === knobs.step_mm}" title="A knob's step moves ${mm} mm, as the deck's STEP key cycles it. ⌗ Panels › Machine › Knobs › Step">${mm}</button>`).join("");
         box.innerHTML = `<div class="row">${run}${machines}</div><div class="row"><span class="meta">step</span>${steps}<span class="meta">mm</span></div>`
             + `<div class="meta deck-knobs-said">${esc(knobs.machine)} · ${esc(armedWords(knobs))} · ${esc(knobs.said)}</div>`
             + `<div class="meta deck-screen">strip screen: ${esc(knobs.screen)} (${knobs.screens.indexOf(knobs.screen) + 1}/${knobs.screens.length}) · a swipe along the strip walks ${knobs.screens.map(esc).join(", ")}</div>`;
+        // Running, the one button stops them, and is answered as a stop.
+        box.querySelector(".deck-run").dataset.can = "knobs.stop";
+    }
+
+    // The deck's answer (`can` on its knobs' state): what each control's route would refuse
+    // now. With no deck to ask, or no answer, every control is refused for that.
+    function deckCan() {
+        if (deck && knobs && knobs.can) return knobs.can;
+        const why = problem || (deck ? "the deck has not answered yet" : $(".deck-name").textContent);
+        return Object.fromEntries(VERBS.map((verb) => [verb, { ok: false, kind: "offline", why }]));
     }
 
     function render() {
         renderKnobs();
+        applyCan(root, deckCan());
         const inputs = !!(deck && deck.simulated);
-        for (const b of root.querySelectorAll(".deck-key, .deck-strip-tap, .deck-turn, .deck-press")) b.disabled = !inputs;
         if (!deck) return;
         $(".deck-name").textContent = `${deck.model} · ${deck.id} · ${deck.vid}:${deck.pid}${deck.simulated ? " · simulated" : ""}${deck.serial ? ` · S/N ${deck.serial}` : ""}${drawn && drawn.mended ? ` · lost and found ${drawn.mended}×` : ""}`;
         const keys = (drawn && drawn.keys_drawn) || {};
@@ -160,6 +174,7 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         if (!alive) return null;
         if (!found.decks.length) {
             deck = null;
+            knobs = null;
             $(".deck-name").textContent = found.problem ? `no Stream Deck +: ${found.problem}` : "no Stream Deck + found";
             render();
             return null;
@@ -169,13 +184,14 @@ export function mountDeck(root, { base = "", log = null } = {}) {
             drawn = await api(`/firmware/decks/${encodeURIComponent(deck.id)}`);
             deck = { ...deck, serial: drawn.serial };
             take(await api(`/firmware/decks/${encodeURIComponent(deck.id)}/events?since=${last}`));
-            knobs = await knobsOf(base, deck.id);
             problem = null;
         } catch (e) {
             // Said once, and shown in the window for as long as it lasts.
             if (e.message !== problem) say(`Deck: ${e.message}`, "bad");
             problem = e.message;
         }
+        // The knobs and the deck's answer, whatever the deck said: asking opens nothing.
+        try { knobs = await knobsOf(base, deck.id); } catch (e) { knobs = null; }
         render();
         return deck;
     }

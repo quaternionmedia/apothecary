@@ -99,6 +99,31 @@ and the window's controls are off.
 [Walkthrough 26](../walkthrough/26-the-stream-deck.md) goes round it, written by
 `tests/e2e/test_deck.py`.
 
+### What the Deck window would be refused
+
+The knobs' state (`GET /firmware/decks/{id}/control`, and each running layout's in `GET
+/firmware/decks/control`) carries `can`: for each of the window's controls, whether its
+route would take it now, as `{"ok", "why", "kind"}`, in the shape a port's answer has
+([firmware.md](firmware.md#what-a-command-would-be-refused-for)). The controls are
+`knobs.start` and `knobs.stop` (▶ Knobs), `knobs.machine` and `knobs.step` (a machine,
+a step chosen), `inject` (a simulated deck's key,
+knob or strip) and, asked with `?port=`, `here` (a Control pad's Knobs here for that
+port's machine). `kind` says what stands in the way: `name` (no deck's name), `found`
+(no such deck), `offline` (the deck library or the HID library missing, the deck's last
+opening failed, or it is lost on USB and not back), `idle` (the knobs are not started),
+`kind` (a real deck, which reports for itself) and `machine` (no machine of the deck's
+has its board on that port). Each is a predicate in `firmware/can.py` that the deck's
+routes raise from, so the answer and the refusal are one check;
+`tests/test_deck_can.py` puts the deck in each condition and requires `ok: false`
+exactly where the route answers 4xx or 5xx. Asking opens no deck: a deck not yet opened
+is judged by its listing, and one whose opening failed by that failure until it opens
+(the window's own look at the deck tries it again every beat); an open deck lost on USB is
+opened again if it is back, as every route that names it does first.
+
+The window greys each control the answer refuses, with the reason in its title
+(`static/can.js`); with no deck found, or no answer yet, every control is refused for
+that. A Control pad's 🎛 Knobs here is greyed from the same answer for its port.
+
 ## The controller
 
 The knobs jog the garage's two machines. `apothecary/firmware/deck_control.py` runs one
