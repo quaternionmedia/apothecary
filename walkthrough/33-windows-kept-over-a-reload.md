@@ -19,7 +19,7 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ## 1. Models, Marks, the Working space and the Deck, opened from ⊞ Windows
 
-The header's ⊞ Windows, four times: Models, Marks and the Deck each a column beside the world, the last opened nearest it, and the Working space a tab of the stack under Selected, beside Pictures, Bench and Settings, each in front as it opens. The browser remembers the layout a moment after each change.
+The header's ⊞ Windows, four times: Models, Marks and the Deck tabs of the one stack beside the world, Models taking its room from the world's and each after it in front as it opens, and the Working space a tab of the stack under Selected, beside Pictures, Bench and Settings, each in front as it opens. The browser remembers the layout a moment after each change.
 
 ![Models, Marks, the Working space and the Deck, opened from ⊞ Windows](screenshots/33-01-models-marks-the-working-space-and-the-deck-opened.png)
 

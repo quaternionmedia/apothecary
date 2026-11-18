@@ -145,6 +145,16 @@ PAGE_WINDOWS = [
 ]
 
 
+def _root(world: float = 70, heights: tuple = ()) -> dict:
+    """The page's own layout here, the world ``world`` per cent of the row and the
+    column's stacks, top first, ``heights`` per cent of it."""
+    root = json.loads(json.dumps(ROOT_LAYOUT))
+    root["content"][0]["width"], root["content"][1]["width"] = world, 100 - world
+    for stack, height in zip(root["content"][1]["content"], heights, strict=False):
+        stack["height"] = height
+    return root
+
+
 def _serve(route) -> None:
     path = urlparse(route.request.url).path
     if path in ("/", "/index.html"):
@@ -261,6 +271,52 @@ def _beside_the_world_with_room_from_the_world(page):
     page.wait_for_function("(w) => Math.abs(H.size('world') - w) < 0.5", arg=before)
 
 
+def _a_second_window_beside_the_world_is_a_tab_of_the_first(page):
+    # A page wide enough that the world could spare a second column beside it.
+    page.set_viewport_size({"width": 2000, "height": 800})
+    _mount(page)
+    _js(page, "() => { for (const id of ['x', 'y']) H.reg(id, { home: 'beside', open: false }); }")
+    _js(page, "() => P.open('x')")
+    world = _js(page, "() => H.size('world')")
+    _js(page, "() => P.open('y')")
+    y = _where(page, "y")
+    assert y["stack"] == ["x", "y"] and y["front"] == "y" and y["parent"] == "row"
+    assert _js(page, "() => H.size('world')") == pytest.approx(world, abs=0.5)
+    # Both closed, the room is the world's again.
+    _js(page, "() => { P.close('y'); P.close('x'); }")
+    page.wait_for_function("(w) => Math.abs(H.size('world') - w) < 0.5", arg=70)
+
+
+def _beside_a_world_that_cannot_spare_the_room_a_tab_next_to_it(page):
+    # The world half the row, 600 pixels: less than BESIDE_LEAST to spare above
+    # WORLD_LEAST, so a tab of the tallest stack next to it, Selected-like `sel`.
+    _mount(page, root=_root(world=50, heights=(25, 45, 30)))
+    _js(page, "() => { H.reg('x', { home: 'beside', open: false }); P.open('x'); }")
+    x = _where(page, "x")
+    assert x["stack"] == ["sel", "x"] and x["front"] == "x"
+    assert _js(page, "() => H.size('world')") == pytest.approx(50, abs=0.5)
+
+
+def _beside_the_world_it_keeps_its_least_width(page):
+    # The world three fifths of the row: what a window beside it takes leaves it about
+    # WORLD_LEAST (400) pixels wide, not BESIDE per cent narrower.
+    _mount(page, root=_root(world=60))
+    _js(page, "() => { H.reg('x', { home: 'beside', open: false }); P.open('x'); }")
+    assert _where(page, "x")["parent"] == "row"
+    width = _js(page, "() => document.getElementById('world').getBoundingClientRect().width")
+    assert width == pytest.approx(400, abs=8)
+
+
+def _opened_by_the_page_somewhere_else_for_once(page):
+    _js(page, "() => { H.reg('x', { home: 'beside', open: false }); P.open('x', { at: 'tabs' }); }")
+    x = _where(page, "x")
+    assert x["stack"] == ["t1", "t2", "x"] and x["front"] == "x"
+    assert _js(page, "() => H.size('world')") == pytest.approx(70, abs=0.5)
+    # Closed and opened by a person, it is at its home again.
+    _js(page, "() => { P.close('x'); P.open('x'); }")
+    assert _where(page, "x")["parent"] == "row"
+
+
 def _at_the_column_foot_after_nothing(page):
     _js(page, "() => { H.reg('x', { home: 'column', open: false }); P.open('x'); }")
     w = _where(page, "x")
@@ -300,6 +356,10 @@ def _a_tab_at_the_foot_of_a_full_column_after_nothing(page):
         _under_the_window_it_follows,
         _with_its_siblings_under_that_window,
         _beside_the_world_with_room_from_the_world,
+        _a_second_window_beside_the_world_is_a_tab_of_the_first,
+        _beside_a_world_that_cannot_spare_the_room_a_tab_next_to_it,
+        _beside_the_world_it_keeps_its_least_width,
+        _opened_by_the_page_somewhere_else_for_once,
         _at_the_column_foot_after_nothing,
         _a_tab_beside_the_window_it_follows_once_the_column_is_full,
         _a_tab_at_once_in_a_column_of_three,

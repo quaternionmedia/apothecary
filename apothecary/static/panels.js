@@ -13,11 +13,18 @@
  * column beside the world, right under the window it follows (`after`), where the
  * windows following that one share a stack -- a stack of its own while the column has
  * fewer than `columnStacks`, else a tab beside the window it follows; "tabs", the
- * stack where the other tabbed windows are; "beside", a stack of its own next to the
- * world, its room taken from the world's; or another window's id, a tab beside it,
- * else beside a window open with the same home. A `loud` window's tab and frame say
- * so. The world's stack maximised is the world alone (the tilde); again, everything
- * back.
+ * stack where the other tabbed windows are; "beside", next to the world (below); or
+ * another window's id, a tab beside it, else beside a window open with the same home.
+ * The page may open a window somewhere else than its home for once (open's `at`). A
+ * `loud` window's tab and frame say so. The world's stack maximised is the world alone
+ * (the tilde); again, everything back.
+ *
+ * Beside the world there is one stack of windows: a window whose home is "beside" is a
+ * tab of the stack in the world's row that holds one already. With none there, it is a
+ * stack of its own next to the world, its room taken from the world's: BESIDE per cent
+ * of the row at most, and never so much that the world is narrower than WORLD_LEAST
+ * pixels. Where the world cannot spare BESIDE_LEAST pixels, it is a tab of the stack
+ * next to the world instead -- the tallest, where a column stands there.
  *
  * A window the page says has nothing to show (setEmpty) gives its room away: in front
  * of one that has something, it gives that one the front; a stack of nothing but
@@ -45,8 +52,15 @@ import { mayAct } from "./keys.js";
 const TILDE_KEYS = new Set(["`", "~"]);
 const WORLD = "world";
 const HOMES = new Set(["column", "tabs", "beside"]);
-// A window opened beside the world takes this share of the world's row (per cent).
+// A window opened beside the world takes this share of the world's row (per cent) at
+// most, and half the world's at most.
 const BESIDE = 28;
+// The least a window opened beside the world leaves the world (pixels): enough to see a
+// machine and select a piece in it.
+const WORLD_LEAST = 400;
+// The least room a stack beside the world is opened with (pixels); with less to spare,
+// the window is a tab next to the world.
+const BESIDE_LEAST = 280;
 // How low a stack goes, its tabs and a sliver: the height a minimised one is given.
 const LOWEST = 40;
 
@@ -239,37 +253,80 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     layout.on("stateChanged", tabsForDrops);
     const isWorldAlone = () => !!worldStack()?.isMaximised;
 
-    // Where a panel opens when it is not in the layout: its home. Added to a stack of
-    // tabs, it is in front only when `front` (opened by a person), so a panel the page
-    // registers does not take the place of the one a person was reading.
-    function addAt(r, front = true) {
+    // A window added to a stack of tabs (at `index`, else after its last), in front only
+    // when `front`.
+    function addTab(stack, config, front, index = undefined) {
+        const before = stack.getActiveComponentItem();
+        stack.addItem(config, index);
+        if (!front && before) stack.setActiveComponentItem(before, false);
+    }
+    // The stack of windows beside the world: one in the world's row holding a window
+    // whose home is "beside" (not `except`), the nearest the world where there are two.
+    function besideStack(except) {
+        const ws = worldStack(), row = ws?.parent;
+        if (!row?.isRow) return null;
+        const at = row.contentItems.indexOf(ws);
+        const beside = (c) => c !== ws && c.isStack && c.contentItems.some((ci) => ci.id !== except && records.get(ci.id)?.home === "beside");
+        const far = (c) => Math.abs(row.contentItems.indexOf(c) - at);
+        return row.contentItems.filter(beside).sort((a, b) => far(a) - far(b))[0] || null;
+    }
+    // The stack next to the world, on its right (else its left): itself, or the tallest
+    // stack of the column standing there, the first of two as tall.
+    function nextToTheWorld() {
+        const ws = worldStack(), row = ws?.parent;
+        if (!row?.isRow) return null;
+        const at = row.contentItems.indexOf(ws);
+        const next = row.contentItems[at + 1] || row.contentItems[at - 1];
+        if (!next) return null;
+        if (next.isStack) return next;
+        const height = (s) => s.element.getBoundingClientRect().height;
+        return stacksOf(next).reduce((best, s) => (!best || height(s) > height(best) ? s : best), null);
+    }
+
+    // Where a panel opens when it is not in the layout: its home, or `home` given for
+    // this once. Added to a stack of tabs, it is in front only when `front` (opened by a
+    // person), so a panel the page registers does not take the place of the one a
+    // person was reading.
+    function addAt(r, front = true, home = r.home) {
         const config = { type: "component", componentType: r.id, id: r.id, title: r.tab || r.title };
         const tabbed = [...records.values()].filter((o) => o.id !== r.id && o.registered && o.home === "tabs" && item(o.id));
         // A window whose home is another one goes beside it, else beside a window open
         // with the same home (an Airgap section beside another, the Airgap closed).
-        const kin = (o) => o.id !== r.id && o.home === r.home && item(o.id);
-        const beside = !HOMES.has(r.home) && r.home !== r.id
-            ? item(r.home) || item([...records.values()].find(kin)?.id) : null;
-        if ((r.home === "tabs" && tabbed.length) || beside) {
+        const kin = (o) => o.id !== r.id && o.home === home && item(o.id);
+        const beside = !HOMES.has(home) && home !== r.id
+            ? item(home) || item([...records.values()].find(kin)?.id) : null;
+        if ((home === "tabs" && tabbed.length) || beside) {
             const stack = (beside || item(tabbed[0].id)).parentItem;
-            const before = stack.getActiveComponentItem();
             // Beside its home panel, else after the stack's last tab.
-            stack.addItem(config, beside ? stack.contentItems.indexOf(beside) + 1 : undefined);
-            if (!front && before) stack.setActiveComponentItem(before, false);
+            addTab(stack, config, front, beside ? stack.contentItems.indexOf(beside) + 1 : undefined);
             return;
         }
         // A component's stack is its parentItem; a stack's row or column, its parent.
         rowForTheWorld();
         const ws = worldStack();
         const besideWorld = ws && ws.parent;
-        if (r.home === "beside" && besideWorld) {
-            // Its room is taken from the world's: the windows on the world's other side
-            // keep theirs.
+        if (home === "beside" && besideWorld) {
+            // The one stack beside the world, where there is one: a tab of it.
+            const shared = besideStack(r.id);
+            if (shared) { addTab(shared, config, front); return; }
+            // Else a stack of its own, its room taken from the world's, the windows on
+            // the world's other side keeping theirs -- unless the world cannot spare it.
             const sizes = new Map(besideWorld.contentItems.map((c) => [c, c.size]));
+            let room = Math.min(BESIDE, sizes.get(ws) / 2);
+            const worldPx = ws.element.getBoundingClientRect().width;
+            if (worldPx > 0) {
+                const perCent = worldPx / sizes.get(ws);  // pixels per per cent of the row
+                const spare = Math.min(room, (worldPx - WORLD_LEAST) / perCent);
+                if (spare * perCent >= BESIDE_LEAST) room = spare;
+                else {
+                    const next = nextToTheWorld();
+                    if (next) { addTab(next, config, front); return; }
+                    // Nothing else stands in the row: a stack of its own all the same.
+                }
+            }
             const at = besideWorld.contentItems.indexOf(ws) + 1;
             besideWorld.addItem({ type: "stack", content: [config] }, at);
             const added = besideWorld.contentItems[at];
-            const room = Math.min(BESIDE, sizes.get(ws) / 2);
             for (const [c, size] of sizes) c.size = c === ws ? size - room : size;
             added.size = room;
             besideWorld.updateSize(false);
@@ -280,13 +337,10 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         // else beside the world. A window that follows another, where one following the
         // same window is open there already, is a tab of that one's stack: a system's
         // sections opened in the column share one stack under it.
-        const sibling = r.after && r.home === "column"
+        const sibling = r.after && home === "column"
             ? [...records.values()].find((o) => o.id !== r.id && o.after === r.after && o.home === "column" && item(o.id)) : null;
         if (sibling) {
-            const stack = item(sibling.id).parentItem;
-            const before = stack.getActiveComponentItem();
-            stack.addItem(config);
-            if (!front && before) stack.setActiveComponentItem(before, false);
+            addTab(item(sibling.id).parentItem, config, front);
             return;
         }
         const near = r.after ? item(r.after)?.parentItem : null;
@@ -297,9 +351,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             // The column full: a tab beside the window it follows, else at its foot.
             const stack = near && near.parent === column ? near : column.contentItems[column.contentItems.length - 1];
             if (stack.isStack) {
-                const before = stack.getActiveComponentItem();
-                stack.addItem(config);
-                if (!front && before) stack.setActiveComponentItem(before, false);
+                addTab(stack, config, front);
                 return;
             }
         }
@@ -711,12 +763,14 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             records.delete(id);
             if (ci && r.onClose) r.onClose();
         },
-        /* Open a panel: shown where it is, else opened at its home, its tab in front,
-         * its body filled before this returns, so a verb sent to it next finds it. */
-        open(id) {
+        /* Open a panel: shown where it is, else opened at its home -- or at `at`, a home
+         * given for this once (a window the page opens of its own accord, in the column
+         * rather than beside the world) -- its tab in front, its body filled before this
+         * returns, so a verb sent to it next finds it. */
+        open(id, { at = null } = {}) {
             const r = records.get(id);
             if (!r || !r.registered) return false;
-            if (!item(id)) addAt(r);
+            if (!item(id)) addAt(r, true, at && at !== id ? at : r.home);
             const shown = show(id);
             const stack = item(id)?.parentItem;
             if (minimised.has(stack)) unminimise(stack);

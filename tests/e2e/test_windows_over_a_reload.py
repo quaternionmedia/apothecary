@@ -16,7 +16,8 @@ from playwright.sync_api import expect
 from viewer_ready import settled
 
 # Windows the page's own layout leaves closed, each opened from ⊞ Windows by a person:
-# Models and Marks beside the world, Working space among the tabs, the Deck beside.
+# Models, Marks and the Deck in the one stack beside the world, Working space among the
+# tabs.
 OPENED = ("models", "marks", "working", "deck")
 
 # What changes on every run whatever the page does: the moments, and in the Working
@@ -74,12 +75,14 @@ def test_windows_a_person_opened_are_open_after_a_reload_where_they_were(page, u
         assert windows.state(page, pid)["open"] is True, pid
     windows.remembered(page)
     stacks = {pid: windows.state(page, pid)["stack"] for pid in OPENED}
+    assert stacks["deck"] == ["models", "marks", "deck"], stacks
     width = windows.world_width(page)
     settled(page)
     story.shows(
         "Models, Marks, the Working space and the Deck, opened from ⊞ Windows",
-        "The header's ⊞ Windows, four times: Models, Marks and the Deck each a column "
-        "beside the world, the last opened nearest it, and the Working space a tab of the "
+        "The header's ⊞ Windows, four times: Models, Marks and the Deck tabs of the one "
+        "stack beside the world, Models taking its room from the world's and each after it "
+        "in front as it opens, and the Working space a tab of the "
         "stack under Selected, beside Pictures, Bench and Settings, each in front as it "
         "opens. The browser remembers the layout a moment after each change.",
         blank=CHANGING,

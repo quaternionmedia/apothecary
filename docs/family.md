@@ -156,9 +156,10 @@ a machine or a board to work, the work must have ended too: a home still under w
 a cut still running, holds the next step, and work that failed holds it until its step
 is fired again. A run is done when its job is, and failed when its job was cancelled or
 failed. Work already queued for a machine behind work that failed for it is not run. GO is in the **Procedure**
-window, which says how each step stands. It stands beside the world
-whenever the site has a procedure, without being asked for, and gives its room back on a site
-with none; a window a person closed stays closed, and one a person opened is the person's.
+window, which says how each step stands. It opens in the column beside the world, at its foot,
+whenever the site has a procedure, without being asked for and without taking the world's
+room, and closes on a site with none; a window a person closed stays
+closed, and one a person opened is the person's.
 It is also ⊞ Windows › Procedure, in the Family group with **Members**, each member, how it is
 reached, its state where the hub started it and its door, and **Deliveries**, the hub's audit,
 newest first, each delivery's step, member, status, milliseconds and the instance that took

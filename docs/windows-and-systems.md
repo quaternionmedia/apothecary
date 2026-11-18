@@ -38,8 +38,15 @@ this.panels.register('gather', {
   a stack with the others that follow it; a stack of its own while the column
   has fewer than `columnStacks` (four), else a tab beside the window it
   follows, or at the column's foot; `"tabs"`, the stack of the other tabbed
-  windows; `"beside"`, next to the world, its room taken from the world's; or
-  another window's id, a tab beside that one.
+  windows; `"beside"`, next to the world; or another window's id, a tab beside
+  that one. Beside the world there is one stack: a window whose home is
+  `"beside"` is a tab of the stack in the world's row that holds one already;
+  with none there it is a stack of its own, its room taken from the world's,
+  never so much that the world is narrower than `WORLD_LEAST` pixels
+  (`apothecary/static/panels.js`); where the world cannot spare `BESIDE_LEAST`
+  pixels, it is a tab of the tallest stack next to the world. `this.panels.open(id, { at })` opens a window at
+  another home for once: the page opens the Procedure in the column, a person's
+  ⊞ Windows beside the world.
 - `open` says whether it opens as it is registered; `loud` that its tab and
   frame say it must be seen (an armed printer's pad). `onOpen` is told when its
   filled body is in front again, `onClose` when it is closed.

@@ -686,7 +686,12 @@ Pictures'.
 The column beside the world is the one place a window opens by default, and it
 holds four stacks at most: a window opened there while it has fewer is a stack
 of its own, right under the window it follows; once it has four, a tab -- beside
-the window it follows, else at the column's foot. A window with nothing to show
+the window it follows, else at the column's foot. A window that opens beside the
+world (Layers, Loops, Models, Marks, the Deck, the armed pad) shares one stack
+there with the others: the first takes its room from the world's, never leaving
+the world too narrow to see a machine in, and the next are tabs of it; where the
+world has no room to give, it is a tab next to the world instead.
+A window with nothing to show
 gives its room away: its tab is dimmed, a window with something to show in its
 stack comes in front of it, and a stack of nothing but such windows is
 minimised to its tabs. It has its height back when one of them has something to

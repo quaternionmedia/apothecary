@@ -8776,9 +8776,9 @@
             // opens no Machine, the node's door does. A node whose board is not connected
             // is asked of the boards once more before the door says so: a member may have
             // flashed or pinned it since the page last looked.
-            // The Procedure beside the world while the site has a procedure, and its
-            // room given back when it has none -- a window the page opened, never one a
-            // person opened, and never again after a person closed it.
+            // The Procedure open while the site has a procedure, and closed when it has
+            // none -- a window the page opened, never one a person opened, and never
+            // again after a person closed it.
             procedureDeclined() {
                 try { return localStorage.getItem('apothecary.procedure-declined') === '1'; } catch (e) { return false; }
             }
@@ -8798,25 +8798,34 @@
                     else localStorage.removeItem('apothecary.procedure-declined');
                 } catch (e) { /* blocked storage: the window still works */ }
             }
-            async procedureRoom(name) {
-                let listed = [];
-                try {
-                    const r = await fetch(`${BASE_URL}/sites/${encodeURIComponent(name)}/procedures`);
-                    if (r.ok) listed = (await r.json()).procedures || [];
-                } catch (e) { return; }
-                if (name !== this.siteName) return;
-                const shown = this.panels.isShown('procedure');
-                // In front while a person's ✕ stands: the person opened it again.
-                if (shown && this.procedureDeclined()) { this.declineProcedure(false); this.givenProcedure(false); }
-                if (listed.length && !shown && !this.procedureDeclined()) {
-                    this.procedureByPage = true;
-                    this.panels.open('procedure'); this.givenProcedure(true);
-                    setTimeout(() => { this.procedureByPage = false; }, 0);
-                } else if (!listed.length && shown && this.procedureGiven()) {
-                    this.procedureByPage = true;
-                    this.panels.close('procedure'); this.givenProcedure(false);
-                    setTimeout(() => { this.procedureByPage = false; }, 0);
-                }
+            // The page opens it in the column beside the world, a stack of its own at the
+            // column's foot while there is room (a tab there once the column is full), and
+            // not beside the world, whose room it would halve on every visit; a person's
+            // ⊞ Windows opens it at its home. A step's door opens a Machine among the tabs
+            // over Pictures, so the Procedure stays in view beside it. `procedureAsked` is
+            // the last asking, settled once the window is opened or closed.
+            procedureRoom(name) {
+                this.procedureAsked = (async () => {
+                    let listed = [];
+                    try {
+                        const r = await fetch(`${BASE_URL}/sites/${encodeURIComponent(name)}/procedures`);
+                        if (r.ok) listed = (await r.json()).procedures || [];
+                    } catch (e) { return; }
+                    if (name !== this.siteName) return;
+                    const shown = this.panels.isShown('procedure');
+                    // In front while a person's ✕ stands: the person opened it again.
+                    if (shown && this.procedureDeclined()) { this.declineProcedure(false); this.givenProcedure(false); }
+                    if (listed.length && !shown && !this.procedureDeclined()) {
+                        this.procedureByPage = true;
+                        this.panels.open('procedure', { at: 'column' }); this.givenProcedure(true);
+                        setTimeout(() => { this.procedureByPage = false; }, 0);
+                    } else if (!listed.length && shown && this.procedureGiven()) {
+                        this.procedureByPage = true;
+                        this.panels.close('procedure'); this.givenProcedure(false);
+                        setTimeout(() => { this.procedureByPage = false; }, 0);
+                    }
+                })();
+                return this.procedureAsked;
             }
             async openProcedureNode(node, section = null) {
                 const at = String(node || '').indexOf(':');

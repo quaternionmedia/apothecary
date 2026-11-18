@@ -19,7 +19,7 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ## 1. The Procedure, beside the world: the steps
 
-The garage has a procedure, so the Procedure stands beside the world without being asked for. Each step has its number, its discipline and its node, a door to the window its work is in; the first stands by with its GO, the rest wait.
+The garage has a procedure, so the Procedure stands in the column beside the world without being asked for, at its foot under Pictures, the world keeping its room. Each step has its number, its discipline and its node, a door to the window its work is in; the first stands by with its GO, the rest wait.
 
 ![The Procedure, beside the world: the steps](screenshots/25-01-the-procedure-beside-the-world-the-steps.png)
 
