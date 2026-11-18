@@ -822,7 +822,8 @@ def test_armed_the_pad_opens_a_loud_window_beside_the_world_and_goes_back(
     page: Page, printer_url: str
 ):
     """Armed, the control pad leaves the Machine for a window of its own beside the
-    world: its tab red and named for the printer it heats and moves, its frame loud,
+    world: its tab red and saying Control pad, as the ring names it, its tooltip naming
+    the printer it heats and moves, its frame loud,
     the world narrower with printer_1 framed in the middle of it, and still there with
     another tab in front of the Machine. Its ⇥ Put back, its tab's ✕ and the ring's
     Panels › Machine › Control pad put it back as the Machine's last child, and the world is as
@@ -845,7 +846,8 @@ def test_armed_the_pad_opens_a_loud_window_beside_the_world_and_goes_back(
     expect(pad.locator("#ctl-pop")).to_have_text("⇥ Put back")
     tab = windows.tab(page, "control")
     expect(tab).to_have_class(re.compile(r"\bloud\b"))
-    expect(tab).to_contain_text("printer_1")
+    expect(tab).to_have_text("🔓 Control pad")
+    expect(tab).to_have_attribute("title", re.compile(r"^printer_1's control pad"))
     expect(page.locator(".panel-window.loud", has=pad)).to_be_visible()
     # Beside the world, on its right: the world narrower, printer_1 framed in it.
     world = page.locator(windows.WORLD).bounding_box()

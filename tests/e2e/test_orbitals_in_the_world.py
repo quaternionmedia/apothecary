@@ -295,7 +295,7 @@ def test_each_shell_and_cluster_is_labelled_at_the_universes_level_and_hidden_wi
     windows.from_the_windows_menu(page, "layers")
     page.wait_for_timeout(400)
     labels = page.evaluate(LABELS)
-    shells = [lab for lab in labels if lab["text"].startswith("shell ")]
+    shells = [lab for lab in labels if lab["text"].startswith("Shell ")]
     assert [lab["text"].split(" · ")[1] for lab in shells][0] == "built from nothing"
     assert [lab["text"].split(" · ")[1] for lab in shells][-1] == "sites"
     categories = {lab["text"] for lab in labels} - {lab["text"] for lab in shells}
