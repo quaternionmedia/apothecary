@@ -37,7 +37,10 @@ this.panels.register('gather', {
   column beside the world -- right under the window named by `after`, sharing
   a stack with the others that follow it; a stack of its own while the column
   has fewer than `columnStacks` (four), else a tab beside the window it
-  follows, or at the column's foot; `"tabs"`, the stack of the other tabbed
+  follows, or at the column's foot -- but never a tab over a window with a
+  least height, which it would hide: under that one it is a stack of its own
+  all the same (a printer's Print under its Machine, so the Machine's head
+  stays in view); `"tabs"`, the stack of the other tabbed
   windows; `"beside"`, next to the world; or another window's id, a tab beside
   that one. Beside the world there is one stack: a window whose home is
   `"beside"` is a tab of the stack in the world's row that holds one already;

@@ -12,7 +12,8 @@
  * Where a window opens when it is not in the layout is its `home`: "column", the one
  * column beside the world, right under the window it follows (`after`), where the
  * windows following that one share a stack -- a stack of its own while the column has
- * fewer than `columnStacks`, else a tab beside the window it follows; "tabs", the
+ * fewer than `columnStacks`, else a tab beside the window it follows, unless that one
+ * has a least height (below), which a tab in front of it would hide; "tabs", the
  * stack where the other tabbed windows are; "beside", next to the world (below); or
  * another window's id, a tab beside it, else beside a window open with the same home.
  * The page may open a window somewhere else than its home for once (open's `at`). A
@@ -277,6 +278,8 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         const far = (c) => Math.abs(row.contentItems.indexOf(c) - at);
         return row.contentItems.filter(beside).sort((a, b) => far(a) - far(b))[0] || null;
     }
+    // A stack holding a window that must stay in view: one with a least height.
+    const holdsLeast = (s) => s.contentItems.some((ci) => records.get(ci.id)?.least > 0);
     // The stack next to the world, on its right (else its left): itself, or the tallest
     // stack of the column standing there, the first of two as tall -- never one holding
     // a window that must stay in view (a least height), while there is another.
@@ -288,9 +291,8 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         if (!next) return null;
         if (next.isStack) return next;
         const height = (s) => s.element.getBoundingClientRect().height;
-        const kept = (s) => s.contentItems.some((ci) => records.get(ci.id)?.least > 0);
         const stacks = stacksOf(next);
-        const free = stacks.filter((s) => !kept(s));
+        const free = stacks.filter((s) => !holdsLeast(s));
         return (free.length ? free : stacks).reduce((best, s) => (!best || height(s) > height(best) ? s : best), null);
     }
 
@@ -364,9 +366,11 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             || [...records.values()].map((o) => item(o.id)).filter(Boolean)
                 .map((ci) => ci.parentItem?.parent).find((p) => p && p.type === "column");
         if (column && column.contentItems.length >= columnStacks) {
-            // The column full: a tab beside the window it follows, else at its foot.
+            // The column full: a tab beside the window it follows, else at its foot --
+            // never over a window that must stay in view (a least height): a stack of its
+            // own under that one all the same.
             const stack = near && near.parent === column ? near : column.contentItems[column.contentItems.length - 1];
-            if (stack.isStack) {
+            if (stack.isStack && !holdsLeast(stack)) {
                 addTab(stack, config, front);
                 return;
             }

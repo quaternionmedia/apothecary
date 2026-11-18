@@ -333,6 +333,17 @@ def _a_tab_beside_the_window_it_follows_once_the_column_is_full(page):
     assert z["stack"] == ["t1", "t2", "z"] and z["front"] == "z" and len(z["children"]) == 4
 
 
+def _never_a_tab_over_a_window_with_a_least_height_once_the_column_is_full(page):
+    # `m` (a Machine, its head to stay in view) the fourth stack; `p`, which follows it,
+    # a stack of its own under it all the same, `m` still in front of its own.
+    _js(page, "() => H.reg('m', { home: 'column', after: 'sel', open: false, least: 200 })")
+    _js(page, "() => H.reg('p', { home: 'column', after: 'm', open: false })")
+    _js(page, "() => { P.open('m'); P.open('p'); }")
+    m, p = _where(page, "m"), _where(page, "p")
+    assert m["stack"] == ["m"] and m["front"] == "m"
+    assert p["stack"] == ["p"] and p["at"] == m["at"] + 1 and len(p["children"]) == 5
+
+
 def _a_loud_window_is_in_front_wherever_it_is_placed(page):
     # Registered among the tabs, as the page registers a window, and kept open as a view
     # is laid out: in front each time, where a quiet one would stand behind.
@@ -373,6 +384,7 @@ def _a_tab_at_the_foot_of_a_full_column_after_nothing(page):
         _opened_by_the_page_somewhere_else_for_once,
         _at_the_column_foot_after_nothing,
         _a_tab_beside_the_window_it_follows_once_the_column_is_full,
+        _never_a_tab_over_a_window_with_a_least_height_once_the_column_is_full,
         _a_loud_window_is_in_front_wherever_it_is_placed,
         _a_tab_at_once_in_a_column_of_three,
         _a_tab_at_the_foot_of_a_full_column_after_nothing,
