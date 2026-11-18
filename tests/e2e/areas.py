@@ -151,6 +151,7 @@ AREAS = {
             "apothecary/static/machine_words.js",
             "apothecary/static/tokens.css",
             "apothecary/static/machine_marks.js",
+            "apothecary/static/tuning.js",
             "apothecary/static/frames.js",
             "apothecary/static/projector.js",
             "templates/projector.html.j2",

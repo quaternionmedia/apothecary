@@ -206,10 +206,11 @@ def test_make_opens_the_board_s_machine_though_the_universe_s_boards_answer_late
 
 
 @pytest.mark.e2e
-def test_the_part_made_measured_is_fed_back_into_the_printers_slices(page: Page, url: str):
-    """The footpedal made on printer_1, then measured in its Print window: the sizes typed
-    are checked against what was sliced, the walls' correction is kept for printer_1, and
-    its next slice takes it."""
+def test_the_part_made_read_is_a_turn_of_the_printers_tuning(page: Page, url: str):
+    """The footpedal made on printer_1, then read in its Print window: a row for each
+    size of its box, kept as the first turn of printer_1's tuning, which says a box's
+    sizes separate no error from another, so Apply is greyed and the next slice takes
+    the profile's own walls; Undo turn drops the turn."""
     errors: list = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     open_garage(page, url, settle=False)
@@ -219,24 +220,34 @@ def test_the_part_made_measured_is_fed_back_into_the_printers_slices(page: Page,
     page.locator("#make-here").click()
     expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=SLICED_MS)
     said = windows.in_machine(page, "#print-measure-said")
-    expect(said).to_contain_text(" sliced", timeout=10000)
-    # What was sliced, as its record keeps it: the window shows it to a hundredth.
+    expect(said).to_contain_text("of 3 features of its box", timeout=10000)
     record = next(
         r
         for r in page.request.get(f"{url}/slicer/slices").json()
         if r["made"]["name"] == "footpedal"
     )
     x, y, _ = record["size"]
-    windows.in_machine(page, "#print-measure").fill(f"{x + 0.2:.3f} × {y + 0.1:.3f} × -")
+    rows = '#print-measure-plan input[data-feature="{}"]'
+    windows.in_machine(page, rows.format("x")).fill(f"{x + 0.2:.3f} {x + 0.22:.3f}")
+    windows.in_machine(page, rows.format("y")).fill(f"{y + 0.1:.3f}")
     windows.in_machine(page, "#print-measure-keep").click()
     expect(page.locator("#status")).to_contain_text(
-        "xy_contour_compensation +0.000 -> -0.075 mm: kept for printer_1", timeout=10000
+        "turn-1 kept for printer_1: footpedal read at 2 features: no term determined",
+        timeout=10000,
     )
-    expect(said).to_contain_text("printer_1's walls -0.075 mm")
-    # The next slice for printer_1 says the value it took, and where it came from.
+    apply = windows.in_machine(page, "#print-tune-apply")
+    expect(apply).to_be_disabled()
+    expect(apply).to_have_attribute("title", re.compile("turn-1 proposes no change"))
+    expect(windows.in_machine(page, "#print-tune-history")).to_contain_text(
+        "turn-1, footpedal: no term determined; not separated: contour, foot, scale_x, "
+        "scale_y; proposed: nothing"
+    )
+    # The next slice for printer_1 takes the profile's own walls: nothing was applied.
     windows.in_machine(page, "#print-slice").click()
     expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=SLICED_MS)
-    expect(windows.in_machine(page, "#print-slice-said")).to_contain_text(
-        "xy_contour_compensation -0.075 measured"
+    expect(windows.in_machine(page, "#print-slice-said")).not_to_contain_text(
+        "xy_contour_compensation -"
     )
+    windows.in_machine(page, "#print-tune-undo").click()
+    expect(page.locator("#status")).to_contain_text("turn-1 undone", timeout=10000)
     assert errors == []

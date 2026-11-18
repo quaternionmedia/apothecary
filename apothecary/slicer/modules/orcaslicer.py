@@ -98,9 +98,13 @@ SHOWN: Dict[str, Tuple[str, ...]] = {
         "sparse_infill_density",
         "enable_support",
         "xy_contour_compensation",
+        "xy_hole_compensation",
+        "elefant_foot_compensation",
     ),
     "filament": (
         "filament_type",
+        "filament_shrink",
+        "filament_shrinkage_compensation_z",
         "nozzle_temperature_initial_layer",
         "nozzle_temperature",
         "cool_plate_temp_initial_layer",
@@ -389,7 +393,7 @@ class OrcaSlicerModule(SlicerModule):
                 before = configs[kind].get(key, ORCA_DEFAULTS.get(key))
                 configs[kind][key] = entry["value"]
                 agrees = before == entry["value"]
-                # A printer's measured correction (slicer/measured.py) is its own,
+                # A setting a printer's tuning holds (slicer/tuning.py) is its own,
                 # not its profile file's.
                 measured = entry.get("origin") == "measured"
                 origins[(kind, key)] = Setting(
@@ -541,7 +545,12 @@ class OrcaSlicerModule(SlicerModule):
         found = sorted(out.glob("*.gcode"))
         if not found:
             return Output(gcode=None, messages=messages)
-        return Output(gcode=found[0], estimate=read_estimate(found[0]), messages=messages)
+        return Output(
+            gcode=found[0],
+            estimate=read_estimate(found[0]),
+            messages=messages,
+            config=read_config(found[0]),
+        )
 
 
 def _result_json(path: Path) -> Optional[dict]:
@@ -592,6 +601,34 @@ def _sum(text: str) -> Optional[float]:
         return round(sum(float(v) for v in text.split(",") if v.strip()), 2)
     except ValueError:
         return None
+
+
+_CONFIG_LINE = re.compile(r"^; ([a-z0-9_]+) = (.*)$")
+
+
+def read_config(gcode: Path) -> Dict[str, str]:
+    """The configuration OrcaSlicer wrote at the end of its G-code, between ;
+    CONFIG_BLOCK_START and ; CONFIG_BLOCK_END: each ; key = value line, as
+    it wrote it. Empty where it wrote none."""
+    found: Dict[str, str] = {}
+    try:
+        with open(gcode, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - 1024 * 1024))
+            tail = f.read().decode("utf-8", "replace")
+    except OSError:
+        return found
+    start = tail.rfind("; CONFIG_BLOCK_START")
+    if start == -1:
+        return found
+    for line in tail[start:].splitlines()[1:]:
+        if line.startswith("; CONFIG_BLOCK_END"):
+            break
+        match = _CONFIG_LINE.match(line.strip())
+        if match:
+            found[match.group(1)] = match.group(2).strip()
+    return found
 
 
 def read_estimate(gcode: Path) -> dict:

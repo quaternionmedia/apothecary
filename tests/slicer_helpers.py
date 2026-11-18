@@ -7,7 +7,9 @@ The fake answers ``--help`` as OrcaSlicer 2.4.2 does (its version first), and a
 slice by reading the profiles it is handed -- refusing, as OrcaSlicer does, a
 process that is not for the machine's system profile -- and writing
 ``plate_1.gcode`` (a header, the start G-code's homing, a square of moves at the
-process's layer height, OrcaSlicer's estimate comments and a config block) and
+process's layer height, OrcaSlicer's estimate comments and a config block, whose
+tuned settings are the profiles' or, where they leave one out, the fake's own
+stand-in for OrcaSlicer's default -- no figure of OrcaSlicer's) and
 ``result.json``. ``FAKE_ORCA`` in its environment scripts a failure: ``outside``
 prints the error OrcaSlicer gives for a model off the bed and exits non-zero;
 ``silent`` exits zero and writes nothing; ``slow`` takes five minutes first,
@@ -82,8 +84,18 @@ FAKE_ORCASLICER = textwrap.dedent(r"""
               "; estimated printing time (normal mode) = 1h 2m 3s",
               "; estimated first layer printing time (normal mode) = 48s", "",
               "; CONFIG_BLOCK_START", f"; layer_height = {process['layer_height']}",
-              f"; wall_loops = {loops}", f"; filament_type = {filament['filament_type'][0]}",
-              "; CONFIG_BLOCK_END"]
+              f"; wall_loops = {loops}", f"; filament_type = {filament['filament_type'][0]}"]
+    # What a slice is tuned by, as the profiles it was handed set it, else the fake's
+    # own stand-in for OrcaSlicer's default: nothing moved, nothing scaled.
+    for config, key, own in ((process, "xy_contour_compensation", "0"),
+                             (process, "xy_hole_compensation", "0"),
+                             (process, "elefant_foot_compensation", "0"),
+                             (process, "initial_layer_print_height", "0.2"),
+                             (filament, "filament_shrink", "100%"),
+                             (filament, "filament_shrinkage_compensation_z", "100%")):
+        value = config.get(key, own)
+        lines.append(f"; {key} = {value[0] if isinstance(value, list) else value}")
+    lines.append("; CONFIG_BLOCK_END")
     (out / "plate_1.gcode").write_text("\n".join(lines) + "\n")
     (out / "result.json").write_text(json.dumps({"return_code": 0, "error_string": "Success.",
         "sliced_plates": [{"id": 1, "warning_message": ""}]}))

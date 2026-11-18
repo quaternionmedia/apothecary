@@ -594,14 +594,29 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "print-measure": (
         WIDGET,
         WHAT_YOU_SEE,
-        "a field for what the part a file printed measures, x, y and z, or the piece a"
-        " toolpath cut, each feature it names",
+        "a field for what the piece a toolpath cut measures, each feature it names",
+    ),
+    "measure-read": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a field for what one feature of a printed piece reads, one in each row of its"
+        " plan under measured",
     ),
     "print-measure-keep": (
         WIDGET,
         WHAT_IS_THERE,
-        "a button that checks the sizes measured against what was made and keeps the"
-        " printer's correction, or the router's tool allowance",
+        "a button that checks what was read against what was made and keeps it: the"
+        " printer's next turn of its tuning, or the router's tool allowance",
+    ),
+    "print-tune-apply": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that takes the last turn of the printer's tuning into its next slices",
+    ),
+    "print-tune-undo": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that drops the last turn of the printer's tuning, and what it applied",
     ),
     "print-preview": (
         WIDGET,
@@ -928,6 +943,9 @@ RING_BACKED: Dict[str, str] = {
     # person to the field when nothing is typed, as the tour's Who does its name; a
     # router's Cut › Measure is the same verb on its ring.
     "print-measure": "print:measure",
+    "measure-read": "print:measure",
+    "print-tune-apply": "print:tune-apply",
+    "print-tune-undo": "print:tune-undo",
     "print-measure-keep": "print:measure",
     # Slice slices what makes names, as the Slice cell of a made piece's ring or a
     # part's slices that piece or part, chosen under makes first.

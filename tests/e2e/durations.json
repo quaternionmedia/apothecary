@@ -122,7 +122,7 @@
  "tests/e2e/test_make.py::test_a_printer_opens_with_its_print_window_and_makes_any_part[chromium]": 4.32,
  "tests/e2e/test_make.py::test_make_on_the_part_selected_slices_it_on_this_site_s_printer[chromium]": 3.36,
  "tests/e2e/test_make.py::test_make_on_the_part_stepped_into_takes_it_to_the_printer_whose_board_is_connected[chromium]": 3.71,
- "tests/e2e/test_make.py::test_the_part_made_measured_is_fed_back_into_the_printers_slices[chromium]": 3.66,
+ "tests/e2e/test_make.py::test_the_part_made_read_is_a_turn_of_the_printers_tuning[chromium]": 3.66,
  "tests/e2e/test_marks_window.py::test_a_persons_word_on_a_mark_is_read_back_in_the_world_and_a_note_is_typed[chromium]": 13.5,
  "tests/e2e/test_marks_window.py::test_a_whiteboards_corner_nudged_squares_its_photograph_again[chromium]": 10.12,
  "tests/e2e/test_marks_window.py::test_a_whiteboards_history_is_scrubbed_a_change_taken_and_a_moment_placed[chromium]": 14.9,

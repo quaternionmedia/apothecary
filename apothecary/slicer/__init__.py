@@ -16,6 +16,9 @@
   and a printer's Print card, slice through the ``/slicer`` routes
   (``api.py``); the G-code is kept where the Print card's file box keeps a
   file (``service.py``), so Print follows Slice.
+- **A printer is tuned from its prints**, a turn at a time: a piece read with
+  calipers, solved into the printer's errors, and the settings that take them out
+  held for its next slices (``tuning.py``; docs/print-tuning.md).
 
 Slicing writes files only: nothing here opens a serial port or sends anything
 to a printer.

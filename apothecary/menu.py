@@ -2013,9 +2013,19 @@ def control_options(device: Device) -> List[Option]:
                 Option(id="print:start", label="Send file", action="print:start"),
                 Option(id="print:preview", label="Preview", action="print:preview"),
                 Option(id="print:plan", label="Keep as plan", action="print:plan"),
-                # The part printed, measured: what is typed under measured kept as the
-                # printer's correction, or the field, with nothing typed.
+                # The piece printed, read: what is read under measured kept as the next
+                # turn of the printer's tuning, or the first field, with nothing read.
                 Option(id="print:measure", label="Measure", action="print:measure"),
+                # The printer's tuning: the last turn's changes into its next slices, or
+                # the last turn dropped with what it applied (slicer/tuning.py).
+                Option(
+                    id="print:tune",
+                    label="Tune",
+                    children=[
+                        Option(id="print:tune-apply", label="Apply", action="print:tune-apply"),
+                        Option(id="print:tune-undo", label="Undo turn", action="print:tune-undo"),
+                    ],
+                ),
             ],
         ),
         Option(

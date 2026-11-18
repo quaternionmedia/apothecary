@@ -1,6 +1,6 @@
 """A router's correction, fed back from a piece it cut: measured by a person with
 calipers, checked against what the toolpath was written to, and held for that
-router's next toolpaths. The printer's is ``slicer/measured.py``.
+router's next toolpaths. The printer's is its tuning, ``slicer/tuning.py``.
 
 A toolpath records what a person measures of the piece it cuts (``CutRecord.features``):
 each named operation that was cut, inside (a pocket, a hole bored) or outside (an

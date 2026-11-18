@@ -657,7 +657,8 @@ def trend(term_name: str, points: Sequence[Point]) -> Trend:
     the step), not responding (stop: the setting does not govern it) or growing (stop:
     the relation is wrong here)?"""
     found = [p for p in points if p.value is not None and p.error is not None]
-    damping = found[-1].damping if found else DAMPING
+    # The share the step before the last turn took: what the next one keeps, or halves.
+    damping = next((p.damping for p in reversed(found[:-1]) if p.stepped), DAMPING)
     if not found:
         return Trend(term_name, "not determined", damping, False, "no turn determined it")
     last = found[-1]

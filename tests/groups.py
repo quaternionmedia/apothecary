@@ -135,6 +135,7 @@ GROUPS = {
             "apothecary/preview/*",
             "apothecary/cli/slicer.py",
             "apothecary/print_tuning.py",
+            "apothecary/static/tuning.js",
             "parts/router_coupon/*",
             "parts/router_emoji/*",
             "parts/ender3/*",
@@ -145,12 +146,13 @@ GROUPS = {
         "tests": (
             "test_slicer.py",
             "test_slicer_api.py",
-            "test_slicer_measured.py",
+            "test_slicer_tuning.py",
             "test_slicer_installer.py",
             "test_cam.py",
             "test_cam_measured.py",
             "test_preview.py",
             "test_print_tuning.py",
+            "test_tuning_js.py",
         ),
     },
     "parts": {

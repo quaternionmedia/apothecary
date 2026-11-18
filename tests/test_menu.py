@@ -720,6 +720,8 @@ def test_the_control_ring_offers_every_allowlisted_verb():
         "print:preview",
         "print:plan",
         "print:measure",
+        "print:tune-apply",
+        "print:tune-undo",
         "control:motors-off",
         "control:quickstop",
         "control:break-wait",

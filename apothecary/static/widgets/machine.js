@@ -55,13 +55,15 @@
  * it keeps is chosen in the card's files, so ▶ Print follows Slice; then the
  * card says what the slice used, each value with where it came from, the
  * slicer's estimate, and its errors and warnings by line. A kept file a slice
- * made says what it was sliced from and for which printer. Its part, printed and
- * measured, is typed under measured: Keep checks each size against what was sliced
- * and keeps the walls' correction it makes for the printer's next slices
- * (slicer/measured.py), and says the correction kept. A router's is the same row
- * under a toolpath that names what to measure (the 😮 of parts/router_emoji: its eye,
- * its mouth, its face): Keep checks each against what was designed and keeps the
- * tool's allowance for the router's next toolpaths (cam/measured.py).
+ * made says what it was sliced from and for which printer. Its piece, printed, is
+ * read under measured, a row for each feature its slice's plan names (or its box):
+ * Keep checks each against its nominal and keeps the next turn of the printer's
+ * tuning, saying what it implies; Apply takes that turn's changes into the printer's
+ * next slices, Undo turn drops it, and the turns and each setting's trend are listed
+ * below (slicer/tuning.py, static/tuning.js). A router's is the same row under a
+ * toolpath that names what to measure (the 😮 of parts/router_emoji: its eye, its
+ * mouth, its face): Keep checks each against what was designed and keeps the tool's
+ * allowance for the router's next toolpaths (cam/measured.py).
  * `host` is "world": the world's page, a window of its layout, one board and
  * everything inline in one column; /firmware/monitor opens the world's page with
  * this Machine.
@@ -94,7 +96,8 @@ import { KINDS, kindOf as kindOfBoard } from "/static/machine_words.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
 import { again } from "/static/twice.js";
-import { applyCan, refreshDisabled, setTip, verbOfLine, withLatch } from "/static/can.js";
+import { applyCan, refreshDisabled, setReason, setTip, verbOfLine, withLatch } from "/static/can.js";
+import * as tuning from "/static/tuning.js";
 import { running as knobsRunning, choose as chooseKnobs } from "/static/deck_knobs.js";
 
 const MAX_HISTORY = 300;
@@ -209,10 +212,14 @@ const CARDS = `
             <span class="s" id="print-plan-said"></span>
         </div>
         <div class="row" id="print-measure-row" hidden><label for="print-measure">measured</label>
-            <input id="print-measure" size="16" spellcheck="false" placeholder="x × y × z mm" title="What the part this file printed measures, in millimetres: X, Y and Z in that order, any left out as -. Checked against what was sliced; the walls' correction it makes is kept for this printer's next slices. ⌗ Print › Measure">
-            <button type="button" id="print-measure-keep" title="Check the sizes typed against what was sliced, and keep the correction they make for this printer's next slices. Nothing is sent to the printer">Keep</button>
+            <input id="print-measure" size="16" spellcheck="false" placeholder="eye × mouth × face mm" title="What the piece this file cut measures, in millimetres, each feature its toolpath names in order, any left out as -. ⌗ Cut › Measure">
+            <button type="button" id="print-measure-keep" title="Check what was read against what was made and keep it: a printer's next turn of its tuning, said and not applied; a router's tool allowance. Nothing is sent to the machine">Keep</button>
+            <button type="button" id="print-tune-apply" title="Take the last turn's changes into this printer's next slices. ⌗ Print › Tune › Apply">Apply</button>
+            <button type="button" id="print-tune-undo" title="Drop the last turn, and what it applied. ⌗ Print › Tune › Undo turn">Undo turn</button>
             <span class="s" id="print-measure-said"></span>
         </div>
+        <div class="row" id="print-measure-plan" hidden></div>
+        <div class="row s" id="print-tune-history" style="white-space: pre-line" hidden></div>
         <div class="row" id="print-verbs">
             <button type="button" id="print-start" data-can="print.start" class="warm">▶ Send</button>
             <button type="button" id="print-pause" data-can="print.pause">⏸ Pause</button>
@@ -1549,22 +1556,22 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         return found;
     }
     // --- a part measured, fed back ---------------------------------------------------
-    // Under the chosen file, once its slice says the size of what it sliced, or its
-    // toolpath names what to measure of the piece it cuts: what it was made to, and
-    // the correction its machine keeps.
+    // Under the chosen file: a printer's piece read feature by feature, as its slice's
+    // plan names them (or its box), each turn kept in the printer's tuning, which says
+    // what the readings imply, Apply takes into its next slices and Undo turn drops
+    // (slicer/tuning.py, docs/print-tuning.md); a router's piece by the features its
+    // toolpath names, kept as the router's tool allowance (cam/measured.py).
     const ms = { shown: null, kept: {} };
-    const fmtSize = (size) => size.map((v) => v.toFixed(2)).join(" × ");
     const signed = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(3)}`;
-    // What the chosen file's piece is measured as: a printer's slice by x, y and z, a
-    // router's toolpath by the features it names; null where it is neither.
+    // What the chosen file's piece is measured as: a printer's slice by its plan's
+    // features, a router's toolpath by the features it names; null where it is neither.
     function measuring() {
         const id = $("print-pick").value || null, r = id && prt.slices[id];
         if (!r) return null;
-        if (state.kind === "printer" && !r.toolpath && r.size) {
-            const at = r.printer;
-            return { id, r, at, names: ["x", "y", "z"],
-                read: `/slicer/corrections?site=${encodeURIComponent(at.site)}&printer=${encodeURIComponent(at.path)}`,
-                said: (kept) => `of ${fmtSize(r.size)} sliced` + (kept ? ` · ${at.path}'s walls ${signed(kept.value)} mm` : "") };
+        if (state.kind === "printer" && !r.toolpath && (r.plan || r.size)) {
+            const at = r.printer, features = tuning.planOf(r);
+            return { id, r, at, features, names: features.map((f) => f.name), applies: tuning.appliesOf(r),
+                read: `/slicer/tuning?site=${encodeURIComponent(at.site)}&printer=${encodeURIComponent(at.path)}` };
         }
         if (state.kind === "router" && r.toolpath && r.features && r.features.length) {
             const at = r.router;
@@ -1574,24 +1581,57 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         }
         return null;
     }
+    // The printer's tuning for the slice's filament and process, as the server last said it.
+    const tuned = (m) => tuning.documentFor(ms.kept[`printer:${m.at.site}:${m.at.path}`], m.applies);
+    // A row for each feature the plan names: its name, what to read with which jaws, its
+    // nominal, and a field for what it reads, repeats a space apart.
+    function planRows(m) {
+        const box = $("print-measure-plan");
+        const shown = box.dataset.for === m.id;
+        box.hidden = false;
+        if (shown) return;
+        box.dataset.for = m.id;
+        box.innerHTML = m.features.map((f) => `<label class="measure-row" title="${esc(f.words)}: ${f.jaw} jaws">${esc(f.name)} <span class="s">${f.nominal}</span>
+            <input class="measure-read" data-feature="${esc(f.name)}" size="9" spellcheck="false" placeholder="${f.nominal}" title="What ${esc(f.name)} reads, mm: ${esc(f.words)}, ${f.jaw} jaws; repeats a space apart. ⌗ Print › Measure"></label>`).join(" ");
+    }
+    function renderTuning(m) {
+        const entry = tuned(m);
+        const apply = tuning.canApply(entry), undo = tuning.canUndo(entry);
+        setReason($("print-tune-apply"), apply.ok ? null : apply.why, apply.ok ? `${apply.why}. ⌗ Print › Tune › Apply` : "Take the last turn's changes into this printer's next slices. ⌗ Print › Tune › Apply");
+        setReason($("print-tune-undo"), undo.ok ? null : undo.why, undo.ok ? `${undo.why}. ⌗ Print › Tune › Undo turn` : "Drop the last turn, and what it applied. ⌗ Print › Tune › Undo turn");
+        const lines = tuning.historyLines(entry), history = $("print-tune-history");
+        history.hidden = !lines.length;
+        history.textContent = lines.join("\n");
+        const held = entry ? Object.entries(entry.document.settings) : [];
+        $("print-measure-said").textContent = `of ${m.features.length} features ${m.r.plan ? "its plan names" : "of its box"}`
+            + (held.length ? ` · ${m.at.path} holds ${held.map(([k, h]) => `${k} ${h.unit === "%" ? `${h.value}%` : signed(h.value)}`).join(", ")}` : "");
+    }
     function renderMeasure() {
-        const m = measuring(), row = $("print-measure-row");
+        const m = measuring(), row = $("print-measure-row"), printer = state.kind === "printer";
         row.hidden = !m;
+        $("print-measure-plan").hidden = !m || !printer;
+        $("print-tune-history").hidden = !m || !printer;
+        $("print-measure").hidden = printer;
+        $("print-tune-apply").hidden = $("print-tune-undo").hidden = !printer;
         if (!m) return;
         const key = `${state.kind}:${m.at.site}:${m.at.path}`;
-        $("print-measure").placeholder = `${m.names.join(" × ")} mm`;
-        $("print-measure").title = state.kind === "router"
-            ? `What the piece this file cut measures, in millimetres: ${m.r.features.map((f) => f.words).join("; ")}, in that order, any left out as -. Checked against what was designed; the tool's allowance it makes is kept for this router's next toolpaths. ⌗ Cut › Measure`
-            : "What the part this file printed measures, in millimetres: X, Y and Z in that order, any left out as -. Checked against what was sliced; the walls' correction it makes is kept for this printer's next slices. ⌗ Print › Measure";
-        $("print-measure-said").textContent = m.said(ms.kept[key]);
+        if (printer) {
+            planRows(m);
+            renderTuning(m);
+        }
+        else {
+            $("print-measure").placeholder = `${m.names.join(" × ")} mm`;
+            $("print-measure").title = `What the piece this file cut measures, in millimetres: ${m.r.features.map((f) => f.words).join("; ")}, in that order, any left out as -. Checked against what was designed; the tool's allowance it makes is kept for this router's next toolpaths. ⌗ Cut › Measure`;
+            $("print-measure-said").textContent = m.said(ms.kept[key]);
+        }
         if (ms.shown === key || !m.at.site || !m.at.path) return;
         ms.shown = key;
         api(m.read)
-            .then((answer) => { ms.kept[key] = answer.correction; renderMeasure(); })
+            .then((answer) => { ms.kept[key] = printer ? answer.documents : answer.correction; renderMeasure(); })
             .catch(() => { ms.shown = null; });
     }
-    // "10.12 × 10.08 × 9.98": a size for each of `count` names in order (x, y and z for a
-    // printer), any as - where it was not measured.
+    // "10.12 × 10.08 × 9.98": a size for each of `count` names in order, any as - where it
+    // was not measured.
     function measuredSizes(text, count = 3) {
         const words = String(text || "").trim().split(/\s*(?:×|x|\*|,|\s)\s*/i).filter(Boolean);
         if (!words.length || words.length > count) return null;
@@ -1600,39 +1640,86 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         while (sizes.length < count) sizes.push(null);
         return sizes;
     }
-    // Keep: the sizes typed checked against what was made, and the correction kept.
+    // What the plan's rows read: each feature's sizes; null, with the row, where one is not sizes.
+    function planReads() {
+        const out = {};
+        for (const field of $("print-measure-plan").querySelectorAll("input.measure-read")) {
+            const read = tuning.parseReads(field.value);
+            if (read === null) return { bad: field.dataset.feature };
+            if (read.length) out[field.dataset.feature] = read;
+        }
+        return { readings: out };
+    }
+    const typedSomething = () => state.kind === "printer"
+        ? [...$("print-measure-plan").querySelectorAll("input.measure-read")].some((f) => f.value.trim())
+        : !!$("print-measure").value.trim();
+    // Keep: what was read checked against what was made and kept -- a printer's next turn,
+    // a router's allowance -- and what it implies said.
     async function keepMeasured() {
         const m = measuring();
         const what = state.kind === "router" ? "the file the piece was cut from, a toolpath that names what to measure" : "the file the part was printed from, a slice that says its size";
         if (!m) { refuse(`measure: choose ${what}`); return false; }
-        const sizes = measuredSizes($("print-measure").value, m.names.length);
-        if (!sizes) { refuse(`measure: type what the ${state.kind === "router" ? "piece" : "part"} measures, ${m.names.join(" × ")} in mm (- for one not measured)`); return false; }
         const router = state.kind === "router";
         let answer;
-        try {
-            answer = router
-                ? await post(`/cam/cuts/${encodeURIComponent(m.id)}/measured`, { sizes: Object.fromEntries(m.names.map((n, i) => [n, sizes[i]])) })
-                : await post(`/slicer/slices/${encodeURIComponent(m.id)}/measured`, { x: sizes[0], y: sizes[1], z: sizes[2] });
+        if (router) {
+            const sizes = measuredSizes($("print-measure").value, m.names.length);
+            if (!sizes) { refuse(`measure: type what the piece measures, ${m.names.join(" × ")} in mm (- for one not measured)`); return false; }
+            try { answer = await post(`/cam/cuts/${encodeURIComponent(m.id)}/measured`, { sizes: Object.fromEntries(m.names.map((n, i) => [n, sizes[i]])) }); }
+            catch (e) { refuse(`measure: ${e.message}`); return false; }
+            ms.kept[`router:${m.at.site}:${m.at.path}`] = answer.correction;
+            $("print-measure").value = "";
+            renderMeasure();
+            tell(`${answer.said}: kept for ${answer.correction.router}, whose next toolpaths take it`);
+            return true;
         }
+        const read = planReads();
+        if (read.bad) { refuse(`measure: ${read.bad} is not sizes in mm, a space apart`); return false; }
+        if (!Object.keys(read.readings).length) { refuse(`measure: read one of ${m.names.join(", ")}, in mm`); return false; }
+        try { answer = await post(`/slicer/slices/${encodeURIComponent(m.id)}/measured`, { readings: read.readings }); }
         catch (e) { refuse(`measure: ${e.message}`); return false; }
-        ms.kept[`${state.kind}:${m.at.site}:${m.at.path}`] = answer.correction;
-        $("print-measure").value = "";
-        renderMeasure();
-        tell(`${answer.said}: kept for ${router ? answer.correction.router : m.at.path}, whose next ${router ? "toolpaths" : "slices"} take it`);
+        await reloadTuning(m);
+        for (const field of $("print-measure-plan").querySelectorAll("input.measure-read")) field.value = "";
+        tell(`${answer.turn} kept for ${m.at.path}: ${answer.said}`);
         return true;
     }
-    // Print › Measure, or a router's Cut › Measure: what is typed kept, as Keep does;
-    // with nothing typed, the field.
+    async function reloadTuning(m) {
+        const key = `printer:${m.at.site}:${m.at.path}`;
+        try { ms.kept[key] = (await api(m.read)).documents; }
+        catch { ms.shown = null; }
+        renderMeasure();
+    }
+    // Apply and Undo turn: the printer's tuning for the chosen slice's filament and process.
+    async function tuneVerb(verb) {
+        const m = measuring();
+        if (!m || state.kind !== "printer" || !m.applies) { refuse(`${verb}: choose a file a slice made for this printer`); return false; }
+        const can = verb === "apply" ? tuning.canApply(tuned(m)) : tuning.canUndo(tuned(m));
+        if (!can.ok) { refuse(`${verb}: ${can.why}`); return false; }
+        let answer;
+        try { answer = await post(`/slicer/tuning/${verb}`, { site: m.at.site, printer: m.at.path, ...m.applies }); }
+        catch (e) { refuse(`${verb}: ${e.message}`); return false; }
+        await reloadTuning(m);
+        tell(verb === "apply"
+            ? `applied for ${m.at.path}'s next slices: ${answer.applied.map((c) => `${c.setting} ${c.after}${c.unit === "%" ? "%" : " mm"}`).join(", ")}`
+            : `${answer.undone} undone: ${m.at.path}'s next slices take what the turns before it applied`);
+        return true;
+    }
+    // Print › Measure, or a router's Cut › Measure: what is read kept, as Keep does;
+    // with nothing read, the first field.
     function measureVerb() {
-        if ($("print-measure").value.trim()) return keepMeasured();
+        if (typedSomething()) return keepMeasured();
         const m = measuring();
         if (!m) { refuse(`measure: choose ${state.kind === "router" ? "the file the piece was cut from, a toolpath that names what to measure" : "the file the part was printed from, a slice that says its size"}`); return false; }
-        $("print-measure").focus();
+        const first = state.kind === "printer" ? $("print-measure-plan").querySelector("input.measure-read") : $("print-measure");
+        if (first) first.focus();
         $("print-card").scrollIntoView({ block: "nearest" });
-        tell(`type what the ${state.kind === "router" ? "piece" : "part"} measures, ${m.names.join(" × ")} in mm, then Keep`);
+        tell(state.kind === "printer"
+            ? `read the piece: ${m.names.join(", ")}, each in mm in its row, then Keep`
+            : `type what the piece measures, ${m.names.join(" × ")} in mm, then Keep`);
         return true;
     }
     $("print-measure-keep").onclick = () => keepMeasured();
+    $("print-tune-apply").onclick = () => tuneVerb("apply");
+    $("print-tune-undo").onclick = () => tuneVerb("undo");
 
     // What a kept file's slice or toolpath was made from: the piece's path in its
     // site and the part's name, or nothing for a file no slice or toolpath made.
@@ -2143,6 +2230,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (action === "print:preview") { togglePreview(); return true; }
         if (action === "print:plan") return keepPlan();
         if (action === "print:measure") return measureVerb();
+        if (action === "print:tune-apply") return tuneVerb("apply");
+        if (action === "print:tune-undo") return tuneVerb("undo");
         if (prt.job && prt.job.running && action in HOST_VERBS) { await printVerb(HOST_VERBS[action]); return true; }
         const lines = LINES_OF();
         if (action in lines) {
@@ -2190,6 +2279,8 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         out.push([$("print-preview"), "print:preview"]);
         out.push([$("print-plan"), "print:plan"]);
         out.push([$("print-measure-keep"), "print:measure"]);
+        out.push([$("print-tune-apply"), "print:tune-apply"]);
+        out.push([$("print-tune-undo"), "print:tune-undo"]);
         out.push([$("print-pause"), "control:sd-pause"]);
         out.push([$("print-resume"), "control:sd-resume"]);
         out.push([$("print-cancel"), "control:sd-abort"]);
