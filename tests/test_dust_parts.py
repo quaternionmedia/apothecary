@@ -16,7 +16,7 @@ from apothecary.models.interfaces import Socket, Spigot, fit
 from apothecary.projects.parts import dust_port, hose_adapter
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.projects.parts.stl_renderer import geometry_scad
-from apothecary.projects.registry import part_names, part_named
+from apothecary.projects.registry import part_named, part_names
 
 ADAPTER, PORT = hose_adapter.DEFAULT, dust_port.DEFAULT
 PRESETS = tuple(dust_port.PRESETS)

@@ -156,7 +156,7 @@ def test_outlines_on_one_shell_overlap_only_where_large_parts_make_them(drawn):
             if a["shell"] != b["shell"]:
                 continue
             pairs += 1
-            between = math.acos(max(-1, min(1, sum(x * y for x, y in zip(a["centre"], b["centre"])))))
+            between = math.acos(max(-1, min(1, sum(x * y for x, y in zip(a["centre"], b["centre"], strict=True)))))
             overlapping += between < a["angle"] + b["angle"]
     assert pairs > 20
     assert overlapping <= pairs // 4

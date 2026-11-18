@@ -336,7 +336,7 @@ def problems_of(p: Params) -> List[str]:
     if p.bearing > 0 and p.bearing / 2 + WALL > floor_r:
         out.append(f"the centre hole leaves less than {WALL:g} of disc")
     if p.shaft > 0 and p.shaft / 2 + WALL > R - p.pin / 2:
-        out.append(f"the shaft's hole reaches the pins' holes")
+        out.append("the shaft's hole reaches the pins' holes")
     if p.outputs:
         r = p.output_d / 2
         if p.output_circle + r + WALL > floor_r:

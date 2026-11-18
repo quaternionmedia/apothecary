@@ -13,8 +13,8 @@ from apothecary.menu import PANEL_GROUPS, VIEWS
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.simulated import DEVKIT
 from apothecary.site_names import UNIVERSE
-from apothecary.universe import create_universe_site
 from apothecary.systems import SYSTEMS
+from apothecary.universe import create_universe_site
 from apothecary.viewer import render_fractal_viewer_page
 
 PAGE = ROOT / "templates" / "fractal_viewer.html.j2"
