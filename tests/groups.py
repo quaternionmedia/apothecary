@@ -375,6 +375,7 @@ GROUPS = {
             "examples/theatre-rig/*",
             "tests/conformance/*",
             "tests/ring_helpers.py",
+            "tests/page_modules.py",
         ),
         "tests": (
             "test_api.py",
@@ -386,6 +387,8 @@ GROUPS = {
             "test_measure.py",
             "test_ends_js.py",
             "test_loop_plots.py",
+            "test_measure_world.py",
+            "test_layers_world.py",
             "test_menu_routes.py",
             "test_orbits_drawn.py",
             "test_pick_scope.py",

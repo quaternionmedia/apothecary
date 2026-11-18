@@ -896,6 +896,8 @@
         import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf, shellLabel, facesEye, pieceNear } from '/static/orbits.js';
         import { ownExtents, sizeFromSceneBox, turnedExtents, turnRowsInScene, turnedBounds, between, gap as gapBetween, nearestWithin, length as mmText, fieldMm, layLabels } from '/static/measure.js';
         import { ADAPTER, presetStaged, endOf, betweenBody, paramsKey, label as endLabel } from '/static/ends.js';
+        import { mountMeasureWorld } from '/static/measure_world.js';
+        import { mountLayersWorld, hideFor as hideForReason, BY_LAYER, layerKinds as layerKindsOf, layersSaid as layersSaidOf } from '/static/layers_world.js';
         import { mountPanels } from '/static/panels.js';
         import { mountMachine } from '/static/widgets/machine.js';
         import { mountBoards } from '/static/boards.js';
@@ -1112,12 +1114,6 @@
         // own volume, this far over the bed's plane (drawn 0.2 up) and under a reading's
         // relief (0.4 up).
         const BED_GRID_MM = 10;
-        const MEASURE_SNAP_PX = 12;      // a measured point snaps to a vertex this near the pointer
-        // A measurement's lines, the points at their ends and its labels' text, in pixels
-        // on screen whatever the distance: drawn thick enough to read over a mesh.
-        const MEASURE_ROD_PX = 3;
-        const MEASURE_END_PX = 7;
-        const MEASURE_LABEL_PX = 13;
         // The universe's orbitals (drawOrbits): how faint a shell's rings, a cluster's outline
         // and the line from a part to what it is built from are drawn, that line's colour,
         // and how near a click must land to a ring or an outline to open its layer's ring.
@@ -1352,8 +1348,27 @@
                 // (pick_scope.js), kept per browser; walls selectable alone is the session's.
                 this.pickScope = makePickScope();
                 // The measurement layer's points ({ site, kind, key, at }), its drawing and
-                // the readings it says (measure.js is its arithmetic).
-                this.measure = { points: [], group: null, lines: [], pending: false, say: false };
+                // the readings it says (measure_world.js; measure.js is its arithmetic).
+                this.measure = mountMeasureWorld({
+                    scope: this.pickScope, scene: () => this.scene, camera: () => this.camera, canvas: () => this.canvas,
+                    pick: (event) => this.raycastHits(event),
+                    nodeOf: (key) => this.renderNodeByKey[key], meshOf: (key) => this.meshByName[key], selected: () => this.selectedName,
+                    envelopeOf: envelopeBounds, frameOf: (key, node) => this.frameOf(key, node),
+                    fallbackColour: DEFAULT_COLOR, dispose: disposeDeep,
+                    setStatus: (words, kind) => this.setStatus(words, kind), invalidate: () => this.invalidate(),
+                    refresh: () => { if (this.layersWidget) this.layersWidget.refresh(); },
+                });
+                // What the layers do to what the world draws (layers_world.js).
+                this.layersWorld = mountLayersWorld({
+                    scope: this.pickScope,
+                    meshes: () => this.meshByName, overlays: () => this.compoundOverlayByKey, volumes: () => this.buildVolumeMeshByName,
+                    nodeOf: (key) => this.renderNodeByKey[key], grid: () => this.gridHelper,
+                    place: () => ({ site: this.siteName, focusPath: this.focusPath }), universe: UNIVERSE,
+                    orbits: () => this.applyOrbits(), anchors: () => this.anchors.touch(), measure: () => this.measure.layersApplied(),
+                    invalidate: () => this.invalidate(),
+                    walls: () => { if (this.wallsToggle) this.wallsToggle.checked = this.wallsSelectable; },
+                    redraw: () => this.renderFocus(), say: (words) => this.setStatus(words, 'success'), wallsSaid: () => this.wallsSaid(),
+                });
                 this.detailModeEl = document.getElementById('detail-mode');
                 this.overlayToggle = document.getElementById('overlay-toggle');
                 this.breadcrumbEl = document.getElementById('breadcrumb');
@@ -3341,313 +3356,37 @@
             // as it was. Only what the layers hid is shown again: a mesh hidden for
             // another reason (a failure's, a comparison's) stays so.
             hideByLayer(object, hide) {
-                this.hideFor(object, 'layer', hide);
+                hideForReason(object, BY_LAYER, hide);
             }
 
-            // Whether a drawn thing is shown, decided in one place: hidden while any reason
-            // holds it -- a layer not shown, a failed render drawn in its place, a
-            // comparison drawn in its place -- each reason taken back on its own, so letting
-            // one go shows the thing only when no other still holds it.
-            hideFor(object, reason, hide) {
-                const by = object.userData.hiddenBy || (object.userData.hiddenBy = new Set());
-                if (hide) by.add(reason);
-                else by.delete(reason);
-                object.visible = by.size === 0;
-            }
-
-            // Every drawn thing put as the layers say: pieces and the outlines round
-            // them, the alignment grid and the build volumes.
-            applyLayers() {
-                const scope = this.pickScope;
-                for (const [key, mesh] of Object.entries(this.meshByName)) this.hideByLayer(mesh, !scope.drawn(this.renderNodeByKey[key]));
-                for (const [key, overlay] of Object.entries(this.compoundOverlayByKey)) this.hideByLayer(overlay, !scope.drawn(this.renderNodeByKey[key]));
-                for (const box of Object.values(this.buildVolumeMeshByName)) this.hideByLayer(box, !scope.isShown(GRID_LAYER));
-                this.applyOrbits();
-                this.gridHelper.visible = this.gridWanted();
-                this.anchors.touch();
-                if (!scope.isShown(MEASURE_LAYER)) this.measure.points = [];
-                this.measureSoon(false);
-                this.invalidate();
-            }
-
-            // Whether the level's grid is drawn -- the floor's, or a machine's bed's when one
-            // is stepped into -- the one rule every grid is drawn by: the alignment grid
-            // layer shown (Layers), and a level with a floor at all: the universe's own
-            // level, a sphere of shells a floor would cut through, has none.
-            gridWanted() {
-                return this.pickScope.isShown(GRID_LAYER) && !(this.siteName === UNIVERSE && this.focusPath.length === 0);
-            }
-
-            // The pick scope changed: a depth redraws the level; a layer is put as it says,
-            // and the Select walls tick follows the wall layer's.
-            layersChanged(what) {
-                if (this.wallsToggle) this.wallsToggle.checked = this.wallsSelectable;
-                if (what && (what.depth !== undefined || what.reset || what.loaded)) this.renderFocus();
-                this.applyLayers();
-                const said = this.layersSaid(what);
-                if (said) this.setStatus(said, 'success');
-            }
-
-            // What the status line says of a change to the scope.
-            layersSaid(what) {
-                if (!what) return null;
-                if (what.reset) return 'Layers: back to depth 1, every layer shown, every layer selectable but walls';
-                if (what.depth !== undefined) return `Depth: ${what.depth} level${what.depth === 1 ? '' : 's'} below this one, drawn and reached by a click`;
-                if (what.layer === WALL_LAYER && what.selectable !== undefined) return this.wallsSaid();
-                if (what.layer === MEASURE_LAYER && what.shown !== undefined) {
-                    return what.shown
-                        ? 'Measure: on. A click in the world drops a point and selects nothing, a second reads the distance, a third starts again (Escape too); the selection reads its size'
-                        : 'Measure: off, a click selects again';
-                }
-                if (what.only) return `${layerLabel(what.layer)} alone of its kind shown: the others hidden, and a click passes through them`;
-                if (what.all) return `Every one shown: ${what.layers.map(layerLabel).join(', ')}`;
-                if (what.shown !== undefined) return `${layerLabel(what.layer)}: ${what.shown ? 'shown' : 'hidden, and a click passes through it'}`;
-                if (what.selectable !== undefined) return `${layerLabel(what.layer)}: ${what.selectable ? 'a click picks it' : 'a click passes through it'}`;
-                return null;
-            }
+            // The layers in the world are layers_world.js's: each name here is a call into it.
+            hideFor(object, reason, hide) { hideForReason(object, reason, hide); }
+            applyLayers() { this.layersWorld.apply(); }
+            gridWanted() { return this.layersWorld.gridWanted(); }
+            layersChanged(what) { this.layersWorld.changed(what); }
+            layersSaid(what) { return layersSaidOf(what, { wallsSaid: () => this.wallsSaid() }); }
 
             // The shells the loaded site's pieces are on, innermost first, and the
             // categories they are of: the rows of the Layers window.
             layerShells() { return this.layerKinds().shells; }
             layerCategories() { return this.layerKinds().categories; }
-            layerKinds() {
-                const shells = new Set(), categories = new Set();
-                const walk = (node) => {
-                    if (Number.isInteger(node.shell)) shells.add(node.shell);
-                    if (node.category) categories.add(node.category);
-                    for (const child of node.children || []) walk(child);
-                };
-                if (this.tree) for (const child of this.tree.children || []) walk(child);
-                return { shells: [...shells].sort((a, b) => a - b), categories: [...categories].sort() };
-            }
+            layerKinds() { return layerKindsOf(this.tree); }
 
-            // ⚙ View › Layers, and the ring's View › Layers: the Layers window in front.
             // ---- Measure: the layer's readings and what it draws --------------------------
             //
-            // Shown, the layer is a mode: a click in the world drops a point (the nearest
-            // vertex of the face under it within MEASURE_SNAP_PX, else the surface point),
-            // through the one pick path (raycastHits, so what a click passes through it
-            // passes through), and selects nothing; a piece is still selected from Site's
-            // rows. The selection wears a dimension line along each of its own axes. Every
-            // number says where it comes from: the part's declared footprint, the
-            // envelope of its pieces, the mesh as loaded, or a stand-in box.
-            measureOn() { return this.pickScope.isShown(MEASURE_LAYER); }
+            // The measurement layer is measure_world.js's (this.measure): each name here is a
+            // call into it.
+            measureOn() { return this.measure.on(); }
+            measureClick(event) { this.measure.click(event); }
+            measureSnap(hit, px, py) { return this.measure.snap(hit, px, py); }
+            measureClear() { return this.measure.clear(); }
+            measureSoon(say) { this.measure.soon(say); }
+            measureSelection() { return this.measure.selection(); }
+            measureReadings(selection) { return this.measure.readings(selection); }
+            drawMeasure() { this.measure.draw(); }
+            placeMeasure() { this.measure.place(); }
 
-            measureClick(event) {
-                const hit = this.raycastHits(event).find((h) => this.renderNodeByKey[h.object.userData.key]);
-                if (!hit) { this.setStatus('Measure: no piece under the pointer to measure from', 'error'); return; }
-                const rect = this.canvas.getBoundingClientRect();
-                const { point, kind } = this.measureSnap(hit, event.clientX - rect.left, event.clientY - rect.top);
-                const m = this.measure;
-                if (m.points.length >= 2) m.points = [];
-                m.points.push({ site: siteAt(point), kind, key: hit.object.userData.key, at: point });
-                this.measureSoon(true);
-            }
-
-            // The vertex of the face hit nearest the pointer, in the world, when one is near
-            // enough; a mesh drawn as moving pieces is not snapped (its faces are a piece's).
-            measureSnap(hit, px, py) {
-                const geometry = hit.object.geometry, position = geometry?.attributes?.position;
-                if (!hit.face || !position || hit.object.userData.kinematics) return { point: hit.point.clone(), kind: 'surface' };
-                const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
-                const corners = [hit.face.a, hit.face.b, hit.face.c].map((i) => {
-                    const v = new THREE.Vector3().fromBufferAttribute(position, i).applyMatrix4(hit.object.matrixWorld);
-                    const s = v.clone().project(this.camera);
-                    return { v, sx: ((s.x + 1) / 2) * w, sy: ((1 - s.y) / 2) * h };
-                });
-                const near = nearestWithin(corners, px, py, MEASURE_SNAP_PX);
-                return near ? { point: near.v, kind: 'vertex' } : { point: hit.point.clone(), kind: 'surface' };
-            }
-
-            // Escape: the points let go. False when there were none.
-            measureClear() {
-                if (!this.measureOn() || !this.measure.points.length) return false;
-                this.measure.points = [];
-                this.measureSoon(false);
-                this.setStatus('Measure: the points let go (Escape); click to drop a first', 'success');
-                return true;
-            }
-
-            // Redrawn, read and mirrored once, after whatever changed it has all happened;
-            // `say`: the reading is also said on the status line.
-            measureSoon(say) {
-                this.measure.say = this.measure.say || say;
-                if (this.measure.pending) return;
-                this.measure.pending = true;
-                queueMicrotask(() => {
-                    this.measure.pending = false;
-                    const said = this.measure.say;
-                    this.measure.say = false;
-                    this.drawMeasure();
-                    if (said && this.measureOn() && this.measure.lines.length) this.setStatus(`Measure: ${this.measure.lines[0]}`, 'success');
-                });
-            }
-
-            // The selected piece's own axes: the drawn mesh's box along them, corner and
-            // edges in the world, with where the size comes from; null when nothing is
-            // drawn for it.
-            measureSelection() {
-                const key = this.selectedName, node = this.renderNodeByKey[key], mesh = this.meshByName[key];
-                if (!node || !mesh || mesh.userData.isDot) return null;
-                const geometry = mesh.geometry;
-                if (!geometry.boundingBox) geometry.computeBoundingBox();
-                // A machine drawn as its pieces measures all of them: the moving ones hang
-                // from the still one, in its frame, wherever its tool has them now.
-                const box = geometry.boundingBox.clone();
-                const moving = (mesh.userData.kinematics && mesh.userData.kinematics.pieces) || [];
-                for (const piece of moving) {
-                    if (!piece.geometry.boundingBox) piece.geometry.computeBoundingBox();
-                    piece.updateMatrix();
-                    box.union(piece.geometry.boundingBox.clone().applyMatrix4(piece.matrix));
-                }
-                mesh.updateWorldMatrix(true, false);
-                const scene = [0, 1, 2].map((i) => (box.max.getComponent(i) - box.min.getComponent(i)) * Math.abs(mesh.scale.getComponent(i)));
-                const source = !mesh.userData.isPlaceholder ? (moving.length ? `the drawn mesh, as loaded, its ${moving.length} moving piece${moving.length === 1 ? '' : 's'} with it` : 'the drawn mesh, as loaded')
-                    : node.footprint ? 'declared footprint'
-                    : envelopeBounds(node) ? 'envelope of its pieces' : 'a stand-in box, no size declared';
-                const corner = box.min.clone().applyMatrix4(mesh.matrixWorld);
-                const edges = [0, 1, 2].map((i) => {
-                    const end = box.min.clone();
-                    end.setComponent(i, box.max.getComponent(i));
-                    return { from: corner, to: end.applyMatrix4(mesh.matrixWorld), mm: scene[i], letter: ['x', 'z', 'y'][i] };
-                });
-                return { key, node, edges, source, size: sizeFromSceneBox(scene) };
-            }
-
-            // The readings as text, most recent first: the points, then the selection.
-            measureReadings(selection) {
-                const lines = [], p = this.measure.points;
-                const at = (q) => q.site.map((v) => v.toFixed(2)).join(', ');
-                const named = (q, i) => `point ${i + 1} (${q.kind}) on ${q.key} at ${at(q)} mm`;
-                if (p.length === 1) lines.push(`${named(p[0], 0)}; click a second point (Escape starts again)`);
-                if (p.length === 2) {
-                    const d = between(p[0].site, p[1].site);
-                    lines.push(`${mmText(d.length)} between ${named(p[0], 0)} and ${named(p[1], 1)}: dx ${mmText(d.dx)}, dy ${mmText(d.dy)}, dz ${mmText(d.dz)} (site frame; a reading of the model, a ${p.map((q) => q.kind).join(' and a ')} point)`);
-                    const [a, b] = p.map((q) => envelopeBounds(this.renderNodeByKey[q.key]));
-                    if (p[0].key !== p[1].key && a && b) {
-                        const g = gapBetween(a, b);
-                        const word = g.overlap ? 'overlap' : g.touching ? 'touching' : mmText(g.gap);
-                        lines.push(`gap between ${p[0].key} and ${p[1].key}: ${word} (clear distance between their declared bounds`
-                            + `${g.overlap ? '; they share volume' : ''}; along x ${mmText(g.axes.x)}, y ${mmText(g.axes.y)}, z ${mmText(g.axes.z)}, negative where they run into each other)`);
-                    }
-                }
-                if (selection) {
-                    const { key, node, size, source } = selection;
-                    const sized = (b) => ['x', 'y', 'z'].map((k) => `${k} ${mmText(b[k])}`).join(' × ');
-                    let line = `${key} measures ${sized(size)} along its own axes (${source})`;
-                    // The turn to a hundredth of a degree, as a length is to a hundredth of a mm.
-                    if (node.turn) line += `; turned [${node.turn.map((a) => +a.toFixed(2)).join(', ')}] degrees, its world box ${sized(turnedExtents(size, node.turn))}`;
-                    lines.push(line);
-                    // A site's piece is its site drawn small: the reading says so, and how large.
-                    if (node.site_ref && node.site_size) lines.push(`${key} is the site ${node.site_ref} in miniature, not to scale beside the parts: the site itself measures ${sized({ x: node.site_size[0], y: node.site_size[1], z: node.site_size[2] })} (its pieces' extent)`);
-                    if (node.footprint && source.startsWith('the drawn mesh')) lines.push(`${key} declares ${sized(ownExtents(node.footprint))} (declared footprint); the mesh above is what is drawn, and the two can differ`);
-                    const frame = this.frameOf(key, node);
-                    if (frame && frame.volume) lines.push(`${key}'s working volume ${frame.volume.map(mmText).join(' × ')} (its frame, from ${frame.volume_from === 'controller' ? "the machine's controller" : "the site's declaration"})`);
-                } else if (this.selectedName && this.renderNodeByKey[this.selectedName]) {
-                    lines.push(`${this.selectedName} is not drawn here, so there is nothing of it to measure`);
-                }
-                return lines;
-            }
-
-            // The dimension lines on the selection, the points and the line between them,
-            // each number labelled with its source; and the readings, mirrored in Layers.
-            drawMeasure() {
-                const m = this.measure;
-                if (m.group) { this.scene.remove(m.group); disposeDeep(m.group); m.group = null; }
-                m.lines = [];
-                m.rods = [];
-                m.labels = [];
-                if (this.measureOn()) {
-                    const selection = this.selectedName ? this.measureSelection() : null;
-                    const group = new THREE.Group();
-                    const colour = layerColour(MEASURE_LAYER, DEFAULT_COLOR);
-                    // A line a few pixels thick at any distance: a rod, its thickness set each
-                    // frame (placeMeasure), with a point at each end.
-                    const line = (a, b) => {
-                        const rod = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 8, 1, true),
-                            new THREE.MeshBasicMaterial({ color: colour, depthTest: false }));
-                        rod.position.copy(a).lerp(b, 0.5);
-                        rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
-                        rod.userData.span = a.distanceTo(b);
-                        group.add(rod);
-                        m.rods.push(rod);
-                        group.add(new THREE.Points(new THREE.BufferGeometry().setFromPoints([a, b]),
-                            new THREE.PointsMaterial({ color: colour, size: MEASURE_END_PX, sizeAttenuation: false, depthTest: false })));
-                    };
-                    // A label on a dark ground, its text in the layer's colour, the size of the
-                    // page's own text whatever the distance; where it stands is placeMeasure's,
-                    // past the far end of its line.
-                    const label = (text, from, to) => {
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
-                        const font = `600 ${MEASURE_LABEL_PX * 2}px sans-serif`;
-                        ctx.font = font;
-                        canvas.width = Math.ceil(ctx.measureText(text).width) + 20;
-                        canvas.height = MEASURE_LABEL_PX * 2 + 14;
-                        ctx.font = font;
-                        ctx.fillStyle = 'rgba(16,18,16,0.88)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-                        ctx.strokeStyle = layerHex(MEASURE_LAYER) || '#ffffff'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
-                        ctx.fillStyle = layerHex(MEASURE_LAYER) || '#ffffff'; ctx.textBaseline = 'middle'; ctx.fillText(text, 10, canvas.height / 2 + 1);
-                        const texture = new THREE.CanvasTexture(canvas);
-                        texture.colorSpace = THREE.SRGBColorSpace;
-                        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, sizeAttenuation: false }));
-                        sprite.userData = { from: from.clone(), to: to.clone(), w: canvas.width / 2, h: canvas.height / 2 };
-                        group.add(sprite);
-                        m.labels.push(sprite);
-                    };
-                    if (selection) {
-                        const token = selection.source.startsWith('the drawn') ? 'mesh' : selection.source.split(' ')[0];
-                        for (const e of selection.edges) {
-                            line(e.from, e.to);
-                            label(`${e.letter} ${mmText(e.mm)} · ${token}`, e.from, e.to);
-                        }
-                    }
-                    const p = m.points;
-                    if (p.length) {
-                        group.add(new THREE.Points(
-                            new THREE.BufferGeometry().setFromPoints(p.map((q) => q.at)),
-                            new THREE.PointsMaterial({ color: colour, size: 9, sizeAttenuation: false, depthTest: false })));
-                    }
-                    if (p.length === 2) {
-                        line(p[0].at, p[1].at);
-                        label(`${mmText(between(p[0].site, p[1].site).length)} · ${p.map((q) => q.kind).join(', ')}`, p[0].at, p[1].at);
-                    }
-                    group.traverse((o) => { o.renderOrder = 10; o.raycast = () => {}; });  // seen over the world, never hit
-                    this.scene.add(group);
-                    m.group = group;
-                    m.lines = this.measureReadings(selection);
-                    this.placeMeasure();
-                }
-                if (this.layersWidget) this.layersWidget.refresh();
-                this.invalidate();
-            }
-
-            // Each frame, before it is drawn: the measurement's rods MEASURE_ROD_PX thick on
-            // screen, and its labels past the far ends of their lines, clear of each other
-            // (measure.js's layLabels), the size of the page's text.
-            placeMeasure() {
-                const m = this.measure;
-                if (!m.group) return;
-                const cam = this.camera, h = this.canvas.clientHeight || 1, w = this.canvas.clientWidth || 1;
-                const perPixel = (at) => (2 * Math.tan((cam.fov * Math.PI) / 360) * at.distanceTo(cam.position)) / h;
-                for (const rod of m.rods) {
-                    const r = (MEASURE_ROD_PX / 2) * perPixel(rod.position);
-                    rod.scale.set(r, rod.userData.span, r);
-                }
-                const screen = (v) => { const s = v.clone().project(cam); return { x: ((s.x + 1) / 2) * w, y: ((1 - s.y) / 2) * h, z: s.z }; };
-                const ends = m.labels.map((sprite) => {
-                    const a = screen(sprite.userData.from), b = screen(sprite.userData.to);
-                    return { x: b.x, y: b.y, dx: b.x - a.x, dy: b.y - a.y, w: sprite.userData.w, h: sprite.userData.h, z: b.z };
-                });
-                const laid = layLabels(ends, { width: w, height: h, gap: 6 });
-                const k = (2 * Math.tan((cam.fov * Math.PI) / 360)) / h;
-                m.labels.forEach((sprite, i) => {
-                    const at = laid[i], z = Math.min(0.999, ends[i].z);
-                    sprite.position.copy(new THREE.Vector3((at.cx / w) * 2 - 1, 1 - (at.cy / h) * 2, z).unproject(cam));
-                    sprite.scale.set(sprite.userData.w * k, sprite.userData.h * k, 1);
-                });
-            }
-
+            // ⚙ View › Layers, and the ring's View › Layers: the Layers window in front.
             openLayers() {
                 this.viewMenuEl.open = false;
                 this.panels.open('layers');
