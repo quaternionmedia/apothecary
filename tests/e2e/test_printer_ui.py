@@ -1387,6 +1387,22 @@ BADGE_AND_MARK = """() => {
 }"""
 
 
+# The world drawn now, and its pixel where the middle of the nozzle's cone is projected.
+CONE_SEEN = """() => {
+    const v = window.fractalViewer, a = v.anchors;
+    let mark = null;
+    for (const g of v.scene.children) if (g.userData.key === 'printer_1') g.traverse((o) => { if (!mark && o.userData.toolMark) mark = o; });
+    const cone = mark.children.find((c) => c.isMesh);
+    const at = cone.getWorldPosition(cone.position.clone()).project(v.camera);
+    const w = v.canvas.clientWidth, h = v.canvas.clientHeight, k = v.renderer.getPixelRatio();
+    const x = Math.round(((at.x + 1) / 2) * w * k), y = Math.round(((at.y + 1) / 2) * h * k);
+    v.renderer.render(v.scene, v.camera);
+    const gl = v.renderer.getContext(), pixel = new Uint8Array(4);
+    gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+    return { pixel: [...pixel], at: [x, y] };
+}"""
+
+
 def _meets(a: dict, b: dict) -> bool:
     return a["l"] < b["r"] and b["l"] < a["r"] and a["t"] < b["b"] and b["t"] < a["b"]
 
@@ -1420,6 +1436,11 @@ def test_stepped_into_its_printer_the_boards_badge_stands_clear_of_the_tools_mar
     assert mark is not None and mark["r"] - mark["l"] >= width / 2, stepped
     assert not _meets(badge, mark), stepped
     assert abs(badge["b"] - (at["y"] - 6)) < 1, stepped  # at its own height, beside it
+    # The mark stands inside the drawn head that carries the nozzle, and is seen: the
+    # world drawn, the canvas's pixel at the cone's middle is the cone's red.
+    seen = page.evaluate(CONE_SEEN)
+    red, green, blue = seen["pixel"][:3]
+    assert red > 100 and red > 1.6 * green and red > 1.6 * blue, seen
 
 
 @pytest.mark.e2e
