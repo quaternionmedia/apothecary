@@ -207,13 +207,14 @@ def _verbs_the_server_answers(monkeypatch) -> set:
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
 def test_every_verb_the_page_names_is_one_the_server_answers(monkeypatch):
     """A button whose data-can names no verb of can_now is never greyed (verdictOf finds
-    nothing and leaves it): each verb machine.js, sketches.js and the templates write, each
-    can.js gives a pad's line, and each the latch lapsing refuses, is one the server
-    answers."""
+    nothing and leaves it): each verb machine.js, sketches.js, loops.js and the templates
+    write, each can.js gives a pad's line, and each the latch lapsing refuses, is one the
+    server answers."""
     answers = _verbs_the_server_answers(monkeypatch)
     pages = [
         MACHINE_JS,
         CAN_JS.parent / "widgets" / "sketches.js",
+        CAN_JS.parent / "widgets" / "loops.js",
         *sorted((ROOT / "templates").glob("*.j2")),
     ]
     written = {v for p in pages for v in re.findall(r'data-can="([^"<>]+)"', p.read_text("utf-8"))}

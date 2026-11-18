@@ -740,6 +740,10 @@ PANELS: Sequence[Tuple[str, str]] = (
     # (widgets/deck.js), a stack beside the world registered at start and closed until
     # asked for; the Stream Deck + piece's Open Deck opens it too.
     ("deck", "Deck"),
+    # Loops: the heater loops of the printer whose Machine is open (widgets/loops.js), a
+    # window of the Machine's group registered at start and closed until asked for. Its
+    # acts are a ring of their own under Panels › Machine (_loops).
+    ("loops", "Loops"),
 )
 # The group each panel's window is registered under, as the page registers it (its
 # markup's data-group, its script's `group:`, a system's entry): a panel's cell wears
@@ -763,6 +767,7 @@ PANEL_GROUPS = {
     "settings": "Tools",
     "deck": "Tools",
     "airgap": "Airgap",
+    "loops": "Machine",
 }
 # What a person may say a whiteboard's mark is (apothecary/vision/marks.py's Kind).
 MARK_KINDS = ("diagram", "writing", "unsure", "nothing")
@@ -803,7 +808,8 @@ def _panels() -> Option:
         if pid == "machine":
             # A board's Machine, and an armed printer's control pad in a loud window
             # of its own or put back in its Machine, as the pad's ⧉ Pop out and
-            # ⇥ Put back do (widgets/machine.js).
+            # ⇥ Put back do (widgets/machine.js); then the knobs, and the heater loops
+            # of the printer whose Machine is open, each after the cells before it.
             return Option(
                 id="panels:machine",
                 label=label,
@@ -812,6 +818,7 @@ def _panels() -> Option:
                     toggle(pid, label),
                     Option(id="panel:pad", label="Control pad", action="panel:pad"),
                     _knobs(),
+                    _loops(toggle("loops", labels["loops"])),
                 ],
             )
         if pid not in _RINGS:
@@ -1088,6 +1095,71 @@ def _knobs() -> Option:
             ),
             Option(id="deck:here", label="Here", action="deck:here"),
             Option(id="panel:deck", label="Deck", action="panel:toggle:deck"),
+        ],
+    )
+
+
+# What a rule's cell says, where its title is longer than a cell holds; a rule this does
+# not name is called by its title, shortened.
+RULE_LABELS = {
+    "zn_ultimate": "ZN ultimate",
+    "zn_reaction": "ZN reaction",
+    "tyreus_luyben": "Tyreus",
+    "cohen_coon": "Cohen-Coon",
+    "simc": "SIMC",
+    "imc": "IMC",
+    "amigo": "AMIGO",
+}
+
+
+def _loops(toggle: Option) -> Option:
+    """Panels › Machine › Loops: the window, then the acts of the loop it shows, which the
+    page hands to it (widgets/loops.js), on the printer whose Machine is open -- the board's
+    gains read, an experiment started and cancelled, the designed gains set on the board
+    (never saved to its memory: no cell asks for that) -- and the choices it makes: which
+    loop, which experiment (``firmware.loops.KINDS``), and the rule and the kind of
+    controller a design is made by (``control_loops.RULES``, each rule a ring of the kinds it
+    gives). Seated after Knobs, so no cell of the Machine's moves."""
+    from .control_loops import RULES
+    from .firmware.loops import KINDS
+
+    def act(verb: str, label: str) -> Option:
+        return Option(id=f"loops:{verb}", label=label, action=f"loops:{verb}")
+
+    return Option(
+        id="panels:loops",
+        label="Loops",
+        group=PANEL_GROUPS["loops"],
+        children=[
+            toggle,
+            act("read", "Read"),
+            act("start", "Start"),
+            act("cancel", "Cancel"),
+            act("set", "Set gains"),
+            Option(
+                id="loops:loop",
+                label="Loop",
+                children=[act("loop:hotend", "Hotend 0"), act("loop:bed", "Bed")],
+            ),
+            Option(
+                id="loops:kind",
+                label="Experiment",
+                children=[act(f"kind:{k.name}", k.name.capitalize()) for k in KINDS],
+            ),
+            Option(
+                id="loops:rule",
+                label="Rule",
+                children=[
+                    Option(
+                        id=f"loops:rule:{rule.name}",
+                        label=RULE_LABELS.get(rule.name) or shorten(rule.title),
+                        children=[
+                            act(f"rule:{rule.name}:{kind}", kind.upper()) for kind in rule.kinds
+                        ],
+                    )
+                    for rule in RULES.values()
+                ],
+            ),
         ],
     )
 
@@ -2219,6 +2291,11 @@ CARRIED_BY: Dict[str, Carries] = {
     # The Stream Deck +'s knobs: the page hands each to the server's layout on the deck
     # (static/deck_knobs.js, PUT /firmware/decks/{id}/control).
     "deck": Carries.VIEWER,
+    # A heater loop's acts and choices: the page hands each to the Loops window
+    # (widgets/loops.js), which calls the loop routes for the printer whose Machine is
+    # open (POST /firmware/printers/loops/read, start, cancel, set), never the intent
+    # route, and greys what the server would refuse.
+    "loops": Carries.VIEWER,
     # How the world is drawn: the header's View menu (snapping, detail, outlines,
     # whether a click picks a wall).
     "view": Carries.VIEWER,

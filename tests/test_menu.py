@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from ring_helpers import address_of, every_action, every_address, walk
@@ -1151,6 +1152,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Control pad", "panel:pad", 6),
         # The Stream Deck +'s knobs, seated after the Machine's own two.
         ("Knobs", None, 2),
+        # The heater loops of the printer whose Machine is open, after the knobs.
+        ("Loops", None, 4),
     ]
     assert address_of(root, "panel:pad") == "446"
     assert carried_by("panel:pad").name == "VIEWER"
@@ -1168,6 +1171,45 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert address_of(root, "deck:step:10") == "44222"
     for action in ("deck:knobs", "deck:machine:printer_1", "deck:step:0.1", "deck:here"):
         assert carried_by(action).name == "VIEWER"
+    # Loops: the window, then a loop's acts on the open Machine's printer, then the
+    # choices the window makes. Nothing saves to the board's memory.
+    loops = next(c for c in machine.children if c.label == "Loops")
+    assert [(c.label, c.action, c.cell) for c in loops.children] == [
+        ("Loops", "panel:toggle:loops", 8),
+        ("Read", "loops:read", 6),
+        ("Start", "loops:start", 2),
+        ("Cancel", "loops:cancel", 4),
+        ("Set gains", "loops:set", 9),
+        ("Loop", None, 3),
+        ("Experiment", None, 1),
+        ("Rule", None, 7),
+    ]
+    assert address_of(root, "panel:loops") == "4448"
+    assert address_of(root, "loops:start") == "4442"
+    assert address_of(root, "loops:loop:bed") == "44436"
+    assert address_of(root, "loops:kind:perturbation") == "44412"
+    assert address_of(root, "loops:rule:simc:pi") == "444798"
+    by_label = {c.label: c for c in loops.children}
+    assert [(c.label, c.action) for c in by_label["Loop"].children] == [
+        ("Hotend 0", "loops:loop:hotend"),
+        ("Bed", "loops:loop:bed"),
+    ]
+    assert [c.action for c in by_label["Experiment"].children] == [
+        "loops:kind:step",
+        "loops:kind:autotune",
+        "loops:kind:perturbation",
+    ]
+    from apothecary.control_loops import RULES
+
+    rules = by_label["Rule"].children
+    assert [c.id for c in rules] == [f"loops:rule:{name}" for name in RULES]
+    assert [[k.action for k in c.children] for c in rules] == [
+        [f"loops:rule:{r.name}:{kind}" for kind in r.kinds] for r in RULES.values()
+    ]
+    every = set(every_action([SimpleNamespace(options=loops.children)]))
+    assert not any("save" in a or "memory" in a for a in every), every
+    for action in every:
+        assert carried_by(action).name == "VIEWER", action
     site = next(c for c in panels.children if c.label == "Site")
     assert [(c.label, c.action, c.cell) for c in site.children] == [
         ("Site", "panel:toggle:site", 8),

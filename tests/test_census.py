@@ -14,7 +14,7 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # The viewer's controls of its own: a change that adds one raises this; one that removes
 # one may lower it. `uv run apothecary census` lists them, and docs/census.md says what
 # is counted, how each is classified and how the ceiling and the share's floor move.
-VIEWER_CEILING = 252
+VIEWER_CEILING = 262
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -378,7 +378,7 @@ def test_the_viewers_ring_backed_share_is_at_least_its_floor():
     `apothecary census` gives the share."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 153 / 252, f"{backed} of {own} ring-backed"
+    assert backed / own >= 160 / 262, f"{backed} of {own} ring-backed"
 
 
 def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address():
@@ -654,3 +654,43 @@ def test_a_part_s_preset_and_its_adapter_are_backed_by_cells_the_ring_produces()
 
     walk(ring.options)
     assert {"part:preset:hose_40", "part:adapter"} <= produced
+
+
+def test_the_loops_windows_acts_and_choices_are_the_cells_of_its_ring():
+    """The Loops window's buttons and choices are ring-backed, each by a cell the canvas
+    ring produces under Panels › Machine › Loops; the figures an experiment is planned by,
+    its ceiling and its longest time are values no cell types; nothing there saves to the
+    board's memory."""
+    from apothecary.menu import Context, Pointing, resolve
+
+    taken = census.take()
+    mine = {f.name: f for f in taken.controls_of_its_own() if f.source == "loops.js"}
+    assert set(mine) == {
+        "loops-loop",
+        "loops-rule",
+        "loops-read",
+        "loops-set",
+        "loops-kind",
+        "loops-param",
+        "loops-ceiling",
+        "loops-longest",
+        "loops-start",
+        "loops-cancel",
+    }
+    typed = {"loops-param", "loops-ceiling", "loops-longest"}
+    assert {name for name, f in mine.items() if not f.ring_action} == typed
+    ring = resolve(Context(pointing=Pointing.CANVAS), site_names=["garage"])
+    produced = set()
+
+    def walk(options):
+        for option in options:
+            if option.action:
+                produced.add(option.action)
+            walk(option.children or [])
+
+    walk(ring.options)
+    for name, f in mine.items():
+        assert f.ring_action is None or f.ring_action in produced, (name, f.ring_action)
+        assert "save" not in name and "save" not in (f.ring_action or ""), name
+    listening = [f for f in taken.found if f.source == "loops.js" and f.how == "listening"]
+    assert listening and all(f.surface != census.UNCLASSIFIED for f in listening)

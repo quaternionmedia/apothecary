@@ -583,6 +583,9 @@ def test_the_world_and_the_panels_are_windows_of_one_layout(page: Page, ring_url
         # The Layers window, beside the world and a cell of Site's ring, closed until
         # asked for.
         "layers",
+        # The Loops window, beside the world and a cell of the Machine's ring, closed
+        # until asked for.
+        "loops",
         # The Working space, a tab of Site's ring, closed until asked for.
         "working",
         # The Procedure, a tab of Site's ring, closed until asked for.

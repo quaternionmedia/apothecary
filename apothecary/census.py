@@ -475,6 +475,48 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "layers-depth-less": (WIDGET, WHAT_YOU_SEE, "a button that reaches one level less deep"),
     "layers-depth-more": (WIDGET, WHAT_YOU_SEE, "a button that reaches one level deeper"),
     "layers-reset-all": (WIDGET, WHAT_YOU_SEE, "a button that puts depth and every layer back as they began"),
+    # ---- Loops, apothecary/static/widgets/loops.js -------------------------------------
+    # A heater loop of the printer whose Machine is open: its choices and its acts, each a
+    # cell of Panels › Machine › Loops (RING_BACKED); the figures an experiment is planned
+    # by are typed, and no cell types a value. Nothing here saves to the board's memory.
+    "loops-loop": (WIDGET, WHAT_YOU_SEE, "a drop-down of the loops: hotend 0 or the bed"),
+    "loops-rule": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of the rules the server lists, each with the kinds of controller it gives",
+    ),
+    "loops-read": (WIDGET, WHAT_YOU_SEE, "a button that reads the gains the board holds (M503)"),
+    "loops-set": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that sets the designed gains on the board and reads them back, not saved",
+    ),
+    "loops-kind": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of the experiments: a step, an autotune, a perturbation",
+    ),
+    "loops-param": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a box for one figure of the experiment chosen, one for each, as the server lists them",
+    ),
+    "loops-ceiling": (WIDGET, WHAT_YOU_SEE, "a box for the experiment's ceiling, typed every time"),
+    "loops-longest": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a box for the experiment's longest time, typed every time",
+    ),
+    "loops-start": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that starts the experiment, heating the machine",
+    ),
+    "loops-cancel": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that ends the experiment, the heater turned off and read back",
+    ),
     # ---- Deck, apothecary/static/widgets/deck.js --------------------------
     # The Stream Deck + as drawn from here: a simulated deck is pressed, turned and
     # tapped from its window, each the event a real deck reports (a real deck's are off);
@@ -1043,6 +1085,19 @@ RING_BACKED: Dict[str, str] = {
     "layers-depth-more": "view:depth:more",
     "layers-reset-all": "layer:reset",
     "root:click:onClick": "view:depth:more",
+    # The Loops window's choices and acts are the cells of Panels › Machine › Loops: a loop
+    # its Loop's cell, a rule and a kind of controller its Rule's (each rule a ring of the
+    # kinds it gives), an experiment its Experiment's, and Read, Start, Cancel and Set on
+    # machine their own. Its typed figures are values no cell types.
+    "loops-loop": "loops:loop:hotend",
+    "loops-rule": "loops:rule:simc:pi",
+    "loops-kind": "loops:kind:step",
+    "loops-read": "loops:read",
+    "loops-start": "loops:start",
+    "loops-cancel": "loops:cancel",
+    "loops-set": "loops:set",
+    "root:click:onLoopsClick": "loops:start",
+    "root:change:onLoopsChange": "loops:loop:hotend",
     "ws-hour": "working:open",
     "ws-add-camera": "camera:add-here",
     "ws-choose": "camera:device",
@@ -1641,6 +1696,44 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WIDGET,
         WHAT_YOU_SEE,
         "the depth stepper's - and +, or Reset, in the Layers window",
+    ),
+    # ---- Loops (widgets/loops.js): one listener of each kind on the window's root, ----
+    # its buttons, choices and figures drawn by it; and the surfaces' stream, on which the
+    # server tells an experiment's progress and a kept experiment's document.
+    "root:click:onLoopsClick": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "Read, Start, Cancel or Set on machine in the Loops window, told which by its class",
+    ),
+    "root:change:onLoopsChange": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a loop, a rule or an experiment chosen in the Loops window",
+    ),
+    "root:input:onLoopsInput": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a figure, the ceiling or the longest time typed: the server asked whether it would start",
+    ),
+    "tellings:change:heardLoop": (
+        AUTOMATIC,
+        WHAT_YOU_SEE,
+        "the server telling an experiment's progress, or a kept experiment's document",
+    ),
+    "tellings:surfaces:catchUp": (
+        AUTOMATIC,
+        WHAT_YOU_SEE,
+        "the surfaces' stream opened again: the experiment asked for afresh",
+    ),
+    "tellings:missed:catchUp": (
+        AUTOMATIC,
+        WHAT_YOU_SEE,
+        "tellings missed on the surfaces' stream: the experiment asked for afresh",
+    ),
+    "tellings:error:streamFaltered": (
+        AUTOMATIC,
+        WHAT_YOU_SEE,
+        "the surfaces' stream dropped: a running experiment asked for once a second",
     ),
     # ---- Settings (widgets/settings.js): one listener of each kind on the panel ----
     "settingsEl:click:settingClicked": (

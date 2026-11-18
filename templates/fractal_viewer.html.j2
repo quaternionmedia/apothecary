@@ -859,6 +859,7 @@
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/models.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/marks.css">
     <link rel="stylesheet" href="{{ base_url }}/static/widgets/layers.css">
+    <link rel="stylesheet" href="{{ base_url }}/static/widgets/loops.css">
     <script type="importmap">
     {
         "imports": {
@@ -906,6 +907,7 @@
         const readingOfKind = (record, kind) => !!record && GCODE_KINDS.includes(kind) && record.machine === kind;
         import { mountPinned } from '/static/widgets/pinned.js';
         import { mountLayers, layerLabel } from '/static/widgets/layers.js';
+        import { mountLoops } from '/static/widgets/loops.js';
         import { mountWorkingSpace } from '/static/widgets/working_space.js';
         import { mountProcedure } from '/static/widgets/procedure.js';
         import { mountFamily } from '/static/widgets/family.js';
@@ -1622,7 +1624,7 @@
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
                     defaultRoot: PAGE_LAYOUT,
-                    known: ['gather', 'models', 'marks', 'working', 'layers', 'deck', ...knownWindows(SYSTEMS)],
+                    known: ['gather', 'models', 'marks', 'working', 'layers', 'deck', 'loops', ...knownWindows(SYSTEMS)],
                     transient: ['control', 'lighting', ...transientWindows(SYSTEMS)],
                 });
                 // Pinned is mounted the first time it is in front of a person, and listed
@@ -1906,6 +1908,25 @@
                             addressOf: (action) => (this.layersTaught ? this.layersTaught[action] || null : null),
                         });
                     },
+                });
+                // Loops: the heater loops of the printer whose Machine is open
+                // (widgets/loops.js), a window of the Machine's group beside the world,
+                // closed until asked for. Panels › Machine › Loops opens it; its acts are
+                // that ring's cells, whose addresses are the canvas ring's (layersTaught).
+                this.loopsWidget = null;
+                this.panels.register('loops', {
+                    title: 'Loops', group: 'Machine', home: 'beside', open: false,
+                    hint: "The heater loops of the printer whose Machine is open: the board's gains, the design, an experiment and its plots",
+                    body: (slot) => {
+                        this.loopsWidget = mountLoops(slot, {
+                            base: BASE_URL,
+                            machine: () => (this.machine && this.machine.port ? { port: this.machine.port, name: this.machine.path || this.machine.port } : null),
+                            say: (text, kind) => this.setStatus(text, kind),
+                            addressOf: (action) => (this.layersTaught ? this.layersTaught[action] || null : null),
+                        });
+                        window.apothecaryLoops = this.loopsWidget;
+                    },
+                    onOpen: () => { if (this.loopsWidget) this.loopsWidget.load(); },
                 });
                 // Working space: the site as every kind of evidence has it, and a
                 // printer's hour in it (widgets/working_space.js) -- a tab of Site's ring,
@@ -11132,6 +11153,15 @@
                     steerKnobs(BASE, action.slice('deck:'.length), { port })
                         .then((said) => { viewer.setStatus(`${intent.label}${tail}: ${said}`, 'success'); viewer.deck?.load(); })
                         .catch((e) => viewer.setStatus(`${intent.label}${tail}: ${e.message}`, 'error'));
+                    return;
+                }
+                // A Loops verb: the window shown, and the act done on the open Machine's
+                // printer; what it did, or the server's reason it was refused, is said here.
+                if (action.startsWith('loops:')) {
+                    viewer.panels.open('loops');
+                    if (!viewer.loopsWidget) await new Promise((r) => setTimeout(r, 0));  // mounted as it is first shown
+                    if (viewer.loopsWidget) await viewer.loopsWidget.act(action.slice('loops:'.length), { label: intent.label, tail });
+                    else viewer.setStatus(`${intent.label}: the Loops window did not open${tail}`, 'error');
                     return;
                 }
                 // A Procedure verb: the window shown, and GO or Start over done; what came
