@@ -30,13 +30,13 @@ printer_1 · paused · elapsed ‒:‒‒ · 2/3
 
 ## 2. Swiped back to the knobs, which say a print holds the port
 
-A drag along the strip, most of its length, is a swipe. The knobs' screen no longer looks live: the print holds the port, the server refuses a jog, and the strip says so in the server's own words. Progress was brought forward once for this print and is not brought forward again.
+A drag along the strip, most of its length, is a swipe. The knobs' screen no longer looks live: the print holds the port, the server refuses a jog, and the strip says so in the server's own words, as the window's line for the knobs does. Progress was brought forward once for this print and is not brought forward again.
 
 ![Swiped back to the knobs, which say a print holds the port](screenshots/41-02-swiped-back-to-the-knobs-which-say-a-print-holds-t.png)
 
 ## 3. On to Status, the last screen
 
-Another swipe forward shows the printer's state, its temperatures and the first thing it asks of a person, read from the newest status anyone's poll made. A swipe past the last screen moves nothing, and a tap on the strip changed nothing.
+Another swipe forward shows the printer's state -- the print's stage, paused -- its temperatures and the first thing it asks of a person, read from the newest status anyone's poll made, and the window writes the strip's two lines under it. A swipe past the last screen moves nothing, and a tap on the strip changed nothing.
 
 ![On to Status, the last screen](screenshots/41-03-on-to-status-the-last-screen.png)
 

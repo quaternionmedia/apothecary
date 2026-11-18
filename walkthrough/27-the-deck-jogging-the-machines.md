@@ -69,6 +69,7 @@ UNLOCK pressed: it sends the router's `$X` through the latch, the alarm is clear
 
 - **A real deck or machine.** What only they show -- the knobs' feel, a gantry that stops, which stop is faster -- is section J of the bench checklist (docs/bench-checklist.md). The machine's own red button is faster than the deck's stop key, and the docs say so.
 - **The printer.** The same turns jog it as `G91`, `G1 .. F3000`, `G90`, and its fourth knob extrudes within the bound the firmware guide names; tests/test_firmware_deck_control.py holds both.
+- **The strip's picture.** The server draws the time an armed control has left into it, which differs on every run, so it is greyed in the pictures; the window writes its words under it, the time blanked there as everywhere.
 
 Run it yourself:
 

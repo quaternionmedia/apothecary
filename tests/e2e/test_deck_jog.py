@@ -17,6 +17,7 @@ J of the bench checklist (docs/bench-checklist.md).
 
 from __future__ import annotations
 
+import re
 import time
 
 import httpx
@@ -32,7 +33,8 @@ from windows import DECK
 
 DECK_ID = "SIMDECK"
 # The time an armed latch has left, which the Deck window writes beside the machine it
-# moves; the strip writes it too, in the picture the server draws, which is blanked whole.
+# moves and under the strip; the strip's own picture carries it too, drawn by the server
+# where no word can be blanked, so the picture is left out whole: its words are under it.
 TIME_LEFT_SHOWN = ((DECK, TIME_LEFT), f"{DECK} .deck-strip-tap")
 ROUTER = "/dev/ttyFAKE3"
 CONTROLLER = "cnc_router.frame_system.controller"
@@ -154,6 +156,9 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
             "**The printer.** The same turns jog it as `G91`, `G1 .. F3000`, `G90`, and its "
             "fourth knob extrudes within the bound the firmware guide names; "
             "tests/test_firmware_deck_control.py holds both.",
+            "**The strip's picture.** The server draws the time an armed control has left "
+            "into it, which differs on every run, so it is greyed in the pictures; the "
+            "window writes its words under it, the time blanked there as everywhere.",
         ],
         page=page,
     )
@@ -201,7 +206,8 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
         blank=TIME_LEFT_SHOWN,
     )
 
-    # 3. Armed the Machine's way: three clicks are three millimetres of X.
+    # 3. Armed the Machine's way: three clicks are three millimetres of X. The words of a
+    #    turn are on the list since step 2: what is waited for is the third jog sent.
     _arm(url, True)
     for turned in range(1, 4):
         deck.locator(".deck-knob[data-knob='0'] .deck-turn[data-dir='1']").click()
@@ -286,6 +292,10 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     # No key drawn hovered or ringed with focus: whether it is depends on the moment.
     page.mouse.move(640, 700)
     page.evaluate("() => document.activeElement && document.activeElement.blur()")
+    # The page asks which machines are armed every two seconds: the badge says so then.
+    expect(page.locator(".world-badge[data-path='cnc_router']")).to_have_class(
+        re.compile(r"\barmed\b"), timeout=10000
+    )
     story.shows(
         "Two long presses of the router's key arm it, and DISARM is lit",
         "The router's key, the top row's second, held a second, let go, and held a second "

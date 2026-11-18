@@ -59,6 +59,12 @@ Control was armed in the Machine at the second step, and the router's badge in t
 
 ![Armed, the router says so on its badge and its row in Site](screenshots/31-07-armed-the-router-says-so-on-its-badge-and-its-row-.png)
 
+## 8. On the ring, a home not proved is greyed with the same reason
+
+cnc_router's ring, Device › Control › Home: Z is greyed from the answer the pad's Home Z is greyed from. Chosen by its digit anyway it does nothing: the ring stays, the reason written under it, and the status line says it with the cell's address.
+
+![On the ring, a home not proved is greyed with the same reason](screenshots/31-08-on-the-ring-a-home-not-proved-is-greyed-with-the-s.png)
+
 ## What this page does not show
 
 - **A limit switch pressed.** The simulated router has no switch for a hand to press, so no home here is proved; pressing each is section I of [docs/bench-checklist.md](../docs/bench-checklist.md).

@@ -25,7 +25,7 @@ The Stream Deck + stands on the bench's right end; its piece's Open Deck opens t
 
 ## 2. A program draws its eight keys and its strip
 
-Each key and the strip were set by a PUT to the deck's routes: a label on a colour, drawn here and sent as the JPEG the device takes. The window shows what was sent, since a deck cannot be asked what it shows.
+Each key and the strip were set by a PUT to the deck's routes: a label on a colour, drawn here and sent as the JPEG the device takes. The window shows what was sent, since a deck cannot be asked what it shows, and writes the strip's two lines under its picture, where they can be read and selected.
 
 ![A program draws its eight keys and its strip](screenshots/26-02-a-program-draws-its-eight-keys-and-its-strip.png)
 
