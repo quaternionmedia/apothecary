@@ -105,7 +105,9 @@ no job's state is built while no reader follows the jobs.
 A tune's stage and progress are also on `jobs` (above); `tune` adds what the experiment
 reads. `control_loop` builds the document with the design's defaults (`simc`, `pi`) from the
 kept experiment alone and never reads the board's gains (`read_board`); an experiment with
-too little to identify a plant is told with `document` null and an `error`.
+too little to identify a plant, or whose heater's power stood still while its targets
+moved, is told with `document` null and an `error`. The Loops window follows both
+([control-loops.md](control-loops.md#the-loops-window)).
 
 ## Contributed
 

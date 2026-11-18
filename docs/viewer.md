@@ -513,8 +513,10 @@ expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
   word on the mark chosen in it, Earlier and Later through a whiteboard's history, and
   Place, [pictures.md](pictures.md#the-marks-window)); Machine › Machine (the selected board's),
   Control pad (an armed printer's pad in a loud window of its own or back in its
-  Machine, as the pad's ⧉ Pop out and ⇥ Put back) and Knobs (the Stream Deck +'s:
-  On / off, Machine, Step, Here and the Deck window, [stream-deck.md](stream-deck.md)); Windows › World alone (as
+  Machine, as the pad's ⧉ Pop out and ⇥ Put back), Knobs (the Stream Deck +'s:
+  On / off, Machine, Step, Here and the Deck window, [stream-deck.md](stream-deck.md)) and
+  Loops (the Loops window, then Read, Start, Cancel, Set gains, Loop, Experiment and
+  Rule, on the printer whose Machine is open, [control-loops.md](control-loops.md#the-loops-window)); Windows › World alone (as
   `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Print view; Bench › Bench (show it), Install (a cell per toolchain
   module, then the slicer), Compile, Upload, Raw flash, Cancel, Cores,
   Libraries; Docs (the documentation in a new tab, as the header's Docs); and
@@ -735,6 +737,11 @@ full; the others are entered from ⊞ Windows › Journeys and from the
   airgap part as a field, torque and dynamics model (Panels › Airgap ›
   Airgap; [airgap.md](airgap.md)); and a site with a lighting rig adds
   **Lighting** ([lighting.md](lighting.md)).
+- **Loops**: a heater loop of the printer whose Machine is open -- the board's
+  gains beside the design, an experiment and its progress, the newest kept
+  experiment's plots and figures -- a window of the Machine's group beside the
+  world, closed until asked for (⊞ Windows › Loops, or Panels › Machine › Loops;
+  [control-loops.md](control-loops.md#the-loops-window)).
 - **The control pad**: an armed printer's pad opens as a window of its own
   beside the world, its tab and frame red, its frame pulsing as it opens, and
   the printer framed in the world that is left. Its ⇥ Put back, its tab's ✕,
@@ -746,7 +753,7 @@ full; the others are entered from ⊞ Windows › Journeys and from the
 
 A window the page makes for the moment -- a Machine and its sections, the pad --
 is left out of the layout this browser remembers. Every other window is kept in
-it: one opened from ⊞ Windows -- Models, Marks, the Working space, the Deck -- is
+it: one opened from ⊞ Windows -- Models, Marks, the Working space, the Deck, Loops -- is
 open again after a reload, where it was, and the world as wide as it was
 ([walkthrough 33](../walkthrough/33-windows-kept-over-a-reload.md)).
 

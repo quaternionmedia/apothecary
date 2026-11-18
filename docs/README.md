@@ -62,6 +62,7 @@ at page 00.
 | [44 — A gap that travels](../walkthrough/44-a-gap-that-travels.md) | A gap that is not one number: two circles, an eccentric read along a ray and to its nearest point, the airgap's cam sweeping, the rolling rotor rolling, the flexure rotor's flank gap closing to its stop and its leaves' bending |
 | [45 — A heater's loop](../walkthrough/45-a-heater-s-loop.md) | A made-up heater identified from a step read once a second, a controller designed for it by a named rule and its margins, the relay an autotune runs and what its describing function costs, and the loop kept as a document whose figures say what they rest on |
 | [46 — A printer tuned from its prints](../walkthrough/46-a-printer-tuned-from-its-prints.md) | A made-up printer's coupon read with made-up calipers, its errors solved and what a cube cannot separate said, half of each taken out, the next coupon's errors smaller, and the turn kept as a document whose figures say what they rest on |
+| [48 — A heater's loop in the page](../walkthrough/48-a-heater-s-loop-in-the-page.md) | The Loops window beside a simulated printer's Machine: a kept step's document and curves, the board's gains read beside the controller SIMC designs, Start greyed in the server's words until a ceiling and a longest time are typed, the designed gains set and read back, and a step run and followed from the stream; written by the browser suite |
 
 ## The checklists
 

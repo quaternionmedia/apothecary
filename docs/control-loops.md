@@ -5,13 +5,14 @@ sets the heater's power, and the heater warms what it heats a little later and a
 little slowly. Apothecary describes such a loop, identifies its plant from what a
 machine reports, designs a controller for it by a named rule, measures how the loop
 responds, and runs the experiments that feed all of it on the machine, through the
-seam's rules. Three modules hold it:
+seam's rules. Three modules hold it, and a window shows it:
 
 | Module | |
 |---|---|
 | `apothecary/control_loops.py` | The maths, standard library only: plants, the PID in two forms, identification, rules, margins and a recorded step's measures |
 | `apothecary/loop_document.py` | `control/loop/1`, one loop of one machine as a document: its schema, a builder that computes its figures, and a Markdown view |
 | `apothecary/firmware/loops.py` | The machine: the gains a board holds, read, set and saved on request, and experiments run as jobs |
+| `apothecary/static/widgets/loops.js` | [The Loops window](#the-loops-window): a loop of the printer whose Machine is open, drawn from the server's answers by `static/loop_plots.js` |
 
 [Walkthrough page 45](../walkthrough/45-a-heater-s-loop.md) identifies a made-up
 heater, designs for it and says its margins, in doctests.
@@ -188,8 +189,17 @@ Where it departs from the Airgap's document, and why:
 Each is a `tune` job (`apothecary/jobs.py`) that holds the port as a print does. It is
 planned before anything is sent (`loops.plan`): every target at or under the ceiling,
 the ceiling at or under the dialect's cap for the heater, the schedule within the
-longest time, which is at most two hours. Only hotend 0 and the bed: a target line
-here names no tool.
+longest time, which is at most two hours. What each kind takes beside its ceiling and
+its longest time is `loops.KINDS`, which `plan` reads its needs from and
+`GET /firmware/loops/kinds` lists, each figure with a value to start from for a hotend
+and for the bed; the ceiling and the longest time have none.
+
+Only hotend 0 and the bed: a target line here names no tool. A second hotend needs a
+`T` word on `M104` among the dialect's control lines (and on `M109`, which a print
+sends), `M301` taking an `E` past `E0`, the safe-off a cancelled print sends -- which
+names `M104 S0`, hotend 0's -- turning it off too, the same in what goes with the latch
+down (`gcode.ALWAYS`, `can.js`'s off lines), and a simulated board with two hotends; a
+board's status already lists every hotend it reports.
 
 | Experiment | What it sends | What it is for |
 |---|---|---|
@@ -225,11 +235,15 @@ after itself.
 from the predicates the routes raise from, so a page greys what the server would
 refuse; `tune.save` is refused, kind `asked`, until a request asks for the board's
 memory by name. The routes are `POST /firmware/printers/loops/read`, `start`, `cancel`,
-`set`, `save`, `document` and `curves` (what a page draws of a loop, computed here: the
-open loop over frequency with each controller, and the measured temperature beside the
-model's step through the same targets, its PID run at a stated stand-in rate), and
-`GET /firmware/printers/loops/job` (with `series`, its samples so far) and `experiments`. A kept experiment is in the state folder's `loops/`,
-under its job's id.
+`set`, `save`, `document`, `curves` (what a page draws of a loop, computed here: the
+open loop over frequency with each controller, where it crosses and peaks with the
+margins the document says, the frequency points measured with their trust, and the
+measured temperature beside the model's step through the same targets, its PID run at a
+stated stand-in rate) and `can-start` (whether an experiment of the figures sent would
+start now: `tune.start`'s verdict, then the plan's, kind `plan`, with the plan when it
+would; nothing is sent), `GET /firmware/printers/loops/job` (with `series`, its samples
+so far) and `experiments`, and `GET /firmware/loops/rules` and `kinds`. A kept
+experiment is in the state folder's `loops/`, under its job's id.
 
 ### What is established and what is assumed
 
@@ -242,6 +256,67 @@ Nothing here sends `M303`, `M301`, `M304` or `M500` to a real board yet. Each
 assumption is a line to keep at the bench, and the parsers read the forms named and
 nothing more: a board that says something else is an experiment that ends without a
 result, with the heater turned off.
+
+## The Loops window
+
+The **Loops** window (`apothecary/static/widgets/loops.js`) is a heater loop of the
+printer whose Machine is open, in the page: ⊞ Windows › Loops, or the ring's Panels ›
+Machine › Loops › Loops. It is a window of the Machine's group, closed until asked for;
+with no printer's Machine open it says so, and every button is greyed with why. For the
+loop chosen, hotend 0 or the bed:
+
+| Part | What it shows | From |
+|---|---|---|
+| The board and the design | The gains the board holds, read back by Read (`M503`), and when it answered; beside them the controller designed for the identified plant, by the rule and kind chosen from the rules the server lists | `POST /firmware/printers/loops/read`; the document's `controller`; `GET /firmware/loops/rules` |
+| The experiment | Its kind, its figures as the server lists them, its ceiling and its longest time; the plan the server makes of them; Start and Cancel; its stage, progress, reading, target and power as it runs, and how it ended | `GET /firmware/loops/kinds`; `POST /firmware/printers/loops/can-start`; the `tune` surface |
+| The plots | The newest kept experiment of the loop: its measured temperature beside the model's step; the open loop's magnitude and phase over frequency, the crossovers marked with the margins; the sensitivity and the complementary sensitivity with their peaks; a perturbation's measured points of the plant, each drawn as its trust says -- good filled, fair faint, poor hollow and broken, unknown a hollow square | `POST /firmware/printers/loops/curves` |
+| The figures | The plant's, the controller's, the loop's margins and peaks, the step's measures and the experiment's, each with its unit, its basis and what it rests on | `POST /firmware/printers/loops/document` |
+
+The page computes nothing the server computes. `apothecary/static/loop_plots.js` maps
+the answer's numbers onto plots and rounds a figure as the document's Markdown view
+does, and nothing else; every series and mark carries the answer's own number.
+
+**Start** is greyed until the server says the figures would start. The ceiling and the
+longest time have no value to start from: the window sends neither until a person types
+them, and `can-start` answers the machine's verdict first (`tune.start`: the latch, a job
+on the port, the card printing), then the plan's -- which of the two is not stated, a
+target over the ceiling, a schedule longer than the longest time. Read, Cancel and Set
+on machine are greyed from the board's own answer (`tune.read`, `tune.cancel`,
+`tune.set`). A greyed button's title says the server's reason before its own tip, and
+the address of its cell.
+
+**An experiment's progress** comes from the surfaces' stream (`GET
+/surfaces/events?names=tune,control_loop`): `tune` tells its stage and each whole
+percent, `control_loop` the kept experiment when it ends, whose document the window then
+asks for by its own rule. Where the stream is not open, the window asks `GET
+/firmware/printers/loops/job` once a second while one runs.
+
+**Set on machine** sends the designed gains (`M301` or `M304`, the latch armed), reads
+them back, says whether the board holds what was sent, and reads the board again for the
+document. Nothing in the window, and no cell of its ring, saves gains to the board's
+memory. A person who means to asks for it by name, the latch armed in the printer's
+Machine, against the server:
+
+```bash
+curl -X POST http://127.0.0.1:6283/firmware/printers/loops/save \
+  -H 'Content-Type: application/json' \
+  -d '{"port": "/dev/ttyUSB0", "write_board_memory": true}'
+```
+
+**A board that identifies nothing.** A board whose heaters jump to their targets -- the
+simulated printer without `APOTHECARY_SIMULATED_HEATERS=model`, as `apothecary serve
+--simulated` runs it -- reports one power whatever its target. In closed loop a target
+that moves moves the power that drives the heater, so a step or a perturbation whose
+power stood still while its targets moved is refused a document
+(`loop_document.unidentifiable`), naming the power it stood at, rather than fitted to
+nothing; the window says the server's words in place of the curves. An autotune
+identifies no plant either: its gains are the firmware's own, and the window says so.
+
+**Its ring** is Panels › Machine › Loops: Loops 8 (the window), Read 6, Start 2,
+Cancel 4, Set gains 9, Loop 3 (Hotend 0, Bed), Experiment 1 (Step, Autotune,
+Perturbation) and Rule 7 (each rule a ring of the kinds of controller it gives). A cell
+does what its control does; one the server would refuse says why on the status line.
+[Walkthrough page 48](../walkthrough/48-a-heater-s-loop-in-the-page.md) shows it.
 
 ## The simulated board
 
