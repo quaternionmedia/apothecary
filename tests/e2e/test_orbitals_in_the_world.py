@@ -348,6 +348,18 @@ def test_the_piece_under_the_pointer_and_the_selected_piece_are_named_and_neithe
     selected = page.locator("[data-anchor='piece-name:selected']")
     expect(selected).to_be_visible(timeout=5000)
     expect(selected).to_contain_text(piece["name"])
+    # Over a part that already wears badges, the name is in no badge's way and is never
+    # merged into their count: two others at the same place do not hide it.
+    page.evaluate(
+        """(k) => { const v = window.fractalViewer, n = v.renderNodeByKey[k], b = n.world_bounds;
+            const at = () => v.sceneAt(...[0, 1, 2].map((i) => (b.min[i] + b.max[i]) / 2));
+            for (const id of ['t1', 't2']) v.anchors.badge('test:' + id, at, { className: 'variant-mark' });
+            v.invalidate(); }""",
+        piece["key"],
+    )
+    page.wait_for_timeout(500)
+    expect(selected).to_be_visible()
+    assert "merged" not in (selected.get_attribute("class") or "")
     page.mouse.move(piece["x"], piece["y"])
     page.mouse.move(piece["x"] + 1, piece["y"])
     expect(page.locator("[data-anchor='piece-name:hover']")).to_have_count(0)

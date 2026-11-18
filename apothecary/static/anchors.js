@@ -253,6 +253,15 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
             a.at = { x, y };
             a.want = { x: x + a.offset.x, y: y + a.offset.y };
             if (testOcclusion && a.occlude) a.el.classList.toggle("behind", occluded(point, a.ignore));
+            if (a.apart) {
+                // Stands at its own point, in no badge's way and never merged: a name over a
+                // thing that already wears badges.
+                a.drawn = { x: a.want.x, y: a.want.y };
+                a.el.classList.remove("merged", "aside");
+                a.el.style.transform = `translate(${a.drawn.x.toFixed(1)}px, ${a.drawn.y.toFixed(1)}px) translate(-50%, -100%)`;
+                a.el.classList.toggle("selected", !!(a.selected && a.selected()));
+                continue;
+            }
             shown.push(a);
         }
         const groups = layout(shown);
@@ -316,8 +325,9 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
          * null to hide). `offset` is in pixels; the element's bottom centre
          * sits on the point. `selected()` says whether its thing is selected,
          * which opens its card; `ignore(mesh)` names a mesh that never dims it
-         * (the one its thing is inside). */
-        add(key, el, point, { offset = { x: 0, y: -6 }, occlude = true, selected = null, ignore = null } = {}) {
+         * (the one its thing is inside). `apart` keeps it out of the layout: it stands at
+         * its point, never stepped aside nor merged into a count, and says no card. */
+        add(key, el, point, { offset = { x: 0, y: -6 }, occlude = true, selected = null, ignore = null, apart = false } = {}) {
             this.remove(key);
             el.style.position = "absolute";
             el.style.left = "0";
@@ -326,7 +336,7 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
             el.hidden = true;
             el.dataset.anchor = key;
             layer.appendChild(el);
-            const a = { key, el, point, offset, occlude, selected, ignore, at: null, want: null, drawn: null, size: null, hover: false, hoverOff: 0 };
+            const a = { key, el, point, offset, occlude, selected, ignore, apart, at: null, want: null, drawn: null, size: null, hover: false, hoverOff: 0 };
             markHover(a);
             anchors.set(key, a);
             dirty = true;

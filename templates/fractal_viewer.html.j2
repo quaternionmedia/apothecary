@@ -3091,7 +3091,7 @@
                     if (!key) { this.anchors.remove(mark); continue; }
                     const node = this.renderNodeByKey[key];
                     const at = () => { const m = middleOf(this.renderNodeByKey[key] || node); return m ? sceneAt(...m) : null; };
-                    const el = this.anchors.badge(mark, at, { className: `piece-name ${slot}`, occlude: false, selected: slot === 'selected' ? () => true : null });
+                    const el = this.anchors.badge(mark, at, { className: `piece-name ${slot}`, occlude: false, apart: true, offset: { x: 0, y: -30 }, selected: slot === 'selected' ? () => true : null });
                     el.style.pointerEvents = 'none';
                     this.anchors.say(mark, { icon: node.site_ref ? `${node.site_ref} · site` : (node.part_ref || node.name), words: '' });
                 }
