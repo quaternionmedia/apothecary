@@ -28,6 +28,7 @@ family's members found stand on every surface alike (`apothecary/routes/surfaces
 | `pictures` | `none` | `apothecary/routes/pictures.py` | | a picture is kept or forgotten here, and a pile is gathered |
 | `whiteboard_marks` | `picture_fractions` | `apothecary/routes/marks.py` | `site` and `view`, both needed | a person's word on a mark or a note |
 | `carlos_holds` | `none` | `apothecary/routes/wiring.py` | `site` | a hold is sent to carlos through the hub, with what carlos answered or why it did not; kept in the state folder's `carlos-holds.json`, read back at start |
+| `family` | `none` | `apothecary/family/hub.py` | | a cue is fired, a delivery ends, a pull member reads its action: the hub's members and each recent delivery's outcome, as `GET /family/` answers, keyed `apothecary` |
 | `tune` | `none` | `apothecary/firmware/loops.py` | `port` | a heater experiment's stage or whole percent changes, or every 5 s of its own clock: the experiment as `GET /firmware/printers/loops/job` has it (its reading, target, power, result), keyed by the port; and once more as it ends |
 | `control_loop` | `none` | `apothecary/firmware/loops.py` | `experiment`, `port` | an experiment is kept: its `control/loop/1` document, `{"experiment", "document", "error"}`, keyed by the experiment's id; read with `experiment` for one, else the kept experiments (of a `port`) without their samples |
 | `contributed` | `none` | `apothecary/surfaces.py` | `surface`, `by` | a member's observation is kept (below); each observation names its own frame |
@@ -212,7 +213,7 @@ move once its owner says its change:
 - `apothecary/static/widgets/working_space.js` asks for the evidence document every five
   seconds; a kept poll is said on `machine_status`, which could ask for it instead.
 - `apothecary/static/widgets/family.js` and `procedure.js` ask the hub every two seconds;
-  the hub's deliveries are no surface, and hearth's `/family/members/<name>/events`
+  the `family` surface says each delivery, and hearth's `/family/members/<name>/events`
   streams a pull member's own.
 - `apothecary/static/widgets/tasks.js` follows a firmware task every half second, and
   the page's render queue every 700 ms; neither is a surface.

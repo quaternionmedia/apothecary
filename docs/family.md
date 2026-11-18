@@ -17,6 +17,7 @@ and the coordinator, imported from `qm-hearth`, never copied.
 | `GET /family/members/<name>` | A pull member's last cue and action |
 | `GET /family/members/<name>/events` | The same, as a stream |
 | `/machine/family/*`, `/board/family/*` | A hosted member's own four routes |
+| `GET /surfaces/family` | The same as `GET /family/`, as a surface: it is told on [the stream](surfaces.md#the-stream) as a cue is fired and each delivery ends |
 | `GET /family/beside` | What each member the hub started itself is doing now: its state, pid, instance and restarts |
 | `GET /sites/<s>/procedures` | The names of the site's procedures |
 | `GET /sites/<s>/procedures/<p>` | One as it stands: each step's status, why, whether GO will fire it, and the outcome of its last fire per member |

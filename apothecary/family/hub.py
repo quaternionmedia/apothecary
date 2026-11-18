@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter
 from hearth import coordinator
 
+from .. import surfaces
 from ..state_folder import state_dir
 from ..version import __version__
 from ..wiring.carlos import CARLOS, carlos_url, loopback_url
@@ -101,6 +102,46 @@ def settings() -> Dict[str, Any]:
     return {**table, "members": members, "pull": pull}
 
 
+# The hub's own state, as a surface (apothecary/surfaces.py): its members and each recent
+# delivery's outcome, as ``GET /family/`` answers and the Family view draws them. Told as a
+# cue is fired, as each delivery ends and as a pull member reads its action.
+FAMILY_SURFACE = "family"
+# What of the coordinator says a thing has happened to its members or deliveries: ``fire``
+# queues them, ``_push`` and ``_call`` end one, ``read`` delivers a pull member's.
+_TOLD_BY = ("fire", "_push", "_call", "read")
+
+
+def _told(hub: coordinator.Coordinator) -> coordinator.Coordinator:
+    """``hub`` that says its state changed after each of ``_TOLD_BY``; the body is made
+    only while someone follows the surface."""
+
+    def wrap(original):
+        def wrapper(*args, **kwargs):
+            try:
+                return original(*args, **kwargs)
+            finally:
+                surfaces.changed(FAMILY_SURFACE, key=HUB, body=hub.snapshot)
+
+        return wrapper
+
+    for name in _TOLD_BY:
+        if hasattr(hub, name):
+            setattr(hub, name, wrap(getattr(hub, name)))
+    return hub
+
+
+surfaces.register(
+    surfaces.Surface(
+        name=FAMILY_SURFACE,
+        frame="none",
+        about="the family's hub: its members and each recent delivery's outcome",
+        snapshot=lambda words: running().snapshot(),
+        tells=True,
+        owner=__name__,
+    )
+)
+
+
 def running() -> coordinator.Coordinator:
     """The running coordinator, started anew when its table has changed."""
     global _running, _read
@@ -109,7 +150,9 @@ def running() -> coordinator.Coordinator:
         if _running is None or wanted != _read:
             if _running is not None:
                 _running.close()
-            _running = coordinator.from_table(wanted, local=hosted.receivers(), table=TABLE)
+            _running = _told(
+                coordinator.from_table(wanted, local=hosted.receivers(), table=TABLE)
+            )
             _read = wanted
         return _running
 

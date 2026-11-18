@@ -29,6 +29,7 @@ OWNED = {
     "carlos_holds": ("none", "apothecary.routes.wiring"),
     "contributed": ("none", "apothecary.surfaces"),
     "control_loop": ("none", "apothecary.firmware.loops"),
+    "family": ("none", "apothecary.family.hub"),
     "jobs": ("none", "apothecary.jobs"),
     "lighting": ("none", "apothecary.routes.lighting"),
     "machine_status": ("bed_mm", "apothecary.firmware.devices"),
@@ -671,3 +672,44 @@ def test_the_post_docs_surfaces_md_shows_for_the_simulated_server_is_accepted(me
     tokens.fixed(body["by"], token)
     kept = _post(body, token=token)
     assert kept.status_code == 201, kept.text
+
+
+def test_the_hub_s_members_and_deliveries_are_a_surface_told_as_they_change(tmp_path, monkeypatch):
+    """A cue fired, a delivery that ends -- pushed to a member that is down, called on a
+    hosted one -- and a pull member's read are each told as a change of ``family``, whose
+    body is what ``GET /family/`` answers; the surface reads the same."""
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path))
+    (tmp_path / hub.TABLE).write_text(
+        json.dumps({"members": {"joe": "http://127.0.0.1:9"}, "pull": ["alfred"], "timeout": 1}),
+        encoding="utf-8",
+    )
+    hub.close()
+    try:
+
+        async def follow():
+            following = surfaces.subscribe(["family"])
+            try:
+                running = hub.running()
+                cue = {"number": "7", "name": "go"}
+                running.fire(cue, {"joe": {"x": 1}, "alfred": {"y": 2}, "machine": {"bogus": 1}})
+                await asyncio.to_thread(running.wait, 5)
+                running.read("alfred")
+                await asyncio.sleep(0.1)  # the loop takes what the threads handed it
+                got, _ = await following.next(0.3)
+                return got
+            finally:
+                following.close()
+
+        told = asyncio.run(follow())
+        assert {e["surface"] for e in told} == {"family"} and {e["key"] for e in told} == {"apothecary"}
+        outcomes = lambda e: {o["member"]: o["done"] for o in e["body"]["last"]}  # noqa: E731
+        assert outcomes(told[0]) == {"joe": False, "alfred": False, "machine": False}
+        assert outcomes(told[-1]) == {"joe": True, "alfred": True, "machine": True}
+        assert len(told) == 4  # fired, a push's end, a call's end, a pull member's read
+        assert told[-1]["body"]["members"]["alfred"] == {"via": "pull"}
+        read = client.get("/surfaces/family").json()["snapshot"]
+        assert read["members"].keys() == told[-1]["body"]["members"].keys()
+        assert client.get("/family/").json()["members"].keys() == read["members"].keys()
+        assert "token" not in json.dumps(read)
+    finally:
+        hub.close()

@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- The family hub's members and deliveries are a surface, `family`, told on the stream as a cue is fired, a delivery ends and a pull member reads. ([doc](docs/surfaces.md#the-surfaces))
 - A heater experiment's progress and the `control/loop/1` document of a kept one are surfaces: `tune` follows a running experiment's stage, reading and result, and `control_loop` tells the document as an experiment is kept; neither asks a port anything. ([doc](docs/surfaces.md#the-surfaces))
 - What a console's own feeds set, sACN levels and OSC status, is told on the surfaces' stream as a change of `lighting`, at most ten times a second, where only a put was. ([doc](docs/surfaces.md#the-surfaces))
 - What carlos was last asked to hold for each site is kept in the state folder, so `carlos_holds` answers the same after a restart. ([doc](docs/surfaces.md#the-surfaces))
