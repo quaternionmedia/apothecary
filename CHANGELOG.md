@@ -9,6 +9,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Added
 
+- What carlos was last asked to hold for each site is kept in the state folder, so `carlos_holds` answers the same after a restart. ([doc](docs/surfaces.md#the-surfaces))
 - `apothecary serve --simulated` names `alfred` and `joe` in its own family table with published tokens, so a sibling can be tried against it. ([doc](docs/surfaces.md#the-simulated-servers-members))
 - A member of the family's hub writes to `POST /surfaces/contributed` with its own token, `Authorization: Bearer <token>`: another member's, a wrong one or none is 401, and a member in the table with no token is refused until the owner makes it one. `apothecary family members`, `add`, `token` and `remove` list and change the table, and the token is shown once and kept only as a hash. ([doc](docs/surfaces.md#a-members-token), [commands](docs/family.md#the-members-at-the-command-line))
 - A job's stage and progress are on the surfaces' stream: a print or a cut says starting, running, paused, finishing or cancelling as it changes, and its progress at each whole percent, a tune likewise, with nothing asked of a port. ([doc](docs/surfaces.md#a-jobs-stages))

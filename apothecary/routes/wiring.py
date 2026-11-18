@@ -21,9 +21,13 @@ garage's when unset) at the start and whenever it changes: ``start_following`` a
 
 from __future__ import annotations
 
+import json
+import logging
 import os
 import threading
+from contextlib import suppress
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -33,9 +37,11 @@ from ..family import hub
 from ..firmware import devices as firmware_devices
 from ..firmware.bindings import bindings_for_site
 from ..firmware.toolchains import ToolchainError
+from ..state_folder import state_dir, write_whole
 from ..wiring import carlos
 from ..wiring.patch import Wiring, wiring_for_site
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 
 _follower: Optional[carlos.Follower] = None
@@ -56,11 +62,45 @@ def _hold(body: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # What carlos was last asked to hold for each site, as a surface (apothecary/surfaces.py):
-# kept as each hold is sent through the hub, and said changed then. Gone when the
-# server stops; carlos's own state is carlos's (its GET /family/state).
+# kept as each hold is sent through the hub, said changed then, and kept in the state
+# folder (``carlos-holds.json``, written whole under one lock) so a restart reads them
+# back. carlos's own state is carlos's (its GET /family/state).
 CARLOS_HOLDS = "carlos_holds"
-_HELD: Dict[str, Dict[str, Any]] = {}
+HOLDS_FILE = "carlos-holds.json"
+HOLDS_FORMAT = "apothecary.carlos-holds/1"
+_HELD: Optional[Dict[str, Dict[str, Any]]] = None
+_HELD_FROM: Optional[Path] = None  # the file _HELD was read from
 _HELD_LOCK = threading.Lock()
+
+
+def _holds_file() -> Path:
+    return state_dir() / HOLDS_FILE
+
+
+def _held_now() -> Dict[str, Dict[str, Any]]:
+    """The holds kept, read from the state folder the first time (and again when the
+    folder is another); call with ``_HELD_LOCK`` held. A file that does not read is
+    moved aside beside itself and the holds start empty: the next hold writes a new one."""
+    global _HELD, _HELD_FROM
+    path = _holds_file()
+    if _HELD is not None and _HELD_FROM == path:
+        return _HELD
+    held: Dict[str, Dict[str, Any]] = {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        rows = data["holds"]
+        if not isinstance(rows, dict) or not all(isinstance(r, dict) for r in rows.values()):
+            raise ValueError("it holds no table of holds")
+        held = rows
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        aside = path.with_name(f"{path.stem}.unreadable-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}.json")
+        with suppress(OSError):
+            path.replace(aside)
+        log.error("carlos holds: %s did not read (%s): kept aside as %s", path, exc, aside.name)
+    _HELD, _HELD_FROM = held, path
+    return held
 
 
 def _held(site: Optional[str], body: Dict[str, Any], answer, error: Optional[str]) -> None:
@@ -72,13 +112,20 @@ def _held(site: Optional[str], body: Dict[str, Any], answer, error: Optional[str
         "error": error,
     }
     with _HELD_LOCK:
-        _HELD[site or ""] = record
+        held = _held_now()
+        held[site or ""] = record
+        try:
+            write_whole(
+                _holds_file(), json.dumps({"format": HOLDS_FORMAT, "holds": held}, indent=2)
+            )
+        except OSError as exc:  # the hold was sent: not keeping it is not worth its failure
+            log.error("carlos holds: not kept in %s: %s", _holds_file(), exc)
     surfaces.changed(CARLOS_HOLDS, key=site, body=record)
 
 
 def _holds_kept(words: Dict[str, str]) -> Dict[str, Any]:
     with _HELD_LOCK:
-        held = dict(_HELD)
+        held = dict(_held_now())
     return {"holds": [r for s, r in sorted(held.items()) if words.get("site") in (None, s)]}
 
 

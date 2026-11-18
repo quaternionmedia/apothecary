@@ -437,3 +437,37 @@ def test_the_follower_in_the_server_holds_through_the_hub(
     assert heard, "the follower sent nothing"
     kept = hub.running().snapshot()["last"]
     assert [(k["member"], k["via"], k["status"]) for k in kept][:1] == [("carlos", "push", 200)]
+
+
+def test_what_carlos_was_last_asked_to_hold_survives_a_restart(
+    fake_arduino_cli, garage, a_carlos, monkeypatch
+):
+    """A hold sent is kept in the state folder, whole, and read back when the server's memory
+    of it is gone: ``carlos_holds`` answers the same after a restart."""
+    import json
+
+    from apothecary.routes import wiring as wiring_routes
+    from apothecary.state_folder import state_dir
+
+    client = TestClient(app)
+    url, _, _ = a_carlos
+    monkeypatch.setenv("APOTHECARY_CARLOS", url)
+    monkeypatch.setattr(wiring_routes, "_HELD", None)
+    assert client.get("/surfaces/carlos_holds").json()["snapshot"] == {"holds": []}
+    assert client.post("/sites/garage/wiring/send").status_code == 200
+    before = client.get("/surfaces/carlos_holds").json()["snapshot"]
+    [hold] = before["holds"]
+    assert hold["error"] is None and hold["answer"] == {"ok": True}
+    kept = state_dir() / wiring_routes.HOLDS_FILE
+    assert json.loads(kept.read_text(encoding="utf-8"))["holds"]["garage"] == hold
+    assert kept.stat().st_mode & 0o077 == 0
+    # The server restarts: nothing in memory, the state folder as it was.
+    monkeypatch.setattr(wiring_routes, "_HELD", None)
+    after = client.get("/surfaces/carlos_holds", params={"site": "garage"}).json()["snapshot"]
+    assert after == before
+    # A file that does not read is set aside, not written over, and the holds start empty.
+    kept.write_text("{ torn", encoding="utf-8")
+    monkeypatch.setattr(wiring_routes, "_HELD", None)
+    assert client.get("/surfaces/carlos_holds").json()["snapshot"] == {"holds": []}
+    [aside] = kept.parent.glob("carlos-holds.unreadable-*.json")
+    assert aside.read_text(encoding="utf-8") == "{ torn"

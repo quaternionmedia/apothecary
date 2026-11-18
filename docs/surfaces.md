@@ -27,7 +27,7 @@ family's members found stand on every surface alike (`apothecary/routes/surfaces
 | `lighting` | `none` | `apothecary/routes/lighting.py` | `site`, needed | levels or slots are put; what a console's own feed sets between puts is read, not said |
 | `pictures` | `none` | `apothecary/routes/pictures.py` | | a picture is kept or forgotten here, and a pile is gathered |
 | `whiteboard_marks` | `picture_fractions` | `apothecary/routes/marks.py` | `site` and `view`, both needed | a person's word on a mark or a note |
-| `carlos_holds` | `none` | `apothecary/routes/wiring.py` | `site` | a hold is sent to carlos through the hub, with what carlos answered or why it did not; kept in the server's memory |
+| `carlos_holds` | `none` | `apothecary/routes/wiring.py` | `site` | a hold is sent to carlos through the hub, with what carlos answered or why it did not; kept in the state folder's `carlos-holds.json`, read back at start |
 | `contributed` | `none` | `apothecary/surfaces.py` | `surface`, `by` | a member's observation is kept (below); each observation names its own frame |
 
 ## Reading
