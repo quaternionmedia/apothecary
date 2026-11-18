@@ -522,7 +522,8 @@ pieces it holds: a digit selects one), then what the piece is:
 then **Part** (a part, a camera or a made piece; [below](#the-part-editor): Edit,
 Defaults, Apply, Revert, Save, View › SCAD, Fullscreen, Ghost and Fit,
 History › Undo and Redo, and Variants › each saved variant › Draw, Rename,
-Duplicate, History, Compare and Delete, and Variants › Deleted), and, when a printer is pinned in the site, **Print** (a made piece) and
+Duplicate, History, Compare and Delete, and Variants › Deleted; after them,
+where the ring has room, Presets › each preset and Adapter), and, when a printer is pinned in the site, **Print** (a made piece) and
 **Slice** (a made piece, or a part not inside a printer and not a board: a
 devkit is flashed, never printed). Print and Slice say whether the printer
 has no board pinned or one pinned and not connected. Last come the cells that
@@ -858,6 +859,31 @@ while another part is selected.
 A piece made from a picture and a camera have the same editor, for their own
 numbers: Edit, Apply, Revert, Undo and Redo, and Fit. A made piece's Apply
 draws the piece again and nothing else.
+
+### Presets, and the adapter between two ends
+
+A part with [presets](parts-authoring.md#presets) -- the sizes people meet --
+whose numbers drive its model (a part built by Python; a part whose SCAD is
+the one draft offers none here yet) has a **Preset** drop-down above its
+controls in Parameters, and Part › Presets › each on its ring: one chosen stages its numbers over the part's
+defaults, a step of Undo, and Apply draws it. What calipers read is then typed
+over it; Defaults lets the preset go.
+
+A part with one round end, a spigot or a socket (`dust_port`), has **⇄ Adapter**
+in Selected, and Part › Adapter on its ring. The first press keeps this end at
+its numbers as staged; the line beside it names the end kept. The other end's
+numbers set -- another preset, or the caliper's reading over one -- the second
+press asks the server for the adapter between the two
+([connections.md](connections.md#the-adapter-between-two-ends)), which derives
+it or refuses, saying why, the end kept still kept. Derived, the adapter is
+chosen where it stands (the universe's `hose_adapter`), its numbers staged in its
+editor and applied, and its Selected lists each end's fit. Each Apply of the
+adapter after that -- an end lengthened, a bore opened by what a print showed --
+asks the server again, and the list says which end no longer seats. ⚒ Make in
+the header then takes the adapter drawn, as the variant applied, to the first
+printer that makes it, and [Print a part](#journeys) goes on from there. The
+ends and the adapter made are this tab's: a reload forgets them, and the adapter
+stays drawn as its variant.
 
 ## The SCAD editor
 

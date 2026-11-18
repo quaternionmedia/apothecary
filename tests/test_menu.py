@@ -1824,6 +1824,60 @@ def test_a_part_s_ring_holds_its_scad_editor_too():
     assert [c.action for c in untold.children[4].children] == ["part:ghost", "part:fit"]
 
 
+def test_a_part_s_presets_and_an_end_s_adapter_come_after_the_rest_of_its_ring():
+    """A part with presets has Part › Presets, a cell each staging one; a part with one
+    round end has Part › Adapter, as ⇄ Adapter in Selected. Both after the rest, where
+    the ring has room, so no cell above moves."""
+    from apothecary.menu import PartSeen, PictureContext
+
+    garage = _garage()
+    on = Context(pointing=Pointing.NODE, targets=["footpedal"])
+    told = PictureContext(part=PartSeen(editable=False, presets=["hose_40", "port_32"], end=True))
+    ring = resolve(on, garage, picture=told)
+    part = ring.options[-1]
+    assert [c.action or c.id for c in part.children] == [
+        "part:edit",
+        "part:defaults",
+        "part:apply",
+        "part:revert",
+        "part:view",
+        "part:history",
+        "part:presets",
+        "part:adapter",
+    ]
+    assert [(c.label, c.action) for c in part.children[6].children] == [
+        ("hose_40", "part:preset:hose_40"),
+        ("port_32", "part:preset:port_32"),
+    ]
+    plain = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=False)))
+    for action in ("part:edit", "part:apply", "part:undo", "part:fit"):
+        assert address_of(plain, action) == address_of(ring, action)
+    assert walk(ring, address_of(ring, "part:preset:port_32")).action == "part:preset:port_32"
+    # A ring already full -- Save and Variants -- has no room for them.
+    full = resolve(
+        on,
+        garage,
+        picture=PictureContext(
+            part=PartSeen(editable=True, variants=["x"], presets=["hose_40"], end=True)
+        ),
+    )
+    ids = [c.id for c in full.options[-1].children]
+    assert len(ids) == MOST_OPTIONS and "part:presets" not in ids and "part:adapter" not in ids
+
+
+def test_the_server_tells_the_ring_a_part_s_presets_and_whether_it_is_an_end():
+    from apothecary.routes.menu import _part_seen
+
+    port = _part_seen("apothecary", "dust_port")
+    assert (port.editable, port.presets, port.end) == (
+        False,
+        ["hose_40", "port_32", "port_25", "outlet_35"],
+        True,
+    )
+    adapter = _part_seen("apothecary", "hose_adapter")
+    assert (adapter.presets, adapter.end) == (["stepped_40_32_25", "plain_40_32"], False)
+
+
 def test_the_server_tells_the_ring_what_a_part_s_scad_is(monkeypatch):
     from fastapi.testclient import TestClient
 

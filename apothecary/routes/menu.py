@@ -153,8 +153,8 @@ def _planned(site: str, kind: str) -> List[str]:
 
 def _part_seen(site: str, path: str) -> Optional[PartSeen]:
     """The part a node of ``site`` is drawn as, when it is one from the parts folder:
-    whether its SCAD is its own to edit, its variants saved in git, and whether it
-    is a board."""
+    whether its SCAD is its own to edit, its variants saved in git, whether it is a
+    board, its presets, and whether it is an end an adapter is made between."""
     from ..api import load_part_wrapper
     from ..projects.parts.drafts import editable
     from ..projects.parts.saved import GitError, NotInGit, list_trash, saved_names
@@ -174,12 +174,16 @@ def _part_seen(site: str, path: str) -> Optional[PartSeen]:
             deleted = [v.name for v in list_trash(part)]
         except (GitError, NotInGit):
             deleted = []
+    round_ends = [i for i in part.interfaces() if i.type in ("spigot", "socket")]
     return PartSeen(
         editable=own,
         variants=saved_names(part) if own else [],
         deleted=deleted,
         board="board" in part.tags,
         cuts=part.has_cuts,
+        # A part whose SCAD is its source keeps its values in its text: none offered yet.
+        presets=[] if own else list(part.presets),
+        end=len(round_ends) == 1,
     )
 
 

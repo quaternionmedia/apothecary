@@ -231,6 +231,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a button that puts the SCAD editor over the whole page, or back",
     ),
     "saved-variant": (WIDGET, WHAT_YOU_SEE, "a button that draws a saved variant of a part"),
+    "part-preset": (WIDGET, WHAT_YOU_SEE, "a drop-down that stages one of a part's presets"),
+    "join-btn": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that keeps an end, then makes and draws the adapter between it and the end edited",
+    ),
     # How much of a subassembly to draw, and whether to outline its extent.
     "detail-mode": (WIDGET, WHAT_YOU_SEE, "a drop-down for how much of each subassembly to draw"),
     "overlay-toggle": (WIDGET, WHAT_YOU_SEE, "a tick-box that outlines each subassembly's extent"),
@@ -991,6 +997,9 @@ RING_BACKED: Dict[str, str] = {
     "scad-save": "part:save",
     "scad-fullscreen": "part:fullscreen",
     "saved-variant": "part:variant:draw",
+    # a part's presets, Part › Presets' cells; ⇄ Adapter, Part › Adapter
+    "part-preset": "part:preset",
+    "join-btn": "part:adapter",
     # and so is what can be done to a saved variant, each a cell of Part › Variants ›
     # its name, and the trash's, of Part › Variants › Deleted
     "variant-rename": "part:variant:rename",

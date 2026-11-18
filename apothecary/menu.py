@@ -177,6 +177,12 @@ class PartSeen(BaseModel):
     # Whether it says how it is cut (its wrapper's `cuts`): a router's Toolpath is
     # offered on such a part, as Slice is on a printed one.
     cuts: bool = False
+    # Its presets by name (``BasePart.presets``), on a part whose numbers drive its model:
+    # Part › Presets stages one, as the Preset drop-down in its Parameters does.
+    presets: List[str] = Field(default_factory=list)
+    # Whether it has one round interface, a spigot or a socket, so it is an end an
+    # adapter is made between: Part › Adapter does what ⇄ Adapter in Selected does.
+    end: bool = False
 
 
 class PictureContext(BaseModel):
@@ -1824,6 +1830,22 @@ def _node_ring(
             chosen = _variants_group(seen.variants, seen.deleted)
             if chosen is not None:
                 verbs.append(chosen)
+        # A part's presets and, on an end, the adapter between it and an end kept: after
+        # the rest, where the ring has room (a part built by Python has no Save or
+        # Variants), so no cell above moves.
+        if seen is not None and seen.presets and len(verbs) < MOST_OPTIONS:
+            verbs.append(
+                Option(
+                    id="part:presets",
+                    label="Presets",
+                    children=[
+                        Option(id=f"part:preset:{name}", label=name, action=f"part:preset:{name}")
+                        for name in seen.presets[:MOST_OPTIONS]
+                    ],
+                )
+            )
+        if seen is not None and seen.end and len(verbs) < MOST_OPTIONS:
+            verbs.append(Option(id="part:adapter", label="Adapter", action="part:adapter"))
         options.append(Option(id="part", label="Part", group="Part", children=verbs))
     # A made piece with a printer pinned in its site to print it on: Print,
     # appended after Part so no cell above moves. A piece with nowhere to be

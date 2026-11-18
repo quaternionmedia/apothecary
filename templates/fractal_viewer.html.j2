@@ -889,6 +889,7 @@
         import { takeLayerColours, layerColour, layerHex, categoriesInOrder } from '/static/layer_colours.js';
         import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf } from '/static/orbits.js';
         import { ownExtents, sizeFromSceneBox, turnedExtents, turnRowsInScene, turnedBounds, between, gap as gapBetween, nearestWithin, length as mmText, fieldMm, layLabels } from '/static/measure.js';
+        import { ADAPTER, presetStaged, endOf, betweenBody, paramsKey, label as endLabel } from '/static/ends.js';
         import { mountPanels } from '/static/panels.js';
         import { mountMachine } from '/static/widgets/machine.js';
         import { mountBoards } from '/static/boards.js';
@@ -5170,6 +5171,7 @@
                     <div class="drawn-from" id="part-drawn"></div>` : ''}
                     <div class="envelope" id="part-envelope"><span class="declared"></span><span class="measured"></span><span class="differs"></span><span class="floor"></span></div>
                     ${target.part ? '<div class="ghost-said" id="part-ghost" hidden></div>' : ''}
+                    ${target.part ? `<div class="part-join" id="part-join" hidden><button type="button" id="join-btn" title="Keep this end at its numbers as staged; with an end kept, the adapter between the two -- derived by the server, drawn, and each end's fit said here (Part › Adapter)">⇄ Adapter</button> <span class="join-said"></span><ul class="join-fits" id="join-fits"></ul></div>` : ''}
                     ${target.scadUrl ? `<div class="part-actions"><a class="part-scad-download" href="${target.scadUrl}">💾 Download SCAD</a></div>` : ''}
                     ${target.checklistUrl ? `<div data-section="readiness"><div id="part-checklist">Loading…</div></div>` : ''}
                     <div class="part-stage">
@@ -5193,7 +5195,7 @@
                       <ul id="part-messages" class="scad-messages"></ul>
                     </div>
                     </div>
-                    <div data-section="parameters"><div id="part-params">Loading…</div></div>
+                    <div data-section="parameters">${target.part ? `<div class="part-presets" id="part-presets" hidden><label title="The part's presets: the sizes people meet, each a set of its numbers staged over its defaults; type what calipers read over one (Part › Presets)">Preset <select id="part-preset"></select></label></div>` : ''}<div id="part-params">Loading…</div></div>
                     ${target.part ? `<div data-section="history"><div id="part-history" class="part-history" title="This tab's recent applies of the part, newest first: one clicked is drawn again from the cache">
                       <p class="section-empty" id="part-history-none">No applies in this tab yet: Apply draws what is staged, and each is listed here.</p>
                       <ul id="part-history-list" class="apply-history"></ul></div></div>
@@ -5738,9 +5740,153 @@
                 if (!stage?.defaults) return false;
                 if (Object.entries(stage.defaults).some(([k, v]) => !sameValue(v, stage.staged[k]))) this.noteUndo(stage);
                 Object.assign(stage.staged, JSON.parse(JSON.stringify(stage.defaults)));
+                stage.preset = null;
                 this.showStaged(target);
+                this.showPresets(target);
                 this.editorLoading = Promise.resolve();
                 return true;
+            }
+
+            // A part's presets, in Parameters: the sizes people meet, each staged over the
+            // part's defaults when chosen, as Part › Presets › a preset stages it; what
+            // calipers read is then typed over it. Hidden for a part with none, and for a
+            // part whose SCAD is the one draft (its values are its text's: not staged here).
+            showPresets(target, spec = null) {
+                const box = this.partEl('#part-presets'), select = this.partEl('#part-preset');
+                const stage = this.partStages[target.key];
+                if (!box || !select || !stage) return;
+                if (spec) stage.presets = stage.tied ? {} : (spec.presets ?? {});
+                const names = Object.keys(stage.presets ?? {});
+                box.hidden = !names.length;
+                if (!names.length) return;
+                const listed = names.join('|');
+                if (select.dataset.names !== listed) {
+                    select.innerHTML = '<option value="">as staged</option>'
+                        + names.map((n) => `<option value="${esc(n)}" title="${esc(stage.presets[n].description ?? '')}">${esc(n)}</option>`).join('');
+                    select.dataset.names = listed;
+                }
+                select.value = stage.preset ?? '';
+                select.onchange = () => {
+                    const { ok, said } = this.stagePreset(target, select.value);
+                    this.setStatus(said, ok ? 'success' : 'error');
+                };
+            }
+
+            // One of a part's presets staged, a step of undo: its numbers over the part's
+            // defaults, the preset kept as where they started, so an end made of them names
+            // it. Apply draws it. What it did, or why not.
+            stagePreset(target, name) {
+                const stage = this.partStages[target.key];
+                if (!stage) return { ok: false, said: `${target.label}: nothing is being edited` };
+                const preset = stage.presets?.[name];
+                if (!preset) {
+                    stage.preset = null;
+                    this.showPresets(target);
+                    return { ok: !name, said: name ? `${target.label} has no preset ${name}` : `${target.label}: its numbers as staged, from no preset` };
+                }
+                this.noteUndo(stage);
+                Object.assign(stage.staged, presetStaged(stage.defaults, preset));
+                stage.preset = name;
+                this.showStaged(target);
+                this.showPresets(target);
+                return { ok: true, said: `${target.label}: ${name} staged -- ${preset.description}; type what calipers read over it, and Apply draws it` };
+            }
+
+            // How many round interfaces a part has at its defaults, a spigot or a socket each:
+            // one makes it an end an adapter is made between. Asked once a part.
+            roundEndsOf(part) {
+                this.roundEnds ??= {};
+                this.roundEnds[part] ??= fetch(`${BASE_URL}/parts/${encodeURIComponent(part)}/interfaces`)
+                    .then((r) => (r.ok ? r.json() : { interfaces: [] }))
+                    .then((b) => b.interfaces.filter((i) => i.type === 'spigot' || i.type === 'socket').length)
+                    .catch(() => 0);
+                return this.roundEnds[part];
+            }
+
+            // ⇄ Adapter, in Selected's part section, on a part with one round end: its words
+            // say what pressing it does now. On the adapter made in this tab, each end's fit
+            // at what is drawn, asked of the server again whenever that changes.
+            async showJoin(target) {
+                const box = this.partEl('#part-join');
+                if (!box || !target.part) return;
+                const round = await this.roundEndsOf(target.part);
+                if (this.editorTarget?.key !== target.key) return;
+                const made = this.joined?.made;
+                const adapter = Boolean(made && made.part === target.part);
+                const button = box.querySelector('#join-btn'), said = box.querySelector('.join-said'), fits = box.querySelector('#join-fits');
+                box.hidden = !(round === 1 || adapter);
+                button.hidden = round !== 1;
+                button.onclick = () => this.joinNow(target).then(({ ok, said: words }) => this.setStatus(words, ok ? 'success' : 'error'));
+                const kept = this.joined?.kept;
+                said.textContent = round !== 1 ? ''
+                    : kept ? `${endLabel(kept)} is kept as one end: set the other end's numbers -- a preset, or what calipers read -- and ⇄ Adapter makes the adapter between them`
+                    : 'its numbers as staged are one end: ⇄ Adapter keeps it; then the other end\'s numbers, and ⇄ Adapter again';
+                if (!adapter) { fits.replaceChildren(); return; }
+                const stage = this.partStages[target.key];
+                const params = { ...(stage?.committed ?? {}) };
+                const asked = paramsKey(params);
+                if (made.asked !== asked) {
+                    made.asked = asked;
+                    const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(made.part)}/between`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(betweenBody(made.a, made.b, params)),
+                    }).catch(() => null);
+                    const body = response ? await response.json().catch(() => ({})) : {};
+                    made.seats = Boolean(response?.ok && body.seats);
+                    made.lines = response?.ok ? body.lines : [`its fits were not checked: ${body.detail ?? 'the server did not answer'}`];
+                }
+                if (this.editorTarget?.key !== target.key) return;
+                const unfit = made.lines.find((line) => /^\s*[ab] ↔ /.test(line) && !/: seats\b/.test(line));
+                said.textContent = made.seats ? 'made in this tab between two ends: each seats at what is drawn'
+                    : `made in this tab between two ends: at what is drawn, an end does not seat -- ${(unfit ?? made.lines[0]).trim()}`;
+                fits.innerHTML = made.lines.map((line) => `<li>${esc(line.trim())}</li>`).join('');
+            }
+
+            // ⇄ Adapter, and Part › Adapter: with no end kept, this end kept at its numbers as
+            // staged; with one, the adapter between the two, asked of the server, which derives
+            // it or refuses saying why. Made, it is chosen where it stands, its numbers staged
+            // and applied, and each end's fit said in its Selected. What it did, or why not.
+            async joinNow(target) {
+                const stage = this.partStages[target.key];
+                if (!stage || !target.part) return { ok: false, said: 'Nothing is being edited: Part › Edit on an end first' };
+                if ((await this.roundEndsOf(target.part)) !== 1) return { ok: false, said: `${target.part} has not one round end, a spigot or a socket, to join` };
+                const here = endOf(target.part, stage.staged, stage.defaults, stage.preset, stage.presets);
+                this.joined ??= { kept: null, made: null };
+                const kept = this.joined.kept;
+                if (!kept) {
+                    this.joined.kept = here;
+                    this.showJoin(target);
+                    return { ok: true, said: `${endLabel(here)} kept as one end: set the other end's numbers -- choose a preset, or type what calipers read -- and ⇄ Adapter again` };
+                }
+                this.setStatus(`The adapter between ${endLabel(kept)} and ${endLabel(here)}...`, 'loading');
+                const response = await fetch(`${BASE_URL}/parts/${ADAPTER}/between`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(betweenBody(kept, here)),
+                }).catch(() => null);
+                const body = response ? await response.json().catch(() => ({})) : {};
+                if (!response?.ok) return { ok: false, said: `No adapter: ${body.detail ?? 'the server did not answer'}; ${endLabel(kept)} is still kept` };
+                const end = (e) => ({ part: e.part, ...(e.preset ? { preset: e.preset } : {}), params: e.set ?? {} });
+                this.joined = { kept: null, made: { part: body.part, a: end(body.a), b: end(body.b), asked: paramsKey(body.params), lines: body.lines, seats: body.seats } };
+                // Chosen among the site's own pieces: the universe holds every part.
+                if (this.focusPath.length) this.goUpTo(0, '⇄ Adapter');
+                if (!this.renderNodeByKey[body.part]) {
+                    return { ok: true, said: `${body.lines[0]}, derived; ${body.part} is no piece of ${this.siteName} (the universe holds every part): its numbers are ${Object.entries(body.params).map(([k, v]) => `${k} ${v}`).join(', ')}` };
+                }
+                this.selectPath(body.part);
+                const adapter = await this.editorOn(body.part);
+                const made = adapter && this.partStages[adapter.key];
+                if (!made) return { ok: false, said: `${body.lines[0]}, derived, but its editor did not open` };
+                this.noteUndo(made);
+                Object.assign(made.staged, body.params);
+                made.preset = null;
+                this.showStaged(adapter);
+                const refused = await this.applyNow(adapter);
+                if (refused) return { ok: false, said: refused };
+                // Framed, as f does: the universe at its own framing shows a part this small as a speck.
+                this.fitSelected();
+                return { ok: true, said: `${body.lines[0]}: derived and drawn, each end's fit in Selected; ⚒ Make slices it` };
             }
 
             // Whether a part is drawn from a variant this tab applied -- its numbers
@@ -5881,6 +6027,8 @@
                     this.bindStageActions(target);
                     this.refreshStage();
                     this.renderHistory(target);
+                    this.showPresets(target, spec);
+                    this.showJoin(target);
                     this.offerKeptWork(target);
                     this.focusEditor();
                 } catch (err) {
@@ -10598,7 +10746,7 @@
         const PART_VERBS = [
             ['#apply-btn', 'part:apply'], ['#revert-btn', 'part:revert'], ['#defaults-btn', 'part:defaults'],
             ['#undo-btn', 'part:undo'], ['#redo-btn', 'part:redo'], ['.ghost-label', 'part:ghost'],
-            ['#scad-save', 'part:save'], ['#scad-fullscreen', 'part:fullscreen'],
+            ['#scad-save', 'part:save'], ['#scad-fullscreen', 'part:fullscreen'], ['#join-btn', 'part:adapter'],
         ];
         // A board's own verbs: carried by its Machine, opened for it when it is not.
         const MACHINE_VERB = /^(control:|level:|print:|device:(poll|query|reconnect|reset|release|flash|listen|probe))/;
@@ -10964,6 +11112,22 @@
                     if (viewer.selectedName !== path && viewer.renderNodeByKey[path]) viewer.selectPath(path);
                     const { ok, said } = viewer.fitSelected();
                     viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error');
+                    return;
+                }
+                // Part › Presets › a preset: staged in its editor, as Parameters' Preset stages it.
+                const preset = /^part:preset:(.+)$/.exec(action);
+                if (preset) {
+                    viewer.editorOn(path).then((target) => {
+                        const { ok, said } = target ? viewer.stagePreset(target, preset[1]) : { ok: false, said: `${path} has no parameters` };
+                        viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error');
+                    });
+                    return;
+                }
+                // Part › Adapter: as ⇄ Adapter in Selected does.
+                if (action === 'part:adapter') {
+                    viewer.editorOn(path)
+                        .then((target) => (target ? viewer.joinNow(target) : { ok: false, said: `${path} has no parameters` }))
+                        .then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
                     return;
                 }
                 // Part › Defaults: as its editor's Defaults does, the part's own SCAD back in its editor.

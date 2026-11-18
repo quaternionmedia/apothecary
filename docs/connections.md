@@ -248,6 +248,11 @@ each 0.1 of diameter moves the seat about 2 mm.
 `apothecary slicer slice hose_adapter -p ...` slices that variant for a printer
 ([slicer.md](slicer.md#slicing)).
 
+In the page, a port's presets are a drop-down in its Parameters, and ⇄ Adapter in
+its Selected keeps one end and then makes the adapter between it and the other,
+which is drawn and framed in the universe with each end's fit listed and asked
+again after each Apply ([viewer.md](viewer.md#presets-and-the-adapter-between-two-ends)).
+
 `parts fit` with a part named alone tries each of its interfaces against each of
 the other's, those that seat first, and exits 1 when nothing seats. `PART@PRESET`
 stands a part at one of its presets
@@ -262,8 +267,9 @@ fit or does not stand where it meets as `misfit`, apothecary's to close
 
 ## Not yet
 
-The viewer draws no interface and makes no connection; a site's connections are
-not placed when it loads; a node's `params` are read by connections and by
+The viewer draws no interface and makes no connection: the adapter it makes is
+drawn alone, not between its two ends, though `Adapter.placed()` says where each
+stands; a site's connections are not placed when it loads; a node's `params` are read by connections and by
 nothing that draws, so a viewer draws its part at the part's defaults; and the
 types with a rule are the spigot and the socket. A thread, a DIN rail, a VESA pattern or a bolt pattern is
 a type with a rule of its own, each citing its standard.

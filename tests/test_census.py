@@ -14,7 +14,7 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # The viewer's controls of its own: a change that adds one raises this; one that removes
 # one may lower it. `uv run apothecary census` lists them, and docs/census.md says what
 # is counted, how each is classified and how the ceiling and the share's floor move.
-VIEWER_CEILING = 250
+VIEWER_CEILING = 252
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -378,7 +378,7 @@ def test_the_viewers_ring_backed_share_is_at_least_its_floor():
     `apothecary census` gives the share."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 151 / 250, f"{backed} of {own} ring-backed"
+    assert backed / own >= 153 / 252, f"{backed} of {own} ring-backed"
 
 
 def test_the_headers_docs_is_panels_docs_and_back_and_forward_follow_the_address():
@@ -626,3 +626,31 @@ def test_the_layers_windows_controls_are_cells_the_ring_produces():
             resolve(Context(pointing=Pointing.CANVAS), sites.store.get(site)).options
         )
         assert set(backed.values()) <= produced, site
+
+
+def test_a_part_s_preset_and_its_adapter_are_backed_by_cells_the_ring_produces():
+    """Parameters' Preset drop-down and Selected's ⇄ Adapter are Part › Presets › a
+    preset and Part › Adapter, which the ring produces on a part told it has presets and
+    one round end."""
+    from apothecary.example_hierarchy import create_example_site
+    from apothecary.menu import Context, PartSeen, PictureContext, Pointing, resolve
+
+    taken = census.take()
+    by_name = {f.name: f for f in taken.controls_of_its_own()}
+    assert by_name["part-preset"].ring_action == "part:preset"
+    assert by_name["join-btn"].ring_action == "part:adapter"
+    assert by_name["join-btn"].effect == census.WHAT_IS_THERE
+    told = PictureContext(part=PartSeen(editable=False, presets=["hose_40"], end=True))
+    ring = resolve(
+        Context(pointing=Pointing.NODE, targets=["footpedal"]), create_example_site(), picture=told
+    )
+    produced = set()
+
+    def walk(options):
+        for option in options:
+            if option.action:
+                produced.add(option.action)
+            walk(option.children or [])
+
+    walk(ring.options)
+    assert {"part:preset:hose_40", "part:adapter"} <= produced
