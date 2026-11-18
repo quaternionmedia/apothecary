@@ -109,6 +109,30 @@ too little to identify a plant, or whose heater's power stood still while its ta
 moved, is told with `document` null and an `error`. The Loops window follows both
 ([control-loops.md](control-loops.md#the-loops-window)).
 
+## What the family surface rests on
+
+`family` is told by wrapping four methods of the hearth library's `Coordinator`, the
+hub's coordinator: `fire`, which queues a cue's deliveries, `read`, which hands a pull
+member its action, and `_push` and `_call`, which end a delivery to a member over HTTP
+and to one hosted here. The last two are private to hearth, which is a pinned
+dependency, so a hearth update that renames one would leave the surface reading as ever
+and its stream silent for that change. The hub therefore checks them:
+
+- At the app's start, and again when the coordinator is made, a method of the four that
+  `Coordinator` lacks is an error in the server's log, naming it and saying the stream
+  will not tell it (`apothecary/family/hub.py`, `_TOLD_BY`).
+- The surface's own snapshot carries `told`: `by` the methods that tell it and `missing`
+  those that are not there, with a `warning` saying why when any is. A coordinator that
+  has all four says `{"by": [...], "missing": []}`.
+- The methods that are there are wrapped as ever; the hub does not stop for one gone.
+
+Each telling follows the write it tells of: the wrapper runs after the method returns,
+the outcome kept under the coordinator's lock, and tellings are made one at a time, so
+a stream's snapshots are never older than the one it offered before. The order in which
+two deliveries tell is theirs, from their own threads, and a reader takes the stream's
+last snapshot and not the first. `tests/test_surfaces.py` holds each of these, with a
+stand-in coordinator lacking each method in turn.
+
 ## Contributed
 
 A member of the family's hub may say what it found about a surface: alfred watching a

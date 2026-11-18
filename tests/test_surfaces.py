@@ -718,6 +718,7 @@ def test_the_hub_s_members_and_deliveries_are_a_surface_told_as_they_change(tmp_
         ended = [sum(outcomes(e).values()) for e in told]
         assert ended == sorted(ended)  # the stream never goes back to an older state
         assert told[-1]["body"]["members"]["alfred"] == {"via": "pull"}
+        assert told[-1]["body"]["told"] == {"by": list(hub._TOLD_BY), "missing": []}
         read = client.get("/surfaces/family").json()["snapshot"]
         assert read["members"].keys() == told[-1]["body"]["members"].keys()
         assert client.get("/family/").json()["members"].keys() == read["members"].keys()
@@ -769,3 +770,43 @@ def test_the_hub_s_tellings_are_made_one_at_a_time_so_the_stream_never_goes_back
     first.join(5)
     second.join(5)
     assert offered == [1, 2]
+
+
+@pytest.mark.parametrize("missing", hub._TOLD_BY)
+def test_a_hearth_without_a_method_the_hub_wraps_is_said_not_gone_quiet(
+    missing, monkeypatch, caplog
+):
+    """The surface is told by wrapping four methods of hearth's coordinator, two of them
+    private. A coordinator lacking one -- a hearth update renamed it -- is wrapped in the
+    rest, and the hub says so: in the log, and in the surface's own snapshot."""
+    named = {name: (lambda self, *a, **k: None) for name in hub._TOLD_BY if name != missing}
+    Standing = type("Standing", (), {**named, "snapshot": lambda self: {"members": {}, "last": []}})
+    with caplog.at_level("ERROR", logger=hub.log.name):
+        told = hub._told(Standing())
+    assert missing in caplog.text and "_TOLD_BY" in caplog.text
+    body = hub._body(told)
+    assert body["told"]["missing"] == [missing]
+    assert body["told"]["by"] == [n for n in hub._TOLD_BY if n != missing]
+    assert missing in body["told"]["warning"] and "pin hearth" in body["told"]["warning"]
+    heard = []
+    monkeypatch.setattr(hub.surfaces, "changed", lambda *a, **k: heard.append(k["body"]()))
+    for name in hub._TOLD_BY:
+        if name != missing:
+            getattr(told, name)()
+    assert len(heard) == len(hub._TOLD_BY) - 1
+    assert all(h["told"]["missing"] == [missing] for h in heard)
+
+
+@pytest.mark.parametrize("missing", hub._TOLD_BY)
+def test_the_hub_s_start_says_when_hearth_lacks_a_method(missing, monkeypatch, caplog):
+    """At the app's start the log says which method of hearth's real ``Coordinator`` is
+    gone, and says nothing when all four are there."""
+    monkeypatch.setattr(hub.beside, "start", lambda *a, **k: None)
+    with caplog.at_level("ERROR", logger=hub.log.name):
+        hub.start()
+    assert caplog.text == "" and hub.not_told(hub.coordinator.Coordinator) == []
+    monkeypatch.delattr(hub.coordinator.Coordinator, missing)
+    with caplog.at_level("ERROR", logger=hub.log.name):
+        hub.start()
+    assert f"no {missing}" in caplog.text and "_TOLD_BY" in caplog.text
+    assert hub.not_told(hub.coordinator.Coordinator) == [missing]

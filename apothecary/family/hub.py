@@ -107,14 +107,46 @@ def settings() -> Dict[str, Any]:
 # cue is fired, as each delivery ends and as a pull member reads its action.
 FAMILY_SURFACE = "family"
 # What of the coordinator says a thing has happened to its members or deliveries: ``fire``
-# queues them, ``_push`` and ``_call`` end one, ``read`` delivers a pull member's.
+# queues them, ``_push`` and ``_call`` end one, ``read`` delivers a pull member's. Two of
+# the four are private to the hearth library, which is pinned, so a surface that rests on
+# them says when one is not there (``not_told``) rather than going quiet.
 _TOLD_BY = ("fire", "_push", "_call", "read")
+
+
+def not_told(hub: Any) -> List[str]:
+    """The methods of ``_TOLD_BY`` that ``hub`` (a coordinator, or its class) lacks: the
+    changes it cannot be heard to make."""
+    return [name for name in _TOLD_BY if not callable(getattr(hub, name, None))]
+
+
+def _gap(missing: List[str]) -> str:
+    return (
+        f"family: hearth's Coordinator has no {', '.join(missing)}, which the hub wraps to tell "
+        f"its surface (apothecary/family/hub.py, _TOLD_BY): the `family` surface still reads, "
+        f"but its stream says nothing when {', '.join(missing)} would have run; a hearth "
+        "update renamed them, so pin hearth to the version that has them or change _TOLD_BY"
+    )
+
+
+def _body(hub: Any) -> Dict[str, Any]:
+    """What the surface says of ``hub``: its snapshot, and which methods tell its changes and
+    which were missing (with why the stream is quiet for them)."""
+    missing = getattr(hub, "_not_told", [])
+    told = {"by": [name for name in _TOLD_BY if name not in missing], "missing": list(missing)}
+    if missing:
+        told["warning"] = _gap(missing)
+    return {**hub.snapshot(), "told": told}
 
 
 def _told(hub: coordinator.Coordinator) -> coordinator.Coordinator:
     """``hub`` that says its state changed after each of ``_TOLD_BY``; the body is made
-    only while someone follows the surface. Tellings are made one at a time, so the stream
-    never offers a snapshot older than one it offered before."""
+    only while someone follows the surface. A method that is not there is not wrapped, and
+    is said, in the log and in the surface's own snapshot. Tellings are made one at a time,
+    so the stream never offers a snapshot older than one it offered before."""
+    missing = not_told(hub)
+    hub._not_told = missing
+    if missing:
+        log.error(_gap(missing))
     one_at_a_time = threading.Lock()
 
     def wrap(original):
@@ -123,12 +155,12 @@ def _told(hub: coordinator.Coordinator) -> coordinator.Coordinator:
                 return original(*args, **kwargs)
             finally:
                 with one_at_a_time:
-                    surfaces.changed(FAMILY_SURFACE, key=HUB, body=hub.snapshot)
+                    surfaces.changed(FAMILY_SURFACE, key=HUB, body=lambda: _body(hub))
 
         return wrapper
 
     for name in _TOLD_BY:
-        if hasattr(hub, name):
+        if name not in missing:
             setattr(hub, name, wrap(getattr(hub, name)))
     return hub
 
@@ -138,7 +170,7 @@ surfaces.register(
         name=FAMILY_SURFACE,
         frame="none",
         about="the family's hub: its members and each recent delivery's outcome",
-        snapshot=lambda words: running().snapshot(),
+        snapshot=lambda words: _body(running()),
         tells=True,
         owner=__name__,
     )
@@ -161,7 +193,11 @@ def running() -> coordinator.Coordinator:
 
 
 def start() -> None:
-    """At the app's start: the members beside the hub."""
+    """At the app's start: the members beside the hub, and a word in the log if the
+    coordinator lacks a method the hub's surface is told by."""
+    missing = not_told(coordinator.Coordinator)
+    if missing:
+        log.error(_gap(missing))
     beside.start(_table().get("start"), TABLE)
 
 
