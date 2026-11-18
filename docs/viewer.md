@@ -285,13 +285,13 @@ Selectable (and showing it restores what was chosen), ticking Selectable shows i
 |---|---|---|
 | Shell N | The parts laid on shell N of the universe's sphere, 0 the innermost and the sites outermost; a row for each shell the loaded site has | Shown, Selectable |
 | A category | The pieces of that category, walls among them | Shown, Selectable (walls start unselectable: View › Select walls is this tick) |
-| Alignment grid | The floor grid and the machines' build-volume boxes | Shown |
+| Alignment grid | The machines' build-volume boxes, drawn in the layer's colour, and the floor grid, drawn in faint greys that are no layer's colour; Shown hides both | Shown |
 | Machine buttons | The badges a machine wears in the world | Shown |
 | Measure | Dimension lines on the selection, and a click that drops a point to measure between ([below](#measure)) | Shown (off at first) |
 
 **Each layer has one colour**, from one table (`apothecary/layer_colours.py`) the
 server sends with the site (`layer_colours`, beside `tree`), so the page writes none of
-its own: a category's pieces are drawn in it, the build volumes in the grid's, the
+its own: a category's pieces are drawn in it, the build volumes in the grid's (the floor grid's lines are the faint greys a floor is drawn in, and the row says so), the
 measurement in its own, and a machine's badges wear the Machine group's, which is the
 machine buttons' layer's. A category nobody wrote down, a picture's word, takes a
 colour from its name, the same every time. The Layers window's rows wear their layers'

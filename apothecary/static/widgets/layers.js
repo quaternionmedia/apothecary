@@ -92,7 +92,7 @@ export function mountLayers(root, { scope, shells = () => [], categories = () =>
 </div>
 <table class="layers-table"><thead><tr><th scope="col">Layer</th><th scope="col">Shown</th><th scope="col">Selectable</th></tr></thead>
 ${section("Parts, by shell", shellRows)}${section("Categories", categoryRows)}${section("The world", [
-            row(GRID, layerLabel(GRID), "The floor grid and the machines' build volumes", false),
+            row(GRID, layerLabel(GRID), "The machines' build volumes, drawn in this colour, and the floor grid, drawn in the faint greys a floor wears: this layer shows or hides both", false),
             row(MACHINE_BUTTONS, layerLabel(MACHINE_BUTTONS), "The badges a machine wears in the world", false),
             row(MEASURE, layerLabel(MEASURE), "While shown, a click in the world drops a point to measure between and selects nothing; the selection reads its size", false),
         ])}</table>
