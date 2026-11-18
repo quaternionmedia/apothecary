@@ -1139,6 +1139,7 @@ class PartState(BaseModel):
         None, description="Its bounding box, read off the STL in the declared frame"
     )
     measured_from: Optional[str] = Field(None, description='"stl" when measured')
+    pose: str = Field(PRINT, description='What stl_url and measured are of: "print" or "rest"')
     can_build: bool = Field(True, description="An OpenSCAD here can build the part")
     build_note: Optional[str] = Field(None, description="Why it cannot be built here")
 
@@ -1171,6 +1172,7 @@ def part_state(part: BasePart, url_name: Optional[str] = None, pose: str = PRINT
         fresh=exists and is_fresh(part, canonical, params),
         measured=measured_box(measured),
         measured_from=FROM_STL if measured else None,
+        pose=posed(part, pose),
     )
 
 

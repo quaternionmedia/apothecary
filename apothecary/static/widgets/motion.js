@@ -18,13 +18,18 @@
  * colour of its own while Bought is ticked, riding the piece it sits in; it is never in
  * a printed STL.
  *
- * Each control is a cell of the ring's Part › View › Motion (part:motion:*), and wears
- * its address in its title (world.addressOf).
+ * Drawn, the part is framed once, looking along the axis its pieces turn about, a little
+ * off it so its depth reads (world.frame); the still piece is drawn see-through, so what
+ * moves inside it -- a rotor in its housing -- is seen; the moving pieces take its colour.
+ *
+ * Each button is a cell of the ring's Part › View › Motion (part:motion:*), and wears
+ * its address in its title (world.addressOf); Play's says Pause while it plays. The
+ * slider is no cell, and wears none.
  *
  * mountMotion(root, world) -> { act(verb), follow(), state(), table() }
  *   world: { base, selected() -> { key, ref, node, params } | null, loadPiece(node, ref,
  *   values, piece) -> Promise<{ mesh, measured }>, swap(node, object), meshOf(key),
- *   redraw(), shown(), addressOf(action) }
+ *   redraw(), shown(), addressOf(action), frame(object, along), view() }
  *   act: "open" | "play" | "back" | "step" | "reset" | "bought" -> Promise<{ said } |
  *   { refused }>
  */
@@ -32,11 +37,17 @@
 import * as THREE from "three";
 import { advance, gapsAt, outlinesAt, placeIn, poseAt, stepFrom } from "/static/part_motion.js";
 
-// What is bought, drawn in a colour of its own; and where a gap is least.
+// What is bought, drawn in a colour of its own; and where a gap is least, in the Part
+// group's colour (static/tokens.css), the Motion window's: no layer's, so the
+// measurement's magenta stays the measurement's.
 const BOUGHT_COLOUR = 0x5f86b3;
-const MARK_COLOUR = 0xe0457b;
+const MARK_TOKEN = "--group-part";
+const MARK_FALLBACK = "#a9c868";
 // Seconds a motion's whole range takes while it plays.
 const SPAN = 6;
+// The still piece, seen through; and how far off the turning axis the part is framed from.
+const STILL_OPACITY = 0.3;
+const FRAME_TILT = (20 * Math.PI) / 180;
 
 const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const scene = (x, y, z) => new THREE.Vector3(x, z, -y);
@@ -51,7 +62,7 @@ const STYLE = `
 .motion-window .motion-at { flex: 1; min-width: 80px; }
 .motion-window .motion-buttons { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .motion-window .motion-gaps { margin: 8px 0; padding-left: 18px; }
-.motion-window .motion-gap-value { color: #c2185b; }
+.motion-window .motion-gap-value { color: var(--group-part, #a9c868); }
 .motion-window .motion-turned, .motion-window .motion-said { margin: 4px 0; opacity: 0.8; font-size: 12px; }`;
 
 export function mountMotion(root, world) {
@@ -69,8 +80,11 @@ export function mountMotion(root, world) {
     let state = { value: 0, cycle: 0, way: 1 };
     let playing = false, frame = null, last = 0, busy = null;
     let showBought = true, note = "";
+    let framed = null;  // the key of the part last framed: framed once, when first drawn
 
     const taught = (action) => { const at = world.addressOf ? world.addressOf(action) : null; return at ? ` · ⌗${at}` : ""; };
+    // Play's tip says what a press does now: Pause while it plays.
+    const playTip = () => `${playing ? "Pause" : "Play"}${taught("part:motion:play")}`;
 
     function paint() {
         if (!subject) {
@@ -87,11 +101,11 @@ export function mountMotion(root, world) {
         motionEl.innerHTML = `
             <div class="motion-head"><strong>${esc(subject.ref)}</strong>: its ${esc(table.label)} from ${lo} to ${hi}${esc(unit(table.unit))}, ${table.samples.length} samples</div>
             <div class="motion-controls">
-              <input type="range" class="motion-at" min="${lo}" max="${hi}" step="any" value="${state.value}" aria-label="${esc(table.label)}" title="${esc(`${table.label}: a sample at a time with Back and Step${taught("part:motion:step")}`)}">
+              <input type="range" class="motion-at" min="${lo}" max="${hi}" step="any" value="${state.value}" aria-label="${esc(table.label)}" title="${esc(`${table.label}: drag through the motion; Back and Step move a sample at a time`)}">
               <span class="motion-value">${esc(table.label)} ${esc(said(state.value, table.unit))}${table.cyclic && state.cycle ? `, cycle ${state.cycle}` : ""}</span>
             </div>
             <div class="motion-buttons">
-              <button type="button" class="motion-play" data-motion="play" title="${esc(`${playing ? "Pause" : "Play"}${taught("part:motion:play")}`)}">${playing ? "⏸ Pause" : "▶ Play"}</button>
+              <button type="button" class="motion-play" data-motion="play" title="${esc(playTip())}">${playing ? "⏸ Pause" : "▶ Play"}</button>
               <button type="button" class="motion-back" data-motion="back" title="${esc(`The sample before${taught("part:motion:back")}`)}">◀ Back</button>
               <button type="button" class="motion-step" data-motion="step" title="${esc(`The sample after${taught("part:motion:step")}`)}">Step ▶</button>
               <button type="button" class="motion-reset" data-motion="reset" title="${esc(`Back to ${lo}${unit(table.unit)}${taught("part:motion:reset")}`)}">Reset</button>
@@ -116,6 +130,7 @@ export function mountMotion(root, world) {
         motionEl.querySelector(".motion-turned").textContent = turned.join("; ");
         const play = motionEl.querySelector(".motion-play");
         play.textContent = playing ? "⏸ Pause" : "▶ Play";
+        play.title = playTip();
     }
 
     // ---- the pieces, drawn once -----------------------------------------------------
@@ -148,6 +163,16 @@ export function mountMotion(root, world) {
         const stillCentre = middle(still.measured);
         const group = still.mesh;
         const edges = group.getObjectByName("edges");
+        // The still piece seen through, the moving ones solid. The page colours the part's
+        // own material (the still piece's): each moving piece takes its colour from it as
+        // it is drawn, so they are coloured, faded and selected with the part.
+        const solid = group.material, ghost = solid.clone();
+        Object.assign(ghost, { transparent: true, opacity: STILL_OPACITY, depthWrite: false });
+        group.material = ghost;
+        const follows = () => {
+            solid.color.copy(ghost.color);
+            if (solid.emissive && ghost.emissive) solid.emissive.copy(ghost.emissive);
+        };
         const out = { key: subject.key, group, stillCentre, moving: {}, bent: [], marks: new THREE.Group(), bought: [] };
         const boughtMaterial = new THREE.MeshPhongMaterial({ color: BOUGHT_COLOUR });
         const seat = (holder, insert, centre) => {
@@ -163,7 +188,8 @@ export function mountMotion(root, world) {
                 object = moving[k].mesh;
                 centre = middle(moving[k].measured);
                 object.material.dispose();
-                object.material = group.material;  // coloured, faded and selected with the part
+                object.material = solid;
+                object.onBeforeRender = follows;
                 const own = object.getObjectByName("edges");
                 if (own && edges) { own.material.dispose(); own.material = edges.material; }
             } else {
@@ -177,7 +203,8 @@ export function mountMotion(root, world) {
             out.moving[p.piece] = { object, centre };
         });
         for (const b of table.bent) {
-            const mesh = new THREE.Mesh(new THREE.BufferGeometry(), group.material);
+            const mesh = new THREE.Mesh(new THREE.BufferGeometry(), solid);
+            mesh.onBeforeRender = follows;
             mesh.name = `bent:${b.name}`;
             group.add(mesh);
             out.bent.push({ b, meshes: [mesh] });
@@ -241,10 +268,11 @@ export function mountMotion(root, world) {
         const c = built.stillCentre;
         const reach = Math.max(...table.pieces.map((p) => p.reach || 1), 1);
         const size = Math.max(0.4, reach * 0.015);
+        const colour = getComputedStyle(document.documentElement).getPropertyValue(MARK_TOKEN).trim() || MARK_FALLBACK;
         // The least of each gap drawn whole, its other places (a pin each) fainter.
         for (const g of gapsAt(table, state.value)) {
             g.marks.forEach((m, k) => {
-                const look = { color: MARK_COLOUR, depthTest: false, transparent: true, opacity: k === 0 ? 1 : 0.55 };
+                const look = { color: colour, depthTest: false, transparent: true, opacity: k === 0 ? 1 : 0.55 };
                 for (const [p, r] of [[m.on, size], [m.to, size * 0.7]]) {
                     const dot = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 8), new THREE.MeshBasicMaterial(look));
                     dot.position.copy(scene(p[0] - c[0], p[1] - c[1], g.z - c[2]));
@@ -297,8 +325,26 @@ export function mountMotion(root, world) {
             note = "";
             paint();
             pose();
+            if (framed !== subject.key) { framed = subject.key; framePart(); }
         }
         return { said: `${subject.ref}: its ${table.label}, ${table.samples.length} samples` };
+    }
+
+    // The part framed looking down the axis its pieces turn about (its own up), tilted
+    // FRAME_TILT towards where the view already is, so the turning reads and its depth too.
+    function framePart() {
+        if (!world.frame || !built) return;
+        const group = built.group;
+        group.updateWorldMatrix(true, true);
+        const axis = new THREE.Vector3(0, 1, 0).applyQuaternion(group.getWorldQuaternion(new THREE.Quaternion())).normalize();
+        const view = world.view ? world.view().normalize() : new THREE.Vector3(1, 0, 0);
+        let side = view.clone().addScaledVector(axis, -view.dot(axis));
+        if (side.lengthSq() < 1e-6) {
+            const across = Math.abs(axis.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+            side = across.addScaledVector(axis, -across.dot(axis));
+        }
+        side.normalize();
+        world.frame(group, axis.multiplyScalar(Math.cos(FRAME_TILT)).addScaledVector(side, Math.sin(FRAME_TILT)));
     }
 
     function tick(now) {
@@ -366,7 +412,7 @@ export function mountMotion(root, world) {
         const chosen = world.selected();
         if (chosen && subject && chosen.key === subject.key) return;
         stop();
-        subject = null; table = null; built = null; note = "";
+        subject = null; table = null; built = null; note = ""; framed = null;
         if (chosen && world.shown()) act("open"); else paint();
     }
 

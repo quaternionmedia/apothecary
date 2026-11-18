@@ -2060,6 +2060,8 @@
                             redraw: () => { this.frameWanted = true; },
                             shown: () => this.panels.isShown('motion'),
                             addressOf: (action) => (this.motionTaught ? this.motionTaught[action] || null : null),
+                            frame: (object, along) => { const box = new THREE.Box3().setFromObject(object); if (!box.isEmpty()) this.frameBox(siteBox(box), along); },
+                            view: () => this.camera.position.clone().sub(this.orbitControls.target),
                         });
                         window.apothecaryMotion = this.motion;
                         new MutationObserver(() => this.motion.follow()).observe(this.selectedBodyEl, { childList: true });
@@ -4870,11 +4872,11 @@
                     drawn: async () => {
                         await this.variantsRead;
                         const record = this.variantRecords[ref];
-                        if (record) return { params: record.params, measured: record.measured, measuredFrom: record.measured_from };
+                        if (record) return { params: record.params, measured: record.measured, measuredFrom: record.measured_from, pose: record.pose };
                         const response = await fetch(`${base}/state?${AS_IT_RESTS}`);
                         if (!response.ok) return null;
                         const state = await response.json();
-                        return { params: state.params, measured: state.measured, measuredFrom: state.measured_from };
+                        return { params: state.params, measured: state.measured, measuredFrom: state.measured_from, pose: state.pose };
                     },
                     apply: async (params) => {
                         // This page's id: a newer Apply from it stops this one's render.
@@ -4943,7 +4945,7 @@
                         await this.addToWave(Promise.all(reloads));
                         const target = { key: `part:${ref}`, label: ref, part: ref };
                         const stage = this.partStages[target.key];
-                        if (stage) stage.measured = { box: body.measured, from: body.measured_from };
+                        if (stage) stage.measured = { box: body.measured, from: body.measured_from, pose: body.pose };
                         // What is drawn now is no failure; and its readiness is the variant's.
                         this.clearFailure(ref);
                         if (this.editorTarget?.key === target.key && this.editorTarget.checklistUrl) this.loadPartChecklist(this.editorTarget);
@@ -4952,7 +4954,7 @@
                         if (scad && scad.text === scad.drawnText) scad.typedPending = false;
                         this.syncFromText(target);
                         if (!again) this.noteApplied(target, body, params ?? {});
-                        this.showMeasured(body.measured, body.measured_from);
+                        this.showMeasured(body.measured, body.measured_from, body.pose);
                         this.showDrawn(ref);
                         this.renderHistory(target);
                         this.keepWork(target);
@@ -6014,7 +6016,7 @@
                     ]);
                     if (this.editorTarget?.key !== target.key) return;  // another target was chosen meanwhile
                     if (tied && (told || stage.told)) {
-                        if (drawn) stage.measured = { box: drawn.measured, from: drawn.measuredFrom };
+                        if (drawn) stage.measured = { box: drawn.measured, from: drawn.measuredFrom, pose: drawn.pose };
                         await this.tiedParams(target, stage, response, told);
                         return;
                     }
@@ -6026,7 +6028,7 @@
                     if (this.editorTarget?.key !== target.key) return;
                     if (drawn) {
                         Object.assign(stage.committed, drawn.params ?? {});
-                        stage.measured = { box: drawn.measured, from: drawn.measuredFrom };
+                        stage.measured = { box: drawn.measured, from: drawn.measuredFrom, pose: drawn.pose };
                     }
                     stage.defaults = Object.fromEntries(spec.fields.map((f) => [f.name, f.default]));
                     // Whether this OpenSCAD can build it at all: when not, Apply is off from
@@ -6060,7 +6062,7 @@
                         host.dataset.built = built;
                         refocus(host, was);
                     }
-                    this.showMeasured(stage.measured?.box, stage.measured?.from);
+                    this.showMeasured(stage.measured?.box, stage.measured?.from, stage.measured?.pose);
                     if (target.part) this.showDrawn(target.part);
                     this.showCommittedEnvelope(target, stage, spec);
                     this.bindStageActions(target);
@@ -6114,7 +6116,7 @@
                 if (!scad.check && this.canBuild(target) && stage.fields.some((f) => f.computed && f.readOnly)) {
                     scad.checking = this.checkScad(target, scad.seq).catch(() => null);
                 }
-                this.showMeasured(stage.measured?.box, stage.measured?.from);
+                this.showMeasured(stage.measured?.box, stage.measured?.from, stage.measured?.pose);
                 this.showDrawn(target.part);
                 if (stage.spec) this.showCommittedEnvelope(target, stage, stage.spec);
                 this.bindStageActions(target);
@@ -6354,14 +6356,17 @@
             }
 
             // Beside what the part declares, what was drawn measures: OpenSCAD's
-            // summary of the render, else read off the STL by the server.
-            showMeasured(box, from) {
+            // summary of the render, else read off the STL by the server; and as it
+            // rests, where the part rests otherwise than it prints (`pose`).
+            showMeasured(box, from, pose = null) {
                 const el = this.partEl('#part-envelope .measured');
                 if (!el) return;
                 this.shownMeasured = box ?? null;
+                this.shownMeasuredPose = box ? pose : null;
                 el.textContent = box
                     ? ` · measured ${box.size.x.toFixed(2)} × ${box.size.y.toFixed(2)} × ${box.size.z.toFixed(2)} mm`
-                      + (from === 'summary' ? " (OpenSCAD's summary)" : ' (read from the STL)')
+                      + (from === 'summary' ? " (OpenSCAD's summary" : ' (read from the STL')
+                      + (pose === 'rest' ? ', as it rests)' : ')')
                     : '';
                 this.markEnvelope();
             }
@@ -6369,14 +6374,16 @@
             // The envelope's line amber, with the difference, when what is drawn measures
             // other than what the part declares for its numbers; and a part reaching under
             // the floor flagged by how far. Only while the envelope shown is the drawn
-            // one's: a staged set's says what it would make, not what is drawn.
+            // one's: a staged set's says what it would make, not what is drawn. A part
+            // declares its envelope as it prints, so one measured as it rests is not held
+            // against it (docs/parts-authoring.md, How it rests).
             markEnvelope() {
                 const line = this.partEl('#part-envelope');
                 if (!line) return;
                 const differs = line.querySelector('.differs'), floor = line.querySelector('.floor');
                 const declared = this.shownDeclared, measured = this.shownMeasured;
                 let apart = null;
-                if (this.envelopeFor !== 'staged' && declared && measured) {
+                if (this.envelopeFor !== 'staged' && declared && measured && this.shownMeasuredPose !== 'rest') {
                     const d = ['x', 'y', 'z'].map((k) => measured.size[k] - declared.size[k]);
                     if (d.some((v) => Math.abs(v) > DIFFERS_MM)) apart = d;
                 }
@@ -7304,8 +7311,9 @@
             }
 
             // The view brought to a box of the site's (x, y, z up), from the side it looks
-            // from, near enough that the whole box fits; the level's reach left as it was.
-            frameBox(bounds) {
+            // from (or along `along`, three.js's frame), near enough that the whole box fits;
+            // the level's reach left as it was.
+            frameBox(bounds, along = null) {
                 const sizes = bounds.max.map((v, i) => v - bounds.min[i]);
                 const span = Math.max(20, ...sizes);
                 const centre = sceneAt(...bounds.min.map((v, i) => (v + bounds.max[i]) / 2));
@@ -7315,7 +7323,7 @@
                 const half = Math.atan(tan * Math.min(1, this.camera.aspect));
                 const distance = Math.max(30, (Math.hypot(...sizes) / 2) / Math.sin(half) * 1.25);
                 // From the side the view is on, at the distance that frames it.
-                const from = this.camera.position.clone().sub(this.orbitControls.target);
+                const from = along ? along.clone() : this.camera.position.clone().sub(this.orbitControls.target);
                 if (from.lengthSq() < 1e-6) from.set(0.7, 0.55, 0.7);
                 from.normalize().multiplyScalar(distance);
                 this.orbitControls.target.copy(centre);
@@ -11442,7 +11450,7 @@
         // The Motion window's controls, by the cell each one is (Part › View › Motion).
         const MOTION_VERBS = [
             ['.motion-play', 'part:motion:play'], ['.motion-back', 'part:motion:back'], ['.motion-step', 'part:motion:step'],
-            ['.motion-reset', 'part:motion:reset'], ['.motion-at', 'part:motion:step'], ['.motion-bought', 'part:motion:bought'],
+            ['.motion-reset', 'part:motion:reset'], ['.motion-bought', 'part:motion:bought'],
         ];
         // The Airgap's buttons, by the verb each one is (Panels › Airgap).
         const AIRGAP_VERBS = [

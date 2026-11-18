@@ -248,7 +248,10 @@ part follows, measured there with `gap_geometry`: its least and where it is on
 each body. The viewer's Motion window (Part › View › Motion on the part's
 ring, a window of the Part group) draws each piece once through OpenSCAD and
 from then on only moves them: Play, Back, Step, Reset and a slider over the
-parameter. No OpenSCAD runs while it plays.
+parameter. No OpenSCAD runs while it plays. Drawn, the part is framed looking down
+the axis its pieces turn about, a little off it, and its still piece is drawn see-through,
+so a rotor in its housing is seen turning; each gap's mark and number are in the Part
+group's colour.
 
 Between two samples the page takes each of x, y and turn in proportion; the
 table says how far that puts any point of a piece from where the part's own

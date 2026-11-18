@@ -652,6 +652,7 @@ class TestTheStateRoute:
             "fresh": True,
             "measured": state["measured"],
             "measured_from": "stl",
+            "pose": "print",
             "can_build": True,
             "build_note": None,
         }
@@ -707,7 +708,7 @@ def test_a_part_without_a_rest_pose_is_answered_as_it_prints(cube, openscad):
     own = "/parts/calibration_cube/stl"
     assert client.get(own, params={"pose": "rest"}).content == client.get(own).content
     state = client.get("/parts/calibration_cube/state", params={"pose": "rest"}).json()
-    assert state["stl_url"] == own
+    assert (state["stl_url"], state["pose"]) == (own, "print")
     assert sorted(p.name for p in cube.parent.glob("calibration_cube*")) == [cube.name]
     assert len(_renders(exe)) == 2
 
@@ -773,6 +774,10 @@ def test_the_routes_serve_each_pose(pedal, tmp_path):
     assert (tilt, lo[2]) == (pytest.approx(16, abs=0.5), pytest.approx(0, abs=1e-3))
     state = client.get("/parts/footpedal/state", params={"pose": "rest"}).json()
     assert (state["exists"], state["stl_url"]) == (False, "/parts/footpedal/stl?pose=rest")
+    # What it measured is the rest pose's, and it says so: a page holds no envelope,
+    # which is the print pose's, against it.
+    assert state["pose"] == "rest"
+    assert client.get("/parts/footpedal/state").json()["pose"] == "print"
     assert state["measured"]["size"]["z"] == pytest.approx(hi[2] - lo[2], abs=1e-3)
 
     assert build_stl(pedal).success  # as the server's start builds it

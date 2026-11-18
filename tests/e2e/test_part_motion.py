@@ -14,6 +14,8 @@ machine's OpenSCAD; nothing here reaches the network.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 import windows
 from playwright.sync_api import Page, expect
@@ -59,6 +61,25 @@ def _pose_of(page: Page, part: str, piece: str) -> dict:
     )
 
 
+# How the part is framed and drawn: how far off its own up (the axis its pieces turn
+# about) the view looks, how tall its still piece stands on the canvas, and how the still
+# piece and a moving one are drawn.
+FRAMED = """([part, piece]) => {
+    const v = window.fractalViewer, m = v.meshByName[part], cam = v.camera;
+    m.updateWorldMatrix(true, false);
+    const e = m.matrixWorld.elements, scale = Math.hypot(e[4], e[5], e[6]);
+    const up = cam.position.clone().set(e[4], e[5], e[6]).normalize();
+    const look = cam.position.clone().sub(v.orbitControls.target).normalize();
+    m.geometry.computeBoundingSphere();
+    const s = m.geometry.boundingSphere, c = s.center.clone().applyMatrix4(m.matrixWorld);
+    const across = (2 * s.radius * scale) / (2 * c.distanceTo(cam.position) * Math.tan((cam.fov * Math.PI) / 360));
+    const moving = m.getObjectByName(`piece:${piece}`);
+    return { along: up.dot(look), across,
+        still: { transparent: m.material.transparent, opacity: m.material.opacity },
+        moving: { transparent: moving.material.transparent, opacity: moving.material.opacity } };
+}"""
+
+
 def _moved(a: dict, b: dict) -> bool:
     return any(abs(x - y) > 1e-6 for x, y in zip(a["at"] + a["turn"], b["at"] + b["turn"], strict=True))
 
@@ -72,6 +93,16 @@ def test_the_cycloidal_disc_plays_its_pieces_move_its_marks_travel_and_nothing_r
     expect(windows.tab(page, "motion")).to_have_count(0)
     on_row(page, "cycloidal_disc", "Part", "View", "Motion", "Play")
     _drawn(page, "cycloidal_disc")
+    # Framed, from the whole sphere, looking down the axis it turns about (20 degrees off
+    # it), the still piece seen through and the disc solid.
+    framed = page.evaluate(FRAMED, ["cycloidal_disc", "disc"])
+    seen = {
+        "looking down its axis": framed["along"] > 0.9,
+        "across a third of the view": framed["across"] > 0.25,
+        "the still piece seen through": framed["still"]["transparent"] and framed["still"]["opacity"] < 0.5,
+        "the disc solid": framed["moving"]["opacity"] == 1 and not framed["moving"]["transparent"],
+    }
+    assert seen == dict.fromkeys(seen, True), framed
     page.wait_for_function("() => window.apothecaryMotion.state().playing", timeout=10000)
     asked: list[str] = []
     page.on("request", lambda r: asked.append(r.url) if any(k in r.url for k in RENDERS) else None)
@@ -97,6 +128,28 @@ def test_the_number_shown_is_the_servers_at_each_sample(page: Page, url: str):
     table = page.evaluate("async () => (await fetch('/parts/rolling_rotor/motion')).json()")
     assert [g["name"] for g in table["gaps"]] == ["track", "poles"]
     panel = page.locator(PANEL)
+    # Play's tip says what a press does: Pause while it plays. The slider is no cell of
+    # the ring and wears no address; Back and Step beside it wear theirs. Drawn as it
+    # rests, assembled, it is measured so beside the envelope it declares the way up it
+    # prints, and not held against it.
+    play = panel.locator(".motion-play")
+    play.click()
+    page.wait_for_function("() => window.apothecaryMotion.state().playing", timeout=5000)
+    playing = play.get_attribute("title")
+    play.click()
+    page.wait_for_function("() => !window.apothecaryMotion.state().playing", timeout=5000)
+    slider = panel.locator(".motion-at")
+    envelope = page.locator("#part-envelope")
+    expect(envelope.locator(".measured")).not_to_be_empty(timeout=20000)
+    seen = {
+        "Pause while it plays": bool(re.fullmatch(r"Pause( · ⌗\d+)?", playing or "")),
+        "Play when paused": bool(re.fullmatch(r"Play( · ⌗\d+)?", play.get_attribute("title") or "")),
+        "the slider wears no address": slider.get_attribute("data-address") is None
+        and "⌗" not in (slider.get_attribute("title") or ""),
+        "measured as it rests": "as it rests" in envelope.locator(".measured").inner_text(),
+        "not amber": "differs" not in (envelope.get_attribute("class") or "").split(),
+    }
+    assert seen == dict.fromkeys(seen, True), (playing, envelope.inner_text())
     panel.locator(".motion-reset").click()
 
     def shown(sample: int) -> None:
