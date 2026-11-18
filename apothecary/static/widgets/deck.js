@@ -8,8 +8,9 @@
  * direction and a touch's place on the strip are lit for a moment after each.
  *
  * Its knobs, the layout that jogs the garage's machines, are the server's (deck_knobs.js):
- * the window starts and stops them and chooses the machine they move and their step,
- * as the deck's own keys do, and shows what the deck, a Control pad or the ring chose. Each control is greyed with the reason its route would
+ * the window starts and stops them and chooses the machine they move, their step and the
+ * screen the strip shows, as the deck's own keys and a swipe do, and shows what the deck,
+ * a Control pad or the ring chose. Each control is greyed with the reason its route would
  * refuse it now (`can` on the knobs' state, firmware/can.py; can.js).
  *
  * mountDeck(root, { base, log }) renders into `root` and returns { shown(), close(),
@@ -21,12 +22,12 @@
 
 import { esc } from "/static/board_text.js";
 import { applyCan } from "/static/can.js";
-import { armedWords, choose, knobsOf, turn } from "/static/deck_knobs.js";
+import { armedWords, choose, knobsOf, screenWords, turn } from "/static/deck_knobs.js";
 
 const SWIPE_PX = 200; // of the strip's 800: what the server reads as a swipe (deck_screens.py)
 const KEYS = 8, KNOBS = 4, STRIP = [800, 100], EVERY_MS = 1500, HEAR_MS = 250, LIT_MS = 1200, KEPT = 200;
 // The controls the deck's answer greys (firmware/can.py deck_can), each by its route.
-const VERBS = ["knobs.start", "knobs.stop", "knobs.machine", "knobs.step", "inject"];
+const VERBS = ["knobs.start", "knobs.stop", "knobs.machine", "knobs.step", "knobs.screen", "inject"];
 
 const MARKUP = `
 <div class="deck-ui">
@@ -111,7 +112,8 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         if (drawnNow) img.src = url;
     }
 
-    // The knobs: off, or the machine they move, their step and its control.
+    // The knobs: off, or the machine they move, their step, its control and the strip's
+    // screen.
     function renderKnobs() {
         const box = $(".deck-control");
         if (!deck || !knobs) { box.innerHTML = ""; return; }
@@ -120,9 +122,11 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         if (!on) { box.innerHTML = `<div class="row">${run}<span class="meta">knobs off</span></div>`; return; }
         const machines = knobs.machines.map((m) => `<button type="button" class="deck-machine" data-machine="${esc(m)}" data-can="knobs.machine" aria-pressed="${m === knobs.machine}" title="The knobs move ${esc(m)}, as its key on the deck chooses it. ⌗ Panels › Machine › Knobs › Machine">${esc(m)}</button>`).join("");
         const steps = knobs.steps_mm.map((mm) => `<button type="button" class="deck-step" data-mm="${mm}" data-can="knobs.step" aria-pressed="${mm === knobs.step_mm}" title="A knob's step moves ${mm} mm, as the deck's STEP key cycles it. ⌗ Panels › Machine › Knobs › Step">${mm}</button>`).join("");
+        const screens = knobs.screens.map((s) => `<button type="button" class="deck-screen-to" data-screen="${esc(s)}" data-can="knobs.screen" aria-pressed="${s === knobs.screen}" title="The deck's strip shows its ${esc(s)} screen, as a swipe along it does; nothing is sent to a machine. ⌗ Panels › Machine › Knobs › Screen">${esc(s)}</button>`).join("");
         box.innerHTML = `<div class="row">${run}${machines}</div><div class="row"><span class="meta">step</span>${steps}<span class="meta">mm</span></div>`
             + `<div class="meta deck-knobs-said">${esc(knobs.machine)} · ${esc(armedWords(knobs))} · ${esc(knobs.said)}</div>`
-            + `<div class="meta deck-screen">strip screen: ${esc(knobs.screen)} (${knobs.screens.indexOf(knobs.screen) + 1}/${knobs.screens.length}) · a swipe along the strip walks ${knobs.screens.map(esc).join(", ")}</div>`;
+            + `<div class="row"><span class="meta">strip</span>${screens}</div>`
+            + `<div class="meta deck-screen">strip screen: ${esc(screenWords(knobs))} · a swipe along the strip walks ${knobs.screens.map(esc).join(", ")}</div>`;
         // Running, the one button stops them, and is answered as a stop.
         box.querySelector(".deck-run").dataset.can = "knobs.stop";
     }
@@ -256,6 +260,7 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         }
         if (b && deck && b.classList.contains("deck-machine")) { await steer(() => choose(base, deck.id, { machine: b.dataset.machine })); return; }
         if (b && deck && b.classList.contains("deck-step")) { await steer(() => choose(base, deck.id, { step_mm: Number(b.dataset.mm) })); return; }
+        if (b && deck && b.classList.contains("deck-screen-to")) { await steer(() => choose(base, deck.id, { screen: b.dataset.screen })); return; }
         if (!b || !deck || !deck.simulated) return;
         if (b.classList.contains("deck-key")) { const i = +b.dataset.key; await give(["key", i, true], ["key", i, false]); }
         else if (b.classList.contains("deck-turn")) await give(["knob-turn", +b.closest(".deck-knob").dataset.knob, +b.dataset.dir]);

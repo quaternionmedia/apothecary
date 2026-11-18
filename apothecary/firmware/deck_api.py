@@ -39,11 +39,13 @@ class ControlRequest(BaseModel):
 
 class ChoiceRequest(BaseModel):
     """What the knobs move -- a machine by its name, or by the port its board is on --
-    and their step, any of them."""
+    their step, and the screen the strip shows (by its name, or ``next`` or
+    ``previous``), any of them."""
 
     machine: Optional[str] = Field(None, max_length=60)
     port: Optional[str] = Field(None, max_length=200)
     step_mm: Optional[float] = Field(None, gt=0, allow_inf_nan=False)
+    screen: Optional[str] = Field(None, max_length=20)
 
 
 class EventRequest(BaseModel):
@@ -211,8 +213,9 @@ def control(deck_id: str, body: ControlRequest):
 
 @router.put("/{deck_id}/control")
 def choose(deck_id: str, body: ChoiceRequest):
-    """The machine the running layout's knobs move, and their step: the Deck window, a
-    Control pad's Knobs here and the ring's Knobs choose here. Nothing is armed."""
+    """The machine the running layout's knobs move, their step and the screen its strip
+    shows: the Deck window, a Control pad's Knobs here and the ring's Knobs choose here.
+    Nothing is armed, and a screen chosen sends nothing to a machine."""
     _refuse(can.knobs_idle(deck_id))
     controller = deck_control.running(deck_id)
     try:
@@ -220,6 +223,8 @@ def choose(deck_id: str, body: ChoiceRequest):
             controller.choose(body.machine, body.port)
         if body.step_mm is not None:
             controller.set_step(body.step_mm)
+        if body.screen is not None:
+            controller.show_screen(body.screen)
     except ValueError as exc:
         raise _said(exc) from exc
     return _knobs(deck_id, controller.state())

@@ -1276,13 +1276,25 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Step", None, 2),
         ("Here", "deck:here", 4),
         ("Deck", "panel:toggle:deck", 9),
+        # The strip's screen, as a swipe along it changes it: seated after the Deck window.
+        ("Screen", None, 3),
     ]
     assert address_of(root, "deck:knobs") == "4428"
     assert address_of(root, "panel:deck") == "4429"
     assert address_of(root, "deck:machine:cnc_router") == "44266"
     assert address_of(root, "deck:step:10") == "44222"
+    screen = next(c for c in knobs.children if c.label == "Screen")
+    assert [(c.label, c.action, c.cell) for c in screen.children] == [
+        ("Knobs", "deck:screen:knobs", 8),
+        ("Progress", "deck:screen:progress", 6),
+        ("Status", "deck:screen:status", 2),
+        ("Back", "deck:screen:previous", 4),
+        ("Next", "deck:screen:next", 9),
+    ]
+    assert address_of(root, "deck:screen:status") == "44232"
     for action in ("deck:knobs", "deck:machine:printer_1", "deck:step:0.1", "deck:here"):
         assert carried_by(action).name == "VIEWER"
+    assert carried_by("deck:screen:next").name == "VIEWER"
     # Loops: the window, then a loop's acts on the open Machine's printer, then the
     # choices the window makes. Nothing saves to the board's memory.
     loops = next(c for c in machine.children if c.label == "Loops")

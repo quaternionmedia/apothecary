@@ -111,6 +111,8 @@ class Rig:
             return self.client.put(f"{at}/control", json={"machine": "cnc_router"})
         if verb == "knobs.step":
             return self.client.put(f"{at}/control", json={"step_mm": 10})
+        if verb == "knobs.screen":
+            return self.client.put(f"{at}/control", json={"screen": "status"})
         if verb == "here":
             return self.client.put(f"{at}/control", json={"port": self.port})
         if verb == "inject":
@@ -177,7 +179,7 @@ def no_library(rig):
     rig.real(library=False)
 
 
-KNOBS = ["knobs.start", "knobs.stop", "knobs.machine", "knobs.step", "here"]
+KNOBS = ["knobs.start", "knobs.stop", "knobs.machine", "knobs.step", "knobs.screen", "here"]
 EVERY = [*KNOBS, "inject"]
 # Each condition: how the rig is put in it, and the controls asked of it. A real deck's
 # knobs are not started here: the layout would look for its machines' boards.

@@ -95,6 +95,8 @@ STEPS_MM = (0.1, 1.0, 10.0)
 AXES = ("X", "Y", "Z")
 KEY_MACHINE = (0, 1)
 KEY_STEP = 2
+# A screen chosen from the page by its step rather than its name: as a swipe left, or right.
+SCREEN_STEPS = {"next": screens.FORWARD, "previous": screens.BACK}
 # Two classes of stop: one key per machine, each sending that machine's
 # own stop, and one that stops every machine at once. The everything key is the bottom
 # row's last, nearest a hand resting on the knobs, bright red where the per-machine stops
@@ -551,6 +553,21 @@ class DeckController:
                 raise ValueError(f"a step of {_mm(mm)} mm: the deck's steps are {steps} mm")
             self.step = STEPS_MM.index(mm)
             self.said = (f"step {_mm(self.step_mm)} mm", "grey")
+            self._draw_if_there()
+
+    def show_screen(self, screen: str) -> None:
+        """The strip's screen chosen from the page: by its name, or ``next`` or
+        ``previous`` as a swipe left or right walks them, stopping at either end. As a
+        swipe, it draws the strip and nothing more: no line goes to a machine, no poll is
+        asked and no key changes; unlike a touch, it clears no ended job from Progress."""
+        with self._lock:
+            if screen in SCREEN_STEPS:
+                self.screens.swipe(SCREEN_STEPS[screen])
+            elif not self.screens.show(screen):
+                names = ", ".join(self.screens.order)
+                raise ValueError(
+                    f"no screen {screen!r}: the strip's are {names}, or next and previous"
+                )
             self._draw_if_there()
 
     def _draw_if_there(self) -> None:

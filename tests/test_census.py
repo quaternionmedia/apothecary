@@ -14,7 +14,7 @@ STATIC = census.TEMPLATES.parent / "apothecary" / "static"
 # The viewer's controls of its own: a change that adds one raises this; one that removes
 # one may lower it. `uv run apothecary census` lists them, and docs/census.md says what
 # is counted, how each is classified and how the ceiling and the share's floor move.
-VIEWER_CEILING = 268
+VIEWER_CEILING = 269
 
 
 def test_the_viewer_stays_under_its_ceiling():
@@ -378,7 +378,7 @@ def test_the_viewers_ring_backed_share_is_at_least_its_floor():
     `apothecary census` gives the share."""
     taken = census.take()
     own, backed = len(taken.controls_of_its_own()), len(taken.ring_backed())
-    assert backed / own >= 166 / 268, f"{backed} of {own} ring-backed"
+    assert backed / own >= 167 / 269, f"{backed} of {own} ring-backed"
 
 
 def test_motions_controls_are_each_a_cell_a_moving_parts_ring_really_produces():

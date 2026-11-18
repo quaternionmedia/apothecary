@@ -647,7 +647,7 @@ def not_here(deck_id: str, port: str) -> Optional[Refusal]:
 
 def deck_can(deck_id: str, port: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
     """Per control of the Deck window, whether its route would take it now: the knobs
-    started and stopped, the machine and step they are given, an event given to a
+    started and stopped, the machine, step and screen they are given, an event given to a
     simulated deck; with ``port``, whether the knobs could be pointed at the machine whose
     board is there (a Control pad's Knobs here)."""
     mended(deck_id)
@@ -658,6 +658,7 @@ def deck_can(deck_id: str, port: Optional[str] = None) -> Dict[str, Dict[str, An
         "knobs.stop": _verdict(found),
         "knobs.machine": _verdict(idle),
         "knobs.step": _verdict(idle),
+        "knobs.screen": _verdict(idle),
         "inject": _verdict(found or real_deck(deck_id)),
     }
     if port is not None:

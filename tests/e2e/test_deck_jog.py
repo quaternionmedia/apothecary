@@ -384,8 +384,9 @@ def test_the_deck_window_and_a_control_pad_show_and_steer_the_same_knobs(page: P
     """The knobs are one state, the server's. The Deck window shows the machine they move
     and their step, and chooses each; a key pressed on the deck shows there; the router's
     Control pad says where the knobs are and points them at the router, its Knobs here
-    answered by the deck; the ring's Knobs chooses the step, which both show; the window
-    stops them, and the pad's row goes."""
+    answered by the deck; the ring's Knobs chooses the step, which both show, and the
+    strip's screen, which the window shows and changes back, sending nothing to a machine;
+    the window stops them, and the pad's row goes."""
     httpx.put(
         f"{url}/firmware/decks/{DECK_ID}/control",
         json={"machine": "printer_1", "step_mm": 1},
@@ -434,7 +435,20 @@ def test_the_deck_window_and_a_control_pad_show_and_steer_the_same_knobs(page: P
     windows.open_window(page, "deck")  # the Machine view laid its own windows out
     expect(step).to_have_text("0.1", timeout=10000)
 
-    # 5. Stopped from the window: off on the server, and the pad's row goes.
+    # 5. The strip's screen, from the ring's Knobs › Screen and from the window: a real
+    #    deck's is changed from here too, and nothing goes to a machine.
+    sent = (_control(url)["sent"], _router(url)["position"])
+    rings.on_world(page, "Panels", "Machine", "Knobs", "Screen", "Status")
+    shown = knobs.locator(".deck-screen-to[aria-pressed='true']")
+    expect(shown).to_have_text("status", timeout=10000)
+    expect(knobs.locator(".deck-screen")).to_contain_text("strip screen: status (3/3)")
+    _until(lambda: (_drawn(url)["strip_drawn"]["small"] or "").endswith("· 3/3"), "Status drawn")
+    knobs.locator(".deck-screen-to[data-screen='knobs']").click()
+    expect(shown).to_have_text("knobs", timeout=10000)
+    assert _control(url)["screen"] == "knobs"
+    assert (_control(url)["sent"], _router(url)["position"]) == sent
+
+    # 6. Stopped from the window: off on the server, and the pad's row goes.
     knobs.locator(".deck-run").click()
     expect(knobs).to_contain_text("knobs off", timeout=10000)
     off = _control(url)

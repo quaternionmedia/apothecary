@@ -547,6 +547,12 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "deck-machine": (WIDGET, WHAT_IS_THERE, "a machine's name, a button that the knobs move it"),
     "deck-step": (WIDGET, WHAT_YOU_SEE, "a button that makes a knob's step so many millimetres"),
+    # The strip's screen, which only a swipe on the deck changed: a real deck's from here.
+    "deck-screen-to": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a screen's name, a button that the deck's strip shows it, as a swipe along it does",
+    ),
     "deck-here": (
         WIDGET,
         WHAT_IS_THERE,
@@ -1094,11 +1100,13 @@ RING_BACKED: Dict[str, str] = {
     # device and Allow the camera's own Device (whose leaves are camera:device:<id>)
     "ws-back": "panel:toggle:working",
     "deck-open": "panel:toggle:deck",
-    # the knobs' controls are the cells of Panels › Machine › Knobs (whose machines and
-    # steps are leaves deck:machine:<name> and deck:step:<mm>)
+    # the knobs' controls are the cells of Panels › Machine › Knobs (whose machines,
+    # steps and screens are leaves deck:machine:<name>, deck:step:<mm> and
+    # deck:screen:<name>)
     "deck-run": "deck:knobs",
     "deck-machine": "deck:machine",
     "deck-step": "deck:step",
+    "deck-screen-to": "deck:screen",
     "deck-here": "deck:here",
     # The Layers window's controls are the cells of View › Layers and View › Depth: a
     # layer's Shown or Selectable tick its ring's Shown or Selectable (each layer has

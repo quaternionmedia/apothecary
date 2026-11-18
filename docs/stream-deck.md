@@ -105,8 +105,8 @@ The knobs' state (`GET /firmware/decks/{id}/control`, and each running layout's 
 /firmware/decks/control`) carries `can`: for each of the window's controls, whether its
 route would take it now, as `{"ok", "why", "kind"}`, in the shape a port's answer has
 ([firmware.md](firmware.md#what-a-command-would-be-refused-for)). The controls are
-`knobs.start` and `knobs.stop` (▶ Knobs), `knobs.machine` and `knobs.step` (a machine,
-a step chosen), `inject` (a simulated deck's key,
+`knobs.start` and `knobs.stop` (▶ Knobs), `knobs.machine`, `knobs.step` and
+`knobs.screen` (a machine, a step, a screen chosen), `inject` (a simulated deck's key,
 knob or strip) and, asked with `?port=`, `here` (a Control pad's Knobs here for that
 port's machine). `kind` says what stands in the way: `name` (no deck's name), `found`
 (no such deck), `offline` (the deck library or the HID library missing, the deck's last
@@ -198,9 +198,14 @@ ended (done, cancelled or failed, and after how long), until a touch of that scr
 it; a touch on another screen leaves it. The screens follow the job's own thread, not a
 poller of their own, and the layout's two-second tick draws the elapsed time.
 
-The Deck window says which screen the strip shows. Dragged along its strip by the mouse,
-a quarter of its length or more, a simulated deck is swiped; a real deck's strip is a
-person's to swipe.
+The Deck window says which screen the strip shows, and changes it, a real deck's as a
+simulated one's: a button for each screen beside it, and the ring's Panels › Machine ›
+Knobs › Screen (Knobs, Progress, Status, then Back and Next, a swipe right or left), are
+`PUT /firmware/decks/{id}/control` with a `screen`, its name or `next` or `previous`.
+Chosen this way it is as a swipe is: it stops at either end, draws the strip and nothing
+more, and sends nothing to a machine; unlike a touch, it clears no ended job from
+Progress. Dragged along its strip by the mouse, a quarter of its length or more, a
+simulated deck is swiped; a real deck's strip is a person's to swipe.
 
 **Nothing the deck sends bypasses what bounds a person's jog.** A jog goes through
 `devices.printer_jog`, the function behind `POST /firmware/printers/jog` and the page's
@@ -254,7 +259,8 @@ Panels › Machine › Knobs holds the same verbs, **Here** being the open Machi
 and the Deck window. None of them arms anything: the knobs move a machine only while its
 control is armed, in its Machine or by two long presses of its key. `GET
 /firmware/decks/control` lists every running layout's state, and `PUT
-/firmware/decks/{id}/control` with a `machine`, a `port` or a `step_mm` chooses.
+/firmware/decks/{id}/control` with a `machine`, a `port`, a `step_mm` or a `screen`
+chooses.
 [Walkthrough 27](../walkthrough/27-the-deck-jogging-the-machines.md) goes round it on the
 simulated bench, written by `tests/e2e/test_deck_jog.py`.
 

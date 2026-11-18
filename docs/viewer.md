@@ -566,7 +566,8 @@ expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
   Place, [pictures.md](pictures.md#the-marks-window)); Machine › Machine (the selected board's),
   Control pad (an armed printer's pad in a loud window of its own or back in its
   Machine, as the pad's ⧉ Pop out and ⇥ Put back), Knobs (the Stream Deck +'s:
-  On / off, Machine, Step, Here and the Deck window, [stream-deck.md](stream-deck.md)) and
+  On / off, Machine, Step, Here, the Deck window and Screen -- Knobs, Progress,
+  Status, Back and Next, the screen its strip shows -- [stream-deck.md](stream-deck.md)) and
   Loops (the Loops window, then Read, Start, Cancel, Set gains, Loop, Experiment and
   Rule, on the printer whose Machine is open, [control-loops.md](control-loops.md#the-loops-window)); Windows › World alone (as
   `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Print view; Bench › Bench (show it), Install (a cell per toolchain

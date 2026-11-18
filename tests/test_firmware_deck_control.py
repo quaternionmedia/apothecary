@@ -1036,3 +1036,44 @@ def test_a_cut_that_holds_the_router_still_lets_the_spindle_knob_say_it_turns(be
     controller.draw()
     assert "a cut holds the port (running)" in one.strip["small"]
     assert "knob 4 still turns the spindle" in one.strip["small"]
+
+
+def test_a_screen_is_chosen_from_the_page_by_name_or_step_and_sends_nothing(bench):
+    """The strip's screen chosen from the page, as a swipe changes it: by name, or next
+    and previous, stopping at either end; a name it has not got is refused. Nothing goes
+    to a machine, and an ended job on Progress is not cleared, as a touch would."""
+    controller, one, links = bench
+    links.control.arm(ROUTER)
+    controller.send = controller.poll = controller.jog = lambda *a: pytest.fail(
+        "a machine was asked"
+    )
+    wire = _wire(links)
+    controller.show_screen("status")
+    assert controller.state()["screen"] == "status" and one.strip["text"].startswith("printer_1 ·")
+    controller.show_screen("next")  # nothing after the last
+    assert controller.state()["screen"] == "status"
+    controller.show_screen("previous")
+    assert controller.state()["screen"] == "progress"
+    with pytest.raises(ValueError, match="no screen 'map': the strip's are knobs, progress"):
+        controller.show_screen("map")
+    _on(controller, PRINTER, _job("j1", outcome="done", progress=1.0))
+    controller.show_screen("progress")
+    controller.show_screen("progress")
+    assert "done after" in one.strip["small"]
+    assert controller.sent == [] and _wire(links) == wire and links.control.armed(ROUTER)
+
+
+def test_a_screen_is_chosen_by_route_while_the_knobs_run(bench):
+    controller, one, links = bench
+    controller.stop()
+    client = TestClient(app)
+    off = client.put("/firmware/decks/SIMDECK0/control", json={"screen": "status"})
+    assert off.status_code == 409 and "not started" in off.json()["detail"]
+    client.post("/firmware/decks/SIMDECK0/control", json={"on": True})
+    chosen = client.put("/firmware/decks/SIMDECK0/control", json={"screen": "status"}).json()
+    assert chosen["screen"] == "status" and chosen["can"]["knobs.screen"]["ok"]
+    back = client.put("/firmware/decks/SIMDECK0/control", json={"screen": "previous"}).json()
+    assert back["screen"] == "progress"
+    bad = client.put("/firmware/decks/SIMDECK0/control", json={"screen": "map"})
+    assert bad.status_code == 422 and "no screen 'map'" in bad.json()["detail"]
+    deck_control.stop_all()

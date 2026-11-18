@@ -1091,7 +1091,8 @@ def _knobs() -> Option:
     """Panels › Machine › Knobs: the Stream Deck +'s knobs, the server's layout on the deck
     (firmware/deck_control.py), which the page hands each verb to -- on or off, the machine
     they move, their step, and the machine of the Machine that is open -- then the Deck
-    window, which shows them. Seated after the Machine's own two cells, so neither moves."""
+    window, which shows them, and the screen the deck's strip shows. Seated after the
+    Machine's own two cells, so neither moves."""
     from .firmware.deck_control import MACHINES, STEPS_MM
 
     return Option(
@@ -1121,9 +1122,29 @@ def _knobs() -> Option:
             ),
             Option(id="deck:here", label="Here", action="deck:here"),
             Option(id="panel:deck", label="Deck", action="panel:toggle:deck"),
+            # The strip's screen, by its name or a step either way as a swipe along the
+            # strip takes it (firmware/deck_screens.py). After the Deck window, so no
+            # cell before it moves.
+            Option(
+                id="deck:screen",
+                label="Screen",
+                children=[
+                    Option(id=f"deck:screen:{name}", label=label, action=f"deck:screen:{name}")
+                    for name, label in SCREEN_CELLS
+                ],
+            ),
         ],
     )
 
+
+# The cells of Knobs › Screen: each screen of the strip in its order, then a step back and on.
+SCREEN_CELLS = (
+    ("knobs", "Knobs"),
+    ("progress", "Progress"),
+    ("status", "Status"),
+    ("previous", "Back"),
+    ("next", "Next"),
+)
 
 # What a rule's cell says, where its title is longer than a cell holds; a rule this does
 # not name is called by its title, shortened.
