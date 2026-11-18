@@ -232,8 +232,8 @@ DESIGN = Journey(
 
 
 # Print a part on a machine: a part chosen in Site, its numbers in Parameters, the
-# machine's Print window to slice it and draw its path, the job in Jobs, and the part
-# made measured there, its correction fed back to the printer. The machine's
+# machine's Print window to slice it and draw its path, the job in Jobs, and the
+# printer tuned there from the coupon made to be measured, a turn at a time. The machine's
 # window and its Print window share a stack at the column's foot, Print in front.
 MAKE = Journey(
     id="make",
@@ -288,9 +288,12 @@ MAKE = Journey(
         Step(
             "measure",
             "Measure",
-            "the part made, measured: its sizes typed under measured, checked against what "
-            "was sliced, and the walls' correction kept for the printer's next slices",
+            "the part made, read under measured a feature a row and kept as the next turn "
+            "of the printer's tuning, which says what the readings imply -- a box's sizes "
+            "separate nothing, and print_coupon under makes is the piece made to be "
+            "measured; Apply takes a turn into the printer's next slices",
             forward=("machine-print",),
+            shown_by=("46-a-printer-tuned-from-its-prints.md",),
             puts=(("file", "footpedal"),),
         ),
     ),

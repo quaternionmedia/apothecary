@@ -54,7 +54,7 @@ The part goes to a machine. printer_1's Machine is opened and the footpedal chos
 5 Start: nothing more to do
     Print a part › 5 Start (the tour): control armed in the Machine, ▶ Print, the job in Jobs
 6 Measure: nothing more to do
-    Print a part › 6 Measure (the tour): the part made, measured: its sizes typed under measured, checked against what was sliced, and the walls' correction kept for the printer's next slices
+    Print a part › 6 Measure (the tour): the part made, read under measured a feature a row and kept as the next turn of the printer's tuning, which says what the readings imply -- a box's sizes separate nothing, and print_coupon under makes is the piece made to be measured; Apply takes a turn into the printer's next slices
 ```
 
 ## 3. Cut a part: its toolpath written for the router, drawn on the table

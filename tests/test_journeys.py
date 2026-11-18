@@ -135,6 +135,8 @@ def test_make_a_thing_goes_from_the_part_to_the_job_and_back_to_the_printer():
     assert make.steps[2].forward == ("machine-print",)
     assert [s.id for s in make.steps if s.draws] == ["see"]
     assert make.steps[4].owns == ("machine", "jobs")
-    # The part made, measured in the Print window, a file of it there to measure against.
+    # The part made, read in the Print window as a turn of the printer's tuning, a file
+    # of it there whose plan (or box) gives the rows to read.
     assert make.steps[-1].forward == ("machine-print",) and make.steps[-1].owns == ()
     assert make.steps[-1].puts == (("file", "footpedal"),)
+    assert make.steps[-1].shown_by == ("46-a-printer-tuned-from-its-prints.md",)

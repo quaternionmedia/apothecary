@@ -61,6 +61,7 @@ at page 00.
 | [43 — Parts that meet](../walkthrough/43-parts-that-meet.md) | A dust hose adapter's interfaces, how each fits the hose and two ports, the three placed where they meet by their connections, both fitting ends in use refused, and what is still a stub |
 | [44 — A gap that travels](../walkthrough/44-a-gap-that-travels.md) | A gap that is not one number: two circles, an eccentric read along a ray and to its nearest point, the airgap's cam sweeping, the rolling rotor rolling, the flexure rotor's flank gap closing to its stop and its leaves' bending |
 | [45 — A heater's loop](../walkthrough/45-a-heater-s-loop.md) | A made-up heater identified from a step read once a second, a controller designed for it by a named rule and its margins, the relay an autotune runs and what its describing function costs, and the loop kept as a document whose figures say what they rest on |
+| [46 — A printer tuned from its prints](../walkthrough/46-a-printer-tuned-from-its-prints.md) | A made-up printer's coupon read with made-up calipers, its errors solved and what a cube cannot separate said, half of each taken out, the next coupon's errors smaller, and the turn kept as a document whose figures say what they rest on |
 
 ## The checklists
 
@@ -104,6 +105,7 @@ suites hold everything else.
 | [The toolpath](cam.md) | The router's toolpath, written from the cuts a part declares: what a part says, what the toolpath does, how it is kept, recorded and offered, and the cut measured as cut |
 | [The slicer](slicer.md) | OrcaSlicer installed and pinned, the printer's profile kept with its part, a part or a made piece sliced for the pinned printer and kept for the Print card |
 | [The Airgap](airgap.md) | The `airgap` part -- a rotor/stator pair computed in its SCAD -- and the Airgap panel: the part as a field, torque and dynamics model that follows its text in the editor, its verbs on the ring, its rig and sweep as documents, and the metrics document Python reads back |
+| [Print tuning](print-tuning.md) | A printer tuned from what its prints measure: the error model a caliper's readings are solved by and what they cannot separate, a reading's uncertainty, the OrcaSlicer settings each term moves as the pinned release names them, the damped step and when the loop stops, the `print/tuning/1` document, and the coupon made to be measured |
 | [Control loops](control-loops.md) | A heater's loop: the plant and the PID it is taken to be, identification from a step, a relay and sampled data, the named tuning rules, margins and a step's measures, the `control/loop/1` document, the experiments run on a printer behind the seam's rules, what is assumed of Marlin, and what only a bench can say |
 
 ## The Rust workspace

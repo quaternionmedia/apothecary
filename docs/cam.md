@@ -111,8 +111,8 @@ designed, a hole as bored: that is the measurement the loop closes on.
 ## Measured by hand, fed back
 
 The piece a router cut is measured by a person with calipers and fed back into
-that router's toolpaths (`apothecary/cam/measured.py`), as a printed part is fed
-back into its printer's slices ([docs/slicer.md](slicer.md#a-printers-correction-measured)).
+that router's toolpaths (`apothecary/cam/measured.py`), as a printed piece is fed
+back into its printer's slices, a turn at a time ([Print tuning](print-tuning.md)).
 The piece made for it is the 😮 of `parts/router_emoji`: its face is an outside
 size, its eyes and its mouth inside ones, and a tool that cuts wider than its
 diameter -- run out, or bent -- leaves the face small and the holes big by the

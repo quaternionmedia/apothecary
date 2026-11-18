@@ -143,6 +143,7 @@ GROUPS = {
             "tests/slicer_helpers.py",
             "walkthrough/20-*",
             "walkthrough/21-*",
+            "walkthrough/46-*",
         ),
         "tests": (
             "test_slicer.py",

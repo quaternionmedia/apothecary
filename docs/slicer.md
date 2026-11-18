@@ -143,6 +143,7 @@ used. The routes:
 | `GET /slicer/tasks/{id}?since=N` | The task's log; once it ends, `slice` is the answer: the record, or the error with the slicer's errors and warnings by line |
 | `POST /slicer/tasks/{id}/cancel` | Stop a slice; nothing is kept |
 | `GET /slicer/slices`, `GET /slicer/slices/{file_id}` | The slices whose files the Print card still keeps |
+| `POST /slicer/slices/{file_id}/measured`, `GET /slicer/tuning`, ... | The piece a slice made, read, and the printer's tuning ([Print tuning](print-tuning.md#through-the-slicer-and-the-page)) |
 
 **Every slice is kept**, each a file of its own in the Print card's file box
 (the state folder's `prints/`) until a person forgets it there; slicing the
@@ -187,11 +188,12 @@ Slice is a step of the loop from a picture to a print
   errors and warnings by line. A kept file a slice made says, in the card's
   files, what it was sliced from and for which printer; choosing it says that
   slice again under **makes**.
-- **Measured, fed back.** Under the chosen file, once its slice says the size of
-  what it sliced, **measured** takes what the part it printed measures, `x × y × z`
-  in millimetres (`-` for one not measured), and **Keep** -- or the control ring's
-  Print › Measure -- checks it and keeps the printer's correction, and says it
-  ([below](#a-printers-correction-measured)). It is *Print a part*'s last step.
+- **Measured, fed back.** Under the chosen file, **measured** has a row for each
+  feature the piece's plan names (or the box of what was sliced), and **Keep** -- or
+  the control ring's Print › Measure -- keeps what they read as the next turn of the
+  printer's tuning and says what it implies; **Apply** and **Undo turn** (Print ›
+  Tune) take it into the next slices or drop it ([below](#a-printer-tuned-from-its-prints)).
+  It is *Print a part*'s last step.
 - **Installing it.** The Bench's toolchain card draws the slicer after the
   toolchain modules: what it slices, where it is, the release pinned, and its
   own **Install** (or Update), whose log is the Bench's task log. It is
@@ -199,33 +201,18 @@ Slice is a step of the loop from a picture to a print
   ESP32 -- the ring of modules for installs -- since installing a tool is the
   Bench's, and the Machine's Slice says where to install it when none is found.
 
-## A printer's correction, measured
+## A printer tuned from its prints
 
-A part a printer made is measured by a person and fed back into that printer's
-slices (`apothecary/slicer/measured.py`). Each slice records the size of the model it
-sliced, its STL's box the way up it prints (`size` in the slice's record), and a
-measurement is held to it:
-
-- **Checked first.** Each size measured is within 5% of the size sliced, or it is not
-  that slice's part -- measured across something else, or printed from another file
-  -- and is refused, saying so; X or Y is measured, since the correction is the
-  walls'. Nothing is kept from a refused measurement.
-- **What is fed back** is OrcaSlicer's `xy_contour_compensation`, which moves each
-  outer wall in or out: the mean of X's and Y's errors is two walls' worth, so the
-  correction is half of it, taken from the value the measured slice was made with
-  (every slice shows the one it used). One past half a millimetre is refused: that
-  far off is the steps per millimetre or the flow, which moving the walls does not
-  correct. Z is checked and recorded, not applied: its error is the layers' and
-  the firmware's.
-- **The printer's own.** It is kept per machine node in the state folder
-  (`corrections/<site>/<node>.json`), with every measurement that made it, and the
-  printer's part's profile is left as it is: two Enders differ. Every later slice
-  for that printer takes it as a value whose origin is `measured`, its source the
-  measurement. A slice for a printer part standing in no site keeps and takes none,
-  and another slicer module takes none.
-
-`POST /slicer/slices/{file_id}/measured` `{x, y, z}` measures the part a kept slice
-made; `GET /slicer/corrections?site=&printer=` reads what a printer keeps.
+A piece a printer made is read with calipers and fed back into that printer's slices,
+a turn at a time: [Print tuning](print-tuning.md) is the reference -- the error model
+and what calipers cannot tell, the OrcaSlicer settings each term moves and where they
+were read, the `print/tuning/1` document, and when the loop says stop. Every slice
+records what a turn needs of it: the plan of what it sliced (`plan`, a part's
+measurement plan) and the size of its model (`size`, for a part with none), and each
+tuned setting it used, from its profiles or, where they leave one out, from the
+configuration its G-code carries. The settings a printer's tuning holds for the
+filament and process its profile names are taken by every later slice for it, each
+with the origin `measured` and the turn it came from.
 
 ## Another slicer
 
