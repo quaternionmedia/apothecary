@@ -184,6 +184,7 @@ def _part_seen(site: str, path: str) -> Optional[PartSeen]:
         # A part whose SCAD is its source keeps its values in its text: none offered yet.
         presets=[] if own else list(part.presets),
         end=len(round_ends) == 1,
+        motion=part.has_motion,
     )
 
 

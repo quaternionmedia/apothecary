@@ -922,6 +922,7 @@
         import { mountBuild, mountRawFlash } from '/static/widgets/sketches.js';
         import { mountTasks } from '/static/widgets/tasks.js';
         import { mountAirgap } from '/static/widgets/airgap.js';
+        import { mountMotion } from '/static/widgets/motion.js';
         import { knownWindows, transientWindows, mountSystems, defineJourneyViews, openFor } from '/static/systems.js';
         import { mountScadEditor, variantChoices, historyRows, trashRows } from '/static/widgets/scad_editor.js';
         import { buildParamControl, described, sameValue, shown, focusedControl, refocus } from '/static/widgets/part_controls.js';
@@ -1642,7 +1643,7 @@
                 this.panels = mountPanels({
                     host: document.querySelector('.main-content'), world: this.canvas.parentElement,
                     defaultRoot: PAGE_LAYOUT,
-                    known: ['gather', 'models', 'marks', 'working', 'layers', 'deck', 'loops', ...knownWindows(SYSTEMS)],
+                    known: ['gather', 'models', 'marks', 'working', 'layers', 'deck', 'loops', 'motion', ...knownWindows(SYSTEMS)],
                     transient: ['control', 'lighting', ...transientWindows(SYSTEMS)],
                 });
                 // Pinned is mounted the first time it is in front of a person, and listed
@@ -2017,6 +2018,36 @@
                     },
                     onOpen: () => this.deck?.shown(),
                     onClose: () => this.deck?.close(),
+                });
+                // Motion: the selected part's pieces moved through its motion (widgets/motion.js),
+                // a window of the Part group in the column beside the world, closed until asked
+                // for: ⊞ Windows, or the part's ring, Part › View › Motion. It follows the
+                // selection, and draws a part's pieces once, when shown or asked (loadMotionPiece).
+                this.motion = null;
+                this.panels.register('motion', {
+                    title: 'Motion', group: 'Part', home: 'column', after: 'selected', open: false,
+                    hint: "The selected part's pieces moved through its motion, each gap where it is least, measured on the server",
+                    body: (slot) => {
+                        this.motion = mountMotion(slot, {
+                            base: BASE_URL,
+                            selected: () => {
+                                const key = this.selectedName, node = key && this.renderNodeByKey[key];
+                                if (!node || !node.part_ref) return null;
+                                const record = this.variantByPart[node.part_ref] ? this.variantRecords[node.part_ref] : null;
+                                return { key, ref: node.part_ref, node, params: record?.params ?? {} };
+                            },
+                            loadPiece: (node, ref, values, piece) => this.loadMotionPiece(node, ref, values, piece),
+                            swap: (node, object) => this.upgradeMesh(node, object),
+                            meshOf: (key) => this.meshByName[key],
+                            redraw: () => { this.frameWanted = true; },
+                            shown: () => this.panels.isShown('motion'),
+                            addressOf: (action) => (this.motionTaught ? this.motionTaught[action] || null : null),
+                        });
+                        window.apothecaryMotion = this.motion;
+                        new MutationObserver(() => this.motion.follow()).observe(this.selectedBodyEl, { childList: true });
+                        this.motion.follow();
+                    },
+                    onOpen: () => this.motion?.act('open'),
                 });
                 // ⊞ Windows: drawn afresh each time it opens, so it says which are open.
                 const windowsBody = this.windowsMenuEl.querySelector('.windows-menu-body');
@@ -9541,6 +9572,21 @@
                 return true;
             }
 
+            // One piece of a part that declares a motion (widgets/motion.js), rendered alone as
+            // the part rests -- `values` hold its piece parameter -- and placed where it measures,
+            // with the box it measured in the part's own frame, which the motion is placed by.
+            async loadMotionPiece(node, ref, values, piece) {
+                const page = encodeURIComponent(`${PAGE_ID}-motion-${piece}`);
+                const response = await fetch(`${BASE_URL}/parts/${encodeURIComponent(ref)}/stl/generate?page=${page}&${AS_IT_RESTS}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ params: values }),
+                });
+                if (!response.ok) throw new Error(`${ref}'s ${piece}: HTTP ${response.status}`);
+                const body = await response.json();
+                const url = body.variant ? this.variantUrl(ref, body.variant) : `${BASE_URL}/parts/${encodeURIComponent(ref)}/stl?${AS_IT_RESTS}`;
+                return { mesh: await this.loadSTLMesh(node, url, body.measured), measured: body.measured };
+            }
+
             // A machine's frame asked for again when a poll says a volume its marks were not
             // laid out by: its controller's travel, read once its settings are, where the
             // marks stand on the site's figure or another travel. Once per travel said; the
@@ -10966,6 +11012,15 @@
                     else viewer.setStatus(`Select a machine with a board pinned to it first${tail}`, 'error');
                     return;
                 }
+                // Part › View › Motion: the Motion window shown on the piece, and the verb done
+                // there (widgets/motion.js); what it did, or refused, is said.
+                if (action.startsWith('part:motion:')) {
+                    if (viewer.selectedName !== path && viewer.renderNodeByKey[path]) viewer.selectPath(path);
+                    viewer.panels.open('motion');
+                    const done = await viewer.motion.act(action.slice('part:motion:'.length));
+                    viewer.setStatus(`${done.refused || done.said}${tail}`, done.refused ? 'error' : 'success');
+                    return;
+                }
                 // Part › Edit: the one editor, in Selected, for a part or a made piece.
                 if (action === 'part:edit') {
                     if (viewer.openEditor(path)) viewer.setStatus(`Editing ${path}: its numbers are in Parameters, Apply and Revert in Selected${tail}`, 'success');
@@ -11187,8 +11242,16 @@
                 for (const el of document.querySelectorAll(`#part-saved .trash-row[data-variant] .${cls}`)) pairs.push([el, `part:trash:${verb}:${el.closest('[data-variant]').dataset.variant}`]);
             }
             for (const el of document.querySelectorAll('#part-saved .trash-empty')) pairs.push([el, 'part:trash:empty']);
+            // The Motion window's controls are the cells of Part › View › Motion.
+            viewer.motionTaught = addresses(ring);
+            for (const [selector, action] of MOTION_VERBS) for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
             annotate(ring, pairs);
         }
+        // The Motion window's controls, by the cell each one is (Part › View › Motion).
+        const MOTION_VERBS = [
+            ['.motion-play', 'part:motion:play'], ['.motion-back', 'part:motion:back'], ['.motion-step', 'part:motion:step'],
+            ['.motion-reset', 'part:motion:reset'], ['.motion-at', 'part:motion:step'], ['.motion-bought', 'part:motion:bought'],
+        ];
         // The Airgap's buttons, by the verb each one is (Panels › Airgap).
         const AIRGAP_VERBS = [
             ['.airgap-play', 'airgap:play'], ['.airgap-run', 'airgap:sweep'], ['.airgap-to-editor', 'airgap:to-editor'], ['.airgap-from-editor', 'airgap:from-editor'],

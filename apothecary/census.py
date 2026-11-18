@@ -777,6 +777,20 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         "a line naming two ranges and the metric to map over them",
     ),
     "airgap-run": (WIDGET, WHAT_YOU_SEE, "a button that maps the metric the sweep line names"),
+    # ---- Motion, apothecary/static/widgets/motion.js ------------------------------
+    # A part's pieces moved through its motion, from the table the server samples. Each
+    # control is a cell of the part's ring, Part › View › Motion; the slider is Back and
+    # Step, a sample at a time, as the Marks history's slider is Earlier and Later.
+    "motion-at": (WIDGET, WHAT_YOU_SEE, "a slider over the motion's parameter, the pieces moved to it"),
+    "motion-play": (WIDGET, WHAT_YOU_SEE, "a button that plays the motion, and pauses it"),
+    "motion-back": (WIDGET, WHAT_YOU_SEE, "a button that moves the pieces to the sample before"),
+    "motion-step": (WIDGET, WHAT_YOU_SEE, "a button that moves the pieces to the sample after"),
+    "motion-reset": (WIDGET, WHAT_YOU_SEE, "a button that puts the motion back at its start"),
+    "motion-bought": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a tick-box that draws what is bought -- pins, inserts -- in a colour of its own",
+    ),
     # ---- the Tour, apothecary/static/widgets/tour_popover.js -------------------
     # The journeys a stage at a time, in a box over the page: a journey chosen, Back and
     # Next, the page taken to a stage, and a person's word on the stage (Off with what
@@ -880,6 +894,17 @@ RING_BACKED: Dict[str, str] = {
     "copyMetricsEl:click:act": "airgap:copy-metrics",
     "airgap-reset": "airgap:reset",
     "resetEl:click:act": "airgap:reset",
+    # Motion's controls are the cells of Part › View › Motion; its one listener of each
+    # kind serves them all
+    "motion-at": "part:motion:step",
+    "motion-play": "part:motion:play",
+    "motion-back": "part:motion:back",
+    "motion-step": "part:motion:step",
+    "motion-reset": "part:motion:reset",
+    "motion-bought": "part:motion:bought",
+    "motionEl:click:clicked": "part:motion:play",
+    "motionEl:input:scrubbed": "part:motion:step",
+    "motionEl:change:ticked": "part:motion:bought",
     # the viewer's Device section: Open is Device › Open, the board's Machine
     "dev-open": "device:open",
     "dev-query": "device:query",
@@ -1815,6 +1840,14 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "that cell's two values taken, into the text where it is edited",
     ),
+    # ---- Motion (widgets/motion.js): one listener of each kind on the window ----
+    "motionEl:click:clicked": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "Play or Pause, Back, Step or Reset, each doing what its cell of Part › View › Motion does",
+    ),
+    "motionEl:input:scrubbed": (WIDGET, WHAT_YOU_SEE, "the motion's slider moved, the pieces with it"),
+    "motionEl:change:ticked": (WIDGET, WHAT_YOU_SEE, "Bought ticked or not, what is bought shown or hidden"),
     # ---- the Working space ------------------------------------------------------
     "root:click:closest": (
         WIDGET,

@@ -1750,6 +1750,33 @@ def test_part_holds_the_loop_edit_keeping_its_address():
 # Variants. A made piece and a camera have none of them.
 
 
+def test_a_part_whose_pieces_move_has_its_motion_under_view_after_fit():
+    """Told by the server that the part declares a motion (``PartSeen.motion``), its
+    ring's Part › View ends in Motion: the window, then its controls (widgets/motion.js).
+    After Fit, so no cell of View moves; a part told nothing has none."""
+    from apothecary.menu import PartSeen, PictureContext, carried_by
+
+    garage = _garage()
+    on = Context(pointing=Pointing.NODE, targets=["footpedal"])
+    moving = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=True, motion=True)))
+    still = resolve(on, garage, picture=PictureContext(part=PartSeen(editable=True)))
+    view = next(c for c in moving.options[-1].children if c.label == "View")
+    assert [c.label for c in view.children] == ["SCAD", "Fullscreen", "Ghost", "Fit", "Motion"]
+    assert [(c.label, c.action) for c in view.children[-1].children] == [
+        ("Motion", "part:motion:open"),
+        ("Play", "part:motion:play"),
+        ("Back", "part:motion:back"),
+        ("Step", "part:motion:step"),
+        ("Reset", "part:motion:reset"),
+        ("Bought", "part:motion:bought"),
+    ]
+    assert address_of(moving, "part:fit") == address_of(still, "part:fit")
+    assert address_of(moving, "part:motion:play") == address_of(moving, "part:fit")[:-1] + "96"
+    assert "part:motion:play" not in set(every_action([still]))
+    for verb in ("open", "play", "back", "step", "reset", "bought"):
+        assert carried_by(f"part:motion:{verb}").name == "VIEWER"
+
+
 def test_a_part_s_ring_holds_its_scad_editor_too():
     from apothecary.menu import PartSeen, PictureContext, carried_by
 

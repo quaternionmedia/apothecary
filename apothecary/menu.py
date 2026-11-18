@@ -183,6 +183,9 @@ class PartSeen(BaseModel):
     # Whether it has one round interface, a spigot or a socket, so it is an end an
     # adapter is made between: Part › Adapter does what ⇄ Adapter in Selected does.
     end: bool = False
+    # Whether its pieces move as one of its parameters goes (its wrapper's `motion`):
+    # Part › View › Motion is offered on such a part.
+    motion: bool = False
 
 
 class PictureContext(BaseModel):
@@ -744,6 +747,11 @@ PANELS: Sequence[Tuple[str, str]] = (
     # window of the Machine's group registered at start and closed until asked for. Its
     # acts are a ring of their own under Panels › Machine (_loops).
     ("loops", "Loops"),
+    # Motion: the selected part's pieces moved through its motion (widgets/motion.js), a
+    # window in the column registered at start and closed until asked for. Its cell is
+    # the part's own, Part › View › Motion, on a part whose pieces move, not one of
+    # Panels'.
+    ("motion", "Motion"),
 )
 # The group each panel's window is registered under, as the page registers it (its
 # markup's data-group, its script's `group:`, a system's entry): a panel's cell wears
@@ -768,6 +776,7 @@ PANEL_GROUPS = {
     "deck": "Tools",
     "airgap": "Airgap",
     "loops": "Machine",
+    "motion": "Part",
 }
 # What a person may say a whiteboard's mark is (apothecary/vision/marks.py's Kind).
 MARK_KINDS = ("diagram", "writing", "unsure", "nothing")
@@ -1266,6 +1275,26 @@ def _airgap(show: Option) -> Option:
             Option(id="airgap:copy-scad", label="Copy SCAD", action="airgap:copy-scad"),
             Option(id="airgap:copy-metrics", label="Copy metrics", action="airgap:copy-metrics"),
             Option(id="airgap:reset", label="Reset", action="airgap:reset"),
+        ],
+    )
+
+
+def _motion() -> Option:
+    """Part › View › Motion: the Motion window opened on the part, then its controls,
+    which the page hands to it (widgets/motion.js): Play plays the motion and pauses
+    it, Back and Step move it a sample of its table at a time, Reset puts it back at
+    the start of its range, Bought shows or hides what is bought (pins, inserts) in its
+    own colour."""
+    return Option(
+        id="part:motion",
+        label="Motion",
+        children=[
+            Option(id="part:motion:open", label="Motion", action="part:motion:open"),
+            Option(id="part:motion:play", label="Play", action="part:motion:play"),
+            Option(id="part:motion:back", label="Back", action="part:motion:back"),
+            Option(id="part:motion:step", label="Step", action="part:motion:step"),
+            Option(id="part:motion:reset", label="Reset", action="part:motion:reset"),
+            Option(id="part:motion:bought", label="Bought", action="part:motion:bought"),
         ],
     )
 
@@ -1886,6 +1915,10 @@ def _node_ring(
         if part_of_the_folder:
             view.append(Option(id="part:ghost", label="Ghost", action="part:ghost"))
         view.append(Option(id="part:fit", label="Fit", action="part:fit"))
+        # A part whose pieces move: its Motion window and the window's controls
+        # (widgets/motion.js). After Fit, so no cell of View moves.
+        if seen is not None and seen.motion:
+            view.append(_motion())
         verbs.append(Option(id="part:view", label="View", children=view))
         verbs.append(
             Option(
