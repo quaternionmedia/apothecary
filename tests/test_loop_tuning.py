@@ -120,9 +120,12 @@ class Stepped:
 @pytest.fixture
 def slow_board(fake_arduino_cli, fresh_task_runner, monkeypatch):
     """The simulated printer of ``board`` on a ``Stepped`` clock, each ``M105`` taking
-    ``slow.reading_s(t)`` simulated seconds, ``t`` the clock as it is written."""
+    ``slow.reading_s(t)`` simulated seconds, ``t`` the clock as it is written, and each
+    read of the board ``slow.read_s``. The plant, the job's schedule and the samples all
+    step on that one clock, which only the test and the job move, so a result is the same
+    on any machine at any load; ``slow.fast`` is it, for ``_run``."""
     clock = Stepped()
-    slow = SimpleNamespace(clock=clock, reading_s=lambda t: 0.0)
+    slow = SimpleNamespace(clock=clock, fast=clock, reading_s=lambda t: 0.0, read_s=0.0)
     made = {}
 
     class SlowReadings(Recorded):
@@ -130,6 +133,12 @@ def slow_board(fake_arduino_cli, fresh_task_runner, monkeypatch):
             if data.decode().strip() == "M105":
                 clock.t += slow.reading_s(clock.t)
             super().write(data)
+
+        def read(self, timeout):
+            # A board read for what it says takes ``slow.read_s`` simulated seconds and no
+            # real ones: an autotune, which no sleep of the job's paces, runs as it is read.
+            clock.t += slow.read_s
+            return super().read(0.0)
 
     def factory(port, baud):
         made["board"] = SlowReadings(
@@ -432,32 +441,58 @@ class TestPlans:
 
 
 class TestExperiments:
-    def test_a_step_sets_its_targets_reads_and_ends_with_the_heater_off(self, board):
-        board.links.control.arm(PORT)
-        job = _run(board, loops.plan("hotend", 0, "step", 200, 900, **STEP))
-        sent = board.sim.sent
+    def test_a_step_sets_its_targets_reads_and_ends_with_the_heater_off(self, slow_board):
+        """On a clock the test owns, so every count is exact: a reading a second for the
+        540 s of the plan, the first target at the start, the step at its 300 s, and 240
+        readings after it."""
+        slow_board.links.control.arm(PORT)
+        job = _run(slow_board, loops.plan("hotend", 0, "step", 200, 900, **STEP))
+        sent = slow_board.sim.sent
         assert job.outcome == "done", job.error
-        heats = _heats(sent)
-        assert heats == ["M104 S180", "M104 S185"]
-        assert sent[sent.index("M104 S185") + 1 :].count("M105") >= 200  # read on after the step
+        assert _heats(sent) == ["M104 S180", "M104 S185"]
+        assert sent[sent.index("M104 S185") + 1 :].count("M105") == 241  # 240 and the read back
         assert _after(sent, "M104 S185")[-5:] == [*OFF, "M105"]  # off, then read back
         assert job.heater_off.startswith("heater off") and "M500" not in sent
-        assert job.experiment.samples.actual and max(job.experiment.samples.target) == 185
+        s = job.samples
+        assert s["t"] == [float(n) for n in range(541)]
+        stepped = next(t for t, target in zip(s["t"], s["target"], strict=True) if target == 185)
+        assert stepped == 301.0 and set(s["target"]) == {0.0, 180.0, 185.0}
         assert jobs.get(job.job.id).outcome == "done"
         assert loops.experiment(job.experiment.id)["kind"] == "step"
 
-    def test_a_step_s_stages_and_progress_reach_a_follower_of_the_jobs(self, board):
+    def test_a_step_on_the_real_sped_up_clock_runs_and_ends_with_the_heater_off(self, board):
+        """The one experiment run end to end on the board's own clock, a real one run 200
+        times fast, with the job's threads and sleeps: what it asserts is structure that
+        holds at any load, the lines sent, the heater off at the end and a document made.
+        The numbers an experiment gives -- how many readings, when a target is set, the plant
+        it finds, the response it measures -- are held by the tests beside it on a clock
+        the test controls."""
+        board.links.control.arm(PORT)
+        plan = loops.plan(
+            "hotend", 0, "step", 200, 600, base_c=180, step_c=5, settle_s=20.0, after_s=200.0
+        )
+        job = _run(board, plan)
+        sent = board.sim.sent
+        assert job.outcome == "done", job.error
+        assert _heats(sent) == ["M104 S180", "M104 S185"]
+        assert _after(sent, "M104 S185")[-5:] == [*OFF, "M105"]
+        assert job.heater_off.startswith("heater off") and "M500" not in sent
+        assert job.experiment.samples.actual and max(job.experiment.samples.target) == 185
+        assert loops.experiment(job.experiment.id)["kind"] == "step"
+        assert loops.document(job.experiment.id).experiments[0].id == job.experiment.id
+
+    def test_a_step_s_stages_and_progress_reach_a_follower_of_the_jobs(self, slow_board):
         import asyncio
 
         from apothecary import surfaces
 
-        board.links.control.arm(PORT)
+        slow_board.links.control.arm(PORT)
 
         async def follow():
             following = surfaces.subscribe(["jobs"])
             try:
                 job = await asyncio.to_thread(
-                    _run, board, loops.plan("hotend", 0, "step", 200, 900, **STEP)
+                    _run, slow_board, loops.plan("hotend", 0, "step", 200, 900, **STEP)
                 )
                 got, _ = await following.next(0.2)
                 return job, got
@@ -473,23 +508,23 @@ class TestExperiments:
             "done",
         ]
         progress = [e["body"]["progress"] for e in told]
-        assert progress == sorted(progress) and 3 < len(told) <= 105
+        assert progress == sorted(progress) and len(told) == 102
         assert told[-1]["body"]["outcome"] == "done"
 
-    def test_a_tune_and_its_document_are_surfaces_that_ask_no_port(self, board):
+    def test_a_tune_and_its_document_are_surfaces_that_ask_no_port(self, slow_board):
         import asyncio
 
         from apothecary import surfaces
         from apothecary.api import app
 
         client = TestClient(app)
-        board.links.control.arm(PORT)
+        slow_board.links.control.arm(PORT)
 
         async def follow():
             following = surfaces.subscribe(["tune", "control_loop"])
             try:
                 job = await asyncio.to_thread(
-                    _run, board, loops.plan("hotend", 0, "step", 200, 900, **STEP)
+                    _run, slow_board, loops.plan("hotend", 0, "step", 200, 900, **STEP)
                 )
                 got, _ = await following.next(0.2)
                 return job, got
@@ -506,7 +541,7 @@ class TestExperiments:
         assert made["key"] == job.experiment.id and made["body"]["error"] is None
         assert made["body"]["document"]["schema"] == "control/loop/1"
         # Read now: the same, and nothing written to the board by either.
-        sent = len(board.sim.sent)
+        sent = len(slow_board.sim.sent)
         read = client.get("/surfaces/control_loop", params={"experiment": job.experiment.id})
         assert read.status_code == 200
         again = read.json()["snapshot"]["document"]
@@ -518,13 +553,15 @@ class TestExperiments:
         assert client.get("/surfaces/tune").json()["snapshot"]["tuning"][0]["job_id"] == job.job.id
         gone = client.get("/surfaces/control_loop", params={"experiment": "nope"}).json()
         assert gone["snapshot"]["document"] is None and "no kept experiment" in gone["snapshot"]["error"]
-        assert len(board.sim.sent) == sent
+        assert len(slow_board.sim.sent) == sent
 
-    def test_a_step_s_document_finds_the_simulated_plant(self, board):
+    def test_a_step_s_document_finds_the_simulated_plant(self, slow_board):
         """The fit of a closed-loop step read once a (simulated) second finds the
-        simulator's own plant within 15 % in its gain and time constant and 2 s in its dead
-        time. The data comes from the model it is fitted to, so this holds the pipeline --
-        the job, the record, the document -- and says nothing of a machine."""
+        simulator's own plant, within 1 % in its gain and time constant and a second in its
+        dead time, the same on every run: the clock is the test's. The data comes from the
+        model it is fitted to, so this holds the pipeline -- the job, the record, the
+        document -- and says nothing of a machine."""
+        board = slow_board
         board.links.control.arm(PORT)
         job = _run(
             board,
@@ -534,9 +571,9 @@ class TestExperiments:
         )
         doc = loops.document(job.experiment.id, rule="simc", read_board=True)
         p, true = doc.plant, board.sim.heaters["T"].plant
-        assert p.gain == pytest.approx(true.gain, rel=0.15)
-        assert p.time_constant == pytest.approx(true.time_constant, rel=0.15)
-        assert p.dead_time == pytest.approx(true.dead_time, abs=2.0)
+        assert p.gain == pytest.approx(true.gain, rel=0.01)  # found 1.004
+        assert p.time_constant == pytest.approx(true.time_constant, rel=0.01)  # 90.4 s
+        assert p.dead_time == pytest.approx(true.dead_time, abs=1.0)  # 2.26 s of 3: a fit's lean
         assert doc.controller.on_machine.basis == "measured"
         client = TestClient(app)
         body = {"experiment_id": job.experiment.id, "rule": "simc"}
@@ -551,19 +588,23 @@ class TestExperiments:
         assert doc.get("response.overshoot").basis == "measured"
         assert doc.machine.simulated is False or doc.machine.port == PORT
 
-    def test_an_autotune_is_watched_and_its_gains_kept(self, board):
+    def test_an_autotune_is_watched_and_its_gains_kept(self, slow_board):
+        board = slow_board
+        board.read_s = 0.5  # the autotune runs as the board is read: half a second a read
         board.links.control.arm(PORT)
         job = _run(board, loops.plan("hotend", 0, "autotune", 230, 1800, target_c=200, cycles=4))
         sent = board.sim.sent
         assert job.outcome == "done", job.error
         assert _heats(sent) == ["M303 E0 S200 C4"]
-        assert set(job.result) >= {"kp", "ki", "kd"} and job.samples["actual"]
+        assert job.result == {"ku": 44.93, "tu": 13.4, "kp": 26.96, "ki": 4.02, "kd": 45.16}
+        assert job.samples["actual"]
         assert _after(sent, "M303 E0 S200 C4")[-6:] == ["M108", *OFF, "M105"]
         doc = loops.document(job.experiment.id)
         assert doc.controller.designed.rule == "firmware_autotune"
         assert doc.controller.designed.basis == "identified"
 
-    def test_a_perturbation_gives_the_frequency_response(self, board):
+    def test_a_perturbation_gives_the_frequency_response(self, slow_board):
+        board = slow_board
         board.links.control.arm(PORT)
         plan = loops.plan(
             "hotend",
@@ -577,14 +618,14 @@ class TestExperiments:
             periods=4,
             settle_s=600,
         )
-        job = _run(board, plan, wait=90)
+        job = _run(board, plan)
         assert job.outcome == "done", job.error
         assert _heats(board.sim.sent)[:3] == ["M104 S200", "M104 S202", "M104 S198"]
         doc = loops.document(job.experiment.id)
         first = doc.frequency[0]
-        assert first.segments == 3 and first.trust in ("good", "fair")
+        assert first.segments == 3 and first.trust == "good"
         g = gcode.simulated_heaters(PORT)["T"].plant.response(first.frequency)
-        assert first.magnitude == pytest.approx(abs(g), rel=0.25)
+        assert first.magnitude == pytest.approx(abs(g), rel=0.02)  # found 1.1 % high
 
     def test_readings_slower_than_the_sample_period_set_each_target_at_its_time(self, slow_board):
         """Each reading takes two sample periods: fewer samples, and the step is still
