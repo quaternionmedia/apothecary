@@ -1163,7 +1163,8 @@ editor, is that box's own undo.
 ## How numbers are written
 
 One form each, from `apothecary/static/format.js`, so the Machine's cards, the Print window,
-Loops and the Deck read alike: a heater `23.1/200°` (actual over target) and a lone reading
+Loops, the Deck, Selected's footprint and envelope, and every moment a window writes (Jobs,
+a task, a part's history, the Working space, Marks, a word kept on the tour) read alike: a heater `23.1/200°` (actual over target) and a lone reading
 `23.1°`; a time of day `11:53:53` (24 hours) and a day with it `2026-11-18 11:53:53`; how long
 a time takes `4:52` (`1:02:09` past an hour); a size in millimetres with its unit, no
 trailing zeros and at most three places (`101.5 mm`, `46 × 46 × 101.5 mm`); a position

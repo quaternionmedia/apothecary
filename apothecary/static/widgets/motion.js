@@ -35,6 +35,7 @@
  */
 
 import * as THREE from "three";
+import { mm } from "/static/format.js";
 import { advance, gapsAt, outlinesAt, placeIn, poseAt, stepFrom } from "/static/part_motion.js";
 
 // What is bought, drawn in a colour of its own; and where a gap is least, in the Part
@@ -113,7 +114,7 @@ export function mountMotion(root, world) {
             </div>
             <ul class="motion-gaps">${gaps.map((g) => `<li data-gap="${esc(g.name)}"><span class="motion-gap-label">${esc(g.label)}</span>: least <strong class="motion-gap-value">${esc(said(g.least, g.unit))}</strong> at ${esc(table.label)} ${esc(said(g.at, table.unit))}${g.marks.length > 1 ? `, ${g.marks.length} places` : ""}</li>`).join("")}</ul>
             <p class="motion-turned">${esc(turned.join("; "))}</p>
-            <p class="motion-said">Each gap is the server's at the sample nearest, measured from the outlines (apothecary/gap_geometry.py); between two samples the pieces are taken in proportion, at most ${esc(table.interpolation.error_mm.toFixed(4))} mm from where the part's own pose puts them. ${esc(table.note)}${table.bent.length ? " The bent pieces are drawn from the model's outline at each sample, not simulated." : ""} No force, torque or flux is computed.</p>`;
+            <p class="motion-said">Each gap is the server's at the sample nearest, measured from the outlines (apothecary/gap_geometry.py); between two samples the pieces are taken in proportion, ${esc(table.interpolation.error_mm < 0.0005 ? "less than 0.001 mm" : `at most ${mm(table.interpolation.error_mm)}`)} from where the part's own pose puts them. ${esc(table.note)}${table.bent.length ? " The bent pieces are drawn from the model's outline at each sample, not simulated." : ""} No force, torque or flux is computed.</p>`;
     }
 
     // Only what changes while it plays, so a control under the pointer is not drawn afresh.

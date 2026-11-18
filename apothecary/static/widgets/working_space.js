@@ -34,6 +34,8 @@
  * an open() overtaken by a later one, or by close(), stops where it is.
  */
 
+import { clock } from "/static/format.js";
+
 const KEEP_EVERY = 0.05;        // a frame set at every 5 % of progress
 // What a machine's hour draws over its state: a printer's heaters, a router's spindle,
 // each on its own scale. Those the machine's polls said are drawn and named; the rest
@@ -148,7 +150,7 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
 
     // --- words ---------------------------------------------------------------------------
     const time = (iso) => new Date(iso).getTime();
-    const hhmm = (iso) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const hhmm = (iso) => clock(iso);
     const degrees = (v) => (typeof v === "number" ? Math.round(v * 10) / 10 : esc(v));
     const size = (bytes) => (bytes < 1e6 ? `${Math.ceil(bytes / 1e3)} kB` : bytes < 1e9 ? `${(bytes / 1e6).toFixed(1)} MB` : `${(bytes / 1e9).toFixed(2)} GB`);
     // A subject as a person names it: garage:printer_1#heater:bed is printer_1's bed

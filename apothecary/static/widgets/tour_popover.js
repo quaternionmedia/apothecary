@@ -17,6 +17,7 @@
 // person's press, and the stage says so.
 
 import { setReason } from '/static/can.js';
+import { stamp } from '/static/format.js';
 
 const KEPT = 'apothecary.tour';
 
@@ -158,7 +159,7 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
 
         const f = at.feedback;
         $('.tour-pop-feedback').textContent = f
-            ? `${f.verdict === 'off' ? `✗ Off: ${f.note}` : '✓ Works'} -- said${f.by ? ` by ${f.by}` : ''} ${new Date(f.at).toLocaleString()}${f.current ? '' : `, of an earlier build${f.commit ? ` (${f.commit})` : ''}: this stage waits for a word again`}`
+            ? `${f.verdict === 'off' ? `✗ Off: ${f.note}` : '✓ Works'} -- said${f.by ? ` by ${f.by}` : ''} ${stamp(f.at)}${f.current ? '' : `, of an earlier build${f.commit ? ` (${f.commit})` : ''}: this stage waits for a word again`}`
             : '';
         setReason($('.tour-pop-back'), state.at === 0 ? 'this is the journey\'s first stage' : null, 'The stage before');
         setReason($('.tour-pop-next'), state.at >= state.stages.length - 1 ? 'this is the journey\'s last stage' : null, 'The next stage');

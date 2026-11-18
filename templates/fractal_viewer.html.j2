@@ -902,6 +902,7 @@
         import { mountLayersWorld, hideFor as hideForReason, BY_LAYER, layerKinds as layerKindsOf, layersSaid as layersSaidOf } from '/static/layers_world.js';
         import { mountPanels } from '/static/panels.js';
         import { setReason } from '/static/can.js';
+        import { clock, stamp, dims } from '/static/format.js';
         import { mountMachine } from '/static/widgets/machine.js';
         import { mountBoards } from '/static/boards.js';
         import { boardLabel, boardSummary } from '/static/board_text.js';
@@ -6414,10 +6415,7 @@
                 const el = this.partEl('#part-envelope .declared');
                 if (!el) return;
                 this.shownDeclared = bounds ?? null;
-                el.textContent = bounds
-                    ? `envelope ${bounds.size.x.toFixed(2)} × ${bounds.size.y.toFixed(2)}`
-                      + ` × ${bounds.size.z.toFixed(2)} mm`
-                    : '';
+                el.textContent = bounds ? `envelope ${dims(bounds.size.x, bounds.size.y, bounds.size.z)}` : '';
                 this.markEnvelope();
             }
 
@@ -6430,7 +6428,7 @@
                 this.shownMeasured = box ?? null;
                 this.shownMeasuredPose = box ? pose : null;
                 el.textContent = box
-                    ? ` · measured ${box.size.x.toFixed(2)} × ${box.size.y.toFixed(2)} × ${box.size.z.toFixed(2)} mm`
+                    ? ` · measured ${dims(box.size.x, box.size.y, box.size.z)}`
                       + (from === 'summary' ? " (OpenSCAD's summary" : ' (read from the STL')
                       + (pose === 'rest' ? ', as it rests)' : ')')
                     : '';
@@ -6533,7 +6531,7 @@
             // Selected's footprint: the declared one, or for a part drawn from a variant,
             // what that measures, the declared beside it.
             footprintText(node) {
-                const size = (b) => b.max.map((v, i) => (v - b.min[i]).toFixed(0)).join(' × ') + ' mm';
+                const size = (b) => dims(...b.max.map((v, i) => v - b.min[i]));
                 const declared = node.footprint ? size(node.footprint) : '—';
                 // Both in the part's own frame, so a part turned where it stands (on the
                 // universe's sphere) is compared along its own axes.
@@ -6778,7 +6776,7 @@
                     const numbers = changed(entry).map(([k, v]) => `${k} ${described(v)}`).join(', ');
                     const what = entry.variant === null ? 'the saved part' : `${numbers || "the part's own numbers"}${entry.draft ? ', its SCAD edited' : ''}`;
                     const size = entry.measured?.size ? ` · ${shown(entry.measured.size.x)} × ${shown(entry.measured.size.y)} × ${shown(entry.measured.size.z)} mm` : '';
-                    const when = new Date(entry.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    const when = clock(entry.at);
                     return `<li data-at="${i}" class="${entry.variant === drawn ? 'drawn' : ''}" title="Draw it again, from the cache"><span class="history-when">${esc(when)}</span> ${esc(what)}${esc(size)}</li>`;
                 }).join('');
             }
@@ -8238,7 +8236,7 @@
                         const part = j.part ? ` → ${esc(j.part.path)}` : '';
                         const how = j.outcome === 'running' ? `running ${Math.round((j.progress || 0) * 100)}%` : esc(j.outcome);
                         const why = j.reason ? `${j.reason}. ` : '';
-                        return `<li class="site-job ${esc(j.outcome)}" data-job="${esc(j.id)}" title="${esc(why)}Started ${esc(new Date(j.started_at).toLocaleString())}${j.finished_at ? `, ended ${esc(new Date(j.finished_at).toLocaleString())}` : ''}. Select ${esc(machine)} and open it">${esc(machine)} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${how} · ${esc(new Date(j.started_at).toLocaleString())}</li>`;
+                        return `<li class="site-job ${esc(j.outcome)}" data-job="${esc(j.id)}" title="${esc(why)}Started ${esc(stamp(j.started_at))}${j.finished_at ? `, ended ${esc(stamp(j.finished_at))}` : ''}. Select ${esc(machine)} and open it">${esc(machine)} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${how} · ${esc(stamp(j.started_at))}</li>`;
                     }).join('')
                     : '<li class="empty">No jobs yet: a print or a cut started from a Machine, or a loop\'s experiment, is listed here</li>';
             }

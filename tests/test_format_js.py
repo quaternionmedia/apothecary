@@ -5,6 +5,7 @@ line's sentence. The module is pure, so node runs it here."""
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -33,6 +34,26 @@ console.log(JSON.stringify({
     sentence: ["poll: refused", "Jog X1", "printer_1's bed", "ttyUSB0: gone", "(⌗4)", ""].map(f.sentence),
 }));
 """
+
+
+# What writes a moment the browser's way, in the person's locale: "11:53:53 AM",
+# "11/18/2026, 12:06:32 PM", "Nov 18, 2026, 12:06 PM".
+LOCALE = re.compile(r"\.toLocale(?:Date|Time)?String\(")
+
+
+def test_no_page_writes_a_moment_its_own_way():
+    """Every time of day and every day the page writes goes through format.js: no
+    module of the page, and not the viewer's template, asks the browser's locale for one."""
+    sources = [p for p in (ROOT / "apothecary" / "static").rglob("*.js") if "vendor" not in p.parts]
+    sources += list((ROOT / "templates").glob("*.j2"))
+    own = [
+        f"{path.relative_to(ROOT)}:{n}"
+        for path in sources
+        if path != MODULE
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if LOCALE.search(line)
+    ]
+    assert own == []
 
 
 def test_each_number_has_one_form(tmp_path):

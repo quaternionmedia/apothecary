@@ -536,7 +536,7 @@ def test_a_quiet_board_and_a_router_s_pins_as_the_site_reads_them(page, url, wal
     # 1. printer_1 not heard for ten minutes: last heard, and its state last known, at
     #    its board's last answer.
     expect(printer).to_contain_text("last heard")
-    hhmm = "iso => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })"
+    hhmm = "async (iso) => (await import('/static/format.js')).clock(iso)"
     answered = page.evaluate(hhmm, when["answered"])
     expect(printer).to_contain_text(f"last heard {answered}")
     expect(printer).to_contain_text("no camera")

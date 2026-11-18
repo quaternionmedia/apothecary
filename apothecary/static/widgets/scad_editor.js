@@ -49,6 +49,7 @@
  */
 
 import { valueChanges } from "./assignments.js";
+import { stamp } from "/static/format.js";
 
 const MARKUP = `
 <div class="scad-editor" tabindex="-1">
@@ -165,7 +166,7 @@ function esc(v) {
 function when(iso) {
     const t = Date.parse(iso);
     if (Number.isNaN(t)) return "";
-    return new Date(t).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+    return stamp(t);
 }
 
 function numbers(params) {

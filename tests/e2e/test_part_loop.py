@@ -268,6 +268,12 @@ def _framed_on_the_cube(page: Page) -> None:
     by_hand(page, PART, distance=NEAR)
 
 
+def _mm(v: float) -> str:
+    """A size as the page writes one (static/format.js): at most three places, none
+    trailing."""
+    return f"{round(v, 3):g}"
+
+
 def _envelope(page: Page) -> str:
     """What the editor says of the part's size: the envelope it declares, and what is
     drawn measures. It stands below the SCAD, out of a picture of the sizes, so a step
@@ -424,7 +430,7 @@ def _a_round(
     # is what the variant drawn measures.
     expect(page.locator("#part-envelope")).not_to_have_class(re.compile(r"\bdiffers\b"))
     expect(page.locator("[data-facts='footprint']")).to_contain_text(
-        f"{side:.0f} × {side:.0f} × {side:.0f} mm, as the variant drawn measures"
+        f"{_mm(side)} × {_mm(side)} × {_mm(side)} mm, as the variant drawn measures"
     )
     expect(page.locator("#stage-summary")).to_have_text("No staged changes")
     assert _variant_in_address(page) == answer.json()["variant"]
@@ -593,7 +599,7 @@ def _drawn_again_from_the_history(page: Page, side: float) -> str:
     assert _size_line(page).startswith(f"size = {side:g};")
     expect(page.locator("#stage-summary")).to_have_text("No staged changes")
     expect(page.locator("#part-envelope .declared")).to_have_text(
-        f"envelope {side:.2f} × {side:.2f} × {side:.2f} mm", timeout=10000
+        f"envelope {_mm(side)} × {_mm(side)} × {_mm(side)} mm", timeout=10000
     )
     expect(page.locator("#part-envelope")).not_to_have_class(re.compile(r"\bdiffers\b"))
     return _status(page).inner_text()

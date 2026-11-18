@@ -42,6 +42,7 @@
  */
 
 import { setReason } from "/static/can.js";
+import { clock } from "/static/format.js";
 
 const MARKUP = `
 <div class="marks-ui">
@@ -146,7 +147,6 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
 
     const STEPS = 1000;
     const ms = (iso) => new Date(iso).getTime();
-    const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     // The moment the slider stands at: null at its end, which is now.
     function moment() {
         if (!line || !line.since) return null;
