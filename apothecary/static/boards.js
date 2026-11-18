@@ -339,16 +339,23 @@ export function mountBoards({ base = "", site = () => null } = {}) {
     // --- the scan ------------------------------------------------------------------------------------
     // The site's bindings and the detected ports: rows by path, the devices, and
     // any toolchain problem to show instead. One at a time; asked again while
-    // one is in flight, that one answers.
+    // one is in flight, that one answers -- for the same site only. A site's scan is
+    // of its site (`era`, which forget() ends): one asked for before the site changed
+    // is not handed to the next, and its answer, whenever it comes, changes nothing.
+    let era = 0;
     function scan({ fresh = false } = {}) {
-        if (scanning) return scanning;
+        if (scanning && scanning.era === era) return scanning.answered;
         model.scanning = true;
-        const name = site();
-        scanning = (async () => {
+        const name = site(), mine = era;
+        const answered = (async () => {
+            let data = null, problem = null;
             try {
-                const data = await api(name
+                data = await api(name
                     ? `/sites/${encodeURIComponent(name)}/devices${fresh ? "?fresh=1" : ""}`
                     : `/firmware/devices${fresh ? "?fresh=1" : ""}`);
+            } catch (e) { problem = e.message; }
+            if (mine !== era) return model;  // another site's by now: its rows are not these
+            if (data) {
                 model.rows = name ? Object.fromEntries(data.bindings.map((row) => [row.path, row])) : {};
                 model.devices = data.devices || [];
                 model.problem = data.problem || null;
@@ -360,20 +367,20 @@ export function mountBoards({ base = "", site = () => null } = {}) {
                     takeView(b, { device: row.device, expected: row.expected });
                     if (row.printer_status) takeStatus(b, row.printer_status, ++seq);
                 }
-            } catch (e) {
-                model.rows = {}; model.devices = []; model.problem = e.message;
-            } finally {
-                model.loaded = true; model.scanning = false; scanning = null;
+            } else {
+                model.rows = {}; model.devices = []; model.problem = problem;
             }
+            model.loaded = true; model.scanning = false; scanning = null;
             emit(null, "scan", { fresh });
             return model;
         })();
-        return scanning;
+        scanning = { era: mine, answered };
+        return answered;
     }
     // The one way to look for boards again: a fresh port scan.
     async function rescan() {
         lookedAt = Date.now();
-        if (scanning) await scanning;
+        if (scanning && scanning.era === era) await scanning.answered;
         return scan({ fresh: true });
     }
     // A pin made or taken back: the row the server answered with. A printer whose
@@ -388,8 +395,12 @@ export function mountBoards({ base = "", site = () => null } = {}) {
         if (row.device.printer && model.links.has(port)) return poll(port).catch(() => null);
         return null;
     }
+    // Another site in view: its pins are not known until its own scan answers, and a
+    // scan still in flight for the site before answers nothing.
     function forget() {
-        model.rows = {}; model.devices = []; model.problem = null; model.loaded = false;
+        era++;
+        scanning = null;
+        model.rows = {}; model.devices = []; model.problem = null; model.loaded = false; model.scanning = false;
     }
 
     // --- the latch, wherever it was armed ------------------------------------------------------

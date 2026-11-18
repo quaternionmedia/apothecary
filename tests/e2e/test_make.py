@@ -151,6 +151,61 @@ def test_make_on_the_part_stepped_into_takes_it_to_the_printer_whose_board_is_co
 
 
 @pytest.mark.e2e
+def test_make_opens_the_board_s_machine_though_the_universe_s_boards_answer_late(
+    page: Page, url: str
+):
+    """The universe's scan of its boards still in flight when ⚒ Make opens the garage:
+    the garage's boards are asked for themselves, and the universe's answer, coming after
+    the garage has loaded, is no answer for it -- printer_1's Machine is its board's,
+    not its plan."""
+    errors: list = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    held: list = []
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        http.post("/firmware/devices/identify", json={"port": PRINTER}).raise_for_status()
+        http.put(
+            f"/sites/garage/nodes/{BOARD}/device", json={"identity": PRINTER}
+        ).raise_for_status()
+        try:
+            open_garage(page, url, settle=False)
+            page.route(
+                re.compile(r"/sites/apothecary/devices$"),
+                lambda route: held.append(route) if not held else route.continue_(),
+            )
+            to_site(page, "apothecary")
+            page.wait_for_function("() => window.fractalViewer.bindingsInFlight")
+            assert len(held) == 1
+            row(page, "calibration_cube").dblclick()
+            page.wait_for_function(
+                "() => window.fractalViewer.focusPath.join('.') === 'calibration_cube'"
+            )
+            make = page.locator("#make-here")
+            expect(make).to_have_text(
+                "⚒ Make calibration_cube on printer_1 in garage", timeout=15000
+            )
+            make.click()
+            page.wait_for_function(
+                "() => window.fractalViewer.siteName === 'garage'", timeout=15000
+            )
+            held[0].continue_()
+            page.wait_for_function(
+                "() => window.apothecaryPanels.isShown('machine-print')", timeout=15000
+            )
+            opened = page.evaluate(
+                "() => { const m = window.fractalViewer.machine;"
+                " return m && { port: m.port, plan: !!m.plan }; }"
+            )
+            assert opened == {"port": PRINTER, "plan": False}
+            pinned = page.evaluate(
+                "(path) => window.fractalViewer.bindings[path]?.device?.port ?? null", BOARD
+            )
+            assert pinned == PRINTER
+        finally:
+            http.delete(f"/sites/garage/nodes/{BOARD}/device")
+    assert errors == []
+
+
+@pytest.mark.e2e
 def test_the_part_made_measured_is_fed_back_into_the_printers_slices(page: Page, url: str):
     """The footpedal made on printer_1, then measured in its Print window: the sizes typed
     are checked against what was sliced, the walls' correction is kept for printer_1, and
