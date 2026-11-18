@@ -794,7 +794,7 @@
             <button type="button" id="tour-pop-open" aria-pressed="false" title="The tour: each journey a stage at a time, the page taken to each stage, and your word kept on it">Tour</button>
             <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, which goes through the app a page at a time">Docs</a>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or Ctrl+right-click a piece); Shift+M opens the canvas ring. Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
-            <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to bring Problems, beside Site, in front">Layout valid</span>
+            <span id="validity-indicator" class="validity-indicator valid" role="button" tabindex="0" title="The site's problems: click, or press Enter, to bring Problems, beside Site, in front">Layout valid</span>
         </div>
         <div class="main-content">
             <div class="viewer-panel">
@@ -2159,6 +2159,7 @@
                 document.addEventListener('pointerdown', (e) => this.foldViewMenu(e));
                 // The header's count of problems brings Problems in front.
                 this.validityEl.addEventListener('click', () => this.openProblems());
+                this.validityEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.openProblems(); } });
                 // A row of Site's Jobs selects its machine, at its level, and opens it.
                 this.siteJobsListEl.addEventListener('click', (e) => {
                     const row = e.target.closest('li[data-job]');
@@ -8238,7 +8239,7 @@
                         const why = j.reason ? `${j.reason}. ` : '';
                         return `<li class="site-job ${esc(j.outcome)}" data-job="${esc(j.id)}" title="${esc(why)}Started ${esc(new Date(j.started_at).toLocaleString())}${j.finished_at ? `, ended ${esc(new Date(j.finished_at).toLocaleString())}` : ''}. Select ${esc(machine)} and open it">${esc(machine)} · ${esc(j.kind)} · ${esc(j.input.name)}${part} · ${how} · ${esc(new Date(j.started_at).toLocaleString())}</li>`;
                     }).join('')
-                    : '<li class="empty">none yet</li>';
+                    : '<li class="empty">No jobs yet: a print or a cut started from a Machine, or a loop\'s experiment, is listed here</li>';
             }
 
             // A poll of a machine: a running job's progress shown, and a job begun or
