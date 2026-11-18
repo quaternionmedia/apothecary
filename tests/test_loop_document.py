@@ -235,6 +235,19 @@ class TestTheBuilder:
         assert doc.get("response.steady_error").value == pytest.approx(0.0, abs=0.05)
         assert doc.get("plant.time_constant").basis == "identified"
 
+    def test_a_record_whose_power_stood_still_while_its_targets_moved_is_refused(self):
+        """A heater that jumps to its target reports one power whatever its target: no plant
+        is fitted to that, and the builder says why. A record whose power moves is fitted."""
+        exp = self._experiment("step", lambda s: 200.0 if s < 300.5 else 205.0, 900, settle_s=300.0)
+        still = exp.model_copy(
+            update={
+                "samples": exp.samples.model_copy(update={"power": [70.0] * len(exp.samples.t)})
+            }
+        )
+        with pytest.raises(ValueError, match="stood at 70 throughout"):
+            build(still, Machine(kind="printer", port="x"), LoopName(heater="hotend"))
+        assert build(exp, Machine(kind="printer", port="x"), LoopName(heater="hotend")).plant
+
     def test_a_perturbation_carries_its_frequency_response(self):
         def square(s):
             if s < 600.5:

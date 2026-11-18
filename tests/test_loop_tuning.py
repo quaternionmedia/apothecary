@@ -1101,3 +1101,38 @@ def test_the_rules_and_the_kinds_are_listed_for_a_page():
     for kind in kinds["kinds"]:
         for p in kind["parameters"]:
             assert p["name"] not in ("ceiling_c", "max_duration_s"), p
+
+
+def test_a_board_whose_power_stands_still_identifies_nothing_and_says_why(
+    fake_arduino_cli, fresh_task_runner, monkeypatch
+):
+    """The simulated board with its heaters not modelled jumps each heater to its target
+    and reports one power throughout: a step on it runs and ends as any does, and its
+    document is refused with why -- the targets moved, the power did not -- where a fit
+    would have found a plant of nothing. The route and the surface say the same words."""
+    monkeypatch.delenv("APOTHECARY_SIMULATED_HEATERS", raising=False)
+    fast = Fast(200)
+    links = gcode.PrinterLinks(factory=lambda port, baud: Recorded(port, baud))
+    monkeypatch.setattr(gcode, "_LINKS", links)
+    try:
+        devices.printer_status(PORT)
+        links.control.arm(PORT)
+        job = loops.start(
+            PORT,
+            loops.plan("hotend", 0, "step", 200, 900, **STEP),
+            clock=fast.now,
+            sleep=fast.sleep,
+        )
+        job.thread.join(60)
+        assert job.outcome == "done", job.error
+        with pytest.raises(
+            ValueError, match=r"targets moved and the heater's power the board reported stood at 70"
+        ):
+            loops.document(job.experiment.id)
+        answer = TestClient(app).post(
+            "/firmware/printers/loops/document", json={"experiment_id": job.experiment.id}
+        )
+        assert answer.status_code == 422 and "no plant is identified" in answer.json()["detail"]
+        assert "no plant is identified" in loops._loop_of(job.experiment.id)["error"]
+    finally:
+        links.stop_all()

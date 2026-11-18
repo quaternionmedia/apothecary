@@ -554,6 +554,26 @@ def render_markdown(doc: LoopDocument) -> str:
     return "\n".join(out).rstrip() + "\n"
 
 
+def unidentifiable(experiment_id: str, s: Samples) -> None:
+    """ValueError when a record's heater power stood still while its targets moved: in
+    closed loop a target that moves moves the power that drives the heater, so a power that
+    did not -- a board whose heaters jump to their targets, as the simulated board's do
+    unless they are modelled, or one that reports a power it does not drive -- leaves what
+    moved the temperature out of the record, and a plant fitted to it would be a fit to
+    nothing. Reported for the document to say, never fitted."""
+    driven = [(r, w) for r, w in zip(s.target, s.power, strict=True) if r > 0 and w is not None]
+    targets = {r for r, _ in driven}
+    powers = {w for _, w in driven}
+    if len(targets) > 1 and len(powers) == 1:
+        (held,) = powers
+        raise ValueError(
+            f"{experiment_id}: its targets moved and the heater's power the board reported "
+            f"stood at {held:g} throughout, so its temperatures do not follow a power it "
+            "reports and no plant is identified from them (a simulated board's heaters do "
+            "this unless APOTHECARY_SIMULATED_HEATERS=model)"
+        )
+
+
 def build(
     experiment: Experiment,
     machine: Machine,
@@ -587,6 +607,8 @@ def build(
     s = experiment.samples
     dt = experiment.sample_period_s
     p = experiment.parameters
+    if s is not None and experiment.kind in ("step", "perturbation"):
+        unidentifiable(experiment.id, s)
     if (
         s is not None
         and len(s.t) >= 8
