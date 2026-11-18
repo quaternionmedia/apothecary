@@ -2184,6 +2184,10 @@ CAN_VERBS: Dict[str, CanVerb] = {
     "print:preview": None,
     "print:plan": None,
     "print:measure": None,
+    # The printer's tuning document (slicer/tuning.py apply, undo), not its port: refused by
+    # the tuning's own answer (static/tuning.js canApply, canUndo), as its button is.
+    "print:tune-apply": None,
+    "print:tune-undo": None,
     "control:unlock": "unlock",
     "control:spindle-on": "spindle",
     "control:spindle-off": "off",
