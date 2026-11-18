@@ -141,4 +141,9 @@ def test_the_registered_parts_depths():
     # board_common.scad is shared code and no part: boards are built from nothing
     for board in ("arduino_uno", "teensy_40", "raspberry_pi_4", "esp32_devkitc"):
         assert depths[board] == 0
-    assert all(part.parts is None for part in parts.values())
+    # the mount subtracts v_slot's own `extrusion` profile at v_slot's `tolerance`; its
+    # include names the library's upstream file, which resolves to nothing, so the
+    # relation is the part's own to declare
+    assert parts["matboard_cutter_mount"].parts == ["v_slot"]
+    assert children["matboard_cutter_mount"] == ["v_slot"] and depths["matboard_cutter_mount"] == 1
+    assert {n for n, p in parts.items() if p.parts is not None} == {"matboard_cutter_mount"}

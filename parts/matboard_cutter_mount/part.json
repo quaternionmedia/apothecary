@@ -1,6 +1,9 @@
 {
   "description": "Matboard cutter mount",
   "category": "tooling",
+  "parts": [
+    "v_slot"
+  ],
   "tags": [
     "matboard",
     "cutter",

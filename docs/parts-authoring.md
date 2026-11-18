@@ -102,6 +102,14 @@ A part that says `"parts": ["name", ...]` in its `part.json` (or `parts=[...]` i
 wrapper) is built from exactly those, an empty list meaning none; the inference is
 then not consulted.
 
+A part says its list where its geometry draws another registered part's and the
+inference cannot see it: `matboard_cutter_mount` includes the V-slot library under
+its upstream file name, which is no file here, and subtracts `v_slot`'s `extrusion`
+profile at its `tolerance`, so its sidecar says `"parts": ["v_slot"]`. Being built
+from is not being made on or made like: stock a part is cut on (`router_coupon`,
+`router_emoji` on the router) and a part another is a variant of (`flexure_rotor`,
+`rolling_rotor` beside `airgap`) draw none of it, and say nothing.
+
 ## How it rests
 
 A part's STL is the way up it prints: its SCAD's own render, never turned.
