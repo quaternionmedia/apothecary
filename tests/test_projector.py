@@ -345,12 +345,17 @@ def test_the_answer_docs_projector_md_shows_has_the_keys_a_real_answer_has(pinne
         tool_position={"x": 60.0, "y": 40.0, "z": 0.2},
         job=job,
     )
-    # Calibrated where that poll says the bed stands, which a bed that carries Y needs.
-    assert pinned.put("/sites/garage/machines/printer_1/projector", json=PUT).status_code == 200
+    # Calibrated where that poll says the bed stands, which a bed that carries Y needs, on
+    # the bed plane and at a second plane.
+    lens = Pinhole()
+    assert _marked(pinned, lens).status_code == 200
+    assert _marked(pinned, lens, height=20.0).status_code == 200
     real = pinned.get("/sites/garage/machines/printer_1/projector").json()
     for where in (
         "",
         "calibration",
+        "calibration.upper",
+        "plane",
         "picture",
         "picture.bed",
         "picture.file",
@@ -364,6 +369,7 @@ def test_the_answer_docs_projector_md_shows_has_the_keys_a_real_answer_has(pinne
         assert _keys(doc) == set(got), (
             f"{where or 'the answer'}: docs {sorted(_keys(doc))}, real {sorted(got)}"
         )
+    assert _keys(shown["plane"]["wanted"]) == set(real["plane"]["wanted"])
     assert _keys(shown["frame"]) <= set(real["frame"])
     assert _keys(shown["moving"]["status"]["job"]) <= set(real["moving"]["status"]["job"])
     projector.clear("garage", "printer_1")
@@ -619,3 +625,159 @@ def test_a_calibration_with_a_second_plane_is_kept_and_read_again(garage):
     # A first calibration marked again forgets the second plane: the projector may have moved.
     projector.save(lens.calibration())
     assert projector.load("garage", "printer_1").upper is None
+
+
+# --- over HTTP: a height, and the plane the picture is drawn for ------------------------------
+
+AT = "/sites/garage/machines/printer_1/projector"
+HOME = {"position": {"x": 0.0, "y": 0.0, "z": 0.0}, "tool_position": {"x": 0.0, "y": 0.0, "z": 0.0}}
+
+
+def _marked(c, lens, height=None, path="printer_1"):
+    """The machine's four points marked on a pinhole projector's output at ``height`` mm
+    above the bed (the bed plane with none), kept as a page's drag keeps them."""
+    at = f"/sites/garage/machines/{path}/projector"
+    got = c.get(at).json()
+    kept = got["calibration"] if height is not None else None
+    bed = kept["bed"] if kept else got["starting_points"]
+    up = 0.0 if height is None else height
+    offset = got["moving"]["bed_offset"] or 0.0  # the bed stands where its poll says
+    lit = [list(lens.pixel(x, y + offset, up)) for x, y in bed]
+    if height is None:
+        return c.put(at, json={"bed": bed, "pixels": lit, "size": list(OUTPUT)})
+    return c.put(
+        f"{at}/upper", json={"pixels": lit, "size": list(OUTPUT), "height": height}
+    )
+
+
+def test_with_one_calibration_the_plane_is_the_bed_s_and_the_answer_says_so(pinned):
+    _poll(**HOME)
+    lens = Pinhole()
+    assert _marked(pinned, lens).status_code == 200
+    got = pinned.get(AT).json()
+    plane = got["plane"]
+    assert plane["z"] == 0.0 and plane["for"] == "the bed plane" and plane["how"] == "bed plane only"
+    assert plane["mapping"] == got["mapping"] and plane["heights"] == [0.0]
+    assert plane["line"].startswith("drawn for the bed plane -- bed plane only") and got["upper_mapping"] is None
+    assert got["calibration"]["upper"] is None
+    # A height asked for needs a second plane, and is refused saying so.
+    asked = pinned.get(AT, params={"height": 12})
+    assert asked.status_code == 422 and "only the bed plane is calibrated" in asked.json()["detail"]
+    assert pinned.get(AT, params={"height": 0}).status_code == 200
+
+
+def test_a_second_plane_is_kept_over_http_and_a_height_asked_is_drawn_for(pinned):
+    _poll(**HOME)
+    lens = Pinhole()
+    refused = _marked(pinned, lens, height=20.0)
+    assert refused.status_code == 409 and "no calibration of the bed plane" in refused.text
+    assert _marked(pinned, lens).status_code == 200
+    got = _marked(pinned, lens, height=20.0)
+    assert got.status_code == 200, got.text
+    got = got.json()
+    assert got["calibration"]["upper"]["height"] == 20.0 and got["plane"]["heights"] == [0.0, 20.0]
+    # Nothing is drawn for a height: the bed plane, and the band's line says so.
+    assert got["plane"]["z"] == 0.0 and got["plane"]["how"] == "measured at the bed plane"
+    assert got["plane"]["line"] == (
+        "drawn for the bed plane (measured at the bed plane; planes calibrated at 0 and 20 mm)"
+    )
+    for z in (5.0, 20.0, 31.0, 40.0):
+        asked = pinned.get(AT, params={"height": z}).json()["plane"]
+        assert asked["z"] == z and asked["for"] == "the height asked"
+        for x, y in PROBES:
+            assert apply(asked["mapping"], x, y) == pytest.approx(lens.pixel(x, y, z), abs=1e-3)
+    assert pinned.get(AT, params={"height": 5}).json()["plane"]["how"] == (
+        "between the two calibrated planes"
+    )
+    assert pinned.get(AT, params={"height": 31}).json()["plane"]["said"][0].startswith(
+        "31 mm is past the second plane's 20 mm"
+    )
+    beyond = pinned.get(AT, params={"height": 41})
+    assert beyond.status_code == 422 and "past 2 times the second plane's 20 mm" in beyond.text
+    assert pinned.get(AT, params={"height": -3}).status_code == 422
+    # The second plane's own mapping is of the pixels marked on it.
+    assert apply(got["upper_mapping"], 20.0, 20.0) == pytest.approx(lens.pixel(20.0, 20.0, 20.0))
+    # Marked again at the same height as the bed: refused, and the second plane kept is the old.
+    same = pinned.put(
+        f"{AT}/upper", json={"pixels": got["calibration"]["pixels"], "size": list(OUTPUT), "height": 20}
+    )
+    assert same.status_code == 422 and "pixels are the bed plane's" in same.json()["detail"]
+    low = pinned.put(f"{AT}/upper", json={"pixels": got["calibration"]["pixels"], "size": list(OUTPUT), "height": 0.2})
+    assert low.status_code == 422 and "fix no height" in low.json()["detail"]
+    assert projector.load("garage", "printer_1").upper.height == 20.0
+    # Forgotten alone, the bed plane's calibration stays; marked again, the bed plane's drops it.
+    assert pinned.delete(f"{AT}/upper").json() == {"forgotten": True}
+    assert pinned.delete(f"{AT}/upper").json() == {"forgotten": False}
+    assert projector.load("garage", "printer_1").upper is None
+    assert _marked(pinned, lens, height=20.0).status_code == 200
+    assert _marked(pinned, lens).status_code == 200
+    assert projector.load("garage", "printer_1").upper is None
+
+
+def test_the_streaming_layer_s_own_height_is_what_a_printer_is_drawn_for(pinned):
+    """A print's current layer stands where the file says (its own Z): with a second plane
+    marked the picture is drawn for that height, the band says which layer, and with none it
+    is drawn on the bed plane and says what that leaves displaced."""
+    kept = devices.save_print_file("square.gcode", SQUARE.encode(), "printer")
+    job = {"kind": "print", "file_id": kept.id, "name": "square.gcode", "stage": "printing"}
+    job.update(sent=7, total=11, progress=7 / 11, running=True)
+    _poll(state="printing", job=job, **HOME)
+    lens = Pinhole()
+    assert _marked(pinned, lens).status_code == 200
+    one = pinned.get(AT).json()
+    layer = [g for g in one["picture"]["toolpath"]["groups"] if g["label"] == "layer 1"]
+    assert layer and one["moving"]["current"] == 1
+    assert one["plane"]["z"] == 0.0 and one["plane"]["how"] == "bed plane only"
+    assert one["plane"]["wanted"]["for"] == "layer 1" and one["plane"]["wanted"]["z"] > 0
+    assert "layer 1 stands" in one["plane"]["said"][0]
+    z = one["plane"]["wanted"]["z"]
+    assert _marked(pinned, lens, height=20.0).status_code == 200
+    two = pinned.get(AT).json()
+    assert two["plane"]["z"] == z and two["plane"]["for"] == "layer 1"
+    assert two["plane"]["how"] == "between the two calibrated planes"
+    assert f"drawn for layer 1, {z:g} mm above the bed" in two["plane"]["line"]
+    for x, y in PROBES:
+        assert apply(two["plane"]["mapping"], x, y) == pytest.approx(lens.pixel(x, y, z), abs=1e-3)
+    # What a poll moves carries the plane, so the page that takes only that stays right.
+    from apothecary.routes.projector import moved
+
+    assert moved("garage", "printer_1")["plane"] == two["plane"]
+
+
+def test_a_router_is_drawn_for_its_stock_s_top_where_its_controller_puts_the_work_zero(
+    fake_arduino_cli, garage
+):
+    c = TestClient(app)
+    c.put(f"/sites/garage/nodes/{CONTROLLER}/device", json={"identity": PORT})
+    at = "/sites/garage/machines/cnc_router/projector"
+    try:
+        kept = devices.save_print_file("slot.nc", SLOT.encode(), "router")
+        machine_plans.save("garage", "cnc_router", "router", "router_coupon", kept.id)
+        poll = dict(
+            dialect=GRBL,
+            position={"x": -300.0, "y": -400.0, "z": -10.0},
+            tool_position={"x": 100.0, "y": 200.0, "z": 70.0},
+        )
+        _poll(**poll, work_origin={"x": 100.0, "y": 150.0, "z": 12.0})
+        lens = Pinhole(eye=(200.0, -300.0, 1800.0), target=(200.0, 300.0, 0.0))
+        assert _marked(c, lens, path="cnc_router").status_code == 200
+        assert _marked(c, lens, height=20.0, path="cnc_router").status_code == 200
+        plane = c.get(at).json()["plane"]
+        assert plane["for"] == "the stock's top" and plane["z"] == 12.0
+        assert plane["how"] == "between the two calibrated planes"
+        offset = c.get(at).json()["moving"]["bed_offset"]
+        for x, y in PROBES:
+            lit = lens.pixel(x, y + offset, 12.0)
+            assert apply(plane["mapping"], x, y + offset) == pytest.approx(lit, abs=1e-3)
+        # A work zero past twice the second plane's height: drawn on the bed plane, saying why.
+        _poll(**poll, work_origin={"x": 100.0, "y": 150.0, "z": 55.0})
+        far = c.get(at).json()["plane"]
+        assert far["z"] == 0.0 and far["how"] == "bed plane: the height is refused"
+        assert far["wanted"] == {"z": 55.0, "for": "the stock's top"}
+        assert "past 2 times the second plane's 20 mm" in far["said"][0]
+        # No work zero said: nothing to draw for, the bed plane.
+        _poll(**poll)
+        none = c.get(at).json()["plane"]
+        assert none["wanted"] is None and none["z"] == 0.0
+    finally:
+        c.delete(f"/sites/garage/nodes/{CONTROLLER}/device")

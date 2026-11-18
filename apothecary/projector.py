@@ -280,6 +280,14 @@ def mapping_at(
     return at
 
 
+def upper_mapping(calibration: Calibration) -> Optional[Matrix]:
+    """The second plane's own mapping, from the four points marked on it, or None."""
+    upper = calibration.upper
+    if upper is None:
+        return None
+    return homography(_in_the_room(upper.bed, upper.bed_offset), upper.pixels)
+
+
 def _in_the_room(bed: Sequence[Point], offset: float) -> List[Point]:
     """Points of a bed standing ``offset`` along Y, where they lie in the frame."""
     return [(x, y + offset) for x, y in bed]
@@ -400,4 +408,5 @@ __all__ = [
     "records",
     "save",
     "starting_points",
+    "upper_mapping",
 ]

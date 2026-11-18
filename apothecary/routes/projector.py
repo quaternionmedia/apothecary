@@ -8,6 +8,11 @@
   the machine's calibration; answers as GET does. A bed that carries Y is calibrated
   where its last poll says it stands, and refused while no poll has said.
 - ``DELETE /sites/{s}/machines/{path}/projector``: the calibration forgotten.
+- ``PUT /sites/{s}/machines/{path}/projector/upper`` ``{pixels, size, height, bed?}``: a
+  second plane ``height`` mm above the bed, marked with a flat piece of that thickness on
+  it, kept with the calibration (``projector.checked_upper``); ``DELETE`` forgets it alone.
+  ``GET ...?height=z`` asks for the plane ``z`` mm above the bed, refusing (422) one the
+  calibration does not fix.
 - ``GET /projector/sites/{s}/machines/{path}``: the projector's page, black and one canvas,
   for a second display (``templates/projector.html.j2``, ``static/projector.js``).
 
@@ -20,6 +25,10 @@ The answer's parts:
   from the work zero its controller reports, ``work_origin``), only the moves that make
   something; and a router plan's cuts (``apothecary/cam``), placed the same way. ``key``
   names it, so a reader knows when to ask again.
+- ``plane``: which plane the picture is drawn for, and its mapping: the bed plane, or --
+  with a second plane marked -- the height of what is drawn on it: a printer's layer the
+  stream is in (the file's own height), a router's stock top (the work zero's height as
+  the controller reports it). One calibration draws on the bed plane only, and says so.
 - ``moving``: what a poll moves -- the tool's place in the frame where a poll said it
   (never a guessed one), where a bed that carries Y stands, the group the streaming job
   is in, and the status band: the machine's state, its job's stage and progress, and
@@ -187,6 +196,114 @@ def band(status) -> Dict[str, Any]:
     }
 
 
+# --- the plane the picture is drawn for ------------------------------------------------------
+
+BED_ONLY = "bed plane only: one calibration, so what stands above the bed is lit displaced"
+
+
+def _wanted(site_name: str, path: str, kind: Optional[str], status) -> Optional[Dict[str, Any]]:
+    """The height above the bed of what is drawn, as the plan or the stream says it, or None:
+    a printer's layer the streaming file is in (the file's own Z, so far as a poll's
+    lines sent place it), a router's stock top (the work zero's height, as its controller
+    reports it -- the work zero stands at the stock's top, ``cam/models.py``)."""
+    if kind == "router":
+        origin = _file_origin(kind, status)
+        if origin is None:
+            return None
+        return {"z": _mm(origin["z"]), "for": "the stock's top"}
+    layer = _layer(site_name, path, status)
+    return None if layer is None else {"z": _mm(layer[1]), "for": layer[0]}
+
+
+def _how(calibration, z: float) -> str:
+    upper = calibration.upper
+    if z <= 1e-9:
+        return "measured at the bed plane"
+    if abs(z - upper.height) <= 1e-9:
+        return "measured at the second plane"
+    if z < upper.height:
+        return "between the two calibrated planes"
+    return "beyond the second plane: extrapolated, weaker"
+
+
+def plane(
+    site_name: str,
+    path: str,
+    kind: Optional[str],
+    frame: Dict[str, Any],
+    status,
+    calibration,
+    height: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Which plane the picture is drawn for, and the mapping that is true there. ``height``
+    asks for one by its height (``projector.Refused`` when the calibration fixes none
+    there); else it is the height of what is drawn (``_wanted``) when the calibration fixes
+    it, and the bed plane with the reason when it does not or when no second plane
+    is marked."""
+    wanted = {"z": _mm(height), "for": "the height asked"} if height is not None else None
+    wanted = wanted or _wanted(site_name, path, kind, status)
+    base: Dict[str, Any] = {
+        "z": 0.0,
+        "for": "the bed plane",
+        "wanted": wanted,
+        "heights": [],
+        "how": None,
+        "mapping": None,
+        "line": None,
+        "said": [],
+    }
+    if calibration is None:
+        return base
+    from ..vision.projection import as_lists
+
+    base["heights"] = [0.0] + ([calibration.upper.height] if calibration.upper else [])
+    bed = as_lists(projector.mapping(calibration))
+    if calibration.upper is None:
+        if height is not None and abs(height) > 1e-9:
+            projector.mapping_at(calibration, height)  # refuses, saying why
+        base.update(mapping=bed, how="bed plane only", line=f"drawn for the bed plane -- {BED_ONLY}")
+        if wanted and wanted["z"] > 1e-9:
+            base["said"].append(
+                f"{wanted['for']} stands {wanted['z']:g} mm above the bed: lit displaced "
+                "from where it is, until a second plane is marked at a known height"
+            )
+        return base
+    offset = bed_offset(frame, status) or 0.0
+    vx, vy = frame["volume"][0], frame["volume"][1]
+    floor = [(0.0, offset), (vx, offset), (vx, vy + offset), (0.0, vy + offset)]
+    z = wanted["z"] if wanted else 0.0
+    try:
+        matrix = projector.mapping_at(calibration, z, over=floor)
+    except projector.Refused as exc:
+        if height is not None:
+            raise
+        base.update(
+            mapping=bed,
+            how="bed plane: the height is refused",
+            line="drawn for the bed plane: the height of what is drawn is refused",
+        )
+        base["said"].append(f"{wanted['for']} at {z:g} mm: {exc}")
+        return base
+    how = _how(calibration, z)
+    what = wanted["for"] if wanted and z > 1e-9 else "the bed plane"
+    spans = " and ".join(f"{h:g}" for h in base["heights"])
+    base.update(
+        z=z,
+        mapping=as_lists(matrix),
+        how=how,
+        line=f"drawn for {what}, {z:g} mm above the bed ({how}; planes calibrated at {spans} mm)"
+        if z > 1e-9
+        else f"drawn for the bed plane ({how}; planes calibrated at {spans} mm)",
+    )
+    base["for"] = what
+    if z > calibration.upper.height + 1e-9:
+        base["said"].append(
+            f"{z:g} mm is past the second plane's {calibration.upper.height:g} mm: what "
+            f"was marked wrong there is carried {z / calibration.upper.height:.2g} times over"
+        )
+    return base
+
+
 # --- what is about to be made ----------------------------------------------------------------
 
 
@@ -200,10 +317,11 @@ def _toolpath(file_id: str, kind: str, origin: Dict[str, float]) -> Optional[Dic
     if preview is None:
         return None
     air = {i for i, name in enumerate(preview.kinds) if name in for_machine(kind).air}
-    ox, oy = origin["x"], origin["y"]
+    ox, oy, oz = origin["x"], origin["y"], origin["z"]
     segments: List[float] = []
     groups: List[Dict[str, Any]] = []
     sents: List[int] = []
+    heights: List[Optional[float]] = []
     for group in preview.groups:
         first = len(segments) // 4
         for i in range(group.first, group.first + group.count):
@@ -217,6 +335,7 @@ def _toolpath(file_id: str, kind: str, origin: Dict[str, float]) -> Optional[Dic
             segments.extend((_mm(ox + x0), _mm(oy + y0), _mm(ox + x1), _mm(oy + y1)))
         groups.append({"label": group.label, "first": first, "count": len(segments) // 4 - first})
         sents.append(group.sent)
+        heights.append(None if group.z is None else _mm(oz + group.z))
     return {
         "process": preview.process,
         "word": preview.word,
@@ -226,6 +345,7 @@ def _toolpath(file_id: str, kind: str, origin: Dict[str, float]) -> Optional[Dic
         "within_mm": preview.within_mm,
         "left_out": [name for name in preview.kinds if name in for_machine(kind).air],
         "sents": sents,
+        "heights": heights,
     }
 
 
@@ -288,6 +408,8 @@ def _intent(site_name: str, path: str, kind: Optional[str], status):
 def _key(source, file, origin, plan, calibration) -> str:
     """What names a picture: it is drawn again when any of these changes."""
     calibrated = calibration.at.isoformat() if calibration is not None else None
+    if calibration is not None and calibration.upper is not None:
+        calibrated = f"{calibrated}+{calibration.upper.at.isoformat()}"
     named = [source, file, origin, plan.part if plan else None, calibrated]
     return hashlib.sha256(json.dumps(named, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -321,10 +443,12 @@ def _picture(site_name, site, path, kind, frame, status, calibration) -> Dict[st
         "calibrated_at": calibration.at.isoformat() if calibration is not None else None,
     }
     sents = toolpath.pop("sents") if toolpath else []
+    heights = toolpath.pop("heights") if toolpath else []
     key = _key(source, file, origin, plan, calibration)
     picture["key"] = key
+    labels = [g["label"] for g in toolpath["groups"]] if toolpath else []
     with _DRAWN_LOCK:
-        _DRAWN[(site_name, path)] = (key, sents)
+        _DRAWN[(site_name, path)] = (key, sents, heights, labels)
     return picture
 
 
@@ -337,6 +461,17 @@ def _current(site_name: str, path: str, status) -> Optional[int]:
         return None
     begun = [i for i, sent in enumerate(drawn[1]) if sent <= job["sent"]]
     return begun[-1] if begun else None
+
+
+def _layer(site_name: str, path: str, status) -> Optional[Tuple[str, float]]:
+    """The label and the height above the bed of the group the streaming job is in, as the
+    file says it (a layer's own Z), or None while no job, no drawn file or no height."""
+    current = _current(site_name, path, status)
+    with _DRAWN_LOCK:
+        drawn = _DRAWN.get((site_name, path))
+    if current is None or drawn is None or current >= len(drawn[2]) or drawn[2][current] is None:
+        return None
+    return drawn[3][current], drawn[2][current]
 
 
 def moving(site_name: str, path: str, frame: Dict[str, Any], status) -> Dict[str, Any]:
@@ -375,12 +510,19 @@ def moved(site_name: str, path: str) -> Dict[str, Any]:
     key, so a reader holding another asks again, and what moves."""
     _, kind, _, status, frame = _now_at(site_name, path)
     source, file, origin, plan, _ = _intent(site_name, path, kind, status)
-    key = _key(source, file, origin, plan, projector.load(site_name, path))
-    return {"key": key, "moving": moving(site_name, path, frame, status)}
+    calibration = projector.load(site_name, path)
+    key = _key(source, file, origin, plan, calibration)
+    return {
+        "key": key,
+        "moving": moving(site_name, path, frame, status),
+        "plane": plane(site_name, path, kind, frame, status, calibration),
+    }
 
 
-def answer(site_name: str, path: str) -> Dict[str, Any]:
-    """Everything the projector's page draws for the machine at ``path``, as one answer."""
+def answer(site_name: str, path: str, height: Optional[float] = None) -> Dict[str, Any]:
+    """Everything the projector's page draws for the machine at ``path``, as one answer;
+    ``height``, a plane's height above the bed, asks for that plane's mapping (422 for one
+    the calibration does not fix)."""
     from ..homography import Degenerate
     from ..vision.projection import as_lists
 
@@ -390,6 +532,12 @@ def answer(site_name: str, path: str) -> Dict[str, Any]:
         matrix = as_lists(projector.mapping(calibration)) if calibration is not None else None
     except Degenerate:
         matrix = None
+    picture = _picture(site_name, site, path, kind, frame, status, calibration)
+    try:
+        drawn_for = plane(site_name, path, kind, frame, status, calibration, height)
+    except projector.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    upper = projector.upper_mapping(calibration) if calibration is not None else None
     return {
         "format": FORMAT,
         "site": site_name,
@@ -401,15 +549,17 @@ def answer(site_name: str, path: str) -> Dict[str, Any]:
         "calibration": calibration.model_dump(mode="json") if calibration is not None else None,
         "starting_points": [list(p) for p in projector.starting_points(frame["volume"])],
         "mapping": matrix,
+        "upper_mapping": as_lists(upper) if upper is not None else None,
+        "plane": drawn_for,
         "size": list(calibration.size) if calibration is not None else None,
-        "picture": _picture(site_name, site, path, kind, frame, status, calibration),
+        "picture": picture,
         "moving": moving(site_name, path, frame, status),
     }
 
 
 @router.get("/sites/{name}/machines/{path}/projector")
-def projected(name: str, path: str):
-    return answer(name, path)
+def projected(name: str, path: str, height: Optional[float] = None):
+    return answer(name, path, height)
 
 
 @router.put("/sites/{name}/machines/{path}/projector")
@@ -433,6 +583,60 @@ def calibrate(name: str, path: str, body: CalibrationIn):
     projector.save(calibration)
     _say_moved(name, path)
     return answer(name, path)
+
+
+class UpperIn(BaseModel):
+    """The second plane: the pixels of the output that light four points of a plane
+    ``height`` mm above the bed (the bed's four, unless ``bed`` names others), and the size of
+    the canvas they were marked on."""
+
+    pixels: List[Tuple[float, float]] = Field(..., min_length=4, max_length=4)
+    size: Tuple[int, int]
+    height: float
+    bed: Optional[List[Tuple[float, float]]] = Field(None, min_length=4, max_length=4)
+
+
+@router.put("/sites/{name}/machines/{path}/projector/upper")
+def calibrate_upper(name: str, path: str, body: UpperIn):
+    """Keep a second plane, ``height`` mm above the bed, with the machine's calibration; a
+    bed that carries Y is marked where its last poll says it stands."""
+    _, _, _, status, frame = _now_at(name, path)
+    calibration = projector.load(name, path)
+    if calibration is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{path} has no calibration of the bed plane: mark its four points first",
+        )
+    offset = bed_offset(frame, status)
+    if offset is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{path}'s bed carries Y, and no poll has said where it stands: poll the "
+                "machine, then mark the four points"
+            ),
+        )
+    try:
+        both = projector.checked_upper(
+            calibration, body.pixels, body.size, body.height, body.bed, offset
+        )
+    except projector.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    projector.save(both)
+    _say_moved(name, path)
+    return answer(name, path)
+
+
+@router.delete("/sites/{name}/machines/{path}/projector/upper")
+def forget_upper(name: str, path: str):
+    """The second plane forgotten, the bed plane's calibration kept."""
+    _machine(name, path)
+    calibration = projector.load(name, path)
+    if calibration is None or calibration.upper is None:
+        return {"forgotten": False}
+    projector.save(calibration.model_copy(update={"upper": None}))
+    _say_moved(name, path)
+    return {"forgotten": True}
 
 
 @router.delete("/sites/{name}/machines/{path}/projector")
@@ -526,10 +730,12 @@ _listen(jobs.LISTENERS, _relay_job)
 __all__ = [
     "CalibrationIn",
     "PROJECTOR",
+    "UpperIn",
     "answer",
     "band",
     "bed_offset",
     "moved",
     "moving",
+    "plane",
     "router",
 ]

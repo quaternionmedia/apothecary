@@ -22,8 +22,83 @@ The mapping is true on that plane and nowhere else. A point above it -- the top 
 part as it grows, the face of the stock, a clamp, a hand -- is lit where the
 projector's ray through it meets the bed plane, displaced away from the point straight
 under the lens: a point `h` above the bed, `d` across from the point under a lens `H`
-above the bed, is lit `d · h / (H − h)` further out. The picture is of intent, drawn on
-the bed's plane, never a measurement of what stands on it.
+above the bed, is lit `d · h / (H − h)` further out. The picture is of intent, never a
+measurement of what stands on it.
+
+### A height: a second plane
+
+With one calibration the picture is drawn on the bed plane, the answer's `plane` says
+`bed plane only`, and the band says what stands above the bed is lit displaced. A second
+calibration at a known height registers a second plane, and from the two, the plane at
+any height between them or a little beyond.
+
+**At the bench.** With the bed calibrated, lay a flat piece of known thickness on it,
+covering the four points (or name four others on its top, `bed` in the `PUT` below), and
+keep the four pixels that light them
+(`PUT .../projector/upper`, below) with the piece's thickness as `height`. Marking the bed plane
+again forgets the second plane, because the projector may have moved.
+
+**The relation.** A pinhole projector projects a point `(X, Y, Z, 1)` by a 3 × 4 matrix
+`P` with columns `p0 p1 p2 p3`. The plane `Z = z` therefore maps by `[p0 p1 (z·p2 + p3)]`,
+a 3 × 3 matrix linear in `z` -- the bed plane `H0 = [p0 p1 p3]`, the second plane at `h`
+`Hh = [p0 p1 (h·p2 + p3)]` -- and so the plane at `z` is `(1 − t)·H0 + t·Hh` with
+`t = z / h`. Each mapping fixed by four points carries a scale of its own, so `Hh` is first
+multiplied by the one number that makes its first two columns, `p0` and `p1`, agree with `H0`'s
+as closely as one multiple can (`homography.scaled_like`, least squares); then the blend
+(`homography.blend`, `projector.mapping_at`). It is exact for exact points of a pinhole
+projector, passes through both marked sets of pixels whatever a hand marked, and past `h` is
+the line through the two. `tests/test_projector.py` holds it against a synthetic pinhole
+whose pixels are computed from its geometry, apart from the code: exact to a millionth of a
+pixel between, at and up to twice `h`, with both planes marked on a bed that carries Y.
+
+**Assumptions, and what is left out.**
+
+- A pinhole: no lens distortion. A real projector's lens bends straight lines, more near
+  the edge of its image; the four points of each plane are corrected for none of it, and
+  the mapping between them is no better than the pinhole is true.
+- Two flat planes: a surface that is not flat is lit displaced as before; what is drawn is a
+  plane's worth of the picture, at one height.
+- The projector, its zoom and its keystone stood still between the two markings. A projector
+  that moved a little is not told apart from a hand's marking error: the only check
+  (`AGREE`) is for a gross mismatch -- points marked in another order, or of another plane.
+- A thin piece shifts the picture little: the shift of a plane `h` above the bed against the
+  bed plane is `d · h / (H − h)` as above, and a piece whose shift is below a hand's marking
+  (a pixel or two) fixes no height worth drawing for. A thicker piece does; what a bench
+  measures is below.
+
+**Refused**, with the reason in the answer (`PUT .../upper` answers 422; `GET ...?height=`
+answers 422; a page's own height falls back to the bed plane and says why):
+
+- a second plane within `MIN_SPAN_MM` (1 mm) of the bed plane -- the two are one plane to a
+  hand's marking -- or past `MAX_SPAN_MM` (500 mm), or a height not finite;
+- four points or pixels that fix no mapping, or pixels off the output (a second plane's
+  pixels are scaled to the bed plane's output from the canvas they were marked on);
+- pixels marked exactly where the bed plane's were: a plane above the bed lights the same
+  points elsewhere, and nothing of its height is told;
+- a second plane that does not agree with the bed plane's by `AGREE` (50 %) of its first two
+  columns;
+- a height below the bed, any height above it with no second plane, a height past
+  `REACH` (2) times the second plane's -- beyond that the line through the two planes is not
+  trusted, and an error in marking the second plane is carried `z / h` times over at height
+  `z` (between the planes less than once, at `2h` twice) -- and a plane whose picture would
+  turn inside out: at that height a point of the bed, or of the volume's floor, reaches the
+  projector's lens plane.
+
+**What height the picture is drawn for** (`plane`, and the band says it): the height of what is
+drawn, where the plan or the stream says it, and nothing else is guessed:
+
+- a router's **stock's top**: the work zero's height above the bed as its controller reports
+  it (`work_origin.z`; the work zero stands at the stock's top, `apothecary/cam/models.py`).
+  The cuts, the toolpath and the tool are lit as if on that plane: a cut's own depth below
+  the stock's top is not corrected for, so a deep cut is lit as displaced as its depth;
+- a printer's **layer** the streaming job is in, at the layer's own Z in the file (the group
+  the lines sent put the job in, as `moving.current` has it), not the nozzle's, which a lift
+  during a travel moves; the toolpath and the tool are lit for it;
+- otherwise, and always while one calibration is kept, the **bed plane**. The bed's outline,
+  the grid and a printer's footprint lie on the bed plane and are always drawn through it.
+
+Nothing is guessed for a height the calibration does not fix: a work zero or a layer past the
+reach is drawn on the bed plane, and the band says which height was refused, and why.
 
 A set of four is refused, saying why, when it fixes no mapping: three points of either
 four on one line (naming them), a pixel off the output, a number that is not finite, or
@@ -70,10 +145,22 @@ to stroke it.
     "bed": [[20, 20], [200, 20], [200, 200], [20, 200]],
     "pixels": [[400, 900], [1500, 880], [1400, 200], [500, 220]],
     "size": [1920, 1080], "bed_offset": -80.0, "at": "2026-11-16T20:10:00+00:00",
-    "upper": null
+    "upper": {
+      "bed": [[20, 20], [200, 20], [200, 200], [20, 200]],
+      "pixels": [[395, 880], [1505, 862], [1410, 190], [498, 211]],
+      "height": 20.0, "bed_offset": -80.0, "at": "2026-11-16T20:12:00+00:00"
+    }
   },
   "starting_points": [[20, 20], [200, 20], [200, 200], [20, 200]],
   "mapping": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+  "upper_mapping": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+  "plane": {
+    "z": 0.4, "for": "layer 1", "wanted": {"z": 0.4, "for": "layer 1"},
+    "heights": [0.0, 20.0], "how": "between the two calibrated planes",
+    "mapping": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+    "line": "drawn for layer 1, 0.4 mm above the bed (between the two calibrated planes; planes calibrated at 0 and 20 mm)",
+    "said": []
+  },
   "size": [1920, 1080],
   "picture": {
     "key": "3f9c0a1b2c3d4e5f",
@@ -107,7 +194,18 @@ to stroke it.
 
 - `mapping` takes a point of the frame on the bed plane -- a point of the bed plus
   `(0, moving.bed_offset)` -- to a pixel of an output `size` wide and high; the page
-  scales it to its canvas. `null` until calibrated.
+  scales it to its canvas. `null` until calibrated. `upper_mapping` is the same for the
+  second plane, from the four points marked on it, `null` with none.
+- `plane` is the plane the picture is drawn for ([A height](#a-height-a-second-plane)): `z`
+  its height above the bed, `for` what stands there (`the bed plane`, `layer 1`, `the
+  stock's top`, `the height asked`), `wanted` the height of what is drawn when it is not the
+  bed's (`null` for none), `heights` the calibrated planes' (`[]` until calibrated, `[0]` with
+  one, `[0, h]` with two), `how` (`bed plane only`, `measured at the bed plane`, `measured at
+  the second plane`, `between the two calibrated planes`, `beyond the second plane:
+  extrapolated, weaker`, or `bed plane: the height is refused`), `mapping` the mapping true at
+  `z` (the bed plane's when one calibration is kept), `line` the band's sentence naming it, and
+  `said` what that leaves out. It moves with a poll (a layer climbs), so a change of the
+  stream carries it with `moving`.
 - `picture` is what changes only when what is made does. `source` is `job` for the file
   streaming on the machine, `plan` for the file its plan names
   ([a machine planned](firmware.md#a-machine-planned-before-its-board-is-connected)), or `null`. `toolpath.segments` are four numbers each, `x0
@@ -126,7 +224,9 @@ to stroke it.
 
 The page strokes the bed's outline dim, the toolpath dim green with the current group
 bright, the cuts amber and the tool a red cross, and writes the band along the canvas's
-foot, in its own pixels: the band is not registered to the bed. Black is everything
+foot, in its own pixels: the band is not registered to the bed. The bed's outline lies
+through `mapping`; the toolpath, the cuts and the tool, through `plane.mapping`. The band's
+line `plane.line` names the plane the picture is drawn for. Black is everything
 else.
 
 ## Calibrating
@@ -164,8 +264,11 @@ when nothing else polls the machine.
 | Route | |
 |---|---|
 | `GET /sites/{s}/machines/{path}/projector` | the answer; 404 for no such node, 400 for one with no working volume |
-| `PUT /sites/{s}/machines/{path}/projector` | `{bed, pixels, size}` kept as the calibration; answers as GET does; 422 says why a set fixes no mapping, 409 for a bed that carries Y with no poll kept |
-| `DELETE /sites/{s}/machines/{path}/projector` | the calibration forgotten |
+| `GET /sites/{s}/machines/{path}/projector?height=z` | the answer with `plane` at `z` mm above the bed; 422 for a height the calibration does not fix |
+| `PUT /sites/{s}/machines/{path}/projector` | `{bed, pixels, size}` kept as the calibration, the second plane forgotten; answers as GET does; 422 says why a set fixes no mapping, 409 for a bed that carries Y with no poll kept |
+| `PUT /sites/{s}/machines/{path}/projector/upper` | `{pixels, size, height, bed?}` kept as the calibration's second plane; 422 says why it fixes none, 409 for no calibration of the bed plane or a bed that carries Y with no poll kept |
+| `DELETE /sites/{s}/machines/{path}/projector/upper` | the second plane forgotten, the bed plane's calibration kept |
+| `DELETE /sites/{s}/machines/{path}/projector` | the calibration forgotten, its second plane with it |
 | `GET /projector/sites/{s}/machines/{path}` | the page |
 
 The calibrations are kept in the state folder's `projectors.json`, one per machine node
