@@ -43,6 +43,8 @@ CHANGING = (
     ),
     *((f"{windows.MACHINE_WINDOWS} {part}", r"-?\d+\.\d+") for part in ("#c-pos", "#c-pos-s")),
     f"{windows.MACHINE_WINDOWS} #log",
+    # The badge over the router is redrawn at every poll: its words, its time left among them.
+    ".world-badge",
 )
 
 
