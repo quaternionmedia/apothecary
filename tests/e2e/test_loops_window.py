@@ -356,6 +356,9 @@ def test_a_kept_step_its_design_an_experiment_planned_and_the_gains_set(
     # Armed: Start is the plan's to refuse until the ceiling and the longest time are typed.
     _arm(url)
     expect(page.locator("#control")).to_be_visible(timeout=10000)  # the pad, popped out
+    # The pad's window is loud: it stands in front of its stack, which may be Loops'.
+    # Loops is brought in front again as a person brings it, by its tab.
+    windows.show(page, "loops")
     expect(start).to_have_attribute(
         "title",
         re.compile(

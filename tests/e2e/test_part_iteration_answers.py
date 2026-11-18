@@ -484,9 +484,13 @@ def test_a_part_hidden_by_a_comparison_and_by_its_shell_is_shown_only_when_both_
     tick.check()
     assert page.evaluate(shown) is False, "the shell shown again showed what the comparison hides"
     tick.uncheck()
+    # Layers, opened beside a world with no room to spare, is a tab of the stack next to
+    # it, in front of Variants: the comparison is closed from Variants, brought in front.
+    windows.show(page, "part-variants")
     page.locator("#part-compare .compare-close").click()
     expect(page.locator("#part-compare")).to_be_hidden()
     assert page.evaluate(shown) is False, "the comparison closed showed what the shell hides"
+    windows.show(page, "layers")
     tick.check()
     assert page.evaluate(shown) is True
 
