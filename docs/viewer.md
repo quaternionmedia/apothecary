@@ -690,7 +690,9 @@ the window it follows, else at the column's foot. A window that opens beside the
 world (Layers, Loops, Models, Marks, the Deck, the armed pad) shares one stack
 there with the others: the first takes its room from the world's, never leaving
 the world too narrow to see a machine in, and the next are tabs of it; where the
-world has no room to give, it is a tab next to the world instead.
+world has no room to give, it is a tab next to the world instead, never over
+the Machine. The Machine's window is never laid out lower than its head and its
+state, and its head -- the latch and ⏹ E-STOP -- stays at its top as it scrolls.
 A window with nothing to show
 gives its room away: its tab is dimmed, a window with something to show in its
 stack comes in front of it, and a stack of nothing but such windows is

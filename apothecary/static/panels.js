@@ -24,7 +24,12 @@
  * stack of its own next to the world, its room taken from the world's: BESIDE per cent
  * of the row at most, and never so much that the world is narrower than WORLD_LEAST
  * pixels. Where the world cannot spare BESIDE_LEAST pixels, it is a tab of the stack
- * next to the world instead -- the tallest, where a column stands there.
+ * next to the world instead -- the tallest, where a column stands there, that holds no
+ * window with a least height.
+ *
+ * A window may have a least height (`least`, pixels, its stack's tabs included): where
+ * it stands in a column, its stack is given that much as the window opens or a view is
+ * laid out, from the stacks beside it, while they keep the height of their tabs.
  *
  * A window the page says has nothing to show (setEmpty) gives its room away: in front
  * of one that has something, it gives that one the front; a stack of nothing but
@@ -136,7 +141,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         const slot = document.createElement("div");
         slot.className = "panel-body-slot";
         el.append(pinned, slot);
-        r = { id, title: id, tab: null, hint: null, flag: null, home: null, after: null, group: null, loud: false, empty: false, el, slot, mount: null, filled: true, open: false,
+        r = { id, title: id, tab: null, hint: null, flag: null, home: null, after: null, group: null, loud: false, empty: false, least: 0, el, slot, mount: null, filled: true, open: false,
               registered: false, container: null, onClose: null, onOpen: null, releasing: false };
         records.set(id, r);
         return r;
@@ -271,7 +276,8 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         return row.contentItems.filter(beside).sort((a, b) => far(a) - far(b))[0] || null;
     }
     // The stack next to the world, on its right (else its left): itself, or the tallest
-    // stack of the column standing there, the first of two as tall.
+    // stack of the column standing there, the first of two as tall -- never one holding
+    // a window that must stay in view (a least height), while there is another.
     function nextToTheWorld() {
         const ws = worldStack(), row = ws?.parent;
         if (!row?.isRow) return null;
@@ -280,14 +286,21 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
         if (!next) return null;
         if (next.isStack) return next;
         const height = (s) => s.element.getBoundingClientRect().height;
-        return stacksOf(next).reduce((best, s) => (!best || height(s) > height(best) ? s : best), null);
+        const kept = (s) => s.contentItems.some((ci) => records.get(ci.id)?.least > 0);
+        const stacks = stacksOf(next);
+        const free = stacks.filter((s) => !kept(s));
+        return (free.length ? free : stacks).reduce((best, s) => (!best || height(s) > height(best) ? s : best), null);
     }
 
     // Where a panel opens when it is not in the layout: its home, or `home` given for
     // this once. Added to a stack of tabs, it is in front only when `front` (opened by a
     // person), so a panel the page registers does not take the place of the one a
-    // person was reading.
+    // person was reading. Then every window keeps its least height.
     function addAt(r, front = true, home = r.home) {
+        placeAt(r, front, home);
+        keepLeast();
+    }
+    function placeAt(r, front, home) {
         const config = { type: "component", componentType: r.id, id: r.id, title: r.tab || r.title };
         const tabbed = [...records.values()].filter((o) => o.id !== r.id && o.registered && o.home === "tabs" && item(o.id));
         // A window whose home is another one goes beside it, else beside a window open
@@ -444,6 +457,27 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             if (was && stack.contentItems.includes(was)) stack.setActiveComponentItem(was, false);
             minimise(stack);
         } else unminimise(stack);
+    }
+    // A window with a least height (`least`) whose stack stands lower in a column: given
+    // it from the stacks beside it in their shares -- none minimised, each keeping its
+    // tabs' height.
+    function keepLeast() {
+        for (const r of records.values()) {
+            if (!r.least || !r.registered) continue;
+            const stack = item(r.id)?.parentItem, column = stack?.parent;
+            if (!column?.isColumn || minimised.has(stack)) continue;
+            const has = stack.element.getBoundingClientRect().height;
+            if (!has || has >= r.least - 1) continue;
+            const height = column.element.getBoundingClientRect().height - LAYOUT_SETTINGS.dimensions.borderWidth * (column.contentItems.length - 1);
+            const others = column.contentItems.filter((c) => c !== stack && !minimised.has(c));
+            const sum = others.reduce((a, c) => a + c.size, 0);
+            if (height <= 0 || !sum) continue;
+            const want = Math.min((100 * r.least) / height, stack.size + sum - (100 * LOWEST * others.length) / height);
+            if (want <= stack.size) continue;
+            for (const c of others) c.size -= (want - stack.size) * (c.size / sum);
+            stack.size = want;
+            column.updateSize(false);
+        }
     }
     function fitEveryEmpty() {
         for (const stack of [...minimised.keys()]) if (!stack.parent) minimised.delete(stack);
@@ -720,9 +754,10 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
          * ("column", "tabs", "beside", or another panel's id: a tab beside it), and
          * `after` the window it opens right under, in the column; `open`
          * whether it opens now when the layout does not hold it; `loud` a panel whose
-         * tab and frame say it must be seen. `onClose` is called when it is closed;
-         * `onOpen` when its filled body is in front of a person again. */
-        register(id, { title, tab = null, hint = null, body, home = "tabs", after = null, group = null, open = true, loud = false, onClose = null, onOpen = null } = {}) {
+         * tab and frame say it must be seen; `least` the least height of its stack, in
+         * pixels, where it stands in a column (see the header). `onClose` is called when
+         * it is closed; `onOpen` when its filled body is in front of a person again. */
+        register(id, { title, tab = null, hint = null, body, home = "tabs", after = null, group = null, open = true, loud = false, least = 0, onClose = null, onOpen = null } = {}) {
             if (!knownTypes.has(id)) {
                 // Not given in `known` or `transient`: the remembered layout was laid
                 // out without it, so a reload has closed it, its room kept from the world.
@@ -730,7 +765,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
                 knownTypes.add(id); layout.registerComponentFactoryFunction(id, factory);
             }
             const r = record(id);
-            r.title = title || id; r.tab = tab; r.hint = hint; r.loud = !!loud; r.group = group; r.after = after;
+            r.title = title || id; r.tab = tab; r.hint = hint; r.loud = !!loud; r.group = group; r.after = after; r.least = Math.max(0, Number(least) || 0);
             r.home = HOMES.has(home) || (typeof home === "string" && home && home !== id) ? home : "tabs";
             r.onClose = onClose; r.onOpen = onOpen; r.registered = true;
             if (typeof body === "function") { r.mount = body; r.filled = false; } else if (body) {
@@ -907,6 +942,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             minimised.clear();
             gaveFront.clear();
             fitEveryEmpty();
+            keepLeast();
             remember();
             return true;
         },

@@ -18,6 +18,10 @@
 .machine-head button.danger { border-color: #6a3a3a; color: #ffb0b0; }
 .machine-head button.danger:hover { background: #3a2626; }
 .machine-head .grow { flex: 1; }
+/* The head -- the link's verbs, the latch and ⏹ E-STOP -- stays at the top of the
+ * Machine's window while what is under it scrolls; the window is never laid out lower
+ * than the head and the state under it (the page's `least` for it, panels.js). */
+.machine > .machine-head { position: sticky; top: 0; z-index: 2; }
 .machine-head label.auto { display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: var(--ink-2); }
 .left { display: flex; flex-direction: column; gap: 0.75rem; overflow: auto; }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6rem; }

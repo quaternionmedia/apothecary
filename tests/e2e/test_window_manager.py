@@ -555,6 +555,34 @@ def test_a_page_with_its_own_way_to_a_view_is_asked_and_its_refusal_is_greyed_no
 
 
 @pytest.mark.e2e
+def test_a_window_with_a_least_height_is_given_it_where_it_opens_and_in_a_view(wm: Page):
+    """A window with a least height, opened in the column, is given it; a view that lays
+    it out lower gives it it too, from the stacks beside it, which keep their tabs."""
+    _js(wm, "() => H.reg('m', { home: 'column', after: 'sel', open: false, least: 360 })")
+    _js(wm, "() => P.open('m')")
+    assert _js(wm, "() => H.height('m')") >= 359
+    low = {
+        "row": [
+            {"world": True, "size": 60},
+            {
+                "column": [
+                    {"stack": ["a"], "size": 45},
+                    {"stack": ["m"], "size": 10},
+                    {"stack": ["sel"], "size": 45},
+                ]
+            },
+        ]
+    }
+    _js(wm, "(v) => P.defineView('low', { title: 'Low', layout: v })", low)
+    assert _js(wm, "() => P.applyView('low')") is True
+    assert _js(wm, "() => H.height('m')") >= 359
+    assert min(_js(wm, "() => [H.height('a'), H.height('sel')]")) >= 40
+    # A window with none is laid out as the view says.
+    _js(wm, "() => { P.unregister('m'); H.reg('m', { open: false }); P.applyView('low'); }")
+    assert _js(wm, "() => H.height('m')") < 120
+
+
+@pytest.mark.e2e
 @pytest.mark.parametrize("was_open", [True, False], ids=["open-stays-open", "closed-stays-closed"])
 def test_a_window_made_for_the_moment_keeps_its_state_through_a_view(wm: Page, was_open: bool):
     _mount(wm, transient=["m"])

@@ -9354,7 +9354,9 @@
                 });
                 sectionsOf(null);
                 this.panels.register('machine', {
-                    group: 'Machine',
+                    // Never laid out lower than its head -- the latch and ⏹ E-STOP -- and its
+                    // state under it, at any width the page is laid out for (panels.js).
+                    group: 'Machine', least: 250,
                     title: planned ? `${anchor} · no board connected: its plan` : (anchor ? `${anchor} · ${port}` : `${port} · pinned nowhere in ${this.siteName}`),
                     // Its tab, beside Pictures and the Bench: the node's name (the
                     // port's last part, pinned nowhere); the whole title its tooltip.

@@ -1,6 +1,7 @@
 """What stops a machine from the page, and what the page says of a machine it cannot
 hear: a jog is one request, the verbs that interrupt go at once and are never greyed,
-the popped-out pad has a stop of its own, a Disarm that failed is never drawn as
+the Machine view keeps the Machine's head and its stop in view at any size the page is
+laid out for, the popped-out pad has a stop of its own, a Disarm that failed is never drawn as
 disarmed, an open Machine hears the latch armed from elsewhere, a status gone old says
 its age, and a Machine follows its board to the port it is found on.
 
@@ -224,6 +225,38 @@ def test_the_popped_out_pad_has_a_stop_of_its_own(page: Page, url: str):
     )
     held[0].continue_()
     page.unroute("**/firmware/printers/command")
+
+
+# Where an element of the Machine's window stands against the window: its top and foot
+# inside it, and the window's own scroll.
+INSIDE = """(selector) => {
+    const win = document.querySelector(".panel[data-panel='machine']").getBoundingClientRect();
+    const box = document.querySelector(`.panel[data-panel='machine'] ${selector}`).getBoundingClientRect();
+    return box.height > 0 && box.top >= win.top - 1 && box.bottom <= win.bottom + 1
+        && box.bottom <= innerHeight;
+}"""
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("size", [(1100, 700), (1600, 1000)], ids=["1100x700", "1600x1000"])
+def test_the_machine_views_head_and_its_stop_stay_in_view(page: Page, url: str, size):
+    """The Machine view on a page 1100 by 700 and on one 1600 by 1000: the Machine's
+    head -- its link's verbs, the latch and ⏹ E-STOP -- is whole in its window, and
+    stays at the window's top as the window scrolls."""
+    page.set_viewport_size({"width": size[0], "height": size[1]})
+    _machine(page, url)
+    for selector in ("#estop", "#ctl-label", "#reconnect"):
+        assert page.evaluate(INSIDE, selector), selector
+    body = page.locator(f"{windows.MACHINE} > .machine")
+    head = page.locator(f"{windows.MACHINE} .machine-head")
+    top = head.bounding_box()["y"]
+    assert body.evaluate("(e) => e.scrollHeight > e.clientHeight")
+    body.evaluate("(e) => { e.scrollTop = e.scrollHeight; }")
+    page.wait_for_function(
+        "(s) => document.querySelector(s).scrollTop > 0", arg=f"{windows.MACHINE} > .machine"
+    )
+    assert head.bounding_box()["y"] == pytest.approx(top, abs=1)
+    assert page.evaluate(INSIDE, "#estop")
 
 
 @pytest.mark.e2e
