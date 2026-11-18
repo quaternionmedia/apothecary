@@ -134,6 +134,7 @@ GROUPS = {
             "apothecary/cam/*",
             "apothecary/preview/*",
             "apothecary/cli/slicer.py",
+            "apothecary/print_tuning.py",
             "parts/router_coupon/*",
             "parts/router_emoji/*",
             "parts/ender3/*",
@@ -149,6 +150,7 @@ GROUPS = {
             "test_cam.py",
             "test_cam_measured.py",
             "test_preview.py",
+            "test_print_tuning.py",
         ),
     },
     "parts": {
