@@ -98,6 +98,11 @@ def _log(page: Page):
 # left, the log and the bar.
 STREAMED = r"\d+/\d+ lines|\(\d+(?:\.\d+)?%\)|\b\d+%|\bG\d+(?: [A-Z][\d.-]+)*"
 POSITION = r"-?\d+\.\d+"
+# The world drawn black in the pictures where the tool is wherever the cut was when it was
+# pictured: the stream is live, and a cancel lands on whichever line it reaches.
+WORLD = "#viewer-canvas"
+# ... and the line and bar of its progress, which name the line it was at.
+LIVE = (WORLD, "#print-progress-row", "#print-bar")
 CHANGING = (
     *moments(windows.MACHINE_WINDOWS, "#status", ".world-badge", "#selected-body .device-section"),
     *(
@@ -116,6 +121,8 @@ CHANGING = (
         for where in (windows.MACHINE_WINDOWS, "#control", ".world-badge", "#contents-list")
     ),
     f"{windows.MACHINE_WINDOWS} #log",
+    # The badge over the router is redrawn at every poll: its words, its time left among them.
+    ".world-badge",
     f"{windows.MACHINE_WINDOWS} #b-print",
 )
 
@@ -307,7 +314,7 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
         "the operation and the pass the cut is in, the badge in the world says the cut, "
         "and Pause and Cancel are there while it runs; ▶ Cut waits, disabled, until it "
         "ends.",
-        blank=CHANGING,
+        blank=(*CHANGING, *LIVE),
     )
 
     # 7. Pause: a feed hold, and Resume in Pause's place.
@@ -320,7 +327,7 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
         "Pause holds the controller: Resume takes Pause's place",
         "Pause is GRBL's feed hold: the controller stops where it is and nothing more is "
         "fed, the state card says Hold, and Resume stands where Pause did.",
-        blank=CHANGING,
+        blank=(*CHANGING, *LIVE),
     )
 
     # 8. Resume, then Cancel pressed twice: the cut ends, and the card is at rest.
@@ -342,7 +349,7 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
         "empties and the spindle is off. The progress line says cancelled, the job is in "
         "the card's history and in Site's Jobs, and ▶ Cut is offered again, the file "
         "still chosen.",
-        blank=CHANGING,
+        blank=(*CHANGING, *LIVE),
     )
     assert errors == []
 

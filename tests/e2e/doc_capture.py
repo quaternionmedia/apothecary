@@ -148,6 +148,8 @@ def _blanked(blanks: Sequence[Blank]) -> str:
             f"{each} {{ background: {BLANK_COLOR} !important; color: transparent !important;"
             " text-shadow: none !important; border-radius: 3px; }\n"
             f"{inside} {{ visibility: hidden !important; }}\n"
+            # A canvas paints over its background: a world blanked whole is drawn black.
+            f":is({each}):is(canvas) {{ filter: brightness(0) !important; }}\n"
         )
     return style
 
