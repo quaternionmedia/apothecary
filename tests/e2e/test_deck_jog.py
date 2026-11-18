@@ -32,8 +32,8 @@ from windows import DECK
 
 DECK_ID = "SIMDECK"
 # The time an armed latch has left, which the Deck window writes beside the machine it
-# moves; the strip writes it too, in the picture the server draws, which is not blanked.
-TIME_LEFT_SHOWN = ((DECK, TIME_LEFT),)
+# moves; the strip writes it too, in the picture the server draws, which is blanked whole.
+TIME_LEFT_SHOWN = ((DECK, TIME_LEFT), f"{DECK} .deck-strip-tap")
 ROUTER = "/dev/ttyFAKE3"
 CONTROLLER = "cnc_router.frame_system.controller"
 MAINBOARD = "printer_1.frame_system.mainboard"
@@ -170,6 +170,9 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     expect(deck.locator(".deck-events")).to_contain_text("key 1 released", timeout=10000)
     assert _drawn(url)["strip_drawn"]["text"] == "cnc_router · disarmed"
     expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # lit a moment
+    # No key drawn hovered or ringed with focus: whether it is depends on the moment.
+    page.mouse.move(640, 700)
+    page.evaluate("() => document.activeElement && document.activeElement.blur()")
     story.shows(
         "The deck's layout, drawn by the server, with the router chosen",
         "The top row's keys choose the machine and cycle the step; the bottom row holds the "
@@ -187,6 +190,9 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     assert state["sent"] == [] and "disarmed" in state["said"], state
     assert _router(url)["position"] == before
     expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # lit a moment
+    # No key drawn hovered or ringed with focus: whether it is depends on the moment.
+    page.mouse.move(640, 700)
+    page.evaluate("() => document.activeElement && document.activeElement.blur()")
     story.shows(
         "Disarmed, three turns of knob one move nothing",
         "Control is armed in the Machine window, or by two long presses of the machine's "
@@ -197,8 +203,15 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
 
     # 3. Armed the Machine's way: three clicks are three millimetres of X.
     _arm(url, True)
-    for _ in range(3):
+    for turned in range(1, 4):
         deck.locator(".deck-knob[data-knob='0'] .deck-turn[data-dir='1']").click()
+        # A turn made while the machine is moving is summed with the ones after it and sent
+        # when it is free, so each click waits for its own jog to end: one
+        # `$J` a click is what a person turning a knob at a knob's pace sends.
+        _until(
+            lambda turned=turned: len(_control(url)["sent"]) == turned and _at_rest(url),
+            f"turn {turned} was sent as a jog of its own and the router came to rest",
+        )
     expect(deck.locator(".deck-events")).to_contain_text("knob 0 turned +1", timeout=10000)
     state = _control(url)
     assert state["sent"] == ["$J=G91 G21 X1 F1000"] * 3, state
@@ -211,6 +224,9 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
         "the strip shows where the tool is",
     )
     expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # lit a moment
+    # No key drawn hovered or ringed with focus: whether it is depends on the moment.
+    page.mouse.move(640, 700)
+    page.evaluate("() => document.activeElement && document.activeElement.blur()")
     story.shows(
         "Armed, three turns jog X by 3 mm and the X key shows where the tool is",
         "Each click is one `$J=G91 G21 X1 F1000`, GRBL's own jog line, sent through the "
@@ -242,6 +258,9 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     assert _drawn(url)["strip_drawn"]["text"] == "cnc_router · disarmed"
     assert "STOP sent to cnc_router" in _drawn(url)["strip_drawn"]["small"]
     expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # lit a moment
+    # No key drawn hovered or ringed with focus: whether it is depends on the moment.
+    page.mouse.move(640, 700)
+    page.evaluate("() => document.activeElement && document.activeElement.blur()")
     story.shows(
         "The router's stop key stops it and disarms it",
         "The step key made the last click 10 mm. The router's own stop key, the bottom "
@@ -263,6 +282,10 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     drawn = _drawn(url)["keys_drawn"]["3"]
     assert (drawn["text"], drawn["colour"], drawn["small"]) == ("DISARM", "blue", "every machine")
     _redrawn(deck, 3, disarm)
+    expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # lit a moment
+    # No key drawn hovered or ringed with focus: whether it is depends on the moment.
+    page.mouse.move(640, 700)
+    page.evaluate("() => document.activeElement && document.activeElement.blur()")
     story.shows(
         "Two long presses of the router's key arm it, and DISARM is lit",
         "The router's key, the top row's second, held a second, let go, and held a second "
@@ -283,6 +306,9 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     assert (drawn["colour"], drawn["small"]) == ("grey", "nothing armed")
     _redrawn(deck, 3, disarm)
     expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # lit a moment
+    # No key drawn hovered or ringed with focus: whether it is depends on the moment.
+    page.mouse.move(640, 700)
+    page.evaluate("() => document.activeElement && document.activeElement.blur()")
     story.shows(
         "DISARM lets go of every machine's control",
         "The printer armed in its own Machine meanwhile, and DISARM pressed once: both "
@@ -318,6 +344,9 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     _until(lambda: "in alarm: UNLOCK it" in _control(url)["said"], "the strip says UNLOCK it")
     assert len(_control(url)["sent"]) == sent and _router(url)["position"] == before
     expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # lit a moment
+    # No key drawn hovered or ringed with focus: whether it is depends on the moment.
+    page.mouse.move(640, 700)
+    page.evaluate("() => document.activeElement && document.activeElement.blur()")
     story.shows(
         "After a stop mid-move the router is in alarm, and UNLOCK is lit",
         "The router sent 100 mm along X slowly and the router's stop key pressed while it "
@@ -338,6 +367,9 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     _until(lambda: _at_rest(url), "the router came to rest")
     _redrawn(deck, 6, unlock)
     expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # lit a moment
+    # No key drawn hovered or ringed with focus: whether it is depends on the moment.
+    page.mouse.move(640, 700)
+    page.evaluate("() => document.activeElement && document.activeElement.blur()")
     story.shows(
         "UNLOCK sends $X, and the next turn moves the router",
         "UNLOCK pressed: it sends the router's `$X` through the latch, the alarm is "
