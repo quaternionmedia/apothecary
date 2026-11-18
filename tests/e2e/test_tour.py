@@ -163,7 +163,8 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     expect(back).to_be_disabled()
     expect(back).to_have_attribute("aria-disabled", "true")
     expect(back).to_have_attribute(
-        "title", "Disabled: this is the journey's first stage. The stage before"
+        "title",
+        re.compile(r"^Disabled: this is the journey's first stage\. The stage before · ⌗\d+$"),
     )
     expect(back).to_have_css("opacity", "0.45")
     expect(box.locator(".tour-pop-feedback")).to_contain_text("✓ Works -- said by Grace ")
