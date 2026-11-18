@@ -93,10 +93,27 @@ def _keep_this_shard(config, items) -> None:
 # teardown. Under xdist the reports come back to the controller, which writes the file.
 _timed: dict = {}
 
+# What the session spends once for every test, in whichever test's setup first asks for
+# a server: every part's STL built (every_stl_built), minutes where SCAD changed or a
+# checkout has none yet. Not that test's own time: the shards are cut by these times, and
+# a minute and a half charged to one file's first test once put it in a shard of its own.
+ONCE = "once for the session"
+_once = {"seconds": 0.0}
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    if call.when == "setup" and _once["seconds"]:
+        report.user_properties.append((ONCE, _once["seconds"]))
+        _once["seconds"] = 0.0
+
 
 def pytest_runtest_logreport(report):
     if report.nodeid.startswith("tests/e2e/"):
-        _timed[report.nodeid] = _timed.get(report.nodeid, 0.0) + report.duration
+        once = sum(seconds for name, seconds in report.user_properties if name == ONCE)
+        _timed[report.nodeid] = _timed.get(report.nodeid, 0.0) + report.duration - once
 
 
 def pytest_sessionfinish(session):
@@ -237,6 +254,7 @@ def every_stl_built(tmp_path_factory):
 
     def _built() -> dict:
         if not said:
+            began = time.monotonic()
             env = {**os.environ, "APOTHECARY_TOOLS_DIR": str(tmp_path_factory.mktemp("tools"))}
             done = subprocess.run(
                 [sys.executable, str(Path(__file__).with_name("parts_built.py"))],
@@ -249,6 +267,7 @@ def every_stl_built(tmp_path_factory):
                 pytest.exit(f"building every part's STL failed:\n{done.stderr[-3000:]}", 1)
             found = json.loads(done.stdout.strip().splitlines()[-1])
             said.append({**found, "said": described(found)})
+            _once["seconds"] += time.monotonic() - began
         return said[0]
 
     return _built

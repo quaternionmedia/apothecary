@@ -87,3 +87,55 @@ def test_in_ci_a_recorded_browser_test_is_capped_at_twice_its_time_and_no_other_
         [Item(nodeid), Item("tests/e2e/test_new.py::test_unrecorded")], known
     ) == {nodeid: -(-2 * seconds // 1)}
     assert conftest.recorded_caps([Item(nodeid, own=1)], known) == {}
+
+
+def test_what_the_session_spends_once_is_no_tests_recorded_time():
+    """Every part's STL is built once a session, in the setup of whichever test first asks
+    for a server (the first test of test_airgap.py in a whole run): that build is left out
+    of the time recorded for it, which the shards are cut by. Its setup's report says how
+    long the build took; the time recorded is the rest."""
+    import importlib.util
+
+    root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location("e2e_conftest", root / "tests/e2e/conftest.py")
+    conftest = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(conftest)
+
+    class Report:
+        def __init__(self, duration):
+            self.nodeid, self.duration, self.user_properties = (
+                "tests/e2e/test_a.py::test_first",
+                duration,
+                [],
+            )
+
+    class Outcome:
+        def __init__(self, report):
+            self._report = report
+
+        def get_result(self):
+            return self._report
+
+    class Call:
+        def __init__(self, when):
+            self.when = when
+
+    def reported(when, duration):
+        report = Report(duration)
+        hook = conftest.pytest_runtest_makereport(None, Call(when))
+        next(hook)
+        try:
+            hook.send(Outcome(report))
+        except StopIteration:
+            pass
+        conftest.pytest_runtest_logreport(report)
+        return report
+
+    conftest._once["seconds"] = 100.0  # what every_stl_built took, in this setup
+    setup = reported("setup", 103.0)
+    assert setup.user_properties == [(conftest.ONCE, 100.0)]
+    reported("call", 9.0)
+    reported("teardown", 0.5)
+    assert conftest._timed["tests/e2e/test_a.py::test_first"] == 12.5
+    # Charged once: the next test's setup carries none of it.
+    assert reported("setup", 0.1).user_properties == []
