@@ -44,7 +44,12 @@ Left to right, one row:
   Site in the canvas ring, a step into a site's piece in the universe or out
   of a site's own level, ⚒ Make naming a machine in another site, a link and
   Back are the only ways the site on screen changes: no other verb switches it
-  as a side effect. A picture's view or a
+  as a side effect. The address names the site chosen at once, so Back works
+  while it loads; the site on screen -- the world, the banner, Site, its boards
+  and machines -- stays the one before until the next has loaded, then changes
+  all at once, and a Machine opened meanwhile closes with the site it was of.
+  Only the site asked for last lands: chosen again, or Back pressed, while one
+  loads, the one left answers nothing when it comes. A picture's view or a
   take-back in another site names that site and leaves the screen where it is.
 - **The rail of a journey**, beside the banner while one is entered: its name,
   its steps numbered, the one a person is on filled, **Next** with the step

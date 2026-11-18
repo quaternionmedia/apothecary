@@ -1386,7 +1386,8 @@
                 this.cameraDrawn = null;  // the camera's place and turn as the last frame drawn had them
 
                 this.tree = null;            // full recursive tree for the loaded site
-                this.siteName = null;
+                this.siteName = null;         // the site drawn: its tree, boards and machines (loadSite)
+                this.siteLoad = 0;            // the newest load's number: an older one's answer is no answer
                 this.focusPath = [];          // names from root -- the only navigation state
                 this.maxDepthValue = 0;
                 this.violations = [];
@@ -2511,10 +2512,11 @@
                 this.forgetVariants();
                 this.variantsRead = this.readVariantsFromAddress(params);
                 const port = params.get('machine');
-                this.loadSite(name, params.get('focus') || '').then(async () => {
-                    if (!port) return;
+                this.loadSite(name, params.get('focus') || '').then(async (landed) => {
+                    if (!landed || !port) return;
+                    const load = this.siteLoad;
                     await this.boards.scan();
-                    this.openMachineFor(port);
+                    if (load === this.siteLoad) this.openMachineFor(port);
                 });
             }
 
@@ -2524,14 +2526,21 @@
                 this.variantRecords = {};
             }
 
+            // A site loaded and drawn, or why not; whether it landed. The address names
+            // the site from the press (chooseSite, or Back and Forward); everything drawn
+            // of a site -- `siteName`, its tree, its boards, its machines -- changes
+            // together once it has loaded. Only the newest load lands: one asked for
+            // before it (a quick Back then Forward, a crumb pressed while a site loads)
+            // answers nothing when it comes, and resolves false.
             async loadSite(name, focusPathStr = '') {
-                if (!name) return;
+                if (!name) return false;
+                const load = ++this.siteLoad;
                 // The site before's machines followed no more, before its Machine closes and
                 // would hand them to the world's own watch on the way out (followMachines).
                 if (name !== this.siteName) this.followMachines(new Map());
                 // A board armed in the site before is disarmed, said again once it loads.
                 const disarmed = this.closeMachine();
-                const first = disarmed ? `${disarmed} · ` : '';
+                let first = disarmed ? `${disarmed} · ` : '';
                 // The site left is not followed while the next loads, whatever redraws its
                 // marks meanwhile (followMachines): nothing is left polling its machines. A
                 // site that does not load follows its own again from what it still draws.
@@ -2544,10 +2553,20 @@
                 this.setStatus(`Loading ${name}...`, 'loading');
                 try {
                     const response = await fetch(`${BASE_URL}/sites/${encodeURIComponent(name)}`);
+                    if (load !== this.siteLoad) return false;
                     if (!response.ok) throw new Error(`Failed to load site (${response.status})`);
                     const data = await response.json();
-                    // Another site's pins say nothing here: forgotten until the scan answers.
-                    if (name !== this.siteName) this.boards.forget();
+                    if (load !== this.siteLoad) return false;
+                    // The site changes here, all of it at once. Another site's pins and machines
+                    // say nothing here: forgotten until this one's answer, a scan in flight for
+                    // the site left answering nothing (boards.js); and a Machine opened on the
+                    // site left while this one loaded closes, as one open before did.
+                    if (name !== this.siteName) {
+                        const late = this.closeMachine();
+                        if (late) first = `${first}${late} · `;
+                        this.boards.forget();
+                        this.machinesHere = [];
+                    }
                     this.siteName = name;
                     this.leavingSite = false;
                     this.lighting.setSite(name);
@@ -2574,7 +2593,7 @@
                     // for after the scene is on screen, never before; its event
                     // redraws what shows the boards.
                     this.boards.scan();
-                    this.machinesLoaded = this.loadMachinesHere(name);
+                    this.machinesLoaded = this.loadMachinesHere(name, load);
                     this.makers = {};
                     this.siteJobs = [];
                     this.renderSiteJobs();
@@ -2586,10 +2605,14 @@
                     if (this.panels.isShown('working')) this.workingSpace?.open(null);
                     if (this.panels.isShown('procedure')) this.procedure?.load();
                     this.procedureRoom(name);
+                    return true;
                 } catch (err) {
+                    if (load !== this.siteLoad) return false;
                     this.setStatus(`${first}Error: ${err.message}`, 'error');
                     console.error(err);
-                    if (leaving) { this.leavingSite = false; this.syncWorldMarks(); }
+                    // The site still drawn follows its machines again, whichever load stopped it.
+                    if (this.leavingSite) { this.leavingSite = false; this.syncWorldMarks(); }
+                    return false;
                 }
             }
 
@@ -8547,12 +8570,15 @@
                 const { row } = this.bindingFor(path);
                 return !!(row && row.device && row.device.port && this.machine.port === row.device.port);
             }
-            // The site's machines (machine_plans.py), asked with the site.
-            async loadMachinesHere(name) {
+            // The site's machines (machine_plans.py), asked with the site: the answer of the
+            // load that asked (loadSite's number), and of no load since.
+            async loadMachinesHere(name, load = this.siteLoad) {
+                let found = [];
                 try {
                     const r = await fetch(`${BASE_URL}/sites/${encodeURIComponent(name)}/machines`);
-                    if (name === this.siteName) this.machinesHere = r.ok ? await r.json() : [];
-                } catch (e) { if (name === this.siteName) this.machinesHere = []; }
+                    found = r.ok ? await r.json() : [];
+                } catch (e) { found = []; }
+                if (load === this.siteLoad && name === this.siteName) this.machinesHere = found;
             }
             // The machine a path is, or stands in: itself or the nearest above it.
             plannedMachineOf(path) {
@@ -10243,8 +10269,8 @@
             enterSite(name, why = '') {
                 const loaded = this.chooseSite(name);
                 if (!loaded) return null;
-                return loaded.then(() => {
-                    if (this.siteName === name) this.setStatus(`Stepped into the site ${name}${why ? ` (${why})` : ''}; Back returns to ${UNIVERSE_SHOWN}`, 'success');
+                return loaded.then((landed) => {
+                    if (landed && this.siteName === name) this.setStatus(`Stepped into the site ${name}${why ? ` (${why})` : ''}; Back returns to ${UNIVERSE_SHOWN}`, 'success');
                 });
             }
 
@@ -10254,8 +10280,8 @@
                 const left = this.siteName;
                 const loaded = this.chooseSite(UNIVERSE);
                 if (!loaded) return null;
-                return loaded.then(() => {
-                    if (this.siteName !== UNIVERSE) return;
+                return loaded.then((landed) => {
+                    if (!landed || this.siteName !== UNIVERSE) return;
                     const piece = this.tree.children.find((c) => c.site_ref === left);
                     if (piece) this.selectChild(piece.name);
                     this.setStatus(`Stepped out of the site ${left} to ${UNIVERSE_SHOWN}${how ? ` (${how})` : ''}`, 'success');

@@ -199,6 +199,64 @@ def test_the_banner_follows_a_site_chosen_any_other_way(page: Page, base_url: st
     assert crumbs(page) == [FIRST, "datum_core"]
 
 
+# Every load of a site the page starts, kept as it is started, so a test can wait for
+# each to have answered -- landed (true) or let go (false) -- in whatever order the
+# answers come.
+LOADS_KEPT = """() => {
+    const v = window.fractalViewer, own = v.loadSite.bind(v);
+    window.loadsKept = [];
+    v.loadSite = (...asked) => { const load = own(...asked); window.loadsKept.push(load); return load; };
+}"""
+ALL_ANSWERED = "() => Promise.all(window.loadsKept)"
+
+
+@pytest.mark.e2e
+def test_a_site_left_before_it_loads_answers_nothing_when_it_comes(page: Page, base_url: str):
+    """theatre's piece double-clicked in the universe, then Back before theatre has
+    loaded: the address names theatre from the press, the universe stays the site drawn,
+    and theatre's answer, coming after the universe's, changes nothing."""
+    _at(page, base_url, UNIVERSE)
+    page.evaluate(LOADS_KEPT)
+    held: list = []
+    page.route(re.compile(r"/sites/theatre$"), lambda route: held.append(route))
+    row(page, "site-theatre").dblclick()
+    expect(page).to_have_url(re.compile(r"/viewer/sites/theatre$"))
+    page.wait_for_function("() => window.loadsKept.length === 1")
+    assert page.evaluate("() => window.fractalViewer.siteName") == UNIVERSE
+    assert crumbs(page) == [FIRST]
+    page.go_back()
+    page.wait_for_function("() => window.loadsKept.length === 2")
+    assert page.evaluate("() => window.loadsKept[1]") is True
+    assert len(held) == 1
+    held[0].continue_()
+    assert page.evaluate(ALL_ANSWERED) == [False, True]
+    assert page.evaluate("() => window.fractalViewer.siteName") == UNIVERSE
+    expect(page).to_have_url(re.compile(r"/viewer/sites/apothecary$"))
+    assert crumbs(page) == [FIRST]
+    expect(status(page)).not_to_contain_text("theatre")
+
+
+@pytest.mark.e2e
+def test_a_site_s_machines_are_its_own_from_the_moment_it_is_drawn(page: Page, base_url: str):
+    """The garage's machines known, the universe drawn while its own are still asked
+    for: none of the garage's stands for the universe's meanwhile."""
+    _at(page, base_url)
+    page.wait_for_function(
+        "() => window.fractalViewer.machinesHere.some((m) => m.path === 'printer_1')"
+    )
+    held: list = []
+    page.route(re.compile(r"/sites/apothecary/machines$"), lambda route: held.append(route))
+    page.locator("#universe-crumb").click()
+    _is_at(page, UNIVERSE)
+    assert page.evaluate("() => window.fractalViewer.machinesHere") == []
+    assert len(held) == 1
+    held[0].continue_()
+    page.wait_for_function("() => window.fractalViewer.machinesHere.length > 0")
+    garage = {"printer_1", "cnc_router"}
+    here = page.evaluate("() => window.fractalViewer.machinesHere.map((m) => m.path)")
+    assert garage.isdisjoint(here), here
+
+
 @pytest.mark.e2e
 def test_the_crumbs_are_reached_and_pressed_from_the_keyboard(page: Page, base_url: str):
     _at(page, base_url, query="?focus=workbench")
