@@ -54,12 +54,14 @@ WORLD: Dict[str, str] = {
 }
 
 # Innermost first. Bright and saturated, apart from the categories' quieter colours, so
-# a shell's rings are not read as a category's outline.
-SHELLS: Tuple[str, ...] = ("#3d7eff", "#b06cff", "#ff4d94", "#f2f2f2", "#c8ff3e", "#0099ff")
+# a shell's rings are not read as a category's outline; and none the measurement's hue,
+# which is drawn over them.
+SHELLS: Tuple[str, ...] = ("#3d7eff", "#b06cff", "#ff6a00", "#f2f2f2", "#c8ff3e", "#0099ff")
 
-# Written down, in the order the Site window's chips list them. The first seven are the
+# Written down, in the order the Site window's chips list them. The first eight are the
 # sites' subsystems and the theatre's (theatre_site.py); the rest are the parts'
-# categories, the universe's clusters, each chosen apart from every colour above it.
+# categories, the universe's clusters, each chosen apart from every colour above it and
+# from the colours that mean a state, which a piece's row in Site wears beside it.
 CATEGORIES: Dict[str, str] = {
     "wall": "#9c8f7a",
     "furniture": "#8a5a3c",
@@ -68,6 +70,7 @@ CATEGORIES: Dict[str, str] = {
     "electrical": "#d8c11a",
     "lighting": "#e8a33a",
     "scenic": "#8f7bb5",
+    "structure": "#b27774",
     "electromechanical": "#bb44aa",
     "machine": "#447744",
     "calibration": "#777700",

@@ -4,6 +4,7 @@ wrote down given the colour the page always gave it, and a site sent with its ow
 
 from __future__ import annotations
 
+import colorsys
 import itertools
 import json
 import math
@@ -107,10 +108,35 @@ def test_the_categories_written_down_stand_apart_from_each_other():
         assert _apart(x, y) >= 15, (a, b)
 
 
+def test_a_category_written_down_stands_apart_from_the_colours_that_mean_a_state():
+    """A piece's row in Site wears its category's colour beside its state's dot: no
+    category is read as a state, each as far from them as from another category. The
+    garage's structure was the page's green, a shade off ok."""
+    for name, colour in CATEGORIES.items():
+        for state in _states():
+            assert _apart(colour, state) >= 15, (name, state)
+    assert "structure" in CATEGORIES
+
+
+def _hue(colour: str) -> float:
+    """A colour's hue, degrees round the wheel."""
+    rgb = [int(colour[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+    return colorsys.rgb_to_hsv(*rgb)[0] * 360
+
+
+def test_the_measurement_is_drawn_in_no_shells_hue():
+    """The measurement is drawn over the universe's rings: its magenta is no shell's, each
+    shell's hue at least 30 degrees round the wheel from it, where shell 2's pink stood 24
+    off and read as the same colour beside it."""
+    for shell in SHELLS:
+        apart = abs(_hue(shell) - _hue(WORLD["measure"])) % 360
+        if shell != "#f2f2f2":  # the white shell has no hue to share
+            assert min(apart, 360 - apart) >= 30, shell
+
+
 # The colours the page gave words nobody wrote down, before the rule moved here: its
 # own function, run under node on these words.
 PAGE_GAVE = {
-    "structure": "#64bc5c",
     "disc": "#8b5cbc",
     "bracket": "#bc5c83",
     "plate": "#bcb35c",
@@ -143,7 +169,7 @@ def test_the_garage_has_its_categories_and_the_worlds_layers_and_no_shell():
     assert categories[len(written) :] == sorted(categories[len(written) :])
     colours = colours_for(garage)
     assert colours["category:wall"] == "#9c8f7a"
-    assert colours["category:structure"] == PAGE_GAVE["structure"]
+    assert colours["category:structure"] == CATEGORIES["structure"]
     assert list(colours)[-3:] == ["grid", "machine-buttons", "measure"]
 
 

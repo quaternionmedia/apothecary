@@ -1210,7 +1210,9 @@
         const DETAIL_BOX = 'box';     // black box: its bounding box, nothing inside
         const DETAIL_DOT = 'dot';     // a marker at its center, minimal footprint
         const DETAIL_LABELS = { full: 'Full', box: 'Black box', dot: 'Dot' };
-        const COMPOUND_OVERLAY_COLOR = 0xffcc44;
+        // A subassembly's outline: a neutral, the orbits' links', so it is read as no state
+        // (amber is a variant applied and not saved, VARIANT_EDGE_COLOR) and no layer.
+        const COMPOUND_OVERLAY_COLOR = ORBIT_LINK_COLOR;
         const OVERLAY_INFLATE = 1.02;  // keeps the outline off the node's own faces
         const DOT_RADIUS_FRACTION = 0.06;  // of the node's own span
         const DOT_MIN_RADIUS = 8;          // mm -- still clickable when zoomed out
