@@ -97,3 +97,57 @@ def test_console_feeds_start_only_when_asked(rig_site, monkeypatch):
     monkeypatch.setenv(routes.CONSOLE_OSC_ENV, "1")
     routes.start_console_feeds()
     assert started == [frozenset({1}), "osc"]
+
+
+def test_what_a_consoles_feeds_set_is_said_on_the_stream_and_a_put_is_said_once(rig_site):
+    """sACN and OSC reaching a site's state are relayed as changes of ``lighting``, keyed
+    by the site and carrying the levels as the state route answers; a burst of packets is
+    told far fewer times than it came."""
+    import asyncio
+    import time
+
+    from apothecary import surfaces
+    from apothecary.console_feedback import ACN_ID, DMX_HEADER, OscReceiver, SacnReceiver
+
+    state = routes.rig_state(SITE)
+    header = bytearray(DMX_HEADER)
+    header[4:16], header[40:44], header[117] = ACN_ID, (2).to_bytes(4, "big"), 2
+    header[113:115] = (1).to_bytes(2, "big")
+    header[123:125] = (6).to_bytes(2, "big")
+
+    def packet(level: int) -> bytes:
+        return bytes(header) + bytes([level]) + bytes(4)
+
+    async def follow():
+        following = surfaces.subscribe(["lighting"])
+        try:
+            receiver = SacnReceiver(state, [1])
+            for level in range(100):
+                receiver.handle(packet(level))
+            time.sleep(0.15)
+            state.flush()
+            OscReceiver(state).handle(b"/eos/out/active/cue\0,i\0\0\0\0\0\x03")
+            time.sleep(0.15)
+            state.flush()  # the receiver's idle look
+            got, _ = await following.next(0.2)
+            return got
+        finally:
+            following.close()
+
+    told = asyncio.run(follow())
+    assert 2 <= len(told) <= 4 and {e["key"] for e in told} == {SITE}
+    assert told[-1]["body"]["status"] == {"/eos/out/active/cue": [3]}
+    assert told[-2]["body"]["channels"][1]["Intens"] == 99 / 255
+
+    async def put():
+        following = surfaces.subscribe(["lighting"])
+        try:
+            await asyncio.to_thread(
+                client.put, f"/sites/{SITE}/lighting/state", json={"levels": {"1": {"Intens": 0.5}}}
+            )
+            got, _ = await following.next(0.2)
+            return got
+        finally:
+            following.close()
+
+    assert len(asyncio.run(put())) == 1

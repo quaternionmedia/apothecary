@@ -8,21 +8,33 @@ set in its show-control setup), both on the local network, through
 ``stays_local.console_listener``: the one socket the stays-local guard lets bind
 beyond loopback, receive only. Asking a console for anything (OSC subscribe) would
 have to send, which the guard refuses; it is not built.
+
+**Telling.** A state can be given ``told``, a function it calls when a console's feed has
+changed what it holds -- never for a ``set_levels`` of a person's own, whose route says it
+itself. A feed sends dozens of packets a second, so ``told`` is called at most once every
+``TELL_EVERY`` seconds, from the receiver's own thread: at the packet that comes after the
+interval, or at the receiver's next idle look (``flush``, a quarter second at most), so the
+last change of a burst is never held back. There is no timer of its own.
 """
 
 from __future__ import annotations
 
 import colorsys
+import logging
 import math
 import socket
 import struct
 import threading
 import time
-from typing import Dict, Iterable, Mapping, Optional, Tuple
+from typing import Callable, Dict, Iterable, Mapping, Optional, Tuple
 
 from .lighting import LightingRig, decode
 from .stays_local import OSC_PORT, SACN_PORT, console_listener
 
+log = logging.getLogger(__name__)
+
+# The fewest seconds between two tellings of what a console's feeds changed.
+TELL_EVERY = 0.1
 ACN_ID = b"ASC-E1.17\x00\x00\x00"
 DMX_HEADER = 126  # ACN root + framing + DMP layers, up to and including the start code
 _E131_DATA = 2
@@ -103,6 +115,10 @@ class ConsoleState:
         self._status: Dict[str, list] = {}
         self._seq = 0
         self._last: Optional[float] = None
+        self.told: Optional[Callable[[], None]] = None  # what a feed's change is said through
+        self.clock: Callable[[], float] = time.monotonic
+        self._pending = False
+        self._told_at: Optional[float] = None
 
     def apply_osc(self, messages) -> None:
         """Keep the latest arguments of each ``/eos/out/...`` message: the console's own status."""
@@ -132,6 +148,27 @@ class ConsoleState:
                 self._levels.setdefault(channel, {}).update(params)
             self._seq += 1
             self._last = time.monotonic()
+
+    def fed(self) -> None:
+        """A feed changed what is held: ``told`` is called now, when ``TELL_EVERY`` has
+        passed since it last was, and else at the next ``flush``."""
+        self._pending = True
+        self.flush()
+
+    def flush(self) -> None:
+        """Tell the feed's change that waited out the interval, if one waits."""
+        told = self.told
+        if told is None or not self._pending:
+            return
+        with self._lock:
+            now = self.clock()
+            if not self._pending or (self._told_at is not None and now - self._told_at < TELL_EVERY):
+                return
+            self._pending, self._told_at = False, now
+        try:
+            told()
+        except Exception:  # a feed's thread does not stop for what is done with its news
+            log.exception("console feed: the change was not told")
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -180,6 +217,7 @@ class _Receiver:
             try:
                 packet, _ = self._sock.recvfrom(8192)
             except socket.timeout:
+                self.state.flush()  # a burst's last change is told at the idle look
                 continue
             except OSError:
                 return
@@ -215,6 +253,7 @@ class SacnReceiver(_Receiver):
         parsed = parse_sacn(packet)
         if parsed and parsed[0] in self.universes:
             self.state.apply_universe(*parsed)
+            self.state.fed()
 
 
 class OscReceiver(_Receiver):
@@ -224,6 +263,7 @@ class OscReceiver(_Receiver):
 
     def handle(self, packet: bytes) -> None:
         self.state.apply_osc(parse_osc(packet))
+        self.state.fed()
 
 
 def simulate_levels(rig: LightingRig, t: float) -> Dict[int, Dict[str, float]]:

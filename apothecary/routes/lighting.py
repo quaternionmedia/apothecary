@@ -75,7 +75,12 @@ def rig_state(name: str) -> Optional[ConsoleState]:
             rig = loader() if loader else None
             if rig is None:
                 return None
-            _states[name] = ConsoleState(rig)
+            made = ConsoleState(rig)
+            # What a console's own feeds (sACN, OSC) set is said, at a bounded rate.
+            made.told = lambda: surfaces.changed(
+                LIGHTING, key=name, body=lambda: site_lighting_state(name)
+            )
+            _states[name] = made
         return _states[name]
 
 
@@ -137,8 +142,8 @@ def put_site_lighting_state(name: str, body: LevelsIn) -> dict:
 
 
 # A site's levels, as a surface (apothecary/surfaces.py): read as GET .../lighting/state
-# answers, and said changed at each put. What the console's own feeds (sACN, OSC) set
-# between puts is read, and not said.
+# answers, and said changed at each put, and at most every ``TELL_EVERY`` seconds as a
+# console's own feeds (sACN, OSC) set levels or status (apothecary/console_feedback.py).
 LIGHTING = "lighting"
 
 surfaces.register(

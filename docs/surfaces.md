@@ -24,7 +24,7 @@ family's members found stand on every surface alike (`apothecary/routes/surfaces
 | `machine_status` | `bed_mm` | `apothecary/firmware/devices.py` | `port` | a poll is kept, whoever made it (`notify_status`): the poll, its raw lines left out |
 | `jobs` | `none` | `apothecary/jobs.py` | `site`, `port` | a job begins and ends, and while it runs when its stage changes or its progress passes a whole percent (below) |
 | `projector` | `bed_mm` | `apothecary/routes/projector.py` | `site` and `path`, both needed | a poll of the machine's board, a job of it begun or ended, a calibration kept or forgotten: its picture's `key` and what moves |
-| `lighting` | `none` | `apothecary/routes/lighting.py` | `site`, needed | levels or slots are put; what a console's own feed sets between puts is read, not said |
+| `lighting` | `none` | `apothecary/routes/lighting.py` | `site`, needed | levels or slots are put, and as a console's own feeds (sACN, OSC) set levels or status: at most every 0.1 s, the last change of a burst told at the receiver's next idle look |
 | `pictures` | `none` | `apothecary/routes/pictures.py` | | a picture is kept or forgotten here, and a pile is gathered |
 | `whiteboard_marks` | `picture_fractions` | `apothecary/routes/marks.py` | `site` and `view`, both needed | a person's word on a mark or a note |
 | `carlos_holds` | `none` | `apothecary/routes/wiring.py` | `site` | a hold is sent to carlos through the hub, with what carlos answered or why it did not; kept in the state folder's `carlos-holds.json`, read back at start |
@@ -195,8 +195,8 @@ The world page polls what the stream could carry; none of it is moved yet. Each 
 move once its owner says its change:
 
 - `apothecary/static/lighting.js` asks for a site's levels every 200 ms; the `lighting`
-  surface says each put, but the console's own feeds (sACN, OSC) set levels without one,
-  and would say so first.
+  surface says each put and each console feed's change, and a page could take them from
+  the stream.
 - `apothecary/static/boards.js` asks which ports are armed every two seconds; the
   control latch is no surface yet.
 - A board's poller in `boards.js` is the poll itself and stays one; a page whose board
