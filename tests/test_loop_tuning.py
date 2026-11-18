@@ -474,6 +474,51 @@ class TestExperiments:
         assert progress == sorted(progress) and 3 < len(told) <= 105
         assert told[-1]["body"]["outcome"] == "done"
 
+    def test_a_tune_and_its_document_are_surfaces_that_ask_no_port(self, board):
+        import asyncio
+
+        from apothecary import surfaces
+        from apothecary.api import app
+
+        client = TestClient(app)
+        board.links.control.arm(PORT)
+        asked = len(board.sim.sent)
+
+        async def follow():
+            following = surfaces.subscribe(["tune", "control_loop"])
+            try:
+                job = await asyncio.to_thread(
+                    _run, board, loops.plan("hotend", 0, "step", 200, 900, **STEP)
+                )
+                got, _ = await following.next(0.2)
+                return job, got
+            finally:
+                following.close()
+
+        job, told = asyncio.run(follow())
+        tuned = [e for e in told if e["surface"] == "tune"]
+        assert {e["key"] for e in tuned} == {PORT} and len(tuned) >= 3
+        assert tuned[0]["body"]["running"] is True and tuned[-1]["body"]["running"] is False
+        assert tuned[-1]["body"]["outcome"] == "done" and tuned[-1]["body"]["stage"] == "done"
+        assert [e["body"]["progress"] for e in tuned] == sorted(e["body"]["progress"] for e in tuned)
+        [made] = [e for e in told if e["surface"] == "control_loop"]
+        assert made["key"] == job.experiment.id and made["body"]["error"] is None
+        assert made["body"]["document"]["schema"] == "control/loop/1"
+        # Read now: the same, and nothing written to the board by either.
+        sent = len(board.sim.sent)
+        read = client.get("/surfaces/control_loop", params={"experiment": job.experiment.id})
+        assert read.status_code == 200
+        again = read.json()["snapshot"]["document"]
+        for doc in (again, made["body"]["document"]):
+            doc.pop("generated_at")  # the one figure that is the moment it was made
+        assert again == made["body"]["document"]
+        listed = client.get("/surfaces/control_loop", params={"port": PORT}).json()["snapshot"]
+        assert [e["id"] for e in listed["experiments"]] == [job.experiment.id]
+        assert client.get("/surfaces/tune").json()["snapshot"]["tuning"][0]["job_id"] == job.job.id
+        gone = client.get("/surfaces/control_loop", params={"experiment": "nope"}).json()
+        assert gone["snapshot"]["document"] is None and "no kept experiment" in gone["snapshot"]["error"]
+        assert len(board.sim.sent) == sent
+
     def test_a_step_s_document_finds_the_simulated_plant(self, board):
         """The fit of a closed-loop step read once a (simulated) second finds the
         simulator's own plant within 15 % in its gain and time constant and 2 s in its dead

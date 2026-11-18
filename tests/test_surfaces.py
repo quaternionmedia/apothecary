@@ -28,11 +28,13 @@ BOARD = "printer_1.frame_system.mainboard"
 OWNED = {
     "carlos_holds": ("none", "apothecary.routes.wiring"),
     "contributed": ("none", "apothecary.surfaces"),
+    "control_loop": ("none", "apothecary.firmware.loops"),
     "jobs": ("none", "apothecary.jobs"),
     "lighting": ("none", "apothecary.routes.lighting"),
     "machine_status": ("bed_mm", "apothecary.firmware.devices"),
     "pictures": ("none", "apothecary.routes.pictures"),
     "projector": ("bed_mm", "apothecary.routes.projector"),
+    "tune": ("none", "apothecary.firmware.loops"),
     "whiteboard_marks": ("picture_fractions", "apothecary.routes.marks"),
 }
 

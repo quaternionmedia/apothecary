@@ -44,7 +44,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
-from .. import jobs, loop_document
+from .. import jobs, loop_document, surfaces
 from ..stamped import claim
 from ..state_folder import private_folder, state_dir
 from . import can, devices, gcode
@@ -239,6 +239,7 @@ class LoopJob:
         self.experiment: Optional[loop_document.Experiment] = None
         self._cancelled = threading.Event()
         self._quiet = False
+        self._told: Optional[Tuple[str, int, int]] = None
         self._t0: Optional[float] = None
         self.job = jobs.Job(
             id=jobs.new_id(self.started, port),
@@ -316,6 +317,15 @@ class LoopJob:
         if link is not None and self.finished is None:
             link.job = self.snapshot()
             jobs.moved(self.job.id, self.now)
+            self._tell_tune()
+
+    def _tell_tune(self) -> None:
+        """Tell the ``tune`` surface when the stage, the whole percent or the ``TUNE_TELL_S``
+        seconds of the experiment's own clock have changed since it was last told."""
+        where = (self.stage, int(self.progress() * 100), int(self._elapsed() // TUNE_TELL_S))
+        if where != self._told and surfaces.listening(TUNE_SURFACE):
+            self._told = where
+            surfaces.changed(TUNE_SURFACE, key=self.port, body=self.snapshot)
 
     # -- ending -------------------------------------------------------------------------
     def cancel(self, quiet: bool = False) -> None:
@@ -573,6 +583,13 @@ class LoopJob:
         if link is not None:
             link.job = None
         self.finished = self.record.finished_at
+        surfaces.changed(TUNE_SURFACE, key=self.port, body=self.snapshot)
+        if self.experiment is not None:
+            surfaces.changed(
+                CONTROL_LOOP,
+                key=self.experiment.id,
+                body=lambda: _loop_of(self.experiment.id),
+            )
 
 
 # ---- what is kept -------------------------------------------------------------------------
@@ -644,6 +661,12 @@ def experiment(experiment_id: str) -> Optional[dict]:
 # ---- the running jobs ---------------------------------------------------------------------
 
 _TUNING: Dict[str, LoopJob] = {}
+
+# Seconds of an experiment's own clock between two tellings of its progress when its stage
+# and whole percent have not moved (an autotune's progress is never known).
+TUNE_TELL_S = 5
+TUNE_SURFACE = "tune"
+CONTROL_LOOP = "control_loop"
 
 
 def tuning_job(port: str) -> Optional[LoopJob]:
@@ -847,3 +870,60 @@ def document(
         read=read,
         autotune=body.get("result"),
     )
+
+
+# ---- as surfaces ----------------------------------------------------------------------------
+# What a page or a member reads of a heater's loop (apothecary/surfaces.py). Neither asks a
+# port anything: a tune's state is its job's own, and a document is built from the kept
+# experiment, never with the board's gains read (``read_board``).
+
+
+def _tuning_now(words: Dict[str, str]) -> Dict[str, object]:
+    """Each port's experiment, the running one or the last: its ``snapshot``, no samples."""
+    port = words.get("port")
+    return {
+        "tuning": [
+            job.snapshot() for p, job in sorted(_TUNING.items()) if port in (None, p)
+        ]
+    }
+
+
+def _loop_of(experiment_id: str) -> Dict[str, object]:
+    """The ``control/loop/1`` document of a kept experiment, the design's defaults
+    (``document``), or why there is none: an experiment with no samples has no plant."""
+    try:
+        doc = document(experiment_id).model_dump(mode="json", by_alias=True)
+        return {"experiment": experiment_id, "document": doc, "error": None}
+    except Exception as exc:  # no kept experiment, or one with too little to identify
+        return {"experiment": experiment_id, "document": None, "error": str(exc)}
+
+
+def _loops_kept(words: Dict[str, str]) -> Dict[str, object]:
+    if words.get("experiment"):
+        return _loop_of(words["experiment"])
+    return {"experiments": experiments(words.get("port") or None)}
+
+
+surfaces.register(
+    surfaces.Surface(
+        name=TUNE_SURFACE,
+        frame="none",
+        about="each printer's heater experiment, the running one or the last: its stage, "
+        "progress, reading and result",
+        snapshot=_tuning_now,
+        takes=("port",),
+        tells=True,
+        owner=__name__,
+    )
+)
+surfaces.register(
+    surfaces.Surface(
+        name=CONTROL_LOOP,
+        frame="none",
+        about="a kept experiment's control/loop/1 document, or the kept experiments without one named",
+        snapshot=_loops_kept,
+        takes=("experiment", "port"),
+        tells=True,
+        owner=__name__,
+    )
+)

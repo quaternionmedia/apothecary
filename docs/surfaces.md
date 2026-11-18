@@ -28,6 +28,8 @@ family's members found stand on every surface alike (`apothecary/routes/surfaces
 | `pictures` | `none` | `apothecary/routes/pictures.py` | | a picture is kept or forgotten here, and a pile is gathered |
 | `whiteboard_marks` | `picture_fractions` | `apothecary/routes/marks.py` | `site` and `view`, both needed | a person's word on a mark or a note |
 | `carlos_holds` | `none` | `apothecary/routes/wiring.py` | `site` | a hold is sent to carlos through the hub, with what carlos answered or why it did not; kept in the state folder's `carlos-holds.json`, read back at start |
+| `tune` | `none` | `apothecary/firmware/loops.py` | `port` | a heater experiment's stage or whole percent changes, or every 5 s of its own clock: the experiment as `GET /firmware/printers/loops/job` has it (its reading, target, power, result), keyed by the port; and once more as it ends |
+| `control_loop` | `none` | `apothecary/firmware/loops.py` | `experiment`, `port` | an experiment is kept: its `control/loop/1` document, `{"experiment", "document", "error"}`, keyed by the experiment's id; read with `experiment` for one, else the kept experiments (of a `port`) without their samples |
 | `contributed` | `none` | `apothecary/surfaces.py` | `surface`, `by` | a member's observation is kept (below); each observation names its own frame |
 
 ## Reading
@@ -98,6 +100,11 @@ data: {"format": "apothecary.surface-change/1", "seq": 43, "surface": "jobs", "f
 
 The stream still polls nothing: what is told is what the job's thread already holds, and
 no job's state is built while no reader follows the jobs.
+
+A tune's stage and progress are also on `jobs` (above); `tune` adds what the experiment
+reads. `control_loop` builds the document with the design's defaults (`simc`, `pi`) from the
+kept experiment alone and never reads the board's gains (`read_board`); an experiment with
+too little to identify a plant is told with `document` null and an `error`.
 
 ## Contributed
 
