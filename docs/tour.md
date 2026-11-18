@@ -29,7 +29,9 @@ word on them. It is dragged by its head, folded to its head by a double-click th
 and closed by its ✕ or by Tour again. Where it stands, whether it is open and the stage
 it shows are this browser's (`apothecary.tour` in its local storage), so a reload opens
 it where it was: the page is then taken to that stage as ↻ does, so the box is not left
-over a page it is not true of.
+over a page it is not true of. No one pressed anything then, so nothing is started on
+the way: where the stage needs a slice, a toolpath or shapes found and none is kept,
+the box says so and that ↻ makes it.
 
 Opened in a browser that has not taken it before, it starts at the first stage with no
 word on the build the server runs.
@@ -57,13 +59,13 @@ thing only where it is not so already:
   | `part` | a piece chosen | its row in Site |
   | `fit` | a piece chosen and framed in the world | `f` |
   | `makes` | the piece named under makes in the open Machine's Print window, and the file kept made from it chosen, where one is kept: nothing is sliced | the card's makes, and its files |
-  | `file` | the open Machine's file made from a part: the one chosen, else the newest kept chosen, else one made; another part's file chosen before is not the stage's | the card's file, Slice, or a router's Toolpath |
+  | `file` | the open Machine's file made from a part: the one chosen, else the newest kept chosen, else one made (on a reload, not made: ↻ makes it); another part's file chosen before is not the stage's | the card's file, Slice, or a router's Toolpath |
   | `edit` | a part's editor opened | Part › Edit |
   | `scad` | a part's SCAD in its window | Part › SCAD |
   | `bench` | the Bench opened on a piece's sketch | Device › Flash sketch |
   | `working` | the Working space opened on the site, or on a machine | ⊞ Windows › Working space, Camera › Workspace |
   | `picture` | a picture of the folder pinned at a piece, and framed where it lies | Picture › Folder |
-  | `shapes` | the shapes of the picture drawn at a piece found | Picture › Find shapes |
+  | `shapes` | the shapes of the picture drawn at a piece found (on a reload, not found: ↻ finds them) | Picture › Find shapes |
 
 - a Machine that is open is closed where the journey has no machine in it;
 - the journey is entered at the stage, its windows laid out and its rail in the

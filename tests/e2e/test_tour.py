@@ -5,7 +5,7 @@ piece chosen, the stage entered; ✓ Works keeps a person's word, under the name
 them once, and takes the page to the next stage, with what there is to try there; the See stage slices the piece where no file is kept, and its path is drawn;
 ✗ Off keeps what is off, and only with it; a view laid out moves the windows and not the
 box; the ring's Panels › Windows › Tour cells do what its buttons do; a reload opens it
-where it was; a machine with no board connected is taken as the site plans it; a stage
+where it was, and starts no job on the way; a machine with no board connected is taken as the site plans it; a stage
 that needs what only a person brings is entered, the box saying what it needs; and the
 server gives back every word kept. Walkthrough page 34 is what it writes.
 
@@ -415,3 +415,41 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
             for r in kept
         ),
     )
+
+
+@pytest.mark.e2e
+def test_a_reload_takes_the_page_to_its_stage_and_starts_no_job(page, url):
+    """A reload that finds the box open on a stage whose work is a job -- Cut a part's See,
+    with no toolpath of router_coupon kept -- takes the page there and starts none: no one
+    pressed anything, so the box says what ↻ does. ↻ pressed starts it."""
+    box = page.locator(BOX)
+    open_garage(page, url)
+    page.evaluate(
+        "() => localStorage.setItem('apothecary.tour', JSON.stringify({ open: true, stage: 'cut/see' }))"
+    )
+    jobs = []
+
+    def asked(request):
+        if request.method == "POST" and ("/cam/cut" in request.url or "/slicer/slice" in request.url):
+            jobs.append(request.url)
+
+    page.on("request", asked)
+    page.reload()
+    expect(box).to_be_visible(timeout=30000)
+    expect(box.locator(".tour-pop-title")).to_have_text("Cut a part · 3. See")
+    page.wait_for_function(
+        "() => window.fractalViewer.machine?.handle?.kind() === 'router'"
+        " && window.fractalViewer.selectedName === 'router_coupon'",
+        timeout=60000,
+    )
+    expect(box).not_to_have_class(re.compile(r"\bbusy\b"), timeout=60000)
+    assert jobs == []
+    expect(box.locator(".tour-pop-needs")).to_have_text(
+        "No toolpath of router_coupon is kept for cnc_router, and a reload starts none: "
+        "↻ writes one, as Toolpath does"
+    )
+    # A person's press is what starts it.
+    with page.expect_request(
+        lambda r: r.method == "POST" and "/cam/cut" in r.url, timeout=30000
+    ):
+        box.locator(".tour-pop-put").click()

@@ -1568,7 +1568,8 @@
                 const journey = DEEP_LINK.get('journey');
                 if (journey && this.siteName) await this.enterJourney(journey, { stepId: DEEP_LINK.get('step'), fromAddress: true });
                 // The tour box a reload found open: the page taken to its stage, as its ↻
-                // does, so the box is not left over a page it is not true of.
+                // does, so the box is not left over a page it is not true of; no one
+                // pressed anything, so no slice or other job is started on the way.
                 if (this.siteName && this.tourPop?.wasOpen()) await this.tourPop.restage();
             }
 
@@ -2108,7 +2109,7 @@
                 const tourOpen = document.getElementById('tour-pop-open');
                 this.tourPop = mountTourPopover({
                     base: BASE_URL,
-                    stage: (journey, stage) => this.stageJourney(journey, stage),
+                    stage: (journey, stage, how) => this.stageJourney(journey, stage, how),
                     onShown: (open) => tourOpen.setAttribute('aria-pressed', String(open)),
                 });
                 window.apothecaryTourPop = this.tourPop;
@@ -9090,8 +9091,11 @@
             // page said of the step. Nothing here arms, starts or sends, and nothing
             // stands in for what a person brings: where that is missing the rest is
             // left, the step is entered all the same, so a person stands where it is
-            // done, and what the stage needs is said (`refused`).
-            async stageJourney(id, stepId) {
+            // done, and what the stage needs is said (`refused`). `reload`: no one
+            // pressed anything (a reload found the tour open), so no job is started --
+            // no slice, toolpath or shapes found; where the stage needs one, it says ↻
+            // starts it.
+            async stageJourney(id, stepId, { reload = false } = {}) {
                 const journey = JOURNEYS.find((j) => j.id === id);
                 if (!journey) return { did: [], said: `There is no journey ${id}`, refused: true };
                 const step = journey.steps.find((x) => x.id === stepId) || journey.steps[0];
@@ -9115,7 +9119,7 @@
                 }
                 let needs = null;
                 for (const [verb, subject] of [...(journey.staged_on || []), ...(step.puts || [])]) {
-                    const done = await this.stagePut(verb, subject);
+                    const done = await this.stagePut(verb, subject, { reload });
                     if (done.refused) { needs = done.refused; break; }
                     if (done.did) did.push(done.did);
                 }
@@ -9130,8 +9134,9 @@
                 return { did, said: status.textContent, refused: status.classList.contains('error') };
             }
             // One thing that takes the page to a stage (journeys.py's PUTS): `{ did }` saying what
-            // was done, `{}` where it was so already, `{ refused }` saying why not.
-            async stagePut(verb, subject) {
+            // was done, `{}` where it was so already, `{ refused }` saying why not. On a
+            // reload a put that would start a job says ↻ does it, and starts nothing.
+            async stagePut(verb, subject, { reload = false } = {}) {
                 const until = async (test, ms) => {
                     const end = Date.now() + ms;
                     while (Date.now() < end) { if (test()) return true; await new Promise((r) => setTimeout(r, 150)); }
@@ -9210,6 +9215,7 @@
                     const earlier = await print.fileOf(subject);
                     if (earlier) return { did: `${earlier}, made from ${subject} before, chosen in ${who}'s ${found.card} window` };
                     const router = machine.handle.kind() === 'router';
+                    if (reload) return { refused: `No ${router ? 'toolpath' : 'slice'} of ${subject} is kept for ${who}, and a reload starts none: ↻ ${router ? 'writes one, as Toolpath does' : 'slices it, as Slice does'}` };
                     const started = await print.slice(subject);
                     if (started.refused) return { refused: `${subject} was not ${router ? 'given a toolpath' : 'sliced'}: ${started.refused}` };
                     await until(() => !print.slicing(), 180000);
@@ -9265,6 +9271,7 @@
                     }
                     if (!drawn()) return { refused: `No picture is drawn at ${host} to find shapes in` };
                     if (drawn().shapes?.length) return framed({});
+                    if (reload) return { refused: `No shapes are found at ${host} yet, and a reload finds none: ↻ finds them, as its Picture › Find shapes › ${what} does` };
                     await this.pictures.findShapes(host, what);
                     if (!(await until(() => drawn()?.shapes?.length, 30000))) return { refused: `No shape was found at ${host}: ${document.getElementById('status').textContent}` };
                     return framed({ did: `${drawn().shapes.length} shapes found at ${host}, as its Picture › Find shapes › ${what} does` });

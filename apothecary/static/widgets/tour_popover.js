@@ -11,7 +11,10 @@
 // over the world, so it is kept small: its head names the stage, what the page did and
 // what to try are folded under one line, and what it says is only what is not so yet.
 //
-// `stage(journey, stageId)` is the page's: it resolves to `{ did: [...], said, refused }`.
+// `stage(journey, stageId, { reload })` is the page's: it resolves to `{ did: [...], said,
+// refused }`. `reload` is true where no one pressed anything -- a reload found the box
+// open -- and the page then starts nothing: a slice, a toolpath or shapes found are a
+// person's press, and the stage says so.
 
 import { setReason } from '/static/can.js';
 
@@ -170,11 +173,11 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
         if (id) state.at = Math.max(0, state.stages.findIndex((s) => s.id === id));
     }
 
-    async function put() {
+    async function put({ reload = false } = {}) {
         const at = here();
         if (!at || state.busy) return;
         state.busy = true; state.did = null; render();
-        try { state.did = await stage(at.journey, at.stage); }
+        try { state.did = await stage(at.journey, at.stage, { reload }); }
         catch (e) { state.did = { did: [], said: `The page did not get here: ${e.message || e}`, refused: true }; }
         state.busy = false; render();
     }
@@ -213,12 +216,13 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
 
     // Where a reload finds the box open, the page is taken to its stage as the stage's
     // ↻ does: the box holds what a person was doing, the page does not, and the box
-    // never stands over a page it is not true of.
+    // never stands over a page it is not true of. No one pressed anything, so nothing is
+    // started on the way: what only a job brings, the box says ↻ does.
     let opening = Promise.resolve();
     const api = {
         isOpen: () => box.matches(':popover-open'),
         open() { return (opening = api.opened()); },
-        restage: async () => { await opening; if (api.isOpen()) await put(); },
+        restage: async () => { await opening; if (api.isOpen()) await put({ reload: true }); },
         async opened() {
             await read();
             const was = state.stages.findIndex((s) => s.id === kept().stage);
