@@ -24,7 +24,7 @@ from doc_capture import MOMENT
 from garage import open_garage
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from playwright.sync_api import expect
-from simulated_process import guarded_env, start_simulated, stop
+from simulated_process import guarded_env, start_simulated, still_folder, stop
 from slicer_helpers import write_fake_orcaslicer
 from viewer_ready import settled
 
@@ -134,10 +134,10 @@ def _words(text: str) -> str:
 
 
 @pytest.fixture(scope="module")
-def simulated(base_url, tmp_path_factory):
+def simulated(base_url):
     """The simulated machines as a person starts them, their folders temp ones, the
     serial guard on."""
-    folder = tmp_path_factory.mktemp("chain-simulated")
+    folder = still_folder("chain-simulated")
     env = guarded_env(folder)
     env["APOTHECARY_ORCASLICER"] = str(write_fake_orcaslicer(folder / "their-orcaslicer"))
     env["FAKE_ORCA_LAYERS"], env["FAKE_ORCA_DWELL"] = "6", "20"
@@ -374,7 +374,13 @@ def test_the_tour_takes_the_page_to_every_stage_of_the_chain(page, simulated, wa
         STANDS[journey.id, stage](page)
         page.mouse.move(640, 700)
         settled(page)
-        story.shows(heading, words, shown="\n".join(said_of), blank=CHANGING)
+        # What the picture of a journey leaves unpictured because the page does not hold it
+        # still: the marks' badges on the whiteboard come and go as the occlusion test fades
+        # them; Selected is the deck's piece or the printer the deck chose, and shows a device
+        # to pin or the deck's own button, as the poll and the choice fall.
+        marks = {"drawing": (".world-badge",), "hands": (".panel[data-panel='selected']",)}
+        marks = marks.get(journey.id, ())
+        story.shows(heading, words, shown="\n".join(said_of), blank=(*CHANGING, *marks))
 
     # Nothing armed, nothing started, no piece made, no word given, no real port touched.
     with httpx.Client(base_url=url, timeout=15.0) as http:

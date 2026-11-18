@@ -6,9 +6,11 @@ opening of a serial device and any listing of the machine's real ports."""
 from __future__ import annotations
 
 import os
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import textwrap
 import time
 from pathlib import Path
@@ -75,6 +77,17 @@ def free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
+
+
+def still_folder(name: str) -> Path:
+    """An empty folder at a name that is the same on every run, for a server whose
+    state folder a picture names (the simulated banner, the Bench's toolchain card): a
+    pytest temp folder carries its run's number, so a picture of it moved every run.
+    One run at a time uses it: the browser suite holds one lock machine-wide."""
+    folder = Path(tempfile.gettempdir()) / f"apothecary-still-{name}"
+    shutil.rmtree(folder, ignore_errors=True)
+    folder.mkdir(parents=True)
+    return folder
 
 
 def guarded_env(folder: Path) -> dict:
