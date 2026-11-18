@@ -113,14 +113,17 @@ _TOLD_BY = ("fire", "_push", "_call", "read")
 
 def _told(hub: coordinator.Coordinator) -> coordinator.Coordinator:
     """``hub`` that says its state changed after each of ``_TOLD_BY``; the body is made
-    only while someone follows the surface."""
+    only while someone follows the surface. Tellings are made one at a time, so the stream
+    never offers a snapshot older than one it offered before."""
+    one_at_a_time = threading.Lock()
 
     def wrap(original):
         def wrapper(*args, **kwargs):
             try:
                 return original(*args, **kwargs)
             finally:
-                surfaces.changed(FAMILY_SURFACE, key=HUB, body=hub.snapshot)
+                with one_at_a_time:
+                    surfaces.changed(FAMILY_SURFACE, key=HUB, body=hub.snapshot)
 
         return wrapper
 

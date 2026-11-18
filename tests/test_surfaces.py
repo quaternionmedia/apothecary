@@ -677,7 +677,12 @@ def test_the_post_docs_surfaces_md_shows_for_the_simulated_server_is_accepted(me
 def test_the_hub_s_members_and_deliveries_are_a_surface_told_as_they_change(tmp_path, monkeypatch):
     """A cue fired, a delivery that ends -- pushed to a member that is down, called on a
     hosted one -- and a pull member's read are each told as a change of ``family``, whose
-    body is what ``GET /family/`` answers; the surface reads the same."""
+    body is what ``GET /family/`` answers; the surface reads the same.
+
+    The deliveries end on their members' own threads and tell as they end, so which
+    telling comes first is not the test's to say: it waits for the four tellings and
+    holds what is true whatever the order, that no snapshot is older than the one told
+    before it."""
     monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path))
     (tmp_path / hub.TABLE).write_text(
         json.dumps({"members": {"joe": "http://127.0.0.1:9"}, "pull": ["alfred"], "timeout": 1}),
@@ -694,18 +699,24 @@ def test_the_hub_s_members_and_deliveries_are_a_surface_told_as_they_change(tmp_
                 running.fire(cue, {"joe": {"x": 1}, "alfred": {"y": 2}, "machine": {"bogus": 1}})
                 await asyncio.to_thread(running.wait, 5)
                 running.read("alfred")
-                await asyncio.sleep(0.1)  # the loop takes what the threads handed it
-                got, _ = await following.next(0.3)
-                return got
+                got = []
+                end = time.monotonic() + 20
+                while len(got) < 4 and time.monotonic() < end:  # four tellings are due
+                    more, _ = await following.next(0.5)
+                    got += more
+                extra, _ = await following.next(0.2)  # and no fifth: nothing is left to tell
+                return got, extra
             finally:
                 following.close()
 
-        told = asyncio.run(follow())
+        told, extra = asyncio.run(follow())
+        assert extra == [] and len(told) == 4  # fired, a push's end, a call's end, a read
         assert {e["surface"] for e in told} == {"family"} and {e["key"] for e in told} == {"apothecary"}
         outcomes = lambda e: {o["member"]: o["done"] for o in e["body"]["last"]}  # noqa: E731
-        assert outcomes(told[0]) == {"joe": False, "alfred": False, "machine": False}
+        assert set(outcomes(told[0])) == {"joe", "alfred", "machine"}  # fired: all three entered
         assert outcomes(told[-1]) == {"joe": True, "alfred": True, "machine": True}
-        assert len(told) == 4  # fired, a push's end, a call's end, a pull member's read
+        ended = [sum(outcomes(e).values()) for e in told]
+        assert ended == sorted(ended)  # the stream never goes back to an older state
         assert told[-1]["body"]["members"]["alfred"] == {"via": "pull"}
         read = client.get("/surfaces/family").json()["snapshot"]
         assert read["members"].keys() == told[-1]["body"]["members"].keys()
@@ -713,3 +724,48 @@ def test_the_hub_s_members_and_deliveries_are_a_surface_told_as_they_change(tmp_
         assert "token" not in json.dumps(read)
     finally:
         hub.close()
+
+
+def test_the_hub_s_tellings_are_made_one_at_a_time_so_the_stream_never_goes_back(monkeypatch):
+    """Two deliveries end on two threads. The first's snapshot is taken, and before it is
+    offered the second ends and is taken: were the second offered first, the stream's last
+    word would be the older state. The second's telling waits for the first's, so the
+    stream's order is the state's. ``surfaces.changed`` is stood in for by one that keeps
+    what it was given and dawdles, the first time, after taking the body."""
+    state = {"done": 0}
+    offered = []
+    calls = []
+
+    def changed(name, key=None, body=None):
+        taken = body()["done"]
+        calls.append(taken)
+        if len(calls) == 1:
+            time.sleep(0.4)  # the first offer comes late, as under load; the second's does not
+        offered.append(taken)
+
+    class Standing:
+        def fire(self, *a):
+            return []
+
+        def read(self, name):
+            return None
+
+        def snapshot(self):
+            return {"members": {}, "last": [], "done": state["done"]}
+
+        def _push(self):
+            state["done"] += 1
+
+        def _call(self):
+            state["done"] += 1
+
+    monkeypatch.setattr(hub.surfaces, "changed", changed)
+    told = hub._told(Standing())
+    first = threading.Thread(target=told._push)
+    first.start()
+    time.sleep(0.1)  # the first has been taken and is dawdling
+    second = threading.Thread(target=told._call)
+    second.start()
+    first.join(5)
+    second.join(5)
+    assert offered == [1, 2]
