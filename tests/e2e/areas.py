@@ -227,6 +227,7 @@ AREAS = {
             "test_part_iteration_answers.py",
             "test_scad_loop.py",
             "test_text_tied.py",
+            "test_join_two_ends.py",
             "test_assignments_in_the_page.py",
             "test_airgap.py",
         ),
