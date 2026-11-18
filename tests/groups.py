@@ -388,6 +388,7 @@ GROUPS = {
             "test_ends_js.py",
             "test_loop_plots.py",
             "test_measure_world.py",
+            "test_measure_features.py",
             "test_layers_world.py",
             "test_menu_routes.py",
             "test_orbits_drawn.py",
