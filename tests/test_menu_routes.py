@@ -146,6 +146,21 @@ def test_a_device_ring_needs_no_arrangement():
     assert [o["label"] for o in ring["options"]][:4] == ["Open", "Poll", "Flash", "Query"]
 
 
+def test_a_device_ring_is_titled_by_the_machine_its_board_is_pinned_to(monkeypatch):
+    """The server names the machine on the port as a reason does (firmware/can.py
+    ``who``): the ring on a pinned board's port says the machine, on a loose one the port."""
+    import apothecary.firmware.can as can
+
+    monkeypatch.setattr(can, "who", lambda port: "printer_1" if port == "/dev/ttyUSB0" else port)
+    for port, title in (("/dev/ttyUSB0", "printer_1"), ("/dev/ttyACM3", "ttyACM3")):
+        answer = client.post(
+            "/menu/resolve",
+            json={"context": {"pointing": "device", "targets": [port]}, "device": {**PRINTER, "port": port}},
+        )
+        assert answer.status_code == 200, answer.text
+        assert answer.json()["title"] == title
+
+
 def test_a_device_told_what_the_server_would_refuse_comes_back_greyed_with_the_reason():
     """The page passes its board's answer (``can``, firmware/can.py) beside the device;
     each act it refuses comes back ``enabled: false`` with the server's words in ``why``,

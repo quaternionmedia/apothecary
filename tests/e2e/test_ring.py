@@ -384,7 +384,7 @@ def test_jog_by_address_on_a_machine_s_device_ring(page: Page, ring_url: str):
     expect(page.locator("#ctl")).to_have_attribute("data-address", "77", timeout=5000)
     page.locator(f"{windows.MACHINE_WINDOWS} #ident").click(button="right", modifiers=["Control"])
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    assert _title(page) == "ttyFAKE1"
+    assert _title(page) == "printer_1"
     assert _wedges(page)["1"] == "Link"
     assert _wedges(page)["7"] == "Control"
     page.keyboard.press("7")

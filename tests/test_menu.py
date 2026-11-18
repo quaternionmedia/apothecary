@@ -973,6 +973,14 @@ def test_the_device_ring_stands_on_the_port_s_last_segment():
     assert len(long_leaf) <= LONGEST_LABEL and "/" not in long_leaf
 
 
+def test_the_device_ring_is_titled_by_the_machine_its_board_is_pinned_to():
+    """Told the machine's name (the server's firmware/can.py ``who``), the ring on the port
+    says it, as the windows and a reason do; told none, it says the port."""
+    named = Device(port="/dev/ttyUSB0", printer=True, name="printer_1")
+    assert _device_ring(named).title == "printer_1"
+    assert _device_ring(Device(port="/dev/ttyUSB0", printer=True)).title == "ttyUSB0"
+
+
 def test_a_device_ring_with_nothing_to_stand_on_is_refused():
     with pytest.raises(ValueError, match="stands on a port"):
         resolve(Context(pointing=Pointing.DEVICE))

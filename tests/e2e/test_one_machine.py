@@ -370,7 +370,8 @@ def test_a_machine_s_ring_is_its_device_ring(page: Page, url: str):
     expect(machine.locator("#poll")).to_have_attribute("data-address", "6")
     machine.locator(".kv").first.click(button="right", modifiers=["Control"])
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    expect(page.locator("#ring-overlay .title")).to_have_text("ttyFAKE1")
+    # Titled by the machine its board is pinned to, as the windows name it, not its port.
+    expect(page.locator("#ring-overlay .title")).to_have_text("printer_1")
     cells = _wedges(page)
     assert cells["Control"] == "7" and cells["Link"] == "1" and cells["Flash"] == "2", cells
     for digit in ("7", "7"):  # Control › Arm
@@ -385,7 +386,7 @@ def test_a_machine_s_ring_is_its_device_ring(page: Page, url: str):
     expect(pad.locator("button[data-cmd='M25']")).to_have_attribute("data-address", "796")
     assert (pad.locator("button[data-jog='Y+']").get_attribute("title") or "").endswith(" · ⌗728")
     pad.locator(".head").click(button="right", modifiers=["Control"])
-    expect(page.locator("#ring-overlay .title")).to_have_text("ttyFAKE1", timeout=5000)
+    expect(page.locator("#ring-overlay .title")).to_have_text("printer_1", timeout=5000)
     page.keyboard.press("Escape")
     expect(page.locator("#ring-overlay")).to_have_count(0)
     pad.locator("#ctl-disarm").click()
@@ -551,7 +552,8 @@ def test_a_board_pinned_nowhere_opens_beside_pictures_on_the_default_site(page: 
         expect(machine.locator(hidden)).to_be_hidden()
     page.wait_for_timeout(1500)
     assert opened == [], opened
-    # Its ring, with nothing selected, is its own device ring.
+    # Its ring, with nothing selected, is its own device ring, titled by its port: it is
+    # pinned to no machine.
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay .title")).to_have_text("ttyFAKE0", timeout=5000)
     assert _wedges(page)["Flash"] == "2" and "Control" not in _wedges(page)

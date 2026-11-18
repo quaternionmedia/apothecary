@@ -573,7 +573,9 @@ cell holds its place and cannot be chosen -- and a devkit's Link ends with
 Listen and Probe. A board's verbs from the ring -- Poll, Query, Flash, the
 link's, Control's, the bed's, the print's -- go to its Machine, opened for it
 when it is not. Inside a Machine the ring is its device ring, on its port,
-and the Machine's buttons wear that ring's addresses. `POST /menu/resolve`
+titled by the machine the board is pinned to as a refusal names it (`printer_1`),
+or by the port where it is pinned to none (`ttyACM0`), and the Machine's buttons
+wear that ring's addresses. `POST /menu/resolve`
 seats the options
 (`apothecary/menu.py`); `POST /menu/intent` receives the choice. A control
 verb from the ring goes through the same latch, allowlist and confirms as the

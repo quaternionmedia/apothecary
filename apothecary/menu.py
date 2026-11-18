@@ -133,6 +133,10 @@ class Device(BaseModel):
     # its Machine's buttons are greyed from. Each act on the ring the answer refuses is
     # greyed with the server's reason (``CAN_VERBS``); told nothing, nothing is.
     can: Optional[Dict[str, Verdict]] = None
+    # What the board's machine is called: the machine it is pinned to, as a reason names
+    # it (firmware/can.py ``who``), which the server fills in; a ring standing on the
+    # port is titled by it, and by the port where nothing is pinned.
+    name: Optional[str] = None
 
 
 class CameraSeen(BaseModel):
@@ -2062,7 +2066,9 @@ def _node_ring(
 
 
 def _device_ring_on_top(context: Context, device: Optional[Device]) -> Ring:
-    """The device ring as the top ring, opened on a port rather than a node."""
+    """The device ring as the top ring, opened on a port rather than a node: titled by
+    the machine its board is pinned to, as the windows and a reason name it, else by
+    the port."""
     if device is None:
         port = context.targets[0] if context.targets else ""
         if not port:
@@ -2070,7 +2076,7 @@ def _device_ring_on_top(context: Context, device: Optional[Device]) -> Ring:
         device = Device(port=port)
     # The port's last path segment: /dev/ttyUSB0 is ttyUSB0 on the ring.
     leaf = device.port.rstrip("/").rsplit("/", 1)[-1] or device.port
-    return Ring(title=shorten(leaf), options=_device_options(device))
+    return Ring(title=shorten(device.name or leaf), options=_device_options(device))
 
 
 def _device_options(device: Device) -> List[Option]:

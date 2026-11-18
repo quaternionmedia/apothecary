@@ -38,6 +38,7 @@ from ..menu import (
     Intent,
     PartSeen,
     PictureContext,
+    Pointing,
     Ring,
     RingTooFull,
     Verdict,
@@ -199,6 +200,22 @@ def _part_seen(site: str, path: str) -> Optional[PartSeen]:
     )
 
 
+def _named(device: Optional[Device], context: Context) -> Optional[Device]:
+    """A ring standing on a port is told the machine its board is pinned to, as a
+    reason names it (firmware/can.py ``who``); a port nothing is pinned to keeps none."""
+    from ..firmware.can import who
+
+    if context.pointing != Pointing.DEVICE:
+        return device
+    port = device.port if device else (context.targets[0] if context.targets else "")
+    if not port:
+        return device
+    name = who(port)
+    if name == port:
+        return device
+    return (device or Device(port=port)).model_copy(update={"name": name})
+
+
 @router.post("/resolve", response_model=Ring)
 def resolve_ring(request: ResolveRequest) -> Ring:
     """Which options belong on the ring, given what it was opened on.
@@ -213,7 +230,7 @@ def resolve_ring(request: ResolveRequest) -> Ring:
             _site(request.site),
             site_names=lists["site_names"],
             groups=lists["groups"],
-            device=request.device,
+            device=_named(request.device, request.context),
             picture=_pictures_known(request.site, request.picture, request.context),
             sketch=request.sketch,
             can=request.can,
