@@ -101,7 +101,7 @@ def _end(
     if child.part_ref is None:
         return child, None, f"{child_name} is no registered part, so it has no interfaces"
     try:
-        return child, _part(child.part_ref).interface(interface_name), ""
+        return child, _part(child.part_ref).interface(interface_name, child.params), ""
     except KeyError as exc:
         return child, None, str(exc.args[0])
     except Exception as exc:  # a part that does not load says why, as the registry does
@@ -293,12 +293,12 @@ def place(node: Assembly) -> Tuple[Assembly, ConnectionReport]:
                 **{k: round(getattr(target, k) - at[i], 9) + 0.0 for i, k in enumerate("xyz")}
             )
             if child.footprint is None and child.part_ref is not None:
-                child.footprint = _part(child.part_ref).get_bounds()
+                child.footprint = _part(child.part_ref).get_bounds(child.params)
             done.add(there[0])
             moving = True
     for child in placed.children:
         if child.name in done and child.footprint is None and child.part_ref is not None:
-            child.footprint = _part(child.part_ref).get_bounds()
+            child.footprint = _part(child.part_ref).get_bounds(child.params)
     return placed, check(placed)
 
 

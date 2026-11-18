@@ -11,7 +11,7 @@ import click
 from pydantic import ValidationError
 
 from ..meshes import UNIT_SCALES, MeshError, bounds, read_mesh, transform, write_stl
-from ..projects.parts.base import BasePart
+from ..projects.parts.base import BasePart, address
 from ..projects.parts.skeleton import ROOT
 from ..projects.parts.stl_renderer import read_params_sidecar
 from ..projects.registry import (
@@ -250,6 +250,7 @@ def parts_info(name: str, json_out: bool):
         "params_model": list(part.params_model.model_fields.keys()) if part.params_model else [],
         "bounds": bounds.model_dump(mode="json") if bounds else None,
         "stl_params": read_params_sidecar(part.get_stl_output_path()),
+        "presets": {n: p.model_dump(mode="json") for n, p in part.presets.items()},
     }
     if json_out:
         click.echo(json.dumps(data, indent=2))
@@ -461,8 +462,20 @@ def _sizes(i) -> str:
     return f"{i.width:g} wide, {i.length:g} long"
 
 
+def _named_at(spec: str):
+    """(part, its parameters, the interface named or None) for ``part[@preset][.interface]``:
+    a preset's parameters, which a person's own ``-p`` go over."""
+    name, preset, interface = address(spec)
+    part = part_or_die(name)
+    try:
+        params = dict(part.preset(preset)) if preset else {}
+    except KeyError as exc:
+        raise click.ClickException(str(exc.args[0])) from None
+    return part, params, interface
+
+
 @parts.command("interfaces", short_help="Where another part meets a part: its interfaces.")
-@click.argument("name")
+@click.argument("name", metavar="NAME[@PRESET]")
 @click.option(
     "--param",
     "-p",
@@ -476,9 +489,10 @@ def parts_interfaces(name: str, param_pairs: tuple[str, ...], json_out: bool):
     """The places where another part meets this one (docs/connections.md): each
     interface's type, where it is and which way it faces in the part's own frame
     (the frame its SCAD draws it in), its sizes, where its numbers came from, and
-    the interfaces of the same part it cannot be in use with."""
-    part = part_or_die(name)
-    params = parse_param_overrides(part, param_pairs)
+    the interfaces of the same part it cannot be in use with. ``NAME@PRESET`` stands
+    the part at one of its presets, which ``-p`` goes over."""
+    part, params, _ = _named_at(name)
+    params.update(parse_param_overrides(part, param_pairs))
     found = part.interfaces(params or None)
     if json_out:
         click.echo(json.dumps([i.model_dump(mode="json") for i in found], indent=2))
@@ -499,23 +513,23 @@ def parts_interfaces(name: str, param_pairs: tuple[str, ...], json_out: bool):
 
 
 def _interfaces_named(spec: str):
-    """(part, [interfaces]) for ``part`` or ``part.interface``."""
-    name, _, interface = spec.partition(".")
-    part = part_or_die(name)
+    """(``part[@preset]``, [interfaces]) for ``part[@preset]`` or ``part[@preset].interface``."""
+    part, params, interface = _named_at(spec)
+    shown = spec.partition(".")[0]
     if interface:
         try:
-            return part, [part.interface(interface)]
+            return shown, [part.interface(interface, params or None)]
         except KeyError as exc:
             raise click.ClickException(str(exc.args[0])) from None
-    found = part.interfaces()
+    found = part.interfaces(params or None)
     if not found:
         raise click.ClickException(f"{part.name} declares no interfaces")
-    return part, found
+    return shown, found
 
 
 @parts.command("fit", short_help="How two parts' interfaces fit: whether, and how far in.")
-@click.argument("a", metavar="PART[.INTERFACE]")
-@click.argument("b", metavar="PART[.INTERFACE]")
+@click.argument("a", metavar="PART[@PRESET][.INTERFACE]")
+@click.argument("b", metavar="PART[@PRESET][.INTERFACE]")
 @click.option("--json-out/--text", default=False, help="As JSON, for a script.")
 def parts_fit(a: str, b: str, json_out: bool):
     """How an interface of one part fits an interface of another (docs/connections.md):
@@ -523,13 +537,13 @@ def parts_fit(a: str, b: str, json_out: bool):
     the spigot goes in, how far its shoulder then stands from the mouth, and how much
     wider than the bore it is there. A part named without an interface tries each of
     its interfaces against each of the other's, those that seat first. Exits 1 when
-    nothing seats."""
+    nothing seats. ``PART@PRESET`` stands a part at one of its presets."""
     from ..models.interfaces import fit
 
     part_a, ours = _interfaces_named(a)
     part_b, theirs = _interfaces_named(b)
     fits = [
-        (f"{part_a.name}.{x.name}", f"{part_b.name}.{y.name}", fit(x, y))
+        (f"{part_a}.{x.name}", f"{part_b}.{y.name}", fit(x, y))
         for x in ours
         for y in theirs
     ]

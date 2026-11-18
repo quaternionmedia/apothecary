@@ -69,6 +69,16 @@ def sagitta(diameter: float, fn: int = FN) -> float:
     return diameter / 2 * (1 - math.cos(math.pi / fn))
 
 
+def facets(diameter: float) -> int:
+    """The facets a circle of ``diameter`` is drawn with: ``FN``, or more for a circle
+    so wide that ``FN`` leaves a flat more than ``SAGITTA`` inside it (a 100 mm port),
+    a multiple of four so the circle is as wide across x as across y."""
+    n = FN
+    while sagitta(diameter, n) > SAGITTA:
+        n += 4
+    return n
+
+
 class Profile(BaseModel):
     """A round part as a stack of sections along +Z, section 0 on the bed."""
 
@@ -306,6 +316,7 @@ __all__ = [
     "SAGITTA",
     "Section",
     "WALL",
+    "facets",
     "readings",
     "sagitta",
 ]

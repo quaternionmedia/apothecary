@@ -2,8 +2,9 @@
 
 How one part meets another: the **interfaces** a part declares, the **fit** two
 interfaces make, and the **connections** that place parts standing side by side
-where their interfaces meet. `parts/dust/` is the worked example: a stepped hose
-adapter and stand-ins for the hose and the ports it goes into.
+where their interfaces meet. `parts/dust/` is the worked example: one part for a
+round end of a dust system, its sizes its presets, and an adapter whose parameters
+are its two ends.
 [Walkthrough 43](../walkthrough/43-parts-that-meet.md) runs it.
 
 | Word | What it is | Where |
@@ -130,16 +131,21 @@ its children, each a registered part:
 Assembly(
     name="dust_hose_32",
     children=[
-        Assembly(name="hose", part_ref="dust_hose_40"),
+        Assembly(name="hose", part_ref="dust_port", params={"diameter": 40.0, "stretch": 5.0, ...}),
         Assembly(name="adapter", part_ref="hose_adapter"),
-        Assembly(name="port", part_ref="dust_port_32"),
+        Assembly(name="port", part_ref="dust_port", params={"diameter": 32.0, ...}),
     ],
     connections=[
-        Connection(a="hose.end", b="adapter.hose"),
-        Connection(a="adapter.fitting_32", b="port.port"),
+        Connection(a="hose.end", b="adapter.a"),
+        Connection(a="adapter.step", b="port.end"),
     ],
 )
 ```
+
+A child's `params` are the parameters its part stands at where they are not its
+defaults: the hose's end and the port above are two nodes of one part at two of
+its presets. A connection reads each child's interfaces, and `place` its bounds,
+at them.
 
 `connections.check(node)` answers each connection's fit, names each interface
 whose numbers are a stub's, and names what is wrong: a child or an interface that
@@ -169,12 +175,14 @@ port is turned over and stands on the adapter's step as far as it goes.
 
 | | Command line | HTTP |
 |---|---|---|
-| a part's interfaces | `apothecary parts interfaces NAME` (`--json-out`, `-p`) | `GET /parts/{name}/interfaces` |
-| how two fit | `apothecary parts fit PART[.INTERFACE] PART[.INTERFACE]` | `GET /parts/{name}/interfaces/{interface}/fit?to=part.interface` |
+| a part's interfaces | `apothecary parts interfaces NAME[@PRESET]` (`--json-out`, `-p`) | `GET /parts/{name}/interfaces?preset=` |
+| how two fit | `apothecary parts fit PART[@PRESET][.INTERFACE] PART[@PRESET][.INTERFACE]` | `GET /parts/{name}/interfaces/{interface}/fit?to=part[@preset].interface&preset=` |
 | on the render | `apothecary parts verify NAME` | |
 
 `parts fit` with a part named alone tries each of its interfaces against each of
-the other's, those that seat first, and exits 1 when nothing seats.
+the other's, those that seat first, and exits 1 when nothing seats. `PART@PRESET`
+stands a part at one of its presets
+([parts-authoring.md](parts-authoring.md#presets)).
 
 ## In the problems index
 
@@ -186,7 +194,7 @@ fit or does not stand where it meets as `misfit`, apothecary's to close
 ## Not yet
 
 The viewer draws no interface and makes no connection; a site's connections are
-not placed when it loads; a node carries no parameters of its own, so a
-connection meets a part at its defaults; and the types with a rule are the
-spigot and the socket. A thread, a DIN rail, a VESA pattern or a bolt pattern is
+not placed when it loads; a node's `params` are read by connections and by
+nothing that draws, so a viewer draws its part at the part's defaults; and the
+types with a rule are the spigot and the socket. A thread, a DIN rail, a VESA pattern or a bolt pattern is
 a type with a rule of its own, each citing its standard.

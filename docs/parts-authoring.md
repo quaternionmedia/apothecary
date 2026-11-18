@@ -145,6 +145,38 @@ prints, and is answered with its STL either way. The bounds a part declares,
 `apothecary parts verify`, the readiness checklist and the slicer stay in the
 print pose.
 
+## Presets
+
+A part whose sizes people meet as a handful of named ones keeps them as
+**presets**: `presets={"port_32": Preset(params={...}, description="...")}` on
+its wrapper (`apothecary.projects.parts.base.Preset`). Each is a set of the
+part's parameters over its defaults, and what it stands for in words. A preset
+that names a parameter the part has not got, or a value its model refuses, is
+refused when the part loads, and a preset's name is letters, digits, `_` and
+`-`, since `part@preset.interface` names one. `dust_port` is one part for every
+round end of a dust system, a 40 mm hose's and a 32 mm port's among them, so its
+sizes are its presets (`hose_40`, `port_32`, `port_25`, `outlet_35`) and not
+parts of their own.
+
+A preset is none of the variants below. A saved variant is a SCAD edited in the
+page and committed to a ref of its own, outside the tree, and a part built by
+Python has none; a cached variant is a render at some parameters, unnamed. A
+preset ships with the part, in its description, and a person's own numbers go
+over it: a caliper's reading of the real end, typed over the preset it is
+nearest.
+
+| | |
+|---|---|
+| `part.preset(name)` | its parameters, as the model coerces them; `KeyError` naming the presets |
+| `apothecary parts info NAME` | lists them |
+| `PART@PRESET` | stands a part at one, for `apothecary parts interfaces` and `fit` |
+| `GET /parts/{name}/params` | carries them as `presets`, beside the fields |
+
+`tests/test_parameter_coverage.py` counts a parameter of a part built by Python
+as live where moving it changes the SCAD it generates or the interfaces it
+declares, from its defaults or from one of its presets: a hose's give reaches
+every fit and nothing drawn, and a spigot's taper is drawn only on a spigot.
+
 ## Overrides
 
 ```bash
@@ -333,7 +365,7 @@ SCAD unchanged.
 slot), each named and given in the part's own frame by a position and a normal
 pointing out of the part. A part nothing meets returns none, the default. A part
 built from a `fittings.Profile` returns the profile's, so they come from the same
-numbers as its solid; `hose_adapter` is one. A described part lists them under
+numbers as its solid; `hose_adapter` and `dust_port` are two. A described part lists them under
 `interfaces` in its `part.json`. `apothecary parts verify` reads each round one
 on the render and fails on drift, `apothecary parts interfaces NAME` lists them,
 and [connections.md](connections.md) says how two fit and how parts are placed by

@@ -1,6 +1,6 @@
 difference() {
   union() {
-  // hose
+  // a
 cylinder(h=40.0, r1=19.5, r2=20.5, center=false, $fn=128);
   translate([0.0, 0.0, 40.0]) {
   // flare
@@ -15,7 +15,7 @@ cylinder(h=2.5, r=23.0, center=false, $fn=128);
 cylinder(h=8.0, r1=23.0, r2=16.3, center=false, $fn=128);
 }
   translate([0.0, 0.0, 53.0]) {
-  // step_32
+  // step
 cylinder(h=25.0, r1=16.3, r2=15.7, center=false, $fn=128);
 }
   translate([0.0, 0.0, 78.0]) {
@@ -23,13 +23,13 @@ cylinder(h=25.0, r1=16.3, r2=15.7, center=false, $fn=128);
 cylinder(h=3.5, r1=15.7, r2=12.8, center=false, $fn=128);
 }
   translate([0.0, 0.0, 81.5]) {
-  // tip_25
+  // b
 cylinder(h=20.0, r1=12.8, r2=12.2, center=false, $fn=128);
 }
 }
   union() {
   translate([0.0, 0.0, -1.0]) {
-  // hose bore
+  // a bore
 cylinder(h=41.01, r=17.5, center=false, $fn=128);
 }
   translate([0.0, 0.0, 39.99]) {
@@ -45,7 +45,7 @@ cylinder(h=2.52, r=17.5, center=false, $fn=128);
 cylinder(h=8.02, r1=17.50475, r2=13.69525, center=false, $fn=128);
 }
   translate([0.0, 0.0, 52.99]) {
-  // step_32 bore
+  // step bore
 cylinder(h=25.02, r=13.7, center=false, $fn=128);
 }
   translate([0.0, 0.0, 77.99]) {
@@ -53,7 +53,7 @@ cylinder(h=25.02, r=13.7, center=false, $fn=128);
 cylinder(h=3.52, r1=13.71, r2=10.19, center=false, $fn=128);
 }
   translate([0.0, 0.0, 81.49]) {
-  // tip_25 bore
+  // b bore
 cylinder(h=21.01, r=10.2, center=false, $fn=128);
 }
 }

@@ -49,6 +49,15 @@ class Preset(BaseModel):
 PRESET_NAME = re.compile(r"[A-Za-z0-9_-]+")
 
 
+def address(spec: str) -> Tuple[str, Optional[str], Optional[str]]:
+    """``part[@preset][.interface]`` as (part, preset, interface), each None where not
+    named: how the command line and HTTP name a part at one of its presets, and one of
+    its interfaces there."""
+    named, _, interface = spec.partition(".")
+    part, _, preset = named.partition("@")
+    return part, preset or None, interface or None
+
+
 # A part is never turned after it renders: a wrapper or a part.json that says
 # display_rotation is refused when the part loads, saying what to do instead.
 TURN_REFUSED = (

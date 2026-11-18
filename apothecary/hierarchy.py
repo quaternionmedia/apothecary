@@ -33,7 +33,7 @@ depth including a single ``Feature``.
 from __future__ import annotations
 
 import itertools
-from typing import Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -156,6 +156,11 @@ class Assembly(BaseModel):
     connection joins are not checked for overlap with each other: one goes into the
     other by design. Empty everywhere else.
 
+    ``params``, on a ``part_ref`` node, are the parameters its part stands at where
+    they are not its defaults -- a preset's, or a person's own: a hose's end and a
+    port as two nodes of one part. ``connections`` reads its interfaces and its
+    bounds at them. None everywhere else; a viewer draws the part at its defaults.
+
     ``build_origin``, on a node with a ``build_volume``, says where that
     volume's (0, 0, 0) is in the node's own frame -- where the nozzle stands
     at home, on the bed's surface. A machine drawn as it is (an Ender 3's
@@ -182,6 +187,7 @@ class Assembly(BaseModel):
     children: List["Assembly"] = Field(default_factory=list)
     comment: Optional[str] = None
     part_ref: Optional[str] = None
+    params: Optional[Dict[str, Any]] = None
     site_ref: Optional[str] = None
     category: Optional[str] = None
     sketch_ref: Optional[str] = None
