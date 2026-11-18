@@ -654,3 +654,18 @@ def test_a_token_is_kept_only_as_its_hash_in_a_file_for_this_account_alone(membe
     assert not tokens.check("alfred", "") and not tokens.check("nobody", again)
     (members / tokens.FILE).write_text("{", encoding="utf-8")  # unreadable: fails closed
     assert not tokens.check("alfred", again)
+
+
+def test_the_post_docs_surfaces_md_shows_for_the_simulated_server_is_accepted(members):
+    """The curl line in docs/surfaces.md: its header names the scheme this route reads, and
+    its body is an observation the route keeps, from the member the table names."""
+    from apothecary import simulated
+
+    text = DOCS.read_text(encoding="utf-8")
+    shown = re.findall(r"```text\n(curl .*?)\n```", text, re.S)[0]
+    token = re.search(r"Authorization: Bearer (\S+)'", shown)[1]
+    body = json.loads(re.search(r"-d '(.*)'", shown, re.S)[1])
+    assert token == simulated.FAMILY_TOKENS[body["by"]]
+    tokens.fixed(body["by"], token)
+    kept = _post(body, token=token)
+    assert kept.status_code == 201, kept.text

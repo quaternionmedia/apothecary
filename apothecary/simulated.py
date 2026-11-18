@@ -22,6 +22,9 @@ with every machine simulated:
 - **a procedure**, ``bring-up``, stands under the garage: a person's check of a lead,
   the devkit flashed and heard, each machine homed, each step fired through the
   family's hub on GO (``family/procedures.py``); written once and kept;
+- **the family's members**, ``alfred`` and ``joe``, are in the hub's table as members a page
+  reads, each with a published token (``FAMILY_TOKENS``) to try a sibling with; a table
+  or a token already there is kept;
 - **a lighting console** sweeps every site's rig -- the theatre's -- as
   ``apothecary lighting simulate`` does (``console_feedback.simulate_levels``), ten
   times a second, set in the server's own state with nothing sent anywhere; not
@@ -291,6 +294,30 @@ def _bring_up():
     )
 
 
+# The simulated server's members, and the tokens they write to it with. Published, so a
+# sibling's author can try a member against `serve --simulated` (docs/surfaces.md): the
+# simulated server's state folder is its own, and a real hub's tokens are made by the hub.
+FAMILY_TOKENS = {"alfred": "simulated-alfred-token", "joe": "simulated-joe-token"}
+
+
+def seed_family() -> None:
+    """The hub's table names alfred and joe, as members a page reads, when it names none
+    of its own; each holds its published token. Refuses outside the simulated server's
+    own state folder."""
+    import json
+
+    from .family import hub, tokens
+    from .state_folder import write_whole
+
+    if running() is None:
+        raise RuntimeError("the simulated members are seeded in the simulated server's folder only")
+    if not hub.table_file().exists():
+        write_whole(hub.table_file(), json.dumps({"pull": sorted(FAMILY_TOKENS)}, indent=2))
+    for name, token in FAMILY_TOKENS.items():
+        if not tokens.has(name):
+            tokens.fixed(name, token)
+
+
 def seed() -> Optional[str]:
     """printer_1's mainboard pinned to the simulated Ender, identified (``M115``) as
     the bench's real board is, and cnc_router's controller to the simulated router,
@@ -305,6 +332,7 @@ def seed() -> Optional[str]:
 
     if running() is None or serial_engine() != "simulated":
         raise RuntimeError("the simulated machines are pinned in their own environment only")
+    seed_family()
     if procedures.load(SITE, "bring-up") is None:
         procedures.save(SITE, "bring-up", _bring_up())
     try:

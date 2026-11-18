@@ -238,3 +238,30 @@ def test_serve_help_describes_simulated_machines_and_shows_the_defaults():
     assert "A simulated console sweeps the theatre's lighting rig" in flat
     assert "[default: 127.0.0.1]" in said
     assert f"[env var: {PORT_ENV}; default: {DEFAULT_PORT}]" in said
+
+
+def test_the_simulated_server_names_alfred_and_joe_with_published_tokens(monkeypatch, tmp_path):
+    """The simulated state folder's table lists both, each token is the documented one,
+    a table or token already kept is not replaced, and none is seeded outside the
+    simulated server's own environment (the real state folder is never written)."""
+    import json
+
+    from apothecary.family import hub, roster, tokens
+
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.delenv(simulated.SIMULATED_ENV, raising=False)
+    with pytest.raises(RuntimeError, match="simulated server's folder only"):
+        simulated.seed_family()
+    assert not (tmp_path / "state").exists()
+    monkeypatch.setenv(simulated.SIMULATED_ENV, str(tmp_path))
+    hub.close()
+    simulated.seed_family()
+    assert json.loads(hub.table_file().read_text(encoding="utf-8")) == {"pull": ["alfred", "joe"]}
+    assert tokens.check("alfred", "simulated-alfred-token")
+    assert tokens.check("joe", "simulated-joe-token")
+    assert not tokens.check("joe", "simulated-alfred-token")
+    assert {r["name"]: r["token"] for r in roster.listing()}["joe"] is True
+    kept = tokens.make("joe")
+    simulated.seed_family()
+    assert tokens.check("joe", kept)  # a token the owner made is kept
+    hub.close()

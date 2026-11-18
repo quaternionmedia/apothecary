@@ -168,6 +168,27 @@ apothecary family token alfred     # shown once: give it to alfred
 apothecary family token joe
 ```
 
+### The simulated server's members
+
+`apothecary serve --simulated` keeps a state folder of its own (`.cache/simulated/state`)
+whose table names `alfred` and `joe` and holds these tokens, so a sibling can be tried
+against it. They are published here because that folder is the simulated server's alone;
+a real hub makes its own and shows each once.
+
+| Member | Token |
+|---|---|
+| `alfred` | `simulated-alfred-token` |
+| `joe` | `simulated-joe-token` |
+
+```text
+curl -X POST http://127.0.0.1:6283/surfaces/contributed \
+     -H 'Authorization: Bearer simulated-joe-token' -H 'Content-Type: application/json' \
+     -d '{"by": "joe", "at": "2026-11-18T10:00:00+00:00", "surface": "jobs", "frame": "none",
+          "body": {"saw": "a performance"}}'
+```
+
+A table or a token already in that folder is kept as it is.
+
 ## What would move to the stream
 
 The world page polls what the stream could carry; none of it is moved yet. Each would
