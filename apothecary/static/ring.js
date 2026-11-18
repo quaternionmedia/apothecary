@@ -154,10 +154,11 @@ export function addressOf(ring, target) {
 }
 
 /* Write the address onto the page's own controls, where they already are.
- * `pairs` is [[element, action], ...]; an action not on the ring takes away an
- * address written before, and leaves the element's own title. Ids and classes are
- * never touched. The address goes after the title (` · ⌗932`), or is the title where
- * there is none (`⌗77`); either is the page's, and can.js never keeps it as the
+ * `pairs` is [[element, action], ...]: an action, or a path of ids down to a cell
+ * that opens a ring (a menu the control opens is that ring). One not on the ring takes
+ * away an address written before, and leaves the element's own title. Ids and classes
+ * are never touched. The address goes after the title (` · ⌗932`), or is the title
+ * where there is none (`⌗77`); either is the page's, and can.js never keeps it as the
  * button's own tip (ADDRESS_AT_END).
  */
 export function annotate(ring, pairs) {
@@ -165,7 +166,7 @@ export function annotate(ring, pairs) {
     let count = 0;
     for (const [el, action] of pairs) {
         if (!el || !action) continue;
-        const digits = map[action];
+        const digits = Array.isArray(action) ? addressOf(ring, action) : map[action];
         const title = (el.title || "").replace(ADDRESS_AT_END, "");
         if (!digits) {
             delete el.dataset.address;

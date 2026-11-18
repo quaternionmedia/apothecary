@@ -609,7 +609,8 @@ where the ring has room, Presets › each preset and Adapter), and, when a print
 devkit is flashed, never printed). Print and Slice say whether the printer
 has no board pinned or one pinned and not connected. Last come the cells that
 depend on where the piece is: **Device** (when a board is pinned to it) and
-**Parent** (the piece it is inside, selected).
+**Parent** (the piece it is inside, selected); on the Stream Deck + piece, where the
+ring has room, **Deck** (the Deck window, as its Open Deck in Selected opens it).
 
 A printer's Pin, in its Device section, pins the board inside it -- printer_1's
 mainboard, where its Device, its Machine and Slice look -- and asks the board

@@ -85,7 +85,7 @@ lost, a draw answers 503 in words, and the Deck window says the deck is not answ
 ## In the page
 
 The **Deck** window (⊞ Windows › Deck, the ring's Panels › Machine › Knobs › Deck, or **Open Deck** on the
-`stream_deck` piece of the garage) shows the first deck found: its eight keys and its
+`stream_deck` piece of the garage, its ring's Deck) shows the first deck found: its eight keys and its
 strip as the images last sent to them, `–` where nothing has been drawn from here, its
 four knobs, and the events it has heard, newest first, in a list that scrolls. It follows
 the deck every second and a half while it is in front, which opens the deck, and asks for

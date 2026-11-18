@@ -163,7 +163,8 @@ def _planned(site: str, kind: str) -> List[str]:
 def _part_seen(site: str, path: str) -> Optional[PartSeen]:
     """The part a node of ``site`` is drawn as, when it is one from the parts folder:
     whether its SCAD is its own to edit, its variants saved in git, whether it is a
-    board, its presets, and whether it is an end an adapter is made between."""
+    board, its presets, whether it is an end an adapter is made between, and whether it
+    is a Stream Deck +, whose ring opens the Deck window."""
     from ..api import load_part_wrapper
     from ..projects.parts.drafts import editable
     from ..projects.parts.saved import GitError, NotInGit, list_trash, saved_names
@@ -194,6 +195,7 @@ def _part_seen(site: str, path: str) -> Optional[PartSeen]:
         presets=[] if own else list(part.presets),
         end=len(round_ends) == 1,
         motion=part.has_motion,
+        deck="streamdeck" in part.tags,
     )
 
 

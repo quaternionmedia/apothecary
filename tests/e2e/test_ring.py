@@ -897,3 +897,48 @@ def test_an_open_ring_is_greyed_again_as_the_latch_goes_down_and_up(page: Page, 
     finally:
         latch(False)
 
+
+@pytest.mark.e2e
+def test_the_headers_menus_the_tour_and_the_procedure_wear_their_cells_addresses(
+    page: Page, ring_url: str
+):
+    """Each control a cell of the ring also is wears that cell's address, once: the
+    header's ⚙ View, ⊞ Windows, Settings and Tour, the universe's crumb out of a site, the
+    site's crumb and its ▾ at the site's own level (the ring's Site), the tour box's
+    buttons, the Procedure's GO and Start over, and the Stream Deck +'s Open Deck (its
+    ring's Deck)."""
+    open_garage(page, ring_url, settle=False)
+    canvas = page.evaluate(
+        """async () => {
+            const ring = await window.apothecaryRing.resolve({ context: { pointing: 'canvas', targets: [] }, site: 'garage' });
+            const at = window.apothecaryRing.addresses(ring);
+            const of = (path) => window.apothecaryRing.addressOf(ring, path);
+            return { ...at, view: of(['view']), windows: of(['panels', 'panel:windows']), site: of(['Site']) };
+        }"""
+    )
+    windows.open_window(page, "procedure")
+    for selector, address in (
+        ("#view-menu > summary", canvas["view"]),
+        ("#windows-menu > summary", canvas["windows"]),
+        ("#settings-open", canvas["view:settings"]),
+        ("#tour-pop-open", canvas["tour:toggle"]),
+        (".tour-pop-next", canvas["tour:next"]),
+        ("#universe-crumb", canvas["site:apothecary"]),
+        ("#site-level", canvas["site"]),
+        ("#site-menu > summary", canvas["site"]),
+        (".panel[data-panel='procedure'] .procedure-again", canvas["procedure:again"]),
+    ):
+        assert address, selector
+        control = page.locator(selector).first
+        expect(control).to_have_attribute("data-address", address, timeout=10000)
+        title = control.get_attribute("title") or ""
+        assert title.endswith(f"⌗{address}") and title.count("⌗") == 1, (selector, title)
+    select(page, "stream_deck")
+    deck = page.evaluate(
+        """async () => {
+            const ring = await window.apothecaryRing.resolve({ context: { pointing: 'node', targets: ['stream_deck'] }, site: 'garage' });
+            return window.apothecaryRing.addresses(ring)['panel:toggle:deck'] || null;
+        }"""
+    )
+    assert deck
+    expect(page.locator(".deck-open")).to_have_attribute("data-address", deck, timeout=10000)

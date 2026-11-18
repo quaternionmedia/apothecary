@@ -3031,3 +3031,28 @@ def test_panels_machine_greys_the_loops_and_the_knobs_by_the_answers_the_page_is
         every_address(root)
     )
 
+
+def test_the_stream_decks_ring_opens_the_deck_window_where_a_device_would_stand():
+    """A Stream Deck + is told to its ring by the server (tagged ``streamdeck``): its Deck
+    opens the Deck window, as Open Deck in its Selected does, after every cell the piece
+    has, so none of them moves, and only where the ring has room; no other part has one."""
+    from apothecary.menu import PartSeen
+    from apothecary.routes.menu import _part_seen
+
+    assert _part_seen("garage", "stream_deck").deck is True
+    assert _part_seen("garage", "whiteboard").deck is False
+    context = Context(pointing=Pointing.NODE, targets=["stream_deck"])
+    told = PictureContext(part=PartSeen(editable=False, deck=True))
+    ring = resolve(context, _garage(), picture=told)
+    plain = resolve(context, _garage(), picture=PictureContext(part=PartSeen(editable=False)))
+    deck = ring.options[-1]
+    assert (deck.label, deck.action, deck.group) == ("Deck", "panel:toggle:deck", "Tools")
+    assert [(o.label, o.cell) for o in ring.options[:-1]] == [
+        (o.label, o.cell) for o in plain.options
+    ]
+    assert carried_by("panel:toggle:deck").name == "VIEWER"
+    # A ring already full -- the deck on the garage's floor is a host, with Camera, Picture
+    # and Slice -- takes no ninth: with a board pinned to it, Device keeps its seat.
+    full = PictureContext(part=PartSeen(editable=False, deck=True), printers=["printer_1"])
+    pinned = resolve(context, _garage(), picture=full, device=PRINTER)
+    assert len(pinned.options) <= 8 and "Device" in [o.label for o in pinned.options]

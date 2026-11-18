@@ -199,6 +199,9 @@ class PartSeen(BaseModel):
     # Whether its pieces move as one of its parameters goes (its wrapper's `motion`):
     # Part › View › Motion is offered on such a part.
     motion: bool = False
+    # Whether it is a Stream Deck + (tagged ``streamdeck``): its ring's Deck opens the Deck
+    # window, as Open Deck in its Selected does.
+    deck: bool = False
 
 
 class PictureContext(BaseModel):
@@ -2034,10 +2037,27 @@ def _node_ring(
         options.append(
             Option(id="device:flash-sketch", label="Flash sketch", action="device:flash-sketch")
         )
-    # The piece it is inside, selected: Parent, last.
+    # The piece it is inside, selected: Parent, after every cell of the piece's own.
     if "." in path:
         parent = path.rsplit(".", 1)[0]
         options.append(Option(id="up", label="Parent", action=f"select:{parent}"))
+    # A Stream Deck +: the Deck window, the device as apothecary has drawn it and what it
+    # has heard, as Open Deck in its Selected opens it. Last, where the ring has room, so
+    # no cell before it moves: a deck on the floor fills it, a host's eight.
+    if (
+        picture.part is not None
+        and picture.part.deck
+        and not camera
+        and len(options) < MOST_OPTIONS
+    ):
+        options.append(
+            Option(
+                id="panel:deck",
+                label="Deck",
+                group=PANEL_GROUPS["deck"],
+                action="panel:toggle:deck",
+            )
+        )
     return Ring(title=shorten(path or (node.name if node else "")), options=options)
 
 

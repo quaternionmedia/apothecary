@@ -785,12 +785,12 @@
                 </div>
             </details>
             <details id="windows-menu" class="view-menu windows-menu">
-                <summary title="Every window by its group, and the views that lay them out together: a window chosen opens, or comes in front; a stack's + opens one there (Panels › Windows on the ring)" aria-label="Windows">⊞<span class="wide-only"> Windows</span></summary>
+                <summary title="Every window by its group, and the views that lay them out together: a window chosen opens, or comes in front; a stack's + opens one there" aria-label="Windows">⊞<span class="wide-only"> Windows</span></summary>
                 <div class="view-menu-body windows-menu-body"></div>
             </details>
             <!-- Beside Docs: the two ways a person is shown the app. -->
             <button type="button" id="tour-pop-open" aria-pressed="false" title="The tour: each journey a stage at a time, the page taken to each stage, and your word kept on it">Tour</button>
-            <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, which goes through the app a page at a time (Panels › Docs on the ring)">Docs</a>
+            <a id="docs-link" class="docs-link" href="/docs" target="_blank" rel="noopener" title="The documentation in a new tab: the guides, and the walkthrough, which goes through the app a page at a time">Docs</a>
             <button type="button" id="ring-open" title="Open the ring for the chosen piece (m, or Ctrl+right-click a piece); Shift+M opens the canvas ring. Digits choose cells as on a numeric keypad; 5 backs out.">⌗ Ring</button>
             <span id="validity-indicator" class="validity-indicator valid" title="The site's problems: click to bring Problems, beside Site, in front">Layout valid</span>
         </div>
@@ -5130,7 +5130,7 @@
                       <ul id="part-messages" class="scad-messages"></ul>
                     </div>
                     </div>
-                    <div data-section="parameters">${target.part ? `<div class="part-presets" id="part-presets" hidden><label title="The part's presets: the sizes people meet, each a set of its numbers staged over its defaults; type what calipers read over one (Part › Presets)">Preset <select id="part-preset"></select></label></div>` : ''}<div id="part-params">Loading…</div></div>
+                    <div data-section="parameters">${target.part ? `<div class="part-presets" id="part-presets" hidden><label title="The part's presets: the sizes people meet, each a set of its numbers staged over its defaults; type what calipers read over one">Preset <select id="part-preset"></select></label></div>` : ''}<div id="part-params">Loading…</div></div>
                     ${target.part ? `<div data-section="history"><div id="part-history" class="part-history" title="This tab's recent applies of the part, newest first: one clicked is drawn again from the cache">
                       <p class="section-empty" id="part-history-none">No applies in this tab yet: Apply draws what is staged, and each is listed here.</p>
                       <ul id="part-history-list" class="apply-history"></ul></div></div>
@@ -11312,6 +11312,11 @@
             // The Motion window's controls are the cells of Part › View › Motion.
             viewer.motionTaught = addresses(ring);
             for (const [selector, action] of MOTION_VERBS) for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
+            // The Preset drop-down is Part › Presets, the ring of the part's presets; the
+            // Stream Deck +'s Open Deck, its ring's Deck.
+            const preset = document.getElementById('part-preset');
+            if (preset && preset.closest('label')) pairs.push([preset.closest('label'), ['part', 'part:presets']]);
+            for (const el of viewer.selectedBodyEl.querySelectorAll('.deck-open')) pairs.push([el, 'panel:toggle:deck']);
             annotate(ring, pairs);
         }
         // The Motion window's controls, by the cell each one is (Part › View › Motion).
@@ -11324,6 +11329,13 @@
             ['.airgap-play', 'airgap:play'], ['.airgap-run', 'airgap:sweep'], ['.airgap-to-editor', 'airgap:to-editor'], ['.airgap-from-editor', 'airgap:from-editor'],
             ['.airgap-copy-scad', 'airgap:copy-scad'], ['.airgap-copy-metrics', 'airgap:copy-metrics'], ['.airgap-reset', 'airgap:reset'],
         ];
+        // The header's Tour and the tour box's controls, by the cell each one is
+        // (Panels › Windows › Tour, widgets/tour_popover.js).
+        const TOUR_VERBS = [
+            ['#tour-pop-open', 'tour:toggle'], ['.tour-pop-close', 'tour:toggle'], ['.tour-pop-back', 'tour:back'],
+            ['.tour-pop-works', 'tour:works'], ['.tour-pop-off', 'tour:off'], ['.tour-pop-next', 'tour:next'],
+            ['.tour-pop-page', 'tour:page'], ['.tour-pop-put', 'tour:put'], ['.tour-pop-by', 'tour:by'],
+        ];
         // The Bench's buttons, by the verb each one is (Panels › Bench).
         const BENCH_VERBS = [
             ['.install-btn', 'bench:install:arduino'], ['.compile-btn', 'bench:compile'], ['.upload-btn', 'bench:upload'],
@@ -11331,35 +11343,59 @@
         ];
         // The list, from the canvas ring: each row at this level is a piece the
         // ring's Pieces cell reaches, and the trail's crumb one level up is its Up;
-        // the View menu, the cell View (its items, View's cells); and the Bench's
-        // buttons, its verbs under Panels › Bench.
+        // the View menu, the cell View (its items, View's cells); the Windows menu,
+        // Panels › Windows; the Tour, its box and the Procedure's buttons, their cells;
+        // and the Bench's buttons, its verbs under Panels › Bench.
+        const UNIVERSE_SITE = {{ universe | tojson }};
+        let procedureWatched = null;
         function annotateList(ring) {
             if (!ring) return;
             // The Layers window's ticks, stepper and Reset: the cells of View › Layers and Depth.
             viewer.layersTaught = addresses(ring);
             if (viewer.layersWidget) viewer.layersWidget.refresh();
-            const viewAt = addressOf(ring, ['view']);
-            const summary = viewer.viewMenuEl.querySelector('summary');
-            summary.title = `How the world is drawn${viewAt ? ` · ⌗${viewAt}` : ''}`;
-            if (viewAt) summary.dataset.address = viewAt; else delete summary.dataset.address;
-            // The Windows menu is Panels › Windows: its views are that ring's cells.
-            const windowsAt = addressOf(ring, ['panels', 'panel:windows']);
-            const windowsSummary = viewer.windowsMenuEl.querySelector('summary');
-            if (windowsAt) windowsSummary.dataset.address = windowsAt; else delete windowsSummary.dataset.address;
             const pairs = [];
+            // A menu of the header is the ring its cell opens: ⚙ View is View, ⊞ Windows
+            // is Panels › Windows (its views are that ring's cells).
+            pairs.push([viewer.viewMenuEl.querySelector('summary'), ['view']]);
+            pairs.push([viewer.windowsMenuEl.querySelector('summary'), ['panels', 'panel:windows']]);
             for (const li of viewer.contentsEl.querySelectorAll('li[data-path]')) pairs.push([li, `select:${li.dataset.path}`]);
             // The crumb a step out goes to wears the ring's Step out, which the ring has
-            // inside a site. The universe's and the site's crumbs stay from level to
-            // level, so one that is no longer the step out is told so ('crumb' is no cell).
+            // inside a site. Out of a site, the universe's crumb is Site › the universe, which
+            // takes the page there as the crumb does; at a site's own level its crumb, and the
+            // ▾ beside it, open the sites, as the ring's Site does. Any other crumb is no cell
+            // ('crumb'), and loses an address it wore before.
             const crumbs = viewer.crumbs();
             const up = viewer.focusPath.length ? crumbs[crumbs.length - 2] : null;
-            for (const crumb of crumbs) pairs.push([crumb, crumb === up ? 'zoom-out' : 'crumb']);
+            const atSiteLevel = !viewer.focusPath.length && viewer.siteName !== UNIVERSE_SITE;
+            for (const crumb of crumbs) {
+                if (crumb === up) pairs.push([crumb, 'zoom-out']);
+                else if (crumb === viewer.universeCrumbEl && viewer.siteName !== UNIVERSE_SITE) pairs.push([crumb, `site:${UNIVERSE_SITE}`]);
+                else if (crumb === viewer.siteLevelEl && atSiteLevel) pairs.push([crumb, ['Site']]);
+                else pairs.push([crumb, 'crumb']);
+            }
+            pairs.push([viewer.siteMenuEl.querySelector('summary'), ['Site']]);
             pairs.push([viewer.snapToggle.closest('label'), 'view:snap']);
             pairs.push([viewer.detailModeEl.closest('label'), `view:detail:${viewer.detailModeEl.value}`]);
             pairs.push([viewer.overlayToggle.closest('label'), 'view:outlines']);
             pairs.push([viewer.wallsToggle.closest('label'), 'view:walls']);
+            pairs.push([viewer.settingsOpenBtn, 'view:settings']);
             // The header's Docs: Panels › Docs.
             pairs.push([document.getElementById('docs-link'), 'panel:docs']);
+            // The header's Tour and the tour's box: Panels › Windows › Tour.
+            for (const [selector, action] of TOUR_VERBS) for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
+            // The Procedure's GO (the ring's fires the step offered first) and Start over:
+            // Panels › Site › Procedure. Its steps are drawn again as they change, so the
+            // addresses are written again then.
+            const procedure = document.querySelector(".panel[data-panel='procedure']");
+            if (procedure) {
+                const go = procedure.querySelector('.procedure-go');
+                if (go) pairs.push([go, 'procedure:go']);
+                for (const el of procedure.querySelectorAll('.procedure-again')) pairs.push([el, 'procedure:again']);
+                if (procedureWatched !== procedure) {
+                    procedureWatched = procedure;
+                    new MutationObserver(refreshAddresses).observe(procedure, { childList: true, subtree: true });
+                }
+            }
             // An armed printer's pad, popped out or put back: Panels › Machine › Control pad.
             const padToggle = document.getElementById('ctl-pop');
             if (padToggle) pairs.push([padToggle, 'panel:pad']);
@@ -11388,6 +11424,9 @@
         }
         new MutationObserver(refreshAddresses).observe(viewer.contentsEl, { childList: true });
         new MutationObserver(refreshAddresses).observe(viewer.selectedBodyEl, { childList: true, subtree: true });
+        // A window opened, closed or moved (the Procedure, the Bench, the Airgap): its
+        // controls are written as it comes.
+        if (viewer.panels && viewer.panels.layout && typeof viewer.panels.layout.on === 'function') viewer.panels.layout.on('stateChanged', refreshAddresses);
 
         // A Machine's buttons wear the addresses of its device ring, resolved for
         // the board as it is now -- a printer or a devkit, armed or not -- and again
