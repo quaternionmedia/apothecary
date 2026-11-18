@@ -169,13 +169,18 @@ node its `shell`, its `depth`, its `built_from` (the parts it is built from, by
 name) and its `turn` (`[rx, ry, rz]` degrees, OpenSCAD's rotate order, null for a
 node not turned). Every other site is one piece, upright
 on the shell outside the parts'; a site added while the server runs gets its piece
-there and moves no part, and the universe does not hold itself. The layout is made
+there and moves no part unless it nests one part in another, which moves that part to
+the shell its new depth gives it, and taking the site away moves it back, with no restart
+(the depths are read again only when what the sites nest has changed); the universe does
+not hold itself. The layout is made
 again each time the universe is drawn, so a piece moved by hand returns. The page
 frames the whole sphere from outside, draws no floor grid there, and the camera may
 travel inside it. At the universe's own level it draws the orbitals
 (`apothecary/static/orbits.js`): each shell's three rings, faint, in the shell's
 colour, the same three planes for every shell so the shells' rings nest; round each
-category's cluster on a shell, an outline in the category's colour; and from a part to
+category's cluster on a shell, an outline in the category's colour, as wide as its
+largest part needs, so on a crowded shell two outlines may cross where large parts' clusters
+meet; and from a part to
 each part it is built from, a faint line. None of them is a piece: a click passes
 through them, and they hide nothing. Each is drawn while the layers it is drawn for
 are shown, a line while both its parts are; and a still click that meets no piece and

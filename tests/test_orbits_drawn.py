@@ -136,3 +136,20 @@ def test_a_click_picks_the_drawn_loop_it_lands_nearest_within_its_reach(drawn):
     """On the first loop's edge, on the second's, between them, on a loop behind the
     eye, and inside a loop away from its edge."""
     assert drawn["near"] == [0, 1, -1, -1, -1]
+
+
+def test_outlines_on_one_shell_overlap_only_where_large_parts_make_them(drawn):
+    """An outline is as wide as its largest part's sphere needs, so caps of large
+    clusters cross: measured on the registry as it is (about one pair in twelve on the
+    first shell), and the guard is that the layout keeps most pairs apart."""
+    caps = drawn["clusters"]
+    pairs = overlapping = 0
+    for i, a in enumerate(caps):
+        for b in caps[i + 1 :]:
+            if a["shell"] != b["shell"]:
+                continue
+            pairs += 1
+            between = math.acos(max(-1, min(1, sum(x * y for x, y in zip(a["centre"], b["centre"])))))
+            overlapping += between < a["angle"] + b["angle"]
+    assert pairs > 20
+    assert overlapping <= pairs // 4
