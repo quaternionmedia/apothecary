@@ -11,7 +11,8 @@
  * the window starts and stops them and chooses the machine they move, their step and the
  * screen the strip shows, as the deck's own keys and a swipe do, and shows what the deck,
  * a Control pad or the ring chose. Each control is greyed with the reason its route would
- * refuse it now (`can` on the knobs' state, firmware/can.py; can.js).
+ * refuse it now (`can` on the knobs' state, firmware/can.py; can.js), and the strip's
+ * words are written under its picture, to be read at any width.
  *
  * mountDeck(root, { base, log }) renders into `root` and returns { shown(), close(),
  * load(), state(), destroy() }. shown() loads the first deck found and follows it
@@ -35,6 +36,7 @@ const MARKUP = `
     <div class="deck-control"></div>
     <div class="deck-keys"></div>
     <div class="deck-strip"></div>
+    <div class="deck-strip-said"></div>
     <div class="deck-knobs"></div>
     <div class="note deck-note"></div>
     <div class="k">Heard</div>
@@ -113,7 +115,8 @@ export function mountDeck(root, { base = "", log = null } = {}) {
     }
 
     // The knobs: off, or the machine they move, their step, its control and the strip's
-    // screen.
+    // screen. While a job holds the machine's port their line says so as their strip does,
+    // in the server's own refusal of a jog (`held`), not the last thing they did.
     function renderKnobs() {
         const box = $(".deck-control");
         if (!deck || !knobs) { box.innerHTML = ""; return; }
@@ -124,7 +127,7 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         const steps = knobs.steps_mm.map((mm) => `<button type="button" class="deck-step" data-mm="${mm}" data-can="knobs.step" aria-pressed="${mm === knobs.step_mm}" title="A knob's step moves ${mm} mm, as the deck's STEP key cycles it. ⌗ Panels › Machine › Knobs › Step">${mm}</button>`).join("");
         const screens = knobs.screens.map((s) => `<button type="button" class="deck-screen-to" data-screen="${esc(s)}" data-can="knobs.screen" aria-pressed="${s === knobs.screen}" title="The deck's strip shows its ${esc(s)} screen, as a swipe along it does; nothing is sent to a machine. ⌗ Panels › Machine › Knobs › Screen">${esc(s)}</button>`).join("");
         box.innerHTML = `<div class="row">${run}${machines}</div><div class="row"><span class="meta">step</span>${steps}<span class="meta">mm</span></div>`
-            + `<div class="meta deck-knobs-said">${esc(knobs.machine)} · ${esc(armedWords(knobs))} · ${esc(knobs.said)}</div>`
+            + `<div class="meta deck-knobs-said">${esc(knobs.machine)} · ${esc(armedWords(knobs))} · ${esc(knobs.held ? `held · ${knobs.held}` : knobs.said)}</div>`
             + `<div class="row"><span class="meta">strip</span>${screens}</div>`
             + `<div class="meta deck-screen">strip screen: ${esc(screenWords(knobs))} · a swipe along the strip walks ${knobs.screens.map(esc).join(", ")}</div>`;
         // Running, the one button stops them, and is answered as a stop.
@@ -139,9 +142,18 @@ export function mountDeck(root, { base = "", log = null } = {}) {
         return Object.fromEntries(VERBS.map((verb) => [verb, { ok: false, kind: "offline", why }]));
     }
 
+    // The strip's two lines as the server drew them, as text under its picture.
+    function renderStripWords() {
+        const sd = deck && drawn ? drawn.strip_drawn : null;
+        $(".deck-strip-said").innerHTML = sd
+            ? `<div class="deck-strip-text">${esc(sd.text)}</div>${sd.small ? `<div class="deck-strip-small">${esc(sd.small)}</div>` : ""}`
+            : "";
+    }
+
     function render() {
         renderKnobs();
         applyCan(root, deckCan());
+        renderStripWords();
         const inputs = !!(deck && deck.simulated);
         if (!deck) return;
         $(".deck-name").textContent = `${deck.model} · ${deck.id} · ${deck.vid}:${deck.pid}${deck.simulated ? " · simulated" : ""}${deck.serial ? ` · S/N ${deck.serial}` : ""}${drawn && drawn.mended ? ` · lost and found ${drawn.mended}×` : ""}`;

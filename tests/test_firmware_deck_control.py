@@ -1038,6 +1038,22 @@ def test_a_cut_that_holds_the_router_still_lets_the_spindle_knob_say_it_turns(be
     assert "knob 4 still turns the spindle" in one.strip["small"]
 
 
+def test_the_knobs_state_says_held_in_the_strips_words_while_a_job_holds_the_port(bench):
+    """What the Deck window says of the knobs agrees with their strip: held, in the
+    server's own refusal, while a job holds the chosen machine's port; nothing held
+    otherwise, whichever screen the strip shows."""
+    controller, one, links = bench
+    assert controller.state()["held"] is None
+    _on(controller, PRINTER, _job("j1", stage="paused"))
+    controller.draw()
+    controller.screens.show("knobs")
+    controller.draw()
+    held = controller.state()["held"]
+    assert held == one.strip["small"] and "a print holds the port (paused)" in held
+    controller.screens.show("status")
+    assert controller.state()["held"] == held
+
+
 def test_a_screen_is_chosen_from_the_page_by_name_or_step_and_sends_nothing(bench):
     """The strip's screen chosen from the page, as a swipe changes it: by name, or next
     and previous, stopping at either end; a name it has not got is refused. Nothing goes

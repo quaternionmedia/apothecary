@@ -35,4 +35,10 @@
     font: inherit; font-size: 0.78rem; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 0.1rem 0.45rem; cursor: pointer;
 }
 .deck-ui .deck-machine[aria-pressed="true"], .deck-ui .deck-step[aria-pressed="true"], .deck-ui .deck-screen-to[aria-pressed="true"] { border-color: var(--ok); color: var(--ok); }
+/* The strip's words, as the server drew them, under its picture: read and selected at
+ * any width, where the picture's small line is too small to read. */
+.deck-ui .deck-strip-said { max-width: 26rem; user-select: text; line-height: 1.3; }
+.deck-ui .deck-strip-said:empty { display: none; }
+.deck-ui .deck-strip-text { font-weight: 600; overflow-wrap: anywhere; }
+.deck-ui .deck-strip-small { color: var(--ink-2); font-size: 0.72rem; overflow-wrap: anywhere; }
 

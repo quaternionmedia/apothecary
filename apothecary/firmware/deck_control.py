@@ -989,8 +989,12 @@ class DeckController:
         )
 
     def state(self) -> dict:
+        """What the knobs are, as the Deck window and each Control pad read them: ``held``
+        is what the knobs' screen says while a job holds the chosen machine's port (the
+        server's own refusal of a jog, ``screens.held_words``), whichever screen shows."""
         with self._lock:
             port = self._port_quiet()
+            held = self._holding()
             return {
                 "running": self._alive.is_set(),
                 "deck": self.deck.info.id,
@@ -1003,6 +1007,7 @@ class DeckController:
                 "screens": list(self.screens.order),
                 "armed_s": self.armed(port) if port else 0.0,
                 "said": self.said[0],
+                "held": screens.held_words(self.machine.kind, held) if held else None,
                 "sent": list(self.sent[-20:]),
                 "deck_alive": self.deck.alive(),
                 "deck_mended": self.deck.mended,

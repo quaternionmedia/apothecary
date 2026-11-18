@@ -113,11 +113,15 @@ def test_the_deck_is_drawn_from_here_and_what_it_hears_is_listed(page: Page, url
         800,
         100,
     ]
+    # The strip's two lines, as text under its picture, to be read at any width.
+    expect(deck.locator(".deck-strip-said .deck-strip-text")).to_have_text("cnc_router")
+    expect(deck.locator(".deck-strip-said .deck-strip-small")).to_have_text("disarmed")
     story.shows(
         "A program draws its eight keys and its strip",
         "Each key and the strip were set by a PUT to the deck's routes: a label on a "
         "colour, drawn here and sent as the JPEG the device takes. The window shows what "
-        "was sent, since a deck cannot be asked what it shows.",
+        "was sent, since a deck cannot be asked what it shows, and writes the strip's "
+        "two lines under its picture, where they can be read and selected.",
     )
 
     # 3. The deck is pressed, turned and tapped, as a real one reports.

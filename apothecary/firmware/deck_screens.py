@@ -208,7 +208,9 @@ def status_strip(machine: str, kind: str, status, now: datetime, position: str) 
     """The Status screen of ``machine``: its state; a printer's hotends and bed, or a
     router's spindle and feed; and the first thing it needs of a person. Read from the
     newest poll, its age said when it is old: a deck that asks a machine nothing mid-job
-    shows the last reading anyone's poll made."""
+    shows the last reading anyone's poll made. Where a job holds the port its stage is the
+    state said -- a print paused is paused -- since a poll made during a job says the
+    busy word whatever the job's stage."""
     if status is None:
         return Strip(f"{machine} · no reading", f"not polled yet · {position}", "grey")
     if kind == "printer":
@@ -227,20 +229,31 @@ def status_strip(machine: str, kind: str, status, now: datetime, position: str) 
     if age is not None and age > READING_FRESH_S:
         parts.append(f"read {clock(age)} ago")
     parts.append(position)
+    held = getattr(status, "job", None) or {}
+    stage = held.get("stage") if isinstance(held, dict) else None
     if need and (status.state == "alarm" or getattr(status, "alarm", None) is not None):
         colour = "red"
     elif need:
         colour = "amber"
+    elif stage:
+        colour = _STAGE_COLOUR.get(stage, "green")
     elif status.state in ("printing", "running"):
         colour = "green"
     else:
         colour = "grey"
-    return Strip(f"{machine} · {status.state}", " · ".join(parts), colour)
+    return Strip(f"{machine} · {stage or status.state}", " · ".join(parts), colour)
+
+
+def held_words(kind: str, words: str) -> str:
+    """What the knobs of a machine a job holds say: ``words``, the server's own refusal of
+    a jog (``PortHeld``), and what the knobs still do. The strip's small line, and the Deck
+    window's line for the knobs."""
+    can = "knob 4 still turns the spindle" if kind == "router" else "no knob moves it"
+    return f"{words} · jogs refused, {can}"
 
 
 def held_strip(machine: str, kind: str, words: str, position: str) -> Strip:
     """The knobs screen of a machine a job holds: not live. ``words`` is what the server
     itself says when it refuses a jog (``PortHeld``). A cut still takes a spindle speed,
     which the dialect lets through; a print takes nothing from the knobs."""
-    can = "knob 4 still turns the spindle" if kind == "router" else "no knob moves it"
-    return Strip(f"{machine} · held", f"{words} · jogs refused, {can}", "amber")
+    return Strip(f"{machine} · held", held_words(kind, words), "amber")

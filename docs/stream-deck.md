@@ -95,7 +95,9 @@ knob turned and the place the strip was touched are each lit for a moment. A rea
 keys and strip are drawn as bright as a simulated one's. A simulated deck is pressed from
 it -- a key, a knob turned a step either way or pressed, the strip tapped -- each the
 event a real deck reports, posted to the deck's routes; a real deck is pressed by hand
-and the window's controls are off.
+and the window's controls are off. Under the strip's picture its two lines are written
+as the server drew them, as text to read and select: the picture's small line is too
+small to read at the window's width, and the picture stays what the deck was sent.
 [Walkthrough 26](../walkthrough/26-the-stream-deck.md) goes round it, written by
 `tests/e2e/test_deck.py`.
 
@@ -179,8 +181,10 @@ holds which is showing):
   and as a bar, its stage and how long it has run. Where no job of the host's is running
   but the printer's card is, it shows the card's progress and the time the card reports.
   No remaining time is drawn, because neither the job's record nor a poll carries one.
-- **Status**: the machine's state; a printer's hotends and bed, or a router's spindle and
-  feed; and the first thing it asks of a person, from its `todo`, else its alarm. It reads
+- **Status**: the machine's state -- the job's stage where a job holds the port, since a
+  poll made during a job says the busy word whatever its stage: a print paused is
+  paused -- a printer's hotends and bed, or a router's spindle and feed; and the first
+  thing it asks of a person, from its `todo`, else its alarm. It reads
   the newest status anyone's poll made, and says how old it is when it is over ten seconds.
 
 A **swipe** is the strip's drag event (`{"kind": "drag", "x", "y", "x_out", "y_out"}`,
@@ -206,6 +210,11 @@ Chosen this way it is as a swipe is: it stops at either end, draws the strip and
 more, and sends nothing to a machine; unlike a touch, it clears no ended job from
 Progress. Dragged along its strip by the mouse, a quarter of its length or more, a
 simulated deck is swiped; a real deck's strip is a person's to swipe.
+
+While a job holds the chosen machine's port, the window's line under the knobs says
+*held* in the words the knobs' screen says it (`screens.held_words`: the server's own
+refusal of a jog, and what the knobs still do), whichever screen the strip shows, not
+the last thing the knobs did.
 
 **Nothing the deck sends bypasses what bounds a person's jog.** A jog goes through
 `devices.printer_jog`, the function behind `POST /firmware/printers/jog` and the page's

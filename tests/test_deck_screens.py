@@ -231,3 +231,29 @@ def test_the_knobs_of_a_machine_a_job_holds_say_jogs_are_refused_in_the_servers_
     assert printer.colour == "amber" and printer.small.startswith(words)
     assert "jogs refused" in printer.small and "no knob moves it" in printer.small
     assert "knob 4 still turns the spindle" in screens.held_strip("r", "router", words, "1/3").small
+
+
+def test_status_says_the_jobs_stage_where_a_job_holds_the_port():
+    """A poll made while the host streams a job carries the job and says the busy word
+    over the card's idle state, whatever the job's stage: Status says the stage -- a
+    print paused is paused, amber as Progress draws it -- and a poll with no job still
+    says the machine's own state."""
+    paused = _status(
+        state="printing",
+        hotends=[Heater(actual=200, target=200)],
+        job={"kind": "print", "port": "/dev/ttyFAKE1", "stage": "paused"},
+    )
+    strip = screens.status_strip("printer_1", "printer", paused, NOW, "3/3")
+    assert strip.text == "printer_1 · paused" and strip.colour == "amber"
+    streaming = paused.model_copy(update={"job": {"kind": "print", "stage": "printing"}})
+    assert screens.status_strip("p", "printer", streaming, NOW, "3/3").colour == "green"
+    cut = _status(state="running", dialect="grbl", job={"kind": "cut", "stage": "running"})
+    assert screens.status_strip("r", "router", cut, NOW, "3/3").text == "r · running"
+
+
+def test_the_knobs_words_while_held_are_one_line_the_strip_and_the_window_both_say():
+    words = "/dev/ttyFAKE1: a print holds the port (paused)"
+    assert screens.held_strip("p", "printer", words, "1/3").small == screens.held_words(
+        "printer", words
+    )
+    assert screens.held_words("printer", words) == f"{words} · jogs refused, no knob moves it"

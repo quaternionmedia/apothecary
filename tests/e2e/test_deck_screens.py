@@ -225,12 +225,16 @@ def test_the_deck_shows_a_print_and_a_swipe_walks_its_screens(page: Page, url: s
     time.sleep(5)  # two ticks of the layout: nothing pulls the strip forward again
     assert _screen(url) == "knobs"
     _window_shows_the_strip(url, deck)
+    # The window's line for the knobs says what the strip says, not the last thing they did.
+    expect(deck.locator(".deck-knobs-said")).to_contain_text(
+        f"held · {_strip(url)['small']}", timeout=10000
+    )
     story.shows(
         "Swiped back to the knobs, which say a print holds the port",
         "A drag along the strip, most of its length, is a swipe. The knobs' screen no longer "
         "looks live: the print holds the port, the server refuses a jog, and the strip says "
-        "so in the server's own words. Progress was brought forward once for this print and "
-        "is not brought forward again.",
+        "so in the server's own words, as the window's line for the knobs does. Progress was "
+        "brought forward once for this print and is not brought forward again.",
         blank=TIME_LEFT_SHOWN,
     )
 
@@ -247,12 +251,15 @@ def test_the_deck_shows_a_print_and_a_swipe_walks_its_screens(page: Page, url: s
     _until(lambda: _touches(url) > heard, "the third swipe heard")
     time.sleep(1)  # taken in the layout's turn, where it moves nothing
     assert _screen(url) == "status"
-    assert _strip(url)["text"].startswith("printer_1 · ")
+    # The job's stage, not the busy word a poll during a job says whatever its stage.
+    _until(lambda: _strip(url)["text"] == "printer_1 · paused", "Status saying the print paused")
     _window_shows_the_strip(url, deck)
+    expect(deck.locator(".deck-strip-said .deck-strip-text")).to_have_text("printer_1 · paused")
     story.shows(
         "On to Status, the last screen",
-        "Another swipe forward shows the printer's state, its temperatures and the first "
-        "thing it asks of a person, read from the newest status anyone's poll made. A swipe "
+        "Another swipe forward shows the printer's state -- the print's stage, paused -- its "
+        "temperatures and the first thing it asks of a person, read from the newest status "
+        "anyone's poll made, and the window writes the strip's two lines under it. A swipe "
         "past the last screen moves nothing, and a tap on the strip changed nothing.",
         blank=TIME_LEFT_SHOWN,
     )
