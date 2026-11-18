@@ -49,7 +49,8 @@ Left to right, one row:
   and machines -- stays the one before until the next has loaded, then changes
   all at once, and a Machine opened meanwhile closes with the site it was of.
   Only the site asked for last lands: chosen again, or Back pressed, while one
-  loads, the one left answers nothing when it comes. A picture's view or a
+  loads, the one left answers nothing when it comes. The first crumb pressed
+  while a site loads steps out of that site, the one the address names. A picture's view or a
   take-back in another site names that site and leaves the screen where it is.
 - **The rail of a journey**, beside the banner while one is entered: its name,
   its steps numbered, the one a person is on filled, **Next** with the step

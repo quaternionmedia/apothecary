@@ -237,6 +237,40 @@ def test_a_site_left_before_it_loads_answers_nothing_when_it_comes(page: Page, b
 
 
 @pytest.mark.e2e
+def test_the_first_crumb_pressed_while_a_site_loads_steps_out_of_that_site(
+    page: Page, base_url: str
+):
+    """garage drawn, theatre chosen under the site crumb's ▾ and still loading, the first
+    crumb pressed: the page steps out of theatre, the site the address names and Back
+    returns to, its piece selected in the universe; theatre's answer, coming last,
+    changes nothing."""
+    _at(page, base_url)
+    page.evaluate(LOADS_KEPT)
+    held: list = []
+    page.route(
+        re.compile(r"/sites/theatre$"),
+        lambda route: held.append(route) if not held else route.continue_(),
+    )
+    page.locator("#site-menu > summary").click()
+    page.locator("#site-menu .site-item[data-site='theatre']").click()
+    expect(page).to_have_url(re.compile(r"/viewer/sites/theatre$"))
+    assert crumbs(page)[:2] == [FIRST, "garage"]
+    page.locator("#universe-crumb").click()
+    _is_at(page, UNIVERSE)
+    said(page, "Stepped out of the site theatre to Apothecary (the first crumb)")
+    page.wait_for_function("() => window.fractalViewer.selectedName === 'site-theatre'")
+    assert len(held) == 1
+    held[0].continue_()
+    assert page.evaluate(ALL_ANSWERED) == [False, True]
+    assert page.evaluate("() => window.fractalViewer.siteName") == UNIVERSE
+    assert page.evaluate("() => window.fractalViewer.selectedName") == "site-theatre"
+    expect(page).to_have_url(re.compile(r"/viewer/sites/apothecary$"))
+    page.go_back()
+    _is_at(page, "theatre")
+    assert crumbs(page) == [FIRST, "theatre"]
+
+
+@pytest.mark.e2e
 def test_a_site_s_machines_are_its_own_from_the_moment_it_is_drawn(page: Page, base_url: str):
     """The garage's machines known, the universe drawn while its own are still asked
     for: none of the garage's stands for the universe's meanwhile."""

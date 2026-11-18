@@ -1387,6 +1387,7 @@
 
                 this.tree = null;            // full recursive tree for the loaded site
                 this.siteName = null;         // the site drawn: its tree, boards and machines (loadSite)
+                this.siteAsked = null;        // the site the address names, from the press, drawn or loading
                 this.siteLoad = 0;            // the newest load's number: an older one's answer is no answer
                 this.focusPath = [];          // names from root -- the only navigation state
                 this.maxDepthValue = 0;
@@ -2527,14 +2528,15 @@
             }
 
             // A site loaded and drawn, or why not; whether it landed. The address names
-            // the site from the press (chooseSite, or Back and Forward); everything drawn
-            // of a site -- `siteName`, its tree, its boards, its machines -- changes
-            // together once it has loaded. Only the newest load lands: one asked for
-            // before it (a quick Back then Forward, a crumb pressed while a site loads)
-            // answers nothing when it comes, and resolves false.
+            // the site from the press (chooseSite, or Back and Forward), so `siteAsked` does
+            // too; everything drawn of a site -- `siteName`, its tree, its boards, its
+            // machines -- changes together once it has loaded. Only the newest load lands:
+            // one asked for before it (a quick Back then Forward, a crumb pressed while a
+            // site loads) answers nothing when it comes, and resolves false.
             async loadSite(name, focusPathStr = '') {
                 if (!name) return false;
                 const load = ++this.siteLoad;
+                this.siteAsked = name;
                 // The site before's machines followed no more, before its Machine closes and
                 // would hand them to the world's own watch on the way out (followMachines).
                 if (name !== this.siteName) this.followMachines(new Map());
@@ -3862,11 +3864,13 @@
                 return true;
             }
 
-            // The banner's first crumb: the universe. From another site, out to it, the
-            // site's piece selected there; in it already, up to its own level.
+            // The banner's first crumb: the universe. From another site -- drawn, or asked
+            // for and still loading -- out to it, the site's piece selected there; in it
+            // already, up to its own level; on its way there, the load in flight lands it.
             toUniverse(how = '', event = null) {
                 if (!this.crumbIsOurs(event)) return null;
-                if (this.siteName !== UNIVERSE) return this.leaveSite(how);
+                if (this.siteAsked !== UNIVERSE) return this.leaveSite(how);
+                if (this.siteName !== UNIVERSE) return null;
                 if (this.focusPath.length) this.goUpTo(0, how);
                 else this.setStatus(`Already at ${UNIVERSE_SHOWN}'s own level`, 'success');
                 return null;
@@ -10275,9 +10279,11 @@
             }
 
             // Out of a site's own level: the universe, the site's piece selected there, so
-            // a step out lands on what was left as it does at any level.
+            // a step out lands on what was left as it does at any level. The site left is the
+            // one the address names (siteAsked), which Back returns to -- the one drawn, or
+            // the one still loading when the press came.
             leaveSite(how = '') {
-                const left = this.siteName;
+                const left = this.siteAsked;
                 const loaded = this.chooseSite(UNIVERSE);
                 if (!loaded) return null;
                 return loaded.then((landed) => {
@@ -10288,9 +10294,11 @@
                 });
             }
 
-            // Whether the universe is a site this page knows, and not the one in view.
+            // Whether the universe is a site this page knows, and not the one in view or
+            // asked for: a step out of a site's level while another loads steps out of
+            // that one, as the first crumb does.
             hasUniverseAbove() {
-                return this.siteName !== UNIVERSE && SITE_NAMES.includes(UNIVERSE);
+                return this.siteAsked !== UNIVERSE && SITE_NAMES.includes(UNIVERSE);
             }
 
             // One level out, the piece left selected, said. From a site's own level, out
