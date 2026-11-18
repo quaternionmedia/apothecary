@@ -1111,6 +1111,8 @@ with no reload.
 | Ring: right-click with | Ctrl | The modifier held with a right-click to open the ring at the pointer: Ctrl, Alt, Shift or Meta |
 | Step in | Page Down | The key that steps into the selected piece, or what the middle of the view shows |
 | Step out | Page Up | The key that steps out to the level above |
+| Projector: mark the bed | `c` | On the projector page ([projector](projector.md)): lays the four markers over the bed, and takes them off again |
+| Projector: mark a plane above | `u` | On the projector page: marks the second plane, the top of a piece of known thickness laid on the bed |
 | Automatic zoom | on | Whether the wheel pushed on past the limit steps at all |
 | Stepping in | on | Whether it steps in |
 | Stepping out | on | Whether it steps out |

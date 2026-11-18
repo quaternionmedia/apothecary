@@ -122,6 +122,27 @@ def test_a_marker_dropped_keeps_the_calibration_and_the_grid_is_drawn_through_it
     assert page.evaluate(f"() => {STATS}.calibrating") is False
 
 
+def test_the_projector_keys_are_the_viewers_settings(page: Page, url: str):
+    """C and U are Settings' Projector: mark the bed and mark a plane above, kept in this
+    browser: a key set there is the key here, and the old one does nothing."""
+    _pinned_and_polled(url)
+    page.goto(f"{url}{PAGE}")
+    page.evaluate(
+        """() => localStorage.setItem("apothecary.settings",
+            JSON.stringify({ projectorMarkKey: "k", projectorUpperKey: "j" }))"""
+    )
+    stats = _open(page, url)
+    assert stats["calibrating"] is True
+    page.keyboard.press("c")  # no longer the key
+    assert page.evaluate(f"() => {STATS}.calibrating") is True
+    page.keyboard.press("k")
+    assert page.evaluate(f"() => {STATS}.calibrating") is False
+    page.keyboard.press("u")  # no longer the key
+    assert page.evaluate(f"() => {STATS}.calibrating") is False
+    page.keyboard.press("j")  # the plane above's key marks, which lays the markers
+    assert page.evaluate(f"() => {STATS}.calibrating") is True
+
+
 def test_the_machine_is_followed_and_its_polls_move_what_is_drawn(page: Page, url: str):
     """The page watches the board as the world does, live while the server holds its
     link; each poll is relayed on the stream and what moves is taken without asking

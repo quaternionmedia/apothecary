@@ -38,7 +38,7 @@ open the page with `?calibrate&upper=<thickness in mm>`: the four markers start 
 bed plane's were and are dragged, without touching the projector, its zoom or its
 keystone, until each cross lights the piece's top over its point. The four are kept with
 that height as the calibration's second plane (`PUT .../projector/upper`, below), and the
-grid is drawn through the second plane's own mapping. U on the page toggles marking it
+grid is drawn through the second plane's own mapping. C on the page lays the markers over the bed and takes them off, and the page's Projector: mark a plane above key (U by default, a [Settings](viewer.md#settings) binding) toggles marking it
 (`?upper=` names the thickness; with none named a kept second plane's is used, and with
 neither the band says so). Marking the bed plane again forgets the second plane, because
 the projector may have moved.

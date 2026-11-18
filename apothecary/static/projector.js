@@ -34,6 +34,8 @@
  */
 
 import { mountBoards } from "/static/boards.js";
+import { matches } from "/static/keys.js";
+import { makeSettings } from "/static/widgets/settings.js";
 
 // A machine is polled this often while followed, as the world polls one it draws.
 export const POLL_MS = 2000;
@@ -154,7 +156,7 @@ export function calibrationBody(answer, markers, width, height) {
 
 // --- the page ------------------------------------------------------------------------------
 
-export function mountProjector({ canvas, base = "", site, path, calibrate = false, upper = null }) {
+export function mountProjector({ canvas, base = "", site, path, calibrate = false, upper = null, keys = null }) {
     const key = `${site}/${path}`;
     const ctx = canvas.getContext("2d");
     const at = `${base}/sites/${encodeURIComponent(site)}/machines/${encodeURIComponent(path)}/projector`;
@@ -399,9 +401,12 @@ export function mountProjector({ canvas, base = "", site, path, calibrate = fals
         const asked = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
         if (asked && asked.catch) asked.catch(() => {});
     });
+    // The two keys are the page's Settings (Projector: mark the bed, mark a plane above), kept
+    // in this browser as the viewer's are; Escape is fixed.
+    const settings = keys || makeSettings();
     window.addEventListener("keydown", (e) => {
-        if (e.key === "c" || e.key === "C") { state.calibrating = !state.calibrating; state.upperMarking = false; }
-        else if (e.key === "u" || e.key === "U") { state.upperMarking = !state.upperMarking; state.calibrating = true; }
+        if (matches(e, settings.get("projectorMarkKey"))) { state.calibrating = !state.calibrating; state.upperMarking = false; }
+        else if (matches(e, settings.get("projectorUpperKey"))) { state.upperMarking = !state.upperMarking; state.calibrating = true; }
         else if (e.key === "Escape") state.calibrating = false;
         else return;
         if (state.answer && state.held === null) state.markers = markersFor(state.answer);
