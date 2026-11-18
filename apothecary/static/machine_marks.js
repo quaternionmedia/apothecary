@@ -28,7 +28,8 @@ import { toScene } from "/static/frames.js";
 
 export const VOLUME_COLOR = 0x6fb3e8;
 export const NOZZLE_COLOR = 0xff8080;
-// The nozzle's cone is drawn after the world's meshes and the measurement (10 to 12).
+// The nozzle's cone is drawn after the world's meshes, what is seen through them, and the
+// measurement (10 to 12).
 export const NOZZLE_ORDER = 20;
 export const BED_COLOR = 0x2a302a;
 // What each kind of move is drawn in (apothecary/preview/process.py names them): what
@@ -159,9 +160,12 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
     // The nozzle: a small cone pointing down, plus a crosshair on the bed. The cone stands
     // where the tool's tip is, inside the drawn head that carries it: it is drawn after
     // everything and over it, so the mark (and the ⚡ that stands aside from it) is seen.
+    // three.js draws what is seen through (`transparent`) after every solid thing, so the
+    // cone is one of those, at full opacity, and the last of them by its order: a bed
+    // reading's translucent mesh is drawn before it, not over it.
     const nozzle = new THREE.Group();
     const cone = new THREE.Mesh(new THREE.ConeGeometry(4, 14, 16),
-        new THREE.MeshStandardMaterial({ color: NOZZLE_COLOR, emissive: 0x552222, depthTest: false, depthWrite: false }));
+        new THREE.MeshStandardMaterial({ color: NOZZLE_COLOR, emissive: 0x552222, depthTest: false, depthWrite: false, transparent: true }));
     cone.renderOrder = NOZZLE_ORDER;
     cone.rotation.x = Math.PI;
     cone.position.y = 7;

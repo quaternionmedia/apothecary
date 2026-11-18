@@ -258,7 +258,8 @@ while their thing is selected; three or more that overlap fold into one,
 height, once the mark is drawn half as wide as the badge or more: stepped into a
 printer, the head is not hidden under its board's badge; from further off the
 badge keeps its own spot. The cone stands at the tool's tip, inside the drawn head
-that carries it, and is drawn over the head, so it is seen.
+that carries it, and is drawn over the head and over what is seen through (a bed
+reading's mesh), so it is seen.
 
 | Badge | Over | A click |
 |---|---|---|

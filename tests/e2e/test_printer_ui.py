@@ -1416,11 +1416,15 @@ def test_stepped_into_its_printer_the_boards_badge_stands_clear_of_the_tools_mar
     """Mid-print, printer_1's board stands under the head's working area, so its ⚡ stood
     over the nozzle's mark. Stepped into the printer, where the mark is drawn large, the
     badge stands beside it at its own height; at the garage's level, where the mark is a
-    few pixels, the badge stays on its own spot."""
+    few pixels, the badge stays on its own spot. The mark is seen over the head that
+    carries it and over a bed reading's mesh, which is seen through."""
+    record_id = _read_the_bed(printer_url)
     _wearing_its_badge(page, printer_url)
     page.wait_for_function(
-        "() => { const m = window.fractalViewer.marks['printer_1'];"
-        " return !!(m && m.marks && m.marks.known()); }",
+        "(id) => { const m = window.fractalViewer.marks['printer_1'];"
+        " return !!(m && m.marks && m.marks.known() && m.marks.mesh()"
+        " && m.marks.mesh().record_id === id); }",
+        arg=record_id,
         timeout=15000,
     )
     settled(page)
@@ -1438,8 +1442,9 @@ def test_stepped_into_its_printer_the_boards_badge_stands_clear_of_the_tools_mar
     assert mark is not None and mark["r"] - mark["l"] >= width / 2, stepped
     assert not _meets(badge, mark), stepped
     assert abs(badge["b"] - (at["y"] - 6)) < 1, stepped  # at its own height, beside it
-    # The mark stands inside the drawn head that carries the nozzle, and is seen: the
-    # world drawn, the canvas's pixel at the cone's middle is the cone's red.
+    # The mark stands inside the drawn head that carries the nozzle, the bed reading's
+    # mesh drawn across it, and is seen: the world drawn, the canvas's pixel at the cone's
+    # middle is the cone's red.
     seen = page.evaluate(CONE_SEEN)
     red, green, blue = seen["pixel"][:3]
     assert red > 100 and red > 1.6 * green and red > 1.6 * blue, seen
