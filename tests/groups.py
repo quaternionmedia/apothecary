@@ -164,6 +164,7 @@ GROUPS = {
             "apothecary/projects/*",
             "apothecary/meshes.py",
             "apothecary/fittings.py",
+            "apothecary/adapters.py",
             "apothecary/spaces.py",
             "apothecary/airgap_metrics.py",
             "apothecary/gap_geometry.py",
@@ -183,6 +184,7 @@ GROUPS = {
             "walkthrough/43-*",
         ),
         "tests": (
+            "test_adapters.py",
             "test_airgap_metrics.py",
             "test_airgap_part.py",
             "test_assignment_cases.py",

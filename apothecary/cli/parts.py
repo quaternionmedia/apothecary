@@ -568,6 +568,105 @@ def parts_fit(a: str, b: str, json_out: bool):
         raise SystemExit(1)
 
 
+def _end_named(spec: str, pairs):
+    """An end of ``part[@preset][.interface]``, a person's ``NAME=VALUE`` over its preset."""
+    from ..adapters import Refused, end
+
+    name, preset, interface = address(spec)
+    part = part_or_die(name)
+    overrides = parse_param_overrides(part, pairs)
+    try:
+        return end(part, preset, interface, overrides)
+    except KeyError as exc:
+        raise click.ClickException(str(exc.args[0])) from None
+    except Refused as exc:
+        raise click.ClickException(str(exc)) from None
+
+
+def _pair(pair: str):
+    if "=" not in pair:
+        raise click.ClickException(f"--param expects name=value, got {pair!r}")
+    name, value = pair.split("=", 1)
+    return name.strip(), value.strip()
+
+
+def _pairs(params: dict) -> str:
+    """Parameters as the ``-p`` pairs that set them."""
+    shown = (str(v).lower() if isinstance(v, bool) else f"{v:g}" if isinstance(v, float) else v for v in params.values())
+    return " ".join(f"-p {k}={v}" for k, v in zip(params, shown, strict=True))
+
+
+@parts.command(
+    "adapter", short_help="The adapter between two round ends: its parameters, and each end's fit."
+)
+@click.argument("a", metavar="PART[@PRESET][.INTERFACE]")
+@click.argument("b", metavar="PART[@PRESET][.INTERFACE]")
+@click.option(
+    "--a-param",
+    "-a",
+    "a_pairs",
+    multiple=True,
+    metavar="NAME=VALUE",
+    help="A number of the first end's part over its preset: what was measured. Repeatable.",
+)
+@click.option(
+    "--b-param",
+    "-b",
+    "b_pairs",
+    multiple=True,
+    metavar="NAME=VALUE",
+    help="A number of the second end's part over its preset. Repeatable.",
+)
+@click.option(
+    "--param",
+    "-p",
+    "param_pairs",
+    multiple=True,
+    metavar="NAME=VALUE",
+    help="The adapter's own parameter over what is derived: it adjusted, and each end's "
+    "fit checked again. Repeatable.",
+)
+@click.option("--json-out/--text", default=False, help="As JSON, for a script.")
+def parts_adapter(a: str, b: str, a_pairs, b_pairs, param_pairs, json_out: bool):
+    """The adapter between two round ends, generated from their interfaces
+    (docs/connections.md): its parameters, which of its ends meets which, and how
+    each fits. An end is a part at a preset, its interface named where it has more
+    than one round one: dust_port@hose_40, dust_port@port_32.end, and what a person
+    measured goes over the preset (-b diameter=31.6 -b measured=true). The rule
+    applied is said with it; no clearance is added, so the first print settles the
+    fit. Refused, saying why, for an end that is not round, two ends that meet
+    already, a wall that leaves no bore, or an adapter that would not print without
+    support. Exits 1 when an adjusted adapter does not seat on both ends."""
+    from ..adapters import Refused, between
+
+    x, y = _end_named(a, a_pairs), _end_named(b, b_pairs)
+    try:
+        made = between(x, y)
+        if param_pairs:
+            # Checked with what was derived, not alone against the defaults.
+            adjusted = dict(_pair(pair) for pair in param_pairs)
+            made = between(made.a, made.b, {**made.params, **adjusted})
+    except Refused as exc:
+        raise click.ClickException(str(exc)) from None
+    if json_out:
+        placed, _ = made.placed()
+        body = made.model_dump(mode="json")
+        body["a"]["label"], body["b"]["label"] = made.a.label, made.b.label
+        body["placed"] = [
+            {"name": c.name, "position": c.position.to_list(), "turn": c.turn.to_list() if c.turn else None}
+            for c in placed.children
+        ]
+        click.echo(json.dumps(body, indent=2))
+    else:
+        for line in made.lines():
+            click.echo(line)
+        click.echo(f"  its parameters: {_pairs(made.params)}")
+        click.echo(f"  the rule: {made.rule}")
+        click.echo(f"  render it: apothecary parts generate-stl {made.part} {_pairs(made.params)}")
+    if not made.seats:
+        raise SystemExit(1)
+
+
 @parts.command("checklist")
 @click.argument("name", required=False)
 @click.option("--all", "check_all", is_flag=True, help="Every part with a wrapper")

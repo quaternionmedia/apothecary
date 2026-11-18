@@ -16,7 +16,8 @@ clamped before. Between the two ends a transition narrows, its bore closing in a
 between the transition and a spigot end ``b``, so one adapter goes into either of
 two fittings, one at a time. The defaults are the stepped adapter for a 40 mm hose
 onto a 32 mm or a 25 mm port, every end pushing in; its presets are that and the
-plain 40 to 32. Built in Python from one profile (``apothecary.fittings``), so the
+plain 40 to 32. ``apothecary/adapters.py`` generates the parameters between any two
+round ends. Built in Python from one profile (``apothecary.fittings``), so the
 solid and its interfaces come from the same numbers;
 parts/dust/hose_adapter/hose_adapter.scad is that solid at the defaults, rewritten
 by ``apothecary parts render hose_adapter -o parts/dust/hose_adapter/hose_adapter.scad``.

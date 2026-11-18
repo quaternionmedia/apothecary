@@ -14,7 +14,8 @@ It is drawn as a stand-in: a tube standing on the bed with its end at the top,
 solid and the interface it declares, ``end``, come from the same numbers.
 parts/dust/dust_port/dust_port.scad is that solid at the defaults, rewritten by
 ``apothecary parts render dust_port -o parts/dust/dust_port/dust_port.scad``.
-docs/connections.md is the reference.
+Two ends are joined by the adapter generated between them
+(``apothecary/adapters.py``); docs/connections.md is the reference.
 """
 
 from __future__ import annotations

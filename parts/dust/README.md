@@ -3,7 +3,8 @@
 Dust collection: one part for a round end of a dust system -- a hose's end, a
 tool's port, a collector's inlet -- and the adapter between two ends. Each part
 declares its interfaces, the places another part meets it, and `apothecary parts
-fit` says how two meet (docs/connections.md).
+fit` says how two meet; `apothecary parts adapter` generates the adapter between
+two ends (docs/connections.md).
 
 | Part | What it is | Interfaces |
 |---|---|---|
@@ -75,3 +76,13 @@ The step's end `b` costs a 32 port airflow: in a 32 port the air still goes
 through `b`'s 20.4 bore. A diameter the real fittings do not have moves the seat
 a long way: a taper of 1.2 over 25 moves it about 2 mm for each 0.1 of bore, so
 measure the fittings before printing for them.
+
+## An adapter between two ends
+
+`apothecary parts adapter dust_port@hose_40 dust_port@port_32` derives the
+adapter's parameters from the two ends' interfaces by the nominal rule: a spigot
+end straddles the bore it meets by half its taper, a socket end's bore is the
+outside it takes, and no clearance is added. It says how each end fits, which
+numbers are still a guess, and the `-p` pairs that render it. A measured end goes
+over its preset: `-b diameter=31.6 -b measured=true`. The first print settles
+the fit; docs/connections.md says what is checked and what only a print shows.

@@ -140,6 +140,73 @@ since one is in use at a time:
     >>> place(both)[1].problems
     ['adapter.b and adapter.step exclude each other and are both in use']
 
+## An adapter between two ends
+
+Two ends that do not meet are joined by an adapter generated between them. Each
+end's interface is read, and the adapter's parameters are derived from them by
+the nominal rule: a spigot end straddles the bore it meets, a socket end takes
+the outside it meets, and no clearance is added. The hose and the 32 port make
+the plain 40 to 32, the wider end on the bed:
+
+    >>> from apothecary.adapters import between, end
+    >>> made = between(end(port, "hose_40"), end(port, "port_32"))
+    >>> for line in made.lines():
+    ...     print(line)
+    hose_adapter between dust_port@hose_40.end and dust_port@port_32.end
+      a ↔ dust_port@hose_40.end: seats, 40 in (it goes 40.0 in and stops: its shoulder reaches the mouth)
+      b ↔ dust_port@port_32.end: seats, 12.5 in (it goes 12.5 in and stops: its diameter reaches the bore's 32)
+      stub numbers: dust_port@hose_40.end, dust_port@port_32.end
+    >>> made.params == {**made.params, **adapter.preset("plain_40_32")}
+    True
+
+A port measured with calipers goes over its preset, and the adapter follows it:
+
+    >>> measured = between(end(port, "hose_40"), end(port, "port_32", None, {"diameter": 31.6, "measured": True}))
+    >>> measured.params["b_d"], measured.stubs
+    (31.6, ['dust_port@hose_40.end'])
+
+A tool's outlet stub, a spigot, is met by a socket end whose bore is its outside:
+
+    >>> stub = between(end(port, "hose_40"), end(port, "outlet_35"))
+    >>> stub.params["b_socket"], stub.params["b_d"], [f.verdict for f in stub.fits]
+    (True, 35.0, ['seats', 'seats'])
+
+At the command line, `apothecary parts adapter` names each end as a part at a
+preset and gives the parameters to render it:
+
+    >>> out = CliRunner().invoke(cli, ["parts", "adapter", "dust_port@hose_40", "dust_port@port_25"]).output
+    >>> print(out.splitlines()[0])
+    hose_adapter between dust_port@hose_40.end and dust_port@port_25.end
+    >>> print(out.splitlines()[4])
+      its parameters: -p a_socket=false -p a_d=40 -p a_length=40 -p a_taper=2 -p step=false -p b_socket=false -p b_d=25 -p b_length=25 -p taper=1.2 -p wall=2 -p transition_length=8
+
+What cannot be joined is refused, saying why: two ends that meet already, an end
+that leaves no bore inside the wall, an adapter that would not print without
+support.
+
+    >>> from apothecary.adapters import Refused
+    >>> try:
+    ...     between(end(port, "outlet_35"), end(port, "port_32", None, {"diameter": 35.0}))
+    ... except Refused as why:
+    ...     print(why)
+    dust_port@outlet_35.end and dust_port@port_32.end (diameter=35) meet without an adapter: it goes 30.0 in and stops: its shoulder reaches the mouth
+    >>> try:
+    ...     between(made.a, made.b, {**made.params, "transition_length": 2.0})
+    ... except Refused as why:
+    ...     print(why)
+    no adapter between dust_port@hose_40.end and dust_port@port_32.end: it would not print: transition: its bore closes in past 45 degrees
+
+The three stand where they meet, each at its own parameters:
+
+    >>> placed, report = made.placed()
+    >>> [(c.name, c.position.z, c.turn and c.turn.x) for c in placed.children]
+    [('end_a', 0.0, None), ('adapter', 60.0, None), ('end_b', 155.5, 180.0)]
+
+The fit is as good as the numbers: no clearance is added, so the first print says
+whether this printer draws the bore and the outside to size, and how the fit
+feels. [docs/connections.md](../docs/connections.md#the-adapter-between-two-ends)
+says what is checked and what only a print shows.
+
 ## Held to the render
 
 The interfaces are declared numbers; `apothecary parts verify hose_adapter` reads
@@ -154,5 +221,7 @@ OpenSCAD, so it is not run on this page; `tests/test_dust_parts.py` runs it with
 | A port at a preset | `apothecary parts interfaces dust_port@hose_40` |
 | How two fit | `apothecary parts fit hose_adapter.step dust_port@port_32.end` |
 | The plain 40 to 32, no step | `apothecary parts interfaces hose_adapter -p step=false -p b_d=32` |
+| The adapter between two ends | `apothecary parts adapter dust_port@hose_40 dust_port@port_32` |
+| A measured end over its preset | `apothecary parts adapter dust_port@hose_40 dust_port@port_32 -b diameter=31.6 -b measured=true` |
 | Its interfaces on its render | `apothecary parts verify hose_adapter` |
 | What is still a stub | `apothecary problems` |

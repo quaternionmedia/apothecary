@@ -171,6 +171,70 @@ Two children a connection joins are not checked for overlap with each other in
 where it is, its end up; the adapter stands on it, pushed all the way in; the
 port is turned over and stands on the adapter's step as far as it goes.
 
+## The adapter between two ends
+
+Two round ends that do not meet are joined by an adapter generated between them
+(`apothecary/adapters.py`). An **end** is a round interface of a part at its
+parameters: `dust_port@hose_40.end` is the part, the preset its parameters start
+from, and the interface, which may be left out where the part has one round
+interface. What a person measured goes over the preset: a caliper's reading of
+the real end, and `measured` ticked.
+
+`between(x, y)` reads each end's interface and derives the parameters of the one
+adapter part, `hose_adapter`, whose parameters are its two ends:
+
+| An end that is | is met by |
+|---|---|
+| a socket that opens when pushed: a hose | a spigot end of a hose's taper and length (`HOSE`, 2.0 across over 40), with the collar a hose stops against where it is end `a` |
+| a rigid socket: a port | a spigot end of a fitting's (`FITTING`, 1.2 across over 25), never longer than twice the depth the bore holds over, so it touches the bore within it |
+| a spigot: a tool's outlet stub | a socket end whose bore is that spigot's diameter at its middle, as deep as the spigot is long, a lip of the wall under it to stop it |
+
+The end whose outside is the wider stands on the bed as end `a`, so every
+outside narrows going up, and the transition between the ends is as long as its
+bore needs to close in at `OVERHANG` (45 degrees), and no shorter than the
+adapter's own 8. Nothing is stepped: a step is a hand-made adapter's, for one
+that goes into either of two fittings.
+
+**The nominal rule** (`hose_adapter.NOMINAL`): a spigot end straddles the bore it
+meets by half its taper either side, so it touches a rigid bore halfway in; a
+socket end's bore is the outside it takes, at that spigot's middle. **No
+clearance is added.** Nothing here knows how true a printer draws a bore and an
+outside, or how a fit feels: those are the first print's to say.
+
+It is refused, with the reason, when:
+
+| Refused | Because |
+|---|---|
+| an end is a bolt hole or a slot | an adapter is generated between round ends |
+| a part with several round interfaces is named alone | which one is meant is a person's to say: `hose_adapter.b` |
+| the two ends meet already | `fit` says the one seats in the other: no adapter is needed |
+| an end would leave no bore | a spigot into a bore under twice the wall and its taper has no inside |
+| it would not print without support | `Profile.problems`: a wall under 2.0, a bore closing in or an outside leaning out past 45 degrees, a ledge facing down |
+| the adapter derived does not seat on both ends | the round trip: an adapter is never answered that does not fit the ends it was made from |
+
+Given the adapter's own parameters instead, nothing is derived: those are
+checked against the two ends, so an adapter adjusted -- a longer end, a bore
+opened by what the first print showed -- is checked again, and says which end no
+longer seats.
+
+`Adapter.placed()` stands the two ends and the adapter where their interfaces
+meet (`connections.place`), each node at its part's parameters: the end `a` meets
+stays where it is, the adapter is pushed on, and the other end is turned over onto
+it.
+
+### What is checked, and what only a print shows
+
+| Checked here | Only the real things show |
+|---|---|
+| each end seats by the rule for a spigot and a socket | how tight it feels, and whether a 1.2 taper holds without a clamp |
+| the profile prints without support at a 2.0 wall | whether the printer draws a bore and an outside to size: that is the printer's, measured and fed back to its slices ([slicer.md](slicer.md#a-printers-correction-measured)) |
+| the render is the interfaces declared, to 0.05 (`apothecary parts verify`) | a hose's real bore and give, and a port's real bore: measured with calipers, at the mouth and 20 mm in |
+
+So a person measures each end before generating, ticks `measured`, prints the
+adapter, and pushes it in. Too tight or too loose, they open or close that end's
+`a_d` or `b_d` by what they felt and check it again: with a 1.2 taper over 25,
+each 0.1 of diameter moves the seat about 2 mm.
+
 ## Asking
 
 | | Command line | HTTP |
@@ -178,6 +242,7 @@ port is turned over and stands on the adapter's step as far as it goes.
 | a part's interfaces | `apothecary parts interfaces NAME[@PRESET]` (`--json-out`, `-p`) | `GET /parts/{name}/interfaces?preset=` |
 | how two fit | `apothecary parts fit PART[@PRESET][.INTERFACE] PART[@PRESET][.INTERFACE]` | `GET /parts/{name}/interfaces/{interface}/fit?to=part[@preset].interface&preset=` |
 | on the render | `apothecary parts verify NAME` | |
+| the adapter between two ends | `apothecary parts adapter END END` (`-a`, `-b` a number over an end's preset; `-p` the adapter's own; `--json-out`) | `POST /parts/hose_adapter/between` with `{a, b, params?}`, each end `{part, preset?, interface?, params?}` |
 
 `parts fit` with a part named alone tries each of its interfaces against each of
 the other's, those that seat first, and exits 1 when nothing seats. `PART@PRESET`

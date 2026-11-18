@@ -169,7 +169,7 @@ nearest.
 |---|---|
 | `part.preset(name)` | its parameters, as the model coerces them; `KeyError` naming the presets |
 | `apothecary parts info NAME` | lists them |
-| `PART@PRESET` | stands a part at one, for `apothecary parts interfaces` and `fit` |
+| `PART@PRESET` | stands a part at one, for `apothecary parts interfaces`, `fit` and `adapter` |
 | `GET /parts/{name}/params` | carries them as `presets`, beside the fields |
 
 `tests/test_parameter_coverage.py` counts a parameter of a part built by Python
