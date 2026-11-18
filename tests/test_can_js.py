@@ -50,6 +50,17 @@ setReason(up, "choose a sketch first", "Build it");
 out.reason = seen(up);
 setReason(up, null, "Build it");
 out.reason_gone = seen(up);
+// The ring's address written first, onto a button with no title of its own and onto one
+// with: the address is the page's and never becomes the button's own tip.
+const bare = el("control", "⌗77"), worded = el("control", "Arm control · ⌗77");
+bare.dataset.address = "77"; worded.dataset.address = "77";
+const pad = { querySelectorAll: () => [bare, worded] };
+applyCan(pad, { control: { ok: true } });
+out.bare_ok = seen(bare); out.worded_ok = seen(worded);
+applyCan(pad, { control: refused });
+out.bare_refused = seen(bare); out.worded_refused = seen(worded);
+applyCan(pad, { control: { ok: true } });
+out.bare_again = seen(bare);
 const asked = [];
 const call = async (path) => { asked.push(path); return { can: { flash: { ok: false, kind: "kind", why: "holds a router's controller" } } }; };
 out.first = await askFlash(call, "/dev/x");
@@ -102,6 +113,12 @@ def test_a_refused_button_is_greyed_with_the_reason_and_its_own_tip_comes_back()
         "aria": None,
         "title": "Build it \u00b7 \u2317932",
     }
+    # An address the ring wrote before the answer came is said once, never "\u231777 \u00b7 \u231777".
+    assert out["bare_ok"]["title"] == "\u231777"
+    assert out["worded_ok"]["title"] == "Arm control \u00b7 \u231777"
+    assert out["bare_refused"]["title"] == f"Disabled: {why}. \u00b7 \u231777"
+    assert out["worded_refused"]["title"] == f"Disabled: {why}. Arm control \u00b7 \u231777"
+    assert out["bare_again"]["title"] == "\u231777"
     # `can.flash` of a port is asked once, kept, and asked again after it is forgotten.
     assert out["first"] is True and out["again"] is False
     assert out["verdict"]["kind"] == "kind" and out["forgotten"] is None

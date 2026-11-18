@@ -28,14 +28,16 @@
  * same digits onto the buttons it already has, so the numbering is visible
  * where the control is.
  *
- * Plain ES module, no build step; its one import is keys.js, how a key is named
- * and when a shortcut may act. The pure parts (angle to
+ * Plain ES module, no build step; it imports keys.js, how a key is named and when a
+ * shortcut may act, and can.js, how an address is told from a button's own tip. The
+ * pure parts (angle to
  * slot, nearest cell in a direction, addresses) are exported so a test can
  * compare them with the Python resolver's; the same four are on
  * window.apothecaryRing.
  */
 
 import { comboOf, matches, mayAct, typing } from "./keys.js";
+import { ADDRESS_AT_END } from "./can.js";
 
 export const PLACEMENT = [8, 6, 2, 4, 9, 3, 1, 7];
 export const COMPASS = [8, 9, 6, 3, 2, 1, 4, 7]; // compass slot (up, clockwise) -> cell
@@ -152,8 +154,11 @@ export function addressOf(ring, target) {
 }
 
 /* Write the address onto the page's own controls, where they already are.
- * `pairs` is [[element, action], ...]; an action not on the ring leaves its
- * element as it was. Ids and classes are never touched.
+ * `pairs` is [[element, action], ...]; an action not on the ring takes away an
+ * address written before, and leaves the element's own title. Ids and classes are
+ * never touched. The address goes after the title (` · ⌗932`), or is the title where
+ * there is none (`⌗77`); either is the page's, and can.js never keeps it as the
+ * button's own tip (ADDRESS_AT_END).
  */
 export function annotate(ring, pairs) {
     const map = addresses(ring);
@@ -161,13 +166,15 @@ export function annotate(ring, pairs) {
     for (const [el, action] of pairs) {
         if (!el || !action) continue;
         const digits = map[action];
+        const title = (el.title || "").replace(ADDRESS_AT_END, "");
         if (!digits) {
             delete el.dataset.address;
-            if (el.title) el.title = el.title.replace(/ · ⌗\d+$/, "");
+            if (el.title !== title) {
+                if (title) el.title = title; else el.removeAttribute("title");
+            }
             continue;
         }
         el.dataset.address = digits;
-        const title = (el.title || "").replace(/ · ⌗\d+$/, "");
         el.title = title ? `${title} · ⌗${digits}` : `⌗${digits}`;
         count += 1;
     }

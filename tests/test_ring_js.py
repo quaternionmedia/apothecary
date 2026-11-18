@@ -83,3 +83,43 @@ def test_a_greyed_wedge_wears_its_reason_and_says_it_under_the_ring_while_lit():
     # The reason is broken at spaces into lines short enough to read under the ring.
     assert all(len(line) <= 24 for line in out["lines"]), out["lines"]
     assert " ".join(out["lines"]) == f"Disabled: {WHY}"
+
+
+ANNOTATE = r"""
+import { annotate, withCells } from %(url)s;
+const el = (title) => {
+  const attrs = new Map(title === undefined ? [] : [["title", title]]);
+  return {
+    dataset: {},
+    removeAttribute: (k) => attrs.delete(k),
+    set title(v) { attrs.set("title", v); }, get title() { return attrs.get("title") || ""; },
+    attrs,
+  };
+};
+const ring = { options: withCells([{ id: "arm", label: "Arm", action: "control:arm" }]) };
+const bare = el(), worded = el("Arm control"), gone = el(), wordedGone = el("Arm control");
+annotate(ring, [[bare, "control:arm"], [worded, "control:arm"], [gone, "control:arm"], [wordedGone, "control:arm"]]);
+const first = { bare: bare.attrs.get("title"), worded: worded.attrs.get("title") };
+annotate(ring, [[bare, "control:arm"], [worded, "control:arm"]]);
+const again = { bare: bare.attrs.get("title"), worded: worded.attrs.get("title") };
+annotate(ring, [[gone, "control:nothing"], [wordedGone, "control:nothing"]]);
+console.log(JSON.stringify({ first, again, gone: gone.attrs.has("title") ? gone.attrs.get("title") : null,
+  goneAddress: gone.dataset.address || null, wordedGone: wordedGone.attrs.get("title") }));
+"""
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_an_address_is_written_once_and_taken_away_whole():
+    """annotate writes a cell's address after a control's own title, or as its title where
+    it has none, the same however often it runs; a control whose act leaves the ring loses
+    the address, a bare one included, and keeps its own words."""
+    script = ANNOTATE % {"url": json.dumps(RING_JS.as_uri())}
+    run = subprocess.run(
+        ["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60
+    )
+    assert run.returncode == 0, run.stderr
+    out = json.loads(run.stdout)
+    assert out["first"] == {"bare": "⌗8", "worded": "Arm control · ⌗8"}
+    assert out["again"] == out["first"]
+    assert out["gone"] is None and out["goneAddress"] is None
+    assert out["wordedGone"] == "Arm control"

@@ -34,8 +34,13 @@ export function refreshDisabled(btn) {
     else btn.removeAttribute("aria-disabled");
 }
 
+// A title with the ring's address the page wrote after it (` · ⌗932`), or the address
+// alone where the button had no title of its own (`⌗77`): the address is the page's,
+// kept in `data-address`, and never part of the button's own tip.
+export const ADDRESS_AT_END = /(?:^| · )⌗\d+$/;
+
 function tipOf(btn) {
-    if (btn.dataset.tip === undefined) btn.dataset.tip = btn.getAttribute("title") || "";
+    if (btn.dataset.tip === undefined) btn.dataset.tip = (btn.getAttribute("title") || "").replace(ADDRESS_AT_END, "");
     return btn.dataset.tip;
 }
 
