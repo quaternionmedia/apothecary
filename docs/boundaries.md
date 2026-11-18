@@ -156,8 +156,11 @@ the slicer prints as it lies and a download is. A part that stands otherwise in 
 declares its rest pose, `rest`, the `-D` definitions that make its SCAD draw it so
 ([How it rests](parts-authoring.md#how-it-rests)), and a part that says
 `display_rotation` is refused when it loads. The page draws a part as it rests,
-asking for `?pose=rest`, and a site draws it in that frame, z up, since a node
-carries no turn of its own. The bounds a part declares, `measured`, the readiness
+asking for `?pose=rest`, and a site draws it in that frame, z up. A node's
+`Assembly.turn` (`apothecary/hierarchy.py`) is its place in a layout, as OpenSCAD's
+`rotate` takes it, about the node's own origin: the universe stands each leaf up along
+its shell's ray with it. It is not a part's pose: the part's STL, its `rest` and the
+bounds below are the same whatever turn the node that holds it carries. The bounds a part declares, `measured`, the readiness
 check and the slicer stay in the print pose, the SCAD's own frame. The z-up turn
 into three.js's frame is written in two places: `sceneAt` in
 `apothecary/static/frames.js`, which the page, `apothecary/static/machine_marks.js`,
