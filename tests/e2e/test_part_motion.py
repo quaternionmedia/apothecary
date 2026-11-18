@@ -214,3 +214,32 @@ def test_a_part_without_a_motion_says_so_and_has_no_motion_on_its_ring(page: Pag
     on_row(page, "calibration_cube", "Part", "View")
     shown = labels(page)
     assert "Motion" not in shown and "Fit" in shown
+
+
+@pytest.mark.e2e
+def test_a_motion_answered_after_the_selection_moved_on_is_dropped(page: Page, url: str):
+    """The selection moves while the Motion window's table is on its way: that answer is
+    dropped, nothing of it drawn and no page error, and the window is on the piece
+    selected now."""
+    errors: list[str] = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    _open(page, url, "calibration_cube")
+    windows.from_the_windows_menu(page, "motion")
+    panel = page.locator(PANEL)
+    expect(panel).to_contain_text("calibration_cube declares no motion", timeout=10000)
+    held = []
+    page.route("**/parts/rolling_rotor/motion*", lambda route: held.append(route))
+    page.locator("#contents-list .contents-item[data-path='rolling_rotor']").click()
+    for _ in range(100):
+        if held:
+            break
+        page.wait_for_timeout(100)
+    assert held, "the Motion window never asked for rolling_rotor's motion"
+    page.locator("#contents-list .contents-item[data-path='calibration_cube']").click()
+    page.wait_for_function("() => window.fractalViewer.selectedName === 'calibration_cube'")
+    held[0].continue_()
+    expect(panel).to_contain_text("calibration_cube declares no motion", timeout=20000)
+    page.wait_for_timeout(1000)
+    assert errors == []
+    state = page.evaluate("() => window.apothecaryMotion.state()")
+    assert (state["ref"], state["drawn"]) == ("calibration_cube", False)

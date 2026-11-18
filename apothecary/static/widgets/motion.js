@@ -151,14 +151,20 @@ export function mountMotion(root, world) {
         return geometry;
     }
 
-    async function build() {
-        const node = subject.node;
+    // The pieces of `asked`'s part drawn and hung together, or null where the window moved
+    // off `asked` while they were drawn: nothing of them is swapped into the world then.
+    async function build(asked) {
+        const node = asked.node;
         const values = (piece) => ({ ...table.params, [table.piece_param]: piece });
         const drawn = table.pieces.filter((p) => p.drawn);
         const [still, ...moving] = await Promise.all([
-            world.loadPiece(node, subject.ref, values(table.still.piece), table.still.piece),
-            ...drawn.map((p) => world.loadPiece(node, subject.ref, values(p.piece), p.piece)),
+            world.loadPiece(node, asked.ref, values(table.still.piece), table.still.piece),
+            ...drawn.map((p) => world.loadPiece(node, asked.ref, values(p.piece), p.piece)),
         ]);
+        if (subject !== asked) {
+            for (const { mesh } of [still, ...moving]) mesh?.traverse((o) => { o.geometry?.dispose(); o.material?.dispose?.(); });
+            return null;
+        }
         if (!still.measured || moving.some((m) => !m.measured)) throw new Error("a piece came back without its measured box");
         const stillCentre = middle(still.measured);
         const group = still.mesh;
@@ -173,7 +179,7 @@ export function mountMotion(root, world) {
             solid.color.copy(ghost.color);
             if (solid.emissive && ghost.emissive) solid.emissive.copy(ghost.emissive);
         };
-        const out = { key: subject.key, group, stillCentre, moving: {}, bent: [], marks: new THREE.Group(), bought: [] };
+        const out = { key: asked.key, group, stillCentre, moving: {}, bent: [], marks: new THREE.Group(), bought: [] };
         const boughtMaterial = new THREE.MeshPhongMaterial({ color: BOUGHT_COLOUR });
         const seat = (holder, insert, centre) => {
             const mesh = cylinder(insert, centre, boughtMaterial);
@@ -222,7 +228,7 @@ export function mountMotion(root, world) {
                 for (let h = from; h < hits.length; h++) hits[h].object = group;
             }
         };
-        group.userData.motion = { ref: subject.ref, param: table.param };
+        group.userData.motion = { ref: asked.ref, param: table.param };
         world.swap(node, group);
         return out;
     }
@@ -293,35 +299,47 @@ export function mountMotion(root, world) {
     // ---- what is moved, and when ----------------------------------------------------
 
     // The selected piece's part, when it has a motion: its table asked for, its pieces
-    // drawn once. Again only when the subject, its values or its drawing changed.
+    // drawn once. Again only when the subject, its values or its drawing changed. What
+    // comes back for a subject the window has since moved off (the selection changed while
+    // it was asked for) is dropped: the window is already on the piece selected now.
     async function prepare() {
         const chosen = world.selected();
         const same = chosen && subject && chosen.key === subject.key && JSON.stringify(chosen.params) === JSON.stringify(subject.params);
         if (!chosen) { subject = null; table = null; built = null; note = ""; paint(); return { refused: "Nothing is selected: select a part whose pieces move" }; }
         if (!same) { stop(); subject = chosen; table = null; built = null; state = { value: 0, cycle: 0, way: 1 }; note = ""; paint(); }
+        const asked = subject;
+        const dropped = () => ({ refused: `${asked.ref}: the selection moved on before its motion was drawn`, dropped: true });
         if (!table) {
-            const q = encodeURIComponent(JSON.stringify(subject.params || {}));
-            const r = await fetch(`${world.base}/parts/${encodeURIComponent(subject.ref)}/motion?params=${q}`);
+            const q = encodeURIComponent(JSON.stringify(asked.params || {}));
+            const r = await fetch(`${world.base}/parts/${encodeURIComponent(asked.ref)}/motion?params=${q}`);
+            if (subject !== asked) return dropped();
             if (!r.ok) {
                 const detail = await r.json().then((b) => b.detail).catch(() => r.statusText);
-                note = r.status === 404 ? `${subject.ref} declares no motion: its pieces do not move against one another.` : `${subject.ref}: ${detail}`;
+                if (subject !== asked) return dropped();
+                note = r.status === 404 ? `${asked.ref} declares no motion: its pieces do not move against one another.` : `${asked.ref}: ${detail}`;
                 paint();
                 return { refused: note };
             }
-            table = await r.json();
+            const answer = await r.json();
+            if (subject !== asked) return dropped();
+            table = answer;
             state = { value: table.range[0], cycle: 0, way: 1 };
             paint();
         }
-        if (!built || world.meshOf(subject.key) !== built.group) {
-            note = `${subject.ref}: drawing its pieces once…`;
+        if (!built || world.meshOf(asked.key) !== built.group) {
+            note = `${asked.ref}: drawing its pieces once…`;
+            let made;
             try {
-                built = await build();
+                made = await build(asked);
             } catch (error) {
+                if (subject !== asked) return dropped();
                 built = null;
-                note = `${subject.ref}'s pieces could not be drawn: ${error.message}`;
+                note = `${asked.ref}'s pieces could not be drawn: ${error.message}`;
                 paint();
                 return { refused: note };
             }
+            if (!made || subject !== asked) return dropped();
+            built = made;
             note = "";
             paint();
             pose();
