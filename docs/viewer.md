@@ -161,9 +161,10 @@ part and from sites that hold one part in another, and a part's own `parts` list
 in `part.json` wins ([parts-authoring.md](parts-authoring.md#what-a-part-is-built-from)).
 The shells are dense, so none is empty, and each stands clear of the one inside it.
 A leaf carries its part's category, and on a shell the parts of one category sit
-together, a cluster; a part stands as nearly under the part built from it as its
-shell allows, and a part several are built from stands under the first of them by
-name, so its cluster gathers under theirs (`apothecary/orbitals.py`).
+together, a cluster in one piece of the shell; a part stands as nearly under the
+part built from it as its shell allows, and a part several are built from stands
+under the first of them by name, so its cluster gathers under theirs
+(`apothecary/orbitals.py`).
 A leaf faces outward, its up along the ray from the middle; the tree gives each
 node its `shell`, its `depth`, its `built_from` (the parts it is built from, by
 name) and its `turn` (`[rx, ry, rz]` degrees, OpenSCAD's rotate order, null for a

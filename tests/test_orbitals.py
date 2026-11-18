@@ -11,8 +11,8 @@ from apothecary.orbitals import (
     composition_depths,
     dense_shells,
     fibonacci_sphere,
+    lattice_neighbours,
     lay_out,
-    least_cost_assignment,
     outward_turn,
     shell_radii,
     turn_matrix,
@@ -137,19 +137,25 @@ def _together(placed, category_of, kind) -> float:
     return (sum(within) / len(within)) / (sum(across) / len(across))
 
 
-def _pieces_of(placed, category_of, kind, near=6) -> int:
-    """How many pieces a category's points make on its shell, each point joined to
-    those of its category among its ``near`` nearest points of the shell: six, the
-    neighbours a point of the lattice has about it."""
+def _nearest(placed, near=6) -> dict:
+    """Each name's ``near`` nearest on its shell: six, the neighbours a point of the
+    lattice has about it."""
     names = list(placed)
-    nearest = {
+    return {
         n: sorted(
             (m for m in names if m != n), key=lambda m: _angle(placed[n].point, placed[m].point)
         )[:near]
         for n in names
     }
+
+
+def _pieces_of(placed, category_of, kind, near=6, nearest=None) -> int:
+    """How many pieces a category's points make on its shell, each point joined to
+    those of its category among its ``near`` nearest points of the shell (``nearest``,
+    where they are already found)."""
+    nearest = nearest or _nearest(placed, near)
     seen, count = set(), 0
-    for start in (n for n in names if category_of[n] == kind):
+    for start in (n for n in placed if category_of[n] == kind):
         if start in seen:
             continue
         count += 1
@@ -185,19 +191,117 @@ def test_a_category_given_no_cluster_is_scattered_which_the_rule_above_would_cat
     assert max(_together(placed, category_of, kind) for kind in set(category_of.values())) > 0.9
 
 
-@pytest.mark.parametrize("n, seed", [(1, 0), (3, 1), (5, 2), (6, 3), (6, 4)])
-def test_the_assignment_is_the_least_cost_of_every_permutation(n, seed):
+def test_the_lattice_is_one_piece_on_its_graph_of_neighbours():
+    """Each point joined to those of its six nearest that have it among theirs: the
+    joins go both ways, and every lattice is one piece on them."""
+    for n in [*range(1, 65), 100, 150]:
+        joined = lattice_neighbours(fibonacci_sphere(n, 1.0))
+        assert all(i in joined[j] for i in range(n) for j in joined[i]), n
+        seen, stack = {0}, [0]
+        while stack:
+            for j in joined[stack.pop()]:
+                if j not in seen:
+                    seen.add(j)
+                    stack.append(j)
+        assert len(seen) == n, n
+
+
+def test_a_region_cuts_off_no_free_points_it_has_no_room_to_take():
+    """On a path 0-1-2-3-4 with a branch 2-5-6, three points grown from 2, where it
+    branches, would leave 0-1 and 5-6 apart: refused, where grown regardless they are
+    apart. Five from 2 take what 2 cuts off with it, and leave the rest one piece."""
+    from apothecary.orbitals import _grow, _pieces
+
+    joined = [[1], [0, 2], [1, 3, 5], [2, 4], [3], [2, 6], [5]]
+    free = set(range(7))
+
+    def rank(i):
+        return (i,)
+
+    assert _grow(2, 3, free, joined, rank, keep_free_whole=True) is None
+    regardless = _grow(2, 3, free, joined, rank, keep_free_whole=False)
+    assert len(_pieces(free - set(regardless), joined)) == 2
+    region = _grow(2, 5, free, joined, rank, keep_free_whole=True)
+    assert _pieces(free - set(region), joined) == [{0, 1}]
+    assert _grow(4, 2, free, joined, rank, keep_free_whole=True) == [4, 3]
+
+
+def _every_category_one_piece(shell_of, sizes, category_of, parent_of):
+    placed = lay_out(shell_of, sizes, category_of=category_of, parent_of=parent_of)
+    split = []
+    for shell in set(shell_of.values()):
+        on = {name: placed[name] for name in placed if shell_of[name] == shell}
+        of = {name: category_of.get(name) for name in on}
+        nearest = _nearest(on)
+        split += [
+            (shell, kind)
+            for kind in sorted(set(of.values()), key=str)
+            if _pieces_of(on, of, kind, nearest=nearest) != 1
+        ]
+    return split
+
+
+# A shell inside a shell of seven: a category of six, two of whose members are built
+# into pieces outside in different directions, and three single pieces built into
+# others; then a category of four, one of three, five of two and eight of one that
+# nothing pulls -- the shape of the universe's innermost shell where a category of
+# two was laid on either side of the six.
+PULLED_TWO_WAYS = {
+    "a": 6,
+    "b": 4,
+    "c": 3,
+    **dict.fromkeys("defgh", 2),
+    **dict.fromkeys("pqrstuvw", 1),
+}
+
+
+def test_a_category_pulled_two_ways_leaves_every_other_one_piece():
+    inner = {f"{kind}{i}": kind for kind, n in PULLED_TWO_WAYS.items() for i in range(n)}
+    outer = {f"out{i}": "xxxyyzz"[i] for i in range(7)}
+    shell_of = {**dict.fromkeys(inner, 0), **dict.fromkeys(outer, 1)}
+    sizes = dict.fromkeys(shell_of, 20.0)
+    split = {}
+    for one, other in itertools.permutations(range(7), 2):
+        for singles in ((s, (s + 2) % 7, (s + 4) % 7) for s in range(7)):
+            parent_of = {
+                "a0": f"out{one}",
+                "a1": f"out{other}",
+                **{f"{kind}0": f"out{at}" for kind, at in zip("pqr", singles, strict=True)},
+            }
+            found = _every_category_one_piece(shell_of, sizes, {**inner, **outer}, parent_of)
+            if found:
+                split[(one, other, singles)] = found
+    assert split == {}
+
+
+def _random_shells(rng):
+    """A shell of 4 to 64 pieces in categories of random sizes, under a shell of 1 to 12
+    whose pieces some of them are built into."""
+    inner, left, kind = {}, rng.randint(4, 64), 0
+    while left:
+        size = min(left, max(1, int(rng.expovariate(1 / rng.choice([1.5, 3, 6, 10])))))
+        named = f"k{kind:02d}" if kind or rng.random() < 0.8 else None
+        for _ in range(size):
+            inner[f"in{len(inner):03d}"] = named
+        left, kind = left - size, kind + 1
+    outer = {f"out{i:02d}": f"o{rng.randint(0, 2)}" for i in range(rng.randint(1, 12))}
+    share = rng.choice([0.05, 0.15, 0.3])
+    parent_of = {name: rng.choice(sorted(outer)) for name in inner if rng.random() < share}
+    shell_of = {**dict.fromkeys(inner, 0), **dict.fromkeys(outer, 1)}
+    return shell_of, dict.fromkeys(shell_of, 20.0), {**inner, **outer}, parent_of
+
+
+def test_every_category_is_one_piece_of_its_shell_whatever_pulls_it():
+    """Shells of random sizes, categories and pulls, the same each run: no category is
+    in two pieces of its shell."""
     import random
 
-    rng = random.Random(seed)
-    cost = [[rng.choice([0.0, 1.0, 2.5, rng.random() * 9]) for _ in range(n)] for _ in range(n)]
-    taken = least_cost_assignment(cost)
-    assert sorted(taken) == list(range(n))
-    best = min(
-        sum(cost[i][j] for i, j in enumerate(order)) for order in itertools.permutations(range(n))
-    )
-    assert sum(cost[i][j] for i, j in enumerate(taken)) == pytest.approx(best)
-    assert least_cost_assignment(cost) == taken
+    split = {}
+    for seed in range(120):
+        found = _every_category_one_piece(*_random_shells(random.Random(seed)))
+        if found:
+            split[seed] = found
+    assert split == {}
 
 
 def _two_shells(inner=20, outer=8):
