@@ -439,7 +439,7 @@ Keep a hand on each machine's own power switch: it is faster than the deck's sto
       *armed* with the minutes left, and the Machine's pad pops out red as ⚙ Control's
       does. A short press, **STEP** or a knob between the two holds breaks the pair.
       The second hold counts from when it is begun: held three seconds, it still arms.
-- [ ] Armed, **DISARM** is blue and says *every machine*. Press it: the strip says
+- [ ] Armed, **DISARM** is red and says *every machine*. Press it: the strip says
       *disarmed*, the key goes grey, the Machine's pad goes back, and a knob turned moves
       nothing. It stops nothing: press it while a jog of 50 mm is under way and the jog
       finishes.

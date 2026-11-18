@@ -676,7 +676,7 @@ def test_the_disarm_key_lets_go_of_every_machines_control_and_is_lit_while_any_i
     ended = _held(controller, 1, 100.0, 1.0)
     _held(controller, 1, ended + 1.0, 1.0)  # the router's, armed from the deck
     assert links.control.armed(ROUTER) and links.control.armed(PRINTER)
-    assert (one.keys[3]["colour"], one.keys[3]["small"]) == ("blue", "every machine")
+    assert (one.keys[3]["colour"], one.keys[3]["small"]) == ("red", "every machine")
     _press(one, 3)
     assert not links.control.armed(ROUTER) and not links.control.armed(PRINTER)
     assert (one.keys[3]["colour"], one.keys[3]["small"]) == ("grey", "nothing armed")

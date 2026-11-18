@@ -286,7 +286,7 @@ def test_the_knobs_jog_the_router_through_the_latch_and_the_stop_key_stops_it(
     _until(lambda: _control(url)["armed_s"] > 0, "two long presses armed the router")
     assert _drawn(url)["strip_drawn"]["text"].startswith("cnc_router · armed ")
     drawn = _drawn(url)["keys_drawn"]["3"]
-    assert (drawn["text"], drawn["colour"], drawn["small"]) == ("DISARM", "blue", "every machine")
+    assert (drawn["text"], drawn["colour"], drawn["small"]) == ("DISARM", "red", "every machine")
     _redrawn(deck, 3, disarm)
     expect(deck.locator(".deck-heard")).to_have_count(0, timeout=5000)  # lit a moment
     # No key drawn hovered or ringed with focus: whether it is depends on the moment.

@@ -84,9 +84,9 @@ from datetime import datetime, timezone
 from typing import Callable, Deque, Dict, List, Optional, Tuple
 
 from .. import jobs
+from . import can, devices, gcode, grbl
 from . import deck as decks
 from . import deck_screens as screens
-from . import can, devices, gcode, grbl
 from .toolchains import PortHeld, ToolchainError
 
 CONTROL_ENV = "APOTHECARY_DECK_CONTROL"
@@ -943,7 +943,7 @@ class DeckController:
             self._put(
                 KEY_DISARM,
                 "DISARM",
-                "blue" if any_armed else "grey",
+                "red" if any_armed else "grey",
                 "every machine" if any_armed else "nothing armed",
             )
             if self._stops_move():
