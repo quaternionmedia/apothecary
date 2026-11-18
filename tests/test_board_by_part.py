@@ -21,6 +21,15 @@ def test_the_garage_s_boards_are_boards_by_their_parts():
     assert _node(tree, "cnc_router")["board"] is False
 
 
+def test_a_thing_bought_whole_is_told_by_its_part():
+    """The Stream Deck + is bought whole and drawn as it is (its part's ``bought`` tag):
+    never made here, and no board either."""
+    tree = _assembly_tree(create_example_site())
+    assert _node(tree, "stream_deck")["bought"] is True
+    assert _node(tree, "stream_deck")["board"] is False
+    assert _node(tree, "footpedal")["bought"] is False
+
+
 def test_an_electrical_leaf_with_no_part_inside_a_machine_is_not_a_board():
     """A board a maker publishes no drawing of is a described part under parts/boards,
     tagged ``board``; a leaf's category and its place say nothing of it."""

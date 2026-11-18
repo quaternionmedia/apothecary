@@ -404,6 +404,7 @@ def load_part_wrapper(name: str):
 
 
 _BOARDS: Dict[str, bool] = {}
+_BOUGHT: Dict[str, bool] = {}
 
 
 def is_board(part_ref: Optional[str]) -> bool:
@@ -417,6 +418,19 @@ def is_board(part_ref: Optional[str]) -> bool:
         except HTTPException:
             _BOARDS[part_ref] = False
     return _BOARDS[part_ref]
+
+
+def is_bought(part_ref: Optional[str]) -> bool:
+    """Whether a part is a thing bought whole and drawn as it is -- tagged ``bought``,
+    the Stream Deck + -- never printed, so never made here. Asked once per part."""
+    if not part_ref:
+        return False
+    if part_ref not in _BOUGHT:
+        try:
+            _BOUGHT[part_ref] = "bought" in (load_part_wrapper(part_ref).tags or [])
+        except HTTPException:
+            _BOUGHT[part_ref] = False
+    return _BOUGHT[part_ref]
 
 
 def _available_part_names() -> List[str]:
@@ -1665,6 +1679,8 @@ def _assembly_tree(
         # A board (a printer's mainboard, a router's controller, a devkit): a node whose
         # part the boards library tags one, where a machine's Pin puts its port.
         "board": is_board(node.part_ref),
+        # A thing bought whole and drawn as it is (the Stream Deck +): never made here.
+        "bought": is_bought(node.part_ref),
         "category": category,
         "position": {"x": world_position.x, "y": world_position.y, "z": world_position.z},
         # How the node is turned about its own origin: [rx, ry, rz] degrees, OpenSCAD's

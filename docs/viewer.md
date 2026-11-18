@@ -58,7 +58,9 @@ Left to right, one row:
   wide a step's name shows on the step a person is on alone, the others' in their
   tooltips; up to 1100 px the journey's name and every step's go.
 - **⚒ Make**, after the banner and a journey's rail, wherever the piece selected,
-  or else the part stepped into, is a part or a piece made from a picture (on a
+  or else the part stepped into, is a part or a piece made from a picture -- not a
+  board, a machine, a camera, or a thing bought whole and drawn as it is, its part
+  tagged `bought` (the Stream Deck +, the webcam) -- (on a
   narrow header it gives way before the rail does): it names the part and
   the machine it makes it on -- the first of every site's machines that make it
   (`GET /sites/{name}/makers`): for a part that says how it is cut, a router

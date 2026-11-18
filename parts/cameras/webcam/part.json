@@ -3,6 +3,7 @@
   "description": "A bare webcam: a 90 x 30 x 30 mm body and its lens, looking straight down, the middle of the lens's front face at the origin. A camera added to a site is drawn as this, turned and tilted as it is aimed.",
   "category": "camera",
   "tags": [
+    "bought",
     "camera",
     "webcam"
   ],

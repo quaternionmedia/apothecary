@@ -50,7 +50,8 @@ def kind_of_part(part_ref: str) -> Optional[str]:
 
 def kinds_that_make(part_ref: str) -> Tuple[str, ...]:
     """The kinds of machine that make a registered part: a printer any part that is
-    neither a board (bought and pinned to, never printed) nor a machine, a router one
+    neither a board (bought and pinned to, never printed), nor a thing bought whole and
+    drawn as it is (tagged ``bought``: the Stream Deck +), nor a machine; a router one
     that says how it is cut (``BasePart.cuts``). None for a part that does not load;
     ``KeyError`` for no such part."""
     try:
@@ -58,7 +59,7 @@ def kinds_that_make(part_ref: str) -> Tuple[str, ...]:
     except PartLoadError:
         return ()
     kinds = []
-    if part.machine is None and "board" not in part.tags:
+    if part.machine is None and not {"board", "bought"} & set(part.tags):
         kinds.append("printer")
     if part.has_cuts:
         kinds.append("router")

@@ -147,6 +147,20 @@ def test_a_part_faces_outward_and_a_site_stands_upright(opened, base_url: str):
 
 
 @pytest.mark.e2e
+def test_the_webcam_part_is_drawn_from_its_stl(opened, base_url: str):
+    """The universe's webcam leaf is the part, not a camera of a site waiting to be
+    aimed: its STL is asked for and drawn, where it stood as its box for good."""
+    page, asked = opened
+    leaf = next(c for c in _tree(page, base_url)["children"] if c["part_ref"] == "webcam")
+    page.wait_for_function(
+        "(k) => { const m = window.fractalViewer.meshByName[k]; return !!m && !m.userData.isPlaceholder; }",
+        arg=leaf["name"],
+        timeout=30000,
+    )
+    assert any("/parts/webcam/stl" in u for u in asked)
+
+
+@pytest.mark.e2e
 def test_every_other_site_is_a_miniature_and_nothing_is_rendered_to_draw_one(opened, base_url: str):
     page, asked = opened
     tree = _tree(page, base_url)

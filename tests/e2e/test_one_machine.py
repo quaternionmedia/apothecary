@@ -427,6 +427,24 @@ def test_no_control_wears_its_address_twice_as_the_latch_goes_up_and_down(page: 
     assert seen == {"disarmed": [], "armed": [], "disarmed again": []}
 
 
+@pytest.mark.e2e
+def test_the_stream_deck_is_not_made_and_selected_keeps_its_one_section(page: Page, url: str):
+    """The Stream Deck + is bought whole: selected, the header's ⚒ Make does not offer it,
+    and Selected shows its Deck door and nothing else of a device, however many words
+    printer_1's board sends meanwhile."""
+    open_garage(page, url, settle=False)
+    expect(page.locator(".world-badge[data-path='printer_1']")).to_be_visible(timeout=15000)
+    _select(page, "footpedal")
+    expect(page.locator("#make-here")).to_be_visible(timeout=5000)
+    _select(page, "stream_deck")
+    sections = page.locator("#selected-body .device-section")
+    expect(sections.locator(".device-title")).to_have_text(["Deck"], timeout=5000)
+    page.wait_for_timeout(2 * POLL_MS + 500)  # the board's words, each redrawing a Device line
+    expect(sections.locator(".device-title")).to_have_text(["Deck"])
+    expect(page.locator("#selected-body .deck-open")).to_be_visible()
+    expect(page.locator("#make-here")).to_be_hidden()
+
+
 PORT_OPENERS = (
     "/firmware/devices/stream",
     "/firmware/devices/listen",

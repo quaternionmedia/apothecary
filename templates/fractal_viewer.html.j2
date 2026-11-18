@@ -4248,7 +4248,9 @@
             // pose comes with the pictures' answer (GET /sites/{s}/attached), so its
             // body stays the box of it until that answer is in.
 
-            isCameraNode(node) { return !!node && node.category === 'camera' && node.part_ref === 'webcam'; }
+            // A camera is a site's, added there and aimed: the universe's webcam leaf is the
+            // part itself, drawn from its STL as every part is.
+            isCameraNode(node) { return !!node && node.category === 'camera' && node.part_ref === 'webcam' && this.siteName !== UNIVERSE; }
 
             // A camera's rotation in three.js's frame: its right, back and the
             // picture's down -- the webcam's own across, lens-to-back and
@@ -5125,7 +5127,7 @@
             // as apothecary has drawn it and what it has heard (widgets/deck.js).
             appendDeckDoor() {
                 this.selectedBodyEl.insertAdjacentHTML('beforeend', `
-                    <div class="device-section"><div class="device-title">Deck</div>
+                    <div class="device-section deck-door"><div class="device-title">Deck</div>
                         <button type="button" class="deck-open" title="Open the Deck window: the Stream Deck + as drawn from here, and what it has heard">Open Deck</button></div>`);
                 this.selectedBodyEl.querySelector('.deck-open').addEventListener('click', () => {
                     this.panels.open('deck');
@@ -8665,12 +8667,13 @@
 
             // ---- Make: a piece made on a machine ----------------------------------------
             // A part or a piece made from a picture can be made; a machine, a board, a
-            // camera and a site's piece in the universe are not things made here.
+            // thing bought whole (the Stream Deck +, its part tagged `bought`), a camera
+            // and a site's piece in the universe are not things made here.
             makeable(path) {
                 const node = path ? this.nodeByPath(path) : null;
                 if (!node || node.site_ref || node.build_volume || this.isCameraNode(node)) return false;
                 // A piece with a sketch of its own (the footpedal) is made; the board in it is bought.
-                if (node.board || MACHINE_STATUSES.includes(node.status)) return false;
+                if (node.board || node.bought || MACHINE_STATUSES.includes(node.status)) return false;
                 return !!(node.part_ref || this.pictureMarks.madeRecord(path));
             }
             // The machines that make a piece, as the server lists them from this site
@@ -10012,7 +10015,9 @@
                     else if (old) old.remove();
                     else if (fresh) li.appendChild(fresh);
                 }
-                const section = this.selectedBodyEl.querySelector('.device-section');
+                // The Device section alone: the Stream Deck +'s door to its Deck wears the
+                // section's look and is no board's line, so a board's word never replaces it.
+                const section = this.selectedBodyEl.querySelector('.device-section:not(.deck-door)');
                 if (section && this.selectedName) {
                     // Leave it alone while the user is in it (typing an identity,
                     // choosing a port): the next word will catch up.
@@ -10024,7 +10029,7 @@
                     const fresh = this.deviceSectionHtml(this.selectedName);
                     if (fresh === section.outerHTML) return;
                     section.outerHTML = fresh;
-                    const pick = this.selectedBodyEl.querySelector('.device-section .dev-pick');
+                    const pick = this.selectedBodyEl.querySelector('.device-section:not(.deck-door) .dev-pick');
                     if (pick && picked && [...pick.options].some((o) => o.value === picked)) pick.value = picked;
                     this.bindDeviceSection(this.selectedName);
                 }

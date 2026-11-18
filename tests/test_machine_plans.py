@@ -56,6 +56,8 @@ def test_make_lists_every_site_s_machines_that_make_a_piece():
         ("apothecary", "ender3", False),
     ]
     assert makers("garage", "esp32_blink") == [] and makers("garage", "cnc_router") == []
+    # The Stream Deck + is bought whole: nothing makes it.
+    assert makers("garage", "stream_deck") == [] and makers("apothecary", "stream_deck_plus") == []
     assert client.get("/sites/garage/makers", params={"part": "nothing_such"}).status_code == 404
 
 
