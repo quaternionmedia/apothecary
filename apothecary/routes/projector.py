@@ -386,6 +386,95 @@ def _cuts(site, plan, origin: Optional[Dict[str, float]]) -> Optional[Dict[str, 
     return {"part": name, "shapes": shapes, "why": None}
 
 
+def _hull(points: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
+    """The convex outline of ``points``, counter-clockwise from the lowest left one."""
+    pts = sorted(set(points))
+    if len(pts) < 3:
+        return pts
+
+    def half(seq):
+        out: List[Tuple[float, float]] = []
+        for q in seq:
+            while len(out) >= 2 and (
+                (out[-1][0] - out[-2][0]) * (q[1] - out[-2][1])
+                - (out[-1][1] - out[-2][1]) * (q[0] - out[-2][0])
+            ) <= 0:
+                out.pop()
+            out.append(q)
+        return out
+
+    return half(pts)[:-1] + half(reversed(pts))[:-1]
+
+
+def _first_layer(toolpath: Optional[Dict[str, Any]]) -> Optional[List[List[float]]]:
+    """The toolpath's first layer that lays anything, as the convex outline of where it
+    lays it (closed), or None: a printer's file is additive, and a part's first layer is
+    where it stands on the bed."""
+    if not toolpath or toolpath["process"] != "additive":
+        return None
+    group = next((g for g in toolpath["groups"] if g["count"] > 0), None)
+    if group is None:
+        return None
+    flat = toolpath["segments"][group["first"] * 4 : (group["first"] + group["count"]) * 4]
+    hull = _hull([(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)])
+    if len(hull) < 3:
+        return None
+    return [[_mm(x), _mm(y)] for x, y in [*hull, hull[0]]]
+
+
+def _planned_footprint(site, plan, frame: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
+    """A printer plan's part as it will stand on the bed, before any file is sliced: its
+    declared bounds at its defaults (``BasePart.get_bounds``: the way up it prints), its
+    X and Y extent as a rectangle centred on the bed, where OrcaSlicer's arrange puts one
+    part (``--arrange 1``, ``--orient 0``: not turned). None, and why, for a part that
+    declares no bounds or does not load."""
+    from ..projects.parts.skeleton import ROOT
+    from ..projects.registry import PartLoadError, part_named
+
+    node = find_node_by_path(site, plan.part)
+    name = node.part_ref if node is not None and node.part_ref else plan.part
+    try:
+        bounds = part_named(name, ROOT).get_bounds()
+    except (KeyError, PartLoadError):
+        return None, f"the planned part {name} does not load: no footprint is drawn"
+    if bounds is None:
+        return None, f"the planned part {name} declares no bounds: no footprint is drawn"
+    sx = bounds.max_point.x - bounds.min_point.x
+    sy = bounds.max_point.y - bounds.min_point.y
+    cx, cy = frame["volume"][0] / 2, frame["volume"][1] / 2
+    said = (
+        f"planned footprint of {name}: its bounds at its defaults, {_mm(sx):g} by {_mm(sy):g} mm, "
+        "centred on the bed as the slicer arranges one part -- not sliced yet"
+    )
+    if sx > frame["volume"][0] or sy > frame["volume"][1]:
+        said += "; it is larger than the bed"
+    return {
+        "points": _rectangle(cx - sx / 2, cy - sy / 2, sx, sy),
+        "source": "plan",
+        "part": name,
+        "size": [_mm(sx), _mm(sy)],
+    }, said
+
+
+def _footprint(
+    site, plan, kind: Optional[str], frame: Dict[str, Any], toolpath, said: List[str]
+) -> Optional[Dict[str, Any]]:
+    """Where the part will stand on a printer's bed: the first layer's own outline once a
+    file is drawn (``source`` "toolpath"), else the plan's part's planned footprint
+    (``source`` "plan", and said so); None for a router, whose cuts are its shapes, and for
+    a plan that names no part."""
+    if kind == "router":
+        return None
+    outline = _first_layer(toolpath)
+    if outline is not None:
+        return {"points": outline, "source": "toolpath", "part": None, "size": None}
+    if plan is None or not plan.part:
+        return None
+    found, words = _planned_footprint(site, plan, frame)
+    said.append(words)
+    return found
+
+
 def _intent(site_name: str, path: str, kind: Optional[str], status):
     """Which file is about to be made, and why: the one streaming, else the plan's;
     where its zero stands; the plan; and what is said of what cannot be drawn."""
@@ -405,12 +494,12 @@ def _intent(site_name: str, path: str, kind: Optional[str], status):
     return source, file, origin, plan, said
 
 
-def _key(source, file, origin, plan, calibration) -> str:
+def _key(source, file, origin, plan, calibration, volume=None) -> str:
     """What names a picture: it is drawn again when any of these changes."""
     calibrated = calibration.at.isoformat() if calibration is not None else None
     if calibration is not None and calibration.upper is not None:
         calibrated = f"{calibrated}+{calibration.upper.at.isoformat()}"
-    named = [source, file, origin, plan.part if plan else None, calibrated]
+    named = [source, file, origin, plan.part if plan else None, calibrated, volume]
     return hashlib.sha256(json.dumps(named, sort_keys=True).encode()).hexdigest()[:16]
 
 
@@ -444,7 +533,9 @@ def _picture(site_name, site, path, kind, frame, status, calibration) -> Dict[st
     }
     sents = toolpath.pop("sents") if toolpath else []
     heights = toolpath.pop("heights") if toolpath else []
-    key = _key(source, file, origin, plan, calibration)
+    footprint = _footprint(site, plan, kind, frame, toolpath, said)
+    picture["footprint"] = footprint
+    key = _key(source, file, origin, plan, calibration, frame["volume"])
     picture["key"] = key
     labels = [g["label"] for g in toolpath["groups"]] if toolpath else []
     with _DRAWN_LOCK:
@@ -511,7 +602,7 @@ def moved(site_name: str, path: str) -> Dict[str, Any]:
     _, kind, _, status, frame = _now_at(site_name, path)
     source, file, origin, plan, _ = _intent(site_name, path, kind, status)
     calibration = projector.load(site_name, path)
-    key = _key(source, file, origin, plan, calibration)
+    key = _key(source, file, origin, plan, calibration, frame["volume"])
     return {
         "key": key,
         "moving": moving(site_name, path, frame, status),

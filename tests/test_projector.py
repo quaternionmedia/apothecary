@@ -781,3 +781,61 @@ def test_a_router_is_drawn_for_its_stock_s_top_where_its_controller_puts_the_wor
         assert none["wanted"] is None and none["z"] == 0.0
     finally:
         c.delete(f"/sites/garage/nodes/{CONTROLLER}/device")
+
+
+# --- a printer plan's footprint -----------------------------------------------------------
+
+
+def test_a_printer_plan_s_part_is_outlined_on_the_bed_before_it_is_sliced(garage):
+    """No file yet: the part's declared bounds, centred on the bed as the slicer arranges one
+    part, and said to be planned; a plan naming no part, and a router's, outline nothing."""
+    from apothecary.projects.parts.skeleton import ROOT
+    from apothecary.projects.registry import part_named
+
+    c = TestClient(app)
+    assert c.get(AT).json()["picture"]["footprint"] is None
+    machine_plans.save("garage", "printer_1", "printer", None, None)
+    assert c.get(AT).json()["picture"]["footprint"] is None
+    machine_plans.save("garage", "printer_1", "printer", "calibration_cube", None)
+    got = c.get(AT).json()["picture"]
+    box = part_named("calibration_cube", ROOT).get_bounds()
+    sx, sy = box.max_point.x - box.min_point.x, box.max_point.y - box.min_point.y
+    footprint = got["footprint"]
+    assert footprint["source"] == "plan" and footprint["part"] == "calibration_cube"
+    assert footprint["size"] == [sx, sy] and sx > 0 and sy > 0
+    xs = [p[0] for p in footprint["points"]]
+    ys = [p[1] for p in footprint["points"]]
+    # Centred on the 220 by 220 bed, a closed rectangle.
+    assert (min(xs) + max(xs)) / 2 == pytest.approx(110.0, abs=0.01)
+    assert (min(ys) + max(ys)) / 2 == pytest.approx(110.0, abs=0.01)
+    assert footprint["points"][0] == footprint["points"][-1] and len(footprint["points"]) == 5
+    assert any(
+        line.startswith("planned footprint of calibration_cube") and "not sliced yet" in line
+        for line in got["said"]
+    ), got["said"]
+    # A piece of the site named by its path is the part it was made from.
+    machine_plans.save("garage", "printer_1", "printer", "no_such_part", None)
+    gone = c.get(AT).json()["picture"]
+    assert gone["footprint"] is None and any("no_such_part" in line for line in gone["said"])
+    # A router's plan is drawn as its cuts: no footprint.
+    machine_plans.save("garage", "cnc_router", "router", "router_coupon", None)
+    assert c.get("/sites/garage/machines/cnc_router/projector").json()["picture"]["footprint"] is None
+
+
+def test_once_a_file_exists_the_footprint_is_its_first_layer_s_outline(garage):
+    kept = devices.save_print_file("square.gcode", SQUARE.encode(), "printer")
+    c = TestClient(app)
+    before = None
+    machine_plans.save("garage", "printer_1", "printer", "calibration_cube", None)
+    before = c.get(AT).json()["picture"]
+    machine_plans.save("garage", "printer_1", "printer", "calibration_cube", kept.id)
+    after = c.get(AT).json()["picture"]
+    footprint = after["footprint"]
+    assert before["footprint"]["source"] == "plan" and footprint["source"] == "toolpath"
+    # The first layer's square, as the file lays it, closed; no word of a plan said.
+    assert sorted(map(tuple, footprint["points"][:-1])) == [
+        (10.0, 10.0), (10.0, 40.0), (60.0, 10.0), (60.0, 40.0)
+    ]
+    assert footprint["points"][0] == footprint["points"][-1]
+    assert not any("planned footprint" in line for line in after["said"])
+    assert before["key"] != after["key"]

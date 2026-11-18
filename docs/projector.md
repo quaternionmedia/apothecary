@@ -173,6 +173,10 @@ to stroke it.
       "groups": [{"label": "layer 1", "first": 0, "count": 2}],
       "within_mm": 0.0, "left_out": ["travel"]
     },
+    "footprint": {
+      "points": [[10, 10], [60, 10], [60, 40], [10, 40], [10, 10]],
+      "source": "toolpath", "part": null, "size": null
+    },
     "cuts": null,
     "said": [],
     "calibrated_at": "2026-11-16T20:10:00+00:00"
@@ -213,7 +217,20 @@ to stroke it.
   the moves through the air (`left_out`) and the moves straight up or down are not
   drawn. `groups` index them, a layer or a pass each. `cuts`, on a router whose plan
   names a part that says how it is cut, is the stock and each operation as an outline,
-  placed at the work zero. `said` is what cannot be drawn and why. `key` names the
+  placed at the work zero. `said` is what cannot be drawn and why. `footprint`, on a
+  printer, is where the part stands on the bed, a closed outline: with a file drawn, the
+  convex outline of its first layer's lines (`source` `toolpath`, a part's concave edge
+  not followed -- the lines themselves are drawn inside it); before one is sliced, the plan's
+  part's **planned footprint** (`source` `plan`, `part` its name, `size` its X and Y in mm):
+  its declared bounds at its defaults (`BasePart.get_bounds`, the way up it prints), a
+  rectangle centred on the bed, where OrcaSlicer's arrange (`--arrange 1`, not turned,
+  `--orient 0`) puts one part, and the band says it is planned, not sliced. `null` for a
+  router (its `cuts` are its shapes) and for a plan naming no part. The plan's part is
+  a piece of the site by path (the part it was made from) or a part by name; a part that
+  declares no bounds or does not load is said, and nothing is drawn. The planned rectangle
+  is a bounding box at the part's defaults, and its centring is the slicer's as documented,
+  not measured here: a variant the slice uses, a rotated or offset arrangement, or a
+  part wider than the bed show only when the file exists. `key` names the
   picture: another key, and the page asks again.
 - `moving` is what a poll moves: the tool where its poll put it in the frame (`null`
   until one has), where the bed stands, `current` -- the group the streaming job is in
@@ -222,7 +239,8 @@ to stroke it.
   machine needs (`todo`, an alarm, a refused line, no filament) -- no figure the poll
   does not carry. `said` is what a poll leaves undrawn.
 
-The page strokes the bed's outline dim, the toolpath dim green with the current group
+The page strokes the bed's outline dim, a printer's footprint in a blue of its own (on the
+bed plane, where the part stands), the toolpath dim green with the current group
 bright, the cuts amber and the tool a red cross, and writes the band along the canvas's
 foot, in its own pixels: the band is not registered to the bed. The bed's outline lies
 through `mapping`; the toolpath, the cuts and the tool, through `plane.mapping`. The band's
