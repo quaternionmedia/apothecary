@@ -170,7 +170,23 @@ CHANGING = (
     # The latch's countdown, in the Machine's head and on the pad.
     f"{windows.MACHINE_WINDOWS} #ctl-ttl",
     "#control .ttl",
+    # The badge over the printer: its time left, its temperatures, as each poll leaves them.
+    ".world-badge",
+    ("#selected-body .device-section", TEMPERATURE),
 )
+
+
+# The Print window's body scrolled as far as its card grows while a piece is made: its
+# first rows are what the pictures show, from the top.
+TO_THE_TOP = """() => {
+    const root = document.querySelector(".panel[data-panel='machine-print']");
+    if (!root) return;
+    for (const el of [root, ...root.querySelectorAll('*')]) if (el.scrollTop) el.scrollTop = 0;
+}"""
+
+
+def _print_card_at_its_top(page) -> None:
+    page.evaluate(TO_THE_TOP)
 
 
 def _undated(row: str) -> str:
@@ -528,6 +544,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     second = _attached(page, url)["views"][-1]
     assert second["id"] != first["id"] and second["taken"]["turn"] == pytest.approx(turned["turn"])
     section.locator(".camera-thumbs").evaluate("(el) => el.scrollIntoView({ block: 'center' })")
+    _print_card_at_its_top(page)
     story.shows(
         "Turned by its ring, the camera takes a second picture with P",
         f"{camera} selected wears its turn ring; dragged half a turn, its next picture "
@@ -555,6 +572,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     expect(_status(page)).to_contain_text("a printer's Machine prints it")
     by_hand(page, plate, distance=900)
     page.locator("#part-params .param[data-field='width']").evaluate(UNDER_THE_STAGE_BAR)
+    _print_card_at_its_top(page)
     story.shows(
         "A second piece, made and adjusted",
         f"Find shapes and Make on the second picture: {plate} stands beside {disc}, the "
@@ -591,6 +609,7 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
         f"{disc}.gcode · {kept['lines']} lines · sliced from {disc} for printer_1"
     )
     settled(page)
+    _print_card_at_its_top(page)
     story.shows(
         "Slice, on the piece's ring, slices it in printer_1's Machine",
         f"{plate}'s ring ends with Print and Slice, a printer being pinned in the garage. "
