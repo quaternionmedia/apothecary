@@ -283,7 +283,7 @@ def test_a_disarm_that_failed_is_never_drawn_as_disarmed(page: Page, url: str):
     settled = "() => window.apothecaryMachine.ctl.pending === 0"
 
     pad.locator("#ctl-disarm").click()
-    expect(page.locator("#status")).to_contain_text("control: the latch did not answer")
+    expect(page.locator("#status")).to_contain_text("Control: the latch did not answer")
     page.wait_for_function(settled)
     assert _armed(url)
     assert pad.is_visible()

@@ -174,7 +174,7 @@ def test_one_log_with_one_query_box_in_the_machine(page: Page, url: str):
 
 
 # The reason the server gives for a jog with control disarmed (firmware/can.py).
-LATCH_DOWN = f"{PRINTER}: control is not armed -- arm it first"
+LATCH_DOWN = "printer_1: control is not armed -- arm it first"
 # The words a ring writes under itself for its lit wedge, its lines joined.
 WHY_UNDER_THE_RING = (
     "() => [...document.querySelectorAll('#ring-overlay .why tspan')]"
@@ -213,7 +213,7 @@ def test_a_refusal_reaches_the_status_bar(page: Page, url: str):
     # A refused report code from the Machine's own box says so too.
     machine.locator("#q").fill("G28")
     machine.locator("#qform button").click()
-    expect(status).to_contain_text("query refused", timeout=5000)
+    expect(status).to_contain_text("Query refused", timeout=5000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
 
 

@@ -26,7 +26,6 @@ from typing import Any, Dict, NamedTuple, Optional
 from . import gcode, grbl
 from .toolchains import PortHeld, ToolchainError
 
-
 _NAMES: Dict[Any, str] = {}
 
 

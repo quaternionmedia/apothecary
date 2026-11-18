@@ -7,13 +7,16 @@
  * nothing here fetches, listens or keeps state (boards.js does that).
  */
 
+import { heater, xyz } from "/static/format.js";
 import { KINDS, STATE_CLS, kindOf } from "/static/machine_words.js";
+
+export { xyz };
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 // One heater: what it reads over what it is set to; "—" when there is none.
 export function heaterText(h) {
-    return h ? `${h.actual.toFixed(1)}/${h.target.toFixed(0)}°` : "—";
+    return h ? heater(h.actual, h.target) : "—";
 }
 
 // The two readings, rounded, as a badge carries them: "210°/60°".
@@ -45,8 +48,7 @@ export function tempsText(st) {
     return `T ${heaterText(st.hotends[0])}${st.bed ? " · B " + heaterText(st.bed) : ""}`;
 }
 
-// A position as the page writes one, wherever it writes one.
-export const xyz = (p) => `X${p.x.toFixed(1)} Y${p.y.toFixed(1)} Z${p.z.toFixed(2)}`;
+// A position as the page writes one, wherever it writes one: format.js's.
 // The same as markup, for a card that may wrap it: between its axes, never inside a
 // number, where a minus sign would otherwise end a line and the number start the next.
 export const xyzHtml = (p) => xyz(p).split(" ").map((axis) => `<span class="nb">${axis}</span>`).join(" ");
@@ -70,7 +72,7 @@ export function printerLine(st) {
     if (!st) return "not polled yet";
     if (st.state === "offline") return `offline${st.raw && st.raw[0] ? " " + st.raw[0] : ""}`;
     let line = `${stateWord(st)} · ${tempsText(st)}`;
-    if (st.position) line += ` · X${st.position.x.toFixed(0)} Y${st.position.y.toFixed(0)} Z${st.position.z.toFixed(1)}`;
+    if (st.position) line += ` · ${xyz(st.position)}`;
     if (st.sd_printing && st.sd_progress != null) line += ` · ${(st.sd_progress * 100).toFixed(1)}%`;
     if (st.filament_present === false) line += " · filament out";
     return line;

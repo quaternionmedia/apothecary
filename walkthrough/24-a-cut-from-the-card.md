@@ -40,7 +40,7 @@ Toolpath writes the cut from what the coupon declares, in GRBL's dialect, keeps 
 The plan row says what is kept and when. cnc_router's Machine chooses the coupon and its toolpath whenever it opens, its board connected or not.
 
 ```
-kept <moment>: router_coupon, router_coupon-cnc_router.nc
+Kept <moment>: router_coupon, router_coupon-cnc_router.nc
 ```
 
 ## 5. ⚙ Control armed: the pad, Probe table offered, and the work zeroed

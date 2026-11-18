@@ -1158,3 +1158,14 @@ drop-down or the SCAD editor, nor on a key the focus takes itself (a slider
 keeps the arrows, Page Up and Page Down; a button, Enter and Space); Ctrl,
 Alt, Shift or Meta held rules Backspace out. Ctrl+Z in a box, or in the SCAD
 editor, is that box's own undo.
+
+## How numbers are written
+
+One form each, from `apothecary/static/format.js`, so the Machine's cards, the Print window,
+Loops and the Deck read alike: a heater `23.1/200°` (actual over target) and a lone reading
+`23.1°`; a time of day `11:53:53` (24 hours) and a day with it `2026-11-18 11:53:53`; how long
+a time takes `4:52` (`1:02:09` past an hour); a size in millimetres with its unit, no
+trailing zeros and at most three places (`101.5 mm`, `46 × 46 × 101.5 mm`); a position
+`X0.0 Y0.0 Z0.00`. A line on the status bar starts a sentence, and the status line names a
+ring cell it was asked by as `Home all (⌗494)`. The world's badge keeps its own short
+reading (`210°/60°`), a place a person reads at a glance.

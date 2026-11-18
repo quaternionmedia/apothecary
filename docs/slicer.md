@@ -199,7 +199,7 @@ Slice is a step of the loop from a picture to a print
 - **Measured, fed back.** Under the chosen file, **measured** has a row for each
   feature the piece's plan names (or the box of what was sliced), and **Keep** -- or
   the control ring's Print › Measure -- keeps what they read as the next turn of the
-  printer's tuning and says what it implies; **Apply** and **Undo turn** (Print ›
+  printer's tuning and says what it implies; **Take turn** and **Undo turn** (Print ›
   Tune) take it into the next slices or drop it ([below](#a-printer-tuned-from-its-prints)).
   It is *Print a part*'s last step.
 - **Installing it.** The Bench's toolchain card draws the slicer after the

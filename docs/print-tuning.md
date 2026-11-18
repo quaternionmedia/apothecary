@@ -3,7 +3,7 @@
 A printer's parts come out a little off what was drawn, and some of that is a slicer
 setting's to take back out. Print tuning is a loop a person goes round: print a piece
 made to be measured, read it with calipers, and apothecary says what the readings
-imply for which setting and how sure that is; Apply takes the change into the
+imply for which setting and how sure that is; Take turn takes the change into the
 printer's next slices, and the next piece confirms it or does not. Every turn is kept.
 Three modules hold it:
 
@@ -151,7 +151,7 @@ comments, and the flow model read from OrcaSlicer's source at the pinned release
 A turn proposes, for each setting whose term it determines and resolves, half of the
 change that would leave none of the term (**damping** 0.5), never more than the
 setting's most a turn, never past its limits, and nothing for a setting the slice did
-not say it used. Nothing is applied until **Apply**, which takes the last turn's
+not say it used. Nothing is applied until **Take turn**, which takes the last turn's
 proposals into the printer's next slices; **Undo turn** drops the last turn and what it
 applied.
 
@@ -236,8 +236,8 @@ carries -- so the turn after it knows what it measured.
 
 In the page, under the chosen file in the Print window, **measured** has a row for
 each feature the slice's plan names (or its box), each a field for what it reads,
-repeats a space apart; **Keep** keeps the turn and says what it implies, **Apply** and
-**Undo turn** (Print › Tune on the control ring) are greyed with the reason where the
+repeats a space apart; **Keep** keeps the turn and says what it implies, **Take turn** and
+**Undo turn** (Print › Tune on the control ring, where Take turn is the cell Apply) are greyed with the reason where the
 server would refuse them, and the turns and each setting's trend are listed beneath.
 *Print a part*'s last step, Measure, stands there on the footpedal's file, says that a
 box's sizes separate nothing and that the coupon is the piece made to be measured, and

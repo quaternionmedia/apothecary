@@ -151,6 +151,7 @@ AREAS = {
             "apothecary/static/boards.js",
             "apothecary/static/can.js",
             "apothecary/static/board_text.js",
+            "apothecary/static/format.js",
             "apothecary/static/machine_words.js",
             "apothecary/static/tokens.css",
             "apothecary/static/machine_marks.js",

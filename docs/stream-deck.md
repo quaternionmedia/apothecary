@@ -133,7 +133,7 @@ layout on a deck:
 
 - **The top row's keys**: 0 **PRINTER** and 1 **ROUTER** choose the machine (held twice,
   they arm its control, below), 2 **STEP** cycles 0.1, 1 and 10 mm, and 3 **DISARM** lets go
-  of every machine's control at one press, blue while any is armed and grey when none is.
+  of every machine's control at one press, red while any is armed and grey when none is.
   It stops nothing -- a move under way finishes -- and the stop keys are the stops.
 - **Key 6** is **UNLOCK**, amber, while the chosen router is in alarm:
   it sends the router's `$X` through the latch, moves nothing, and keeps the position the

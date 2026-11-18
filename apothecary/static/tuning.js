@@ -70,7 +70,7 @@ function termText(t) {
     return `${t.term} ${t.value >= 0 ? "+" : ""}${(t.value * 100).toFixed(2)} ± ${((t.error || 0) * 100).toFixed(2)} %`;
 }
 
-function settingText(v, unit) {
+export function settingText(v, unit) {
     if (v === null || v === undefined) return "-";
     return unit === "%" ? `${+v.toFixed(3)}%` : `${v >= 0 ? "+" : ""}${v.toFixed(3)}`;
 }

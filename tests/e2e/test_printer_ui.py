@@ -1168,7 +1168,7 @@ def test_a_print_from_here_pauses_from_the_ring_and_cancels(page: Page, printer_
         "(n) => window.apothecaryMachine.print.job().sent > n + 2", arg=sent, timeout=8000
     )
     page.locator("#print-cancel").click()
-    expect(page.locator("#print-cancel")).to_have_text("Again to cancel")
+    expect(page.locator("#print-cancel")).to_have_text("Again to abort")
     page.locator("#print-cancel").click()
     expect(page.locator("#print-progress")).to_contain_text("· cancelled ·", timeout=8000)
     expect(page.locator("#print-history")).to_contain_text(

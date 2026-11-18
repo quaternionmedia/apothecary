@@ -41,9 +41,10 @@ BLANK_COLOR = "#3c3c3c"
 
 # What differs on every run whatever the page does, found in the words: the moment a
 # kept picture is named by (20261011T231147.943), a date or a time of day as the
-# browser writes one, and a duration as the Machine writes one (1m 2s, 1h 3m).
+# browser writes one or format.js does (2026-11-18 11:53:53), and a duration as the Machine writes one (1m 2s, 1h 3m).
 MOMENT = (
     r"\d{8}T\d{6}(?:\.\d+)?"
+    r"|\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}(?::\d{2})?"
     r"|\d{1,2}/\d{1,2}/\d{4},? \d{1,2}:\d{2}(?::\d{2})?(?:\s?[AP]M)?"
     r"|\d{1,2}:\d{2}:\d{2}(?:\.\d+)?(?:\s?[AP]M)?"
     r"|\b\d+h \d+m(?: \d+s)?\b|\b\d+m \d+s\b"

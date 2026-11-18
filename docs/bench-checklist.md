@@ -198,7 +198,7 @@ one machine on the number another held; nothing in them moves a machine.
       in flight; the status line says the print started.
 - [ ] **⏸ Pause** mid-square (⌗796): the head finishes what was queued and
       stops; **Resume** (⌗798).
-- [ ] **■ Cancel**, pressed twice: `M104 S0`, `M140 S0`, `M107`, `M84` in the
+- [ ] **⏏ Abort**, pressed twice: `M104 S0`, `M140 S0`, `M107`, `M84` in the
       log; the history and Site's Jobs read *cancelled*; the status line says
       the print ended.
 - [ ] Print it again to the end: *done · 23/23*, `dry run done` on the

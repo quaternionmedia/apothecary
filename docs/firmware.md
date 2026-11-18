@@ -860,7 +860,7 @@ slicer](slicer.md#in-the-page)). The card shows each control once what it
 needs holds, in the loop's order: makes and Choose File are the two ways in;
 Slice is there once a part is chosen under makes, the files kept once there is
 one, Keep as plan once a part or a file is chosen, a chosen file's ✕, the
-preview and ▶ Print once a file is chosen, Pause and Cancel while a print runs,
+preview and ▶ Print once a file is chosen, Pause and Abort while a print runs,
 and Resume while it is paused. **Print** needs the latch and starts a job that sends one line per
 `ok`; a line unanswered for thirty seconds (heat-and-wait and home excepted),
 or answered with an error or a resend, ends the print. While it prints,

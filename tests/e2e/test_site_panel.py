@@ -188,6 +188,20 @@ def test_a_layout_remembered_with_a_retired_panel_is_harmless(page, base_url: st
 
 
 @pytest.mark.e2e
+def test_the_layout_chip_is_reached_and_pressed_from_the_keyboard(page, base_url: str):
+    """The Layout valid chip takes the focus, and Enter or Space brings Problems in front
+    as a click does."""
+    _open(page, base_url)
+    chip = page.locator("#validity-indicator")
+    expect(chip).to_have_attribute("role", "button")
+    expect(windows.panel(page, "problems")).to_be_hidden()
+    chip.focus()
+    expect(chip).to_be_focused()
+    page.keyboard.press("Enter")
+    expect(windows.panel(page, "problems")).to_be_visible(timeout=5000)
+
+
+@pytest.mark.e2e
 def test_a_problem_marks_its_pieces_and_its_row_selects_one_at_its_level(page, base_url: str):
     """printer_1 moved onto the footpedal: both rows red, saying why on hover; Problems'
     tab, beside Site, counts it, and in front, the problem selects printer_1 from a

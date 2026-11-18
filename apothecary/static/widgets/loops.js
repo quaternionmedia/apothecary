@@ -33,6 +33,7 @@
  */
 
 import { applyCan, verdictOf } from "/static/can.js";
+import { clock, heater, sentence, span } from "/static/format.js";
 import { plotSvg, extent, logDomain, linearDomain, stepTicks, shown, finite } from "/static/loop_plots.js";
 
 const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -105,7 +106,9 @@ export function mountLoops(root, { base = "", machine = () => null, say = () => 
 <section class="loops-figures" aria-label="Figures"></section></div></div>`;
     const $ = (cls) => root.querySelector(`.${cls}`);
 
+    // `kind` "note" is a plain line (a state, not a failure); "error" is red.
     function tell(text, kind = "success") {
+        text = sentence(text);
         st.said = text;
         const el = $("loops-said");
         el.textContent = text || "";
@@ -129,6 +132,7 @@ export function mountLoops(root, { base = "", machine = () => null, say = () => 
     }
     const running = () => !!(st.job && st.job.running && st.job.port === st.port);
     const VERBS = ["tune.read", "tune.start", "tune.cancel", "tune.set"];
+    const NO_MACHINE = "Open a printer's Machine: Loops works on the printer whose Machine is open";
     function localCan() {
         const out = { ...(st.can || {}) };
         if (!st.port) {
@@ -155,6 +159,9 @@ export function mountLoops(root, { base = "", machine = () => null, say = () => 
         ["loops-cancel", "loops:cancel", () => "End the experiment: the heater turned off and read back"],
     ];
     function renderCan() {
+        // The refusal on the window's line goes once the act it refused would be taken.
+        const refused = st.refusedVerb && verdictOf(localCan(), st.refusedVerb);
+        if (refused && (refused.ok || refused.why !== st.refusedWhy)) { st.refusedVerb = null; tell(""); }
         for (const [cls, action, tip] of BUTTONS) {
             const b = $(cls), at = addressOf(action);
             if (at) b.dataset.address = at; else delete b.dataset.address;
@@ -191,6 +198,9 @@ export function mountLoops(root, { base = "", machine = () => null, say = () => 
     // --- the head: which machine, which loop, which rule ---------------------------------
     function renderHead() {
         $("loops-machine").textContent = !st.port ? "No printer's Machine is open" : st.name && st.name !== st.port ? `${st.name} · ${st.port}` : st.port;
+        // With no Machine open Loops has nothing to say but how to give it one: a state, not a failure.
+        if (!st.port && !st.said) tell(NO_MACHINE, "note");
+        else if (st.port && st.said === NO_MACHINE) tell("");
         $("loops-loop").value = st.heater;
         $("loops-loop").title = `Which loop: hotend 0 or the bed${taught(`loops:loop:${st.heater}`)}`;
         const rule = $("loops-rule");
@@ -214,7 +224,7 @@ export function mountLoops(root, { base = "", machine = () => null, say = () => 
         const read = st.doc && (st.doc.experiments || []).find((e) => e.kind === "read");
         return read ? read.started_at : st.read ? st.read.read_at : null;
     }
-    const when = (iso) => (iso ? new Date(iso).toLocaleTimeString("en-GB") : "—");
+    const when = (iso) => (iso ? clock(iso) : "—");
     function ruleTitle(g) {
         if (!g) return "";
         if (g.rule === "firmware_autotune") return "the firmware's own autotune";
@@ -278,8 +288,8 @@ ${board ? "" : `<p class="loops-note">The board's gains are not read yet: Read a
         const el = $("loops-job");
         if (!j) { el.innerHTML = ""; return; }
         const line = [];
-        if (j.reading !== null && j.reading !== undefined) line.push(`reading ${esc(j.reading)} °C, target ${esc(j.target)} °C, power ${esc(j.power ?? "—")}`);
-        line.push(`${esc(j.elapsed_s)} s of ${esc(j.max_duration_s)} s at the longest, ceiling ${esc(j.ceiling_c)} °C`);
+        if (j.reading !== null && j.reading !== undefined) line.push(`reading ${esc(heater(j.reading, j.target))}, power ${esc(j.power ?? "—")}`);
+        line.push(`${esc(span(j.elapsed_s))} of ${esc(span(j.max_duration_s))} at the longest, ceiling ${esc(j.ceiling_c)}°`);
         if (!j.running) {
             line.push(`<span class="${j.outcome === "done" ? "ok" : "bad"}" data-outcome="${esc(j.outcome)}">${esc(j.outcome)}${j.error ? `: ${esc(j.error)}` : ""}</span>`);
             if (j.heater_off) line.push(`<span data-heater-off>${esc(j.heater_off)}</span>`);
@@ -540,7 +550,11 @@ ${g.figures.map((f) => `<tr data-figure="${esc(`${g.id}.${f.key}`)}" data-value=
         else if (verb.startsWith("rule:")) { const [, name, kind] = verb.split(":"); done = await chooseRule(name, kind); }
         else done = { refused: `Loops has no act ${verb}` };
         const head = label || "Loops";
-        if (done.refused) { tell(done.refused, "error"); say(`${head}: ${done.refused}${tail}`, "error"); }
+        // A refusal stays until the act it refused would go, or is refused for another
+        // reason, or another act goes: it is not left standing after what stopped it has ended.
+        st.refusedVerb = done.refused && ["read", "start", "cancel", "set"].includes(verb) ? `tune.${verb}` : null;
+        st.refusedWhy = done.refused || null;
+        if (done.refused) { tell(done.refused, st.port ? "error" : "note"); say(`${head}: ${done.refused}${tail}`, "error"); }
         else { tell(done.said); say(`${head}: ${done.said}${tail}`, "success"); }
         return done;
     }

@@ -292,8 +292,11 @@ result, with the heater turned off.
 The **Loops** window (`apothecary/static/widgets/loops.js`) is a heater loop of the
 printer whose Machine is open, in the page: ⊞ Windows › Loops, or the ring's Panels ›
 Machine › Loops › Loops. It is a window of the Machine's group, closed until asked for;
-with no printer's Machine open it says so, and every button is greyed with why. For the
-loop chosen, hotend 0 or the bed:
+with no printer's Machine open it says so in plain type, as a state and not a failure,
+and every button is greyed with why. A refusal said on its line is let go once the act it
+refused would be taken, or is refused for another reason, so it is not left standing after
+what stopped it has ended. Its times are written as the rest of the page writes them
+(`static/format.js`: `11:53:53`, `4:52`, `23.1/200°`). For the loop chosen, hotend 0 or the bed:
 
 | Part | What it shows | From |
 |---|---|---|

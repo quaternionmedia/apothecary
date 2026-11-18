@@ -8,6 +8,8 @@
  * the knobs do, through the control latch.
  */
 
+import { span } from "/static/format.js";
+
 async function call(base, path, opts = {}) {
     const r = await fetch(base + path, { headers: { "Content-Type": "application/json" }, ...opts });
     const body = await r.json().catch(() => ({}));
@@ -32,7 +34,7 @@ export const screenWords = (knobs) => `${knobs.screen} (${knobs.screens.indexOf(
 
 // The control the knobs' machine has left, as its strip says it.
 export const armedWords = (knobs) => (knobs.armed_s > 0
-    ? `armed ${Math.floor(knobs.armed_s / 60)}:${String(Math.floor(knobs.armed_s % 60)).padStart(2, "0")}`
+    ? `armed ${span(knobs.armed_s)}`
     : "disarmed: arm it in its Machine, or long press its key twice");
 
 // What the deck's routes would refuse now, for the ring's Panels › Machine › Knobs: the

@@ -335,7 +335,7 @@ def test_a_cut_from_the_card_as_a_person_goes_round_it(
     expect(progress).to_contain_text("running", timeout=10000)
     expect(card.locator("#print-pause")).to_be_visible()
     card.locator("#print-cancel").click()
-    expect(page.locator("#status")).to_contain_text("press again to cancel the cut", timeout=5000)
+    expect(page.locator("#status")).to_contain_text("press again to abort the cut", timeout=5000)
     card.locator("#print-cancel").click()
     expect(progress).to_contain_text("cancelled", timeout=20000)
     expect(machine.locator("#c-state")).to_have_text("idle", timeout=WITHIN_A_POLL)
@@ -647,7 +647,7 @@ def test_toolpath_writes_the_coupon_s_cut_and_the_cut_names_its_operation(page: 
         re.compile(r"op 4/4 pass \d/6: outline 120 x 80 at 10,10 to z -"), timeout=30000
     )
     machine.locator("#print-cancel").click()  # pressed twice: the first press asks
-    expect(page.locator("#status")).to_contain_text("press again to cancel the cut", timeout=5000)
+    expect(page.locator("#status")).to_contain_text("press again to abort the cut", timeout=5000)
     machine.locator("#print-cancel").click()
     expect(machine.locator("#print-progress")).to_contain_text("cancelled", timeout=20000)
     expect(machine.locator("#c-state")).to_have_text("idle", timeout=WITHIN_A_POLL)

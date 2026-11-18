@@ -41,6 +41,8 @@ def _as_it_starts(url):
             http.post("/firmware/printers/print/cancel", json={"port": PRINTER})
             http.post("/firmware/printers/control", json={"port": PRINTER, "armed": False})
             http.post("/firmware/printers/release", json={"port": PRINTER})
+            for pin in http.get("/firmware/pins").json()["pins"]:
+                http.delete(f"/firmware/pins/{pin['site']}/{pin['path']}")
             http.post("/firmware/devices/identify", json={"port": PRINTER}).raise_for_status()
 
     start_over()
@@ -88,11 +90,59 @@ def test_a_print_greys_the_jog_the_reboot_and_the_quickstop_and_never_the_stop(
         expect(live).to_be_enabled()
         expect(live).not_to_have_attribute("aria-disabled", "true")
 
+    # The bed level's corner moves are control lines like the pad's: greyed the same way,
+    # and the same word on the print's button as on the pad's and the ring's.
+    corner = page.locator("#level-card button[data-corner='FL']")
+    expect(corner).to_be_disabled(timeout=WITHIN_A_POLL)
+    expect(corner).to_have_attribute("title", re.compile(r"^Disabled: .*a print holds the port"))
+    expect(page.locator("#print-cancel")).to_have_text("⏏ Abort")
+    # A reason names the machine its board is pinned to, as its window does, not the
+    # port's path: pinned, the next poll's answer says printer_1.
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        http.put(
+            "/sites/garage/nodes/printer_1.frame_system.mainboard/device",
+            json={"identity": PRINTER},
+        ).raise_for_status()
+    expect(corner).to_have_attribute(
+        "title", re.compile(r"^Disabled: printer_1: a print holds the port"), timeout=WITHIN_A_POLL
+    )
+    assert PRINTER not in (corner.get_attribute("title") or "")
+    # A refused line stays in the Machine's needs until an act of the machine goes: it is
+    # named by its button's label, and the print cancelled below lets it go.
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        assert http.post(
+            "/firmware/printers/command", json={"port": PRINTER, "command": "M84"}
+        ).status_code in (409, 422)
+    needs = windows.in_machine(page, "#c-needs")
+    expect(needs).to_contain_text("Motors off did not go", timeout=WITHIN_A_POLL)
+    expect(needs).not_to_contain_text("M84")
+
     # The print cancelled, the jog is the server's to take again and the page says so.
+    page.locator("#print-cancel").click()
+    expect(page.locator("#print-cancel")).to_have_text("Again to abort")
     page.locator("#print-cancel").click()
     expect(jog).to_be_enabled(timeout=WITHIN_A_POLL * 2)
     expect(jog).not_to_have_attribute("title", re.compile(r"^Disabled"))
     expect(quickstop).to_be_enabled()
+    expect(needs).not_to_contain_text("Motors off did not go", timeout=WITHIN_A_POLL)
+
+
+@pytest.mark.e2e
+def test_the_control_pad_buttons_say_what_they_do(page: Page, url: str):
+    """Every pad button has a description of its own as its tip, so the ring's address
+    written after it is never the whole of a title."""
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        http.post("/firmware/printers/control", json={"port": PRINTER, "armed": True})
+    page.goto(f"{url}/firmware/monitor?port={PRINTER}")
+    windows.machine_ready(page, "printer")
+    expect(page.locator("#control")).to_be_visible(timeout=WITHIN_A_POLL)
+    bare = page.evaluate(
+        r"""() => [...document.querySelectorAll('#control button, #ctl, #ctl-disarm')]
+            .filter((b) => !b.hidden && b.offsetParent !== null)
+            .filter((b) => !(b.getAttribute('title') || '').replace(/\s*·?\s*⌗\d+/g, '').trim())
+            .map((b) => b.id || b.textContent.trim())"""
+    )
+    assert bare == [], bare
 
 
 @pytest.mark.e2e

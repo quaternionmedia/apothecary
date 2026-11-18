@@ -325,7 +325,7 @@ def test_a_kept_step_its_design_an_experiment_planned_and_the_gains_set(
     expect(loops.locator(".loops-gains th[data-col='board'] .loops-when")).to_be_visible(
         timeout=15000
     )
-    expect(loops.locator(".loops-said")).to_contain_text("hotend 0 holds P")
+    expect(loops.locator(".loops-said")).to_contain_text("Hotend 0 holds P")
     with _http(url) as http:
         held = http.post("/firmware/printers/loops/read", json={"port": PRINTER}).json()["gains"][
             "hotend 0"
@@ -482,6 +482,35 @@ def test_the_ring_opens_the_window_and_a_refused_act_says_the_server_s_reason(pa
             .json()
             .get("running")
         )
+
+
+@pytest.mark.e2e
+def test_with_no_machine_open_loops_says_so_plainly_and_a_refusal_goes_when_it_would_not_be_one(
+    page: Page, url: str
+):
+    """No printer's Machine open is a state, said in plain type with what to do, not an
+    error in red; a refusal on the window's line is let go once the act it refused would
+    be taken: Start refused for the latch down says so, then arming takes it away."""
+    page.goto(f"{url}/")
+    page.wait_for_function("() => !!window.apothecaryPanels", timeout=15000)
+    windows.open_window(page, "loops")
+    said = _loops(page).locator(".loops-said")
+    expect(said).to_contain_text("Open a printer's Machine", timeout=10000)
+    expect(said).not_to_have_class(re.compile(r"\bbad\b"))
+    _machine(page, url)
+    rings.on_world(page, "Panels", "Machine", "Loops", "Loops")
+    expect(_loops(page).locator(".loops-machine")).to_contain_text(PRINTER, timeout=10000)
+    expect(said).not_to_contain_text("Open a printer's Machine", timeout=10000)
+    _drawn(page)
+    start = _button(page, "start")
+    expect(start).to_have_attribute(
+        "title", re.compile(r"^Disabled: .*arm control first"), timeout=10000
+    )
+    rings.on_world(page, "Panels", "Machine", "Loops", "Start")
+    expect(said).to_have_class(re.compile(r"\bbad\b"), timeout=10000)
+    with _http(url) as http:
+        http.post("/firmware/printers/control", json={"port": PRINTER, "armed": True})
+    expect(said).to_have_text("", timeout=15000)
 
 
 @pytest.mark.e2e
