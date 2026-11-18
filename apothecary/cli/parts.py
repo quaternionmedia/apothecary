@@ -303,9 +303,16 @@ def parts_verify(
     a fit computed from a diameter the part does not have is wrong
     (docs/connections.md).
 
+    Each feature a part's measurement plan names is read along its jaws' line
+    on the render, and fails where either face stands further than
+    models.measures.MEASURE_TOLERANCE from the plan's: a turn of the print
+    tuning loop measured against a size the part does not have tunes the
+    printer to the plan's mistake (docs/print-tuning.md).
+
     Renders to a temporary file, so the STL you are iterating on is untouched.
     """
     from ..fittings import INTERFACE_TOLERANCE, readings
+    from ..models.measures import MEASURE_TOLERANCE
     from ..projects.parts.stl_renderer import get_renderer, render_part
 
     if interface_tolerance is None:
@@ -337,11 +344,12 @@ def parts_verify(
         declared = part.get_bounds(params or None)
         try:
             interfaces = part.interfaces(params or None)
+            plan = part.measures(params or None)
         except (ValueError, KeyError) as exc:
-            skipped.append((part_name, f"its interfaces do not read: {exc}"))
+            skipped.append((part_name, f"its interfaces or its plan do not read: {exc}"))
             continue
-        if declared is None and not interfaces:
-            skipped.append((part_name, "declares no bounds or interfaces"))
+        if declared is None and not interfaces and plan is None:
+            skipped.append((part_name, "declares no bounds, interfaces or plan"))
             continue
 
         can_build, reason = part.can_generate_stl()
@@ -388,6 +396,23 @@ def parts_verify(
                 flag = "" if held else "   <-- drift"
                 where = f"{r.interface} {r.where}"
                 rows.append(f"    {where:<22}{r.declared:>10.3f}{got:>10}{delta:>8}{flag}")
+        if plan is not None:
+            rows.append(f"    {'measured feature':<22}{'declared':>10}{'measured':>10}{'delta':>8}")
+            for feature in plan.features:
+                found = feature.read_on(triangles)
+                drift = (
+                    None
+                    if found is None
+                    else max(abs(a - b) for a, b in zip(found, feature.faces, strict=True))
+                )
+                held = drift is not None and drift <= MEASURE_TOLERANCE
+                ok = ok and held
+                got = "nothing" if found is None else f"{found[1] - found[0]:.3f}"
+                delta = "" if drift is None else f"{drift:.3f}"
+                flag = "" if held else "   <-- drift"
+                rows.append(
+                    f"    {feature.name:<22}{feature.nominal:>10.3f}{got:>10}{delta:>8}{flag}"
+                )
         checked += 1
 
         if ok:

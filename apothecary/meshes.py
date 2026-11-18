@@ -212,6 +212,34 @@ def section_radii(
     return near, far
 
 
+def crossings(
+    triangles: Iterable[Triangle], point: Tuple[float, float, float], axis: int
+) -> List[float]:
+    """Where the line through ``point`` along axis ``axis`` (0, 1 or 2: X, Y or Z)
+    crosses the mesh's surface, as that axis's coordinates, in order: the faces a
+    caliper's jaws closing along that line would meet. A crossing two triangles share
+    (an edge the line passes through) is counted once."""
+    u, v = [i for i in range(3) if i != axis]
+    pu, pv = point[u], point[v]
+    found: List[float] = []
+    for a, b, c in triangles:
+        # The triangle seen down the axis: is (pu, pv) inside it, and where along the axis?
+        d = (b[u] - a[u]) * (c[v] - a[v]) - (c[u] - a[u]) * (b[v] - a[v])
+        if abs(d) < 1e-12:
+            continue  # edge-on to the line
+        s = ((pu - a[u]) * (c[v] - a[v]) - (c[u] - a[u]) * (pv - a[v])) / d
+        t = ((b[u] - a[u]) * (pv - a[v]) - (pu - a[u]) * (b[v] - a[v])) / d
+        if s < -1e-9 or t < -1e-9 or s + t > 1 + 1e-9:
+            continue
+        found.append(a[axis] + s * (b[axis] - a[axis]) + t * (c[axis] - a[axis]))
+    found.sort()
+    out: List[float] = []
+    for x in found:
+        if not out or x - out[-1] > 1e-6:
+            out.append(x)
+    return out
+
+
 def transform(triangles: Iterable[Triangle], scale: float = 1.0, up: str = "z") -> List[Triangle]:
     """Scale every corner, and turn a Y-up mesh (most game and web tools) into
     Z-up (OpenSCAD, the viewer, every printer): a quarter turn about X, so y

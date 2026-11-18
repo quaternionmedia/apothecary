@@ -211,6 +211,7 @@ GROUPS = {
             "test_parts_parameters.py",
             "test_parts_stl_generation.py",
             "test_parts_wrappers.py",
+            "test_print_coupon_part.py",
             "test_rolling_rotor_part.py",
             "test_registry.py",
             "test_render_queue.py",

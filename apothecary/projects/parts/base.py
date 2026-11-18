@@ -250,6 +250,13 @@ class BasePart(BaseModel):
         """Whether this part says how it is cut: its wrapper defines ``cuts``."""
         return type(self).cuts is not BasePart.cuts
 
+    def measures(self, params: Optional[Mapping[str, Any]] = None):
+        """What a person reads of this part printed, for ``params`` as ``Params`` reads
+        them (``apothecary.models.measures.MeasurePlan``): a part made to be measured
+        names each feature, its jaws and where they close. None for a part that names
+        none, which is most of them; the print tuning loop then reads its box."""
+        return None
+
     def interfaces(self, params: Optional[Mapping[str, Any]] = None) -> List[InterfaceBase]:
         """The places where another part meets this one, for already-validated
         ``params`` (``apothecary.models.interfaces``): each named, in the part's own
