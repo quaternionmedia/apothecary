@@ -488,11 +488,11 @@ class DeckController:
             if machine is self.machine:
                 self.screens.show(screens.PROGRESS)
 
-    def _holding(self) -> Optional[str]:
+    def _holding(self, port: Optional[str] = None) -> Optional[str]:
         """What holds the chosen machine's port, in the words the server refuses a jog
         with (``PortHeld``): the host's own print or cut, or a long exchange a poll saw
-        a moment ago (a bed reading)."""
-        port = self._port_quiet()
+        a moment ago (a bed reading). ``port`` is that port, when it was found already."""
+        port = port or self._port_quiet()
         if not port:
             return None
         job = self.job(port)
@@ -994,7 +994,7 @@ class DeckController:
         server's own refusal of a jog, ``screens.held_words``), whichever screen shows."""
         with self._lock:
             port = self._port_quiet()
-            held = self._holding()
+            held = self._holding(port)
             return {
                 "running": self._alive.is_set(),
                 "deck": self.deck.info.id,
