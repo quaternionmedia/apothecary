@@ -168,7 +168,7 @@ def test_the_page_draws_a_plane_through_the_mapping_the_server_blended(tmp_path)
     applies the bed's, and takes it from the answer, the bed's when it has none."""
     import math
 
-    from test_projector import LIT, OUTPUT, PROBES, Pinhole  # noqa: PLC0415
+    from projector_helpers import LIT, OUTPUT, PROBES, Pinhole  # noqa: PLC0415
 
     lens = Pinhole()
     both = lens.calibration(25.0)

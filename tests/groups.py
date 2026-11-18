@@ -92,6 +92,7 @@ GROUPS = {
             "apothecary/static/can.js",
             "walkthrough/19-*",
             "walkthrough/45-*",
+            "tests/projector_helpers.py",
         ),
         "tests": (
             "test_board_by_part.py",
