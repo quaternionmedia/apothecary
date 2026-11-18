@@ -261,7 +261,9 @@ def plane(
     if calibration.upper is None:
         if height is not None and abs(height) > 1e-9:
             projector.mapping_at(calibration, height)  # refuses, saying why
-        base.update(mapping=bed, how="bed plane only", line=f"drawn for the bed plane -- {BED_ONLY}")
+        base.update(
+            mapping=bed, how="bed plane only", line=f"drawn for the bed plane -- {BED_ONLY}"
+        )
         if wanted and wanted["z"] > 1e-9:
             base["said"].append(
                 f"{wanted['for']} stands {wanted['z']:g} mm above the bed: lit displaced "
@@ -395,10 +397,14 @@ def _hull(points: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
     def half(seq):
         out: List[Tuple[float, float]] = []
         for q in seq:
-            while len(out) >= 2 and (
-                (out[-1][0] - out[-2][0]) * (q[1] - out[-2][1])
-                - (out[-1][1] - out[-2][1]) * (q[0] - out[-2][0])
-            ) <= 0:
+            while (
+                len(out) >= 2
+                and (
+                    (out[-1][0] - out[-2][0]) * (q[1] - out[-2][1])
+                    - (out[-1][1] - out[-2][1]) * (q[0] - out[-2][0])
+                )
+                <= 0
+            ):
                 out.pop()
             out.append(q)
         return out

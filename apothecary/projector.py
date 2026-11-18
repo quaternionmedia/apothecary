@@ -183,7 +183,11 @@ def checked_upper(
     pixels marked where the bed plane's were (no height told), or a plane the first does
     not agree with (``AGREE``: a gross mismatch only). ``bed`` is the first's four points when none are given, and
     ``pixels`` of a canvas ``size`` are scaled to the first's output as the page scales."""
-    if isinstance(height, bool) or not isinstance(height, (int, float)) or not math.isfinite(height):
+    if (
+        isinstance(height, bool)
+        or not isinstance(height, (int, float))
+        or not math.isfinite(height)
+    ):
         raise Refused("the second plane's height is a finite number of millimetres")
     if height < MIN_SPAN_MM:
         raise Refused(
@@ -229,7 +233,11 @@ def _two_planes(calibration: Calibration, upper: Upper) -> Tuple[Matrix, Matrix]
             f"{AGREE:.0%}): the four points are marked in another order than the bed "
             "plane's, or are not of a plane over the bed, or the projector moved between"
         )
-    gap = max(abs(a - b) for ra, rb in zip(scaled, first, strict=True) for a, b in zip(ra, rb, strict=True))
+    gap = max(
+        abs(a - b)
+        for ra, rb in zip(scaled, first, strict=True)
+        for a, b in zip(ra, rb, strict=True)
+    )
     if gap < SAME_AS * max(abs(v) for row in first for v in row):
         raise Degenerate(
             "its pixels are the bed plane's: a plane above the bed lights the same points "
@@ -238,9 +246,7 @@ def _two_planes(calibration: Calibration, upper: Upper) -> Tuple[Matrix, Matrix]
     return first, scaled
 
 
-def mapping_at(
-    calibration: Calibration, z: float, over: Sequence[Point] = ()
-) -> Matrix:
+def mapping_at(calibration: Calibration, z: float, over: Sequence[Point] = ()) -> Matrix:
     """The mapping of the plane ``z`` mm above the bed: the frame's point on that plane
     (the room's X and Y, as ``mapping`` takes them) to the output's pixel. Exact for a
     pinhole projector between and beyond the two planes, up to ``REACH`` times the second's
