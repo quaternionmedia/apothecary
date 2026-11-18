@@ -56,7 +56,9 @@ def _read() -> Dict[str, Dict[str, str]]:
     except FileNotFoundError:
         return {}
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        log.warning("family: %s does not read, so no member has a token: %s", path, type(exc).__name__)
+        log.warning(
+            "family: %s does not read, so no member has a token: %s", path, type(exc).__name__
+        )
         return {}
     return rows
 

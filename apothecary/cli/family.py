@@ -77,5 +77,7 @@ def remove(name: str):
     except roster.Refused as exc:
         raise _refused(exc) from None
     if not was:
-        raise click.ClickException(f"{name} is named nowhere in the table: `apothecary family members`")
+        raise click.ClickException(
+            f"{name} is named nowhere in the table: `apothecary family members`"
+        )
     click.echo(f"{name} is no longer a member, and holds no token")

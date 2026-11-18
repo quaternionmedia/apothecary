@@ -482,7 +482,6 @@ class TestExperiments:
 
         client = TestClient(app)
         board.links.control.arm(PORT)
-        asked = len(board.sim.sent)
 
         async def follow():
             following = surfaces.subscribe(["tune", "control_loop"])

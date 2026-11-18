@@ -101,7 +101,9 @@ def add(name: str, url: str) -> Tuple[str, str]:
     try:
         kept = loopback_url(url)
     except ValueError:
-        raise Refused(f"{url!r} is not on this machine: a member is http://127.0.0.1:<port>") from None
+        raise Refused(
+            f"{url!r} is not on this machine: a member is http://127.0.0.1:<port>"
+        ) from None
     with _lock:
         table = _strict()
         members = table.get("members") if isinstance(table.get("members"), dict) else {}

@@ -560,7 +560,7 @@ def test_progress_is_told_at_each_whole_percent_and_no_oftener(fake_arduino_cli,
     monkeypatch.setattr(devices, "PRINT_PROGRESS_EVERY", 1)  # the job speaks at every line
     job, told, _ = _a_print_followed(scripted_links, 400, lambda job, gate: None)
     percents = [int(e["body"]["progress"] * 100) for e in told]
-    assert len(percents) == len(set(zip(percents, (e["body"]["detail"]["stage"] for e in told))))
+    assert len(percents) == len(set(zip(percents, (e["body"]["detail"]["stage"] for e in told), strict=True)))
     assert len(told) <= 100 + 5 and percents[0] == 0 and percents[-1] == 100
     assert len(told) > 5  # the progress between is told, at some rate
 
