@@ -532,8 +532,11 @@ Its cells are a numeric keypad, `7 8 9 / 4 5 6 / 1 2 3`. A ring holds up to
 eight options, seated in the order it lists them: 8, 6, 2 and 4 first, then
 9, 3, 1 and 7. **5** is the hub: it backs out one ring, and closes the first.
 A label ending `›` opens a ring of its own. The digits pressed through nested
-rings are the option's **address**, shown under the hub as you go and after
-every verb in the status line: `(⌗98)` is 9, then 8. The page writes the same
+rings are the option's **address**, shown in the hub as you go and after
+every verb in the status line: `(⌗98)` is 9, then 8. The ring is drawn on a
+ground of its own, so nothing it is opened over shows through a wedge, and a
+ring opened near the screen's edge stands far enough in that no label is cut.
+The page writes the same
 address into the tooltip of each of its own buttons that a cell also does
 (`· ⌗NN`), so a button teaches its digits.
 
@@ -547,8 +550,9 @@ chooses it, on the hub backs out, and far outside the ring closes it.
 address wherever it is opened; the cells that come and go with where it is
 opened are seated after them.
 
-**A cell that cannot be chosen now is greyed, and says why.** Its wedge is drawn
-dim; its reason is its title, and written under the ring while the wedge is lit by
+**A cell that cannot be chosen now is greyed, and says why.** It is greyed whole --
+wedge, label and digit -- as a greyed button is, with the not-allowed cursor; its
+reason is its title, and written under the ring while the wedge is lit by
 the pointer, an arrow or a digit -- a title is not seen on a touch screen. Chosen
 anyway, by its digit, a click or a tap, it does nothing: the ring stays where it
 is, the reason under it, and the status line says it as a refused verb is said,

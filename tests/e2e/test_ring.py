@@ -26,7 +26,7 @@ from boards import PRINTER
 from garage import open_garage, select
 from playwright.sync_api import Page, expect
 from rings import cells as _wedges
-from rings import past_the_chord
+from rings import cut_labels, open_at, past_the_chord
 
 from apothecary.systems import by_id
 
@@ -803,3 +803,21 @@ def test_the_tilde_shows_the_world_alone_and_the_ring_does_too(page: Page, ring_
     page.evaluate("() => window.apothecaryPanels.open('selected')")
     expect(windows.panel(page, "selected")).to_be_visible()
     windows.world_is(page, before)
+
+
+@pytest.mark.e2e
+def test_a_ring_opened_at_the_screens_edge_keeps_every_label_whole(page: Page, ring_url: str):
+    """Opened against either edge of the screen, the ring stands far enough in that no label
+    is cut -- the canvas ring's, and the Panels ring's entered from it, whose Machine and
+    Selected run out past the wedges on the level spokes -- however long the labels of the
+    ring it is on."""
+    open_garage(page, ring_url, settle=False)
+    width, height = page.evaluate("() => [window.innerWidth, window.innerHeight]")
+    for x in (0, width):
+        open_at(page, x, height // 2)
+        assert cut_labels(page) == [], x
+        page.keyboard.press("4")  # Panels
+        expect(page.locator("#ring-overlay .title")).to_have_text("Panels")
+        assert cut_labels(page) == [], x
+        page.keyboard.press("Escape")
+        expect(page.locator("#ring-overlay")).to_have_count(0)

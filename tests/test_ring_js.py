@@ -123,3 +123,74 @@ def test_an_address_is_written_once_and_taken_away_whole():
     assert out["again"] == out["first"]
     assert out["gone"] is None and out["goneAddress"] is None
     assert out["wordedGone"] == "Arm control"
+
+
+DRAWN = r"""
+import { ringMarkup, withCells, GEOMETRY, STYLE, GREYED_OPACITY } from %(url)s;
+const ring = { title: "Jog", options: withCells([
+    { id: "y", label: "Y+", action: "control:jog:Y+", enabled: false, why: "not armed" },
+    { id: "x", label: "X+", action: "control:jog:X+" },
+    { id: "d", label: "Y-", action: "control:jog:Y-" },
+]) };
+console.log(JSON.stringify({
+    markup: ringMarkup({ ring, address: "772" }),
+    untitled: ringMarkup({ ring: { options: ring.options }, address: "7" }),
+    r0: GEOMETRY.r0, r1: GEOMETRY.r1, style: STYLE, greyed: GREYED_OPACITY,
+}));
+"""
+
+TOKENS_CSS = RING_JS.parent / "tokens.css"
+
+
+def _drawn() -> dict:
+    script = DRAWN % {"url": json.dumps(RING_JS.as_uri())}
+    run = subprocess.run(
+        ["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60
+    )
+    assert run.returncode == 0, run.stderr
+    return json.loads(run.stdout)
+
+
+def _at(markup: str, cls: str) -> tuple:
+    found = re.search(rf'<text class="{cls}"[^>]* x="(-?[\d.]+)" y="(-?[\d.]+)"', markup)
+    assert found, (cls, markup)
+    return float(found[1]), float(found[2])
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_the_address_so_far_is_written_inside_the_hub_clear_of_every_digit():
+    out = _drawn()
+    for markup in (out["markup"], out["untitled"]):
+        x, y = _at(markup, "address")
+        assert x == 0 and abs(y) + 4 < out["r0"], (x, y)  # inside the hub, not under it
+        digits = re.findall(r'<text class="digit[^"]*" x="(-?[\d.]+)" y="(-?[\d.]+)"', markup)
+        assert len(digits) == 8
+        for dx, dy in digits:  # no cell's digit, cell 2's below the hub included, is under it
+            assert abs(float(dx) - x) > 10 or abs(float(dy) - y) > 10, (dx, dy, x, y)
+        _, hub = _at(markup, "hub-digit")
+        assert abs(hub - y) >= 11
+    _, title = _at(out["markup"], "title")
+    assert abs(title - _at(out["markup"], "address")[1]) >= 11
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_a_greyed_cell_is_greyed_whole_over_the_rings_own_ground_as_a_greyed_button_is():
+    """Nothing behind the ring shows through a wedge: it is drawn over a ground of its own
+    as wide as the wedges. A cell that cannot be chosen -- wedge, label and digit -- is at
+    the opacity a greyed button is (tokens.css), with the not-allowed cursor."""
+    out = _drawn()
+    markup = out["markup"]
+    ground = re.match(r'<circle class="ground" r="([\d.]+)">', markup)
+    assert ground and float(ground[1]) >= out["r1"], markup[:80]
+    greyed = re.search(r'<g class="off">(.*?)</g>', markup, re.S)
+    assert greyed, markup
+    assert 'id="ring-cell-8"' in greyed[1] and ">Y+<" in greyed[1] and ">8</text>" in greyed[1]
+    assert markup.count('<g class="off">') == 1  # Y+ alone; X+ and Y- can be chosen
+    button = re.search(
+        r"button:disabled[^{]*\{\s*opacity:\s*([\d.]+);\s*cursor:\s*not-allowed",
+        TOKENS_CSS.read_text(encoding="utf-8"),
+    )
+    assert button, "tokens.css no longer says how a greyed button looks"
+    assert out["greyed"] == float(button[1])
+    assert f".apothecary-ring .off {{ opacity: {out['greyed']}; }}" in out["style"]
+    assert ".apothecary-ring .wedge.disabled { cursor: not-allowed; }" in out["style"]

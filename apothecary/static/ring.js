@@ -202,12 +202,20 @@ export async function resolveRing({ base = "", context, site, device, picture, s
 // Drawing
 // ---------------------------------------------------------------------------
 
-const STYLE = `
+// A greyed cell looks as a greyed button does (tokens.css: `button:disabled`): the whole
+// of it -- wedge, rim, label, digit -- at this opacity, with the not-allowed cursor. It is
+// seen over the ring's own ground, the page's background, never over what the ring is
+// opened on, so neither a window's text nor a badge's card shows through a wedge.
+export const GREYED_OPACITY = 0.45;
+
+export const STYLE = `
 .apothecary-ring { position: fixed; inset: 0; z-index: 1000; outline: none; touch-action: none; }
 .apothecary-ring svg { position: absolute; overflow: visible; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+.apothecary-ring .ground { fill: var(--bg, #141614); pointer-events: none; }
 .apothecary-ring .wedge { fill: #2a2f2a; stroke: #0f120f; stroke-width: 1.5; cursor: pointer; }
 .apothecary-ring .wedge.empty { fill: #1b1e1b; opacity: 0.35; cursor: default; }
-.apothecary-ring .wedge.disabled { opacity: 0.5; cursor: not-allowed; }
+.apothecary-ring .off { opacity: ${GREYED_OPACITY}; }
+.apothecary-ring .wedge.disabled { cursor: not-allowed; }
 .apothecary-ring .wedge[data-group] { fill: color-mix(in srgb, var(--group) 26%, #2a2f2a); }
 .apothecary-ring .wedge.destructive { fill: #3a2020; }
 .apothecary-ring .wedge.hot { fill: #4c6a4c; }
@@ -272,6 +280,8 @@ export function refusedWords(option, address) {
 // A reason in lines of at most `most` characters, broken at spaces, to be written under
 // the ring. A word longer than a line is a line of its own.
 const WHY_CHARS = 46, WHY_LINE_PX = 13, WHY_GAP_PX = 22;
+// How far in from the screen's edge a label of the ring is kept.
+const EDGE_PX = 4;
 export function whyLines(text, most = WHY_CHARS) {
     const lines = [];
     for (const word of String(text).split(/\s+/).filter(Boolean)) {
@@ -282,15 +292,26 @@ export function whyLines(text, most = WHY_CHARS) {
     return lines;
 }
 
-/* The ring's picture, as SVG markup: its eight wedges, each with its digit and label, the
- * hub, the title and the address so far. `highlight` is the cell lit, `armed` one asked
- * to be chosen again; a lit wedge that cannot be chosen has its reason written under the
- * ring, or over it when `below` is false (no room under it on the screen). */
+// Where the hub's lines stand, by what it holds: its digit, the ring's title, the address
+// so far. All inside the hub, clear of the digits on its rim (cell 2's under it).
+function hubLines(title, address) {
+    if (title && address) return { digit: -12, title: 2, address: 16 };
+    if (title) return { digit: -6, title: 8, address: null };
+    if (address) return { digit: -4, title: null, address: 10 };
+    return { digit: 4, title: null, address: null };
+}
+
+/* The ring's picture, as SVG markup: its ground, its eight wedges, each with its digit and
+ * label, the hub with the title and the address so far inside it. `highlight` is the cell
+ * lit, `armed` one asked to be chosen again; a lit wedge that cannot be chosen has its
+ * reason written under the ring, or over it when `below` is false (no room under it on
+ * the screen). */
 export function ringMarkup({ ring, highlight = null, armed: armedCell = null, address = "", below = true }) {
     const { r0, r1 } = GEOMETRY;
     const byCell = {};
     for (const option of ring.options) byCell[option.cell] = option;
-    const parts = [];
+    // The ring's own ground: what a faint or greyed wedge is seen over.
+    const parts = [`<circle class="ground" r="${r1 + 1}"></circle>`];
     for (let slot = 0; slot < 8; slot++) {
         const cell = COMPASS[slot];
         const option = byCell[cell];
@@ -320,7 +341,9 @@ export function ringMarkup({ ring, highlight = null, armed: armedCell = null, ad
             ? `<text class="label armed"${anchor} x="${lx.toFixed(1)}" y="${(ly - 2).toFixed(1)}">again to<tspan x="${lx.toFixed(1)}" dy="13">${esc(option.label.toLowerCase())}</tspan></text>`
             : `<text class="label"${anchor} x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}">${label}</text>`;
         parts.push(
-            `<path id="ring-cell-${cell}" class="${cls.join(" ")}" data-cell="${cell}" role="menuitem"`
+            // A cell that cannot be chosen is greyed whole (GREYED_OPACITY).
+            (refusal ? `<g class="off">` : "")
+            + `<path id="ring-cell-${cell}" class="${cls.join(" ")}" data-cell="${cell}" role="menuitem"`
             + (option && option.group ? ` data-group="${esc(option.group)}"` : "")
             + (option && option.colour ? ` data-colour="${esc(option.colour)}" style="--group: ${esc(option.colour)}"` : "")
             + ` aria-label="${option ? esc(armed ? `again to ${option.label.toLowerCase()}` : option.label) : "empty"}"`
@@ -336,14 +359,16 @@ export function ringMarkup({ ring, highlight = null, armed: armedCell = null, ad
             + (option ? words : "")
             + `<circle class="digit-key${option ? "" : " empty-digit"}" cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="8.5"></circle>`
             + `<text class="digit${option ? "" : " empty-digit"}" x="${dx.toFixed(1)}" y="${(dy + 4).toFixed(1)}">${cell}</text>`
+            + (refusal ? `</g>` : "")
         );
     }
     const title = ring.title || "";
+    const at = hubLines(title, address);
     parts.push(
         `<circle class="hub" data-cell="5" r="${r0}"></circle>`
-        + `<text class="hub-digit" x="0" y="${title ? -6 : 4}">5</text>`
-        + (title ? `<text class="title" x="0" y="8">${esc(title)}</text>` : "")
-        + (address ? `<text class="address" x="0" y="${r0 + 14}">⌗${address}</text>` : "")
+        + `<text class="hub-digit" x="0" y="${at.digit}">5</text>`
+        + (title ? `<text class="title" x="0" y="${at.title}">${esc(title)}</text>` : "")
+        + (address ? `<text class="address" x="0" y="${at.address}">⌗${address}</text>` : "")
     );
     // The lit wedge's reason, in words under the ring (over it near the screen's foot):
     // what a title cannot show a finger.
@@ -435,6 +460,7 @@ class RingInstance {
         el.id = "ring-overlay";
         el.tabIndex = -1;
         el.setAttribute("role", "menu");
+        this.size = size;
         el.innerHTML = `<svg id="ring-svg" width="${size}" height="${size}" viewBox="${-size / 2} ${-size / 2} ${size} ${size}" style="left:${this.cx - size / 2}px;top:${this.cy - size / 2}px"></svg>`;
         this.el = el;
         this.svg = el.firstElementChild;
@@ -456,8 +482,39 @@ class RingInstance {
         // A lit wedge's reason goes under the ring, or over it where the screen ends first.
         const below = this.cy + GEOMETRY.r1 + WHY_GAP_PX + 3 * WHY_LINE_PX <= window.innerHeight;
         this.svg.innerHTML = ringMarkup({ ring: this.ring, highlight: this.highlight, armed: this.armed, address: this.address, below });
+        this.keepOnScreen();
         if (this.highlight != null) this.el.setAttribute("aria-activedescendant", `ring-cell-${this.highlight}`);
         else this.el.removeAttribute("aria-activedescendant");
+    }
+
+    /* Every label on the screen, whole: a ring whose labels an edge would cut is moved in
+     * from that edge, never shrunk (a label on a level spoke runs out past the wedges, and
+     * a ring of longer labels can be entered from one that fitted); a reason written under
+     * it is moved along its line. Measured as drawn, since a label's width is the font's. */
+    keepOnScreen() {
+        const w = window.innerWidth, h = window.innerHeight, m = EDGE_PX;
+        const inside = (lo, hi, size) => (lo < m ? m - lo : hi > size - m ? Math.max(m - lo, size - m - hi) : 0);
+        let box = null;
+        for (const el of this.svg.querySelectorAll(".ground, .label")) {
+            const r = el.getBoundingClientRect();
+            if (!r.width && !r.height) continue;
+            box = box
+                ? { left: Math.min(box.left, r.left), right: Math.max(box.right, r.right), top: Math.min(box.top, r.top), bottom: Math.max(box.bottom, r.bottom) }
+                : { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+        }
+        const dx = box ? inside(box.left, box.right, w) : 0, dy = box ? inside(box.top, box.bottom, h) : 0;
+        if (dx || dy) {
+            this.cx += dx;
+            this.cy += dy;
+            this.svg.style.left = `${this.cx - this.size / 2}px`;
+            this.svg.style.top = `${this.cy - this.size / 2}px`;
+        }
+        const why = this.svg.querySelector(".why");
+        if (why) {
+            const r = why.getBoundingClientRect();
+            const along = inside(r.left, r.right, w);
+            if (along) for (const line of why.querySelectorAll("tspan")) line.setAttribute("x", along.toFixed(1));
+        }
     }
 
     setHighlight(cell) {
