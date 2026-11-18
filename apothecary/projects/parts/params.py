@@ -28,7 +28,7 @@ from pydantic_core import to_jsonable_python
 
 from apothecary.models import BoundingBox3D
 
-from .base import BasePart, ContestedValue
+from .base import BasePart, ContestedValue, Preset
 
 
 class NoParameters(LookupError):
@@ -99,6 +99,11 @@ class ParamsSpec(BaseModel):
         True, description="An OpenSCAD here can build the part (gridfinity's cannot on 2021.01)"
     )
     build_note: Optional[str] = Field(None, description="Why it cannot be built here")
+    presets: Dict[str, Preset] = Field(
+        default_factory=dict,
+        description="The part's presets by name: the sizes people meet, each a set of its "
+        "parameters, chosen instead of typed",
+    )
 
 
 class FieldError(BaseModel):
@@ -336,6 +341,7 @@ def params_spec(part: BasePart) -> ParamsSpec:
         description=part.description,
         fields=fields,
         bounds=part.get_bounds(),
+        presets=part.presets,
     )
 
 

@@ -32,6 +32,23 @@ class ContestedValue(BaseModel):
     note: str = ""
 
 
+class Preset(BaseModel):
+    """A named set of a part's parameters, kept in its description: a size people
+    meet -- a 40 mm hose, a 32 mm port -- chosen instead of typed. ``params`` are
+    overrides of the part's defaults, checked as ``-p`` overrides are when the part
+    loads; ``description`` says what it stands for. It is no saved variant (a SCAD
+    edited and kept in git, ``saved.py``) and no render (``variants.py``): it ships
+    with the part, and a person's own numbers go over it."""
+
+    params: Dict[str, Any] = Field(default_factory=dict)
+    description: str = ""
+
+
+# A preset's name: what `part@preset` names at the command line and over HTTP, so
+# never a dot (which names an interface) or an @.
+PRESET_NAME = re.compile(r"[A-Za-z0-9_-]+")
+
+
 # A part is never turned after it renders: a wrapper or a part.json that says
 # display_rotation is refused when the part loads, saying what to do instead.
 TURN_REFUSED = (
@@ -101,6 +118,10 @@ class BasePart(BaseModel):
     # it (2021.01, or a snapshot's 2025.03.15); None when any will do.
     openscad_min_version: Optional[str] = None
 
+    # Its presets, by name: the sizes people meet, each a set of its parameters
+    # (``Preset``). Empty for most parts.
+    presets: Dict[str, Preset] = Field(default_factory=dict)
+
     @model_validator(mode="before")
     @classmethod
     def _not_turned(cls, data: Any) -> Any:
@@ -138,6 +159,30 @@ class BasePart(BaseModel):
                     "so it would draw nothing; rest names the SCAD's own variables"
                 )
         return self
+
+    @model_validator(mode="after")
+    def _presets_are_its_parameters(self) -> "BasePart":
+        # A preset that names a parameter the part has not got, or a value it refuses,
+        # would draw something else than its name says: refused when the part loads.
+        for name, preset in self.presets.items():
+            if not PRESET_NAME.fullmatch(name):
+                raise ValueError(
+                    f"preset {name!r}: a preset's name is letters, digits, _ and -, "
+                    "since part@preset.interface names one"
+                )
+            try:
+                self.validate_overrides(preset.params)
+            except ValueError as exc:
+                raise ValueError(f"preset {name}: {exc}") from None
+        return self
+
+    def preset(self, name: str) -> Dict[str, Any]:
+        """The parameters the preset ``name`` sets, as its model coerces them;
+        KeyError naming the part's presets when it has no such one."""
+        if name not in self.presets:
+            names = ", ".join(self.presets) or "none"
+            raise KeyError(f"{self.name} has no preset {name!r}; its presets: {names}")
+        return self.validate_overrides(self.presets[name].params)
 
     @property
     def exists(self) -> bool:
