@@ -9,6 +9,7 @@ from the polls kept, never by asking a port."""
 from __future__ import annotations
 
 import json
+import math
 import re
 import subprocess
 import sys
@@ -436,3 +437,185 @@ def test_the_projector_s_listeners_are_kept_once_however_often_it_is_imported():
     )
     assert said.returncode == 0, said.stderr[-2000:]
     assert said.stdout.split() == ["1", "1"]
+
+
+# --- a height: a second plane, held against a pinhole projector whose answers are computed
+# --- here, apart from the code under test -------------------------------------------------
+
+
+class Pinhole:
+    """A projector's lens at ``eye`` in the room, aimed at ``target``: a point (x, y, z) of
+    the room lands at the pixel its ray through the lens meets the output, worked out from
+    the geometry, never from a mapping the code under test returns."""
+
+    def __init__(self, eye=(150.0, -420.0, 1800.0), target=(110.0, 110.0, 0.0), focal=2600.0):
+        def sub(a, b):
+            return [p - q for p, q in zip(a, b, strict=True)]
+
+        def unit(a):
+            n = math.sqrt(sum(v * v for v in a))
+            return [v / n for v in a]
+
+        def cross(a, b):
+            return [
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0],
+            ]
+
+        self.eye, self.focal = eye, focal
+        self.forward = unit(sub(target, eye))
+        self.right = unit(cross(self.forward, [0.0, 1.0, 0.0]))
+        self.down = cross(self.forward, self.right)
+
+    def pixel(self, x, y, z=0.0):
+        d = [x - self.eye[0], y - self.eye[1], z - self.eye[2]]
+        along = sum(a * b for a, b in zip(d, self.forward, strict=True))
+        across = sum(a * b for a, b in zip(d, self.right, strict=True))
+        down = sum(a * b for a, b in zip(d, self.down, strict=True))
+        return (960 + self.focal * across / along, 540 + self.focal * down / along)
+
+    def calibration(self, height=None, offset=0.0, bed=None, **noise):
+        marked = projector.starting_points(VOLUME) if bed is None else bed
+        lit = [self.pixel(x, y + offset) for x, y in marked]
+        first = projector.checked("garage", "printer_1", marked, lit, OUTPUT, bed_offset=offset)
+        if height is None:
+            return first
+        up = [self.pixel(x, y + offset, height) for x, y in marked]
+        return projector.checked_upper(first, up, OUTPUT, height, bed_offset=offset)
+
+
+PROBES = [(0.0, 0.0), (110.0, 110.0), (220.0, 40.0), (35.0, 200.0), (210.0, 210.0)]
+
+
+@pytest.mark.parametrize("height", [10.0, 25.0, 60.0])
+def test_a_plane_at_any_height_is_the_pinhole_s_between_at_and_beyond_the_two(height):
+    """Two planes of one pinhole projector fix every plane over the bed, exactly: the plane
+    at z is the interpolation of the two, up to REACH times the second's height."""
+    lens = Pinhole()
+    calibration = lens.calibration(height)
+    for z in [0.0, height / 4, height / 2, height, 1.5 * height, projector.REACH * height]:
+        matrix = projector.mapping_at(calibration, z)
+        for x, y in PROBES:
+            assert apply(matrix, x, y) == pytest.approx(lens.pixel(x, y, z), abs=1e-6), (z, x, y)
+
+
+def test_the_two_planes_are_each_true_where_they_were_marked_whatever_a_hand_got_wrong():
+    lens = Pinhole()
+    marked = projector.starting_points(VOLUME)
+    first = projector.checked(
+        "garage", "printer_1", marked, [lens.pixel(x, y) for x, y in marked], OUTPUT
+    )
+    off = [(u + dx, v + dy) for (u, v), (dx, dy) in zip(
+        [lens.pixel(x, y, 30.0) for x, y in marked], [(2, -1), (-1, 2), (1, 1), (-2, 0)],
+        strict=True,
+    )]
+    both = projector.checked_upper(first, off, OUTPUT, 30.0)
+    for (x, y), (u, v) in zip(marked, off, strict=True):
+        assert apply(projector.mapping_at(both, 30.0), x, y) == pytest.approx((u, v), abs=1e-6)
+    for (x, y), (u, v) in zip(marked, first.pixels, strict=True):
+        assert apply(projector.mapping_at(both, 0.0), x, y) == pytest.approx((u, v), abs=1e-6)
+
+
+def test_a_second_plane_marked_on_another_canvas_is_scaled_to_the_first_s_output():
+    lens = Pinhole()
+    marked = projector.starting_points(VOLUME)
+    first = projector.checked(
+        "garage", "printer_1", marked, [lens.pixel(x, y) for x, y in marked], OUTPUT
+    )
+    half = [(lens.pixel(x, y, 20.0)[0] / 2, lens.pixel(x, y, 20.0)[1] / 2) for x, y in marked]
+    both = projector.checked_upper(first, half, (960, 540), 20.0)
+    got = apply(projector.mapping_at(both, 20.0), 110.0, 110.0)
+    assert got == pytest.approx(lens.pixel(110.0, 110.0, 20.0), abs=1e-6)
+
+
+def test_a_bed_that_carries_y_has_both_planes_in_the_room():
+    """Each plane marked with the bed standing where it stood then: the planes are of the
+    room, so the offsets may differ."""
+    lens = Pinhole()
+    marked = projector.starting_points(VOLUME)
+    first = projector.checked(
+        "garage", "printer_1", marked,
+        [lens.pixel(x, y - 30.0) for x, y in marked], OUTPUT, bed_offset=-30.0,
+    )
+    up = [lens.pixel(x, y + 10.0, 15.0) for x, y in marked]
+    both = projector.checked_upper(first, up, OUTPUT, 15.0, bed_offset=10.0)
+    got = apply(projector.mapping_at(both, 7.5), 50.0, 70.0)
+    assert got == pytest.approx(lens.pixel(50.0, 70.0, 7.5), abs=1e-6)
+
+
+def test_a_second_plane_with_other_points_than_the_first_s_fixes_the_same_planes():
+    lens = Pinhole()
+    block = [(60.0, 60.0), (160.0, 60.0), (160.0, 160.0), (60.0, 160.0)]
+    first = lens.calibration()
+    up = [lens.pixel(x, y, 18.0) for x, y in block]
+    both = projector.checked_upper(first, up, OUTPUT, 18.0, bed=block)
+    assert apply(projector.mapping_at(both, 9.0), 200.0, 30.0) == pytest.approx(
+        lens.pixel(200.0, 30.0, 9.0), abs=1e-6
+    )
+
+
+def test_a_second_plane_is_refused_saying_why():
+    lens = Pinhole()
+    first = lens.calibration()
+    marked = first.bed
+    up = [lens.pixel(x, y, 20.0) for x, y in marked]
+    # The same height: a plane under a millimetre above the bed is the bed plane.
+    with pytest.raises(projector.Refused, match="fix no height"):
+        projector.checked_upper(first, up, OUTPUT, 0.4)
+    with pytest.raises(projector.Refused, match="finite number"):
+        projector.checked_upper(first, up, OUTPUT, float("nan"))
+    with pytest.raises(projector.Refused, match="past 500"):
+        projector.checked_upper(first, up, OUTPUT, 900.0)
+    # Points that fix no mapping, and pixels off the output.
+    line = [(40.0, 40.0), (80.0, 40.0), (120.0, 40.0), (40.0, 90.0)]
+    with pytest.raises(projector.Refused, match="second plane fixes no mapping.*on one line"):
+        projector.checked_upper(first, up, OUTPUT, 20.0, bed=line)
+    with pytest.raises(projector.Refused, match="outside the 1920 by 1080"):
+        projector.checked_upper(first, [*up[:3], (5000.0, 5.0)], OUTPUT, 20.0)
+    # Marked where the bed plane's were: no height told.
+    with pytest.raises(projector.Refused, match="pixels are the bed plane's"):
+        projector.checked_upper(first, first.pixels, OUTPUT, 20.0)
+    # Corners marked in another order than the first's are not of one plane over the bed.
+    with pytest.raises(projector.Refused, match="does not agree with the bed plane's"):
+        projector.checked_upper(first, up[::-1], OUTPUT, 20.0)
+
+
+def test_a_height_is_refused_below_the_bed_with_one_plane_and_beyond_the_reach():
+    lens = Pinhole()
+    one = lens.calibration()
+    assert projector.mapping_at(one, 0.0) == projector.mapping(one)
+    with pytest.raises(projector.Refused, match="only the bed plane is calibrated"):
+        projector.mapping_at(one, 5.0)
+    two = lens.calibration(20.0)
+    with pytest.raises(projector.Refused, match="below the bed plane"):
+        projector.mapping_at(two, -1.0)
+    projector.mapping_at(two, 40.0)  # twice the second plane's: the reach
+    with pytest.raises(projector.Refused, match="past 2 times the second plane's 20 mm"):
+        projector.mapping_at(two, 40.5)
+    with pytest.raises(projector.Refused, match="finite"):
+        projector.mapping_at(two, float("inf"))
+
+
+def test_a_plane_at_the_projector_s_lens_is_refused_not_drawn_inside_out():
+    """A projector 100 mm over the bed, tilted: a point in front of the bed that a plane 40 mm
+    up still lights is behind the lens plane at 80 mm, where a pinhole's picture is inside
+    out, and the plane is refused there (the volume's own corners are asked)."""
+    lens = Pinhole(eye=(110.0, -50.0, 100.0), target=(110.0, 110.0, 0.0), focal=60.0)
+    calibration = lens.calibration(40.0)
+    front = [(110.0, -80.0)]
+    projector.mapping_at(calibration, 40.0, over=front)
+    with pytest.raises(projector.Refused, match="reaches the projector's lens plane over 110, -80"):
+        projector.mapping_at(calibration, 80.0, over=front)
+    projector.mapping_at(calibration, 80.0)  # no point asked: the bed's own are well in front
+
+
+def test_a_calibration_with_a_second_plane_is_kept_and_read_again(garage):
+    lens = Pinhole()
+    both = lens.calibration(20.0)
+    projector.save(both)
+    kept = projector.load("garage", "printer_1")
+    assert kept.upper is not None and kept.upper.height == 20.0 and kept == both
+    # A first calibration marked again forgets the second plane: the projector may have moved.
+    projector.save(lens.calibration())
+    assert projector.load("garage", "printer_1").upper is None

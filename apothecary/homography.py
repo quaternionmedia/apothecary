@@ -103,13 +103,50 @@ def compose(outer: Matrix, inner: Matrix) -> Matrix:
     )
 
 
+def _flat(matrix: Matrix, columns: Sequence[int]) -> List[float]:
+    return [matrix[r][c] for c in columns for r in range(3)]
+
+
+def scaled_like(matrix: Matrix, reference: Matrix) -> Tuple[Matrix, float]:
+    """``matrix`` times the one number that makes its first two columns agree with
+    ``reference``'s as closely as a single multiple can (least squares), and how far
+    they still differ, as a fraction of ``reference``'s two columns' length.
+
+    A mapping from four points is fixed only up to its scale, and ``homography`` sets
+    the last entry to 1. Two mappings of two planes standing over one another, seen by one
+    pinhole projector, share what the plane's own X and Y do -- their first two columns --
+    up to one multiple; this is that multiple. The fraction is 0 for two planes of one
+    pinhole projector, and grows with a projector, its zoom or its lens that moved or
+    bent between the two."""
+    a, b = _flat(reference, (0, 1)), _flat(matrix, (0, 1))
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
+    norm = sum(y * y for y in b)
+    if norm == 0.0 or dot == 0.0:
+        raise Degenerate("two mappings with nothing in common to scale one by")
+    k = dot / norm
+    scaled = tuple(tuple(k * v for v in row) for row in matrix)
+    misfit = sum((k * y - x) ** 2 for x, y in zip(a, b, strict=True)) ** 0.5
+    return scaled, misfit / (sum(x * x for x in a) ** 0.5)  # type: ignore[return-value]
+
+
+def blend(first: Matrix, second: Matrix, t: float) -> Matrix:
+    """``(1 - t)`` of ``first`` and ``t`` of ``second``, entry by entry: ``first`` at 0,
+    ``second`` at 1, and the line through them beyond."""
+    return tuple(  # type: ignore[return-value]
+        tuple((1.0 - t) * a + t * b for a, b in zip(r1, r2, strict=True))
+        for r1, r2 in zip(first, second, strict=True)
+    )
+
+
 __all__ = [
     "Degenerate",
     "Matrix",
     "Point",
     "apply",
+    "blend",
     "compose",
     "homography",
     "invert",
     "on_one_line",
+    "scaled_like",
 ]

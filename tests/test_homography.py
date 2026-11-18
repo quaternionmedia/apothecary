@@ -60,3 +60,26 @@ def test_the_rig_and_the_pictures_take_the_one_mapping():
     assert panels.face_onto(LEANING) == h.homography(projection.CORNERS, LEANING)
     assert (panels.apply, panels.invert, panels.compose) == (h.apply, h.invert, h.compose)
     assert projection.Matrix is h.Matrix
+
+
+def test_a_mapping_is_brought_to_the_scale_of_another_by_their_first_two_columns():
+    onto = h.homography(SQUARE, LEANING)
+    # The same plane, its numbers all five times as large (a mapping's scale is its own).
+    five = tuple(tuple(5.0 * v for v in row) for row in onto)
+    scaled, misfit = h.scaled_like(five, onto)
+    assert misfit == pytest.approx(0.0, abs=1e-12)
+    for row, want in zip(scaled, onto, strict=True):
+        assert row == pytest.approx(want)
+    # Mappings that share nothing but a scale in two columns differ by what is left over.
+    other = h.homography(SQUARE, list(reversed(LEANING)))
+    assert h.scaled_like(other, onto)[1] > 0.5
+
+
+def test_a_blend_is_the_first_at_nothing_the_second_at_one_and_the_line_through_them_beyond():
+    a = h.homography(SQUARE, LEANING)
+    b = h.homography(SQUARE, [(x + 30.0, y - 12.0) for x, y in LEANING])
+    assert h.blend(a, b, 0.0) == a and h.blend(a, b, 1.0) == b
+    half = h.blend(a, b, 0.5)
+    assert half[0][2] == pytest.approx((a[0][2] + b[0][2]) / 2)
+    twice = h.blend(a, b, 2.0)
+    assert twice[1][2] == pytest.approx(2 * b[1][2] - a[1][2])
