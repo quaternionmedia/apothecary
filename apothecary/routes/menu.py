@@ -6,8 +6,10 @@ refused with a 400 naming it, never answered with a 200 that did nothing.
 
 **What the page knows about a board is carried beside the context, not inside
 it.** `device` on a resolve says whether the node has a board pinned, whether
-that board is a printer and whether its control latch is armed; the resolver
-offers the device and control rings from that and nothing else. The verbs on
+that board is a printer, whether its control latch is armed and what the server
+would refuse of its port now (`can`, the answer its Machine's buttons are greyed
+from); the resolver offers the device and control rings from that and nothing
+else, each act the answer refuses greyed with its reason. The verbs on
 those rings are the viewer's: the pages already have a handler for each, and
 the intent route never opens a port.
 

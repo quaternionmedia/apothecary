@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import re
 from enum import Enum
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -102,11 +102,19 @@ class Context(BaseModel):
     targets: List[str] = Field(default_factory=list)
 
 
+class Verdict(BaseModel):
+    """What the server would say to one command on a port now (firmware/can.py)."""
+
+    ok: bool
+    why: Optional[str] = None
+    kind: Optional[str] = None
+
+
 class Device(BaseModel):
     """What the resolver is told about a board, so it can offer the right verbs.
 
     Told rather than looked up: the resolver stays a plain function over data,
-    and the page already knows all four of these about the port it is standing
+    and the page already knows each of these about the port it is standing
     on. ``bound`` says the port is pinned to the node the ring was opened on;
     ``printer`` says it speaks G-code, so control is on offer; ``armed`` is the
     control latch, which decides whether the ring says Arm or Disarm.
@@ -120,6 +128,11 @@ class Device(BaseModel):
     # or ``router`` (apothecary/jobs.py's machine kinds). A router's Control ring is
     # its own: no heaters or bed, but the spindle, work zero and a probe.
     machine: Optional[str] = None
+    # What the server would refuse of the port now, per command: ``can`` on its status
+    # (firmware/can.py), with what the page knows over it (static/can.js), the answer
+    # its Machine's buttons are greyed from. Each act on the ring the answer refuses is
+    # greyed with the server's reason (``CAN_VERBS``); told nothing, nothing is.
+    can: Optional[Dict[str, Verdict]] = None
 
 
 class CameraSeen(BaseModel):
@@ -230,6 +243,10 @@ class Option(BaseModel):
     label: str
     action: Optional[str] = None
     enabled: bool = True
+    # Why it cannot be chosen, while it cannot (``enabled`` false): for a machine's act,
+    # the server's own refusal. The wedge shows it, and says it when chosen anyway
+    # (static/ring.js).
+    why: Optional[str] = None
     destructive: bool = False
     # Not undoable in the page (a site rebuilt, a camera removed, a picture forgotten,
     # a board rebooted): chosen once, the wedge says "again to ..." and waits; chosen
@@ -2016,12 +2033,19 @@ def _device_options(device: Device) -> List[Option]:
     same on a devkit and on a printer (Control at 7). Pin and Unpin
     are one cell, since a port is either pinned to this node or not. Control
     appears only for a printer: a board running a sketch has no G-code to be
-    driven with.
+    driven with. Told what the server would refuse of the port now (``device.can``),
+    each act it refuses is greyed with its reason.
     """
     options = [
         Option(id="device:open", label="Open", action="device:open"),
         Option(id="device:poll", label="Poll", action="device:poll"),
-        Option(id="device:flash", label="Flash", action="device:flash", enabled=not device.printer),
+        Option(
+            id="device:flash",
+            label="Flash",
+            action="device:flash",
+            enabled=not device.printer,
+            why=keeps_its_firmware(device) if device.printer else None,
+        ),
         Option(id="device:query", label="Query", action="device:query"),
         (
             Option(id="device:unpin", label="Unpin", action="device:unpin")
@@ -2063,7 +2087,128 @@ def _device_options(device: Device) -> List[Option]:
     ]
     if device.printer:
         options.append(Option(id="control", label="Control", children=control_options(device)))
+    if device.can is not None:
+        judged(options, device.can)
     return options
+
+
+def keeps_its_firmware(device: Device) -> str:
+    """Why a machine's Flash, which holds its cell, is never chosen: the Machine's words."""
+    return f"a {device.machine or 'printer'} keeps its own firmware; Apothecary polls it and never flashes it"
+
+
+class ByJob(NamedTuple):
+    """An act that is the job's while a job from the host runs on the port (its
+    ``print.cancel`` is ok) and the line's otherwise, as the Machine carries it
+    (widgets/machine.js HOST_VERBS): a print's Pause is the job paused, else ``M25``."""
+
+    job: str
+    line: Optional[str]
+
+
+JOG_AXES = ("Y+", "X+", "Y-", "X-", "Z+", "Z-")
+CORNERS = ("BR", "FR", "FL", "BL")
+
+# Each act on a machine's ring, by the command the server answers for it (firmware/can.py
+# can_now): the verb its button in the Machine names in data-can, or, for a line the pad
+# sends, the verb static/can.js verbOfLine names that line by. None: nothing the server
+# answers stands in its way -- the latch's own switch, what opens a window or a card, what
+# the page alone does. tests/test_can_js.py holds it to the page act by act, and every
+# act a machine's ring carries has an entry.
+CanVerb = Union[str, ByJob, None]
+CAN_VERBS: Dict[str, CanVerb] = {
+    "device:open": None,
+    "device:poll": None,
+    "device:flash": None,  # it opens the Flashing card, whose own buttons answer for a flash
+    "device:query": "identify",
+    "device:pin": None,
+    "device:unpin": None,
+    "device:rescan": None,
+    "device:reconnect": "reconnect",
+    "device:reset": "reset",
+    "device:release": "release",
+    "device:listen": "listen",
+    "device:probe": "probe",
+    "control:arm": None,
+    "control:disarm": None,
+    "control:estop": "estop",
+    "control:hotend-on": "heat",
+    "control:hotend-off": "off",
+    "control:bed-on": "heat",
+    "control:bed-off": "off",
+    "control:fan-on": "heat",
+    "control:fan-off": "off",
+    "control:home": "home",
+    "control:home-xy": "home",
+    "control:home-x": "home.X",
+    "control:home-y": "home.Y",
+    "control:home-z": "home.Z",
+    **{f"control:jog:{axis}": "jog" for axis in JOG_AXES},
+    "control:jog-cancel": "quickstop",
+    "control:motors-off": "control",
+    "control:quickstop": "quickstop",
+    "control:break-wait": "interrupt",
+    "control:mesh-on": "control",
+    "control:mesh-off": "control",
+    **{f"control:corner:{corner}": "control" for corner in CORNERS},
+    "level:probe": "level.probe",
+    "level:read": "level.read",
+    "control:sd-resume": ByJob("print.resume", "control"),
+    "control:sd-pause": ByJob("print.pause", "card.pause"),
+    "control:sd-abort": ByJob("print.cancel", "control"),
+    "control:job-resume": ByJob("print.resume", "resume"),
+    "control:job-hold": ByJob("print.pause", "interrupt"),
+    "control:job-abort": ByJob("print.cancel", "estop"),  # with no job, the soft reset: a stop
+    "print:start": "print.start",
+    "print:preview": None,
+    "print:plan": None,
+    "print:measure": None,
+    "control:unlock": "unlock",
+    "control:spindle-on": "spindle",
+    "control:spindle-off": "off",
+    "control:zero-xyz": "control",
+    "control:zero-z": "control",
+    "control:go-zero": "control",
+    "control:top-z": "control",
+    "control:probe-z": "control",
+    "control:probe-plate": "control",
+}
+# What is never greyed, whatever an answer says: the stop, as can.js's NEVER.
+NEVER_GREYED = frozenset({"estop"})
+
+
+def verdict_of(can: Dict[str, Verdict], verb: str) -> Optional[Verdict]:
+    """The answer for ``verb``, else for the command before its dot (a printer's
+    ``home.X`` is its ``home``), as static/can.js verdictOf reads it."""
+    return can.get(verb) or can.get(verb.split(".")[0])
+
+
+def refusal_of(action: str, can: Dict[str, Verdict]) -> Optional[str]:
+    """Why the server would refuse the act ``action`` names, by ``can``; None when it
+    would take it, or when nothing it answers stands in its way."""
+    verb = CAN_VERBS.get(action)
+    if isinstance(verb, ByJob):
+        running = verdict_of(can, "print.cancel")
+        verb = verb.job if running is not None and running.ok else verb.line
+    if verb is None or verb in NEVER_GREYED:
+        return None
+    verdict = verdict_of(can, verb)
+    if verdict is None or verdict.ok:
+        return None
+    return verdict.why or f"the server refuses {verb} now"
+
+
+def judged(options: Sequence[Option], can: Dict[str, Verdict]) -> None:
+    """Each act among ``options`` the answer refuses greyed with its reason; a ring of
+    acts opens whatever its acts say, so the reasons can be read there."""
+    for option in options:
+        if option.children:
+            judged(option.children, can)
+        elif option.action:
+            why = refusal_of(option.action, can)
+            if why:
+                option.enabled = False
+                option.why = why
 
 
 def control_options(device: Device) -> List[Option]:

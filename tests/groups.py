@@ -404,6 +404,7 @@ GROUPS = {
             "test_pick_scope.py",
             "test_projector_page.py",
             "test_readiness.py",
+            "test_ring_js.py",
             "test_stays_local.py",
             "test_group_colours.py",
             "test_layer_colours.py",

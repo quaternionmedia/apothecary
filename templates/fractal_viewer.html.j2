@@ -10685,6 +10685,7 @@
     // addresses written onto the controls the page already has.
     import { installRing, annotate, addressOf, addresses, resolveRing } from '/static/ring.js';
     import { steer as steerKnobs } from '/static/deck_knobs.js';
+    import { withLatch } from '/static/can.js';
 
     (() => {
         const BASE = {{ base_url | tojson }};
@@ -10708,15 +10709,28 @@
 
         // What the page knows about the board under a node, in the shape the
         // resolver is told it. A node with nothing pinned gets no `device`,
-        // and so no Device option -- absent, not greyed.
-        function deviceFor(path) {
+        // and so no Device option -- absent, not greyed. `judged`, as a ring opens on
+        // it: with what the server would refuse of its port now, which greys those acts.
+        function deviceFor(path, { judged = false } = {}) {
             const { row } = viewer.bindingFor(path);
             if (!row || !row.device) return undefined;
             // The latch as the board's open Machine knows it, so the ring says Disarm
             // while it is armed; a board with no Machine open is taken as disarmed.
             const m = viewer.machine;
             const armed = !!(m && m.handle && m.port === row.device.port && m.handle.ctl.armed);
-            return { port: row.device.port, printer: !!row.device.printer, machine: row.device.printer ? row.device.printer.machine || 'printer' : null, armed, bound: true };
+            const device = { port: row.device.port, printer: !!row.device.printer, machine: row.device.printer ? row.device.printer.machine || 'printer' : null, armed, bound: true };
+            return judged ? { ...device, can: canOf(row.device.port) } : device;
+        }
+        // What the server would refuse of a board now (firmware/can.py), the answer its
+        // Machine's buttons are greyed from: its open Machine's, with what that page knows
+        // over it; else the board's last poll, with a latch that lapsed since counted down
+        // (can.js withLatch). Null when nothing has been asked of it yet.
+        function canOf(port) {
+            const m = viewer.machine;
+            if (m && m.handle && m.port === port) return m.handle.device().can;
+            const board = viewer.boards ? viewer.boards.board(port) : null;
+            const can = board ? (board.status && board.status.can) || (board.info && board.info.can) : null;
+            return can ? withLatch(can, board.armedUntil > Date.now(), port) : null;
         }
         // The sketch of a part of its own that no board connected runs: the ring's
         // Flash its sketch.
@@ -10729,7 +10743,7 @@
         // device is: the pictures list is asked for again as the ring opens.
         const nodeSpec = (path, at, fresh = true) => ({
             context: { pointing: 'node', targets: [path] },
-            site: viewer.siteName, device: deviceFor(path), sketch: sketchFor(path), at,
+            site: viewer.siteName, device: deviceFor(path, { judged: fresh }), sketch: sketchFor(path), at,
             picture: viewer.pictures.context(path, { fresh }),
         });
         // The canvas ring stands on the level you are looking at: its Pieces
@@ -11206,7 +11220,14 @@
         // The key a ring is cached by: what it stands on, and what it was told of
         // the board and the pictures, so a choose, pin or make is never answered
         // from a ring resolved before it.
-        const ringKey = (spec, picture) => JSON.stringify({ p: spec.context.pointing, c: spec.context.targets, s: spec.site, d: spec.device || null, k: spec.sketch || null, pic: picture || null });
+        const ringKey = (spec, picture) => JSON.stringify({ p: spec.context.pointing, c: spec.context.targets, s: spec.site, d: unjudged(spec.device), k: spec.sketch || null, pic: picture || null });
+        // A board's context without the server's answer: what a ring's addresses hang on,
+        // since a greyed cell keeps its seat.
+        function unjudged(device) {
+            if (!device) return null;
+            const { can, ...rest } = device;
+            return rest;
+        }
         async function ringForSelected() {
             if (!viewer.siteName || !viewer.selectedName) return null;
             // The floor's cells are the canvas ring's Pictures › Floor.
@@ -11329,7 +11350,7 @@
         async function annotateMachine() {
             const m = viewer.machine;
             if (!m || !m.handle) return;
-            const device = m.handle.device();
+            const device = unjudged(m.handle.device());
             if (!device.port) return;
             const key = JSON.stringify(device);
             if (!machineRings.has(key)) {
@@ -11352,7 +11373,16 @@
             onIntent: carry,
             onResolved: async (ring, spec) => {
                 if (spec.context.pointing === 'node') { rings.set(ringKey(spec, await spec.picture), Promise.resolve(ring)); annotateControls(ring); }
-                if (spec.context.pointing === 'device' && viewer.machine && viewer.machine.handle) { machineRings.set(JSON.stringify(spec.device), Promise.resolve(ring)); annotate(ring, viewer.machine.handle.pairs()); }
+                if (spec.context.pointing === 'device' && viewer.machine && viewer.machine.handle) { machineRings.set(JSON.stringify(unjudged(spec.device)), Promise.resolve(ring)); annotate(ring, viewer.machine.handle.pairs()); }
+            },
+            // A greyed cell chosen anyway: nothing is done, and the reason is said as a
+            // refused verb's is -- through its Machine, in its log too, when it is a verb
+            // of the Machine open on that board.
+            onRefused: (refusal) => {
+                const m = viewer.machine;
+                const port = refusal.device ? refusal.device.port : null;
+                if (m && m.handle && MACHINE_VERB.test(refusal.action || '') && (!port || m.port === port)) m.handle.refuse(refusal.said);
+                else viewer.setStatus(refusal.said, 'error');
             },
             onError: (err) => viewer.setStatus(`Ring: ${err.message}`, 'error'),
         });

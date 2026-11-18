@@ -203,17 +203,26 @@ def print_(w: Walk) -> None:
 
 
 def disarm(w: Walk) -> None:
-    """🔒 Disarm: the pad's window gone; the ring's Control › Jog › Y+ (⌗7728) then refused,
-    said in the status bar as an error."""
+    """🔒 Disarm: the pad's window gone; the ring's Control › Jog › Y+ (⌗7728) then greyed
+    with the server's reason, and chosen anyway, refused: said in the status bar as an
+    error, the ring left where it was until Escape."""
     where("Disarm", "printer_1's Machine open", w.on("printer_1"))
     if w.machine.locator("#ctl").is_checked():
         w.pad.locator("#ctl-disarm").click()
     expect(w.pad).to_be_hidden(timeout=5000)
+    expect(w.machine.locator("#ctl-label")).not_to_have_class(re.compile(r"\barmed\b"))
     _ring_on(w.page, "printer_1")
-    assert _press(w.page, "Device", "Control", "Jog", "Y+") == "7728"
+    assert _press(w.page, "Device", "Control", "Jog") == "772"
+    why = f"{PRINTER}: control is not armed -- arm it first"
+    up = w.page.locator("#ring-overlay .wedge[data-cell='8']")
+    expect(up).to_have_class(re.compile(r"\bdisabled\b"))
+    expect(up.locator("title")).to_have_text(f"Disabled: {why}")
+    assert _press(w.page, "Y+") == "8"
     status = w.page.locator("#status")
-    expect(status).to_have_text("Y+ (⌗7728): control is not armed", timeout=5000)
+    expect(status).to_have_text(f"Y+ (⌗7728): {why}", timeout=5000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
+    w.page.keyboard.press("Escape")
+    expect(w.page.locator("#ring-overlay")).to_have_count(0)
 
 
 def devkit(w: Walk) -> None:

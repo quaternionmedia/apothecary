@@ -96,7 +96,7 @@ import { KINDS, kindOf as kindOfBoard } from "/static/machine_words.js";
 import { mountBuild } from "/static/widgets/sketches.js";
 import { mountTasks } from "/static/widgets/tasks.js";
 import { again } from "/static/twice.js";
-import { applyCan, refreshDisabled, setReason, setTip, verbOfLine, withLatch } from "/static/can.js";
+import { applyCan, NEEDS_THE_LATCH, refreshDisabled, setReason, setTip, verbOfLine, withLatch } from "/static/can.js";
 import * as tuning from "/static/tuning.js";
 import { running as knobsRunning, choose as chooseKnobs } from "/static/deck_knobs.js";
 
@@ -409,6 +409,9 @@ const BY_CMD = {
 // the exchange in flight, so the page sends each at once, never behind another line,
 // and its button is never greyed.
 const INTERRUPTS = new Set(["M410", "M108", "JOG-CANCEL", "HOLD", "RESUME"]);
+// Each verb's pad line, the other way round: a ring verb is held to the latch as its
+// button is, by the command can.js names that line by.
+const CMD_OF = Object.fromEntries(Object.entries(BY_CMD).map(([cmd, verb]) => [verb, cmd]));
 // A status older than this is said to be, with its age; a board polled less often
 // than that is given two of its intervals.
 const OLD_MS = 5000;
@@ -867,7 +870,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
                 break;
             case "info":
                 if (d.info && latchFresh(d.asked)) applyControlState(d.info.control);
-                if (d.info && !(state.status && state.status.can)) takeCan(d.info.can);
+                // The newest poll's answer when the board has one (the model may hold a poll
+                // made before this Machine opened), else the info's.
+                takeCan((state.status && state.status.can) || (d.info && d.info.can));
                 applyKind(); renderStatus();
                 break;
             case "error":
@@ -912,9 +917,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             return;
         }
         // Watched at once as what it is known to be, so a verb carried the moment
-        // the Machine opens finds it so; what the server says of it follows.
+        // the Machine opens finds it so; what the server says of it follows. A poll the
+        // model holds already answers for its buttons and its ring from the first.
         applyKind();
         renderAll();
+        if (state.status && state.status.can) takeCan(state.status.can);
         $("ident").textContent = "connecting…";
         try { await model.loadInfo(port); } catch (e) { refuse(e.message); }
         if (state.port !== port) return;  // another port was chosen meanwhile
@@ -1133,7 +1140,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             .catch(() => { if (canNow.asking === key) canNow.asking = null; });
     }
     function localCan() {
-        const out = { ...withLatch(canNow.server, ctl.armed) };
+        const out = { ...withLatch(canNow.server, ctl.armed, state.port) };
         const job = prt.job, running = !!(job && job.running);
         const chosen = prt.files.find((f) => f.id === $("print-pick").value);
         if (!state.port) {
@@ -2188,9 +2195,12 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     }
 
     // --- the ring's side: what this board knows, and carrying a chosen verb ------------
+    // `can` is what the server would refuse of the port now, with what this page knows
+    // over it: the answer the buttons are greyed from, which greys the ring's acts too
+    // (menu.py CAN_VERBS).
     function device() {
         const d = state.port ? b().device : null;
-        return { port: state.port, printer: !!(d && d.printer), machine: d && d.printer ? d.printer.machine || "printer" : null, armed: ctl.armed, bound: !!(pin && pin.how === "manual") };
+        return { port: state.port, printer: !!(d && d.printer), machine: d && d.printer ? d.printer.machine || "printer" : null, armed: ctl.armed, bound: !!(pin && pin.how === "manual"), can: state.port ? localCan() : null };
     }
     // A verb of this board's: false when it is not one (the host's: open, pin, unpin);
     // else { refused, said }: the refusal it met, and what it told, or null.
@@ -2235,7 +2245,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (prt.job && prt.job.running && action in HOST_VERBS) { await printVerb(HOST_VERBS[action]); return true; }
         const lines = LINES_OF();
         if (action in lines) {
-            if (!ctl.armed) { refuse(`${intent.label} (⌗${intent.address}): control is not armed`); return true; }
+            // What the server takes with the latch down -- an off, an interrupt -- goes
+            // disarmed, as its button would and its cell on the ring is not greyed.
+            if (!ctl.armed && NEEDS_THE_LATCH.includes(verbOfLine(CMD_OF[action] || ""))) { refuse(`${intent.label} (⌗${intent.address}): control is not armed`); return true; }
             await sendControl(lines[action](handle));
             return true;
         }

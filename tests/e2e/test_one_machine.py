@@ -173,24 +173,43 @@ def test_one_log_with_one_query_box_in_the_machine(page: Page, url: str):
     expect(machine.locator("#log")).to_contain_text("query refused", timeout=5000)
 
 
+# The reason the server gives for a jog with control disarmed (firmware/can.py).
+LATCH_DOWN = f"{PRINTER}: control is not armed -- arm it first"
+# The words a ring writes under itself for its lit wedge, its lines joined.
+WHY_UNDER_THE_RING = (
+    "() => [...document.querySelectorAll('#ring-overlay .why tspan')]"
+    ".map((t) => t.textContent).join(' ')"
+)
+
+
 @pytest.mark.e2e
 def test_a_refusal_reaches_the_status_bar(page: Page, url: str):
-    """A verb the Machine refuses -- a jog while control is not armed, chosen from the
-    ring -- is said in the status bar as an error, with its label and address once, and
-    in the log in the same words."""
+    """A verb the server would refuse -- a jog while control is not armed -- is greyed on
+    the ring as the Machine's jog is, with the server's reason in its title; chosen
+    anyway by its digit, nothing is done, the ring stays with the reason under it, and
+    the status bar says it as an error, with its label and address once, and the log in
+    the same words."""
     open_garage(page, url, settle=False)
     page.locator(".world-badge[data-path='printer_1']").click()
     machine = windows.machine(page)
     expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
     windows.machine_ready(page, "printer")
     _ring_on(page, "printer_1")
-    _choose(page, "Device", "Control", "Jog", "Y+")
-    expect(page.locator("#ring-overlay")).to_have_count(0)
+    _choose(page, "Device", "Control", "Jog")
+    up = page.locator("#ring-overlay .wedge[data-cell='8']")
+    expect(up).to_have_class(re.compile(r"\bdisabled\b"))
+    expect(up).to_have_attribute("aria-disabled", "true")
+    expect(up.locator("title")).to_have_text(f"Disabled: {LATCH_DOWN}")
+    page.keyboard.press("8")
     status = page.locator("#status")
-    said = "Y+ (⌗7728): control is not armed"
+    said = f"Y+ (⌗7728): {LATCH_DOWN}"
     expect(status).to_have_text(said, timeout=5000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
     expect(machine.locator("#log .sys", has_text=said).last).to_be_visible()
+    assert page.locator("#ring-overlay .title").text_content() == "Jog"
+    assert page.evaluate(WHY_UNDER_THE_RING) == f"Disabled: {LATCH_DOWN}"
+    page.keyboard.press("Escape")
+    expect(page.locator("#ring-overlay")).to_have_count(0)
     # A refused report code from the Machine's own box says so too.
     machine.locator("#q").fill("G28")
     machine.locator("#qform button").click()
@@ -294,8 +313,13 @@ def test_a_printers_device_ring_holds_flash_disabled_in_cell_2_and_control_in_7(
     """Device › Flash is in cell 2; Query, Unpin, Rescan, Link and Control keep the cells
     a devkit's device ring gives them -- Control at 7, so from a printer's node 2 7 2 8
     is Control › Jog › Y+. A printer keeps its own firmware: its Flash
-    holds the cell and cannot be chosen."""
+    holds the cell and cannot be chosen, and says why. With no Machine open the jog is
+    greyed from the board's last poll, as it is from an open Machine's answer."""
     open_garage(page, url, settle=False)
+    page.wait_for_function(
+        f"() => !!(window.fractalViewer.boards.board('{PRINTER}').status || {{}}).can",
+        timeout=15000,
+    )
     _ring_on(page, "printer_1")
     _choose(page, "Device")
     assert _wedges(page) == {
@@ -310,14 +334,20 @@ def test_a_printers_device_ring_holds_flash_disabled_in_cell_2_and_control_in_7(
     }
     flash = page.locator("#ring-overlay .wedge[data-cell='2']")
     expect(flash).to_have_class(re.compile(r"\bdisabled\b"))
-    page.keyboard.press("2")  # nothing: the ring stays on Device
+    expect(flash.locator("title")).to_contain_text("keeps its own firmware")
+    page.keyboard.press("2")  # nothing done: the ring stays on Device and says why
     expect(page.locator("#ring-overlay .title")).to_have_text("Device")
+    status = page.locator("#status")
+    expect(status).to_contain_text("Flash (⌗72): a printer keeps its own firmware", timeout=5000)
     for digit in ("7", "2", "8"):
         page.keyboard.press(digit)
+    expect(page.locator("#ring-overlay .wedge[data-cell='8']")).to_have_class(
+        re.compile(r"\bdisabled\b")
+    )
+    expect(status).to_have_text(f"Y+ (⌗7728): {LATCH_DOWN}", timeout=8000)
+    expect(status).to_have_class(re.compile(r"\berror\b"))
+    page.keyboard.press("Escape")
     expect(page.locator("#ring-overlay")).to_have_count(0)
-    status = page.locator("#status")
-    expect(status).to_contain_text("⌗7728", timeout=8000)
-    expect(status).to_contain_text("not armed")
     # Selected's buttons wear the same cells.
     _select(page, "printer_1")
     section = page.locator("#selected-body .device-section")

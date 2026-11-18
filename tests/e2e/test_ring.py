@@ -50,8 +50,9 @@ def ring_url(start_server):
 
 
 CAPTURE = (
-    "window.__intents = []; "
+    "window.__intents = []; window.__refused = []; "
     "window.addEventListener('apothecary:intent', (e) => window.__intents.push(e.detail));"
+    "window.addEventListener('apothecary:refused', (e) => window.__refused.push(e.detail));"
 )
 
 
@@ -68,6 +69,10 @@ def _title(page: Page) -> str:
 
 def _intents(page: Page) -> list:
     return page.evaluate("() => window.__intents")
+
+
+def _refused(page: Page) -> list:
+    return page.evaluate("() => window.__refused")
 
 
 @pytest.mark.e2e
@@ -138,17 +143,23 @@ def test_the_toolbar_button_and_ctrl_right_click_open_it_too(page: Page, ring_ur
 
 
 @pytest.mark.e2e
-def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
+def test_digits_walk_device_control_jog_and_what_leaves_the_ring_carries_the_address(
     page: Page, ring_url: str
 ):
-    """7 7 2 8 reaches Jog > Y+ from printer_1's ring, Device seated last; the intent says so,
-    and so does the page."""
+    """7 7 2 8 reaches Jog > Y+ from printer_1's ring, Device seated last. Disarmed, Y+ is
+    greyed with the server's reason, as the Machine's jog is: chosen anyway, no intent
+    leaves the ring, and what does -- its refusal -- carries the address, and so does
+    the page."""
     # Device's cells: Open (the board's Machine), Flash, ..., and Control, after Link,
     # in cell 7.
     _open_on(page, ring_url)
     expect(
         page.locator("#contents-list .contents-item[data-path='printer_1'] .dev-badge")
     ).to_be_visible(timeout=10000)
+    page.wait_for_function(
+        f"() => !!(window.fractalViewer.boards.board('{PRINTER}').status || {{}}).can",
+        timeout=15000,
+    )
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press("7")
@@ -172,15 +183,20 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
     # The numpad as a jog pad: up, right, down, left, up-right, down-right.
     assert _wedges(page) == {"8": "Y+", "6": "X+", "2": "Y-", "4": "X-", "9": "Z+", "3": "Z-"}
     assert page.locator("#ring-overlay .address").text_content() == "⌗772"
+    expect(page.locator("#ring-overlay .wedge.disabled")).to_have_count(6)
     page.keyboard.press("8")
-    expect(page.locator("#ring-overlay")).to_have_count(0)
-    intents = _intents(page)
-    assert len(intents) == 1
-    intent = intents[0]
+    assert _title(page) == "Jog"  # chosen anyway: the ring stays, nothing is done
+    assert _intents(page) == []
+    refusals = _refused(page)
+    assert len(refusals) == 1
+    intent = refusals[0]
     assert intent["action"] == "control:jog:Y+"
     assert intent["option_id"] == "control:jog:Y+"
     assert intent["address"] == "7728"
     assert intent["context"] == {"pointing": "node", "targets": ["printer_1"]}
+    assert "not armed" in intent["why"]
+    page.keyboard.press("Escape")
+    expect(page.locator("#ring-overlay")).to_have_count(0)
     # The same address, worked out from the ring itself two ways.
     by_path = page.evaluate(
         "() => window.apothecaryRing.addressOf(window.apothecaryRing.lastRing(), "
@@ -190,13 +206,12 @@ def test_digits_walk_device_control_jog_and_the_intent_carries_the_address(
         "() => window.apothecaryRing.addressOf(window.apothecaryRing.lastRing(), 'control:jog:Y+')"
     )
     assert by_path == by_action == intent["address"]
-    # A board's verb goes to its Machine, opened for it: disarmed, the jog is refused,
-    # and the status line says so as an error, with its address.
+    # The status line says so as an error, with its address; no Machine is opened for
+    # an act that was not done.
     expect(page.locator("#status")).to_contain_text("⌗7728", timeout=5000)
     expect(page.locator("#status")).to_contain_text("not armed")
     expect(page.locator("#status")).to_have_class(re.compile(r"\berror\b"))
-    expect(page.locator(".panel[data-panel='machine']")).to_be_visible()
-    page.evaluate("() => window.fractalViewer.closeMachine()")
+    expect(page.locator(".panel[data-panel='machine']")).to_have_count(0)
     # "Appear as generated": the Device section's buttons wear their addresses.
     opener = page.locator("#selected-body .dev-open")
     expect(opener).to_have_attribute("data-address", "78", timeout=5000)

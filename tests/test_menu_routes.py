@@ -146,6 +146,26 @@ def test_a_device_ring_needs_no_arrangement():
     assert [o["label"] for o in ring["options"]][:4] == ["Open", "Poll", "Flash", "Query"]
 
 
+def test_a_device_told_what_the_server_would_refuse_comes_back_greyed_with_the_reason():
+    """The page passes its board's answer (``can``, firmware/can.py) beside the device;
+    each act it refuses comes back ``enabled: false`` with the server's words in ``why``,
+    for the ring to draw, and the stop comes back as it went."""
+    why = "/dev/ttyUSB0: a print holds the port (printing)"
+    refused = {"ok": False, "why": why, "kind": "held"}
+    judged = {**PRINTER, "can": {"jog": refused, "estop": refused, "home": {"ok": True}}}
+    answer = client.post(
+        "/menu/resolve",
+        json={"context": {"pointing": "device", "targets": ["/dev/ttyUSB0"]}, "device": judged},
+    )
+    assert answer.status_code == 200, answer.text
+    control = next(o for o in answer.json()["options"] if o["id"] == "control")
+    cells = {o["label"]: o for o in control["children"]}
+    jog = {c["label"]: c for c in cells["Jog"]["children"]}
+    assert (jog["Y+"]["enabled"], jog["Y+"]["why"]) == (False, why)
+    assert all(c["enabled"] and c["why"] is None for c in cells["Home"]["children"])
+    assert (cells["Stop"]["enabled"], cells["Stop"]["why"]) == (True, None)
+
+
 def test_an_unknown_pointing_is_refused():
     answer = client.post(
         "/menu/resolve",

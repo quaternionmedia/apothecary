@@ -725,6 +725,19 @@ and are greyed with the job's words; Resume moves the machine again and wants th
 One rule in `static/tokens.css` greys a disabled button everywhere, with the
 not-allowed cursor whatever a widget's own rule for its buttons says.
 
+The ring greys the same acts from the same answer. A ring opened on a board -- its
+Machine's, or a piece's Device -- is told the answer beside the board (`can` on the
+resolver's `Device`): the open Machine's, with what that page knows over it, else the
+board's last poll with a lapsed latch counted down. `menu.CAN_VERBS` names, for each
+act on a machine's ring, the command the server answers for it: the verb its button
+names in `data-can`, or the one `verbOfLine` names its pad line by
+(`tests/test_can_js.py` holds the two to each other act by act, and a new act with no
+entry fails it). A print's or a cut's Pause, Resume and Abort are the job's while a job
+from here runs and the line's otherwise, as the Machine carries them. An act the answer
+refuses is greyed with the server's reason (`Option.why`); E-STOP never is. A greyed
+cell chosen anyway does nothing and says why on the status line, in the Machine's log
+too when it is a verb of the Machine open ([the viewer](viewer.md#the-ring)).
+
 Send reads `GET /firmware/printers/can-start` for the chosen file, so the page holds no
 rule of its own for which file goes to which machine. The Bench's Compile & upload and
 raw Flash read `can.flash` of the chosen port (the info of that port, asked once when it

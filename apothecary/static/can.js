@@ -146,15 +146,17 @@ export function applyCan(root, can) {
 }
 
 // What a latch that lapses with no event does to an answer read a moment ago: each
-// command that was ok only because the latch was armed is refused once it is not. The
+// command that was ok only because the latch was armed is refused once it is not, in the
+// words the server refuses it with (firmware/can.py not_armed) when the port is given. The
 // server's own `armed` verdicts, and every other reason, are left as they were said.
 export const NEEDS_THE_LATCH = ["jog", "home", "home.X", "home.Y", "home.Z", "heat", "spindle", "unlock", "resume", "control", "print.start", "print.resume", "level.probe"];
 
-export function withLatch(can, armed) {
+export function withLatch(can, armed, port = null) {
     if (!can || armed) return can;
     const out = { ...can };
+    const why = `${port ? `${port}: ` : ""}control is not armed -- arm it first`;
     for (const verb of NEEDS_THE_LATCH) {
-        if (out[verb] && out[verb].ok) out[verb] = { ok: false, kind: "armed", why: "control is not armed -- arm it first" };
+        if (out[verb] && out[verb].ok) out[verb] = { ok: false, kind: "armed", why };
     }
     return out;
 }

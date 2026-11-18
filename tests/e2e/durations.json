@@ -240,7 +240,7 @@
  "tests/e2e/test_ring.py::test_a_closed_window_stays_closed_and_the_ring_reopens_it[chromium]": 2.63,
  "tests/e2e/test_ring.py::test_a_stacks_plus_opens_any_window_there_and_windows_lists_them_by_group[chromium]": 1.98,
  "tests/e2e/test_ring.py::test_arrows_reach_the_nearest_occupied_cell[chromium]": 3.3,
- "tests/e2e/test_ring.py::test_digits_walk_device_control_jog_and_the_intent_carries_the_address[chromium]": 2.01,
+ "tests/e2e/test_ring.py::test_digits_walk_device_control_jog_and_what_leaves_the_ring_carries_the_address[chromium]": 2.01,
  "tests/e2e/test_ring.py::test_five_backs_out_and_escape_closes[chromium]": 1.72,
  "tests/e2e/test_ring.py::test_jog_by_address_on_a_machine_s_device_ring[chromium]": 2.65,
  "tests/e2e/test_ring.py::test_key_m_opens_the_node_ring_in_its_cells[chromium]": 2.5,

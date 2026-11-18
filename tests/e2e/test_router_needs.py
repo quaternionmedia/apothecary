@@ -1,8 +1,9 @@
 """What the router's state asks of a person, read in its Machine and not in its log: a
 controller in alarm says what it needs before anything moves, a line that did not go
 stays in the Needs you card until one goes, each axis's home says beside its button
-which way it will seek and what the port must show first, and the router armed says so
-on its badge and its row in Site. Walkthrough page 31 is what it writes.
+which way it will seek and what the port must show first, the router armed says so
+on its badge and its row in Site, and the ring greys a home not proved as the pad does,
+with the same reason. Walkthrough page 31 is what it writes.
 
 Runs against a server of its own with the simulated router on ``/dev/ttyFAKE3``, started
 in alarm and held to the homing proof as a real one is
@@ -22,6 +23,8 @@ from doc_capture import TIME_LEFT, moments
 from garage import open_garage
 from garage import select as _select
 from playwright.sync_api import Page, expect
+from rings import open_on_row as _ring_on
+from rings import press as _press
 
 ROUTER = "/dev/ttyFAKE3"
 CONTROLLER = "cnc_router.frame_system.controller"
@@ -218,3 +221,29 @@ def test_the_machine_says_what_it_needs_and_what_did_not_go(page: Page, url: str
         "the deck's two long presses arm it the same way.",
         blank=CHANGING,
     )
+
+    # 8. The ring greys the same act from the same answer: Device › Control › Home › Z,
+    #    chosen by its digit, does nothing and says why under the ring and in the status
+    #    line, in the server's own words.
+    before = _position(url)
+    _ring_on(page, "cnc_router")
+    assert _press(page, "Device", "Control", "Home") == "778"
+    z_cell = page.locator("#ring-overlay .wedge[aria-label='Z']")
+    expect(z_cell).to_have_class(re.compile(r"\bdisabled\b"))
+    expect(z_cell.locator("title")).to_have_text(
+        re.compile(r"^Disabled: .*home refused: Z will seek \+Z at")
+    )
+    assert _press(page, "Z") == "4"
+    expect(page.locator("#status")).to_contain_text("Z (⌗7784): ", timeout=5000)
+    expect(page.locator("#status")).to_contain_text("home refused: Z will seek +Z at")
+    expect(page.locator("#ring-overlay .why")).to_contain_text("home refused")
+    assert _position(url) == before
+    story.shows(
+        "On the ring, a home not proved is greyed with the same reason",
+        "cnc_router's ring, Device › Control › Home: Z is greyed from the answer the pad's "
+        "Home Z is greyed from. Chosen by its digit anyway it does nothing: the ring stays, "
+        "the reason written under it, and the status line says it with the cell's address.",
+        blank=CHANGING,
+    )
+    page.keyboard.press("Escape")
+    expect(page.locator("#ring-overlay")).to_have_count(0)

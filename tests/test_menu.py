@@ -821,6 +821,118 @@ def test_stop_is_marked_destructive_and_nothing_else_on_the_ring_is():
     assert {o.id for o in ring.options if o.destructive} == {"control:estop"}
 
 
+# ------------------------------------------------- greyed from the server's answer
+
+LATCH_DOWN = "/dev/ttyUSB0: control is not armed -- arm it first"
+
+
+def _refused(why: str, kind: str = "armed") -> dict:
+    return {"ok": False, "why": why, "kind": kind}
+
+
+def _judged(base: Device, can: dict) -> Device:
+    """``base`` told what the server would refuse of its port now."""
+    return Device(**{**base.model_dump(), "can": can})
+
+
+def _leaves_of(option) -> list:
+    return [o for o in (option.children or []) if o.action]
+
+
+def test_a_machine_cell_the_server_would_refuse_is_greyed_with_its_reason():
+    """Told the port's answer (``can`` on its status, firmware/can.py), the ring greys
+    each act the server would refuse, with the server's words, as the Machine greys
+    its button; what the answer allows stays, and no cell moves."""
+    device = _judged(PRINTER, {"jog": _refused(LATCH_DOWN), "home": {"ok": True}})
+    ring = _device_ring(device)
+    jog = walk(ring, "72")  # Control › Jog
+    assert [(c.label, c.enabled, c.why) for c in jog.children] == [
+        (axis, False, LATCH_DOWN) for axis in ("Y+", "X+", "Y-", "X-", "Z+", "Z-")
+    ]
+    assert all(c.enabled and c.why is None for c in walk(ring, "76").children)  # Home
+    assert walk(ring, "72").enabled  # a ring of acts opens whatever its acts say
+    assert every_address(ring) == every_address(_device_ring(PRINTER))
+    # The same from a piece's ring: the Device it carries is greyed alike.
+    node = _node_with_printer(device)
+    assert walk(node, "4728").why == LATCH_DOWN
+    # Told nothing, nothing is greyed.
+    assert all(walk(_device_ring(PRINTER), a).enabled for a in every_address(ring) if a != "2")
+
+
+def test_a_printers_one_axis_home_is_its_home_and_a_routers_is_its_own():
+    """A verb with a dot falls back to the one before it, as static/can.js reads it: a
+    printer's Home X is answered by its ``home``; a router's by its own ``home.X``."""
+    printer = _device_ring(_judged(PRINTER, {"home": _refused("not homed", "homed")}))
+    assert all(not c.enabled for c in walk(printer, "76").children)
+    router = _device_ring(
+        _judged(ROUTER, {"home": {"ok": True}, "home.X": _refused("X has not shown its switch")})
+    )
+    home = {c.label: c for c in walk(router, "78").children}
+    assert not home["X"].enabled and home["X"].why == "X has not shown its switch"
+    assert home["All"].enabled and home["Y"].enabled and home["Z"].enabled
+
+
+def test_a_print_cell_is_the_jobs_while_one_runs_from_here_and_the_lines_otherwise():
+    """Print's Pause, Resume and Abort do whichever is running, as the Machine carries
+    them: the job's verb while a job from the host runs (its ``print.cancel`` is ok), the
+    card's line otherwise."""
+    idle = {"print.cancel": _refused("no print is running", "idle"), "card.pause": {"ok": True}}
+    pause = {c.label: c for c in walk(_device_ring(_judged(PRINTER, idle)), "79").children}
+    assert pause["Pause"].enabled  # M25, to the card
+    paused = {
+        "print.cancel": {"ok": True},
+        "print.pause": _refused("the print is paused, not running", "idle"),
+        "card.pause": _refused("a print holds the port", "held"),
+    }
+    pause = {c.label: c for c in walk(_device_ring(_judged(PRINTER, paused)), "79").children}
+    assert not pause["Pause"].enabled and pause["Pause"].why == "the print is paused, not running"
+    assert pause["Abort"].enabled
+
+
+def _answered(monkeypatch, kind: str, armed: bool) -> dict:
+    """What the server answers for an idle port of ``kind``, its latch as ``armed``."""
+    from apothecary.firmware import can
+
+    facts = can.Facts("/dev/x", None, armed, None, None, None, None, None, kind, None)
+    monkeypatch.setattr(can, "facts_of", lambda *a, **k: facts)
+    return can.can_now("/dev/x")
+
+
+@pytest.mark.parametrize("base", [PRINTER, ROUTER], ids=["printer", "router"])
+def test_the_stops_are_never_greyed_on_the_ring(base, monkeypatch):
+    """E-STOP is never greyed, whatever an answer says of it, as the Machine's E-STOP and
+    the pad's are not; and with the latch down what interrupts or turns off -- Break
+    wait, Quickstop, Stop jog, Hold, the heaters and the spindle off -- stays, as the
+    server takes it, while what needs the latch is greyed for it."""
+    everything = {
+        verb: _refused("refused")
+        for verb in _answered(monkeypatch, base.machine or "printer", True)
+    }
+    ring = _device_ring(_judged(base, everything))
+    stop = walk(ring, address_of(ring, "control:estop"))
+    assert stop.enabled and stop.why is None
+    down = _answered(monkeypatch, base.machine or "printer", False)
+    ring = _device_ring(_judged(base, down))
+    acts = {a: walk(ring, address) for address, a in every_address(ring).items()}
+    live = {
+        "printer": ("control:break-wait", "control:quickstop", "control:hotend-off",
+                    "control:bed-off", "control:fan-off", "control:sd-pause", "control:estop"),
+        "router": ("control:jog-cancel", "control:job-hold", "control:spindle-off",
+                   "control:job-abort", "control:estop"),
+    }[base.machine or "printer"]  # fmt: skip
+    for action in live:
+        assert acts[action].enabled, (action, acts[action].why)
+    assert not acts["control:jog:Y+"].enabled and "not armed" in acts["control:jog:Y+"].why
+    assert not acts["control:home"].enabled
+
+
+def test_a_printers_flash_says_why_it_cannot_be_chosen():
+    flash = walk(_device_ring(), "2")
+    assert flash.enabled is False and "keeps its own firmware" in flash.why
+    devkit = walk(_device_ring(Device(port="/dev/ttyACM0", bound=True)), "2")
+    assert devkit.enabled and devkit.why is None
+
+
 def test_the_device_ring_stands_on_the_port_s_last_segment():
     assert _device_ring().title == "ttyUSB0"
     long_leaf = _device_ring(Device(port="/dev/serial/by-id/usb-Marlin_Ender-if00")).title

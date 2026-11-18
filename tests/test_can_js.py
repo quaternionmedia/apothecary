@@ -43,6 +43,7 @@ out.tip_while_refused = seen(buttons.jog);
 applyCan(root, { jog: { ok: true } });
 out.tip_after = seen(buttons.jog);
 out.latch = withLatch({ jog: { ok: true }, off: { ok: true }, home: { ok: false, kind: "held", why: "w" } }, false);
+out.latch_of = withLatch({ jog: { ok: true } }, false, "/dev/x");
 const up = el("upload", "Build it");
 up.dataset.address = "932";
 setReason(up, "choose a sketch first", "Build it");
@@ -111,6 +112,8 @@ def test_a_refused_button_is_greyed_with_the_reason_and_its_own_tip_comes_back()
     # A latch that lapsed refuses what only the latch allowed, and nothing else.
     assert out["latch"]["jog"]["kind"] == "armed" and out["latch"]["off"] == {"ok": True}
     assert out["latch"]["home"] == {"ok": False, "kind": "held", "why": "w"}
+    # Said with the port it is told, in the server's own words (firmware/can.py not_armed).
+    assert out["latch_of"]["jog"]["why"] == can.not_armed("/dev/x", False)
 
 
 MACHINE_JS = CAN_JS.parent / "widgets" / "machine.js"
@@ -236,3 +239,124 @@ def test_every_verb_the_page_names_is_one_the_server_answers(monkeypatch):
     ):
         unanswered = sorted(set(verbs) - answers)
         assert not unanswered, f"{where} names {unanswered}, which can_now does not answer"
+
+
+def _machine_rings():
+    """Every ring a machine's acts are on: a printer's, a router's and a devkit's device
+    ring, latch down and up."""
+    from apothecary.menu import Context, Device, Pointing, resolve
+
+    for device in (
+        Device(port="/dev/x", printer=True, bound=True),
+        Device(port="/dev/x", printer=True, armed=True),
+        Device(port="/dev/x", printer=True, machine="router", bound=True),
+        Device(port="/dev/x", printer=True, machine="router", armed=True),
+        Device(port="/dev/x", bound=True),
+        Device(port="/dev/x"),
+    ):
+        yield resolve(Context(pointing=Pointing.DEVICE, targets=[device.port]), device=device)
+
+
+def _acts(options) -> set:
+    """Every act among ``options`` and the rings under them."""
+    found = set()
+    for option in options:
+        found |= _acts(option.children) if option.children else {option.action}
+    return found
+
+
+def _named(verb) -> set:
+    """The commands an entry of menu.CAN_VERBS names: one, both halves of a ByJob, or none."""
+    from apothecary.menu import ByJob
+
+    halves = verb if isinstance(verb, ByJob) else (verb,)
+    return {v for v in halves if v}
+
+
+def test_every_act_on_a_machines_ring_names_a_command_the_server_answers_or_none(monkeypatch):
+    """The ring greys an act from the command menu.CAN_VERBS names for it. Every act a
+    machine's ring carries has an entry -- a command, or None where nothing the server
+    answers stands in its way -- so a new act is not left out of the answer by being
+    left out of the table, and each command named is one can_now answers."""
+    from apothecary.menu import CAN_VERBS
+
+    answers = _verbs_the_server_answers(monkeypatch)
+    acts = set().union(*(_acts(ring.options) for ring in _machine_rings()))
+    assert {"control:jog:Y+", "control:job-hold", "device:listen", "print:start"} <= acts
+    missing = sorted(acts - set(CAN_VERBS))
+    assert not missing, f"no entry in menu.CAN_VERBS for {missing}: name its command, or None"
+    stale = sorted(set(CAN_VERBS) - acts)
+    assert not stale, f"menu.CAN_VERBS names acts no machine's ring carries: {stale}"
+    named = set().union(*(_named(v) for v in CAN_VERBS.values()))
+    assert not sorted(named - answers), f"menu.CAN_VERBS names {sorted(named - answers)}"
+
+
+def _block(text: str, start: str, end: str) -> str:
+    at = text.index(start)
+    return text[at : text.index(end, at)]
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_the_rings_acts_are_greyed_by_the_commands_the_machines_buttons_are():
+    """menu.CAN_VERBS and the Machine name each act by one command: a pad's line by the
+    verb verbOfLine names it (BY_CMD, the line's act), a job's verb by the job's command
+    (HOST_VERBS), and each button the ring's addresses are written on (pairs()) by its
+    data-can -- a button with none, an act with none."""
+    from apothecary.menu import CAN_VERBS, ByJob
+
+    text = MACHINE_JS.read_text(encoding="utf-8")
+    by_cmd = dict(re.findall(r'"([^"]+)": "(control:[a-z-]+)"', _block(text, "const BY_CMD", "};")))
+    host = dict(
+        re.findall(r'"(control:[a-z-]+)": "([a-z]+)"', _block(text, "const HOST_VERBS", "};"))
+    )
+    tags = {}
+    for tag in re.findall(r"<button\b[^>]*>", text):
+        named = re.search(r'\bid="([^"]+)"', tag)
+        if named:
+            said = re.search(r'\bdata-can="([^"]+)"', tag)
+            tags[named[1]] = said[1] if said else None
+    paired = re.findall(
+        r'out\.push\(\[\$\("([^"]+)"\), "([a-z:-]+)"\]\)',
+        _block(text, "function pairs()", "\n    }"),
+    )
+    assert len(by_cmd) > 20 and len(host) == 6 and len(paired) > 15, (by_cmd, host, paired)
+    script = (
+        f"import {{ verbOfLine }} from {json.dumps(CAN_JS.as_uri())};\n"
+        f"console.log(JSON.stringify(Object.fromEntries({json.dumps(sorted(by_cmd))}"
+        ".map((l) => [l, verbOfLine(l)]))));"
+    )
+    run = subprocess.run(
+        ["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60
+    )
+    assert run.returncode == 0, run.stderr
+    of_line = json.loads(run.stdout)
+
+    def line_half(action):
+        ours = CAN_VERBS[action]
+        return ours.line if isinstance(ours, ByJob) else ours
+
+    def button_half(action):
+        ours = CAN_VERBS[action]
+        return ours.job if isinstance(ours, ByJob) else ours
+
+    problems = [
+        f"{cmd} ({action}): the pad greys it as {of_line[cmd]}, the ring as {line_half(action)}"
+        for cmd, action in by_cmd.items()
+        if of_line[cmd] != line_half(action)
+    ]
+    problems += [
+        f"{action}: the job's {word} is print.{word}, the ring's {button_half(action)}"
+        for action, word in host.items()
+        if button_half(action) != f"print.{word}"
+    ]
+    problems += [
+        f"#{button} ({action}): its data-can is {tags.get(button)}, the ring's {button_half(action)}"
+        for button, action in paired
+        if tags.get(button) != button_half(action)
+    ]
+    problems += [
+        f"control:jog:{axis}: a jog button's data-can is jog"
+        for axis in ("X+", "Y-")
+        if CAN_VERBS[f"control:jog:{axis}"] != "jog"
+    ]
+    assert problems == []

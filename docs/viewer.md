@@ -542,6 +542,15 @@ chooses it, on the hub backs out, and far outside the ring closes it.
 address wherever it is opened; the cells that come and go with where it is
 opened are seated after them.
 
+**A cell that cannot be chosen now is greyed, and says why.** Its wedge is drawn
+dim; its reason is its title, and written under the ring while the wedge is lit by
+the pointer, an arrow or a digit -- a title is not seen on a touch screen. Chosen
+anyway, by its digit, a click or a tap, it does nothing: the ring stays where it
+is, the reason under it, and the status line says it as a refused verb is said,
+`Y+ (⌗7728): <why>`. A machine's acts are greyed from the server's own answer for
+its port, the one its Machine's buttons are greyed from
+([firmware.md](firmware.md#what-a-command-would-be-refused-for)); the stop never is.
+
 **The canvas ring** lists Pieces 8 (each piece at this level; at a site's top
 the pieces made from pictures are one more cell, Made; at a leaf, the leaf
 itself), Site 6 (every site, Apothecary among them), View 2, Panels 4, Pictures 9 and Rebuild 3 (the
