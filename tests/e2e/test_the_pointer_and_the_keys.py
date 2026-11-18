@@ -511,18 +511,19 @@ def test_settings_survive_a_reload_and_reset_puts_them_back(page: Page, url: str
     _open(page, url)
     panel = _settings(page)
     panel.locator(".setting-choice[data-setting='ringModifier']").select_option("alt")
-    _capture(page, "zoomOutKey", "u")
+    # A key no shortcut holds: u is the projector page's Mark a plane above.
+    _capture(page, "zoomOutKey", "j")
     panel.locator(".setting-tick[data-setting='autoZoom']").uncheck()
     panel.locator(".setting-number[data-setting='dollyOut']").fill("4")
     panel.locator(".setting-number[data-setting='dollyOut']").press("Tab")
-    changed = {"ringModifier": "alt", "zoomOutKey": "u", "autoZoom": False, "dollyOut": 4}
+    changed = {"ringModifier": "alt", "zoomOutKey": "j", "autoZoom": False, "dollyOut": 4}
 
     page.reload()
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     values = page.evaluate("() => window.apothecarySettings.values()")
     assert {k: values[k] for k in changed} == changed
     panel = _settings(page)
-    expect(panel.locator(".setting-key[data-setting='zoomOutKey']")).to_have_text("u")
+    expect(panel.locator(".setting-key[data-setting='zoomOutKey']")).to_have_text("j")
     expect(panel.locator(".setting-tick[data-setting='autoZoom']")).not_to_be_checked()
     expect(page.locator("#viewer-hint")).to_contain_text("Alt+right-click: ring")
     # Each row shows its default, and its reset is there while it differs from it.
