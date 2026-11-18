@@ -73,6 +73,8 @@ class Step:
 #   machine   a piece's Machine opened, the piece chosen first: with no board
 #             connected, as the site plans it
 #   part      a piece chosen
+#   makes     the open Machine's Print window naming a piece under makes, and the file kept
+#             made from it chosen where one is kept: nothing is sliced
 #   file      the open Machine keeping a file for a part: sliced, or its toolpath
 #             written, where none is kept
 #   fit       a piece chosen and framed in the world, as f does
@@ -87,6 +89,7 @@ PUTS = (
     "pin",
     "machine",
     "part",
+    "makes",
     "file",
     "fit",
     "edit",
@@ -247,7 +250,7 @@ MAKE = Journey(
     opened_by="a machine's badge or its row in Site, or Slice on a part's ring",
     view=_machine_view("machine-print", "pictures", "bench", "settings", active="machine-print"),
     name="Print a part",
-    staged_on=(("machine", "printer_1"), ("part", "footpedal")),
+    staged_on=(("machine", "printer_1"), ("part", "footpedal"), ("makes", "footpedal")),
     steps=(
         Step(
             "choose",
@@ -284,7 +287,7 @@ MAKE = Journey(
             "print",
             "Start",
             "control armed in the Machine, ▶ Print, the job in Jobs",
-            forward=("machine", "jobs"),
+            forward=("machine-print", "jobs"),
             owns=("machine", "jobs"),
             shown_by=("03-a-picture-to-a-print.md#8", "03-a-picture-to-a-print.md#9"),
         ),
@@ -315,7 +318,7 @@ CUT = Journey(
     opened_by="the router's badge or its row in Site, or Toolpath on a part's ring",
     view=_machine_view("machine-print", "machine-status", "machine-level", active="machine-print"),
     name="Cut a part",
-    staged_on=(("machine", "cnc_router"), ("part", "router_coupon")),
+    staged_on=(("machine", "cnc_router"), ("part", "router_coupon"), ("makes", "router_coupon")),
     steps=(
         Step(
             "choose",
@@ -359,7 +362,7 @@ CUT = Journey(
             "cut",
             "Cut",
             "control armed in the Machine, the work zeroed, ▶ Cut, the job in Jobs",
-            forward=("machine", "jobs"),
+            forward=("machine-print", "jobs"),
             owns=("machine", "jobs"),
             shown_by=(
                 "24-a-cut-from-the-card.md#5",

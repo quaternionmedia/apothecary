@@ -140,6 +140,10 @@ def test_make_a_thing_goes_from_the_part_to_the_job_and_back_to_the_printer():
     assert make.steps[2].forward == ("machine-print",)
     assert [s.id for s in make.steps if s.draws] == ["see"]
     assert make.steps[4].owns == ("machine", "jobs")
+    # Start names ▶ Print, a button of the Print window: that tab is the one in front,
+    # not the Machine's beside it. The stage's part is under makes wherever it is entered.
+    assert make.steps[4].forward[0] == "machine-print"
+    assert ("makes", "footpedal") in make.staged_on
     # The part made, read in the Print window as a turn of the printer's tuning, a file
     # of it there whose plan (or box) gives the rows to read.
     assert make.steps[-1].forward == ("machine-print",) and make.steps[-1].owns == ()

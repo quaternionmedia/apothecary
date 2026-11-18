@@ -36,6 +36,7 @@ Print a part, chosen in the box's drop-down. The page is taken to its first stag
 ```
 printer_1's Machine opened
 footpedal chosen
+footpedal named under makes in printer_1's Print window
 Print a part entered, its windows laid out
 Print a part › 1 Choose (⊞ Windows › Print a part): the part, among the site's pieces
 ```
@@ -58,13 +59,14 @@ See, chosen among the journey's stages: the stage draws the chosen file's path, 
 ![See is reached from nothing: the piece sliced, its path drawn](screenshots/34-04-see-is-reached-from-nothing-the-piece-sliced-its-p.png)
 
 ```
+footpedal chosen
 footpedal sliced for printer_1, as Slice does: footpedal.gcode
 Print a part › 4 See (the tour): footpedal.gcode's path is drawn on printer_1 and framed, all of it: the preview slider in its Print goes through each layer
 ```
 
 ## 5. ✗ Off keeps what is off, and only with it
 
-✗ Off with the field empty is refused, the box saying what it needs and staying on the stage; with what is off typed, it is kept, and the box goes to Start and takes the page there, the Machine and Jobs in front. Nothing is armed.
+✗ Off with the field empty is refused, the box saying what it needs and staying on the stage; with what is off typed, it is kept, and the box goes to Start and takes the page there, the Print window, where ▶ Print is, and Jobs in front. Nothing is armed.
 
 ```
 Print a part › 5 Start (the tour): control armed in the Machine, ▶ Print, the job in Jobs
@@ -103,6 +105,7 @@ Cut a part, chosen: its stages are on the router's Machine, and this server's ro
 ```
 cnc_router's Machine opened with no board connected: what it makes is planned there
 router_coupon chosen
+router_coupon named under makes in cnc_router's Print window
 Cut a part entered, its windows laid out
 Cut a part › 1 Choose (⊞ Windows › Cut a part): a part that says how it is cut, among the site's pieces
 ```
@@ -130,7 +133,7 @@ make/see	works	Ada
 
 ## What this page does not show
 
-- **A stage armed or started.** Start's stage brings the Machine and Jobs forward; arming control and starting a print are a person's.
+- **A stage armed or started.** Start's stage brings the Print window and Jobs forward; arming control and starting a print are a person's.
 - **What changes on every run.** Moments are blanked in the pictures and left out of the words, and so is how many stages the tour holds, which any stage added to a journey changes.
 
 Run it yourself:

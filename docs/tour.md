@@ -28,7 +28,8 @@ small, since it stands over the world: its head names the stage and how many hav
 word on them. It is dragged by its head, folded to its head by a double-click there,
 and closed by its ✕ or by Tour again. Where it stands, whether it is open and the stage
 it shows are this browser's (`apothecary.tour` in its local storage), so a reload opens
-it where it was.
+it where it was: the page is then taken to that stage as ↻ does, so the box is not left
+over a page it is not true of.
 
 Opened in a browser that has not taken it before, it starts at the first stage with no
 word on the build the server runs.
@@ -52,9 +53,10 @@ thing only where it is not so already:
   | Put | What the page does | As |
   |---|---|---|
   | `pin` | a board on a port pinned to a piece, where that port is listed | Pin, in the piece's Device section |
-  | `machine` | a piece's Machine opened, in place of another's; with no board connected, as the site plans it | its badge, or Device › Open |
+  | `machine` | a piece chosen, and its Machine opened, in place of another's, where it is not open already; with no board connected, as the site plans it | its badge, or Device › Open |
   | `part` | a piece chosen | its row in Site |
   | `fit` | a piece chosen and framed in the world | `f` |
+  | `makes` | the piece named under makes in the open Machine's Print window, and the file kept made from it chosen, where one is kept: nothing is sliced | the card's makes, and its files |
   | `file` | the open Machine's file made from a part: the one chosen, else the newest kept chosen, else one made; another part's file chosen before is not the stage's | the card's file, Slice, or a router's Toolpath |
   | `edit` | a part's editor opened | Part › Edit |
   | `scad` | a part's SCAD in its window | Part › SCAD |
@@ -89,7 +91,7 @@ box opens on what the stage needs, in the page's own words for it -- *esp32_blin
 board is pinned to a board, but not connected: connect it, or ⟳ Rescan in its Device
 section*. With that done, ↻ takes the page the rest of the way.
 
-**Nothing is armed, started, sent or made.** Start's stage brings the Machine and Jobs
+**Nothing is armed, started, sent or made.** Start's stage brings the Print window, where ▶ Print is, and Jobs
 forward, Flash's the board's Flashing window, Steps' the Procedure, Pieces' the shapes
 found: arming control, ▶ Print and ▶ Cut, an upload, GO, a knob turned and Picture ›
 Make are a person's.

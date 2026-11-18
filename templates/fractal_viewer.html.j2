@@ -1562,6 +1562,9 @@
                 // this browser remembers them and that step's brought forward.
                 const journey = DEEP_LINK.get('journey');
                 if (journey && this.siteName) await this.enterJourney(journey, { stepId: DEEP_LINK.get('step'), fromAddress: true });
+                // The tour box a reload found open: the page taken to its stage, as its ↻
+                // does, so the box is not left over a page it is not true of.
+                if (this.siteName && this.tourPop?.wasOpen()) await this.tourPop.restage();
             }
 
             initThreeJS() {
@@ -9067,8 +9070,9 @@
                     // stage's windows are there.
                     const open = () => this.machine && this.machine.handle?.kind()
                         && (port ? this.machine.port === port : this.machine.plan && this.machine.path === subject);
-                    if (open()) return {};
+                    // Chosen whether its Machine is open or not: the stage is about it.
                     await choose(subject);
+                    if (open()) return {};
                     // Not connected, it opens as the site plans it: the site's machines,
                     // asked for as it loaded and answering apart from its boards, first.
                     if (!port) await this.machinesLoaded;
@@ -9076,6 +9080,21 @@
                         return { refused: port ? `${subject}'s Machine did not open: ${document.getElementById('status').textContent}` : this.noMachine(subject) };
                     }
                     return { did: port ? `${subject}'s Machine opened` : `${subject}'s Machine opened with no board connected: what it makes is planned there` };
+                }
+                if (verb === 'makes') {
+                    const machine = this.machine, print = machine?.handle?.print;
+                    if (!print?.choose) return { refused: `No Machine that makes ${subject} is open` };
+                    const who = machine.path || machine.port;
+                    const part = () => document.querySelector('#print-part')?.value, file = () => document.querySelector('#print-pick')?.value;
+                    const [partBefore, fileBefore] = [part(), file()];
+                    if (!(await print.choose(subject))) return { refused: `${subject} is not among what ${who} makes: its site does not list it` };
+                    // The file kept from it, chosen; another part's file is not this stage's.
+                    // Nothing is sliced here: See does that.
+                    const earlier = await print.fileOf(subject);
+                    const said = [];
+                    if (partBefore !== subject) said.push(`${subject} named under makes in ${who}'s Print window`);
+                    if (earlier && file() !== fileBefore) said.push(`${earlier}, made from ${subject} before, chosen`);
+                    return said.length ? { did: said.join('; ') } : {};
                 }
                 if (verb === 'file') {
                     const machine = this.machine, print = machine?.handle?.print;

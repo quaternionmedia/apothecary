@@ -152,7 +152,7 @@ def test_make_a_thing_is_walked_step_by_step_on_its_rail(page: Page, url: str):
         ("shape", "part-parameters", 2, "Shape"),
         ("slice", "machine-print", 3, "Slice"),
         ("see", "machine-print", 4, "See"),
-        ("print", "machine", 5, "Start"),
+        ("print", "machine-print", 5, "Start"),
         ("measure", "machine-print", 6, "Measure"),
     ):
         nxt = page.locator(f"{RAIL} .journey-next")

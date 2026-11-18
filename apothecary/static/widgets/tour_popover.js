@@ -209,9 +209,15 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
         else render();
     }
 
+    // Where a reload finds the box open, the page is taken to its stage as the stage's
+    // ↻ does: the box holds what a person was doing, the page does not, and the box
+    // never stands over a page it is not true of.
+    let opening = Promise.resolve();
     const api = {
         isOpen: () => box.matches(':popover-open'),
-        async open() {
+        open() { return (opening = api.opened()); },
+        restage: async () => { await opening; if (api.isOpen()) await put(); },
+        async opened() {
             await read();
             const was = state.stages.findIndex((s) => s.id === kept().stage);
             const first = state.stages.findIndex((s) => !now(s));

@@ -38,22 +38,22 @@ The chain starts at a part. The footpedal is chosen among the garage's pieces; i
 
 ## 2. Print a part: the part sliced for the printer, its path drawn, the job ready
 
-The part goes to a machine. printer_1's Machine is opened and the footpedal chosen; Slice's stage is the Machine's Print window with the part under makes; See needs a file, so the page slices the footpedal for printer_1 where none is kept, and its path is drawn on the bed; Start's stage is the Machine and Jobs. The picture is Start: the tour arms nothing and starts nothing.
+The part goes to a machine. printer_1's Machine is opened and the footpedal chosen; Slice's stage is the Machine's Print window with the part under makes; See needs a file, so the page slices the footpedal for printer_1 where none is kept, and its path is drawn on the bed; Start's stage is the Print window and Jobs. The picture is Start: the tour arms nothing and starts nothing.
 
 ![Print a part: the part sliced for the printer, its path drawn, the job ready](screenshots/39-02-print-a-part-the-part-sliced-for-the-printer-its-p.png)
 
 ```
-1 Choose: printer_1's Machine opened; footpedal chosen; Print a part entered, its windows laid out
+1 Choose: printer_1's Machine opened; footpedal chosen; footpedal named under makes in printer_1's Print window; Print a part entered, its windows laid out
     Print a part › 1 Choose (⊞ Windows › Print a part): the part, among the site's pieces
-2 Shape: nothing more to do
+2 Shape: footpedal chosen
     Print a part › 2 Shape (the tour): its numbers, in Parameters
-3 Slice: nothing more to do
+3 Slice: footpedal chosen
     Print a part › 3 Slice (the tour): the machine's Print window: the part under makes, then Slice
-4 See: footpedal sliced for printer_1, as Slice does: footpedal.gcode
+4 See: footpedal chosen; footpedal sliced for printer_1, as Slice does: footpedal.gcode
     Print a part › 4 See (the tour): footpedal.gcode's path is drawn on printer_1 and framed, all of it: the preview slider in its Print goes through each layer
-5 Start: nothing more to do
+5 Start: footpedal chosen
     Print a part › 5 Start (the tour): control armed in the Machine, ▶ Print, the job in Jobs
-6 Measure: nothing more to do
+6 Measure: footpedal chosen
     Print a part › 6 Measure (the tour): the part made, read under measured a feature a row and kept as the next turn of the printer's tuning, which says what the readings imply -- a box's sizes separate nothing, and print_coupon under makes is the piece made to be measured; Apply takes a turn into the printer's next slices
 ```
 
@@ -64,17 +64,17 @@ The same path through another machine. cnc_router's Machine is opened in printer
 ![Cut a part: its toolpath written for the router, drawn on the table](screenshots/39-03-cut-a-part-its-toolpath-written-for-the-router-dra.png)
 
 ```
-1 Choose: cnc_router's Machine opened; router_coupon chosen; Cut a part entered, its windows laid out
+1 Choose: cnc_router's Machine opened; router_coupon chosen; router_coupon named under makes in cnc_router's Print window; Cut a part entered, its windows laid out
     Cut a part › 1 Choose (⊞ Windows › Cut a part): a part that says how it is cut, among the site's pieces
-2 Toolpath: nothing more to do
+2 Toolpath: router_coupon chosen
     Cut a part › 2 Toolpath (the tour): the router's Cut window: the part under makes, then Toolpath
-3 See: router_coupon's toolpath written for cnc_router, as Toolpath does: router_coupon-cnc_router.nc
+3 See: router_coupon chosen; router_coupon's toolpath written for cnc_router, as Toolpath does: router_coupon-cnc_router.nc
     Cut a part › 3 See (the tour): router_coupon-cnc_router.nc's path is drawn on cnc_router and framed, all of it: the preview slider in its Cut goes through each pass
-4 Needs: nothing more to do
+4 Needs: router_coupon chosen
     Cut a part › 4 Needs (the tour): what the router needs before it moves: its state, its pins, each axis's home
-5 Cut: nothing more to do
+5 Cut: router_coupon chosen
     Cut a part › 5 Cut (the tour): control armed in the Machine, the work zeroed, ▶ Cut, the job in Jobs
-6 Measure: nothing more to do
+6 Measure: router_coupon chosen
     Cut a part › 6 Measure (the tour): the piece cut, measured: each size it names typed under measured, checked against what was designed, and the tool's allowance kept for the router's next toolpaths
 ```
 

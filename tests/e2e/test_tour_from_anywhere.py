@@ -82,13 +82,50 @@ def test_a_stage_opens_its_site_and_draws_its_own_piece_s_file(page: Page, url: 
     _sliced(page, "calibration_cube")
     box.locator(".tour-pop-stages button", has_text="3 Slice").click()
     _taken_to(page, "slice")
+    # The Slice stage stands on its own part: footpedal under makes, its kept file chosen,
+    # not the cube's that was.
+    expect(windows.in_machine(page, "#print-part")).to_have_value("footpedal")
+    expect(windows.in_machine(page, "#print-pick")).to_have_value(re.compile("footpedal"))
+    assert any("footpedal.gcode, made from footpedal before, chosen" in t for t in _did(page))
+    # So See has nothing left to choose or slice.
     box.locator(".tour-pop-stages button", has_text="4 See").click()
     _taken_to(page, "see")
-    assert (
-        "footpedal.gcode, made from footpedal before, chosen in printer_1's Print window"
-        in _did(page)
-    )
+    assert not any("sliced for printer_1" in t for t in _did(page))
     expect(box.locator(".tour-pop-did li").last).to_contain_text("path is drawn on printer_1")
+
+    # Start names ▶ Print, which is in the Print window: that tab is brought forward.
+    box.locator(".tour-pop-stages button", has_text="5 Start").click()
+    _taken_to(page, "print")
+    expect(windows.in_machine(page, "#print-start")).to_be_visible()
+    assert errors == []
+
+
+@pytest.mark.e2e
+def test_a_stage_chooses_its_machine_when_that_machine_is_open_already(page: Page, url: str):
+    """Drive a machine › Knobs is about printer_1: chosen in Selected whether its Machine
+    opens for the stage or was open already, not left on the deck the stage before chose."""
+    errors: list = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    box = page.locator(BOX)
+    open_garage(page, url, settle=False)
+    page.locator("#tour-pop-open").click()
+    expect(box).to_be_visible()
+    journeys = page.request.get(f"{url}/tour").json()["journeys"]
+    at = next(i for i, j in enumerate(journeys) if j["name"] == "Drive a machine")
+    box.locator(".tour-pop-journeys").select_option(value=str(at))
+    _taken_to(page, "deck")
+    assert page.evaluate("() => window.fractalViewer.selectedName") == "stream_deck"
+    box.locator(".tour-pop-stages button", has_text="2 Knobs").click()
+    _taken_to(page, "knobs")
+    assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
+    # Its Machine open, the deck stage again and then Knobs again.
+    box.locator(".tour-pop-stages button", has_text="1 Deck").click()
+    _taken_to(page, "deck")
+    assert page.evaluate("() => window.fractalViewer.selectedName") == "stream_deck"
+    assert page.evaluate("() => Boolean(window.fractalViewer.machine)")
+    box.locator(".tour-pop-stages button", has_text="2 Knobs").click()
+    _taken_to(page, "knobs")
+    assert page.evaluate("() => window.fractalViewer.selectedName") == "printer_1"
     assert errors == []
 
 

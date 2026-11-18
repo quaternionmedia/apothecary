@@ -66,7 +66,7 @@ PICTURED = {
         "The part goes to a machine. printer_1's Machine is opened and the footpedal "
         "chosen; Slice's stage is the Machine's Print window with the part under makes; "
         "See needs a file, so the page slices the footpedal for printer_1 where none is "
-        "kept, and its path is drawn on the bed; Start's stage is the Machine and Jobs. "
+        "kept, and its path is drawn on the bed; Start's stage is the Print window and Jobs. "
         "The picture is Start: the tour arms nothing and starts nothing.",
     ),
     "cut": (
@@ -219,14 +219,14 @@ STANDS = {
     ("make", "shape"): lambda page: _shown(page, "part-parameters"),
     ("make", "slice"): lambda page: _says(page, "machine-print", "footpedal"),
     ("make", "see"): _path_drawn_on("printer_1"),
-    ("make", "print"): lambda page: _shown(page, "machine"),
+    ("make", "print"): lambda page: _shown(page, "machine-print"),
     # The footpedal's file chosen, what it was sliced to under measured, nothing kept.
     ("make", "measure"): lambda page: _says(page, "machine-print", "sliced"),
     ("cut", "choose"): _on(ROUTER),
     ("cut", "toolpath"): lambda page: _says(page, "machine-print", "Toolpath"),
     ("cut", "see"): _path_drawn_on("cnc_router"),
     ("cut", "needs"): lambda page: _says(page, "machine-status", "Pins on"),
-    ("cut", "cut"): lambda page: _shown(page, "machine"),
+    ("cut", "cut"): lambda page: _shown(page, "machine-print"),
     # The coupon's file chosen, what it names to measure under measured, nothing kept.
     ("cut", "measure"): lambda page: _says(page, "machine-print", "mm designed"),
     ("board", "pin"): lambda page: (

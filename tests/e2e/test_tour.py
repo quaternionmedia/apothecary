@@ -136,7 +136,7 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
             "does. Its state folder is this test's, so the feedback it keeps is its own."
         ),
         does_not_show=[
-            "**A stage armed or started.** Start's stage brings the Machine and Jobs "
+            "**A stage armed or started.** Start's stage brings the Print window and Jobs "
             "forward; arming control and starting a print are a person's.",
             "**What changes on every run.** Moments are blanked in the pictures and "
             "left out of the words, and so is how many stages the tour holds, which any "
@@ -272,12 +272,12 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     _taken_to(page, "print")
     see = _feedback(url)["make/see"]
     assert (see["verdict"], see["note"]) == ("off", NOTE)
-    page.wait_for_function("() => window.apothecaryPanels.state('machine').shown")
+    page.wait_for_function("() => window.apothecaryPanels.state('machine-print').shown")
     story.says(
         "✗ Off keeps what is off, and only with it",
         "✗ Off with the field empty is refused, the box saying what it needs and staying "
         "on the stage; with what is off typed, it is kept, and the box goes to Start and "
-        "takes the page there, the Machine and Jobs in front. Nothing is armed.",
+        "takes the page there, the Print window, where ▶ Print is, and Jobs in front. Nothing is armed.",
         shown=_words(did.last.inner_text()),
     )
 
@@ -325,6 +325,13 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     page.reload()
     expect(box).to_be_visible(timeout=30000)
     expect(title).to_have_text("Print a part · 5. Start")
+    # And the page is taken to that stage again, not left bare under a box that says
+    # where it was: its machine open, its part chosen.
+    page.wait_for_function(
+        "() => window.fractalViewer.machine?.handle?.kind() && window.fractalViewer.selectedName === 'footpedal'",
+        timeout=60000,
+    )
+    expect(box).not_to_have_class(re.compile(r"\bbusy\b"), timeout=60000)
     story.says(
         "Reloaded, it is open where it was",
         "The page reloaded: the box is open again on the stage it showed, where it was "
