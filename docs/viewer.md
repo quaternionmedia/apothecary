@@ -238,7 +238,11 @@ tree, which works either way.
 
 **Badges** stand over things in the world, their words shown on hover or
 while their thing is selected; three or more that overlap fold into one,
-"×N", whose card lists them.
+"×N", whose card lists them. A board's ⚡ stands beside its machine's tool mark
+(the nozzle's cone and cross, a router's tool) rather than over it, at its own
+height, once the mark is drawn half as wide as the badge or more: stepped into a
+printer, the head is not hidden under its board's badge; from further off the
+badge keeps its own spot.
 
 | Badge | Over | A click |
 |---|---|---|

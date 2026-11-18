@@ -32,7 +32,7 @@ import windows
 from boards import BOARD, PRINTER
 from garage import select as _select
 from playwright.sync_api import Page, expect
-from viewer_ready import FRAMES
+from viewer_ready import FRAMES, settled
 
 UNO = "/dev/ttyFAKE0"
 POLL_MS = 2000  # the Machine's default interval
@@ -1377,6 +1377,49 @@ def test_the_world_wears_its_machines(page: Page, printer_url: str):
     )
     target = page.evaluate("() => window.fractalViewer.marks['printer_1'].marks.target()")
     assert target["x"] == pytest.approx(st["position"]["x"], abs=0.01)
+
+
+# Where the board's badge is drawn, where its point projects, and where the tool mark it
+# stands aside from is drawn: boxes and points in canvas pixels.
+BADGE_AND_MARK = """() => {
+    const a = window.fractalViewer.anchors;
+    return { badge: a.drawn('printer_1'), at: a.at('printer_1'), mark: a.toolMark('printer_1') };
+}"""
+
+
+def _meets(a: dict, b: dict) -> bool:
+    return a["l"] < b["r"] and b["l"] < a["r"] and a["t"] < b["b"] and b["t"] < a["b"]
+
+
+@pytest.mark.e2e
+def test_stepped_into_its_printer_the_boards_badge_stands_clear_of_the_tools_mark(
+    page: Page, printer_url: str
+):
+    """Mid-print, printer_1's board stands under the head's working area, so its ⚡ stood
+    over the nozzle's mark. Stepped into the printer, where the mark is drawn large, the
+    badge stands beside it at its own height; at the garage's level, where the mark is a
+    few pixels, the badge stays on its own spot."""
+    _wearing_its_badge(page, printer_url)
+    page.wait_for_function(
+        "() => { const m = window.fractalViewer.marks['printer_1'];"
+        " return !!(m && m.marks && m.marks.known()); }",
+        timeout=15000,
+    )
+    settled(page)
+    garage = page.evaluate(BADGE_AND_MARK)
+    badge, at, mark = garage["badge"], garage["at"], garage["mark"]
+    assert mark is not None, garage
+    width = badge["r"] - badge["l"]
+    assert mark["r"] - mark["l"] < width / 2, garage
+    assert abs((badge["l"] + badge["r"]) / 2 - at["x"]) < 1, garage  # on its own spot
+    page.evaluate("() => window.fractalViewer.stepIn('printer_1', 'a test')")
+    page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'printer_1'")
+    settled(page)
+    stepped = page.evaluate(BADGE_AND_MARK)
+    badge, at, mark = stepped["badge"], stepped["at"], stepped["mark"]
+    assert mark is not None and mark["r"] - mark["l"] >= width / 2, stepped
+    assert not _meets(badge, mark), stepped
+    assert abs(badge["b"] - (at["y"] - 6)) < 1, stepped  # at its own height, beside it
 
 
 @pytest.mark.e2e

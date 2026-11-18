@@ -168,6 +168,8 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
         new THREE.LineBasicMaterial({ color: NOZZLE_COLOR, transparent: true, opacity: 0.8 }),
     );
     nozzle.add(cross);
+    // The tool's mark, which its machine's board's badge stands aside from (anchors.js).
+    nozzle.userData.toolMark = true;
     group.add(nozzle);
 
     // `current` is what is drawn, `target` what was last asked for; each
@@ -374,9 +376,10 @@ export function makeMachineMarks(printer, { drawVolume = true, onNote } = {}) {
 /* A board's badge on the anchors layer (anchors.js): ⚡ at the board's own spot
  * -- `point()`, the top of its node, inside the printer it drives -- and never
  * dimmed by the node it is inside, nor by that node's marks (a group keyed as
- * the node is). Keyed by `key`, the machine it stands for (the printer a board
- * inside drives, else the board's node); the page listens to it. `selected()`
- * opens its words. */
+ * the node is), nor standing over its machine's tool mark: where it would hide
+ * the nozzle or the tool, it stands beside it. Keyed by `key`, the machine it
+ * stands for (the printer a board inside drives, else the board's node); the page
+ * listens to it. `selected()` opens its words. */
 export function makeBoardBadge(anchors, key, boardPath, { point, selected }) {
     const inside = (mesh) => {
         for (let o = mesh; o; o = o.parent) {
@@ -385,7 +388,7 @@ export function makeBoardBadge(anchors, key, boardPath, { point, selected }) {
         }
         return false;
     };
-    const badge = anchors.badge(key, point, { group: "Machine", selected, ignore: inside });
+    const badge = anchors.badge(key, point, { group: "Machine", selected, ignore: inside, clearOf: key });
     badge.dataset.path = key;
     badge.dataset.board = boardPath;
     badge.setAttribute("aria-label", "Select this board and open its Machine");
