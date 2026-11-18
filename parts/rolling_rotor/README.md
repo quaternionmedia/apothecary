@@ -35,11 +35,13 @@ openscad -o assembled.stl -D print=false -D orbit=60 parts/rolling_rotor/rolling
 | `poles`, `pole_width`, `pole_depth`, `yoke` | 8, 8, 10, 5 mm | The teeth a coil is wound on, and the ring behind them |
 | `stack`, `base`, `track_height` | 12, 2, 2 mm | The rotor's height, the floor it stands on, and the track's height above the floor |
 | `hole`, `outputs`, `output_pin`, `output_circle` | 10, 4, 4, 16 mm | The rotor's centre hole, and the holes an output disc's pins run in |
+| `pole_insert`, `rim_insert`, `rim_inserts`, `insert_depth` | 0, 0, 8, 6 mm | Pockets from the top of each tooth and round the rotor's rim for bought inserts; 0 for none |
 | `orbit` | 0 | Where the rotor's centre stands, as drawn assembled |
 | `facets` | 180 | Sides of a circle; a multiple of 12 |
+| `piece` | all | Both pieces, or one alone: the rotor in its own frame, as the viewer's motion draws it |
 
-A set of values whose teeth meet at their tips, or whose holes leave less
-than two millimetres of wall, is refused, saying which.
+A set of values whose teeth meet at their tips, or whose holes or pockets
+leave less than two millimetres of wall, is refused, saying which.
 
 ## What is printed and what is bought
 
@@ -50,8 +52,11 @@ in the rotor (the holes are a pin's diameter plus twice the eccentricity); a
 ball bearing of `hole` outside diameter on an eccentric crank, where a crank
 drives the orbit instead of the poles; magnet wire for a coil on each tooth,
 in the room `slot_area` measures. Printed plastic carries next to no magnetic
-flux, so for the poles to pull the rotor round, the teeth and the rotor's rim
-need soft iron in them, which the part does not draw or choose.
+flux, so as drawn the poles pull nothing: `pole_insert` and `rim_insert` cut a
+pocket from the top of each tooth and round the rotor's rim, and the wrapper
+lists an insert for each (`bought`: a cylinder 0.2 mm under the pocket across,
+`insert_depth` long), its material not chosen. The SCAD never draws the
+inserts; the viewer's motion draws them, in their own colour, when asked.
 
 ## What is measured, and what is not
 

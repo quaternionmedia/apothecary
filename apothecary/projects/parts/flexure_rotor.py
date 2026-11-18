@@ -22,6 +22,12 @@ bending of a beam whose sections stay plane, its stretch along its length left o
 stiff the leaves are, how fast the hub rings, and whether a leaf survives that strain
 belong to the filament and the print, which this module does not know.
 
+The motion (``motion``) is the swing, from ``-stop`` to the stop: the ring and its posts
+stand still, the hub and its lobes turn rigidly, and each leaf is drawn at each sampled
+swing from ``leaf_outline``, the model's own cubic, which is the drawing's shape and not
+a simulation of the bending. What goes in the pockets is listed by ``bought``, a disc for
+each, its material the owner's to choose.
+
 Units: mm and degrees.
 """
 
@@ -29,7 +35,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -43,11 +49,14 @@ from apothecary.gap_geometry import (
     circle,
     clearance_in,
     follow,
+    nearest,
     radial_gap,
     separation,
 )
 from apothecary.models import BoundingBox3D, Color, Vector3D
+from apothecary.models.bought import INSERT_FIT, Bought
 from apothecary.models.interfaces import InterfaceBase, Socket
+from apothecary.motion import Bent, Gap, Insert, Mark, Motion, Piece
 
 from .base import BasePart
 from .skeleton import ROOT
@@ -118,6 +127,11 @@ class Params(BaseModel):
         3.0, ge=0.5, le=20, description="depth of a pocket from the top", json_schema_extra=MM
     )
     facets: int = Field(180, ge=36, le=720, multiple_of=12, description="sides of a circle")
+    piece: Literal["all", "ring", "hub"] = Field(
+        "all",
+        description="what to draw: the piece, or one part of it alone without the leaves -- "
+        "the ring and its posts, or the hub and its lobes unturned",
+    )
 
     @model_validator(mode="after")
     def _drawable(self) -> "Params":
@@ -428,15 +442,89 @@ def volume(p: Params) -> float:
     return flat * p.height - (pockets * p.pocket_depth if p.pocket > 0 else 0.0)
 
 
+# ---- the motion ------------------------------------------------------------------------
+
+
+def flank_marks(p: Params, swing: float) -> List[Mark]:
+    """Where each lobe comes closest to its post at ``swing``, the least first: on the
+    post, and on the lobe as it stands."""
+    marks = []
+    for k in range(p.lobes):
+        found = nearest(lobe_outline(p, k, swing), post_outline(p, k))
+        marks.append(Mark(found.distance, found.on_b, found.on_a))
+    return sorted(marks, key=lambda m: m.gap)
+
+
+def motion_of(p: Params, step: float = 0.25) -> Motion:
+    """The swing, from ``-stop`` to the stop: the ring still, the hub turning, the leaves
+    drawn from the model's cubic at each sample, and each lobe's flank gap to its post."""
+    centres = pocket_centres(p, 0.0)
+    top = p.height
+    disc = p.pocket - INSERT_FIT
+
+    def seated(points):
+        return tuple(Insert("pocket insert", at, top - p.pocket_depth, top, disc) for at in points)
+
+    lobes = seated(centres[: p.lobes] if p.pocket > 0 else [])
+    posts = seated(centres[p.lobes :] if p.pocket > 0 else [])
+    return Motion(
+        param="swing",
+        label="swing",
+        unit="deg",
+        lo=-p.stop,
+        hi=p.stop,
+        step=step,
+        piece_param="piece",
+        still=Piece("ring", "the ring and its posts", reach=p.ring + p.wall, inserts=posts),
+        moving=(Piece("hub", "the hub and its lobes", reach=p.lobe_r, inserts=lobes),),
+        pose=lambda swing: {"hub": Pose(0.0, 0.0, swing)},
+        bent=(
+            Bent(
+                "leaves",
+                "the leaves, drawn from the model's cubic",
+                0.0,
+                p.height,
+                lambda swing: [leaf_outline(p, a, swing) for a in leaf_angles(p)],
+            ),
+        ),
+        gaps=(Gap("flank", "a lobe's flank to its post", p.height / 2, lambda swing: flank_marks(p, swing)),),
+        note="The hub turns rigidly on its leaves. Each leaf is drawn at each swing as the "
+        "model's cubic of a beam built in at both ends: the drawing's shape, not a simulation "
+        "of the bending, and nothing here says how far a pull swings it.",
+    )
+
+
 # ---- the part ------------------------------------------------------------------------------
 
 
 class FlexureRotorPart(BasePart):
     """One piece: the ring and its posts, the leaves, the hub and its lobes."""
 
+    def motion(self, params: Optional[Mapping[str, Any]] = None) -> Motion:
+        return motion_of(Params(**(params or {})))
+
+    def bought(self, params: Optional[Mapping[str, Any]] = None) -> List[Bought]:
+        """A disc for each pocket, sized here, its material the owner's: a magnet in one
+        and steel in the other is how the bench first tries it."""
+        p = Params(**(params or {}))
+        if p.pocket <= 0:
+            return []
+        places = [i.name for i in self.interfaces(p.model_dump())]
+        return [
+            Bought(
+                name="pocket insert",
+                count=len(places),
+                diameter=round(p.pocket - INSERT_FIT, 6),
+                length=p.pocket_depth,
+                goes_in=places,
+                notes="a disc for a pocket from the top, in each lobe and each post: what "
+                "carries the flux the plastic does not, of a material the bench chooses",
+            )
+        ]
+
     def get_bounds(self, params: Optional[Dict] = None) -> BoundingBox3D:
         p = Params(**(params or {}))
-        r = p.ring + p.wall
+        r = p.lobe_r if p.piece == "hub" else p.ring + p.wall
         return BoundingBox3D(
             min_point=Vector3D(x=-r, y=-r, z=0.0), max_point=Vector3D(x=r, y=r, z=p.height)
         )
@@ -450,6 +538,7 @@ class FlexureRotorPart(BasePart):
         names: Sequence[str] = [f"lobe_{k + 1}" for k in range(p.lobes)] + [
             f"post_{k + 1}" for k in range(p.lobes)
         ]
+        keep = {"all": names, "hub": names[: p.lobes], "ring": names[p.lobes :]}[p.piece]
         return [
             Socket(
                 name=name,
@@ -461,7 +550,8 @@ class FlexureRotorPart(BasePart):
                 source="drawn",
                 notes="a pocket from the top for a disc magnet or a steel slug, as the bench chooses",
             )
-            for name, (x, y) in zip(names, pocket_centres(p), strict=True)
+            for name, (x, y) in zip(names, pocket_centres(p, 0.0 if p.piece == "hub" else None), strict=True)
+            if name in keep
         ]
 
 

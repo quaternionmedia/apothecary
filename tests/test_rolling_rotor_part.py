@@ -212,3 +212,57 @@ class TestWhatItIs:
     def test_it_rests_assembled_and_prints_apart(self):
         assert DEFAULT.rest == {"print": False}
         assert DEFAULT.get_bounds().size.x > 2 * Params().outer_r
+
+
+INSERTS = {**COARSE, "pole_insert": 3.5, "rim_insert": 4}
+
+
+class TestTheInserts:
+    """Pockets for what is bought: drawn by the SCAD, listed by the wrapper, never in the
+    STL. Printed plastic carries next to no flux; what goes in them is the owner's."""
+
+    def test_the_pockets_are_where_the_interfaces_say(self, tmp_path):
+        if not get_renderer().is_available:
+            pytest.skip("OpenSCAD not installed")
+        validated = DEFAULT.scad_overrides(DEFAULT.validate_overrides(INSERTS))
+        result = render_part(DEFAULT, tmp_path / "pockets.stl", params=validated, timeout=120)
+        assert result.success, result.stderr
+        triangles = read_mesh(result.stl_path)
+        pockets = [i for i in DEFAULT.interfaces(INSERTS) if i.name.startswith(("pole_", "rim_"))]
+        assert len(pockets) == Params().poles + Params().rim_inserts
+        for interface in pockets:
+            for reading in readings(interface, triangles):
+                assert reading.measured is not None, reading
+                assert abs(reading.measured - reading.declared) <= INTERFACE_TOLERANCE, reading
+
+    def test_each_bought_insert_is_listed_with_its_size_and_count_and_fits_its_pocket(self):
+        listed = {b.name: b for b in DEFAULT.bought(INSERTS)}
+        assert list(listed) == ["output pin", "bearing", "pole insert", "rim insert"]
+        p = Params(**INSERTS)
+        assert listed["pole insert"].count == p.poles and listed["rim insert"].count == p.rim_inserts
+        holes = {i.name: i for i in DEFAULT.interfaces(INSERTS)}
+        for item in listed.values():
+            assert item.material is None
+            for place in item.goes_in:
+                assert item.diameter <= holes[place].diameter, (item.name, place)
+                if item.length is not None:
+                    assert item.length <= holes[place].depth
+        assert [b.name for b in DEFAULT.bought()] == ["output pin", "bearing"]
+
+    def test_the_pockets_are_taken_out_of_the_volumes(self):
+        p = Params(**INSERTS)
+        plain, pocketed = rr.volumes(Params(facets=48)), rr.volumes(p)
+        hole = rr.area(rr.hole_outline(p, p.pole_insert))
+        assert plain["stator"] - pocketed["stator"] == pytest.approx(p.poles * hole * p.insert_depth)
+
+    @pytest.mark.parametrize(
+        "values, says",
+        [
+            (dict(pole_insert=5), "tooth round it"),
+            (dict(rim_insert=4, rim_inserts=36), "between them"),
+            (dict(rim_insert=12), "round the output holes"),
+        ],
+    )
+    def test_a_pocket_with_no_room_is_refused_saying_why(self, values, says):
+        with pytest.raises(ValueError, match=says):
+            Params(**values)

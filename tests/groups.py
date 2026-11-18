@@ -184,6 +184,7 @@ GROUPS = {
             "tests/rendered_parts.py",
             "tests/assignment_cases.json",
             "walkthrough/43-*",
+            "walkthrough/44-*",
         ),
         "tests": (
             "test_adapters.py",
@@ -191,6 +192,7 @@ GROUPS = {
             "test_airgap_part.py",
             "test_assignment_cases.py",
             "test_assignments.py",
+            "test_bought.py",
             "test_calibration_cube.py",
             "test_camera_parts.py",
             "test_contested_values.py",

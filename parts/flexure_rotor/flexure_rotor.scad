@@ -7,7 +7,9 @@
 // The leaves are the spring that brings it back. Drawn at `swing`, the hub is turned and
 // each leaf bent as a beam built in at both ends: a cubic from the hub's root to the ring's.
 // It prints flat, as drawn at swing 0, in one piece with nothing overhanging; the pockets
-// in the lobes and the posts take what is bought to pull them together.
+// in the lobes and the posts take what is bought to pull them together, which this file
+// never draws. `piece` draws the ring or the hub alone, without the leaves, for a viewer
+// that moves the hub and draws each leaf from the model's own curve.
 //
 // Units: mm and degrees. apothecary/projects/parts/flexure_rotor.py mirrors the outlines,
 // measures the gaps, the stop and the leaves' bending, and holds its defaults to these
@@ -38,6 +40,7 @@ pocket_depth = 3;     // [0.5:0.5:20] depth of a pocket from the top [mm]
 
 /* [Drawing] */
 facets = 180;         // [36:12:720] sides of a circle
+piece = "all";        // [all, ring, hub] what to draw: the piece, or one part of it alone without the leaves -- the ring and its posts, or the hub and its lobes unturned
 
 /* [Hidden] */
 leaf_steps = 24;      // straight pieces a leaf is drawn in
@@ -48,6 +51,7 @@ function lobe_at(k) = 360 * k / lobes;                   // a lobe's middle, at 
 function post_from(k) = lobe_at(k) + lobe_arc / 2 + stop;  // a post's flank nearest its lobe
 free = 360 / lobes - lobe_arc - stop - post_arc;         // the room for leaves after each post
 function leaf_at(k, j) = post_from(k) + post_arc + free * (j + 1) / (leaves + 1);
+turned = piece == "hub" ? 0 : swing;                     // the hub alone is drawn unturned
 
 // ---- outlines ----------------------------------------------------------------------------
 // An arc of radius r from a0 to a1, both ends included, a point about every 360/facets degrees.
@@ -55,7 +59,7 @@ function arc(r, a0, a1) = let (n = max(1, ceil(abs(a1 - a0) * facets / 360)))
   [for (i = [0 : n]) let (a = a0 + (a1 - a0) * i / n) [r * cos(a), r * sin(a)]];
 // The hub and its lobes, turned by swing: each lobe's tip, its flanks straight down to the
 // hub, the hub's rim to the next lobe.
-function hub_outline() = [for (k = [0 : lobes - 1]) let (c = lobe_at(k) + swing, h = lobe_arc / 2)
+function hub_outline() = [for (k = [0 : lobes - 1]) let (c = lobe_at(k) + turned, h = lobe_arc / 2)
   each concat(arc(lobe_r, c - h, c + h), arc(hub, c + h, c - h + 360 / lobes))];
 // The free space inside the ring and its posts: each post's tip, its flanks straight out
 // to the ring, the ring to the next post.
@@ -91,16 +95,16 @@ module pocket_at(r, a) {
 module flexure_rotor() {
   difference() {
     linear_extrude(height = height) union() {
-      difference() {
+      if (piece != "hub") difference() {
         circle(r = ring + wall, $fn = facets);
         polygon(cavity_outline());
       }
-      polygon(hub_outline());
-      for (a = leaf_angles()) polygon(leaf_outline(a, leaf));
+      if (piece != "ring") polygon(hub_outline());
+      if (piece == "all") for (a = leaf_angles()) polygon(leaf_outline(a, leaf));
     }
     if (pocket > 0) for (k = [0 : lobes - 1]) {
-      pocket_at((hub + lobe_r) / 2, lobe_at(k) + swing);
-      pocket_at((post_r + ring) / 2, post_from(k) + post_arc / 2);
+      if (piece != "ring") pocket_at((hub + lobe_r) / 2, lobe_at(k) + turned);
+      if (piece != "hub") pocket_at((post_r + ring) / 2, post_from(k) + post_arc / 2);
     }
   }
 }

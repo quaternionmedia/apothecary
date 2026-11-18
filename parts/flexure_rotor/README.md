@@ -37,6 +37,7 @@ uv run apothecary parts generate-stl flexure_rotor -p lobes=3 -p post_arc=20 -p 
 | `pocket`, `pocket_depth` | 6.2, 3 mm | A pocket from the top in each lobe and each post, 0 for none |
 | `swing` | 0 | The hub's turn as drawn; a swing at or past `stop` is refused |
 | `facets` | 180 | Sides of a circle; a multiple of 12 |
+| `piece` | all | The piece, or the ring or the hub alone without the leaves, as the viewer's motion draws them |
 
 A set whose posts would pass over the lobes (so nothing stops the hub),
 whose pieces stand less than half a millimetre apart, which leaves no room
@@ -46,10 +47,12 @@ refused, saying which.
 ## What is printed and what is bought
 
 Printed: the one piece. Bought, and not drawn: what goes in the pockets, a
-6 mm by 3 mm disc magnet or a steel slug of that size at the defaults, one in
-each lobe and each post; and whatever drives the hub -- a coil set against a
-post, a magnet brought near a lobe, a finger. Which way a magnet faces, and
-what pulls what, is the bench's first question.
+6 mm by 3 mm disc at the defaults, one in each lobe and each post, which the
+wrapper lists with its size and count (`bought`), its material not chosen --
+a magnet in one and a steel slug in the other is how the bench first tries
+it; and whatever drives the hub -- a coil set against a post, a magnet
+brought near a lobe, a finger. Which way a magnet faces, and what pulls what,
+is the bench's first question.
 
 ## What is measured, and what is not
 

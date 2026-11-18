@@ -159,6 +159,15 @@ class TestTheLeaves:
 
 
 class TestWhatItIs:
+    def test_a_disc_for_each_pocket_is_listed_bought_and_fits_it(self):
+        (discs,) = DEFAULT.bought()
+        p = Params()
+        assert (discs.name, discs.count, discs.diameter, discs.length) == ("pocket insert", 2 * p.lobes, 6.0, 3.0)
+        holes = {i.name: i for i in DEFAULT.interfaces()}
+        assert sorted(discs.goes_in) == sorted(holes)
+        assert all(discs.diameter < holes[n].diameter and discs.length <= holes[n].depth for n in discs.goes_in)
+        assert DEFAULT.bought({"pocket": 0}) == []
+
     def test_it_is_one_piece_with_its_pockets_taken_out(self):
         whole = fr.volume(Params(pocket=0))
         pocketed = fr.volume(Params())
