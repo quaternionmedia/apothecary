@@ -284,6 +284,29 @@ def test_a_hidden_shell_is_not_drawn_and_not_hit_and_the_choice_survives_a_reloa
 
 
 @pytest.mark.e2e
+def test_a_shell_s_row_says_what_the_sphere_calls_it(page: Page, url: str):
+    """Layers' row for a shell is worded as the world's label on that shell is
+    (orbits.js shellLabel): one name for one shell."""
+    _universe(page, url)
+    windows.from_the_windows_menu(page, "layers")
+    rows = page.locator(".layers-table tr[data-row^='shell:'] > th")
+    expect(rows.first).to_be_visible(timeout=10000)
+    said = rows.all_inner_texts()
+    shells = page.locator(".layers-table tr[data-row^='shell:']").evaluate_all(
+        "(trs) => trs.map((tr) => Number(tr.dataset.row.slice('shell:'.length)))"
+    )
+    sphere = page.evaluate(
+        """async (shells) => {
+            const { shellLabel } = await import('/static/orbits.js');
+            const v = window.fractalViewer;
+            return shells.map((n) => shellLabel(n, v.sphereNodes()));
+        }""",
+        shells,
+    )
+    assert said == sphere and said[0] == "Shell 0 · built from nothing", (said, sphere)
+
+
+@pytest.mark.e2e
 def test_depth_two_lets_a_click_select_a_piece_of_a_piece(page: Page, url: str):
     """At depth 1 a piece that holds pieces is drawn as one; at depth 2 its own
     pieces are drawn inside it and a click on one selects it, from the Layers window's

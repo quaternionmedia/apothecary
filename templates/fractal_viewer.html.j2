@@ -1949,6 +1949,7 @@
                             readings: () => this.measure.lines,
                             colourOf: (id) => layerHex(id),
                             addressOf: (action) => (this.layersTaught ? this.layersTaught[action] || null : null),
+                            shellLabel: (n) => shellLabel(n, this.sphereNodes()),
                         });
                     },
                 });
@@ -3017,12 +3018,16 @@
             // hides nothing inside it. Each is drawn while the layers it is drawn for are
             // shown (a link while both its pieces are drawn), and a still click that meets
             // no piece and lands on a ring or an outline opens that layer's ring.
+            // The universe's own pieces, each with its key: what its sphere is drawn from.
+            sphereNodes() {
+                return Object.entries(this.renderNodeByKey)
+                    .filter(([key]) => !key.includes('.'))
+                    .map(([key, node]) => ({ ...node, key }));
+            }
             drawOrbits() {
                 this.dropOrbits();
                 if (this.siteName !== UNIVERSE || this.focusPath.length || !this.tree) return;
-                const nodes = Object.entries(this.renderNodeByKey)
-                    .filter(([key]) => !key.includes('.'))
-                    .map(([key, node]) => ({ ...node, key }));
+                const nodes = this.sphereNodes();
                 const group = new THREE.Group();
                 const draw = (points, colour, opacity, closed) => {
                     const geometry = new THREE.BufferGeometry().setFromPoints(points.map((p) => sceneAt(...p)));
@@ -9459,10 +9464,12 @@
             // the world, its tab red, its frame pulsing as it opens, and the printer
             // framed in what the world has left. Its ✕ puts the pad back in the Machine.
             openPadWindow(machine, pad, who) {
+                // Its tab is the pad's, as the ring's Panels › Machine › Control pad
+                // names it: the Machine's own tab names the machine.
                 this.panels.register('control', {
                     group: 'Machine',
-                    title: `${who}: control armed, it can heat and move`,
-                    tab: `🔓 ${who}`,
+                    title: `${who}'s control pad: control armed, it can heat and move`,
+                    tab: '🔓 Control pad',
                     body: pad, home: 'beside', loud: true,
                     onClose: () => { if (this.machine === machine && machine.handle) machine.handle.padBack(); },
                 });

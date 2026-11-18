@@ -445,6 +445,22 @@ def test_the_stream_deck_is_not_made_and_selected_keeps_its_one_section(page: Pa
     expect(page.locator("#make-here")).to_be_hidden()
 
 
+@pytest.mark.e2e
+def test_the_pad_s_tab_is_not_the_machine_s(page: Page, url: str):
+    """Armed, the pad pops out into a window of its own: its tab says it is the control
+    pad, so no two tabs read printer_1."""
+    open_garage(page, url, settle=False)
+    page.locator(".world-badge[data-path='printer_1']").click()
+    machine = windows.machine(page)
+    expect(machine.locator("#ctl")).to_have_attribute("data-address", "77", timeout=5000)
+    machine.locator("#ctl").click()
+    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    titles = page.locator(".lm_tab .lm_title").all_inner_texts()
+    assert "🔓 Control pad" in titles and len(titles) == len(set(titles)), titles
+    page.locator("#ctl-disarm").click()
+    expect(machine.locator("#control")).to_be_hidden(timeout=5000)
+
+
 PORT_OPENERS = (
     "/firmware/devices/stream",
     "/firmware/devices/listen",

@@ -170,7 +170,7 @@ export function shellLabel(shell, nodes) {
     const here = nodes.filter((n) => n.shell === shell);
     const sites = here.length > 0 && here.every((n) => n.site_ref);
     const what = sites ? "sites" : shell === 0 ? "built from nothing" : "built from those inside";
-    return `shell ${shell} \u00b7 ${what}`;
+    return `Shell ${shell} \u00b7 ${what}`;
 }
 
 /* What a cluster's outline is labelled: its category, and where the category has a

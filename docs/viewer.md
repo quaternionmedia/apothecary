@@ -191,8 +191,8 @@ largest part needs, so on a crowded shell two outlines may cross where large par
 meet; and from a part to
 each part it is built from, a faint line. None of them is a piece: a click passes
 through them, and they hide nothing. Each shell wears a label at its top, in its
-layer's colour and in the words of this section (`shell 0 · built from nothing`, `shell 1 ·
-built from those inside`, and `· sites` outermost), and each cluster's outline a label with
+layer's colour and in the words of this section (`Shell 0 · built from nothing`, `Shell 1 ·
+built from those inside`, and `· sites` outermost), the words its row in Layers says too, and each cluster's outline a label with
 its category's name, and its shell's where the category has clusters on more than one
 (`camera · shell 1`); the labels are the size of the page's text at any distance, hung from
 the highest point of their loop on the canvas, laid clear of one another, of the pieces drawn
@@ -313,7 +313,7 @@ Selectable (and showing it restores what was chosen), ticking Selectable shows i
 
 | Layer | Is | Ticks |
 |---|---|---|
-| Shell N | The parts laid on shell N of the universe's sphere, 0 the innermost and the sites outermost; a row for each shell the loaded site has | Shown, Selectable |
+| Shell N | The parts laid on shell N of the universe's sphere, 0 the innermost and the sites outermost; a row for each shell the loaded site has, worded as the shell's label in the world (`Shell 0 · built from nothing`) | Shown, Selectable |
 | A category | The pieces of that category, walls among them | Shown, Selectable (walls start unselectable: View › Select walls is this tick) |
 | Alignment grid | The machines' build-volume boxes, drawn in the layer's colour, and the floor grid, drawn in faint greys that are no layer's colour; Shown hides both | Shown |
 | Machine buttons | The badges a machine wears in the world | Shown |
@@ -848,7 +848,8 @@ full; the others are entered from ⊞ Windows › Journeys and from the
   world, closed until asked for (⊞ Windows › Loops, or Panels › Machine › Loops;
   [control-loops.md](control-loops.md#the-loops-window)).
 - **The control pad**: an armed printer's pad opens as a window of its own
-  beside the world, its tab and frame red, its frame pulsing as it opens, and
+  beside the world, its tab (*🔓 Control pad*, as the ring names it, so it is
+  never a second tab named for the machine) and frame red, its frame pulsing as it opens, and
   the printer framed in the world that is left. Its ⇥ Put back, its tab's ✕,
   the ring's Panels › Machine › Control pad or disarming put it back in the
   Machine, and

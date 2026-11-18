@@ -39,7 +39,9 @@ export function layerLabel(id) {
     return id;
 }
 
-export function mountLayers(root, { scope, shells = () => [], categories = () => [], readings = () => [], colourOf = () => null, addressOf = () => null }) {
+// `shellLabel(n)`, where given, is what the world's sphere calls shell n (orbits.js
+// shellLabel): a row says it in the same words.
+export function mountLayers(root, { scope, shells = () => [], categories = () => [], readings = () => [], colourOf = () => null, addressOf = () => null, shellLabel = null }) {
     root.classList.add("layers-window");
 
     // " · ⌗NN" for the cell that does what `action` does, or nothing.
@@ -82,7 +84,7 @@ export function mountLayers(root, { scope, shells = () => [], categories = () =>
         const last = rows.length - 1;
         const shellRows = rows.map((n, i) => {
             const note = rows.length > 1 ? (i === 0 ? " (innermost)" : i === last ? " (outermost)" : "") : "";
-            return row(shellLayer(n), `${layerLabel(shellLayer(n))}${note}`, "The parts laid on this shell of the sphere", true);
+            return row(shellLayer(n), shellLabel ? shellLabel(n) : `${layerLabel(shellLayer(n))}${note}`, "The parts laid on this shell of the sphere", true);
         });
         const categoryRows = categories().map((c) => row(categoryLayer(c), layerLabel(categoryLayer(c)), c === "wall"
             ? "Walls: drawn faded; Selectable here is View > Select walls" : `The pieces of the ${c} category`, true));
