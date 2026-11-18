@@ -35,6 +35,26 @@ export const armedWords = (knobs) => (knobs.armed_s > 0
     ? `armed ${Math.floor(knobs.armed_s / 60)}:${String(Math.floor(knobs.armed_s % 60)).padStart(2, "0")}`
     : "disarmed: arm it in its Machine, or long press its key twice");
 
+// What the deck's routes would refuse now, for the ring's Panels › Machine › Knobs: the
+// answer of the deck `steer` acts on (the first found; firmware/can.py deck_can), with
+// `here` for the open Machine's port; with no deck found, each refused for that, in
+// steer's words. Empty when the server could not be asked: the ring is then told nothing.
+const KNOBS_VERBS = ["knobs.start", "knobs.stop", "knobs.machine", "knobs.step", "knobs.screen", "here"];
+export async function knobsCan(base, port = null) {
+    try {
+        const { decks } = await call(base, "/firmware/decks");
+        if (!decks.length) {
+            return Object.fromEntries(KNOBS_VERBS.map((verb) => [verb, { ok: false, kind: "found", why: "no Stream Deck + found" }]));
+        }
+        const { can } = await call(base, `${at(decks[0].id)}${port ? `?port=${encodeURIComponent(port)}` : ""}`);
+        const out = { ...(can || {}) };
+        if (!port) out.here = { ok: false, kind: "machine", why: "no Machine is open: Here is the open Machine's machine" };
+        return out;
+    } catch (e) {
+        return {};
+    }
+}
+
 // A verb of Panels › Machine › Knobs -- "knobs", "machine:<name>", "step:<mm>", "here" or
 // "screen:<name>" -- on the first deck found; `port` is the open Machine's, which "here"
 // points the knobs at. Answers what came of it.

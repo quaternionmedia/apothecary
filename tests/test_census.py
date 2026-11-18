@@ -222,7 +222,7 @@ def test_the_command_refuses_a_page_it_could_not_read(tmp_path):
 
 
 def _on_the_page(text: str) -> list:
-    found = re.findall(r"(window|document)\.addEventListener\(\s*[\"'](\w+)[\"']", text)
+    found = re.findall(r"(window|document)\.addEventListener\(\s*[\"']([\w:]+)[\"']", text)
     return sorted(set(found))
 
 
@@ -230,9 +230,11 @@ def test_the_ring_module_opens_three_ways_and_the_pages_import_it():
     """ring.js installs its keys (`m` and Shift+M unless Settings gives others) on the
     window; on the document, the press and release of a right-click held with its
     modifier, a touch held still, and the browser's menu kept away where the ring is
-    asked for; and a click on `#ring-open`, and nothing else on either. Everything else
-    it listens to is on the ring's own element while the ring is open. keys.js, which
-    names a key and says when a shortcut may act, listens to nothing."""
+    asked for; and a click on `#ring-open`, and nothing else on either but the page's
+    news that an open ring is greyed again from: an answer applied (can.js) and a
+    board's news. Everything else it listens to is on the ring's own element while the
+    ring is open. keys.js, which names a key and says when a shortcut may act, listens
+    to nothing."""
     text = (STATIC / "ring.js").read_text(encoding="utf-8")
     assert _on_the_page(text) == [
         ("document", "contextmenu"),
@@ -240,6 +242,8 @@ def test_the_ring_module_opens_three_ways_and_the_pages_import_it():
         ("document", "pointerdown"),
         ("document", "pointermove"),
         ("document", "pointerup"),
+        ("window", "apothecary:board"),
+        ("window", "apothecary:can"),
         ("window", "keydown"),
     ]
     assert "addEventListener" not in (STATIC / "keys.js").read_text(encoding="utf-8")

@@ -9,7 +9,9 @@ it.** `device` on a resolve says whether the node has a board pinned, whether
 that board is a printer, whether its control latch is armed and what the server
 would refuse of its port now (`can`, the answer its Machine's buttons are greyed
 from); the resolver offers the device and control rings from that and nothing
-else, each act the answer refuses greyed with its reason. The verbs on
+else, each act the answer refuses greyed with its reason. `can` on a canvas
+ring's resolve is the same kind of answer for Panels › Machine: the open
+Machine's port's for its heater loops, the deck's for the knobs. The verbs on
 those rings are the viewer's: the pages already have a handler for each, and
 the intent route never opens a port.
 
@@ -38,6 +40,7 @@ from ..menu import (
     PictureContext,
     Ring,
     RingTooFull,
+    Verdict,
     carried_by,
     resolve,
 )
@@ -56,6 +59,10 @@ class ResolveRequest(BaseModel):
     # The sketch of a part of its own that no board connected runs, when the ring
     # stands on such a piece: its Flash its sketch.
     sketch: Optional[str] = None
+    # On the canvas ring, what the page knows would be refused now of Panels › Machine's
+    # acts: the open Machine's port's answer for its heater loops, the deck's for the
+    # knobs (apothecary/menu.py resolve). Told nothing, nothing there is greyed.
+    can: Optional[Dict[str, Verdict]] = None
 
 
 class Chosen(BaseModel):
@@ -207,6 +214,7 @@ def resolve_ring(request: ResolveRequest) -> Ring:
             device=request.device,
             picture=_pictures_known(request.site, request.picture, request.context),
             sketch=request.sketch,
+            can=request.can,
         )
     except RingTooFull as too_many:
         # A ring that cannot be built is a design problem, and the answer says so

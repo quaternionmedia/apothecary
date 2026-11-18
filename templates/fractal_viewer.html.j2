@@ -10684,8 +10684,8 @@
     // wiring: what the ring opens on, what each chosen verb calls, and the
     // addresses written onto the controls the page already has.
     import { installRing, annotate, addressOf, addresses, resolveRing } from '/static/ring.js';
-    import { steer as steerKnobs } from '/static/deck_knobs.js';
-    import { withLatch } from '/static/can.js';
+    import { steer as steerKnobs, knobsCan } from '/static/deck_knobs.js';
+    import { withLatch, shownCan, shownVerdict } from '/static/can.js';
 
     (() => {
         const BASE = {{ base_url | tojson }};
@@ -10721,13 +10721,35 @@
             const device = { port: row.device.port, printer: !!row.device.printer, machine: row.device.printer ? row.device.printer.machine || 'printer' : null, armed, bound: true };
             return judged ? { ...device, can: canOf(row.device.port) } : device;
         }
+        // Print › Tune › Apply and Undo turn are refused by the printer's tuning document,
+        // not its port (static/tuning.js canApply, canUndo; menu.py PAGE_ANSWERS), which only
+        // its Print window holds: read as its two buttons show it. Their row hidden, no file
+        // a slice made for this printer is chosen, as the Machine says when either is asked for.
+        const TUNE_BUTTONS = [['tune.apply', 'print-tune-apply'], ['tune.undo', 'print-tune-undo']];
+        function tuneCan(m) {
+            const out = {};
+            for (const [verb, id] of TUNE_BUTTONS) {
+                const btn = m.handle.$(id);
+                if (!btn) continue;
+                out[verb] = btn.closest('[hidden]')
+                    ? { ok: false, kind: 'file', why: 'choose a file a slice made for this printer' }
+                    : shownVerdict(btn);
+            }
+            return out;
+        }
+        // A board's open Machine as its ring is told it: the board, and what the server would
+        // refuse of its port with what the Machine's windows know over it.
+        function machineDevice(m) {
+            const device = m.handle.device();
+            return device.can ? { ...device, can: { ...device.can, ...tuneCan(m) } } : device;
+        }
         // What the server would refuse of a board now (firmware/can.py), the answer its
         // Machine's buttons are greyed from: its open Machine's, with what that page knows
         // over it; else the board's last poll, with a latch that lapsed since counted down
         // (can.js withLatch). Null when nothing has been asked of it yet.
         function canOf(port) {
             const m = viewer.machine;
-            if (m && m.handle && m.port === port) return m.handle.device().can;
+            if (m && m.handle && m.port === port) return machineDevice(m).can;
             const board = viewer.boards ? viewer.boards.board(port) : null;
             const can = board ? (board.status && board.status.can) || (board.info && board.info.can) : null;
             return can ? withLatch(can, board.armedUntil > Date.now(), port) : null;
@@ -10740,30 +10762,54 @@
         }
         // What the page knows about pictures at the place a ring stands on (a
         // node, or on the canvas ring the floor), told to the resolver as a
-        // device is: the pictures list is asked for again as the ring opens.
+        // device is: the pictures list is asked for again as the ring opens. A ring
+        // opened (`fresh`) is greyed again while it is open from what the page knows
+        // then (`again`, ring.js regrey).
         const nodeSpec = (path, at, fresh = true) => ({
             context: { pointing: 'node', targets: [path] },
             site: viewer.siteName, device: deviceFor(path, { judged: fresh }), sketch: sketchFor(path), at,
             picture: viewer.pictures.context(path, { fresh }),
+            ...(fresh ? { again: () => ({ device: deviceFor(path, { judged: true }) ?? null }) } : {}),
         });
+        // Panels › Machine › Loops: what the Loops window greys its buttons for while it is
+        // there (widgets/loops.js); else the open Machine's port's answer; with no Machine
+        // open, refused for that, in the Loops window's words.
+        const LOOPS_VERBS = ['tune.read', 'tune.start', 'tune.cancel', 'tune.set'];
+        function loopsCan() {
+            const shown = shownCan(document.querySelector(".panel[data-panel='loops']"));
+            if (LOOPS_VERBS.every((verb) => shown[verb])) return shown;
+            const m = viewer.machine;
+            const can = m && m.handle ? m.handle.device().can : null;
+            if (can) return Object.fromEntries(LOOPS_VERBS.filter((verb) => can[verb]).map((verb) => [verb, can[verb]]));
+            const why = "no printer's Machine is open: Loops works on the printer whose Machine is open";
+            return Object.fromEntries(LOOPS_VERBS.map((verb) => [verb, { ok: false, kind: 'offline', why }]));
+        }
         // The canvas ring stands on the level you are looking at: its Pieces
         // are that node's children and Up steps back out. At the root the
         // target list is empty, and the resolver offers no Up. Its Pictures ›
-        // Floor holds the floor's Camera and Picture.
+        // Floor holds the floor's Camera and Picture. Opened, it is told what would be
+        // refused now of Panels › Machine's acts: the heater loops' (loopsCan) and the
+        // deck's knobs' (deck_knobs.js knobsCan, asked once as it opens).
         const canvasSpec = (at, fresh = true) => {
             const focus = viewer.focusPath.join('.');
-            return {
+            const spec = {
                 context: { pointing: 'canvas', targets: focus ? [focus] : [] },
                 site: viewer.siteName, at,
                 picture: viewer.pictures.context('', { fresh }),
             };
+            if (!fresh) return spec;
+            const knobs = knobsCan(BASE, viewer.machine ? viewer.machine.port : null);
+            spec.can = knobs.then((deck) => ({ ...loopsCan(), ...deck }));
+            spec.again = async () => ({ can: { ...loopsCan(), ...(await knobs) } });
+            return spec;
         };
 
         // A board's Machine has a ring of its own, the device ring on its port: its
         // cells are the Machine's buttons.
         const machineSpec = (at) => ({
             context: { pointing: 'device', targets: [viewer.machine.port] },
-            device: viewer.machine.handle.device(), at,
+            device: machineDevice(viewer.machine), at,
+            again: () => (viewer.machine && viewer.machine.handle ? { device: machineDevice(viewer.machine) } : null),
         });
         // Ctrl+right-click (Settings' modifier), or a long press by touch: on a piece
         // in the world, a badge or a Contents row, the node ring for that piece (and

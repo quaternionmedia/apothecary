@@ -536,6 +536,7 @@ def resolve(
     device: Optional[Device] = None,
     picture: Optional[PictureContext] = None,
     sketch: Optional[str] = None,
+    can: Optional[Dict[str, Verdict]] = None,
 ) -> Ring:
     """Work out which options belong on the ring, and hand them back.
 
@@ -544,11 +545,18 @@ def resolve(
     board itself. ``picture`` is what it knows about pictures and cameras
     (``PictureContext``); without one, a host still offers Camera and Picture,
     with nothing pinned, drawn or listed. ``sketch`` is the sketch of a part of its
-    own that no board connected runs, for a node ring: Flash its sketch.
+    own that no board connected runs, for a node ring: Flash its sketch. ``can``, on
+    the canvas ring, is what the page knows would be refused now of Panels › Machine's
+    acts -- the open Machine's port's answer for its heater loops (``tune.*``), the
+    deck's for the knobs (``knobs.*``, ``here``) -- and greys each act it refuses, as
+    ``device.can`` greys a board's; told nothing, nothing is.
     """
     picture = picture or PictureContext()
     if context.pointing is Pointing.CANVAS:
-        return _canvas_ring(context, site, site_names, groups, picture)
+        ring = _canvas_ring(context, site, site_names, groups, picture)
+        if can is not None:
+            judged(ring.options, {verb: Verdict.model_validate(v) for verb, v in can.items()})
+        return ring
     if context.pointing is Pointing.NODE:
         return _node_ring(context, site, device, picture, sketch)
     if context.pointing is Pointing.DEVICE:
@@ -2119,12 +2127,15 @@ def keeps_its_firmware(device: Device) -> str:
 
 
 class ByJob(NamedTuple):
-    """An act that is the job's while a job from the host runs on the port (its
-    ``print.cancel`` is ok) and the line's otherwise, as the Machine carries it
-    (widgets/machine.js HOST_VERBS): a print's Pause is the job paused, else ``M25``."""
+    """An act that is the job's while a job runs (its ``running`` command is ok) and the
+    line's otherwise, as the page carries it: a print's Pause is the job paused while a
+    print from the host runs on the port (``print.cancel`` ok, widgets/machine.js
+    HOST_VERBS), else ``M25``; the knobs' On / off is their stop while they run on the deck
+    (``knobs.machine`` ok), else their start."""
 
     job: str
     line: Optional[str]
+    running: str = "print.cancel"
 
 
 JOG_AXES = ("Y+", "X+", "Y-", "X-", "Z+", "Z-")
@@ -2185,9 +2196,10 @@ CAN_VERBS: Dict[str, CanVerb] = {
     "print:plan": None,
     "print:measure": None,
     # The printer's tuning document (slicer/tuning.py apply, undo), not its port: refused by
-    # the tuning's own answer (static/tuning.js canApply, canUndo), as its button is.
-    "print:tune-apply": None,
-    "print:tune-undo": None,
+    # the tuning's own answer (static/tuning.js canApply, canUndo), as its button is, which
+    # the page tells beside the port's (PAGE_ANSWERS).
+    "print:tune-apply": "tune.apply",
+    "print:tune-undo": "tune.undo",
     "control:unlock": "unlock",
     "control:spindle-on": "spindle",
     "control:spindle-off": "off",
@@ -2197,9 +2209,48 @@ CAN_VERBS: Dict[str, CanVerb] = {
     "control:top-z": "control",
     "control:probe-z": "control",
     "control:probe-plate": "control",
+    # Panels › Machine on the canvas ring (_panels), told the page's ``can`` beside the
+    # context: the open Machine's window and its pad, which the page alone opens; the
+    # knobs, by the deck's answer (firmware/can.py deck_can, the Deck window's data-can),
+    # On / off their stop while they run and their start otherwise; the heater loops, by the
+    # open Machine's port's (the Loops window's data-can). A key ending in a colon is a
+    # family: ``deck:machine:`` is every machine's cell. Choosing a loop, an experiment
+    # or a rule is the window's choice, which nothing the server answers stands in the way of.
+    "panel:toggle:machine": None,
+    "panel:pad": None,
+    "deck:knobs": ByJob("knobs.stop", "knobs.start", running="knobs.machine"),
+    "deck:machine:": "knobs.machine",
+    "deck:step:": "knobs.step",
+    "deck:here": "here",
+    "panel:toggle:deck": None,
+    "deck:screen:": "knobs.screen",
+    "panel:toggle:loops": None,
+    "loops:read": "tune.read",
+    "loops:start": "tune.start",
+    "loops:cancel": "tune.cancel",
+    "loops:set": "tune.set",
+    "loops:loop:": None,
+    "loops:kind:": None,
+    "loops:rule:": None,
 }
 # What is never greyed, whatever an answer says: the stop, as can.js's NEVER.
 NEVER_GREYED = frozenset({"estop"})
+# Commands the page answers itself and tells in a board's ``can`` beside the server's: the
+# printer's tuning document's Apply and Undo turn, as its Print window's two buttons show
+# them (the template's tuneCan). With its Machine not open the page tells neither, and
+# neither is greyed.
+PAGE_ANSWERS = frozenset({"tune.apply", "tune.undo"})
+
+
+def can_entry(action: str) -> Tuple[bool, CanVerb]:
+    """``action``'s entry in ``CAN_VERBS``: its own, else its family's (the key ending in a
+    colon it starts with); ``(False, None)`` when it has none."""
+    if action in CAN_VERBS:
+        return True, CAN_VERBS[action]
+    for key, verb in CAN_VERBS.items():
+        if key.endswith(":") and action.startswith(key):
+            return True, verb
+    return False, None
 
 
 def verdict_of(can: Dict[str, Verdict], verb: str) -> Optional[Verdict]:
@@ -2211,9 +2262,9 @@ def verdict_of(can: Dict[str, Verdict], verb: str) -> Optional[Verdict]:
 def refusal_of(action: str, can: Dict[str, Verdict]) -> Optional[str]:
     """Why the server would refuse the act ``action`` names, by ``can``; None when it
     would take it, or when nothing it answers stands in its way."""
-    verb = CAN_VERBS.get(action)
+    _, verb = can_entry(action)
     if isinstance(verb, ByJob):
-        running = verdict_of(can, "print.cancel")
+        running = verdict_of(can, verb.running)
         verb = verb.job if running is not None and running.ok else verb.line
     if verb is None or verb in NEVER_GREYED:
         return None

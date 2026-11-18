@@ -2969,3 +2969,65 @@ def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(car
     assert send("picture:word:no_such_word", targets=[made]).status_code == 422
     assert send("picture:drop", site=None).status_code == 400
     assert send("picture:drop", site="no_such_site").status_code == 404
+
+
+def _panels_machine(can=None) -> dict:
+    """Panels › Machine of the canvas ring on garage, told ``can``: each act under it by
+    its action, Knobs' and Loops' rings walked."""
+    root = resolve(Context(pointing=Pointing.CANVAS), _garage(), can=can)
+    machine = walk(root, address_of(root, "panels:machine"))
+    found = {}
+
+    def leaves(options):
+        for option in options:
+            if option.children:
+                leaves(option.children)
+            else:
+                found[option.action] = option
+
+    leaves(machine.children)
+    return found
+
+
+def test_panels_machine_greys_the_loops_and_the_knobs_by_the_answers_the_page_is_told():
+    """Told beside the canvas ring's context what the page knows would be refused now --
+    the open Machine's port's answer for the heater loops, the deck's for the knobs -- each
+    act of Panels › Machine the answers refuse is greyed with its words, as the Loops and
+    Deck windows grey its button; told nothing, nothing is, and no cell moves."""
+    nothing = "no printer's Machine is open: Loops works on the printer whose Machine is open"
+    idle = "the knobs are not started on SIMDECK0"
+    can = {
+        **{verb: _refused(nothing, "offline") for verb in ("tune.read", "tune.start", "tune.set")},
+        "tune.cancel": {"ok": True},
+        "knobs.start": {"ok": True},
+        "knobs.stop": {"ok": True},
+        "knobs.machine": _refused(idle, "idle"),
+        "knobs.step": _refused(idle, "idle"),
+        "knobs.screen": _refused(idle, "idle"),
+        "here": _refused(idle, "idle"),
+    }
+    told = _panels_machine(can)
+    for action in ("loops:read", "loops:start", "loops:set"):
+        assert (told[action].enabled, told[action].why) == (False, nothing), action
+    assert told["loops:cancel"].enabled
+    greyed = sorted(a for a, o in told.items() if a.startswith("deck:") and not o.enabled)
+    assert greyed and all(told[a].why == idle for a in greyed)
+    assert {"deck:here", "deck:step:1", "deck:screen:status"} <= set(greyed)
+    assert any(a.startswith("deck:machine:") for a in greyed)
+    # Off, the knobs' On / off is their start, which the deck would take.
+    assert told["deck:knobs"].enabled
+    # The window, the pad, the Deck window and the loops' own choices: nothing stands in
+    # their way.
+    for action in ("panel:toggle:machine", "panel:pad", "panel:toggle:deck", "panel:toggle:loops"):
+        assert told[action].enabled
+    assert all(o.enabled for a, o in told.items() if a.startswith(("loops:loop:", "loops:rule:")))
+    # Running, On / off is their stop: refused for its own reason, not the start's.
+    running = {**can, "knobs.machine": {"ok": True}, "knobs.stop": _refused("deck lost", "offline")}
+    assert _panels_machine(running)["deck:knobs"].why == "deck lost"
+    # Told nothing, nothing is greyed, and every address is as it was.
+    assert all(o.enabled for o in _panels_machine().values())
+    root = resolve(Context(pointing=Pointing.CANVAS), _garage())
+    assert every_address(resolve(Context(pointing=Pointing.CANVAS), _garage(), can=can)) == (
+        every_address(root)
+    )
+

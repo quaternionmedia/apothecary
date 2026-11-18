@@ -455,8 +455,8 @@ def test_a_kept_step_its_design_an_experiment_planned_and_the_gains_set(
 @pytest.mark.e2e
 def test_the_ring_opens_the_window_and_a_refused_act_says_the_server_s_reason(page: Page, url: str):
     """Panels › Machine › Loops › Loops opens the window; its Experiment cell chooses
-    what its drop-down chooses; its Start, with the latch down, is refused in the
-    server's words on the status line, as the greyed button's title says them."""
+    what its drop-down chooses; its Start, with the latch down, is greyed in the server's
+    words, as the window's button is, and chosen anyway says them on the status line."""
     _machine(page, url)
     rings.on_world(page, "Panels", "Machine", "Loops", "Loops")
     expect(_loops(page)).to_be_visible(timeout=10000)
@@ -472,8 +472,9 @@ def test_the_ring_opens_the_window_and_a_refused_act_says_the_server_s_reason(pa
     )
     reason = re.search(r"^Disabled: (.*?)\. Start", start.get_attribute("title")).group(1)
     rings.on_world(page, "Panels", "Machine", "Loops", "Start")
+    assert rings.greyed(page)["2"] == f"Disabled: {reason}"
     status = page.locator("#status")
-    expect(status).to_contain_text(f"Start: {reason} (⌗4442)", timeout=10000)
+    expect(status).to_contain_text(f"Start (⌗4442): {reason}", timeout=10000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
     with _http(url) as http:
         assert (

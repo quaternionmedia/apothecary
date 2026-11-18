@@ -345,7 +345,10 @@ identifies no plant either: its gains are the firmware's own, and the window say
 **Its ring** is Panels › Machine › Loops: Loops 8 (the window), Read 6, Start 2,
 Cancel 4, Set gains 9, Loop 3 (Hotend 0, Bed), Experiment 1 (Step, Autotune,
 Perturbation) and Rule 7 (each rule a ring of the kinds of controller it gives). A cell
-does what its control does; one the server would refuse says why on the status line.
+does what its control does. Read, Start, Cancel and Set gains are greyed as the window
+greys their buttons, or, with the window not there, by the open Machine's port's answer
+and, with no printer's Machine open, for that; one chosen anyway says why on the status
+line.
 [Walkthrough page 48](../walkthrough/48-a-heater-s-loop-in-the-page.md) shows it.
 
 ## The simulated board

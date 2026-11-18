@@ -557,8 +557,10 @@ the pointer, an arrow or a digit -- a title is not seen on a touch screen. Chose
 anyway, by its digit, a click or a tap, it does nothing: the ring stays where it
 is, the reason under it, and the status line says it as a refused verb is said,
 `Y+ (⌗7728): <why>`. A machine's acts are greyed from the server's own answer for
-its port, the one its Machine's buttons are greyed from
-([firmware.md](firmware.md#what-a-command-would-be-refused-for)); the stop never is.
+its port, the one its Machine's buttons are greyed from, and Panels › Machine's Loops
+and Knobs from what the Loops and Deck windows grey theirs for
+([firmware.md](firmware.md#what-a-command-would-be-refused-for)); the stop never is. A
+ring left open is greyed again as those answers change.
 
 **The canvas ring** lists Pieces 8 (each piece at this level; at a site's top
 the pieces made from pictures are one more cell, Made; at a leaf, the leaf

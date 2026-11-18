@@ -26,7 +26,7 @@ from boards import PRINTER
 from garage import open_garage, select
 from playwright.sync_api import Page, expect
 from rings import cells as _wedges
-from rings import cut_labels, open_at, past_the_chord
+from rings import cut_labels, greyed, on_world, open_at, past_the_chord
 
 from apothecary.systems import by_id
 
@@ -821,3 +821,79 @@ def test_a_ring_opened_at_the_screens_edge_keeps_every_label_whole(page: Page, r
         assert cut_labels(page) == [], x
         page.keyboard.press("Escape")
         expect(page.locator("#ring-overlay")).to_have_count(0)
+
+
+NO_MACHINE = "no printer's Machine is open: Loops works on the printer whose Machine is open"
+
+
+@pytest.mark.e2e
+def test_panels_machine_greys_the_loops_and_the_knobs_as_their_windows_do(
+    page: Page, ring_url: str
+):
+    """With no printer's Machine open and no Stream Deck + found, Panels › Machine › Loops'
+    Read, Start, Cancel and Set gains, and the knobs' On / off and Here, are greyed with
+    the words their windows say, rather than live and refused once chosen; the windows
+    themselves are not."""
+    open_garage(page, ring_url, settle=False)
+    on_world(page, "Panels", "Machine", "Loops")
+    assert greyed(page) == {cell: f"Disabled: {NO_MACHINE}" for cell in ("6", "2", "4", "9")}
+    page.keyboard.press("5")
+    page.keyboard.press("2")  # Knobs
+    expect(page.locator("#ring-overlay .title")).to_have_text("Knobs")
+    knobs = greyed(page)
+    assert set(knobs) == {"8", "4"}, knobs  # On / off, Here; the Deck window is live
+    assert all("no Stream Deck + found" in why for why in knobs.values()), knobs
+
+
+@pytest.mark.e2e
+def test_print_tune_is_greyed_on_the_ring_as_its_buttons_are(page: Page, ring_url: str):
+    """Print › Tune › Apply and Undo turn are the printer's tuning document's, not its
+    port's: with no file a slice made for the printer chosen, the ring greys both, as the
+    Machine refuses them, rather than offering them live."""
+    page.goto(f"{ring_url}/firmware/monitor?port={PRINTER}")
+    windows.machine_ready(page, "printer")
+    expect(page.locator("#ident")).to_contain_text("Marlin", timeout=8000)
+    expect(page.locator("#print-measure-row")).to_be_hidden()
+    page.locator(f"{windows.MACHINE_WINDOWS} #ident").click(button="right", modifiers=["Control"])
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    for digit in "797":  # Control › Print › Tune
+        page.keyboard.press(digit)
+    expect(page.locator("#ring-overlay .title")).to_have_text("Tune")
+    why = "Disabled: choose a file a slice made for this printer"
+    assert greyed(page) == {"8": why, "6": why}
+
+
+@pytest.mark.e2e
+def test_an_open_ring_is_greyed_again_as_the_latch_goes_down_and_up(page: Page, ring_url: str):
+    """A ring left open at Control › Jog is greyed again from each answer the page applies:
+    the latch let go while it is open greys every jog with the server's reason, and armed
+    again they are live, the ring where it was throughout."""
+
+    def latch(armed: bool) -> None:
+        httpx.post(
+            f"{ring_url}/firmware/printers/control",
+            json={"port": PRINTER, "armed": armed},
+            timeout=15.0,
+        ).raise_for_status()
+
+    latch(True)
+    page.goto(f"{ring_url}/firmware/monitor?port={PRINTER}")
+    windows.machine_ready(page, "printer")
+    expect(page.locator("#control")).to_be_visible(timeout=10000)  # armed: its pad
+    page.locator(f"{windows.MACHINE_WINDOWS} #ident").click(button="right", modifiers=["Control"])
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press("7")
+    page.keyboard.press("2")
+    expect(page.locator("#ring-overlay .title")).to_have_text("Jog")
+    assert greyed(page) == {}
+    try:
+        latch(False)
+        jogs = page.locator("#ring-overlay .wedge.disabled")
+        expect(jogs).to_have_count(6, timeout=10000)
+        assert all("not armed" in why for why in greyed(page).values()), greyed(page)
+        expect(page.locator("#ring-overlay .title")).to_have_text("Jog")
+        latch(True)
+        expect(jogs).to_have_count(0, timeout=10000)
+    finally:
+        latch(False)
+

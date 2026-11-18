@@ -264,8 +264,10 @@ def test_every_verb_the_page_names_is_one_the_server_answers(monkeypatch):
 
 def _machine_rings():
     """Every ring a machine's acts are on: a printer's, a router's and a devkit's device
-    ring, latch down and up."""
-    from apothecary.menu import Context, Device, Pointing, resolve
+    ring, latch down and up; and the canvas ring's Panels › Machine, the open Machine's
+    window, its pad, the deck's knobs and its heater loops."""
+    from apothecary.example_hierarchy import create_example_site
+    from apothecary.menu import Context, Device, Pointing, Ring, resolve
 
     for device in (
         Device(port="/dev/x", printer=True, bound=True),
@@ -276,6 +278,9 @@ def _machine_rings():
         Device(port="/dev/x"),
     ):
         yield resolve(Context(pointing=Pointing.DEVICE, targets=[device.port]), device=device)
+    canvas = resolve(Context(pointing=Pointing.CANVAS), create_example_site())
+    panels = next(o for o in canvas.options if o.id == "panels")
+    yield Ring(options=[next(o for o in panels.children if o.id == "panels:machine")])
 
 
 def _acts(options) -> set:
@@ -296,20 +301,31 @@ def _named(verb) -> set:
 
 def test_every_act_on_a_machines_ring_names_a_command_the_server_answers_or_none(monkeypatch):
     """The ring greys an act from the command menu.CAN_VERBS names for it. Every act a
-    machine's ring carries has an entry -- a command, or None where nothing the server
-    answers stands in its way -- so a new act is not left out of the answer by being
-    left out of the table, and each command named is one can_now answers."""
-    from apothecary.menu import CAN_VERBS
+    machine's ring carries has an entry -- its own or its family's, a command, or None
+    where nothing the server answers stands in its way -- so a new act is not left out of
+    the answer by being left out of the table, and each command named is one can_now (or
+    a deck's answer) answers."""
+    from apothecary.menu import CAN_VERBS, can_entry
 
     answers = _verbs_the_server_answers(monkeypatch)
     acts = set().union(*(_acts(ring.options) for ring in _machine_rings()))
     assert {"control:jog:Y+", "control:job-hold", "device:listen", "print:start"} <= acts
-    missing = sorted(acts - set(CAN_VERBS))
+    assert {"loops:start", "deck:here", "deck:step:1"} <= acts
+    missing = sorted(a for a in acts if not can_entry(a)[0])
     assert not missing, f"no entry in menu.CAN_VERBS for {missing}: name its command, or None"
-    stale = sorted(set(CAN_VERBS) - acts)
+    stale = sorted(
+        key
+        for key in CAN_VERBS
+        if not any(a == key or (key.endswith(":") and a.startswith(key)) for a in acts)
+    )
     assert not stale, f"menu.CAN_VERBS names acts no machine's ring carries: {stale}"
     named = set().union(*(_named(v) for v in CAN_VERBS.values()))
-    assert not sorted(named - answers), f"menu.CAN_VERBS names {sorted(named - answers)}"
+    from apothecary.menu import PAGE_ANSWERS
+
+    # The page's own answers are no server's, and none of the server's is the page's.
+    assert PAGE_ANSWERS <= named and not PAGE_ANSWERS & answers
+    unanswered = sorted(named - answers - PAGE_ANSWERS)
+    assert not unanswered, f"menu.CAN_VERBS names {unanswered}"
 
 
 def _block(text: str, start: str, end: str) -> str:
@@ -322,8 +338,9 @@ def test_the_rings_acts_are_greyed_by_the_commands_the_machines_buttons_are():
     """menu.CAN_VERBS and the Machine name each act by one command: a pad's line by the
     verb verbOfLine names it (BY_CMD, the line's act), a job's verb by the job's command
     (HOST_VERBS), and each button the ring's addresses are written on (pairs()) by its
-    data-can -- a button with none, an act with none."""
-    from apothecary.menu import CAN_VERBS, ByJob
+    data-can -- a button with none, an act with none -- or, for a command the page answers
+    itself (PAGE_ANSWERS), by the button the template reads that answer from."""
+    from apothecary.menu import CAN_VERBS, PAGE_ANSWERS, ByJob
 
     text = MACHINE_JS.read_text(encoding="utf-8")
     by_cmd = dict(re.findall(r'"([^"]+)": "(control:[a-z-]+)"', _block(text, "const BY_CMD", "};")))
@@ -370,11 +387,26 @@ def test_the_rings_acts_are_greyed_by_the_commands_the_machines_buttons_are():
         for action, word in host.items()
         if button_half(action) != f"print.{word}"
     ]
-    problems += [
-        f"#{button} ({action}): its data-can is {tags.get(button)}, the ring's {button_half(action)}"
-        for button, action in paired
-        if tags.get(button) != button_half(action)
-    ]
+    template = (ROOT / "templates" / "fractal_viewer.html.j2").read_text(encoding="utf-8")
+    read_from = {
+        verb: button
+        for verb, button in re.findall(
+            r"\['(tune\.[a-z]+)', '([a-z-]+)'\]", _block(template, "TUNE_BUTTONS", ";")
+        )
+    }
+    assert set(read_from) == PAGE_ANSWERS, read_from
+    for button, action in paired:
+        ours = button_half(action)
+        if ours in PAGE_ANSWERS:
+            # Greyed by the page's own answer (setReason), named by no data-can.
+            if read_from.get(ours) != button or tags.get(button) is not None:
+                problems.append(
+                    f"#{button} ({action}): the ring's {ours} is read from #{read_from.get(ours)}"
+                )
+        elif tags.get(button) != ours:
+            problems.append(
+                f"#{button} ({action}): its data-can is {tags.get(button)}, the ring's {ours}"
+            )
     problems += [
         f"control:jog:{axis}: a jog button's data-can is jog"
         for axis in ("X+", "Y-")

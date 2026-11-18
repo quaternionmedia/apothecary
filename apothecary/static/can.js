@@ -16,6 +16,10 @@
  * A button some other act holds disabled (a send in flight) says so with
  * `data-busy`; it is enabled again by `refreshDisabled` only when neither the act nor
  * the answer holds it.
+ *
+ * Each answer applied is told on `window` (`apothecary:can`), so a ring open on the
+ * same acts greys them again (ring.js); `shownCan(root)` reads back what a root's
+ * buttons are greyed for, for a ring whose acts are a window's buttons.
  */
 
 const NEVER = new Set(["estop"]);
@@ -148,6 +152,27 @@ export function applyCan(root, can) {
         compose(btn);
         refreshDisabled(btn);
     }
+    // Told, so a ring open on the same acts greys them again (ring.js regreyAll).
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
+        window.dispatchEvent(new CustomEvent("apothecary:can"));
+    }
+}
+
+// What a button shows, as applyCan or setReason left it: refused, with its reason, while
+// it is greyed; ok otherwise. Null for no button.
+export function shownVerdict(btn) {
+    if (!btn) return null;
+    if (btn.dataset.canOff === "1") return { ok: false, why: btn.dataset.canWhy || "refused", kind: btn.dataset.canKind || null };
+    return { ok: true, why: null, kind: null };
+}
+
+// Every verb a root's buttons name (data-can), as they show it now: the answer they were
+// greyed from, read back, for a ring whose acts are those buttons.
+export function shownCan(root) {
+    const out = {};
+    if (!root) return out;
+    for (const btn of root.querySelectorAll("[data-can]")) out[btn.dataset.can] = shownVerdict(btn);
+    return out;
 }
 
 // What a latch that lapses with no event does to an answer read a moment ago: each

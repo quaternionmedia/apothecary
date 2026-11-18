@@ -265,7 +265,8 @@ a step theirs, as the deck's own keys do -- and shows what the deck's keys or an
 else chose. Each Machine's Control pad, while its control is armed, says where the knobs
 are and their step, and its **🎛 Knobs here** points them at its machine. The ring's
 Panels › Machine › Knobs holds the same verbs, **Here** being the open Machine's machine,
-and the Deck window. None of them arms anything: the knobs move a machine only while its
+and the Deck window, each greyed as the deck answers for it (with no deck found, every
+one but the Deck window). None of them arms anything: the knobs move a machine only while its
 control is armed, in its Machine or by two long presses of its key. `GET
 /firmware/decks/control` lists every running layout's state, and `PUT
 /firmware/decks/{id}/control` with a `machine`, a `port`, a `step_mm` or a `screen`

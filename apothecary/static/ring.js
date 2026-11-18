@@ -182,14 +182,17 @@ export function annotate(ring, pairs) {
 }
 
 /* `picture` is what the page knows about pictures and cameras where the ring
- * stands (apothecary/menu.py's PictureContext), or a promise of it. */
-export async function resolveRing({ base = "", context, site, device, picture, sketch }) {
+ * stands (apothecary/menu.py's PictureContext), or a promise of it; `can`, on the
+ * canvas ring, what it knows would be refused now of Panels › Machine's acts, or a
+ * promise of it. */
+export async function resolveRing({ base = "", context, site, device, picture, sketch, can }) {
     const body = { context };
     if (site) body.site = site;
     if (device) body.device = device;
     if (sketch) body.sketch = sketch;
-    const told = await picture;
+    const [told, answer] = await Promise.all([picture, can]);
     if (told) body.picture = told;
+    if (answer) body.can = answer;
     const r = await fetch(`${base}/menu/resolve`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
@@ -404,25 +407,47 @@ export function close() {
  * chosen; onRefused each time a greyed wedge is chosen anyway (with what to
  * say: RingInstance.refuse); onClose when it goes away for any reason. With `into`, the id or
  * label of an option with children, the ring opens entered down to it, as if
- * its digits had been pressed.
+ * its digits had been pressed. `again()`, the page's, says what it knows now of what
+ * the ring was told about refusals ({ device } or { can }, or a promise of it): asked
+ * whenever the page applies a new answer while the ring is open (regreyAll).
  */
-export async function openRing({ base = "", context, site, device, picture, sketch, at = null, into = null, onIntent, onRefused, onClose }) {
+export async function openRing({ base = "", context, site, device, picture, sketch, can, again = null, at = null, into = null, onIntent, onRefused, onClose }) {
     close();
-    const ring = await resolveRing({ base, context, site, device, picture, sketch });
+    const [toldPicture, toldCan] = await Promise.all([picture, can]);
+    const ring = await resolveRing({ base, context, site, device, picture: toldPicture, sketch, can: toldCan });
     if (current) current.close(false); // somebody opened another while we fetched
-    const instance = new RingInstance({ ring, context, site, device, at, onIntent, onRefused, onClose });
+    const told = { base, context, site, device, picture: toldPicture, sketch, can: toldCan };
+    const instance = new RingInstance({ ring, told, again, at, onIntent, onRefused, onClose });
     current = instance;
     instance.mount();
     if (into) instance.enter(into);
     return instance;
 }
 
+// The open ring's cells greyed again from what the page knows now: called by the page, or
+// heard from can.js each time it applies an answer (`apothecary:can`), and from a board's
+// news (`apothecary:board`). Asked at most once a frame; nothing is resolved again unless
+// what the page knows has changed.
+let regreyAsked = false;
+export function regreyAll() {
+    if (!current || regreyAsked) return;
+    regreyAsked = true;
+    const later = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (f) => setTimeout(f, 0);
+    later(() => {
+        regreyAsked = false;
+        if (current) current.regrey();
+    });
+}
+
 class RingInstance {
-    constructor({ ring, context, site, device, at, onIntent, onRefused, onClose }) {
+    constructor({ ring, told, again, at, onIntent, onRefused, onClose }) {
         this.root = ring;
-        this.context = context;
-        this.site = site;
-        this.device = device;
+        this.told = told;
+        this.again = again;
+        this.regreys = 0;
+        this.context = told.context;
+        this.site = told.site;
+        this.device = told.device;
         this.at = at;
         this.onIntent = onIntent;
         this.onRefused = onRefused;
@@ -667,6 +692,41 @@ class RingInstance {
         return true;
     }
 
+    /* Greyed again from what the page knows now (`again`): resolved anew when that has
+     * changed since the ring was told, and the rings entered walked down again by the
+     * same digits, so the ring stays where it is -- a greyed cell keeps its seat, and an
+     * Arm that is a Disarm now is in the same cell. A ring whose cell entered is gone is
+     * left at the deepest one still there; a lit or armed cell that cannot be chosen now
+     * is let go. */
+    async regrey() {
+        if (!this.again || this.done) return;
+        let fresh;
+        try { fresh = await this.again(); } catch (e) { return; }
+        if (!fresh || this.done) return;
+        const keys = Object.keys(fresh);
+        const said = (from) => JSON.stringify(keys.map((k) => from[k] ?? null));
+        if (said(fresh) === said(this.told)) return;
+        const asked = ++this.regreys;
+        let root;
+        try { root = await resolveRing({ ...this.told, ...fresh }); } catch (e) { return; }
+        if (this.done || asked !== this.regreys) return;
+        Object.assign(this.told, fresh);
+        this.device = this.told.device;
+        this.root = root;
+        const stack = [{ ring: root, digit: "" }];
+        for (const level of this.stack.slice(1)) {
+            const holder = stack[stack.length - 1].ring.options.find((o) => String(o.cell) === level.digit);
+            if (!holder || !holder.children) break;
+            stack.push({ ring: { title: holder.label, options: holder.children }, digit: level.digit });
+        }
+        this.stack = stack;
+        this.address = stack.map((level) => level.digit).join("");
+        const here = this.byCell;
+        if (this.highlight != null && !here[this.highlight]) this.highlight = null;
+        if (this.armed != null && (!here[this.armed] || here[this.armed].enabled === false)) this.armed = null;
+        this.draw();
+    }
+
     // One level out; at the top, away.
     back() {
         if (this.stack.length <= 1) { this.close(false); return; }
@@ -724,7 +784,10 @@ const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator
  * focus takes the key (keys.js's mayAct). `onRefused(refusal)` is told of a greyed
  * wedge chosen anyway, to say why. `onResolved(ring, spec)` fires after
  * every resolve, for annotating the page. The keys and the modifier change at once
- * with `configure({ key, canvasKey, modifier })`.
+ * with `configure({ key, canvasKey, modifier })`. A spec's `again()` says what the page
+ * knows now of what the ring was told; while the ring is open, each answer the page
+ * applies (can.js's `apothecary:can`) and each board's news (`apothecary:board`) greys
+ * it again from that (RingInstance.regrey).
  */
 export function installRing({ base = "", whatFor, onIntent, onRefused, onResolved, onError, button = "#ring-open", key = "m", canvasKey = "Shift+m", modifier = "ctrl" }) {
     const bound = { key, canvasKey, modifier: MODIFIERS[modifier] ? modifier : "ctrl" };
@@ -738,6 +801,8 @@ export function installRing({ base = "", whatFor, onIntent, onRefused, onResolve
                 device: spec.device,
                 picture: spec.picture,
                 sketch: spec.sketch,
+                can: spec.can,
+                again: spec.again ?? null,
                 at: at ?? spec.at ?? null,
                 into: spec.into ?? null,
                 onIntent,
@@ -753,6 +818,9 @@ export function installRing({ base = "", whatFor, onIntent, onRefused, onResolve
     };
     const middle = () => ({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
     const fromKeyboard = () => open(whatFor(null), middle());
+
+    window.addEventListener("apothecary:can", regreyAll);
+    window.addEventListener("apothecary:board", regreyAll);
 
     window.addEventListener("keydown", (e) => {
         if (isOpen() || !mayAct(e)) return;
@@ -852,6 +920,7 @@ export function installRing({ base = "", whatFor, onIntent, onRefused, onResolve
         angleToIndex,
         cellAtAngle,
         annotate,
+        regrey: regreyAll,
         resolve: (spec) => resolveRing({ base, ...spec }),
         current: () => current,
         /* Whether an arrow pressed now would make a corner with the last one. */
