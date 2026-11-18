@@ -8710,11 +8710,22 @@
                 const inView = this.focusPath.join('.');
                 return this.makeable(inView) ? inView : null;
             }
-            // The header's ⚒ Make, pressed.
-            makeNow() {
+            // The header's ⚒ Make, pressed: the piece made (makePiece); then, where it went
+            // to a machine, the Machine view laid out round it -- the Machine's head with
+            // its latch and stop, Print beside it, and nothing a site opened on the way
+            // (the Procedure, a window of the universe's) left taking the world's room --
+            // and the machine framed in what the world has. A journey's step lays out its
+            // own windows, so none is laid out while a journey is entered.
+            async makeNow() {
                 const path = this.makeSubject();
-                if (!path) return Promise.resolve(this.setStatus('Make: nothing selected or in view is a part to make', 'error'));
-                return this.makePiece(path);
+                if (!path) return this.setStatus('Make: nothing selected or in view is a part to make', 'error');
+                const done = await this.makePiece(path);
+                const machine = this.machine;
+                if (done.refused || !machine || this.journey) return done;
+                await this.procedureAsked;
+                if (this.machine !== machine || this.journey) return done;
+                if (this.panels.applyView('machine') && machine.path) this.frameArmed(machine.path);
+                return done;
             }
             // A piece made on the first machine that makes it (makersOf). In another site,
             // that site is opened first, as the banner's ▾ does. The machine's Machine opened, its Print or Cut in front (makingWith),

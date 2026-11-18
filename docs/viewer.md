@@ -67,7 +67,11 @@ Left to right, one row:
   another. Pressed, it opens that
   site, the machine's Machine with its Print or Cut window in front, chooses the
   part under **makes** (in another site, by its name) and slices it or writes its
-  toolpath, as the variant drawn where one is applied. Nothing is armed, started
+  toolpath, as the variant drawn where one is applied; then it lays out the
+  Machine view round the machine, framed in the world, so the Machine's head
+  stands beside its Print or Cut and nothing a site opened on the way is left
+  taking the world's room (in a journey, the journey's step lays out its own
+  windows). Nothing is armed, started
   or sent: ▶ is a person's. A printer makes any part but a board or a machine; a
   router, a part that says how it is cut; a piece made from a picture is made on
   its own site's printers. For another machine, open it: its **makes** offers

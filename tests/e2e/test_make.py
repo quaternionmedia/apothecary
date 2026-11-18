@@ -27,6 +27,14 @@ from playwright.sync_api import Page, expect
 from slicer_helpers import write_fake_orcaslicer
 
 SLICED_MS = 30000
+# A piece drawn about the middle of the world: framed.
+IN_THE_MIDDLE = """(key) => {
+    const v = window.fractalViewer, node = v.renderNodeByKey[key];
+    if (!node || !node.world_bounds) return false;
+    const b = node.world_bounds;
+    const s = v.sceneAt(...b.min.map((m, i) => (m + b.max[i]) / 2)).project(v.camera);
+    return Math.abs(s.x) < 0.35 && Math.abs(s.y) < 0.35;
+}"""
 
 
 @pytest.fixture(scope="module")
@@ -145,6 +153,17 @@ def test_make_on_the_part_stepped_into_takes_it_to_the_printer_whose_board_is_co
             )
             expect(windows.in_machine(page, "#print-part")).to_have_value("calibration_cube")
             expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=SLICED_MS)
+            # Landed in the Machine view: the Machine's head beside its Print, each a
+            # stack of its own, nothing the garage opened on the way left -- its
+            # Procedure -- and the printer framed in the world.
+            page.wait_for_function(
+                "() => window.apothecaryPanels.state('machine').stack.length === 1",
+                timeout=10000,
+            )
+            assert windows.state(page, "machine-print")["stack"] == ["machine-print"]
+            assert windows.state(page, "machine-print")["shown"] is True
+            assert windows.state(page, "procedure")["open"] is False
+            page.wait_for_function(IN_THE_MIDDLE, arg="printer_1", timeout=5000)
         finally:
             http.delete(f"/sites/garage/nodes/{BOARD}/device")
     assert errors == []
