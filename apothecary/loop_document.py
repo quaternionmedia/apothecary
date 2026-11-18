@@ -362,6 +362,12 @@ def gains_of(
     )
 
 
+def _loop(pm: PlantModel, g: Gains) -> cl.Loop:
+    """The open loop of a controller round the plant, as the margins and the curves take
+    it: sampled where the gains carry their sample time, else the continuous controller."""
+    return cl.Loop(pm.plant(), g.pid(), sampled=g.dt is not None)
+
+
 def figures(
     doc: LoopDocument, step_of: Optional[str] = None, step_time: Optional[float] = None
 ) -> List[FigureGroup]:
@@ -422,7 +428,7 @@ def figures(
             )
         if pm is not None and g.kp:
             src = f"plant+controller.{name}"
-            m = cl.loop_margins(cl.Loop(pm.plant(), g.pid(), sampled=g.dt is not None))
+            m = cl.loop_margins(_loop(pm, g))
             for key, label, value, unit in (
                 ("gain_crossover", "gain crossover", m.gain_crossover, "rad/s"),
                 ("phase_margin", "phase margin", m.phase_margin, "°"),
@@ -653,14 +659,37 @@ def build(
 MODEL_PID_DT = 0.1
 
 
+def _finite_or_none(v: Optional[float]) -> Optional[float]:
+    return v if v is not None and math.isfinite(v) else None
+
+
 def curves(doc: LoopDocument, n: int = 120) -> Dict[str, object]:
     """What a page draws of a loop, computed here so the page computes nothing: the
-    plant's and each controller's open loop over frequency (``control_loops.bode``),
-    and, for an experiment with samples, the measured temperature beside the model's
-    step through the same targets with each controller the document carries, its PID
-    run every ``MODEL_PID_DT`` seconds. Empty parts where the document lacks what they
-    need."""
-    out: Dict[str, object] = {"model_pid_dt": MODEL_PID_DT, "bode": {}, "step": None}
+    plant's and each controller's open loop over frequency (``control_loops.bode``) with
+    where its curves cross and peak (``margins``: the loop's margins as the document's
+    figures have them, and the frequencies of the peaks of the sensitivity and the
+    complementary sensitivity), the frequency points an experiment measured with their
+    trust, and, for an experiment with samples, the measured temperature beside the
+    model's step through the same targets with each controller the document carries,
+    its PID run every ``MODEL_PID_DT`` seconds. Empty parts where the document lacks what
+    they need."""
+    out: Dict[str, object] = {
+        "model_pid_dt": MODEL_PID_DT,
+        "bode": {},
+        "margins": {},
+        "frequency": [
+            {
+                "frequency": p.frequency,
+                "magnitude": p.magnitude,
+                "phase_deg": p.phase_deg,
+                "coherence": p.coherence,
+                "trust": p.trust,
+                "why": p.why,
+            }
+            for p in doc.frequency
+        ],
+        "step": None,
+    }
     if doc.plant is None:
         return out
     plant = doc.plant.plant()
@@ -668,7 +697,22 @@ def curves(doc: LoopDocument, n: int = 120) -> Dict[str, object]:
     for name in ("designed", "on_machine"):
         g = getattr(doc.controller, name)
         if g is not None and g.kp:
-            out["bode"][name] = cl.bode(cl.Loop(plant, g.pid(MODEL_PID_DT), sampled=False), n=n)
+            loop = _loop(doc.plant, g)
+            out["bode"][name] = cl.bode(loop, n=n)
+            m = cl.loop_margins(loop)
+            out["margins"][name] = {
+                key: _finite_or_none(getattr(m, key))
+                for key in (
+                    "gain_crossover",
+                    "phase_margin",
+                    "phase_crossover",
+                    "gain_margin",
+                    "ms",
+                    "ms_at",
+                    "mt",
+                    "mt_at",
+                )
+            }
     exp = next((e for e in doc.experiments if e.samples is not None and e.samples.t), None)
     if exp is None:
         return out

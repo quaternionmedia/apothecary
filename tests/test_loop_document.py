@@ -285,6 +285,7 @@ class TestTheCurves:
         assert error < 0.1
         assert set(drawn["bode"]) == {"designed", "on_machine"}
         assert drawn["model_pid_dt"] == 0.1
+        assert drawn["frequency"] == []  # a step excites no harmonics of a period
         assert (
             curves(
                 LoopDocument.model_validate(
@@ -292,4 +293,50 @@ class TestTheCurves:
                 )
             )["step"]
             is None
+        )
+
+    def test_the_curves_mark_the_margins_the_document_says(self):
+        """Where a page marks the crossovers and the peaks is the curves' answer, and its
+        margins are the document's own figures, computed once, from the same loop: equal
+        to the last digit, so a page that prints the one and marks the other cannot show
+        two numbers for one margin."""
+        doc = _built()
+        drawn = curves(doc)
+        for name in ("designed", "on_machine"):
+            marked = drawn["margins"][name]
+            for key in (
+                "gain_crossover",
+                "phase_margin",
+                "phase_crossover",
+                "gain_margin",
+                "ms",
+                "mt",
+            ):
+                assert marked[key] == doc.get(f"loop.{key}_{name}").value, (name, key)
+            # The peaks' frequencies are where the curve drawn peaks: no grid point of the
+            # sensitivity drawn stands above the peak marked.
+            bode = drawn["bode"][name]
+            assert max(bode["s_mag"]) <= marked["ms"] + 1e-9
+            assert bode["w"][0] < marked["ms_at"] < bode["w"][-1]
+            assert bode["w"][0] < marked["gain_crossover"] < bode["w"][-1]
+
+    def test_the_curves_carry_each_measured_frequency_point_with_its_trust(self):
+        """A perturbation's frequency points go to the page as the document holds them,
+        each with its trust and why, so a poor point is drawn as one."""
+
+        def square(s):
+            if s < 600.5:
+                return 200.0
+            return 200.0 + (2.0 if ((s - 600.5) % 120) < 60 else -2.0)
+
+        exp = TestTheBuilder._experiment(
+            None, "perturbation", square, 600 + 120 * 5, settle_s=600.0, period_s=120.0
+        )
+        doc = build(exp, Machine(kind="printer", port="x"), LoopName(heater="hotend"))
+        drawn = curves(doc)
+        assert [(p["frequency"], p["trust"], p["why"]) for p in drawn["frequency"]] == [
+            (p.frequency, p.trust, p.why) for p in doc.frequency
+        ]
+        assert drawn["frequency"] and {"magnitude", "phase_deg", "coherence"} <= set(
+            drawn["frequency"][0]
         )
