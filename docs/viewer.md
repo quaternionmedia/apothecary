@@ -655,6 +655,7 @@ what it made:
 | **Start a site** (`bring-up`) | 1 Steps, 2 Members, 3 Audit | a site in working order |
 | **Watch a site** (`watch`) | 1 Space, 2 Hour | what each machine's hour held |
 | **Read a drawing** (`drawing`) | 1 Board, 2 Picture, 3 Shapes, 4 Marks, 5 Models, 6 Pieces | shapes that stand up as pieces: parts, to design |
+| **Join a hose** (`join`) | 1 Ends, 2 Adapter, 3 Ready | the adapter between two ends, for Print a part: it stands in the universe, where the port part and the adapter are ([above](#presets-and-the-adapter-between-two-ends)) |
 
 *Print a part* in full, as each is written in `apothecary/journeys.py`:
 

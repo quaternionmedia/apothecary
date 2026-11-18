@@ -251,7 +251,8 @@ each 0.1 of diameter moves the seat about 2 mm.
 In the page, a port's presets are a drop-down in its Parameters, and ⇄ Adapter in
 its Selected keeps one end and then makes the adapter between it and the other,
 which is drawn and framed in the universe with each end's fit listed and asked
-again after each Apply ([viewer.md](viewer.md#presets-and-the-adapter-between-two-ends)).
+again after each Apply ([viewer.md](viewer.md#presets-and-the-adapter-between-two-ends));
+*Join a hose* is that journey in the tour.
 
 `parts fit` with a part named alone tries each of its interfaces against each of
 the other's, those that seat first, and exits 1 when nothing seats. `PART@PRESET`

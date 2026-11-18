@@ -12,6 +12,8 @@ from apothecary.journeys import JOURNEYS, PUTS, by_id, manifest
 from apothecary.menu import PANEL_GROUPS, VIEWS
 from apothecary.projects.parts.skeleton import ROOT
 from apothecary.simulated import DEVKIT
+from apothecary.site_names import UNIVERSE
+from apothecary.universe import create_universe_site
 from apothecary.systems import SYSTEMS
 from apothecary.viewer import render_fractal_viewer_page
 
@@ -55,12 +57,15 @@ def test_each_journey_is_named_once_and_apart_from_the_systems():
 
 def test_the_page_is_taken_to_a_stage_by_verbs_it_has_on_pieces_the_simulated_server_s_site_has():
     """What the tour does to stand on a stage is from the page's own short list, and its
-    subjects are pieces of the site each journey names, which is the simulated server's,
-    so the tour opens it from any other."""
-    site = create_example_site()  # the simulated server's garage
-    pieces = {child.name for child in site.children}
+    subjects are pieces of the site each journey names -- the garage, or the universe,
+    where every part stands -- each the simulated server's, so the tour opens it from
+    any other."""
+    garage = create_example_site()  # the simulated server's garage
+    universe = create_universe_site()  # every part, and every other site, one piece each
+    sites = {garage.name.lower(): garage, UNIVERSE: universe}
     for journey in JOURNEYS:
-        assert journey.site == site.name.lower(), journey.id
+        assert journey.site in sites, journey.id
+        pieces = {child.name for child in sites[journey.site].children}
         for verb, subject in [*journey.staged_on, *(p for s in journey.steps for p in s.puts)]:
             assert verb in PUTS, (journey.id, verb)
             piece, _, what = subject.partition(":")
@@ -140,3 +145,14 @@ def test_make_a_thing_goes_from_the_part_to_the_job_and_back_to_the_printer():
     assert make.steps[-1].forward == ("machine-print",) and make.steps[-1].owns == ()
     assert make.steps[-1].puts == (("file", "footpedal"),)
     assert make.steps[-1].shown_by == ("46-a-printer-tuned-from-its-prints.md",)
+
+
+def test_join_a_hose_stands_in_the_universe_on_the_port_and_the_adapter():
+    """Two ends, then the adapter between them, then whether it is ready: the port part
+    and the adapter are the universe's leaves, which is where the tour opens it."""
+    join = by_id("join")
+    assert (join.name, join.site) == ("Join a hose", UNIVERSE)
+    assert [s.label for s in join.steps] == ["Ends", "Adapter", "Ready"]
+    assert join.steps[0].puts == (("edit", "dust_port"),)
+    assert join.steps[1].puts == (("edit", "hose_adapter"),)
+    assert JOURNEYS[-1] is join  # last in the chain: no other journey's place moves

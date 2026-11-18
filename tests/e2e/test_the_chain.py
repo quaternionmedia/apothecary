@@ -2,9 +2,10 @@
 manages, a stage at a time, on simulated machines as a person starts them. A part
 designed; made on the printer; cut on the router; the board a machine runs on built for
 and heard; a deck's knobs on the machines; the site brought up through the family's hub;
-the site watched; and a drawing photographed into shapes. At each stage the tour's box
-says what the page did to stand there, and the page stands there: its window in front,
-its subject chosen, what the stage needs made. Walkthrough page 39 is what it writes.
+the site watched; a drawing photographed into shapes; and two ends joined by an
+adapter. At each stage the tour's box says what the page did to stand there, and the
+page stands there: its window in front, its subject chosen, what the stage needs made.
+Walkthrough page 39 is what it writes.
 
 Runs against `python -m apothecary serve --simulated` as a subprocess (simulated_process.py),
 where every machine a stage is about is there to stand on, with the scripted OrcaSlicer
@@ -125,6 +126,18 @@ PICTURED = {
         "asked and never trusted; Pieces is where Picture › Make stands each shape up, "
         "which is left to the person: a piece made is a part, to design. The picture "
         "is Marks.",
+    ),
+    "join": (
+        "ends",
+        "Join a hose: two ends, each one part at its numbers, and the adapter between them",
+        "A part can be made between two others. The universe opens, where every part "
+        "stands; the dust port is chosen and its editor opened, its presets above its "
+        "numbers in Parameters: a hose's end, a port, a tool's stub, each typed over with "
+        "what calipers read. ⇄ Adapter in Selected keeps one end; at the other end's "
+        "numbers it asks the server for the adapter between them. Adapter is the "
+        "adapter's editor, where each end's fit is said; Ready is whether it can be "
+        "printed, and ⚒ Make takes it on. The picture is Ends: keeping an end, and the "
+        "numbers measured, are the person's.",
     ),
 }
 
@@ -248,6 +261,15 @@ STANDS = {
     ("drawing", "marks"): lambda page: _says(page, "marks", "whiteboard.png · whiteboard"),
     ("drawing", "models"): lambda page: _says(page, "models", "qmcp"),
     ("drawing", "pieces"): _selected("whiteboard"),
+    ("join", "ends"): lambda page: (
+        _selected("dust_port")(page),
+        expect(windows.panel(page, "part-parameters").locator("#part-preset")).to_be_visible(),
+    ),
+    ("join", "adapter"): lambda page: (
+        _selected("hose_adapter")(page),
+        _says(page, "selected", "hose_adapter"),
+    ),
+    ("join", "ready"): lambda page: _shown(page, "part-readiness"),
 }
 # What the box says the page did, somewhere among a journey's stages, the first time round.
 DID = {
@@ -280,6 +302,11 @@ DID = {
         "whiteboard.png pinned at whiteboard, as its Picture › Folder does",
         "3 shapes found at whiteboard, as its Picture › Find shapes › outline does",
     ],
+    "join": [
+        "apothecary opened, where Join a hose stands (garage was open)",
+        "dust_port's editor opened, as Part › Edit does",
+        "hose_adapter's editor opened, as Part › Edit does",
+    ],
 }
 
 
@@ -304,8 +331,9 @@ def test_the_tour_takes_the_page_to_every_stage_of_the_chain(page, simulated, wa
             "Every journey the page has, in the order of the chain it manages, the page "
             "taken to each stage by the [tour](34-the-tour.md): a part designed, made "
             "on the printer, cut on the router; the board a machine runs on; a deck's "
-            "knobs on the machines; the site brought up and watched; and a drawing "
-            "photographed into shapes, which stand up as parts to design. Each journey "
+            "knobs on the machines; the site brought up and watched; a drawing "
+            "photographed into shapes, which stand up as parts to design; and two ends "
+            "joined by an adapter the server derives between them. Each journey "
             "hands the next what it made. Under each is what the tour's box said the "
             "page did to stand on each stage, then what the page said of it. "
             "[docs/tour.md](../docs/tour.md) is the reference."

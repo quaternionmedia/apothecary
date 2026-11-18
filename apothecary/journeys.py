@@ -19,8 +19,9 @@ person is on it.
 The journeys are in the order of the chain the page manages, each handing the next
 what it made: a part designed; the part made on a printer, or cut on a router; the
 board that runs a machine built, flashed and heard; a deck's knobs on the machines;
-the site brought up a step at a time through the family's hub; the site watched; and
-a drawing photographed into pieces, which are parts to design.
+the site brought up a step at a time through the family's hub; the site watched; a
+drawing photographed into pieces, which are parts to design; and two ends joined by
+an adapter the server derives between them, a part to print.
 
 The tour takes the page to a stage by its ``puts``: what the page does to stand where
 the stage is, each a verb the page already has and its subject, done only where it is
@@ -37,6 +38,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
+from .site_names import UNIVERSE
 from .systems import FAMILY, PART, Layout
 
 
@@ -124,7 +126,8 @@ class Journey:
     # one: the others are entered from ⊞ Windows › Journeys and the tour.
     cell: str = ""
     # The site its subjects stand in -- the pieces and machines its puts name -- which
-    # the tour opens first where another is open.
+    # the tour opens first where another is open: the garage, or the universe, where
+    # every part stands.
     site: str = SITE
 
 
@@ -709,9 +712,58 @@ DRAWING = Journey(
 )
 
 
+# Join a hose: two ends, each one part at its numbers -- a preset chosen, what calipers
+# read typed over it -- and the adapter between them derived by the server, drawn, and
+# each end's fit said; its numbers adjusted, each fit said again. It stands in the
+# universe, where the port part and the adapter are. What it hands on is the adapter,
+# which ⚒ Make takes to a printer, where Print a part goes on.
+JOIN = Journey(
+    id="join",
+    title="Join",
+    group="Part",
+    requires="selected",
+    opened_by="a part's row in Site, and ⇄ Adapter in its Selected",
+    view=PART.view,
+    name="Join a hose",
+    site=UNIVERSE,
+    steps=(
+        Step(
+            "ends",
+            "Ends",
+            "each end one part at its numbers: a preset chosen in Parameters, what calipers "
+            "read typed over it; ⇄ Adapter in Selected keeps the first",
+            forward=("part-parameters", "selected"),
+            owns=("part-parameters",),
+            puts=(("edit", "dust_port"),),
+            shown_by=("43-parts-that-meet.md",),
+        ),
+        Step(
+            "adapter",
+            "Adapter",
+            "⇄ Adapter again at the other end's numbers: the adapter between them derived, "
+            "drawn, and each end's fit said in Selected",
+            forward=("selected",),
+            owns=("selected",),
+            puts=(("edit", "hose_adapter"),),
+            shown_by=("43-parts-that-meet.md",),
+        ),
+        Step(
+            "ready",
+            "Ready",
+            "its numbers adjusted and each fit said again after Apply; whether it is ready "
+            "to print; ⚒ Make takes it to a printer, where Print a part goes on",
+            forward=("part-readiness", "selected"),
+            owns=("part-readiness", "problems"),
+            puts=(("edit", "hose_adapter"),),
+        ),
+    ),
+)
+
+
 # In the order of the chain, each handing the next what it made; a view's cell on the
-# ring is the first's alone.
-JOURNEYS: Tuple[Journey, ...] = (DESIGN, MAKE, CUT, BOARD, HANDS, BRING_UP, WATCH, DRAWING)
+# ring is the first's alone. Join a hose comes last: an adapter between two ends is a
+# part designed by the server, which hands it to Print a part as Design a part does.
+JOURNEYS: Tuple[Journey, ...] = (DESIGN, MAKE, CUT, BOARD, HANDS, BRING_UP, WATCH, DRAWING, JOIN)
 
 
 def by_id(journey_id: str) -> Journey:

@@ -11,8 +11,9 @@ it takes the page to.
 The tour is [the viewer's journeys](viewer.md#journeys), in their order, which is the
 order of the chain the page manages: a part designed; made on the printer, or cut on
 the router; the board a machine runs on; a deck's knobs on the machines; the site
-brought up, and watched; and photographs last, a drawing read into shapes that stand
-up as parts to design. Each journey hands the next what it made.
+brought up, and watched; photographs, a drawing read into shapes that stand up as
+parts to design; and last two ends joined by the adapter the server derives
+between them, a part to print. Each journey hands the next what it made.
 
 The box has no words of its own. A stage's line is the one its journey's rail shows.
 Under it is what there is to try on the stage: the steps of the walkthrough that go
@@ -41,7 +42,8 @@ names, in a tab. The page then does what a person would do to get there, each
 thing only where it is not so already:
 
 - the site the journey stands in opened, where another is, as the banner's ▾ opens
-  it: every journey's pieces and machines are the garage's (`Journey.site`), so a
+  it (`Journey.site`): the garage, whose pieces and machines every journey but one
+  names, or the universe, where *Join a hose*'s port part and adapter stand; so a
   stage is the same whichever site the tour was opened in;
 - what the journey is staged on, then what the stage itself needs (`staged_on` and a
   stage's `puts`, in `apothecary/journeys.py`), from a short list of things the page
