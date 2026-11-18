@@ -293,6 +293,9 @@
         .panel[data-panel="pictures"] .panel-body-slot > *, .panel[data-panel="gather"] .panel-body-slot > * { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
         .panel[data-panel="pictures"] .panel-ui, .panel[data-panel="gather"] .panel-ui { flex: 1 1 auto; min-height: 0; }
         .pictures-list, .pictures-gather .pics { flex: 0 1 auto; min-height: 3rem; overflow: auto; }
+        /* Never lower than a row of thumbnails: a low Pictures window scrolls whole,
+           rather than cutting its one row of pictures. */
+        .pictures-list { min-height: 9rem; }
         .picture-views { display: flex; flex-wrap: wrap; gap: 0.25rem; color: #888; }
         .picture-view { padding: 0 0.3rem; border-radius: 6px; border: 1px solid #3a3a3a; color: #999; }
         .picture-view.here { border-color: #4a6fa8; color: #9cd2ff; cursor: pointer; }
@@ -348,8 +351,9 @@
         .contents-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
 
         /* Category filter chips: each expands one whole subsystem, at any
-           depth beneath the current level. */
-        .category-filters { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.6rem; }
+           depth beneath the current level. Two rows of them at most, the rest
+           scrolled to, so the tree's rows under them stay in view in a low Site. */
+        .category-filters { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.6rem; max-height: 3.6rem; overflow-y: auto; }
         .category-chip {
             display: flex; align-items: center; gap: 0.3rem;
             padding: 0.2rem 0.5rem; border-radius: 10px; cursor: pointer; user-select: none;

@@ -268,3 +268,29 @@ def test_forget_and_purge_from_pictures(page, base_url: str, picture_folder, lea
     purge.click()
     expect(status).to_contain_text("nothing kept from the browser to forget", timeout=5000)
     expect(status).to_have_class(re.compile(r"\berror\b"))
+
+
+# The thumbnail inside its list's box, its top and its foot.
+WHOLE = """(path) => {
+    const list = document.querySelector('#pictures-list').getBoundingClientRect();
+    const img = document.querySelector(`.picture-row[data-path='${path}'] img`).getBoundingClientRect();
+    return img.height > 0 && img.top >= list.top - 1 && img.bottom <= list.bottom + 1;
+}"""
+
+
+@pytest.mark.e2e
+def test_a_low_pictures_window_shows_its_row_of_thumbnails_whole(
+    page, base_url: str, picture_folder, leaves_as_found
+):
+    """On a page 1100 by 700, Pictures as low as the page's own layout makes it: its row
+    of thumbnails is whole, and the window scrolls to what is under it."""
+    _drawn(0).save(picture_folder / "a_low_window.png")
+    page.set_viewport_size({"width": 1100, "height": 700})
+    _open(page, base_url)
+    row = page.locator(".panel[data-panel='pictures'] .picture-row[data-path='a_low_window.png']")
+    expect(row.locator("img")).to_be_visible(timeout=5000)
+    page.wait_for_function(
+        "(p) => document.querySelector(`.picture-row[data-path='${p}'] img`).complete",
+        arg="a_low_window.png",
+    )
+    assert page.evaluate(WHOLE, "a_low_window.png")
