@@ -393,6 +393,40 @@ def test_a_machine_s_ring_is_its_device_ring(page: Page, url: str):
     expect(machine.locator("#control")).to_be_hidden(timeout=5000)
 
 
+# Every title on the page that wears one address twice ("⌗77 · ⌗77").
+TWICE = r"""() => [...document.querySelectorAll('[title]')]
+    .map((el) => [el.id || el.dataset.cmd || el.dataset.jog || el.className, el.title])
+    .filter(([, title]) => /⌗(\d+)\b.*⌗\1\b/.test(title))"""
+
+
+@pytest.mark.e2e
+def test_no_control_wears_its_address_twice_as_the_latch_goes_up_and_down(page: Page, url: str):
+    """The ring's addresses (annotate) and the server's answer (applyCan) are written onto
+    the Machine's controls in whichever order they come: each control wears its address
+    once, the latch down, up with the pad popped out, and down again."""
+    open_garage(page, url, settle=False)
+    page.locator(".world-badge[data-path='printer_1']").click()
+    machine = windows.machine(page)
+    expect(machine.locator("#c-state")).to_contain_text("printing", timeout=10000)
+    expect(machine.locator("#ctl")).to_have_attribute("data-address", "77", timeout=5000)
+    seen = {}
+
+    def after_a_poll(moment: str) -> None:
+        page.wait_for_timeout(POLL_MS + 500)  # an answer applied over the addresses
+        seen[moment] = page.evaluate(TWICE)
+
+    after_a_poll("disarmed")
+    machine.locator("#ctl").click()
+    pad = page.locator("#control")
+    expect(pad).to_be_visible(timeout=5000)
+    expect(pad.locator("button[data-jog='Y+']")).to_have_attribute("data-address", "728", timeout=5000)
+    after_a_poll("armed")
+    pad.locator("#ctl-disarm").click()
+    expect(machine.locator("#control")).to_be_hidden(timeout=5000)
+    after_a_poll("disarmed again")
+    assert seen == {"disarmed": [], "armed": [], "disarmed again": []}
+
+
 PORT_OPENERS = (
     "/firmware/devices/stream",
     "/firmware/devices/listen",
