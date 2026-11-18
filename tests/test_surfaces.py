@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 
 from apothecary import jobs, projector, sites, surfaces
 from apothecary.api import app
-from apothecary.family import hub
+from apothecary.family import hub, tokens
 from apothecary.firmware import devices, gcode
 from apothecary.firmware.models import PrinterStatus
 
@@ -289,8 +289,23 @@ def members(tmp_path, monkeypatch):
     monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path))
     (tmp_path / hub.TABLE).write_text(json.dumps({"pull": ["alfred", "joe"]}), encoding="utf-8")
     hub.close()
+    TOKENS.clear()
+    TOKENS.update({name: tokens.make(name) for name in ("alfred", "joe")})
     yield tmp_path
     hub.close()
+
+
+TOKENS: dict = {}
+
+
+def _post(body: dict, token="its own", **more):
+    """A member's observation posted, with its own token unless another is named."""
+    if token == "its own":
+        token = TOKENS.get(body.get("by"))
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    return client.post(
+        "/surfaces/contributed", json=body, headers={**headers, **more.pop("headers", {})}, **more
+    )
 
 
 def _found(by="alfred", surface="projector", **more) -> dict:
@@ -309,7 +324,7 @@ def test_a_member_s_observation_is_kept_and_relayed(members):
     async def follow():
         following = surfaces.subscribe(["contributed"])
         try:
-            kept = await asyncio.to_thread(client.post, "/surfaces/contributed", json=_found())
+            kept = await asyncio.to_thread(_post, _found())
             got, _ = await following.next(2.0)
             return kept, got
         finally:
@@ -322,7 +337,7 @@ def test_a_member_s_observation_is_kept_and_relayed(members):
     assert [(e["surface"], e["key"], e["body"]["by"]) for e in told] == [
         ("contributed", "projector", "alfred")
     ]
-    client.post("/surfaces/contributed", json=_found(by="joe", surface="jobs", frame="none"))
+    _post(_found(by="joe", surface="jobs", frame="none"))
     every = client.get("/surfaces/contributed").json()["snapshot"]["observations"]
     assert [o["by"] for o in every] == ["joe", "alfred"]
     one = client.get("/surfaces/contributed", params={"surface": "projector"}).json()
@@ -345,12 +360,12 @@ def test_a_kept_file_that_does_not_read_is_set_aside_and_said_never_written_over
     read = client.get("/surfaces/contributed")
     assert read.status_code == 503 and "does not read" in read.json()["detail"], read.text
     assert kept.read_text(encoding="utf-8") == damaged
-    refused = client.post("/surfaces/contributed", json=_found())
+    refused = _post(_found())
     assert refused.status_code == 503 and "kept aside as" in refused.json()["detail"]
     [aside] = folder.glob("contributed.unreadable-*.json")
     assert aside.name in refused.json()["detail"]
     assert aside.read_text(encoding="utf-8") == damaged and not kept.exists()
-    assert client.post("/surfaces/contributed", json=_found()).status_code == 201
+    assert _post(_found()).status_code == 201
     every = client.get("/surfaces/contributed").json()["snapshot"]["observations"]
     assert [o["by"] for o in every] == ["alfred"]
     # One row that is no observation does not read either: nothing of it is dropped.
@@ -386,25 +401,25 @@ def test_the_shapes_docs_surfaces_md_shows_have_the_keys_real_ones_have(members,
             following.close()
 
     assert set(change_shown) == set(asyncio.run(one_change()))
-    kept_answer = client.post("/surfaces/contributed", json=observation_shown)
+    kept_answer = _post(observation_shown)
     assert kept_answer.status_code == 201, kept_answer.text
     assert set(kept_answer.json()) == set(observation_shown) | {"format", "recorded_at"}
 
 
 def test_only_a_member_writes_and_only_of_a_surface_in_a_frame(members, monkeypatch):
-    stranger = client.post("/surfaces/contributed", json=_found(by="mallory"))
+    stranger = _post(_found(by="mallory"))
     assert stranger.status_code == 403 and "no member of the family's hub" in stranger.text
-    nowhere = client.post("/surfaces/contributed", json=_found(surface="weather"))
+    nowhere = _post(_found(surface="weather"))
     assert nowhere.status_code == 404
-    assert client.post("/surfaces/contributed", json=_found(frame="inches")).status_code == 422
+    assert _post(_found(frame="inches")).status_code == 422
     huge = _found(body={"saw": "x" * (surfaces.BODY_MOST + 1)})
-    assert client.post("/surfaces/contributed", json=huge).status_code == 422
+    assert _post(huge).status_code == 422
     # A page of another origin cannot write, as it can write nowhere here.
     foreign = {"origin": "https://evil.example", "sec-fetch-site": "cross-site"}
-    assert client.post("/surfaces/contributed", json=_found(), headers=foreign).status_code == 403
+    assert _post(_found(), headers=foreign).status_code == 403
     monkeypatch.setattr(surfaces, "KEPT", 2)
     for n in range(3):
-        client.post("/surfaces/contributed", json=_found(body={"n": n}))
+        _post(_found(body={"n": n}))
     kept = client.get("/surfaces/contributed").json()["snapshot"]["observations"]
     assert [o["body"]["n"] for o in kept] == [2, 1]
 
@@ -597,3 +612,45 @@ def test_the_job_change_docs_surfaces_md_shows_has_the_keys_a_real_one_has(
     assert set(written["body"]) <= set(real["body"])
     assert set(written["body"]["detail"]) <= set(real["body"]["detail"])
     assert jobs.JOB_ID_RE.match(written["key"]) and "log" not in real["body"]
+
+
+def test_a_member_writes_only_with_its_own_token(members, caplog):
+    """The name in ``by`` is a claim: without the member's token, with another's, with a
+    wrong one or in another scheme it is 401 and nothing is kept, and no token is in
+    what is answered or logged."""
+    caplog.set_level("DEBUG")
+    missing = _post(_found(), token=None)
+    assert missing.status_code == 401 and missing.headers["www-authenticate"] == "Bearer"
+    others = _post(_found(by="alfred"), token=TOKENS["joe"])  # joe's token, alfred's name
+    wrong = _post(_found(), token="not-a-token")
+    scheme = _post(_found(), token=None, headers={"Authorization": f"Basic {TOKENS['alfred']}"})
+    bare = _post(_found(), token=None, headers={"Authorization": TOKENS["alfred"]})
+    for refused in (others, wrong, scheme, bare):
+        assert refused.status_code == 401, refused.text
+    assert client.get("/surfaces/contributed").json()["snapshot"]["observations"] == []
+    assert _post(_found()).status_code == 201
+    for text in [r.text for r in (missing, others, wrong, scheme, bare)] + [caplog.text]:
+        assert not any(token in text for token in TOKENS.values())
+
+
+def test_a_member_with_no_token_made_is_refused_and_told_how_to_make_one(members):
+    """A name in the table with no token is not let write as itself, as it was: the
+    owner makes it one (``apothecary family token NAME``)."""
+    tokens.revoke("joe")
+    refused = _post(_found(by="joe", surface="jobs", frame="none"), token=TOKENS["joe"])
+    assert refused.status_code == 401
+    assert "apothecary family token joe" in refused.json()["detail"]
+    assert TOKENS["joe"] not in refused.text
+    assert not (members / "surfaces" / "contributed.json").exists()
+
+
+def test_a_token_is_kept_only_as_its_hash_in_a_file_for_this_account_alone(members):
+    text = (members / tokens.FILE).read_text(encoding="utf-8")
+    assert not any(token in text for token in TOKENS.values())
+    assert (members / tokens.FILE).stat().st_mode & 0o077 == 0
+    assert tokens.named() == ["alfred", "joe"]
+    again = tokens.make("alfred")  # a new token replaces the old
+    assert not tokens.check("alfred", TOKENS["alfred"]) and tokens.check("alfred", again)
+    assert not tokens.check("alfred", "") and not tokens.check("nobody", again)
+    (members / tokens.FILE).write_text("{", encoding="utf-8")  # unreadable: fails closed
+    assert not tokens.check("alfred", again)

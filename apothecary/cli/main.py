@@ -6,6 +6,7 @@ from .airgap import airgap
 from .census import census
 from .docs import docs
 from .evidence import evidence
+from .family import family
 from .firmware import firmware
 from .kernels import kernel_reference
 from .lighting import lighting
@@ -102,6 +103,7 @@ cli.add_command(airgap)
 cli.add_command(loop)
 cli.add_command(rig)
 cli.add_command(evidence)
+cli.add_command(family)
 
 
 def main():  # pragma: no cover - entry point

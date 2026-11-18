@@ -64,6 +64,11 @@ def _table() -> Dict[str, Any]:
     return table
 
 
+def table() -> Dict[str, Any]:
+    """The table as written: what ``apothecary family`` lists."""
+    return _table()
+
+
 def _on_this_machine(members: Any) -> Any:
     """The members reached on this machine; any other is said and left out."""
     if not isinstance(members, dict):

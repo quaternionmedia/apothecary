@@ -13,7 +13,8 @@ what the family's members found.
   nobody polling hears nothing of the machines. ``seconds`` ends it after that long.
 - ``POST /surfaces/contributed``: an observation a member of the family's hub found
   about a surface (``surfaces.Observation``), kept; 403 for a name the hub's table does
-  not hold, 404 for a surface no owner declared. Under the app's guard, as every route
+  not hold, 401 without the member's own token (``Authorization: Bearer <token>``,
+  ``apothecary/family/tokens.py``) or with another's, 404 for a surface no owner declared. Under the app's guard, as every route
   is (``apothecary/stays_local.py``): from this machine, and from a page of this origin.
 """
 
@@ -23,7 +24,7 @@ import json
 import time
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from .. import surfaces
@@ -108,14 +109,30 @@ async def surface_events(
 
 
 @router.post("/surfaces/contributed", status_code=201)
-def contribute(body: surfaces.Observation):
+def contribute(
+    body: surfaces.Observation,
+    authorization: Optional[str] = Header(None, description="Bearer <the member's token>"),
+):
     """What a member of the family's hub found about a surface, kept."""
-    from ..family import hub
+    from ..family import hub, tokens
 
     if body.by not in hub.members():
         raise HTTPException(
             status_code=403,
             detail=f"{body.by!r} is no member of the family's hub: its table names the members",
+        )
+    if not tokens.has(body.by):
+        raise HTTPException(
+            status_code=401,
+            detail=f"the hub holds no token for {body.by!r}: `apothecary family token "
+            f"{body.by}` makes one, shown once",
+            headers={"WWW-Authenticate": tokens.SCHEME},
+        )
+    if not tokens.check(body.by, tokens.bearer(authorization)):
+        raise HTTPException(
+            status_code=401,
+            detail=f"send {body.by!r}'s own token as '{tokens.HEADER}: {tokens.SCHEME} <token>'",
+            headers={"WWW-Authenticate": tokens.SCHEME},
         )
     try:
         return surfaces.contribute(body).model_dump(mode="json")

@@ -85,6 +85,25 @@ hearth's `from_table` reads. Each key is optional, and with no file there are no
 changed table starts a new coordinator, whose audit starts empty, and the audit is
 not kept across a restart.
 
+### The members, at the command line
+
+```text
+apothecary family members              # each member: name, address, how it is reached,
+                                       # what it can do, and whether it holds a token
+apothecary family members --json
+apothecary family add NAME URL         # names a push member at URL, on this machine, and
+                                       # makes it a token, shown once
+apothecary family token NAME           # a new token for a member, replacing its own
+apothecary family remove NAME          # out of members, pull and start; its token revoked
+```
+
+These write the state folder's `family.json` whole, as the hub reads it, and
+`family-tokens.json` beside it, which holds only each token's hash. A table that does not
+read is left as it is and the command says so. The members the hub hosts and the page's
+camera are not in the table and are not removed. The token is what the member sends to
+write to the server as itself ([a member's token](surfaces.md#a-members-token)); the
+list never shows one.
+
 ### Members it starts
 
 - **`start`** names a member beside the hub by how it is started, and the hub keeps it

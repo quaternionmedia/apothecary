@@ -103,7 +103,8 @@ no job's state is built while no reader follows the jobs.
 
 A member of the family's hub may say what it found about a surface: alfred watching a
 camera's frames, joe a performance, each reading the surfaces and the stream and driving
-nothing. An observation is posted to `POST /surfaces/contributed`:
+nothing. An observation is posted to `POST /surfaces/contributed`, with the member's own token
+([A member's token](#a-members-token)):
 
 ```json
 {
@@ -118,7 +119,7 @@ nothing. An observation is posted to `POST /surfaces/contributed`:
 
 | Field | |
 |---|---|
-| `by` | the member's name, as the hub's table names it (`family.json`: `members`, `pull`, `start`); a name it does not hold is 403 |
+| `by` | the member's name, as the hub's table names it (`family.json`: `members`, `pull`, `start`); a name it does not hold is 403, and the token must be that member's: 401 |
 | `at` | when what it says held, ISO 8601 |
 | `surface` | the surface it is about, a declared one; another is 404 |
 | `frame` | the frame of the body's coordinates, one of the four; another is 422 |
@@ -135,8 +136,37 @@ never read as fewer: a read of it answers 503 and leaves it, and a post moves it
 nothing; the next post starts a file of its own.
 
 The route is under the app's guard as every route is (`apothecary/stays_local.py`): it
-answers this machine alone, and no page of another origin may post to it. `by` is what
-the member says it is; nothing on this machine proves it.
+answers this machine alone, and no page of another origin may post to it.
+
+### A member's token
+
+`by` is a claim; the token proves it. The hub makes each member a secret when the member
+is added (`apothecary family add NAME URL`, or `apothecary family token NAME` for a
+member already in the table), shows it once to the person who made it, and keeps only
+its SHA-256 in `family-tokens.json` in the state folder, readable by this account alone.
+The member sends it on every post, in the one header:
+
+```text
+Authorization: Bearer <the member's token>
+```
+
+| Answer | When |
+|---|---|
+| 201 | the token is `by`'s own |
+| 401, `WWW-Authenticate: Bearer` | no `Authorization` header, a scheme other than `Bearer`, a token that is not `by`'s (another member's included), or a `by` the hub holds no token for |
+| 403 | `by` is no member the table names |
+
+A 401 never carries a token, and none is logged or returned by any route: the list of
+members (`apothecary family members`) says only whether a member holds one.
+
+**A member in the table with no token is refused.** Before tokens the table's names were
+enough, so a table written earlier names members that hold none. They are refused until
+the owner makes them one, and nothing is let through on the old footing:
+
+```text
+apothecary family token alfred     # shown once: give it to alfred
+apothecary family token joe
+```
 
 ## What would move to the stream
 
