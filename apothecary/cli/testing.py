@@ -167,6 +167,9 @@ HELP = """Run the test suite, exiting as pytest does.
 `test run`, `test changed` and `test group` run the unit part on a core fewer
 than the machine has (pytest-xdist, a file's tests together); --workers 1
 runs it in one process.
+`test all` runs it in one process, as the gate: state an earlier test leaves in
+the same process is found by that order only, and --workers N gives up that
+evidence for time.
 
 The walkthrough's demonstration and every browser test drive Chromium:
 `uv run playwright install chromium` once per machine. CONTRIBUTING.md has the rest.
@@ -226,7 +229,9 @@ def test_run(slow: bool, workers: int | None, pytest_args: tuple[str, ...]):
     type=click.IntRange(min=1),
     default=1,
     show_default=True,
-    help="Both parts in parallel, a file's tests together (pytest-xdist).",
+    help="Both parts in parallel, a file's tests together (pytest-xdist). The unit part "
+    "runs in one process unless this names more: the whole suite's own order finds what "
+    "parallel runs do not.",
 )
 @click.option(
     "--coverage",

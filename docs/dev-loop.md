@@ -74,6 +74,39 @@ being pulled, which carries every level beneath it
 [the integration checklist](integration-checklist.md)). Every test has a time
 bound, here as in CI, so a hang ends with its stack written.
 
+### The gate keeps one process
+
+`test run`, `test changed` and `test group` run the unit part on workers; `test all` runs
+it in one process. A test can pass in a worker that never ran what leaves state behind it,
+and fail in the one process that did: a module registered at the import of another, a
+universe a walkthrough page already built. The whole suite in one process, in file order,
+is the run that finds those, and it is the gate's. Measured on a four-core machine, both ways, the unit part
+alone (`walkthrough` and `tests`, the browser tests left out), alternating, on a machine
+shared with other test runs:
+
+| Run | One process | Three workers |
+|---|---|---|
+| 1 | 698 s (load 5.9 to 8.1) | 350 s (load 8.1 to 13.4), 2 failed |
+| 2 | 722 s (load 13.4 to 8.9) | 405 s (load 8.9 to 11.9), 2 failed |
+| 3 | 634 s (load 11.9 to 9.7) | 283 s (load 9.7 to 10.5) |
+
+Each time is the wall time, with the one-minute load when the run began and ended. The
+load moved between 6 and 13 throughout, other test runs sharing the four cores, so the
+numbers say two to one and no more. In two of the three runs the workers also failed two
+tests that passed in one process (two experiments of `tests/test_loop_tuning.py`, then one
+of them and one of `tests/test_family_procedures.py`): timing tests that a loaded machine
+holds to their bound, so a red parallel run is read before it is
+believed.
+
+Whether only the one process finds the order faults was tried on a copy of the tree with
+the fixes of the two recent ones taken out: the one process failed
+`tests/test_loop_tuning.py` (one run of one), the workers did in one of two runs, and
+neither failed `tests/test_jobs.py` for the registration order. So the evidence for the
+one process is thin and is not more than the two faults found by it; what it costs is
+about four minutes of a gate that runs the browser suite after it for more than half an
+hour, once per stack. `test all --workers N` runs both parts on workers when that time is
+wanted more than that evidence.
+
 ## Committing
 
 One branch per change, off `main`. A commit subject is one plain sentence saying

@@ -120,6 +120,7 @@ def test_help_says_what_run_and_all_each_do():
     assert "uv run playwright install chromium" in said
     assert "not run, unchanged since green, and --even-unchanged runs it too" in said
     assert "on a core fewer than the machine has" in said and "--workers 1" in said
+    assert "`test all` runs it in one process, as the gate" in said
 
 
 @pytest.mark.parametrize("name", ["setup-e2e", "validate-e2e", "run-e2e"])

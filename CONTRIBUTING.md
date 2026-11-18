@@ -63,8 +63,14 @@ once it does not match its seal. `test run`, `test all` and `test group` run eve
 they name. `test run`, `test changed` and `test group` run the unit part on a core fewer
 than the machine has, one to four workers (pytest-xdist, a file's tests on one worker),
 the core left to what shares the machine; `--workers N` names another number, and
-`--workers 1` runs it in one process. A browser part runs on one worker unless `--workers`
-names more. `apothecary test group NAME` runs one group. `apothecary test run` is the
+`--workers 1` runs it in one process. `test all`, the gate, runs the unit part in one
+process too, whatever the cores: the whole suite in one order finds what parallel runs do
+not, state an earlier test leaves in the same process (a module imported first, a universe
+already built), and two faults of that kind were found by that run alone; the price is a
+unit part twice as long as `test run`'s (about 700 s against 350 s, measured on a four-core machine
+under load, [docs/dev-loop.md](docs/dev-loop.md#the-gate-keeps-one-process)), once per stack.
+`test all --workers N` gives that evidence up for time. A browser part runs on one worker
+unless `--workers` names more. `apothecary test group NAME` runs one group. `apothecary test run` is the
 ordinary command, and runs the window manager's browser tests too. Those need no server,
 only Chromium, so `uv run pytest` runs them as well wherever Playwright has installed it.
 
