@@ -39,12 +39,14 @@ ECHO = re.compile(
 )
 
 
-def scad_says(overrides: dict) -> dict:
+def scad_says(overrides: dict, rest: bool = False) -> dict:
     renderer = get_renderer()
     if not renderer.is_available:
         pytest.skip("OpenSCAD not installed")
     args = ["-o", "-", "--export-format=echo", "-D", "echo_shapes=true"]
     args += scad_definitions(DEFAULT.scad_overrides(DEFAULT.validate_overrides(overrides)))
+    if rest:
+        args += scad_definitions(DEFAULT.rest)
     args.append(str(DEFAULT.source_file))
     code, out, err, stopped = run_openscad(renderer.openscad_path, args, DEFAULT.part_dir, 60)
     assert code == 0 and not stopped, err[-2000:]
@@ -74,6 +76,23 @@ def test_the_scad_and_the_mirror_draw_the_same_outlines(overrides):
     assert said["turn"] == pytest.approx(rr.turn(p), abs=2e-4)
     assert said["outer_r"] == pytest.approx(p.outer_r)
     assert said["rotor_at"] == pytest.approx([rr.print_offset(p), 0, 0])
+
+
+@pytest.mark.parametrize("orbit", [0.0, 70.0, 250.0])
+def test_assembled_the_scad_stands_the_rotor_where_the_motions_table_does(orbit):
+    """The SCAD's own pose, as it rests, is the row the motion's table has at that orbit:
+    the table the viewer plays and the drawing a render makes agree."""
+    from apothecary.motion import table
+
+    values = {**COARSE, "orbit": orbit}
+    said = scad_says(values, rest=True)
+    p = Params(**COARSE)
+    made = table(DEFAULT.motion(p.model_dump()), p.model_dump())
+    (rotor,) = made["pieces"]
+    i = made["samples"].index(orbit)
+    x, y, turned = rotor["poses"][i]
+    assert said["rotor_at"] == pytest.approx([x, y, p.base], abs=2e-4)
+    assert said["turn"] == pytest.approx(turned, abs=2e-4)
 
 
 def test_the_models_defaults_are_the_scads_literals():

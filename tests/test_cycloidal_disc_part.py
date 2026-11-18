@@ -49,12 +49,14 @@ OTHERS = [
 ]
 
 
-def scad_says(overrides: dict) -> dict:
+def scad_says(overrides: dict, rest: bool = False) -> dict:
     renderer = get_renderer()
     if not renderer.is_available:
         pytest.skip("OpenSCAD not installed")
     args = ["-o", "-", "--export-format=echo", "-D", "echo_shapes=true"]
     args += scad_definitions(DEFAULT.scad_overrides(DEFAULT.validate_overrides(overrides)))
+    if rest:
+        args += scad_definitions(DEFAULT.rest)
     args.append(str(DEFAULT.source_file))
     code, out, err, stopped = run_openscad(renderer.openscad_path, args, DEFAULT.part_dir, 60)
     assert code == 0 and not stopped, err[-2000:]
@@ -84,6 +86,22 @@ def test_the_scad_and_the_mirror_draw_the_same_flank(overrides):
     assert said["turn"] == pytest.approx(cd.turn(p), abs=2e-4)
     assert said["outer_r"] == pytest.approx(p.outer_r)
     assert said["disc_at"] == pytest.approx([cd.print_offset(p), 0, 0])
+
+
+@pytest.mark.parametrize("crank", [0.0, 70.0, 250.0])
+def test_assembled_the_scad_stands_the_disc_where_the_motions_table_does(crank):
+    """The ratio guard on the drawing's side: the SCAD's own pose, as it rests, is the
+    row the motion's table has at that crank, so a ratio broken in either the SCAD or
+    the mirror shows."""
+    from apothecary.motion import table
+
+    said = scad_says({**COARSE, "crank": crank}, rest=True)
+    p = Params(**COARSE)
+    made = table(DEFAULT.motion(p.model_dump()), p.model_dump())
+    disc = next(x for x in made["pieces"] if x["piece"] == "disc")
+    x, y, turned = disc["poses"][made["samples"].index(crank)]
+    assert said["disc_at"] == pytest.approx([x, y, p.base], abs=2e-4)
+    assert said["turn"] == pytest.approx(turned, abs=2e-4)
 
 
 def test_the_models_defaults_are_the_scads_literals():

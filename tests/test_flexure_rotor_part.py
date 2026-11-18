@@ -80,6 +80,28 @@ def test_the_scad_and_the_mirror_draw_the_same_outlines(overrides):
         assert _apart(theirs, mine) < 2e-4
 
 
+@pytest.mark.parametrize("swing", [-6.0, 4.5])
+def test_swung_the_scad_draws_the_hub_where_the_motions_table_turns_it(swing):
+    """The SCAD's hub drawn at a swing is the hub's own outline, at swing 0, placed by
+    the motion's table's row at that swing; and its leaves are the table's."""
+    from apothecary.gap_geometry import Pose as Placed
+    from apothecary.motion import table
+
+    values = {**COARSE, "swing": swing}
+    said = scad_says(values)
+    p = Params(**COARSE)
+    made = table(DEFAULT.motion(p.model_dump()), p.model_dump())
+    i = made["samples"].index(swing)
+    (hub,) = made["pieces"]
+    placed = Placed(*hub["poses"][i]).place(fr.hub_outline(p, 0.0))
+    assert max(math.dist(a, b) for a, b in zip(said["hub"], placed, strict=True)) < 2e-4
+    (leaves,) = made["bent"]
+    # The SCAD carries each leaf on into the hub and the ring; the table draws its free span.
+    for drawn, own in zip(said["leaves"], leaves["outlines"][i], strict=True):
+        inner = drawn[1 : 1 + len(own) // 2] + drawn[len(own) // 2 + 3 : len(own) + 3]
+        assert max(math.dist(a, b) for a, b in zip(inner, own, strict=True)) < 2e-4
+
+
 def test_the_models_defaults_are_the_scads_literals():
     assert defaults_disagree(DEFAULT) == []
 
