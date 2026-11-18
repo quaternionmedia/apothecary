@@ -53,7 +53,9 @@ def test_check_ends_with_the_next_step(monkeypatch):
 
     monkeypatch.setattr(system, "has_manifold", lambda exe: False)
     without = CliRunner().invoke(cli, ["check"]).output.rstrip().splitlines()[-1]
-    assert without.startswith("next: apothecary openscad install, then apothecary serve --simulated")
+    assert without.startswith(
+        "next: apothecary openscad install, then apothecary serve --simulated"
+    )
     monkeypatch.setattr(system, "has_manifold", lambda exe: True)
     monkeypatch.setattr(system.OpenSCADRenderer, "is_available", True)
     monkeypatch.setattr(system.OpenSCADRenderer, "get_version", lambda self: "2026.01.01")

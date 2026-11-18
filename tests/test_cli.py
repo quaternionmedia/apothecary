@@ -160,7 +160,9 @@ def test_serve_refuses_simulated_machines_on_a_persons_own_state_folder(uvicorn_
     monkeypatch.delenv("APOTHECARY_STATE_DIR", raising=False)
     result = CliRunner().invoke(cli, ["serve", "--port", "8126"])
     assert result.exit_code != 0 and uvicorn_runs == []
-    assert "apothecary serve --simulated" in result.output and "APOTHECARY_STATE_DIR" in result.output
+    assert (
+        "apothecary serve --simulated" in result.output and "APOTHECARY_STATE_DIR" in result.output
+    )
     monkeypatch.setenv("APOTHECARY_STATE_DIR", "/nowhere/of/its/own")
     result = CliRunner().invoke(cli, ["serve", "--port", "8126"])
     assert result.exit_code == 0 and len(uvicorn_runs) == 1, result.output

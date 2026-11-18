@@ -327,7 +327,11 @@ class SimulatedHeater:
 
         self.cl = cl
         self.plant, self.ambient, self.dt = plant, ambient, dt
-        self.max_power, self.smoothing, self.functional_range = max_power, smoothing, functional_range
+        self.max_power, self.smoothing, self.functional_range = (
+            max_power,
+            smoothing,
+            functional_range,
+        )
         self.noise = noise
         self._rng = random.Random(seed)
         self.runner = cl.PlantRunner(plant, dt)
@@ -416,7 +420,9 @@ class SimulatedAutotune:
         if self.t >= self.next_report:
             self.next_report += self.REPORT_EVERY_S
             power = "B@" if self.label == "B" else "@"
-            self.said.append(f" {self.label}:{measured:.2f} /{self.target:.2f} {power}:{int(self._out())}")
+            self.said.append(
+                f" {self.label}:{measured:.2f} /{self.target:.2f} {power}:{int(self._out())}"
+            )
         if measured > self.target + self.OVERSHOOT_C:
             return self._end("PID Autotune failed! Temperature too high")
         if self.t > self.GIVE_UP_S:
@@ -456,7 +462,11 @@ class SimulatedAutotune:
                 kp, ki, kd = self.result or (0.0, 0.0, 0.0)
                 return self._end(
                     "PID Autotune finished! Put the last Kp, Ki and Kd constants from below into Configuration.h",
-                    [f"#define DEFAULT_Kp {kp:.2f}", f"#define DEFAULT_Ki {ki:.2f}", f"#define DEFAULT_Kd {kd:.2f}"],
+                    [
+                        f"#define DEFAULT_Kp {kp:.2f}",
+                        f"#define DEFAULT_Ki {ki:.2f}",
+                        f"#define DEFAULT_Kd {kd:.2f}",
+                    ],
                 )
         return self._out()
 
@@ -543,7 +553,11 @@ class SimulatedPrinter:
         # its own clock, simulated seconds, which ``APOTHECARY_SIMULATED_HEATER_SPEED``
         # runs faster than real time. Without it a heater sits at its target.
         self._lock = threading.Lock()
-        self.heaters = heaters if heaters is not None else (simulated_heaters(port) if heaters_modelled() else None)
+        self.heaters = (
+            heaters
+            if heaters is not None
+            else (simulated_heaters(port) if heaters_modelled() else None)
+        )
         speed = float(os.environ.get("APOTHECARY_SIMULATED_HEATER_SPEED", "1") or 1)
         self._clock = clock or (lambda: time.monotonic() * speed)
         self._sim_at = self._clock()
@@ -1190,8 +1204,12 @@ class GcodeLink:
                 if line is None:
                     self._owed += 1
                     if time.monotonic() >= end:
-                        raise ToolchainError(f"{self.port}: {cmd} did not finish within {limit:.0f}s")
-                    raise ToolchainError(f"{self.port}: nothing said for {silence:.0f}s during {cmd}")
+                        raise ToolchainError(
+                            f"{self.port}: {cmd} did not finish within {limit:.0f}s"
+                        )
+                    raise ToolchainError(
+                        f"{self.port}: nothing said for {silence:.0f}s during {cmd}"
+                    )
                 lines.append(line)
                 self.log.add("rx", line, origin, note=self._note(line))
                 if BOOT_RE.match(line):
@@ -1697,7 +1715,9 @@ def normalise_control(command: str) -> str:
         if cmd.startswith(("M301", "M304")):
             for name, figure in zip("PID", m.groups(), strict=True):
                 if not GAIN_FIGURE.match(figure):
-                    raise ValueError(f"{name} is a plain decimal of four places at most: {command!r}")
+                    raise ValueError(
+                        f"{name} is a plain decimal of four places at most: {command!r}"
+                    )
                 if float(figure) > GAIN_MAX[name]:
                     raise OutOfBounds(f"{name} above {GAIN_MAX[name]:g}: {command!r}")
             return cmd
@@ -1764,8 +1784,12 @@ def normalise_autotune(command: str) -> str:
 GAINS_LINE_RE = re.compile(
     r"\b(M301|M304)(?:\s+E(\d))?\s+P(-?\d+(?:\.\d+)?)\s+I(-?\d+(?:\.\d+)?)\s+D(-?\d+(?:\.\d+)?)"
 )
-GAINS_REPORT_RE = re.compile(r"\bp:\s*(-?\d+(?:\.\d+)?)\s+i:\s*(-?\d+(?:\.\d+)?)\s+d:\s*(-?\d+(?:\.\d+)?)")
-AUTOTUNE_VALUE_RE = re.compile(r"(?:#define\s+DEFAULT_(?:bed)?|\b)(Kp|Ki|Kd|Ku|Tu)\b:?\s*(-?\d+(?:\.\d+)?)")
+GAINS_REPORT_RE = re.compile(
+    r"\bp:\s*(-?\d+(?:\.\d+)?)\s+i:\s*(-?\d+(?:\.\d+)?)\s+d:\s*(-?\d+(?:\.\d+)?)"
+)
+AUTOTUNE_VALUE_RE = re.compile(
+    r"(?:#define\s+DEFAULT_(?:bed)?|\b)(Kp|Ki|Kd|Ku|Tu)\b:?\s*(-?\d+(?:\.\d+)?)"
+)
 AUTOTUNE_FAILED_RE = re.compile(r"PID Autotune failed!?\s*(.*)$", re.I)
 AUTOTUNE_DONE_RE = re.compile(r"PID Autotune finished", re.I)
 
@@ -1793,7 +1817,12 @@ def parse_gains_report(lines: List[str]) -> Optional[dict]:
     for line in lines:
         m = GAINS_REPORT_RE.search(line)
         if m:
-            return {"kp": float(m.group(1)), "ki": float(m.group(2)), "kd": float(m.group(3)), "line": line.strip()}
+            return {
+                "kp": float(m.group(1)),
+                "ki": float(m.group(2)),
+                "kd": float(m.group(3)),
+                "line": line.strip(),
+            }
     return None
 
 

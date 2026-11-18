@@ -892,7 +892,9 @@ def test_the_world_follows_the_router_with_no_machine_open(page: Page, url: str)
     for line in (f"$J=G91 G21 X{dx} F1000", f"$J=G91 G21 Y{dy} F1000"):
         _command(url, line)
     _poll_at_rest(url)
-    page.wait_for_function(at, arg={"x": start["x"] + dx, "y": start["y"] + dy}, timeout=WITHIN_A_POLL)
+    page.wait_for_function(
+        at, arg={"x": start["x"] + dx, "y": start["y"] + dy}, timeout=WITHIN_A_POLL
+    )
     after = page.evaluate(ROUTER_NOW)
     # The table carries Y: its piece and the box move together, minus the jog along the
     # site's Y (three.js's -z for the piece); along X neither moves.
@@ -915,9 +917,7 @@ def test_the_world_follows_the_router_with_no_machine_open(page: Page, url: str)
 
 
 @pytest.mark.e2e
-def test_no_tool_is_drawn_while_a_poll_does_not_say_where_it_is_in_the_volume(
-    page: Page, url: str
-):
+def test_no_tool_is_drawn_while_a_poll_does_not_say_where_it_is_in_the_volume(page: Page, url: str):
     """A router's machine position is a place in its volume only by the way each axis
     homes, which the server reads from its controller's settings. A poll without that
     word (no tool_position) draws no tool, rather than one counted as if every axis homed

@@ -617,9 +617,25 @@ def firmware_loops_start(body: LoopExperimentRequest):
     square wave of the target about an operating temperature -- as a job that holds the
     port (latch required), with the ceiling and the longest time the request states."""
     _busy_guard(body.port)
-    params = body.model_dump(exclude={"port", "heater", "index", "kind", "ceiling_c", "max_duration_s", "sample_period_s"})
+    params = body.model_dump(
+        exclude={
+            "port",
+            "heater",
+            "index",
+            "kind",
+            "ceiling_c",
+            "max_duration_s",
+            "sample_period_s",
+        }
+    )
     plan = loops.plan(
-        body.heater, body.index, body.kind, body.ceiling_c, body.max_duration_s, body.sample_period_s, **params
+        body.heater,
+        body.index,
+        body.kind,
+        body.ceiling_c,
+        body.max_duration_s,
+        body.sample_period_s,
+        **params,
     )
     return loops.start(body.port, plan).snapshot()
 
@@ -762,7 +778,9 @@ async def firmware_loops_schema():
 
 
 @router.post("/loops/validate")
-async def firmware_loops_validate(doc: loop_document.LoopDocument, format: Literal["json", "md"] = "json"):
+async def firmware_loops_validate(
+    doc: loop_document.LoopDocument, format: Literal["json", "md"] = "json"
+):
     """A loop document read back normalized, or as Markdown; 422 names what is wrong."""
     if format == "md":
         return PlainTextResponse(loop_document.render_markdown(doc))

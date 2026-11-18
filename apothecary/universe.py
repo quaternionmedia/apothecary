@@ -204,9 +204,7 @@ def arrange(universe: Assembly) -> None:
         where = placed[node.name]
         # The middle of the footprint, turned with the node, lands on the shell's point.
         turn = (
-            Vector3D(x=where.turn[0], y=where.turn[1], z=where.turn[2])
-            if node.part_ref
-            else None
+            Vector3D(x=where.turn[0], y=where.turn[1], z=where.turn[2]) if node.part_ref else None
         )
         middle = node.footprint.center
         carried = (

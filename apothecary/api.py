@@ -2242,9 +2242,7 @@ def machine_frame(
     travel = controller.travel if controller is not None else None
     said = travel is not None and all(travel.get(k) is not None for k in "xyz")
     volume = (
-        [float(travel[k]) for k in "xyz"]
-        if said
-        else [site_volume.x, site_volume.y, site_volume.z]
+        [float(travel[k]) for k in "xyz"] if said else [site_volume.x, site_volume.y, site_volume.z]
     )
     if getattr(n, "build_origin", None) is not None:
         origin, origin_from = [n.build_origin.x, n.build_origin.y, n.build_origin.z], "node"

@@ -474,7 +474,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     ),
     "layers-depth-less": (WIDGET, WHAT_YOU_SEE, "a button that reaches one level less deep"),
     "layers-depth-more": (WIDGET, WHAT_YOU_SEE, "a button that reaches one level deeper"),
-    "layers-reset-all": (WIDGET, WHAT_YOU_SEE, "a button that puts depth and every layer back as they began"),
+    "layers-reset-all": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a button that puts depth and every layer back as they began",
+    ),
     # ---- Loops, apothecary/static/widgets/loops.js -------------------------------------
     # A heater loop of the printer whose Machine is open: its choices and its acts, each a
     # cell of Panels › Machine › Loops (RING_BACKED); the figures an experiment is planned
@@ -787,7 +791,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # A part's pieces moved through its motion, from the table the server samples. Each
     # control is a cell of the part's ring, Part › View › Motion; the slider is Back and
     # Step, a sample at a time, as the Marks history's slider is Earlier and Later.
-    "motion-at": (WIDGET, WHAT_YOU_SEE, "a slider over the motion's parameter, the pieces moved to it"),
+    "motion-at": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a slider over the motion's parameter, the pieces moved to it",
+    ),
     "motion-play": (WIDGET, WHAT_YOU_SEE, "a button that plays the motion, and pauses it"),
     "motion-back": (WIDGET, WHAT_YOU_SEE, "a button that moves the pieces to the sample before"),
     "motion-step": (WIDGET, WHAT_YOU_SEE, "a button that moves the pieces to the sample after"),
@@ -805,7 +813,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     # Panels › Windows › Tour; its ✕ is that ring's Tour, which closes it too.
     "tour-pop-open": (WIDGET, WHAT_YOU_SEE, "a button that opens the tour's box, or closes it"),
     "tour-pop-close": (WIDGET, WHAT_YOU_SEE, "a button that closes the tour's box"),
-    "tour-pop-journeys": (WIDGET, WHAT_YOU_SEE, "a drop-down of the journeys, each with its stages"),
+    "tour-pop-journeys": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of the journeys, each with its stages",
+    ),
     "tour-pop-note": (WIDGET, WHAT_YOU_SEE, "a field for what is off at the stage shown"),
     "tour-pop-by": (WIDGET, WHAT_YOU_SEE, "a field for the name a word is kept under"),
     "tour-pop-back": (WIDGET, WHAT_YOU_SEE, "a button that goes to the stage before"),
@@ -1522,7 +1534,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "a mark's kind chosen, a person's word on it; or another picture's marks listed",
     ),
     "marks:click:closest": (WIDGET, WHAT_YOU_SEE, "a mark chosen, for the ring's Marks cells"),
-    "tourJourneys:change:chosen": (WIDGET, WHAT_YOU_SEE, "a journey chosen, the page taken to its first stage"),
+    "tourJourneys:change:chosen": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a journey chosen, the page taken to its first stage",
+    ),
     # The Tour's box (widgets/tour_popover.js): the header's button, its buttons by one
     # listener, its fold, its name, and its head, by which it is dragged and folded.
     "tourOpen:click:toggle": (WIDGET, WHAT_YOU_SEE, "the header's Tour, its box opened or closed"),
@@ -1539,7 +1555,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     "who:change:named": (WIDGET, WHAT_YOU_SEE, "the name typed, kept by this browser"),
     "noteField:keydown:act": (WIDGET, WHAT_IS_THERE, "Enter in the field for what is off: Off"),
     "head:pointerdown:closest": (WIDGET, WHAT_YOU_SEE, "the tour's box taken hold of by its head"),
-    "head:pointermove:move": (WIDGET, WHAT_YOU_SEE, "the tour's box dragged, kept where it is left"),
+    "head:pointermove:move": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the tour's box dragged, kept where it is left",
+    ),
     "head:pointerup:up": (WIDGET, NOTHING, "the tour's box let go"),
     "head:dblclick:closest": (
         WIDGET,
@@ -1854,8 +1874,16 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "Play or Pause, Back, Step or Reset, each doing what its cell of Part › View › Motion does",
     ),
-    "motionEl:input:scrubbed": (WIDGET, WHAT_YOU_SEE, "the motion's slider moved, the pieces with it"),
-    "motionEl:change:ticked": (WIDGET, WHAT_YOU_SEE, "Bought ticked or not, what is bought shown or hidden"),
+    "motionEl:input:scrubbed": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "the motion's slider moved, the pieces with it",
+    ),
+    "motionEl:change:ticked": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "Bought ticked or not, what is bought shown or hidden",
+    ),
     # ---- the Working space ------------------------------------------------------
     "root:click:closest": (
         WIDGET,

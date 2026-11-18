@@ -1598,7 +1598,8 @@ def _start_leveling(
     grid: Optional[TableGrid],
 ) -> LevelingJob:
     can.raise_for(
-        can.level_start_blocked(port, _LEVELING.get(port), _PRINTS.get(port), _tuning_on(port)), "held"
+        can.level_start_blocked(port, _LEVELING.get(port), _PRINTS.get(port), _tuning_on(port)),
+        "held",
     )
     if probe:
         can.raise_for(
@@ -2313,7 +2314,8 @@ def _start_print(
         "armed",
     )
     can.raise_for(
-        can.print_start_blocked(port, _PRINTS.get(port), _LEVELING.get(port), _tuning_on(port)), "held"
+        can.print_start_blocked(port, _PRINTS.get(port), _LEVELING.get(port), _tuning_on(port)),
+        "held",
     )
     if links.get(port) is None:
         printer_status(port, state=state, links=links)
