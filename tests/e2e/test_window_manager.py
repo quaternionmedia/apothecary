@@ -333,6 +333,17 @@ def _a_tab_beside_the_window_it_follows_once_the_column_is_full(page):
     assert z["stack"] == ["t1", "t2", "z"] and z["front"] == "z" and len(z["children"]) == 4
 
 
+def _a_loud_window_is_in_front_wherever_it_is_placed(page):
+    # Registered among the tabs, as the page registers a window, and kept open as a view
+    # is laid out: in front each time, where a quiet one would stand behind.
+    _mount(page, transient=["x"])
+    _js(page, "() => H.reg('x', { home: 'tabs', loud: true })")
+    assert _where(page, "x")["front"] == "x"
+    _js(page, "() => P.applyView('default')")
+    x = _where(page, "x")
+    assert x["stack"] == ["t1", "t2", "x"] and x["front"] == "x"
+
+
 def _a_tab_at_once_in_a_column_of_three(page):
     _mount(page, columnStacks=3)
     _js(page, "() => { H.reg('x', { home: 'column', after: 'sel', open: false }); P.open('x'); }")
@@ -362,6 +373,7 @@ def _a_tab_at_the_foot_of_a_full_column_after_nothing(page):
         _opened_by_the_page_somewhere_else_for_once,
         _at_the_column_foot_after_nothing,
         _a_tab_beside_the_window_it_follows_once_the_column_is_full,
+        _a_loud_window_is_in_front_wherever_it_is_placed,
         _a_tab_at_once_in_a_column_of_three,
         _a_tab_at_the_foot_of_a_full_column_after_nothing,
     ],

@@ -16,8 +16,10 @@
  * stack where the other tabbed windows are; "beside", next to the world (below); or
  * another window's id, a tab beside it, else beside a window open with the same home.
  * The page may open a window somewhere else than its home for once (open's `at`). A
- * `loud` window's tab and frame say so. The world's stack maximised is the world alone
- * (the tilde); again, everything back.
+ * `loud` window's tab and frame say so, and it must be seen: wherever it is placed --
+ * opened, registered, or kept open as a view is laid out -- it is the front tab of its
+ * stack. The world's stack maximised is the world alone (the tilde); again, everything
+ * back.
  *
  * Beside the world there is one stack of windows: a window whose home is "beside" is a
  * tab of the stack in the world's row that holds one already. With none there, it is a
@@ -295,9 +297,10 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     // Where a panel opens when it is not in the layout: its home, or `home` given for
     // this once. Added to a stack of tabs, it is in front only when `front` (opened by a
     // person), so a panel the page registers does not take the place of the one a
-    // person was reading. Then every window keeps its least height.
+    // person was reading -- a loud one always, as it must be seen. Then every window
+    // keeps its least height.
     function addAt(r, front = true, home = r.home) {
-        placeAt(r, front, home);
+        placeAt(r, front || r.loud, home);
         keepLeast();
     }
     function placeAt(r, front, home) {

@@ -49,7 +49,9 @@ this.panels.register('gather', {
   another home for once: the page opens the Procedure in the column, a person's
   ⊞ Windows beside the world.
 - `open` says whether it opens as it is registered; `loud` that its tab and
-  frame say it must be seen (an armed printer's pad); `least` the least height
+  frame say it must be seen (an armed printer's pad), and it is the front tab
+  of its stack wherever it is placed: opened, registered, or kept open as a
+  view is laid out; `least` the least height
   of its stack, in pixels, where it stands in a column -- given it as it opens
   and as a view lays it out, from the stacks beside it (the Machine's, so its
   head and ⏹ E-STOP are never cut). `onOpen` is told when its filled body is in
