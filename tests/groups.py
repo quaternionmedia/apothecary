@@ -385,6 +385,7 @@ GROUPS = {
             "test_menu.py",
             "test_measure.py",
             "test_ends_js.py",
+            "test_loop_plots.py",
             "test_menu_routes.py",
             "test_orbits_drawn.py",
             "test_pick_scope.py",
