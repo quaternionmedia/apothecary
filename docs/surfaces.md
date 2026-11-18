@@ -73,6 +73,10 @@ falls more than 256 changes behind is sent `event: missed` with how many were le
 and should read the surfaces again. A comment line keeps a quiet stream open every 15
 seconds.
 
+The stream does not replay. A change carries an `id`, and a reader that reconnects is
+not sent what it missed: a `Last-Event-ID` it sends is not read. On every opening,
+read the surfaces once and follow from there.
+
 The stream relays and asks nothing. It has no poller of its own: a poller of the
 server's would contend for a machine's serial link while it prints. A surface no owner
 says has changed is silent however long a reader follows it; a machine's polls are
