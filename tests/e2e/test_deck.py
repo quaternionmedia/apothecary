@@ -239,6 +239,28 @@ def test_a_deck_that_will_not_open_says_why_in_its_window(page: Page, url: str):
 
 
 @pytest.mark.e2e
+def test_the_decks_knobs_wear_the_rings_addresses_and_its_words(page: Page, url: str):
+    """The Deck window's knobs controls are the cells of Panels › Machine › Knobs: the ring
+    writes each one's address after its tip, as it does on a Machine's buttons, where the
+    window once spelled the path out; and the strip's screens are called as the ring calls
+    them."""
+    open_garage(page, url)
+    select(page, "stream_deck")
+    page.locator("#selected-body .deck-open").click()
+    deck = page.locator(DECK)
+    run = deck.locator(".deck-run")
+    expect(run).to_be_enabled(timeout=10000)
+    expect(run).to_have_attribute("title", re.compile(r" · ⌗\d+$"), timeout=10000)
+    assert "Panels" not in (run.get_attribute("title") or "")
+    run.click()
+    step = deck.locator(".deck-step").first
+    expect(step).to_have_attribute("title", re.compile(r"cycles it · ⌗\d+$"), timeout=10000)
+    assert "Panels" not in (step.get_attribute("title") or "")
+    expect(deck.locator(".deck-screen-to").first).to_have_text("Knobs")
+    expect(deck.locator(".deck-screen")).to_contain_text("Knobs (1/3)")
+
+
+@pytest.mark.e2e
 def test_with_no_deck_found_the_window_says_so_and_why(page: Page, url: str):
     """The list finding no deck: the window says so, its controls off; the list saying
     why it cannot look (no HID library): the window says that."""

@@ -11620,6 +11620,9 @@
             // An armed printer's pad, popped out or put back: Panels › Machine › Control pad.
             const padToggle = document.getElementById('ctl-pop');
             if (padToggle) pairs.push([padToggle, 'panel:pad']);
+            // The Deck window's controls and a pad's Knobs here: Panels › Machine › Knobs.
+            if (window.apothecaryDeck && window.apothecaryDeck.pairs) pairs.push(...window.apothecaryDeck.pairs());
+            for (const el of document.querySelectorAll('#deck-here')) pairs.push([el, 'deck:here']);
             const bench = document.querySelector(".panel[data-panel='bench']");
             if (bench) {
                 for (const [selector, action] of BENCH_VERBS) for (const el of bench.querySelectorAll(selector)) pairs.push([el, action]);
@@ -11648,6 +11651,8 @@
         // A window opened, closed or moved (the Procedure, the Bench, the Airgap): its
         // controls are written as it comes.
         if (viewer.panels && viewer.panels.layout && typeof viewer.panels.layout.on === 'function') viewer.panels.layout.on('stateChanged', refreshAddresses);
+        // The Deck window draws its knobs' buttons anew when they change.
+        window.addEventListener('apothecary:deck-drawn', refreshAddresses);
 
         // A Machine's buttons wear the addresses of its device ring, resolved for
         // the board as it is now -- a printer or a devkit, armed or not -- and again

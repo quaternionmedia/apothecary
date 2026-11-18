@@ -23,11 +23,13 @@
 
 import { esc } from "/static/board_text.js";
 import { applyCan } from "/static/can.js";
-import { armedWords, choose, knobsOf, screenWords, turn } from "/static/deck_knobs.js";
+import { armedWords, choose, knobsOf, turn } from "/static/deck_knobs.js";
 
 const SWIPE_PX = 200; // of the strip's 800: what the server reads as a swipe (deck_screens.py)
 const KEYS = 8, KNOBS = 4, STRIP = [800, 100], EVERY_MS = 1500, HEAR_MS = 250, LIT_MS = 1200, KEPT = 200;
 // The controls the deck's answer greys (firmware/can.py deck_can), each by its route.
+// What the ring's Knobs › Screen calls each screen of the strip (apothecary/menu.py SCREEN_CELLS).
+const SCREEN_LABEL = { knobs: "Knobs", progress: "Progress", status: "Status", previous: "Back", next: "Next" };
 const VERBS = ["knobs.start", "knobs.stop", "knobs.machine", "knobs.step", "knobs.screen", "inject"];
 
 const MARKUP = `
@@ -119,17 +121,25 @@ export function mountDeck(root, { base = "", log = null } = {}) {
     // in the server's own refusal of a jog (`held`), not the last thing they did.
     function renderKnobs() {
         const box = $(".deck-control");
-        if (!deck || !knobs) { box.innerHTML = ""; return; }
+        // Drawn again only when what it says changes: the ring's addresses written on the
+        // buttons stay on them, and are written anew (`apothecary:deck-drawn`) when they are not.
+        const draw = (html) => {
+            if (box.dataset.drawn === html) return;
+            box.dataset.drawn = html;
+            box.innerHTML = html;
+            window.dispatchEvent(new CustomEvent("apothecary:deck-drawn"));
+        };
+        if (!deck || !knobs) { draw(""); return; }
         const on = !!knobs.running;
-        const run = `<button type="button" class="deck-run" data-can="knobs.start" title="${on ? "Stop the knobs: the keys and strip stay as drawn" : "Start the knobs: the layout that jogs the garage's machines"}. ⌗ Panels › Machine › Knobs › On / off">${on ? "■ Knobs" : "▶ Knobs"}</button>`;
-        if (!on) { box.innerHTML = `<div class="row">${run}<span class="meta">knobs off</span></div>`; return; }
-        const machines = knobs.machines.map((m) => `<button type="button" class="deck-machine" data-machine="${esc(m)}" data-can="knobs.machine" aria-pressed="${m === knobs.machine}" title="The knobs move ${esc(m)}, as its key on the deck chooses it. ⌗ Panels › Machine › Knobs › Machine">${esc(m)}</button>`).join("");
-        const steps = knobs.steps_mm.map((mm) => `<button type="button" class="deck-step" data-mm="${mm}" data-can="knobs.step" aria-pressed="${mm === knobs.step_mm}" title="A knob's step moves ${mm} mm, as the deck's STEP key cycles it. ⌗ Panels › Machine › Knobs › Step">${mm}</button>`).join("");
-        const screens = knobs.screens.map((s) => `<button type="button" class="deck-screen-to" data-screen="${esc(s)}" data-can="knobs.screen" aria-pressed="${s === knobs.screen}" title="The deck's strip shows its ${esc(s)} screen, as a swipe along it does; nothing is sent to a machine. ⌗ Panels › Machine › Knobs › Screen">${esc(s)}</button>`).join("");
-        box.innerHTML = `<div class="row">${run}${machines}</div><div class="row"><span class="meta">step</span>${steps}<span class="meta">mm</span></div>`
+        const run = `<button type="button" class="deck-run" data-can="knobs.start" title="${on ? "Stop the knobs: the keys and strip stay as drawn" : "Start the knobs: the layout that jogs the garage's machines"}">${on ? "■ Knobs" : "▶ Knobs"}</button>`;
+        if (!on) { draw(`<div class="row">${run}<span class="meta">knobs off</span></div>`); return; }
+        const machines = knobs.machines.map((m) => `<button type="button" class="deck-machine" data-machine="${esc(m)}" data-can="knobs.machine" aria-pressed="${m === knobs.machine}" title="The knobs move ${esc(m)}, as its key on the deck chooses it">${esc(m)}</button>`).join("");
+        const steps = knobs.steps_mm.map((mm) => `<button type="button" class="deck-step" data-mm="${mm}" data-can="knobs.step" aria-pressed="${mm === knobs.step_mm}" title="A knob's step moves ${mm} mm, as the deck's STEP key cycles it">${mm}</button>`).join("");
+        const screens = knobs.screens.map((s) => `<button type="button" class="deck-screen-to" data-screen="${esc(s)}" data-can="knobs.screen" aria-pressed="${s === knobs.screen}" title="The deck's strip shows its ${esc(s)} screen, as a swipe along it does; nothing is sent to a machine">${esc(SCREEN_LABEL[s] || s)}</button>`).join("");
+        draw(`<div class="row">${run}${machines}</div><div class="row"><span class="meta">step</span>${steps}<span class="meta">mm</span></div>`
             + `<div class="meta deck-knobs-said">${esc(knobs.machine)} · ${esc(armedWords(knobs))} · ${esc(knobs.held ? `held · ${knobs.held}` : knobs.said)}</div>`
             + `<div class="row"><span class="meta">strip</span>${screens}</div>`
-            + `<div class="meta deck-screen">strip screen: ${esc(screenWords(knobs))} · a swipe along the strip walks ${knobs.screens.map(esc).join(", ")}</div>`;
+            + `<div class="meta deck-screen">strip screen: ${esc(SCREEN_LABEL[knobs.screen] || knobs.screen)} (${knobs.screens.indexOf(knobs.screen) + 1}/${knobs.screens.length}) · a swipe along the strip walks ${knobs.screens.map((n) => esc(SCREEN_LABEL[n] || n)).join(", ")}</div>`);
         // Running, the one button stops them, and is answered as a stop.
         box.querySelector(".deck-run").dataset.can = "knobs.stop";
     }
@@ -286,6 +296,16 @@ export function mountDeck(root, { base = "", log = null } = {}) {
 
     return {
         load, state: () => ({ deck, drawn, last }),
+        // The controls that are cells of Panels › Machine › Knobs, each by its verb, for the
+        // ring to write its address on (the page asks, as it does of a Machine's pairs).
+        pairs() {
+            const out = [];
+            for (const b of root.querySelectorAll(".deck-run")) out.push([b, "deck:knobs"]);
+            for (const b of root.querySelectorAll(".deck-machine")) out.push([b, `deck:machine:${b.dataset.machine}`]);
+            for (const b of root.querySelectorAll(".deck-step")) out.push([b, `deck:step:${b.dataset.mm}`]);
+            for (const b of root.querySelectorAll(".deck-screen-to")) out.push([b, `deck:screen:${b.dataset.screen}`]);
+            return out;
+        },
         shown() { alive = true; load().catch((e) => { $(".deck-name").textContent = e.message; }); schedule(); hear(); },
         close() { clearTimeout(timer); clearTimeout(ear); },
         destroy() { alive = false; clearTimeout(timer); clearTimeout(ear); root.innerHTML = ""; },

@@ -173,7 +173,7 @@ def test_the_deck_shows_a_print_and_a_swipe_walks_its_screens(page: Page, url: s
     deck = page.locator(DECK)
     expect(deck.locator(".deck-strip-tap img:visible")).to_have_count(1, timeout=15000)
     assert _screen(url) == "knobs"
-    expect(deck.locator(".deck-screen")).to_contain_text("strip screen: knobs (1/3)", timeout=10000)
+    expect(deck.locator(".deck-screen")).to_contain_text("strip screen: Knobs (1/3)", timeout=10000)
 
     # 1. A print is begun: Progress is brought forward, once.
     kept = httpx.post(
@@ -203,7 +203,7 @@ def test_the_deck_shows_a_print_and_a_swipe_walks_its_screens(page: Page, url: s
     assert strip["bar"] is not None and "paused" in strip["small"], strip
     assert "remaining" not in strip["small"]
     expect(deck.locator(".deck-screen")).to_contain_text(
-        "strip screen: progress (2/3)", timeout=10000
+        "strip screen: Progress (2/3)", timeout=10000
     )
     _window_shows_the_strip(url, deck)
     story.shows(
