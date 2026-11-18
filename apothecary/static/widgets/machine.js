@@ -532,7 +532,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!state.port) return;
         try {
             const w = await api(`/firmware/printers/where?port=${encodeURIComponent(state.port)}`);
-            if (w && w.printer && w.printer.frame) level.volume = w.printer.frame.volume;
+            if (w && w.printer && w.printer.frame) { level.volume = w.printer.frame.volume; level.frame = w.printer.frame; }
         } catch (e) { /* not known yet: nothing is sized by it */ }
     }
     // A jog's position carries no dialect of its own: the kind's is used.
@@ -1291,8 +1291,13 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // at a grid of points: one card, one route, the kind's words (KINDS[kind].level).
     // `volume` is the machine's working volume from its frame, null until the world or
     // GET /firmware/printers/where has said it: no corner is guessed from another's.
-    const level = { records: [], shown: null, timer: null, volume: null };
-    const onWhere = (ev) => { if (ev.detail && ev.detail.printer && ev.detail.printer.frame && (!ev.detail.port || ev.detail.port === state.port)) level.volume = ev.detail.printer.frame.volume; };
+    // `frame` is the whole of that record (api.machine_frame), which says too which way
+    // a router's axes home: where its file's zero stands (fileOrigin).
+    const level = { records: [], shown: null, timer: null, volume: null, frame: null };
+    const onWhere = (ev) => {
+        const frame = ev.detail && ev.detail.printer && ev.detail.printer.frame;
+        if (frame && (!ev.detail.port || ev.detail.port === state.port)) { level.volume = frame.volume; level.frame = frame; }
+    };
     window.addEventListener("apothecary:where", onWhere);
     onWindow.push(["apothecary:where", onWhere]);
     // Null while the printer's volume is not known (its board pinned nowhere): refused.
@@ -1416,10 +1421,14 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     // --- the chosen file's path, drawn in the world (docs/toolpath-preview.md) --------
     // One slider: off at the left, then through each group of moves, all of them at the
     // right. Nothing is asked of the server until it is moved off the left.
-    const pv = { file: null, data: null, turn: 0, told: null };
+    // `unplaced`: the card last said the path is not drawn for want of its zero.
+    const pv = { file: null, data: null, turn: 0, told: null, unplaced: false };
     const previewOn = () => Number($("print-preview").value) > 0;
+    // A router's file with no zero to stand at (fileOrigin): why its path is not drawn.
+    const ZERO_UNKNOWN = "where its work zero stands is not known until the controller has said which way each axis homes (its settings, $$) and its work offset";
+    // Where the file's zero stands in the volume; null for a router's until it is known.
     const previewOrigin = () => {
-        if (!planning() || state.kind !== "router" || !pv.data) return fileOrigin(state.port ? b().status : null, level.volume);
+        if (!planning() || state.kind !== "router" || !pv.data) return fileOrigin(state.port ? b().status : null, level.frame, { router: state.kind === "router" });
         // Planned, with no board to say where its work zero is: the stock as if laid on
         // the table at the working area's front-left corner, its deepest pass on the table.
         const lows = Object.values(pv.data.bounds || {}).map((box) => box.min[2]);
@@ -1433,7 +1442,9 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         return group.first + group.count;
     }
     function tellPreview() {
-        const on = previewOn() && !!pv.data, origin = previewOrigin();
+        const origin = previewOrigin(), on = previewOn() && !!pv.data && origin !== null;
+        // A poll that places the zero, or no longer does: the card says so first.
+        if (previewOn() && pv.data && (origin === null) !== pv.unplaced) { renderPreview(); return; }
         const told = `${on ? pv.file : ""}|${on ? previewUpto() : 0}|${JSON.stringify(origin)}`;
         if (told === pv.told) return;
         pv.told = told;
@@ -1441,10 +1452,13 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     }
     function renderPreview() {
         const said = $("print-preview-said"), d = pv.data;
+        pv.unplaced = previewOn() && !!d && previewOrigin() === null;
         if (!previewOn() || !d) {
             said.textContent = previewOn() ? "reading the file…" : "off";
         } else if (!d.groups.length) {
             said.textContent = "this file moves nothing";
+        } else if (pv.unplaced) {
+            said.textContent = `not drawn: ${ZERO_UNKNOWN}`;
         } else {
             const at = Number($("print-preview").value), n = d.groups.length, group = d.groups[at - 1];
             const where = at >= n ? "all of it" : group.label;
@@ -1528,9 +1542,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         if (!previewOn()) slider.value = slider.max;
         if (!pv.data || pv.file !== id) await loadPreview(); else renderPreview();
         const d = pv.data, at = Number(slider.value);
-        found.drawn = previewOn() && !!d && d.groups.length > 0;
+        const placed = previewOrigin() !== null;
+        found.drawn = previewOn() && !!d && d.groups.length > 0 && placed;
         if (found.drawn) { found.word = d.word; found.where = at >= d.groups.length ? "all of it" : d.groups[at - 1].label; }
-        else found.refused = refusals > before ? lastRefusal : d ? "this file moves nothing" : "its path could not be read";
+        else found.refused = refusals > before ? lastRefusal : !d ? "its path could not be read" : !d.groups.length ? "this file moves nothing" : ZERO_UNKNOWN;
         return found;
     }
     // --- a part measured, fed back ---------------------------------------------------
@@ -1755,7 +1770,7 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         else if (planning()) {
             // The machine's node answers in the same shape, with where it stands.
             try { c = await api(machinePath()); } catch (e) { c = null; }
-            if (c && c.where && c.where.frame) level.volume = c.where.frame.volume;
+            if (c && c.where && c.where.frame) { level.volume = c.where.frame.volume; level.frame = c.where.frame; }
         }
         if (port !== state.port) return;  // another port was chosen meanwhile
         prt.choices = c;

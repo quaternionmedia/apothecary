@@ -71,7 +71,12 @@ kind's length in the colour it is drawn in, which is the path's key. It follows 
 A printer's file is in the bed's coordinates, so it stands at the bed. A router's counts
 from its work zero, so it stands where the controller's last poll says that is
 (`machine_marks.fileOrigin`), and moves when the zero does: a zero set in the wrong place
-shows before the cut does. In `apothecary serve --simulated` the router's work zero is seeded at
+shows before the cut does. Where that is in the working volume turns on which way each
+axis homes -- the AnoleX's X to its minimum, its Y and Z to their maximum -- which the
+poll says once the controller's settings (`$$`) have been read, and the machine's frame
+says too (`homing`). Until either has said, the path is not drawn rather than drawn a
+travel away: the card says so in place of the key, and the Machine view says why on the
+status line, as it does for a machine with no volume. In `apothecary serve --simulated` the router's work zero is seeded at
 the coupon's stock, so the coupon's toolpath is drawn on the coupon.
 
 ⊞ Windows › Machine, and the ring's Panels › Windows › Machine view, land on it. The

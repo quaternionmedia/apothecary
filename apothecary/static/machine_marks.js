@@ -41,16 +41,26 @@ const MESH_INSET = 10;                 // Marlin's default MESH_INSET, mm from t
 // apothecary (x, y, z) z-up -> three.js (x, z, -y) y-up (frames.js).
 export { toScene };
 
-// Where a G-code file's (0, 0, 0) stands in the machine's volume: a printer's file is
-// in the bed's coordinates; a router's counts from the work zero, which the controller
-// reports as an offset from its machine coordinates (mpos = wpos + wco, and the volume
-// at mpos + travel, as below).
-export function fileOrigin(st, volume) {
-    if (!st || st.dialect !== "grbl") return { x: 0, y: 0, z: 0 };
-    if (st.work_origin) return st.work_origin;  // the server's, by the way each axis homes
-    const [vx, vy, vz] = volume || [0, 0, 0];
-    const w = st.work_offset || { x: 0, y: 0, z: 0 };
-    return { x: w.x + vx, y: w.y + vy, z: w.z + vz };
+// Where a G-code file's (0, 0, 0) stands in the machine's volume, or null where that is
+// not known. A printer's file is in the bed's coordinates. A router's counts from the
+// work zero, which the controller reports as an offset from its machine coordinates
+// (mpos = wpos + wco), each axis placed in the volume by the way it homes: one that
+// homes to its maximum counts down from there, one that homes to its minimum (the
+// AnoleX's X) up. That is the poll's word (`work_origin`, grbl.in_volume), else the
+// machine's frame's (api.machine_frame: `homing`, `volume`) with the poll's offset;
+// until one of them says, no place -- no path drawn rather than one a travel off.
+// `router` is whether the file is a router's, for a machine whose poll has not come.
+export function fileOrigin(st, frame = null, { router = !!(st && st.dialect === "grbl") } = {}) {
+    if (!router) return { x: 0, y: 0, z: 0 };
+    if (st && st.work_origin) return st.work_origin;
+    const homing = frame && frame.homing, volume = frame && frame.volume, w = st && st.work_offset;
+    if (!homing || !volume || !w) return null;
+    const origin = {};
+    for (const [i, k] of ["x", "y", "z"].entries()) {
+        if (typeof w[k] !== "number" || !["min", "max"].includes(homing[k])) return null;
+        origin[k] = w[k] + (homing[k] === "min" ? 0 : volume[i]);
+    }
+    return origin;
 }
 
 // Where a poll puts the tool in the machine's volume: the server's word, which counts

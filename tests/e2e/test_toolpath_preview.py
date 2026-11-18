@@ -262,6 +262,96 @@ def test_a_router_s_file_stands_at_its_work_zero_and_on_the_coupon_once_zeroed_t
     assert top == pytest.approx(ROUTER_COUPON_POSITION.z + COUPON.cuts().stock.thickness)
 
 
+# --- a router's zero, before its controller's settings are read ---------------------------
+
+# The router's polls, wherever the page reads one: its own, a scan's rows, its card.
+POLLED = re.compile(r"/(firmware/printers/(status|info)\?|sites/garage/devices)")
+FRAMED = re.compile(r"/firmware/printers/where\?port=" + re.escape(ROUTER.replace("/", "%2F")))
+
+
+def _unread(answer) -> None:
+    """``answer`` as the server gives it before a router's controller has said its
+    settings ($$): a poll places neither the tool nor the work zero in the volume, and
+    says no travel and no homing. The work offset its reports carry stays."""
+    if isinstance(answer, dict):
+        if answer.get("dialect") == "grbl":
+            for key in ("work_origin", "tool_position", "travel", "homing"):
+                answer[key] = None
+        for value in answer.values():
+            _unread(value)
+    elif isinstance(answer, list):
+        for value in answer:
+            _unread(value)
+
+
+def _settings_unread(page: Page, homing) -> None:
+    """The router's polls answered as before its settings are read, and its frame saying
+    of the way each axis homes only ``homing`` (None: nothing)."""
+
+    def polled(route):
+        response = route.fetch()
+        answer = response.json()
+        _unread(answer)
+        route.fulfill(response=response, json=answer)
+
+    def framed(route):
+        response = route.fetch()
+        answer = response.json()
+        answer["printer"]["frame"]["homing"] = homing
+        route.fulfill(response=response, json=answer)
+
+    page.route(POLLED, polled)
+    page.route(FRAMED, framed)
+
+
+@pytest.mark.e2e
+def test_a_router_s_file_stands_where_its_frame_says_each_axis_homes(page: Page, url: str):
+    """No poll has placed the work zero, and the frame says how each axis homes -- X to
+    its minimum, as the AnoleX's does, Y and Z to their maximum: the file's zero is the
+    work offset counted up from X's switch and down from Y's and Z's, not the far
+    corner of every axis."""
+    machine = MACHINES["router"]
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        wco = http.get("/firmware/printers/status", params={"port": ROUTER}).json()["work_offset"]
+        frame = http.get("/firmware/printers/where", params={"port": ROUTER}).json()["printer"][
+            "frame"
+        ]
+    _settings_unread(page, {"x": "min", "y": "max", "z": "max"})
+    body = _open(page, url, machine)
+    _slide(page, body, 1)
+    expect(body.locator("#print-preview-said")).to_contain_text("all", timeout=5000)
+    _, vy, vz = frame["volume"]
+    assert _drawn(page, machine.node)["origin"] == pytest.approx(
+        {"x": wco["x"], "y": wco["y"] + vy, "z": wco["z"] + vz}
+    )
+
+
+@pytest.mark.e2e
+def test_a_router_whose_zero_is_not_known_draws_no_path_and_says_why(page: Page, url: str):
+    """Neither a poll nor the frame has said how the router's axes home: its file's path
+    is drawn nowhere rather than a travel off, the Machine view and the card say why,
+    and the controller's word, once a poll carries it, draws it where the server says."""
+    machine = MACHINES["router"]
+    _keep_only(url, machine)
+    _settings_unread(page, None)
+    _selected(page, url, machine.node)
+    _from_windows(page)
+    expect(page.locator(f"{windows.MACHINE} > .machine.kind-router")).to_be_attached(timeout=20000)
+    body = windows.machine(page)
+    said = body.locator("#print-preview-said")
+    expect(said).to_contain_text("not drawn", timeout=10000)
+    expect(status(page)).to_contain_text(f"{machine.file}'s path is not drawn: ")
+    expect(status(page)).to_contain_text("settings")
+    expect(status(page)).to_have_class(re.compile(r"\berror\b"))
+    assert _drawn(page, machine.node) is None
+    page.unroute(POLLED)
+    page.unroute(FRAMED)
+    expect(said).to_contain_text("all of it", timeout=2 * WITHIN_A_POLL)
+    with httpx.Client(base_url=url, timeout=15.0) as http:
+        zero = http.get("/firmware/printers/status", params={"port": ROUTER}).json()["work_origin"]
+    assert _drawn(page, machine.node)["origin"] == zero
+
+
 # --- the Machine view lands on the path ---------------------------------------------------
 
 MACHINE_VIEW = ".windows-menu-body .view-item[data-view='machine']"
