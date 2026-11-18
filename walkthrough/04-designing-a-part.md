@@ -24,7 +24,7 @@ The universe, /viewer/sites/apothecary, where every part is a leaf: calibration_
 ![Part › Edit opens the part's editor at what is drawn](screenshots/04-01-part-edit-opens-the-part-s-editor-at-what-is-drawn.png)
 
 ```
-envelope 10.00 × 10.00 × 10.00 mm · measured 10.00 × 10.00 × 10.00 mm
+envelope 10 × 10 × 10 mm · measured 10 × 10 × 10 mm
 ```
 
 ## 2. A size dragged is checked once the slider rests
@@ -46,7 +46,7 @@ Apply: the text rendered, its size in it and nothing passed beside it, into the 
 
 ```
 calibration_cube regenerated: an applied variant, not saved; Part › Save keeps it in git
-envelope 30.00 × 30.00 × 30.00 mm · measured 30.00 × 30.00 × 30.00 mm
+envelope 30 × 30 × 30 mm · measured 30 × 30 × 30 mm
 ```
 
 ## 4. A reload draws what the tab applied, marked at a glance
@@ -111,7 +111,7 @@ Recent applies, in History, a tab beside Parameters, lists this tab's applies of
 
 ```
 calibration_cube: drawn again from the cache, the variant applied then; nothing rendered
-envelope 30.00 × 30.00 × 30.00 mm · measured 30.00 × 30.00 × 30.00 mm
+envelope 30 × 30 × 30 mm · measured 30 × 30 × 30 mm
 ```
 
 ## 12. A size staged and not applied is kept over a reload
