@@ -107,9 +107,11 @@ def test_site_is_a_window_beside_the_world_and_the_retired_panels_are_gone(page,
         "family-members",  # the family's own, closed until asked for
         "family-deliveries",
         "layers",  # the Layers window, beside the world, closed until asked for
+        "loops",  # the Loops window, a machine's heater loops, closed until asked for
         "working",  # the Working space, closed until asked for
         "procedure",  # the Procedure, closed until asked for
         "deck",  # the Deck, closed until asked for
+        "motion",  # the Motion window, a part's motion played, closed until asked for
     ]
     assert windows.state(page, "site")["stack"] == ["site", "problems", "pinned", "jobs", "scad"]
     for gone in ("contents", "validation", "kept", "camera"):
