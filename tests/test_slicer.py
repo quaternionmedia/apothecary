@@ -423,6 +423,38 @@ def test_slicer_slice_slices_a_part_and_keeps_its_gcode(fake_orcaslicer, monkeyp
     assert "extrudes from (105.0, 105.0, 0.12) to (115.0, 115.0, 0.36)" in text.output
 
 
+def test_slicer_slice_at_parameters_slices_the_variant_they_render(fake_orcaslicer, monkeypatch):
+    """`-p`: the part rendered at those parameters into the cache of variants, as the
+    page's Apply renders it, and that variant sliced -- not its own STL at its defaults,
+    which a build for a slice would put back over a render made with them."""
+    from apothecary.projects.parts import variants
+
+    asked = []
+
+    def target(name, site=None, path=None, variant=None):
+        asked.append(variant)
+        return _target({"layer_height": 0.12}, name)
+
+    made = []
+
+    def make_variant(part, params=None, **kw):
+        made.append((part.name, dict(params)))
+        return variants.Made(key="0123456789abcdef01234567", params=dict(params))
+
+    monkeypatch.setattr(service, "part_target", target)
+    monkeypatch.setattr(variants, "make_variant", make_variant)
+    result = CliRunner().invoke(
+        cli, ["slicer", "slice", "hose_adapter", "-p", "step=false", "-p", "b_d=31.6", "--json-out"]
+    )
+    assert result.exit_code == 0, result.output
+    assert made == [("hose_adapter", {"step": False, "b_d": 31.6})]
+    assert asked[-1] == "0123456789abcdef01234567"
+    bad = CliRunner().invoke(cli, ["slicer", "slice", "hose_adapter", "-p", "nope=1"])
+    assert bad.exit_code != 0 and "unknown parameter(s): nope" in bad.output
+    node = CliRunner().invoke(cli, ["slicer", "slice", "garage/bin_1", "-p", "b_d=3"])
+    assert node.exit_code != 0 and "not a site's node" in node.output
+
+
 def test_slicer_slice_refuses_a_part_that_is_not_one(fake_orcaslicer):
     result = CliRunner().invoke(cli, ["slicer", "slice", "no_such_part"])
     assert result.exit_code != 0 and "no part named 'no_such_part'" in result.output

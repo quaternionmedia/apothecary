@@ -12,7 +12,7 @@ from typing import Optional
 import click
 
 from .server import port_option
-from .utils import safe_echo
+from .utils import parse_param_overrides, part_or_die, safe_echo
 
 
 def _status_lines(chosen: Optional[str] = None) -> None:
@@ -118,6 +118,15 @@ def slicer_status():
     help="For SITE/PATH: the running server's address, this machine only (apothecary serve's)",
 )
 @port_option("For SITE/PATH: its port")
+@click.option(
+    "--param",
+    "-p",
+    "param_pairs",
+    multiple=True,
+    metavar="NAME=VALUE",
+    help="A registered part at these parameters: rendered into the cache of variants, as "
+    "the page's Apply renders it, and that variant sliced. Repeatable.",
+)
 @click.option("--json-out/--text", default=False)
 def slicer_slice(
     part: str,
@@ -125,6 +134,7 @@ def slicer_slice(
     slicer_id: Optional[str],
     host: str,
     port: int,
+    param_pairs: tuple,
     json_out: bool,
 ):
     """Slice PART for a printer, and keep the G-code where the Print card's file
@@ -137,30 +147,54 @@ def slicer_slice(
                 serve, on this machine), where made pieces live
 
     The part's declared print settings are used, the printer's profile filling
-    the rest; each value is listed with where it came from. Nothing is sent to
-    a printer.
+    the rest; each value is listed with where it came from. With -p, a
+    registered part is sliced at those parameters, as the variant they render
+    (an adapter `apothecary parts adapter` derived, say); without, at its
+    defaults. Nothing is sent to a printer.
     """
     if "/" in part:
+        if param_pairs:
+            raise click.ClickException("-p sets a registered part's parameters, not a site's node")
         site, path = part.split("/", 1)
         record = _slice_through_server(host, port, site, path, printer, slicer_id, json_out)
     else:
-        record = _slice_here(part, printer, slicer_id, json_out)
+        record = _slice_here(part, printer, slicer_id, json_out, param_pairs)
     if json_out:
         click.echo(json.dumps(record, indent=2))
         return
     _print_record(record)
 
 
-def _slice_here(part: str, printer: Optional[str], slicer_id: Optional[str], json_out: bool):
+def _slice_here(
+    part: str, printer: Optional[str], slicer_id: Optional[str], json_out: bool, param_pairs=()
+):
     from ..slicer.modules import SlicerError
     from ..slicer.service import Here, resolve, slice_into
 
     log = (lambda _line: None) if json_out else click.echo
+    variant = _variant_at(part, param_pairs, log) if param_pairs else None
     try:
-        target, chosen = resolve(part, printer=printer)
+        target, chosen = resolve(part, printer=printer, variant=variant)
         return slice_into(target, chosen, Here(log), slicer=slicer_id).model_dump(mode="json")
     except SlicerError as exc:
         raise click.ClickException(str(exc)) from exc
+
+
+def _variant_at(name: str, param_pairs, log) -> Optional[str]:
+    """The cache key of ``name`` rendered at ``param_pairs``, as the page's Apply renders
+    it; None where they are its defaults, which its own STL is."""
+    from ..projects.parts import variants
+
+    part = part_or_die(name)
+    params = parse_param_overrides(part, param_pairs)
+    made = variants.make_variant(part, params)
+    if made.failure:
+        raise click.ClickException(
+            f"{name} at {params} was not rendered: {made.error_message or made.failure}"
+        )
+    if made.key:
+        log(f"{name}: the variant {made.key} at {params}" + (" (rendered)" if made.rendered else ""))
+    return made.key
 
 
 SITE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")

@@ -87,7 +87,7 @@ def test_the_adapter_between_two_presets_says_each_fit_and_its_parameters():
     ]
     assert "-p a_d=40 " in lines[4] and "-p b_d=32 " in lines[4] and "-p step=false" in lines[4]
     assert lines[5].startswith("  the rule: a spigot end straddles the bore it meets")
-    assert lines[6].startswith("  render it: apothecary parts generate-stl hose_adapter -p ")
+    assert lines[6].startswith("  slice it: apothecary slicer slice hose_adapter -p ")
 
 
 def test_a_measured_end_goes_over_its_preset_and_is_no_stub():

@@ -83,6 +83,7 @@ measure the fittings before printing for them.
 adapter's parameters from the two ends' interfaces by the nominal rule: a spigot
 end straddles the bore it meets by half its taper, a socket end's bore is the
 outside it takes, and no clearance is added. It says how each end fits, which
-numbers are still a guess, and the `-p` pairs that render it. A measured end goes
+numbers are still a guess, and the `-p` pairs that slice it: `apothecary slicer
+slice hose_adapter -p ...`. A measured end goes
 over its preset: `-b diameter=31.6 -b measured=true`. The first print settles
 the fit; docs/connections.md says what is checked and what only a print shows.

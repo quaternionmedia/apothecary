@@ -124,7 +124,15 @@ Every slice's answer lists each value with its `origin` (`declared` or
 uv run apothecary slicer slice calibration_cube            # a part, for the one printer that keeps a profile
 uv run apothecary slicer slice datum_core --json-out       # the slice record, as JSON
 uv run apothecary slicer slice garage/disc_1               # a made piece, through the running server
+uv run apothecary slicer slice hose_adapter -p step=false -p b_d=31.6   # a part at its parameters
 ```
+
+A part is sliced at its defaults, from its own STL; with `-p`, at those
+parameters, rendered into the cache of variants as the page's Apply renders
+them, and that variant is sliced, its record naming it. A render with
+`apothecary parts generate-stl -p` is no way to it: the slice builds the part's
+own STL at its defaults again. `apothecary parts adapter` gives the `-p` pairs of
+the adapter it derives.
 
 A piece made from a picture lives in the running server's memory, so
 `apothecary slicer slice SITE/PATH` asks that server, as the page does: it

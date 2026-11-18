@@ -662,7 +662,7 @@ def parts_adapter(a: str, b: str, a_pairs, b_pairs, param_pairs, json_out: bool)
             click.echo(line)
         click.echo(f"  its parameters: {_pairs(made.params)}")
         click.echo(f"  the rule: {made.rule}")
-        click.echo(f"  render it: apothecary parts generate-stl {made.part} {_pairs(made.params)}")
+        click.echo(f"  slice it: apothecary slicer slice {made.part} {_pairs(made.params)}")
     if not made.seats:
         raise SystemExit(1)
 

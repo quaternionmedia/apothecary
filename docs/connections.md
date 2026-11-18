@@ -244,6 +244,10 @@ each 0.1 of diameter moves the seat about 2 mm.
 | on the render | `apothecary parts verify NAME` | |
 | the adapter between two ends | `apothecary parts adapter END END` (`-a`, `-b` a number over an end's preset; `-p` the adapter's own; `--json-out`) | `POST /parts/hose_adapter/between` with `{a, b, params?}`, each end `{part, preset?, interface?, params?}` |
 
+`apothecary parts adapter` ends with the `-p` pairs that slice what it derived:
+`apothecary slicer slice hose_adapter -p ...` slices that variant for a printer
+([slicer.md](slicer.md#slicing)).
+
 `parts fit` with a part named alone tries each of its interfaces against each of
 the other's, those that seat first, and exits 1 when nothing seats. `PART@PRESET`
 stands a part at one of its presets
