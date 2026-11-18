@@ -89,11 +89,13 @@
         .view-menu { position: relative; }
         .view-menu > summary { list-style: none; user-select: none; }
         .view-menu > summary::-webkit-details-marker { display: none; }
+        /* Opaque, as a stack's + list is: nothing of the windows under a menu shows
+           through its items. */
         .view-menu-body {
             position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
             display: flex; flex-direction: column; align-items: flex-start; gap: 0.55rem;
             padding: 0.65rem 0.8rem; background: #252525; border: 1px solid #3a3a3a; border-radius: 6px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.55); opacity: var(--popover-opacity);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.55);
         }
         .validity-indicator {
             font-size: 0.85rem; padding: 0.35rem 0.75rem; border-radius: 4px;

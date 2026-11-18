@@ -564,6 +564,11 @@ def test_the_view_menu_holds_snap_detail_and_outlines_and_the_ring_backs_each(
     page.locator("#view-menu > summary").click()
     for item in ("#snap-toggle", "#detail-mode", "#overlay-toggle"):
         expect(page.locator(item)).to_be_visible()
+    # Opaque, as ⊞ Windows is: nothing of the windows under it shows through its items.
+    for menu in ("#view-menu", "#windows-menu"):
+        body = page.locator(f"{menu} > .view-menu-body")
+        assert body.evaluate("(e) => getComputedStyle(e).opacity") == "1", menu
+        assert body.evaluate("(e) => getComputedStyle(e).backgroundColor") == "rgb(37, 37, 37)"
     label = lambda item: page.locator(f"#view-menu label:has({item})")  # noqa: E731
     expect(label("#snap-toggle")).to_have_attribute("data-address", "26", timeout=5000)
     expect(label("#detail-mode")).to_have_attribute("data-address", "228")
