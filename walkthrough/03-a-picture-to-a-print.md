@@ -77,7 +77,7 @@ disc_1 rebuilt 173.2 × 172.2 × 5 mm; found 173.2 × 172.2, thickness a person'
 
 ## 7. Slice, in printer_1's Machine, slices the piece and chooses its G-code
 
-printer_1's ring, Device › Open: its Machine a tab beside Pictures, below Selected, and ⊞ Windows › Print opens its Print from here, a tab beside it in a column already four stacks deep. It lists the pieces of the garage under makes; disc_1 chosen, its Slice slices it for printer_1, the slicer's log in the card while it runs. The G-code it kept is chosen in the card's files, saying what it was sliced from and for which printer, and the card lists what the slice used -- each value from the printer's profile, a piece declaring none -- with the slicer's estimate. Print is maximised here from its stack, so the whole card is seen.
+printer_1's ring, Device › Open: its Machine a tab beside Pictures, below Selected, and ⊞ Windows › Print opens its Print from here, a stack of its own under it, so the Machine's head and its stop stay seen. It lists the pieces of the garage under makes; disc_1 chosen, its Slice slices it for printer_1, the slicer's log in the card while it runs. The G-code it kept is chosen in the card's files, saying what it was sliced from and for which printer, and the card lists what the slice used -- each value from the printer's profile, a piece declaring none -- with the slicer's estimate. Print is maximised here from its stack, so the whole card is seen.
 
 ![Slice, in printer_1's Machine, slices the piece and chooses its G-code](screenshots/03-07-slice-in-printer-1-s-machine-slices-the-piece-and-.png)
 

@@ -370,8 +370,10 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     windows.from_the_windows_menu(page, "machine-print")
     print_window = windows.panel(page, "machine-print")
     expect(print_window.locator("#print-card")).to_be_visible(timeout=5000)
-    # The column four stacks deep already (Site, Selected, Parameters, Pictures): a tab.
-    assert "machine" in windows.state(page, "machine-print")["stack"]
+    # The column four stacks deep already (Site, Selected, Parameters, Pictures): a stack
+    # of its own under the Machine all the same, whose head and stop a tab would hide.
+    assert "machine" not in windows.state(page, "machine-print")["stack"]
+    expect(machine.locator("#estop")).to_be_visible()
     makes = machine.locator("#print-part")
     expect(makes.locator(f"option[value='{disc}']")).to_be_attached(timeout=10000)
     expect(machine.locator("#print-where")).to_have_text("in garage")
@@ -423,8 +425,8 @@ def test_a_picture_to_a_print_twice(page, url, walkthrough, shots):
     story.shows(
         "Slice, in printer_1's Machine, slices the piece and chooses its G-code",
         "printer_1's ring, Device › Open: its Machine a tab beside Pictures, below "
-        "Selected, and ⊞ Windows › Print opens its Print from here, a tab beside it in "
-        "a column already four stacks deep. It lists "
+        "Selected, and ⊞ Windows › Print opens its Print from here, a stack of its own "
+        "under it, so the Machine's head and its stop stay seen. It lists "
         "the pieces of the garage under makes; "
         f"{disc} chosen, its Slice slices it for printer_1, the slicer's log in the card "
         "while it runs. The G-code "
