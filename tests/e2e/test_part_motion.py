@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 import windows
 from playwright.sync_api import Page, expect
-from rings import on_row
+from rings import labels, on_row
 
 PANEL = ".panel[data-panel='motion']"
 RENDERS = ("/stl/generate", "/draft/render", "/draft/check")
@@ -159,5 +159,5 @@ def test_a_part_without_a_motion_says_so_and_has_no_motion_on_its_ring(page: Pag
     windows.from_the_windows_menu(page, "motion")
     expect(page.locator(PANEL)).to_contain_text("declares no motion", timeout=10000)
     on_row(page, "calibration_cube", "Part", "View")
-    labels = page.evaluate("() => [...document.querySelectorAll('#ring-overlay .wedge')].map((w) => w.getAttribute('aria-label'))")
-    assert "Motion" not in labels and "Fit" in labels
+    shown = labels(page)
+    assert "Motion" not in shown and "Fit" in shown
