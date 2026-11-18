@@ -25,9 +25,11 @@ import pytest
 import windows
 from boards import BOARD, DWELL, LAYERS, PRINTER
 from doc_capture import MOMENT
+from firmware_helpers import write_fake_arduino_cli
 from garage import open_garage
 from playwright.sync_api import expect
 from rings import open_from_key, press
+from simulated_process import still_folder
 from slicer_helpers import write_fake_orcaslicer
 from viewer_ready import settled
 
@@ -63,18 +65,24 @@ def _words(text: str) -> str:
 
 
 @pytest.fixture(scope="module")
-def state(tmp_path_factory):
-    return tmp_path_factory.mktemp("tour-state")
+def state():
+    return still_folder("tour-state")
 
 
 @pytest.fixture(scope="module")
-def url(start_server, state, tmp_path_factory):
-    orca = write_fake_orcaslicer(tmp_path_factory.mktemp("orca"))
+def url(start_server, state):
+    # Every folder the Bench's card names is at a name of its own: nothing of a pytest temp's
+    # run number is in a picture.
+    kit = still_folder("tour-kit")
+    orca = write_fake_orcaslicer(kit / "orca")
     (state / "tour").mkdir()
     (state / "tour" / "feedback.jsonl").write_text(json.dumps(EARLIER) + "\n", encoding="utf-8")
     url = start_server(
         {
             "APOTHECARY_STATE_DIR": str(state),
+            "APOTHECARY_TOOLS_DIR": str(kit / "tools"),
+            "APOTHECARY_CACHE_DIR": str(kit / "cache"),
+            "ARDUINO_CLI": str(write_fake_arduino_cli(kit / "arduino-cli")),
             "APOTHECARY_SIMULATED_PRINTER": "idle",
             "APOTHECARY_ORCASLICER": str(orca),
             "FAKE_ORCA_LAYERS": LAYERS,
