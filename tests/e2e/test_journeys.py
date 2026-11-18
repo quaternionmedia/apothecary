@@ -59,9 +59,13 @@ def test_the_make_view_is_greyed_until_a_machine_is_there(page: Page, url: str):
     _select(page, "footpedal")
     page.locator("#windows-menu > summary").click()
     entry = page.locator(MAKE)
-    expect(entry).to_have_class(re.compile(r"\bmissing\b"))
-    expect(entry).to_have_attribute("title", re.compile(r"^Not now: .*footpedal"))
-    entry.click(timeout=5000)
+    # Greyed as every control the page greys is: its look and "Disabled: <why>".
+    expect(entry).to_have_attribute("aria-disabled", "true")
+    expect(entry).to_have_attribute("title", re.compile(r"^Disabled: .*footpedal"))
+    expect(entry).to_have_css("opacity", "0.45")
+    # Pressed all the same, as a person can: aria-disabled alone, which Playwright's own
+    # wait for an enabled element counts as disabled.
+    entry.click(timeout=5000, force=True)
     said = status(page)
     expect(said).to_contain_text("Print view: ")
     expect(said).to_contain_text("footpedal")
@@ -106,7 +110,7 @@ def test_the_make_view_lays_out_the_windows_a_part_is_made_through(page: Page, u
     _machine_open_and_the_part_chosen(page, url)
     page.locator("#windows-menu > summary").click()
     entry = page.locator(MAKE)
-    expect(entry).not_to_have_class(re.compile(r"\bmissing\b"))
+    expect(entry).not_to_have_attribute("aria-disabled", "true")
     expect(entry).to_have_text("Print")
     entry.click(timeout=5000)
     expect(page.locator(".windows-menu-body")).to_be_hidden()

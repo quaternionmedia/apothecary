@@ -24,6 +24,7 @@
  * time, so one listener of each kind on the root serves them all.
  */
 
+import { setReason } from "/static/can.js";
 import { GRID, MACHINE_BUTTONS, MEASURE, DEPTH_MAX, shellLayer, categoryLayer } from "/static/pick_scope.js";
 
 const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -87,9 +88,9 @@ export function mountLayers(root, { scope, shells = () => [], categories = () =>
             ? "Walls: drawn faded; Selectable here is View > Select walls" : `The pieces of the ${c} category`, true));
         root.innerHTML = `<div class="layers-depth">
     <span class="layers-depth-label" title="How many levels below the level in view a click reaches and the world draws: 1 is the level's own pieces">Depth</span>
-    <button type="button" class="layers-depth-less" data-act="depth-less" aria-label="One level less" title="One level less${taught("view:depth:less")}"${depth <= 1 ? " disabled" : ""}>-</button>
+    <button type="button" class="layers-depth-less" data-act="depth-less" aria-label="One level less">-</button>
     <output class="layers-depth-value" aria-live="polite">${depth}</output>
-    <button type="button" class="layers-depth-more" data-act="depth-more" aria-label="One level more" title="One level more${taught("view:depth:more")}"${depth >= DEPTH_MAX ? " disabled" : ""}>+</button>
+    <button type="button" class="layers-depth-more" data-act="depth-more" aria-label="One level more">+</button>
 </div>
 <table class="layers-table"><thead><tr><th scope="col">Layer</th><th scope="col">Shown</th><th scope="col">Selectable</th></tr></thead>
 ${section("Parts, by shell", shellRows)}${section("Categories", categoryRows)}${section("The world", [
@@ -99,6 +100,9 @@ ${section("Parts, by shell", shellRows)}${section("Categories", categoryRows)}${
         ])}</table>
 <div class="layers-reset"><button type="button" class="layers-reset-all" data-act="reset" title="Depth 1, every layer shown, every layer selectable but walls${taught("layer:reset")}">Reset</button></div>
 ${reading()}`;
+        // The stepper at either end is greyed, saying why, as every control is (can.js).
+        setReason(root.querySelector(".layers-depth-less"), depth <= 1 ? "the depth is 1, a click reaching the level's own pieces alone" : null, `One level less${taught("view:depth:less")}`);
+        setReason(root.querySelector(".layers-depth-more"), depth >= DEPTH_MAX ? `the depth is ${DEPTH_MAX}, the deepest a click reaches` : null, `One level more${taught("view:depth:more")}`);
     }
 
     function onChange(event) {

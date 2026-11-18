@@ -20,7 +20,7 @@ import httpx
 import pytest
 import windows
 from doc_capture import moments
-from garage import look_down, open_garage, said, status
+from garage import look_down, open_garage, said, status, to_site
 from PIL import Image, ImageDraw, ImageFont
 from playwright.sync_api import expect
 
@@ -203,6 +203,22 @@ def test_a_persons_word_on_a_mark_is_read_back_in_the_world_and_a_note_is_typed(
         blank=CHANGING,
     )
     assert errors == []
+
+
+@pytest.mark.e2e
+def test_with_no_picture_pinned_the_picture_is_greyed_and_says_why(page, url):
+    """In the universe, where no picture is pinned, Marks' drop-down of pictures is
+    greyed as every control of the page is, saying why."""
+    open_garage(page, url, settle=False)
+    to_site(page, "apothecary")
+    windows.from_the_windows_menu(page, "marks")
+    pick = windows.panel(page, "marks").locator(".marks-view")
+    expect(pick).to_be_disabled(timeout=10000)
+    expect(pick).to_have_attribute("aria-disabled", "true")
+    expect(pick).to_have_attribute(
+        "title", re.compile(r"^Disabled: no picture is pinned in this site yet")
+    )
+    expect(pick).to_have_css("opacity", "0.45")
 
 
 @pytest.fixture(scope="module")

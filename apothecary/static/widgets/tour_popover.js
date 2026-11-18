@@ -13,6 +13,8 @@
 //
 // `stage(journey, stageId)` is the page's: it resolves to `{ did: [...], said, refused }`.
 
+import { setReason } from '/static/can.js';
+
 const KEPT = 'apothecary.tour';
 
 const MARKUP = `
@@ -155,8 +157,8 @@ export function mountTourPopover({ base = '', stage, onShown = () => {} }) {
         $('.tour-pop-feedback').textContent = f
             ? `${f.verdict === 'off' ? `✗ Off: ${f.note}` : '✓ Works'} -- said${f.by ? ` by ${f.by}` : ''} ${new Date(f.at).toLocaleString()}${f.current ? '' : `, of an earlier build${f.commit ? ` (${f.commit})` : ''}: this stage waits for a word again`}`
             : '';
-        $('.tour-pop-back').disabled = state.at === 0;
-        $('.tour-pop-next').disabled = state.at >= state.stages.length - 1;
+        setReason($('.tour-pop-back'), state.at === 0 ? 'this is the journey\'s first stage' : null, 'The stage before');
+        setReason($('.tour-pop-next'), state.at >= state.stages.length - 1 ? 'this is the journey\'s last stage' : null, 'The next stage');
         if (box.matches(':popover-open')) place();
     }
 

@@ -722,7 +722,8 @@ which the page, the ring and the tests all read.
 
 A view needs its main window. The Machine view, and the Print view, open the Machine
 of the machine selected, or else stepped into, when none is open; with none to open
-each is offered greyed, and asked for, from ⊞ Windows or the ring, it says why and
+each is offered greyed, its tooltip saying why as every greyed control's does
+("Disabled: <why>. ..."), and asked for, from ⊞ Windows or the ring, it says why and
 leaves the layout as it was: a part chosen for Print, its Slice on the part's ring opens
 the printer's Machine.
 Laid out, either lands on the file the machine would run: the path of the file its

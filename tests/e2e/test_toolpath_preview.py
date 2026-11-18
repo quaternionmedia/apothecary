@@ -433,7 +433,7 @@ def test_windows_machine_opens_the_selected_machine_and_lands_on_its_file_s_path
     _selected(page, url, machine.node)
     page.locator("#windows-menu > summary").click()
     entry = page.locator(MACHINE_VIEW)
-    expect(entry).not_to_have_class(re.compile(r"\bmissing\b"))
+    expect(entry).not_to_have_attribute("aria-disabled", "true")
     expect(entry).to_have_attribute("title", re.compile(f"Opens {machine.node}'s Machine"))
     entry.click(timeout=5000)
     expect(page.locator(".windows-menu-body")).to_be_hidden()
@@ -583,11 +583,16 @@ def test_with_no_machine_to_open_the_entry_is_greyed_and_a_press_says_why(page: 
     )
     page.locator("#windows-menu > summary").click()
     entry = page.locator(MACHINE_VIEW)
-    expect(entry).to_have_class(re.compile(r"\bmissing\b"))
+    expect(entry).to_have_attribute("aria-disabled", "true")
+    expect(entry).to_have_attribute(
+        "title", re.compile(r"^Disabled: no Machine is open and nothing is selected")
+    )
     other = page.locator(".windows-menu-body .view-item[data-view='part']")
-    grey = "(el) => getComputedStyle(el).color"
-    assert entry.evaluate(grey) != other.evaluate(grey)
-    entry.click(timeout=5000)
+    grey = "(el) => getComputedStyle(el).opacity"
+    assert entry.evaluate(grey) == "0.45" and other.evaluate(grey) == "1"
+    # Pressed all the same, as a person can: aria-disabled alone, which Playwright's own
+    # wait for an enabled element counts as disabled.
+    entry.click(timeout=5000, force=True)
     expect(page.locator(".windows-menu-body")).to_be_hidden()
     said = status(page)
     expect(said).to_contain_text("Machine view: no Machine is open and nothing is selected")

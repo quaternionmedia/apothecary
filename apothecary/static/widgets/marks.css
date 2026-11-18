@@ -22,7 +22,6 @@
 .marks-ui .marks-photo polygon { fill: color-mix(in srgb, var(--group) 14%, transparent); stroke: var(--group); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .marks-ui .marks-corner { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; padding: 0; border-radius: 50%; border: 2px solid var(--bg); background: var(--group); cursor: grab; }
 .marks-ui .marks-corner:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
-.marks-ui .marks-corner:disabled { cursor: not-allowed; opacity: 0.5; }
 /* A whiteboard's history: a tick per event on one strip, and the slider under it. */
 .marks-ui .marks-strip { width: 100%; height: 24px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; }
 .marks-ui .marks-strip .tick { stroke-width: 3; vector-effect: non-scaling-stroke; }

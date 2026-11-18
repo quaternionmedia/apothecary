@@ -18,7 +18,6 @@
 .deck-ui .deck-turn, .deck-ui .deck-press {
     font: inherit; font-size: 0.78rem; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 0.1rem 0.35rem; cursor: pointer;
 }
-.deck-ui button:disabled { opacity: 0.55; cursor: not-allowed; }
 .deck-ui button:not(:disabled):hover { border-color: var(--ink-3); }
 /* A real deck's keys and strip are its picture, not a control that is off. */
 .deck-ui .deck-key:disabled, .deck-ui .deck-strip-tap:disabled { opacity: 1; cursor: default !important; }

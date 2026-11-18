@@ -162,6 +162,9 @@ def test_apply_is_off_up_front_where_this_openscad_cannot_build_the_part(page: P
     gridx.locator(".param-number").fill("4")
     expect(page.locator("#stage-summary")).to_contain_text("1 change staged, valid", timeout=10000)
     expect(page.locator("#apply-btn")).to_be_disabled()
+    expect(page.locator("#apply-btn")).to_have_attribute(
+        "title", re.compile(r"^Disabled: this OpenSCAD cannot build it: needs OpenSCAD")
+    )
     define = page.locator("#part-params > .param[data-field='gridz_define'] select.param-choice")
     expect(define.locator("option")).to_have_count(4)
     group = page.locator("#part-params > .param[data-field='hole_options']")

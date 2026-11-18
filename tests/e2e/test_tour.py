@@ -158,6 +158,14 @@ def test_the_tour_takes_the_page_to_each_stage_and_keeps_a_person_s_word(
     expect(box.locator(".tour-pop-name")).to_have_text(re.compile(r"^0/\d+$"))
     expect(title).to_have_text("Design a part · 1. Choose")
     expect(box.locator(".tour-pop-put")).to_be_enabled()
+    # On the first stage ‹ is greyed as every control of the page is, saying why.
+    back = box.locator(".tour-pop-back")
+    expect(back).to_be_disabled()
+    expect(back).to_have_attribute("aria-disabled", "true")
+    expect(back).to_have_attribute(
+        "title", "Disabled: this is the journey's first stage. The stage before"
+    )
+    expect(back).to_have_css("opacity", "0.45")
     expect(box.locator(".tour-pop-feedback")).to_contain_text("✓ Works -- said by Grace ")
     expect(box.locator(".tour-pop-feedback")).to_contain_text(
         "of an earlier build (0000000): this stage waits for a word again"

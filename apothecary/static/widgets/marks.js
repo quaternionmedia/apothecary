@@ -41,6 +41,8 @@
  * and act("place") are the slider's steps and Place.
  */
 
+import { setReason } from "/static/can.js";
+
 const MARKUP = `
 <div class="marks-ui">
     <div class="row"><select class="marks-view" aria-label="The picture whose marks are listed"></select></div>
@@ -87,7 +89,8 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
         pick.innerHTML = views.length
             ? views.map((v) => `<option value="${esc(v.id)}"${v.id === viewId ? " selected" : ""}>${esc(v.source || v.picture)} · ${esc(v.host === "" ? "the floor" : v.host ?? "nowhere")}</option>`).join("")
             : '<option value="">no picture pinned here yet</option>';
-        pick.disabled = !views.length;
+        // Greyed with nothing to choose, saying why, as every control is (can.js).
+        setReason(pick, views.length ? null : "no picture is pinned in this site yet: Pictures pins one", "The picture whose marks are listed");
     }
 
     function render() {
@@ -131,9 +134,14 @@ export function mountMarks(root, { base = "", world = null, log = null } = {}) {
             <div class="marks-photo" style="aspect-ratio:${corners.pixel_width} / ${corners.pixel_height}">
                 <img src="${esc(src)}" alt="The photograph the picture was squared from">
                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="${pts}"></polygon></svg>
-                ${corners.corners.map(([x, y], i) => `<button type="button" class="marks-corner" data-handle="${i}" style="left:${(x * 100).toFixed(2)}%;top:${(y * 100).toFixed(2)}%" aria-label="The whiteboard's ${CORNERS[i]} corner"${corners.made ? " disabled" : ""}></button>`).join("")}
+                ${corners.corners.map(([x, y], i) => `<button type="button" class="marks-corner" data-handle="${i}" style="left:${(x * 100).toFixed(2)}%;top:${(y * 100).toFixed(2)}%" aria-label="The whiteboard's ${CORNERS[i]} corner"></button>`).join("")}
             </div>
             <div class="note marks-corners-said">${esc(said)}</div>`;
+        // A corner held by the pieces made from it is greyed, saying why (can.js).
+        const heldBy = corners.made ? `${corners.made} piece(s) are made from it as squared: drop them to move its corners` : null;
+        for (const handle of held.querySelectorAll(".marks-corner")) {
+            setReason(handle, heldBy, `The whiteboard's ${CORNERS[Number(handle.dataset.handle)]} corner: drag it, or nudge it with the arrow keys and Enter`);
+        }
     }
 
     const STEPS = 1000;

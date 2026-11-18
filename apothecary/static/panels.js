@@ -39,6 +39,7 @@
  */
 
 import { GoldenLayout, LayoutConfig } from "golden-layout";
+import { setReason } from "./can.js";
 import { mayAct } from "./keys.js";
 
 const TILDE_KEYS = new Set(["`", "~"]);
@@ -485,7 +486,7 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
     function stepFocus(list, ev) {
         const keys = { ArrowDown: 1, ArrowUp: -1, Home: -Infinity, End: Infinity };
         if (!list || !(ev.key in keys)) return;
-        const buttons = [...list.querySelectorAll("button")];
+        const buttons = [...list.querySelectorAll("button:not(:disabled)")];
         if (!buttons.length) return;
         ev.preventDefault();
         const at = buttons.indexOf(document.activeElement);
@@ -617,11 +618,12 @@ export function mountPanels({ host, world, storageKey = "apothecary.layout", kno
             b.textContent = v.title;
             const missing = api.viewMissing(id);
             const offer = own ? own.offer(id) : { refused: missing ? `${v.title} lays out ${missing.title}'s windows: open ${missing.title} first${missing.hint ? ` (${missing.hint})` : ""}` : null };
-            // Greyed where it cannot be laid out now. The page's own press says why,
-            // so its entry is pressed all the same; without one it is disabled.
-            b.classList.toggle("missing", !!offer.refused);
-            b.disabled = !own && !!offer.refused;
-            b.title = offer.refused || offer.title || `The windows laid out as ${v.title}`;
+            // Greyed where it cannot be laid out now, as every control the page greys is
+            // (can.js): "Disabled: <why>. <what it does>". The page's own press says why
+            // as well, so its entry is pressed all the same, disabled to assistive
+            // technology alone (aria-disabled); without one it is disabled.
+            setReason(b, offer.refused || null, offer.title || `The windows laid out as ${v.title}`);
+            if (own) b.disabled = false;
             b.addEventListener("click", () => { if (own) own.press(id); else api.applyView(id); if (done) done(); });
             into.append(b);
         }

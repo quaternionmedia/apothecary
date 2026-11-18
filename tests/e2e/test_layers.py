@@ -14,6 +14,8 @@ Runs against a server of its own, so the site it draws is the code's whatever ra
 
 from __future__ import annotations
 
+import re
+
 import pytest
 import windows
 from doc_capture import moments
@@ -292,8 +294,18 @@ def test_depth_two_lets_a_click_select_a_piece_of_a_piece(page: Page, url: str):
     assert page.evaluate("(k) => !!window.fractalViewer.meshByName[k]", nested["inner"]) is False
 
     windows.from_the_windows_menu(page, "layers")
-    page.locator(".panel[data-panel='layers'] button[data-act='depth-more']").click()
+    less = page.locator(".panel[data-panel='layers'] button[data-act='depth-less']")
+    more = page.locator(".panel[data-panel='layers'] button[data-act='depth-more']")
+    # At depth 1 the stepper's − is greyed as every control of the page is, saying why.
+    expect(less).to_be_disabled()
+    expect(less).to_have_attribute("aria-disabled", "true")
+    expect(less).to_have_attribute("title", re.compile(r"^Disabled: the depth is 1, .*One level less"))
+    expect(less).to_have_css("opacity", "0.45")
+    more.click()
     said(page, "Depth: 2 levels")
+    expect(less).to_be_enabled()
+    expect(less).not_to_have_attribute("aria-disabled", "true")
+    expect(less).to_have_attribute("title", re.compile(r"^One level less"))
     settled(page)
     assert page.evaluate("(k) => !!window.fractalViewer.meshByName[k]", nested["inner"]) is True
     spot = page.evaluate(PICKING, nested["inner"])

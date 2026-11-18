@@ -449,9 +449,16 @@ def test_a_view_that_needs_a_window_the_page_has_not_says_so_and_does_nothing(wm
     button = _js(
         wm,
         """() => { const into = document.createElement('div'); P.fillMenu(into);
-            const b = into.querySelector("[data-view='v']"); return [b.disabled, b.title]; }""",
+            const b = into.querySelector("[data-view='v']");
+            return [b.disabled, b.getAttribute('aria-disabled'), b.title]; }""",
     )
-    assert button == [True, "V lays out V's windows: open V first (its ring)"]
+    # Greyed as every control the page greys is (can.js): disabled, to assistive
+    # technology too, and "Disabled: <why>. <what it does>".
+    assert button == [
+        True,
+        "true",
+        "Disabled: V lays out V's windows: open V first (its ring). The windows laid out as V",
+    ]
     _js(wm, "() => H.reg('m', { open: false })")
     assert _js(wm, "() => P.viewMissing('v')") is None and _js(wm, "() => P.applyView('v')") is True
 
@@ -459,8 +466,9 @@ def test_a_view_that_needs_a_window_the_page_has_not_says_so_and_does_nothing(wm
 @pytest.mark.e2e
 def test_a_page_with_its_own_way_to_a_view_is_asked_and_its_refusal_is_greyed_not_dead(wm: Page):
     """The page's own way with a view (fillMenu's `views`): its entry says what the page
-    says of it, greyed where the page refuses it, and a press goes to the page either
-    way -- which may open what the view needs, or say why it cannot."""
+    says of it, greyed where the page refuses it -- disabled to assistive technology,
+    "Disabled: <why>. <what it does>" -- and a press goes to the page either way, which
+    may open what the view needs, or say why it cannot."""
     _js(
         wm,
         "(v) => P.defineView('v', { title: 'V', layout: v, requires: 'm', hint: 'its ring' })",
@@ -473,14 +481,14 @@ def test_a_page_with_its_own_way_to_a_view_is_asked_and_its_refusal_is_greyed_no
                 offer: (id) => (id === 'v' ? { refused: 'Nothing to open', title: null } : { refused: null, title: id === 'default' ? 'The page says' : null }),
                 press: (id) => window.pressed.push(id) } });
             const of = (id) => { const b = into.querySelector(`[data-view='${id}']`);
-                return [b.disabled, b.classList.contains('missing'), b.title]; };
+                return [b.disabled, b.getAttribute('aria-disabled'), b.title]; };
             const out = { v: of('v'), default: of('default') };
             into.querySelector("[data-view='v']").click();
             into.querySelector("[data-view='default']").click();
             return out; }""",
     )
-    assert drawn["v"] == [False, True, "Nothing to open"]
-    assert drawn["default"] == [False, False, "The page says"]
+    assert drawn["v"] == [False, "true", "Disabled: Nothing to open. The windows laid out as V"]
+    assert drawn["default"] == [False, None, "The page says"]
     # Each press went to the page, the refused one too, and nothing was laid out here.
     assert _js(wm, "() => [window.pressed, window.menuClosed]") == [["v", "default"], 2]
     assert _where(wm, "a") is not None

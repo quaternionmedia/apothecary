@@ -124,6 +124,18 @@ def test_a_control_writes_its_line_a_typed_value_moves_it_and_undo_takes_back_ea
     assert re.match(r"size = 10;\s+// ", own), own
     box = _param(page, "size").locator(".param-number")
     slider = _param(page, "size").locator(".param-slider")
+    # Nothing done yet: Apply, Undo and Redo greyed as every control of the page is,
+    # each saying why.
+    for selector, why in (
+        ("#apply-btn", "nothing is staged against what is drawn"),
+        ("#undo-btn", "nothing to undo"),
+        ("#redo-btn", "nothing to redo"),
+    ):
+        button = page.locator(selector)
+        expect(button).to_be_disabled()
+        expect(button).to_have_attribute("aria-disabled", "true")
+        expect(button).to_have_attribute("title", re.compile(f"^Disabled: {why}"))
+        expect(button).to_have_css("opacity", "0.45")
 
     # Moved: its value rewritten in its line, its comment kept, staged and checked.
     box.fill("20")

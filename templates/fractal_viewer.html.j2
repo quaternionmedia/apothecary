@@ -234,8 +234,6 @@
         .window-item.open { color: #e8e8e8; }
         .window-item.view-item, .window-item.journey-item { color: #9cd2ff; }
         .window-item.journey-item[aria-current]::before { content: "● "; }
-        /* A view that cannot be laid out now is greyed, under the pointer too. */
-        .window-item.missing, .window-item.missing:hover { color: #6b7078; background: none; cursor: default; }
         /* A stack maximised -- the world alone, or a panel's ☐ -- is all there is: the
            windows under it are hidden, not only covered, so nothing of them is reached. */
         .lm_root:has(> .lm_maximised) > :not(.lm_maximised) { visibility: hidden; }
@@ -575,12 +573,10 @@
                                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .stage-actions #apply-btn { flex-grow: 2; }
         #apply-btn { background: #4a9eff; color: #0b0d10; }
-        #apply-btn:disabled { opacity: .4; cursor: default; }
         #revert-btn, #defaults-btn { background: #2a2f38; color: #d7dae0; }
         /* Undo and Redo of the staged numbers, and the ghost, under the stage's actions. */
         .stage-more { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; }
         .stage-more button { padding: 2px 8px; border: 0; border-radius: 4px; background: #2a2f38; color: #d7dae0; cursor: pointer; font: inherit; }
-        .stage-more button:disabled { opacity: .4; cursor: default; }
         .stage-more .ghost-label { margin-left: auto; color: #9cc4e8; display: flex; align-items: center; gap: 3px; cursor: pointer; }
         .stage-more .ghost-label input { accent-color: #9cc4e8; margin: 0; }
         /* What this tab kept from before a reload, offered back. */
@@ -899,6 +895,7 @@
         import { mountMeasureWorld } from '/static/measure_world.js';
         import { mountLayersWorld, hideFor as hideForReason, BY_LAYER, layerKinds as layerKindsOf, layersSaid as layersSaidOf } from '/static/layers_world.js';
         import { mountPanels } from '/static/panels.js';
+        import { setReason } from '/static/can.js';
         import { mountMachine } from '/static/widgets/machine.js';
         import { mountBoards } from '/static/boards.js';
         import { boardLabel, boardSummary } from '/static/board_text.js';
@@ -5438,7 +5435,7 @@
                     summary.textContent = this.partStages[target.key]?.tied
                         ? "The part's own SCAD, a variant drawn: Apply draws the saved part"
                         : "The part's own numbers, and its SCAD edited: Apply draws the saved part";
-                    apply.disabled = !this.canBuild(target);
+                    this.greyed(apply, this.cannotBuild(target));
                     apply.textContent = 'Apply: the saved part';
                     this.envelopeFor = 'drawn';
                     return;
@@ -5446,7 +5443,7 @@
                 if (!count) {
                     summary.className = 'clean';
                     summary.textContent = 'No staged changes';
-                    apply.disabled = true;
+                    this.greyed(apply, 'nothing is staged against what is drawn: change a number first');
                     apply.textContent = 'Apply';
                     this.envelopeFor = 'drawn';
                     this.markEnvelope();
@@ -5456,7 +5453,7 @@
 
                 summary.className = 'clean';
                 summary.textContent = `Validating ${count} change${count > 1 ? 's' : ''}…`;
-                apply.disabled = true;
+                this.greyed(apply, 'what is staged is being checked');
                 this.stagedValid = false;
                 // The check waits for the controls to rest: a slider dragged is
                 // many changes and one check.
@@ -5488,6 +5485,7 @@
                 } catch (err) {
                     summary.className = 'invalid';
                     summary.textContent = `Could not validate: ${err.message}`;
+                    this.greyed(apply, `what is staged could not be checked: ${err.message}`);
                     return;
                 }
                 // A slower validation must not overwrite a newer one.
@@ -5499,7 +5497,7 @@
                     summary.textContent = report.errors
                         .map((e) => `${e.field}: ${e.message}`)
                         .join('; ');
-                    apply.disabled = true;
+                    this.greyed(apply, `what is staged is not valid: ${summary.textContent}`);
                     return;
                 }
 
@@ -5510,7 +5508,7 @@
                     : '';
                 summary.textContent =
                     `${count} change${count > 1 ? 's' : ''} staged, valid${envelope}`;
-                apply.disabled = !this.canBuild(target);
+                this.greyed(apply, this.cannotBuild(target));
                 apply.textContent = `Apply ${count} change${count > 1 ? 's' : ''}`;
                 // The envelope shown is the staged set's now, not what is drawn's.
                 this.envelopeFor = 'staged';
@@ -5619,14 +5617,11 @@
             refreshUndoButtons(target) {
                 const stage = this.partStages[target?.key];
                 const undo = this.partEl('#undo-btn'), redo = this.partEl('#redo-btn');
-                if (stage?.tied) {
-                    const editor = this.tiedEditor(target);
-                    if (undo) undo.disabled = !editor?.canUndo();
-                    if (redo) redo.disabled = !editor?.canRedo();
-                    return;
-                }
-                if (undo) undo.disabled = !stage?.undo?.length;
-                if (redo) redo.disabled = !stage?.redo?.length;
+                const tied = stage?.tied ? this.tiedEditor(target) : null;
+                const canUndo = stage?.tied ? !!tied?.canUndo() : !!stage?.undo?.length;
+                const canRedo = stage?.tied ? !!tied?.canRedo() : !!stage?.redo?.length;
+                this.greyed(undo, canUndo ? null : 'nothing to undo: no change made here yet');
+                this.greyed(redo, canRedo ? null : 'nothing to redo: no change undone');
             }
 
             stagedSaid(target) {
@@ -6852,6 +6847,17 @@
             canBuild(target) {
                 return this.partStages[target?.key]?.canBuild !== false;
             }
+            // Why Apply cannot draw the part at all here, or null.
+            cannotBuild(target) {
+                return this.canBuild(target) ? null : `this OpenSCAD cannot build it${this.partStages[target.key]?.buildNote ? `: ${this.partStages[target.key].buildNote}` : ''}`;
+            }
+            // One of the page's own controls greyed for a reason it knows (`why`), or let
+            // go of it (null), as can.js greys every control: "Disabled: <why>. <its own
+            // tip>", and its ring address after, the tip kept for when it is let go.
+            greyed(btn, why) {
+                if (!btn) return;
+                setReason(btn, why || null, btn.dataset.tip ?? (btn.getAttribute('title') || '').replace(/ · ⌗\d+$/, ''));
+            }
 
             showBuildNote(target) {
                 const note = this.partEl('#part-build-note');
@@ -6860,11 +6866,7 @@
                 const cannot = stage?.canBuild === false;
                 note.hidden = !cannot;
                 note.textContent = cannot ? `Apply is off: ${stage.buildNote || 'this OpenSCAD cannot build it'}` : '';
-                const apply = this.partEl('#apply-btn');
-                if (apply && cannot) {
-                    apply.disabled = true;
-                    apply.title = `This OpenSCAD cannot build it: ${stage.buildNote || ''}`;
-                }
+                if (cannot) this.greyed(this.partEl('#apply-btn'), this.cannotBuild(target));
             }
 
             // `asked`, a fetch of a render or a check, with the queue watched while it is
@@ -8948,7 +8950,7 @@
             // What ⊞ Windows says of a view: why it is greyed, else what a press does.
             viewOffer(id) {
                 const refused = this.viewRefusal(id);
-                if (refused) return { refused: `Not now: ${refused}`, title: null };
+                if (refused) return { refused, title: null };
                 if (!this.viewOpensMachine(id)) return { refused: null, title: null };
                 const lands = 'its windows laid out together, and its chosen file\'s path drawn in the world';
                 const title = this.panels.views().find((v) => v.id === id).title;

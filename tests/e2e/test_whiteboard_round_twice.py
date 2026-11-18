@@ -13,6 +13,8 @@ drawn here (tests/test_whiteboard_history.py's whiteboard on a wall).
 
 from __future__ import annotations
 
+import re
+
 import pytest
 import rings
 import windows
@@ -168,6 +170,16 @@ def test_a_whiteboard_to_a_model_round_twice(page: Page, url: str, walkthrough):
         "front of the whiteboard where they were drawn, as big as they are drawn on it.",
         blank=CHANGING,
     )
+    # The pieces hold the photograph's corners: each handle greyed as every control of
+    # the page is, saying why.
+    page.evaluate("() => window.apothecaryMarks.load()")
+    corner = marks.locator(".marks-corner").first
+    expect(corner).to_be_disabled(timeout=WITHIN)
+    expect(corner).to_have_attribute("aria-disabled", "true")
+    expect(corner).to_have_attribute(
+        "title", re.compile(r"^Disabled: 3 piece\(s\) are made from it as squared")
+    )
+    expect(corner).to_have_css("opacity", "0.45")
 
     # 6. Tuesday's photograph, the drawing changed: the history shows both.
     rings.on_row(page, "whiteboard", "Picture", "Folder", "tuesday")
