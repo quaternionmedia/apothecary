@@ -82,13 +82,19 @@ def rust_only_url(start_server, tmp_path_factory):
 CHANGING = (
     ".task-log",
     ".task-history .meta",
-    "#log .t",
+    # The device log scrolls as the board blinks: which lines the window holds is the moment's.
+    "#log",
     # When the board was flashed, a grey of one width whatever the time.
     *all_words("#c-sketch .when"),
     ".tc-status",
     # The stand-in tools' folders, which the toolchains' cards name.
     (".tc-module .kv", FOLDER),
 )
+
+
+# The board's badge in the world and on Site's row pulse while it is flashed: lit or not
+# as the moment falls.
+BOARD_BADGES = (".world-badge", ".contents-item .dev-badge")
 
 
 def _title(where) -> str:
@@ -370,7 +376,7 @@ def test_the_firmware_loop_goes_round_with_arduino_then_rust(page: Page, url: st
         + _lines(sketch, "should run", "observed").replace(
             sketch.locator(".when").inner_text(), "…"
         ),
-        blank=CHANGING,
+        blank=(*CHANGING, *BOARD_BADGES),
     )
 
     # 9. Listen: the hello on the wire.
