@@ -17,6 +17,7 @@ what the run wrote.
 from __future__ import annotations
 
 import io
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -31,6 +32,21 @@ PICTURES = "walkthrough/screenshots"
 # most; a word of the hint bar or the status line is thousands. Past this, the
 # picture shows something the committed one does not, or another machine drew it.
 TOLERANCE = 0.001
+
+
+# The pictures a test writes that move by themselves, each with the test that writes it
+# and why: a list of {"picture", "test", "reason"}, empty while every picture is still.
+# A picture on it that changes is reported apart (a notice), so a page's change is not
+# looked for among them; tests/test_picture_drift.py fails on an entry naming a picture
+# or a test that is not there.
+MOVES_BY_ITSELF = "tests/e2e/moves_by_itself.json"
+
+
+def moves_by_itself(root: Path = ROOT) -> dict[str, dict]:
+    """The listed pictures, by their path under root."""
+    path = root / MOVES_BY_ITSELF
+    listed = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    return {f"{PICTURES}/{entry['picture']}": entry for entry in listed}
 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess:
@@ -90,6 +106,7 @@ def warnings(
     """One annotation per picture past ``tolerance``, naming it and the box that
     changed; with ``sheets``, each drawn there beside the committed one."""
     said = []
+    moving = moves_by_itself(root)
     for name in rewritten(root):
         path = root / name
         if not path.exists():
@@ -105,6 +122,13 @@ def warnings(
         share = differing(committed.stdout, now)
         if share > tolerance:
             left, top, right, bottom = changed_box(committed.stdout, now)
+            if name in moving:
+                said.append(
+                    f"::notice file={name},title=A walkthrough picture that moves by "
+                    f"itself changed::{name} is listed in {MOVES_BY_ITSELF} ({moving[name]['reason']}), "
+                    f"written by {moving[name]['test']}"
+                )
+                continue
             said.append(
                 f"::warning file={name},title=A walkthrough picture changed::{name} "
                 f"differs from the committed picture in {share:.2%} of its pixels, past "
@@ -123,9 +147,11 @@ def main(root: Path = ROOT, argv: list[str] | None = None) -> int:
     said = warnings(root, sheets=sheets)
     for line in said:
         print(line)
+    apart = sum(line.startswith("::notice") for line in said)
     print(
-        f"{len(said)} walkthrough picture(s) differ from the committed ones past "
+        f"{len(said) - apart} walkthrough picture(s) differ from the committed ones past "
         f"{TOLERANCE:.1%} of their pixels"
+        + (f", and {apart} that move by themselves" if apart else "")
     )
     if sheets is not None and said:
         print(f"each drawn beside its commit, its changed pixels marked, in {sheets}")
