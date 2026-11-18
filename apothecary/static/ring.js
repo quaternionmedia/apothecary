@@ -38,6 +38,7 @@
 
 import { comboOf, matches, mayAct, typing } from "./keys.js";
 import { ADDRESS_AT_END } from "./can.js";
+import { viaRing } from "./format.js";
 
 export const PLACEMENT = [8, 6, 2, 4, 9, 3, 1, 7];
 export const COMPASS = [8, 9, 6, 3, 2, 1, 4, 7]; // compass slot (up, clockwise) -> cell
@@ -275,10 +276,10 @@ export function refusalOf(option) {
     return option.why ? `Disabled: ${option.why}` : "Disabled";
 }
 
-// The status line's words for a greyed wedge chosen anyway, as a refused verb's are said:
-// its label, its address, why.
+// The status line's words for a greyed wedge chosen anyway, as every refusal there is
+// said (format.js viaRing): its label, its address, why.
 export function refusedWords(option, address) {
-    return `${option.label} (⌗${address}): ${option.why || "it cannot be chosen here"}`;
+    return `${viaRing(option.label, address)}: ${option.why || "it cannot be chosen here"}`;
 }
 
 // A reason in lines of at most `most` characters, broken at spaces, to be written under

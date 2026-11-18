@@ -393,9 +393,10 @@ def _selected(page: Page, url: str, node: str | None) -> None:
 
 
 def _from_windows(page: Page) -> None:
-    """⊞ Windows › Machine, as a person presses it."""
+    """⊞ Windows › Machine, as a person presses it: greyed (aria-disabled alone, which
+    Playwright's wait for an enabled element counts as disabled) or not."""
     page.locator("#windows-menu > summary").click()
-    page.locator(MACHINE_VIEW).click(timeout=5000)
+    page.locator(MACHINE_VIEW).click(timeout=5000, force=True)
     expect(page.locator(".windows-menu-body")).to_be_hidden()
 
 
@@ -601,7 +602,9 @@ def test_with_no_machine_to_open_the_entry_is_greyed_and_a_press_says_why(page: 
 
     _select(page, "workbench")
     rings.on_world(page, "Panels", "Windows", "Machine view")
-    expect(said).to_contain_text("no Machine is open, and workbench has no board pinned")
+    expect(said).to_have_text(
+        re.compile(r"^Machine view \(⌗\d+\): no Machine is open, and workbench has no board pinned")
+    )
     assert page.evaluate("() => window.fractalViewer.machine") is None
     after = page.evaluate(
         "() => window.apothecaryPanels.list().filter((w) => w.open).map((w) => w.id)"

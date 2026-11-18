@@ -96,7 +96,8 @@ firmware tools, a state folder of their own -- and how to reach the real ones:
 
 The status line is the bar along the bottom: every verb says there what it
 did and what comes next, with the address of the ring cell that does it,
-`(⌗98)`. It is announced to a screen reader as it changes. Over the world, the
+`(⌗98)`. A refusal names the cell first, then why: `Y+ (⌗7728): control is not
+armed`, whether the ring greyed the cell or the verb met the refusal. It is announced to a screen reader as it changes. Over the world, the
 depth ladder has a tick per level, and the hint bar names the essentials -- a
 click, stepping in and out, panning, the ring -- in one line, and fades once
 they have been used (`?` shows it again); it names the keys and the modifier
@@ -1167,5 +1168,5 @@ Loops and the Deck read alike: a heater `23.1/200°` (actual over target) and a 
 a time takes `4:52` (`1:02:09` past an hour); a size in millimetres with its unit, no
 trailing zeros and at most three places (`101.5 mm`, `46 × 46 × 101.5 mm`); a position
 `X0.0 Y0.0 Z0.00`. A line on the status bar starts a sentence, and the status line names a
-ring cell it was asked by as `Home all (⌗494)`. The world's badge keeps its own short
+ring cell it was asked by as `Home all (⌗494)`, a refusal as `Home all (⌗494): why`. The world's badge keeps its own short
 reading (`210°/60°`), a place a person reads at a glance.

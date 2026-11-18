@@ -9002,7 +9002,7 @@
                 const view = this.panels.views().find((v) => v.id === id);
                 const asked = label || (view ? `${view.title} view` : id);
                 const refused = view ? this.viewRefusal(id) : 'no such view';
-                if (refused) { this.setStatus(`${asked}: ${refused}${tail}`, 'error'); return false; }
+                if (refused) { this.setStatus(`${asked}${tail}: ${refused}`, 'error'); return false; }
                 if (this.viewOpensMachine(id) && !this.machine) this.openMachine(this.viewSubject());
                 const registered = () => this.panels.list().filter((w) => w.registered).length;
                 const had = registered();
@@ -9010,7 +9010,7 @@
                 // A Machine first put in front by its view says its kind there: that
                 // kind's sections are laid out with it.
                 if (done && registered() !== had) done = this.panels.applyView(id);
-                if (!done) { this.setStatus(`${asked}: its windows could not be laid out${tail}`, 'error'); return false; }
+                if (!done) { this.setStatus(`${asked}${tail}: its windows could not be laid out`, 'error'); return false; }
                 if (id === 'default') { this.setStatus(`The page's own layout again: the world, Site and Selected beside it, the tabs below them${tail}`, 'success'); return true; }
                 const laid = `The ${view.title} view: its windows laid out together`;
                 const landed = this.viewOpensMachine(id) ? await this.landOnPath() : null;
@@ -10915,6 +10915,7 @@
     import { installRing, annotate, addressOf, addresses, resolveRing } from '/static/ring.js';
     import { steer as steerKnobs, knobsCan } from '/static/deck_knobs.js';
     import { withLatch, shownCan, shownVerdict } from '/static/can.js';
+    import { viaRing } from '/static/format.js';
 
     (() => {
         const BASE = {{ base_url | tojson }};
@@ -11119,6 +11120,11 @@
             const action = intent.action, path = intent.context.targets[0] || '';
             const port = intent.device ? intent.device.port : null;
             const tail = ` (⌗${intent.address})`;
+            // A refusal names the cell it was asked by first, as every refusal on the
+            // status line does (format.js viaRing): "Label (⌗N): why".
+            const refuse = (why) => viewer.setStatus(`${viaRing(intent.label, intent.address)}: ${why}`, 'error');
+            // A verb's `{ ok, said }`: what it did, the address after it; or its refusal.
+            const answered = ({ ok, said }) => (ok ? viewer.setStatus(`${said}${tail}`, 'success') : refuse(said));
             try {
                 // The device ring, opened inside a Machine: it stands on the port, not
                 // on a piece. Open is the Machine it was opened in; a pin is taken back
@@ -11128,10 +11134,10 @@
                     if (action === 'device:open') { viewer.setStatus(`${intent.label}: this is ${port}'s Machine${tail}`, 'success'); return; }
                     if (action === 'device:unpin') {
                         if (m && m.pin && m.pin.binding_source === 'manual') { await viewer.setNodeDevice(m.pin.path, null); viewer.setStatus(`Unpinned ${port} from ${m.pin.path}${tail}`, 'success'); }
-                        else viewer.setStatus(`${intent.label}: ${port} is pinned nowhere by hand${tail}`, 'error');
+                        else refuse(`${port} is pinned nowhere by hand`);
                         return;
                     }
-                    if (action === 'device:pin') { viewer.setStatus(`${intent.label}: choose the piece to pin ${port} to, and pin it from Selected${tail}`, 'error'); return; }
+                    if (action === 'device:pin') { refuse(`choose the piece to pin ${port} to, and pin it from Selected`); return; }
                 }
                 // A machine's Projector: the projector's page for it, in a window of its own
                 // for a second display (routes/projector.py). Opened before anything is
@@ -11141,7 +11147,7 @@
                     const at = `${BASE}/projector/sites/${encodeURIComponent(viewer.siteName)}/machines/${encodeURIComponent(machine)}`;
                     const opened = window.open(at, `apothecary-projector-${machine}`);
                     if (opened) viewer.setStatus(`${intent.label}: ${machine}'s projector page, opened in a window of its own${tail}`, 'success');
-                    else viewer.setStatus(`${intent.label}: the browser kept ${machine}'s projector page from opening; it is at ${at}${tail}`, 'error');
+                    else refuse(`the browser kept ${machine}'s projector page from opening; it is at ${at}`);
                     return;
                 }
                 // A printer's Workspace: the Working space opened on it.
@@ -11154,21 +11160,21 @@
                 // ring's target. Before the board verbs: it is the world's, not a Machine's.
                 if (action.startsWith('print:piece:')) {
                     const done = await viewer.printPiece(path, action.slice('print:piece:'.length));
-                    if (done.refused) viewer.setStatus(`${intent.label}: ${done.refused}${tail}`, 'error');
+                    if (done.refused) refuse(done.refused);
                     else viewer.setStatus(`${intent.label}: ${done.said}${tail}`, 'success');
                     return;
                 }
                 // Slice, on a made piece or a part, names the printer it slices for.
                 if (action.startsWith('slice:piece:')) {
                     const done = await viewer.slicePiece(path, action.slice('slice:piece:'.length));
-                    if (done.refused) viewer.setStatus(`${intent.label}: ${done.refused}${tail}`, 'error');
+                    if (done.refused) refuse(done.refused);
                     else viewer.setStatus(`${intent.label}: ${done.said}${tail}`, 'success');
                     return;
                 }
                 // Toolpath, on a part that says how it is cut, names the router it is cut on.
                 if (action.startsWith('toolpath:piece:')) {
                     const done = await viewer.toolpathPiece(path, action.slice('toolpath:piece:'.length));
-                    if (done.refused) viewer.setStatus(`${intent.label}: ${done.refused}${tail}`, 'error');
+                    if (done.refused) refuse(done.refused);
                     else viewer.setStatus(`${intent.label}: ${done.said}${tail}`, 'success');
                     return;
                 }
@@ -11182,8 +11188,13 @@
                     const done = await viewer.machine.handle.carry(intent);
                     if (done) {
                         // A refusal naming the verb and its address, as the Machine's log
-                        // keeps it, is said as it is; one that does not, after the label.
-                        if (done.refused) viewer.setStatus(done.refused.includes(tail.trim()) ? done.refused : `${intent.label}: ${done.refused}${tail}`, 'error');
+                        // keeps it, is said as it is; one that names the verb alone, or
+                        // nothing, after the label and its address.
+                        const own = `${intent.label.toLowerCase()}: `;
+                        if (done.refused) {
+                            if (done.refused.includes(tail.trim())) viewer.setStatus(done.refused, 'error');
+                            else refuse(done.refused.toLowerCase().startsWith(own) ? done.refused.slice(own.length) : done.refused);
+                        }
                         else viewer.setStatus(`${intent.label}${done.said ? `: ${done.said}` : ''}${tail}`, 'success');
                         return;
                     }
@@ -11198,7 +11209,7 @@
                     // Gather, in front, does what its button does. Said first, so a
                     // refusal of the gathering's own is the last word.
                     viewer.setStatus(`Gather${tail}`, 'success');
-                    if (!viewer.pictureList().act('gather')) viewer.setStatus(`${intent.label}: Pictures cannot do that${tail}`, 'error');
+                    if (!viewer.pictureList().act('gather')) refuse('Pictures cannot do that');
                     return;
                 }
                 // A Bench verb: the Bench shown, and what its button does done on what
@@ -11234,7 +11245,7 @@
                     const port = viewer.machine ? viewer.machine.port : null;
                     steerKnobs(BASE, action.slice('deck:'.length), { port })
                         .then((said) => { viewer.setStatus(`${intent.label}${tail}: ${said}`, 'success'); viewer.deck?.load(); })
-                        .catch((e) => viewer.setStatus(`${intent.label}${tail}: ${e.message}`, 'error'));
+                        .catch((e) => refuse(e.message));
                     return;
                 }
                 // A Loops verb: the window shown, and the act done on the open Machine's
@@ -11243,7 +11254,7 @@
                     viewer.panels.open('loops');
                     if (!viewer.loopsWidget) await new Promise((r) => setTimeout(r, 0));  // mounted as it is first shown
                     if (viewer.loopsWidget) await viewer.loopsWidget.act(action.slice('loops:'.length), { label: intent.label, tail });
-                    else viewer.setStatus(`${intent.label}: the Loops window did not open${tail}`, 'error');
+                    else refuse('the Loops window did not open');
                     return;
                 }
                 // A Procedure verb: the window shown, and GO or Start over done; what came
@@ -11275,7 +11286,7 @@
                     const r = viewer.machine && viewer.machine.handle
                         ? viewer.machine.handle.pad()
                         : { refused: 'No Machine is open: a printer\'s pad shows while ⚙ Control in its Machine is armed' };
-                    viewer.setStatus(`${r.refused || r.said}${tail}`, r.refused ? 'error' : 'success');
+                    if (r.refused) refuse(r.refused); else viewer.setStatus(`${r.said}${tail}`, 'success');
                     return;
                 }
                 // Panels › Windows: the world alone or every window back (~), and the
@@ -11298,7 +11309,7 @@
                 if (action === 'panel:toggle:machine') {
                     if (viewer.machine && viewer.panels.isOpen('machine')) { viewer.panels.close('machine'); viewer.setStatus(`Closed the machine${tail}`, 'success'); }
                     else if (viewer.selectedName && viewer.openMachine(viewer.selectedName)) viewer.setStatus(`Opened ${viewer.selectedName}${tail}`, 'success');
-                    else viewer.setStatus(`Select a machine with a board pinned to it first${tail}`, 'error');
+                    else refuse('select a machine with a board pinned to it first');
                     return;
                 }
                 // Part › View › Motion: the Motion window shown on the piece, and the verb done
@@ -11307,29 +11318,29 @@
                     if (viewer.selectedName !== path && viewer.renderNodeByKey[path]) viewer.selectPath(path);
                     viewer.panels.open('motion');
                     const done = await viewer.motion.act(action.slice('part:motion:'.length));
-                    viewer.setStatus(`${done.refused || done.said}${tail}`, done.refused ? 'error' : 'success');
+                    if (done.refused) refuse(done.refused); else viewer.setStatus(`${done.said}${tail}`, 'success');
                     return;
                 }
                 // Part › Edit: the one editor, in Selected, for a part or a made piece.
                 if (action === 'part:edit') {
                     if (viewer.openEditor(path)) viewer.setStatus(`Editing ${path}: its numbers are in Parameters, Apply and Revert in Selected${tail}`, 'success');
-                    else viewer.setStatus(`${path} has no parameters to edit${tail}`, 'error');
+                    else refuse(`${path} has no parameters to edit`);
                     return;
                 }
                 // Part › Apply and Part › Revert: what the editor has staged, as its buttons do.
                 if (action === 'part:apply') {
                     viewer.applyStagedOn(path).then((refused) => {
-                        if (refused) viewer.setStatus(`${refused}${tail}`, 'error');
+                        if (refused) refuse(refused);
                     });
                     return;
                 }
                 if (action === 'part:revert') {
-                    viewer.revertStagedOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                    viewer.revertStagedOn(path).then(answered);
                     return;
                 }
                 // Part › Save, Variants, Float and Fullscreen: what the SCAD editor's own do.
                 if (action === 'part:save') {
-                    viewer.saveScadOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                    viewer.saveScadOn(path).then(answered);
                     return;
                 }
                 // Part › Variants › a variant › Draw, Rename, Duplicate, History, Compare,
@@ -11338,24 +11349,23 @@
                 const cell = /^part:(?:variant:(draw|rename|duplicate|history|compare|delete)|trash:(restore|forget)):(.+)$/.exec(action);
                 if (cell || action === 'part:trash:empty') {
                     const [where, verb, name] = !cell ? ['trash', 'empty', null] : cell[1] ? ['variant', cell[1], cell[3]] : ['trash', cell[2], cell[3]];
-                    viewer.variantOn(path, where, verb, name, !!intent.confirmed).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                    viewer.variantOn(path, where, verb, name, !!intent.confirmed).then(answered);
                     return;
                 }
                 if (action === 'part:scad') {
-                    viewer.scadWindowOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                    viewer.scadWindowOn(path).then(answered);
                     return;
                 }
                 if (action === 'part:fullscreen') {
-                    viewer.fullscreenScadOn(path).then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                    viewer.fullscreenScadOn(path).then(answered);
                     return;
                 }
                 // Part › History › Undo and Redo: the staged numbers a step back or forward,
                 // as the editor's Undo and Redo, Ctrl+Z and Ctrl+Shift+Z do.
                 if (action === 'part:undo' || action === 'part:redo') {
                     viewer.editorOn(path).then((target) => {
-                        if (!target) { viewer.setStatus(`${path} has no staged numbers to undo${tail}`, 'error'); return; }
-                        const { ok, said } = action === 'part:undo' ? viewer.undoStaged(target) : viewer.redoStaged(target);
-                        viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error');
+                        if (!target) { refuse(`${path} has no staged numbers to undo`); return; }
+                        answered(action === 'part:undo' ? viewer.undoStaged(target) : viewer.redoStaged(target));
                     });
                     return;
                 }
@@ -11363,25 +11373,22 @@
                 // behind what is, or hidden again, as the editor's Ghost tick-box does.
                 if (action === 'part:ghost') {
                     viewer.editorOn(path).then((target) => {
-                        if (!target || !target.part) { viewer.setStatus(`${path} has no part to show a ghost of${tail}`, 'error'); return; }
-                        const { ok, said } = viewer.setGhost(!viewer.ghostShown);
-                        viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error');
+                        if (!target || !target.part) { refuse(`${path} has no part to show a ghost of`); return; }
+                        answered(viewer.setGhost(!viewer.ghostShown));
                     });
                     return;
                 }
                 // Part › View › Fit: the piece framed, Selected and its editor kept open, as f does.
                 if (action === 'part:fit') {
                     if (viewer.selectedName !== path && viewer.renderNodeByKey[path]) viewer.selectPath(path);
-                    const { ok, said } = viewer.fitSelected();
-                    viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error');
+                    answered(viewer.fitSelected());
                     return;
                 }
                 // Part › Presets › a preset: staged in its editor, as Parameters' Preset stages it.
                 const preset = /^part:preset:(.+)$/.exec(action);
                 if (preset) {
                     viewer.editorOn(path).then((target) => {
-                        const { ok, said } = target ? viewer.stagePreset(target, preset[1]) : { ok: false, said: `${path} has no parameters` };
-                        viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error');
+                        answered(target ? viewer.stagePreset(target, preset[1]) : { ok: false, said: `${path} has no parameters` });
                     });
                     return;
                 }
@@ -11389,7 +11396,7 @@
                 if (action === 'part:adapter') {
                     viewer.editorOn(path)
                         .then((target) => (target ? viewer.joinNow(target) : { ok: false, said: `${path} has no parameters` }))
-                        .then(({ ok, said }) => viewer.setStatus(`${said}${tail}`, ok ? 'success' : 'error'));
+                        .then(answered);
                     return;
                 }
                 // Part › Defaults: as its editor's Defaults does, the part's own SCAD back in its editor.
@@ -11397,30 +11404,30 @@
                     viewer.stageDefaultsOn(path).then((staged) => {
                         if (staged === 'text') viewer.setStatus(`${path}: the part's own SCAD is back in its editor, its own values with it; Apply draws the saved part${tail}`, 'success');
                         else if (staged) viewer.setStatus(`${path}: the part's own numbers are staged in Selected; Apply draws the saved part${tail}`, 'success');
-                        else viewer.setStatus(`${path} has no part's own numbers to stage${tail}`, 'error');
+                        else refuse(`${path} has no part's own numbers to stage`);
                     });
                     return;
                 }
                 if (action.startsWith('select:')) {
                     const target = action.slice('select:'.length);
                     if (viewer.selectPath(target)) viewer.setStatus(`Selected ${target}${tail}`, 'success');
-                    else viewer.setStatus(`${target} is not at this level${tail}`, 'error');
+                    else refuse(`${target} is not at this level`);
                 } else if (action === 'zoom-out' || action === 'zoom-in') {
                     // Step out, and a piece's Step in: the page's one way out and in, saying
                     // what it did.
                     const ok = action === 'zoom-out' ? viewer.stepOut(intent.label) : viewer.stepIn(path, intent.label);
-                    viewer.setStatus(`${viewer.statusEl.textContent}${tail}`, ok ? 'success' : 'error');
+                    if (ok) viewer.setStatus(`${viewer.statusEl.textContent}${tail}`, 'success'); else refuse(viewer.statusEl.textContent);
                 } else if (action === 'move') {
                     if (viewer.renderNodeByKey[path]) viewer.selectChild(path);
                     viewer.setStatus(viewer.transformControls.object ? `Drag the handle to move ${path}${tail}` : `${path} cannot be moved from here: only a direct child of the site can${tail}`, 'success');
                 } else if (action.startsWith('layer:')) {
                     // View › Layers: a layer's acts, on the pick scope the Layers window shows.
                     const said = viewer.layerVerb(action.slice('layer:'.length));
-                    viewer.setStatus(said ? `${said}${tail}` : `${intent.label}: no such act of a layer${tail}`, said ? 'success' : 'error');
+                    if (said) viewer.setStatus(`${said}${tail}`, 'success'); else refuse('no such act of a layer');
                 } else if (action.startsWith('view:')) {
                     // The View menu's items, as a person changes them there.
                     const said = viewer.viewVerb(action.slice('view:'.length));
-                    viewer.setStatus(said ? `${said}${tail}` : `${intent.label}: the View menu has no such item${tail}`, said ? 'success' : 'error');
+                    if (said) viewer.setStatus(`${said}${tail}`, 'success'); else refuse('the View menu has no such item');
                 } else if (action === 'panel:toggle:working') {
                     // Panels › Site › Workspace: the Working space on the whole site.
                     const said = await viewer.openWorkingSpace(null);
@@ -11474,7 +11481,7 @@
                     if (answer.added) viewer.selectPath(answer.added);
                 }
             } catch (err) {
-                viewer.setStatus(`${intent.label}: ${err.message}${tail}`, 'error');
+                refuse(err.message);
             }
         }
 
