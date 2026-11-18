@@ -97,8 +97,8 @@ ${section("Parts, by shell", shellRows)}${section("Categories", categoryRows)}${
             row(MACHINE_BUTTONS, layerLabel(MACHINE_BUTTONS), "The badges a machine wears in the world", false),
             row(MEASURE, layerLabel(MEASURE), "While shown, a click in the world drops a point to measure between and selects nothing, and reads the diameter or the wall under it; the selection reads its size", false),
         ])}</table>
-${reading()}
-<div class="layers-reset"><button type="button" class="layers-reset-all" data-act="reset" title="Depth 1, every layer shown, every layer selectable but walls${taught("layer:reset")}">Reset</button></div>`;
+<div class="layers-reset"><button type="button" class="layers-reset-all" data-act="reset" title="Depth 1, every layer shown, every layer selectable but walls${taught("layer:reset")}">Reset</button></div>
+${reading()}`;
     }
 
     function onChange(event) {

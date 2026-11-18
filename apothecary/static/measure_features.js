@@ -18,8 +18,10 @@
  *                                  normals, and the circle fitted to their vertices across it,
  *                                  its radius running along the axis where it is a taper
  *   wallAt(mesh, t, point)         from a point of a flat face, the wall behind it (cast along
- *                                  the inward normal to the face that closes it) and the gap
- *                                  in front of it (cast outward to the face that faces it)
+ *                                  the inward normal to the face that closes it; and a step
+ *                                  in toward the face's middle, where that reads thinner: by
+ *                                  a face's edge the cast runs down a wall meeting it) and the
+ *                                  gap in front of it (cast outward to the face that faces it)
  *   featureAt(mesh, t, point, { pixel })   what a click reads: a round, a flat face, or that
  *                                  it cannot tell, and why
  *   edgeBetween(mesh, va, vb)      whether two vertices are the ends of one edge of the mesh
@@ -430,23 +432,58 @@ function cast(mesh, origin, dir, skip) {
     return best;
 }
 
+/* From `point` on a face whose outward normal is `n`, the wall behind it: cast along the
+ * inward normal to the face that closes it. */
+function wallFrom(mesh, point, n, skip) {
+    const inward = scale(n, -1);
+    const behind = cast(mesh, point, inward, skip);
+    if (!behind) return { why: "a cast along its inward normal leaves the piece without meeting another face: the mesh is open there" };
+    const m = mesh.tris[behind.t].normal;
+    // Leaving the piece, the face met looks the way the cast goes.
+    if (dot(m, inward) <= 0) return { why: "the first face met inside looks back toward the click: the mesh is not closed there, or overlaps itself" };
+    const off = degrees(dot(m, inward));
+    return { thickness: behind.distance, far: behind.at, off, parallel: off < PARALLEL_DEG };
+}
+
+/* Whether `p`, a point of the facet's plane, lies on one of its triangles. */
+function onFacet(mesh, facet, p) {
+    for (const s of facet.tris) {
+        const [a, b, c] = mesh.tris[s].v.map((i) => mesh.points[i]);
+        const n = mesh.tris[s].normal;
+        if (!n) continue;
+        const inside = [[a, b], [b, c], [c, a]].every(([u, v]) => dot(cross(sub(v, u), sub(p, u)), n) >= -1e-9);
+        if (inside) return true;
+    }
+    return false;
+}
+
+/* A step in from the click, toward the middle of its face -- as far as the wall read there
+ * is thick, or to the middle -- and the wall read there, where it is a twentieth thinner or
+ * more: a click by a face's edge casts down whatever wall meets the face under that edge
+ * (a hollow box's top, by its corner, casts down its side), and a step in reads the face's
+ * own. Null where the step leaves the face, or reads no thinner. */
+function stepIn(mesh, facet, point, wall) {
+    let middle = [0, 0, 0];
+    for (const s of facet.tris) middle = add(middle, scale(mesh.tris[s].middle, mesh.tris[s].area / facet.area));
+    // The middle, laid in the plane through the click.
+    middle = sub(middle, scale(facet.normal, dot(sub(middle, point), facet.normal)));
+    const toward = sub(middle, point), far = norm(toward);
+    if (!(far > 1e-6 * mesh.size)) return null;
+    const at = add(point, scale(toward, Math.min(1, wall.thickness / far)));
+    if (!onFacet(mesh, facet, at)) return null;
+    const there = wallFrom(mesh, at, facet.normal, facet.tris);
+    if (there.thickness === undefined || there.thickness > 0.95 * wall.thickness) return null;
+    return { thickness: there.thickness, at, far: there.far };
+}
+
 export function wallAt(mesh, t, point) {
     const facet = facetOf(mesh, t);
     const n = facet.normal;
     if (!n) return { normal: null, wall: { why: "the face under the click has no area" }, gap: null };
-    const inward = scale(n, -1);
-    const behind = cast(mesh, point, inward, facet.tris);
-    let wall;
-    if (!behind) {
-        wall = { why: "a cast along its inward normal leaves the piece without meeting another face: the mesh is open there" };
-    } else {
-        const m = mesh.tris[behind.t].normal;
-        // Leaving the piece, the face met looks the way the cast goes.
-        if (dot(m, inward) <= 0) wall = { why: "the first face met inside looks back toward the click: the mesh is not closed there, or overlaps itself" };
-        else {
-            const off = degrees(dot(m, inward));
-            wall = { thickness: behind.distance, far: behind.at, off, parallel: off < PARALLEL_DEG };
-        }
+    const wall = wallFrom(mesh, point, n, facet.tris);
+    if (wall.thickness !== undefined) {
+        const inner = stepIn(mesh, facet, point, wall);
+        if (inner) wall.stepIn = inner;
     }
     const ahead = cast(mesh, point, n, facet.tris);
     let gap = null;

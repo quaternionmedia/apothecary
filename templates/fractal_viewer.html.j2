@@ -1643,6 +1643,7 @@
                 this.anchors = mountAnchors({
                     container: this.canvas.parentElement, canvas: this.canvas, camera: this.camera, scene: this.scene,
                     keepClear: () => [this.hintEl, this.minimapEl],  // no badge's words over these
+                    keepOff: () => this.measure.labelBoxes(),  // no name over a measurement's label
                 });
                 // The machines' buttons -- the badges a machine wears in the world -- are a
                 // layer the pick scope shows or hides.

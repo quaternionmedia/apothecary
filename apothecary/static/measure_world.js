@@ -17,6 +17,12 @@
  * read beside the declared one on the same axis. Two vertices along one edge of the mesh read
  * that edge, and two flat faces the angle between them.
  *
+ * A line is drawn where the eye sees it, and faint where something drawn stands in front of
+ * it -- a hole's circle seen through its part's outside, a wall's line through the wall -- so
+ * it is told where it runs; its labels are seen over everything. A piece on the universe's
+ * sphere stands where the layout put it: a point on it is given in its part's own frame, and
+ * its turn there is not read as its own.
+ *
  *   sourceOf({ placeholder, moving, footprint, envelope })   where a selection's size comes
  *                                  from, in the words its reading says
  *   tokenOf(source)                the word a dimension line's label says of that source
@@ -30,6 +36,8 @@
  *   pairWords({ edge, angle })     an edge between two points, and the angle of two faces
  *   featureBrief(feature), hintAfter(feature)   what a first click read and how to get the
  *                                  other readings, as the status line says them
+ *   statusOf({ points, pair })     the status line's words for the points: short, the
+ *                                  whole reading in Layers
  *   mountMeasureWorld(world)       the layer's state ({ points, group, lines, ... }) and what
  *                                  it does: on, click, snap, clear, soon, selection,
  *                                  readings, draw, place, layersApplied
@@ -50,6 +58,8 @@ export const END_PX = 7;
 export const LABEL_PX = 13;
 // A round's circle is drawn as this many rods.
 export const CIRCLE_RODS = 48;
+// How faint a line is drawn where something drawn stands in front of it.
+export const HIDDEN_OPACITY = 0.3;
 
 export function sourceOf({ placeholder, moving = 0, footprint, envelope }) {
     return !placeholder ? (moving ? `the drawn mesh, as loaded, its ${moving} moving piece${moving === 1 ? "" : "s"} with it` : "the drawn mesh, as loaded")
@@ -88,6 +98,7 @@ export function featureWords(f) {
         let words = w && w.thickness !== undefined
             ? `a flat face, its wall ${mmText(w.thickness)} thick (cast from the click along the face's inward normal to the face behind it, ${w.parallel ? "parallel to it" : `${degrees(w.off)} off parallel`}; the drawn mesh)`
             : `a flat face, but no wall read behind it: ${w ? w.why : "nothing is behind it"}`;
+        if (w && w.stepIn) words += `; a step in toward the face's middle it reads ${mmText(w.stepIn.thickness)}: by the face's edge the cast runs down a wall that meets the face there`;
         if (f.gap) words += `; across it a gap of ${mmText(f.gap.width)} to the face that faces it, ${f.gap.parallel ? "parallel" : `${degrees(f.gap.off)} off parallel`}`;
         return words;
     }
@@ -125,7 +136,10 @@ export function pairWords({ edge = null, angle = null } = {}) {
 export function featureBrief(f) {
     if (!f) return null;
     if (f.kind === "unknown") return "cannot tell";
-    if (f.kind === "flat") return f.wall && f.wall.thickness !== undefined ? `a wall ${mmText(f.wall.thickness)} thick` : "a flat face, no wall behind it";
+    if (f.kind === "flat") {
+        if (!f.wall || f.wall.thickness === undefined) return "a flat face, no wall behind it";
+        return f.wall.stepIn ? `a wall ${mmText(f.wall.thickness)} here, ${mmText(f.wall.stepIn.thickness)} a step in` : `a wall ${mmText(f.wall.thickness)} thick`;
+    }
     return `a ${f.sense} ⌀ ${mmText(f.diameter)} across its vertices`;
 }
 
@@ -135,10 +149,31 @@ export function hintAfter(f) {
     return "a curved face reads a diameter, a flat face a wall, a second click the distance";
 }
 
+export function statusOf({ points, pair = {} }) {
+    const p = points;
+    if (p.length === 1) {
+        const f = p[0].feature;
+        if (f) return `point 1 on ${p[0].key}: ${featureBrief(f)}; ${hintAfter(f)} (${f.kind === "unknown" ? "why" : "the rest"} in Layers)`;
+        return `point 1 on ${p[0].key}; click a second point (Escape starts again)`;
+    }
+    if (p.length === 2) {
+        const d = between(p[0].site, p[1].site);
+        const what = pair.edge ? ", an edge of the mesh" : pair.angle ? `, the faces ${pair.angle.parallel ? "parallel" : `at ${degrees(pair.angle.angle)}`}` : "";
+        return `${mmText(d.length)} from point 1 to point 2${what} (the rest in Layers)`;
+    }
+    return null;
+}
+
+// Where a piece stands on the universe's sphere is the layout's, not its own: its points
+// are said in its part's frame, and its turn there is not said.
+const onTheSphere = (node) => Boolean(node && Number.isInteger(node.shell));
+
 export function readingsOf({ points, selection, selectedKey, nodeOf, envelopeOf, frameOf, pair = {}, declaredOf = () => null }) {
     const lines = [], p = points;
-    const at = (q) => q.site.map((v) => v.toFixed(2)).join(", ");
-    const named = (q, i) => `point ${i + 1} (${q.kind}) on ${q.key} at ${at(q)} mm`;
+    const own = (q) => onTheSphere(nodeOf(q.key));
+    const at = (q) => (own(q) ? (q.own ? `${triple(q.own).slice(1, -1)} mm in its part's own frame` : "a place its part's frame cannot say")
+        : `${q.site.map((v) => v.toFixed(2)).join(", ")} mm`);
+    const named = (q, i) => `point ${i + 1} (${q.kind}) on ${q.key} at ${at(q)}`;
     // What the click read under a point, and the round the part declares beside it.
     const under = (q, i) => {
         const words = featureWords(q.feature);
@@ -152,8 +187,10 @@ export function readingsOf({ points, selection, selectedKey, nodeOf, envelopeOf,
         lines.push(`${named(p[0], 0)}; click a second point (Escape starts again)`);
     }
     if (p.length === 2) {
-        const d = between(p[0].site, p[1].site);
-        lines.push(`${mmText(d.length)} between ${named(p[0], 0)} and ${named(p[1], 1)}: dx ${mmText(d.dx)}, dy ${mmText(d.dy)}, dz ${mmText(d.dz)} (site frame; a reading of the model, a ${p.map((q) => q.kind).join(" and a ")} point)`);
+        // On one piece of the sphere, its components in its part's frame; else the site's.
+        const inPart = p[0].key === p[1].key && own(p[0]) && p[0].own && p[1].own;
+        const d = between(p[0].site, p[1].site), c = inPart ? between(p[0].own, p[1].own) : d;
+        lines.push(`${mmText(d.length)} between ${named(p[0], 0)} and ${named(p[1], 1)}: dx ${mmText(c.dx)}, dy ${mmText(c.dy)}, dz ${mmText(c.dz)} (${inPart ? "its part's own frame" : "site frame"}; a reading of the model, a ${p.map((q) => q.kind).join(" and a ")} point)`);
         lines.push(...pairWords(pair));
         const [a, b] = p.map((q) => envelopeOf(nodeOf(q.key)));
         if (p[0].key !== p[1].key && a && b) {
@@ -169,8 +206,9 @@ export function readingsOf({ points, selection, selectedKey, nodeOf, envelopeOf,
         const { key, node, size, source } = selection;
         const sized = (b) => ["x", "y", "z"].map((k) => `${k} ${mmText(b[k])}`).join(" × ");
         let line = `${key} measures ${sized(size)} along its own axes (${source})`;
-        // The turn to a hundredth of a degree, as a length is to a hundredth of a mm.
-        if (node.turn) line += `; turned [${node.turn.map((a) => +a.toFixed(2)).join(", ")}] degrees, its world box ${sized(turnedExtents(size, node.turn))}`;
+        // The turn to a hundredth of a degree, as a length is to a hundredth of a mm; on the
+        // sphere the layout's, not the piece's.
+        if (node.turn && !onTheSphere(node)) line += `; turned [${node.turn.map((a) => +a.toFixed(2)).join(", ")}] degrees, its world box ${sized(turnedExtents(size, node.turn))}`;
         lines.push(line);
         // A site's piece is its site drawn small: the reading says so, and how large.
         if (node.site_ref && node.site_size) lines.push(`${key} is the site ${node.site_ref} in miniature, not to scale beside the parts: the site itself measures ${sized({ x: node.site_size[0], y: node.site_size[1], z: node.site_size[2] })} (its pieces' extent)`);
@@ -201,7 +239,7 @@ export function readingsOf({ points, selection, selectedKey, nodeOf, envelopeOf,
  * Answers the layer's state -- points ({ site, kind, key, at, feature, ... }), group, lines,
  * and what is drawn of it -- with what it does. */
 export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, meshOf, selected, envelopeOf, frameOf, fallbackColour, dispose, setStatus, invalidate, refresh, raycaster = () => null, interfacesOf = () => null }) {
-    const m = { points: [], group: null, lines: [], pending: false, say: false, rods: [], labels: [], status: null };
+    const m = { points: [], group: null, lines: [], pending: false, say: false, rods: [], labels: [], boxes: [], status: null };
     const shapes = new WeakMap();   // a geometry, read as measure_features reads a mesh
     const declared = new Map();     // a part's interfaces: { done, interfaces }
 
@@ -227,7 +265,12 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
             const why = `the mesh under it could not be read (${error.message})`;
             read = { owner: null, local: { kind: "unknown", why }, feature: { kind: "unknown", why } };
         }
-        m.points = pointsAfter(m.points, { site: siteAt(point), kind, key: hit.object.userData.key, at: point, vertex, ...read });
+        // Where it is in its part's own frame: its mesh's, turned back to the site's letters
+        // and moved by where the STL's box stood (as inPartFrame reads a round).
+        const from = read.owner && read.owner.userData.centredFrom;
+        const local = from ? read.owner.worldToLocal(point.clone()) : null;
+        const own = local ? [local.x + from[0], -local.z + from[1], local.y + from[2]] : null;
+        m.points = pointsAfter(m.points, { site: siteAt(point), own, kind, key: hit.object.userData.key, at: point, vertex, ...read });
         soon(true);
     }
 
@@ -387,26 +430,37 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
         m.lines = [];
         m.rods = [];
         m.labels = [];
+        m.boxes = [];
         m.status = null;
         if (on()) {
             const sel = selected() ? selection() : null;
             const group = new THREE.Group();
             const colour = layerColour(MEASURE, fallbackColour);
+            // Drawn where it is seen, pulled a hair toward the eye so a line along a face
+            // is not lost in it; and again faint over everything, so where it runs behind
+            // something drawn it is seen to.
+            const seen = { color: colour, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 };
+            const hidden = { color: colour, depthTest: false, depthWrite: false, transparent: true, opacity: HIDDEN_OPACITY };
+            const twice = (object, faint) => { faint.userData.faint = true; object.add(faint); return object; };
             // A line a few pixels thick at any distance: a rod, its thickness set each frame
             // (place), with a point at each end.
             const rod = (a, b) => {
-                const r = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 8, 1, true),
-                    new THREE.MeshBasicMaterial({ color: colour, depthTest: false }));
+                const geometry = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true);
+                const r = twice(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial(seen)), new THREE.Mesh(geometry, new THREE.MeshBasicMaterial(hidden)));
                 r.position.copy(a).lerp(b, 0.5);
                 r.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
                 r.userData.span = a.distanceTo(b);
                 group.add(r);
                 m.rods.push(r);
             };
+            const dots = (points, size) => {
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                return twice(new THREE.Points(geometry, new THREE.PointsMaterial({ ...seen, size, sizeAttenuation: false })),
+                    new THREE.Points(geometry, new THREE.PointsMaterial({ ...hidden, size, sizeAttenuation: false })));
+            };
             const line = (a, b) => {
                 rod(a, b);
-                group.add(new THREE.Points(new THREE.BufferGeometry().setFromPoints([a, b]),
-                    new THREE.PointsMaterial({ color: colour, size: END_PX, sizeAttenuation: false, depthTest: false })));
+                group.add(dots([a, b], END_PX));
             };
             // A label on a dark ground, its text in the layer's colour, the size of the page's
             // own text whatever the distance; where it stands is place's, past the far end of
@@ -437,11 +491,7 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
                 }
             }
             const p = m.points;
-            if (p.length) {
-                group.add(new THREE.Points(
-                    new THREE.BufferGeometry().setFromPoints(p.map((q) => q.at)),
-                    new THREE.PointsMaterial({ color: colour, size: 9, sizeAttenuation: false, depthTest: false })));
-            }
+            if (p.length) group.add(dots(p.map((q) => q.at), 9));
             const pair = pairOf();
             if (p.length === 2) {
                 line(p[0].at, p[1].at);
@@ -474,6 +524,11 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
                     if (f.wall && f.wall.thickness !== undefined) {
                         line(world(f.wall.far), world(lp));
                         label(`wall ${mmText(f.wall.thickness)} · mesh`, world(f.wall.far), world(lp));
+                        const step = f.wall.stepIn;
+                        if (step) {
+                            line(world(step.far), world(step.at));
+                            label(`wall ${mmText(step.thickness)} · a step in`, world(step.far), world(step.at));
+                        }
                     }
                     if (f.gap) {
                         line(world(lp), world(f.gap.far));
@@ -481,15 +536,13 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
                     }
                 }
             }
-            group.traverse((o) => { o.renderOrder = 10; o.raycast = () => {}; });  // seen over the world, never hit
+            // Drawn after the world, its faint lines and its labels last; never hit.
+            group.traverse((o) => { o.renderOrder = o.userData.faint ? 11 : o.isSprite ? 12 : 10; o.raycast = () => {}; });
             scene().add(group);
             m.group = group;
             m.lines = readings(sel);
-            // After a first click the status line says what it read and how to read the rest.
-            if (p.length === 1 && p[0].feature) {
-                const f = p[0].feature;
-                m.status = `point 1 on ${p[0].key}: ${featureBrief(f)}; ${hintAfter(f)} (${f.kind === "unknown" ? "why" : "the rest"} in Layers)`;
-            }
+            // The status line says the points' reading short; Layers has it whole.
+            m.status = statusOf({ points: p, pair });
             place();
         }
         refresh();
@@ -513,11 +566,20 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
         });
         const laid = layLabels(ends, { width: w, height: h, gap: 6 });
         const k = (2 * Math.tan((cam.fov * Math.PI) / 360)) / h;
+        m.boxes = [];
         m.labels.forEach((sprite, i) => {
             const at = laid[i], z = Math.min(0.999, ends[i].z);
             sprite.position.copy(new THREE.Vector3((at.cx / w) * 2 - 1, 1 - (at.cy / h) * 2, z).unproject(cam));
             sprite.scale.set(sprite.userData.w * k, sprite.userData.h * k, 1);
+            const { w: lw, h: lh } = sprite.userData;
+            if (z < 1) m.boxes.push({ l: at.cx - lw / 2, r: at.cx + lw / 2, t: at.cy - lh / 2, b: at.cy + lh / 2 });
         });
+    }
+
+    // Where the measurement's labels were last laid, in the canvas's pixels: what the
+    // page's name badges keep off (anchors.js).
+    function labelBoxes() {
+        return m.group ? m.boxes : [];
     }
 
     // The layers were put again: a measurement not shown lets its points go, and is drawn
@@ -527,5 +589,5 @@ export function mountMeasureWorld({ scope, scene, camera, canvas, pick, nodeOf, 
         soon(false);
     }
 
-    return Object.assign(m, { on, click, snap, clear, soon, selection, readings, draw, place, layersApplied });
+    return Object.assign(m, { on, click, snap, clear, soon, selection, readings, draw, place, layersApplied, labelBoxes });
 }

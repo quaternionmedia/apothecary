@@ -20,6 +20,11 @@
  * when what it says changes), an open card's each frame: there are at most a
  * few.
  *
+ * A name badge (`apart`) stands clear of what the page asks it to keep off in the world
+ * (keepOff: the measurement's labels, which are drawn in the scene and are no element):
+ * where it would cover one it rises above it, so a size and the name of what it sizes are
+ * both read.
+ *
  * A badge stands aside from its machine's tool mark (`clearOf`): the marks keyed as
  * the badge is in the scene (machine_marks.js), whose child flagged `toolMark` is
  * the nozzle or the tool -- a board's ⚡ inside a printer stands where the tool works
@@ -58,7 +63,7 @@ const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const boxOf = (x, y, w, h) => ({ l: x - w / 2, r: x + w / 2, t: y - h, b: y });
 const meets = (a, b, gap) => a.l < b.r + gap && b.l < a.r + gap && a.t < b.b + gap && b.t < a.b + gap;
 
-export function mountAnchors({ container, canvas, camera, scene, keepClear = () => [] }) {
+export function mountAnchors({ container, canvas, camera, scene, keepClear = () => [], keepOff = () => [] }) {
     const layer = document.createElement("div");
     layer.className = "anchor-layer";
     layer.style.cssText = "position:absolute;inset:0;overflow:hidden;pointer-events:none;";
@@ -140,6 +145,20 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
         if (!meets(boxOf(a.want.x, a.want.y, bw, bh), box, CLEAR_PX)) return;
         const left = a.at.x < (box.l + box.r) / 2;
         a.want = { x: left ? box.l - CLEAR_PX - bw / 2 : box.r + CLEAR_PX + bw / 2, y: a.want.y };
+    }
+
+    // A name badge over something it is asked to keep off (keepOff, boxes in the layer's
+    // pixels) rises until it covers none: its bottom just above the highest it meets.
+    function riseClear(a) {
+        const off = keepOff() || [];
+        if (!off.length) return;
+        const { w, h } = sizeOf(a);
+        for (let tries = 0; tries < off.length; tries++) {
+            const box = boxOf(a.want.x, a.want.y, w, h);
+            const met = off.filter((o) => meets(box, o, CLEAR_PX));
+            if (!met.length) return;
+            a.want = { x: a.want.x, y: Math.min(...met.map((o) => o.t)) - CLEAR_PX };
+        }
     }
 
     // A badge's size, read when it is first shown and after what it says changed;
@@ -313,7 +332,8 @@ export function mountAnchors({ container, canvas, camera, scene, keepClear = () 
             if (testOcclusion && a.occlude) a.el.classList.toggle("behind", occluded(point, a.ignore));
             if (a.apart) {
                 // Stands at its own point, in no badge's way and never merged: a name over a
-                // thing that already wears badges.
+                // thing that already wears badges; risen above what it would cover of keepOff.
+                riseClear(a);
                 a.drawn = { x: a.want.x, y: a.want.y };
                 a.el.classList.remove("merged", "aside");
                 a.el.style.transform = `translate(${a.drawn.x.toFixed(1)}px, ${a.drawn.y.toFixed(1)}px) translate(-50%, -100%)`;

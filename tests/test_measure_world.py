@@ -49,6 +49,13 @@ out.selected = readingsOf({
     frameOf: () => ({ volume: [220, 220, 250], volume_from: "controller" }),
 });
 out.notDrawn = readingsOf({ ...plain, points: [], selection: null, selectedKey: "cube" });
+// A part on the universe's sphere: laid out there, turned to face outward.
+nodes.leaf = { shell: 1, turn: [0, 108.82, -129.84], footprint: box([0, 0, 0], [20, 10, 5]) };
+const leafPoint = (site, own) => ({ key: "leaf", site, own, kind: "vertex" });
+out.sphere = readingsOf({
+    ...plain, points: [leafPoint([1500.123, -800, 900], [20, 10, 5]), leafPoint([1490, -790, 905], [0, 0, 5])], selectedKey: "leaf",
+    selection: { key: "leaf", node: nodes.leaf, size: { x: 20, y: 10, z: 5 }, source: "the drawn mesh, as loaded" },
+});
 
 // A world of one cube, ten on a side, its middle at the origin, seen from its front right.
 const scene = new THREE.Scene();
@@ -190,7 +197,7 @@ def test_the_layer_hidden_lets_its_points_go_and_draws_nothing(result):
 # ---- what a click reads under it ----------------------------------------------------
 
 WORDS = """
-import { featureWords, featureBrief, declaredWords, pairWords, hintAfter, inPartFrame } from "/static/measure_world.js";
+import { featureWords, featureBrief, declaredWords, pairWords, hintAfter, inPartFrame, statusOf } from "/static/measure_world.js";
 const out = {};
 const hole = { kind: "round", sense: "hole", diameter: 32, radius: 16, flats: 31.9904, sides: 128, facets: 128, closed: true, arc: 360,
     vertices: 256, residual: 0.0001, axis: [0, 0, 1], middle: [0, 0, 15], length: 30, slope: 0, lean: 0, taper: false, ends: [32, 32],
@@ -213,6 +220,12 @@ out.pairs = [pairWords({ edge: { length: 10, meet: 90 } }), pairWords({ edge: { 
 out.hints = [hintAfter({ kind: "round" }), hintAfter({ kind: "flat" }), hintAfter({ kind: "unknown" }), hintAfter(null)];
 out.briefs = [featureBrief(hole), featureBrief({ kind: "flat", wall: { thickness: 4 } }), featureBrief({ kind: "flat", wall: { why: "open" } }),
     featureBrief({ kind: "unknown", why: "a sphere" }), featureBrief(undefined)];
+const corner = { kind: "flat", normal: [0, 0, 1], wall: { thickness: 10, off: 0, parallel: true, stepIn: { thickness: 2, at: [5, 5, 10], far: [5, 5, 8] } }, gap: null };
+out.corner = [featureWords(corner), featureBrief(corner)];
+const far = (key, site) => ({ key, site, kind: "vertex" });
+out.statuses = [statusOf({ points: [far("a_long_part_name_of_the_garage", [0, 0, 0]), far("another_long_part_name_of_the_bench", [3, 4, 0])], pair: { edge: { length: 5, meet: 90 } } }),
+    statusOf({ points: [far("a", [0, 0, 0]), far("b", [0, 0, 12])], pair: { angle: { angle: 90, between: 90, parallel: false } } }),
+    statusOf({ points: [far("a", [0, 0, 0])] }), statusOf({ points: [] })];
 // A round read in three.js's frame, its mesh centred on a box whose middle was (1, 2, 3) in the part's.
 out.framed = inPartFrame({ axis: [0, 1, 0], middle: [0, 5, 0], across: [1, 0, 0], slope: 0.1, ends: [9, 11] }, [1, 2, 3]);
 out.flipped = inPartFrame({ axis: [0, 0, 1], middle: [0, 0, 0], across: [1, 0, 0], slope: 0.1, ends: [9, 11] }, [0, 0, 0]);
@@ -377,11 +390,15 @@ look([130, 25, 40], [100, 0, 0]);
 m.click(onScreen(new THREE.Vector3(104.6, 5, 4.6)));
 m.click(onScreen(new THREE.Vector3(95.4, 5, 4.6)));
 await settle();
-out.edge = { kinds: m.points.map((p) => p.kind), lines: [...m.lines], labels: m.labels.length };
+out.edge = { kinds: m.points.map((p) => p.kind), lines: [...m.lines], labels: m.labels.length, said: said[said.length - 1] };
+// Each line drawn where it is seen, and again faint over everything; its labels on top.
+const rod = m.rods[0], faint = rod.children[0];
+out.drawn = { seen: rod.material.depthTest, faint: faint ? { depthTest: faint.material.depthTest, opacity: faint.material.opacity } : null,
+    order: [rod.renderOrder, faint ? faint.renderOrder : null, m.labels[0].renderOrder], boxes: m.labelBoxes().length };
 m.click(onScreen(new THREE.Vector3(100, 5, 0)));
 m.click(onScreen(new THREE.Vector3(102, 1, 5)));
 await settle();
-out.angle = { kinds: m.points.map((p) => p.feature.kind), lines: [...m.lines] };
+out.angle = { kinds: m.points.map((p) => p.feature.kind), lines: [...m.lines], said: said[said.length - 1] };
 console.log(JSON.stringify(out));
 """
 )
@@ -445,3 +462,56 @@ def test_two_corners_along_an_edge_read_the_edge_and_two_faces_their_angle(click
     assert angle["kinds"] == ["flat", "flat"]
     assert "the faces at point 1 and point 2 stand at 90.0 degrees to each other (their normals 90.0 degrees apart)" in angle["lines"]
     assert any(line.startswith("point 2 on cube: a flat face, its wall 10.00 mm thick") for line in angle["lines"])
+
+
+def test_on_the_universes_sphere_a_point_is_said_in_its_parts_frame_and_its_turn_is_not(result):
+    """A part on the sphere stands where the layout put it, turned to face outward: its
+    points are said in its part's own frame, the two points' components too, and its
+    selection says its size and not the layout's turn."""
+    distance, *_rest = result["sphere"]
+    assert "at 20.00, 10.00, 5.00 mm in its part's own frame" in distance
+    assert "1500" not in distance
+    assert "dx -20.00 mm, dy -10.00 mm, dz 0.00 mm (its part's own frame;" in distance
+    (selection,) = [line for line in result["sphere"] if line.startswith("leaf measures")]
+    assert selection == (
+        "leaf measures x 20.00 mm × y 10.00 mm × z 5.00 mm along its own axes "
+        "(the drawn mesh, as loaded)"
+    )
+
+
+def test_by_a_faces_edge_the_wall_a_step_in_is_said_beside_it(words):
+    said, brief = words["corner"]
+    assert said.endswith(
+        "; a step in toward the face's middle it reads 2.00 mm: by the face's edge the cast "
+        "runs down a wall that meets the face there"
+    )
+    assert brief == "a wall 10.00 mm here, 2.00 mm a step in"
+
+
+def test_two_points_are_said_short_on_the_status_line(words):
+    edge, angle, one, none = words["statuses"]
+    assert edge == "5.00 mm from point 1 to point 2, an edge of the mesh (the rest in Layers)"
+    assert angle == "12.00 mm from point 1 to point 2, the faces at 90.0 degrees (the rest in Layers)"
+    assert one == "point 1 on a; click a second point (Escape starts again)"
+    assert none is None
+
+
+def test_every_status_line_a_click_says_is_no_longer_than_measures_own(clicks):
+    """The status line is one line under the world: what two points say is no longer than
+    the words Measure is turned on with, as a first click's is, whatever the reading."""
+    assert clicks["edge"]["said"].startswith("Measure: 10.00 mm from point 1 to point 2, an edge")
+    assert clicks["angle"]["said"].endswith("from point 1 to point 2, the faces at 90.0 degrees (the rest in Layers)")
+    for said in (clicks["edge"]["said"], clicks["angle"]["said"]):
+        assert len(said) <= len(clicks["measureOn"]), said
+
+
+def test_a_line_is_drawn_where_it_is_seen_and_faint_where_it_is_behind_something(clicks):
+    """A rod is depth-tested, so a hole's circle seen through its part's outside is not
+    drawn as if on it; a faint copy over everything says where it runs; the labels are
+    drawn last, and where they were laid is what the name badges keep off."""
+    drawn = clicks["drawn"]
+    assert drawn["seen"] is True
+    assert drawn["faint"]["depthTest"] is False and drawn["faint"]["opacity"] < 0.5
+    rod, faint, label = drawn["order"]
+    assert rod < faint < label
+    assert drawn["boxes"] >= 1

@@ -352,9 +352,9 @@ printed part differs by what the printer does. Every number says where it comes 
   each of its own axes, a few pixels thick in the measurement's colour whatever the
   distance, and the length written past the line's far end, in millimetres, at the
   size of the page's own text, each label kept clear of the others and of every
-  line's end. A turned piece, such
-  as a part on the universe's sphere, is measured along its own axes, not the
-  world's, and its world box is said beside it. The source is written on each label
+  line's end. A turned piece is measured along its own axes, not the world's, and
+  its world box is said beside it; a part on the universe's sphere stands as the
+  layout turned it, so its turn there is not said as its own. The source is written on each label
   and in the reading: the part's *declared footprint*, the *envelope of its pieces*
   (a piece with no footprint of its own), *the drawn mesh, as loaded* (the STL's own
   bounds, once it is in) or *a stand-in box* where nothing is declared. The two main
@@ -366,7 +366,9 @@ printed part differs by what the printer does. Every number says where it comes 
   not drawn here has nothing to measure.
 - **Any two points.** With Measure shown, a click in the world drops a point on the
   surface, and a second click another; the world draws the line between them and writes
-  the straight distance and dx, dy and dz in the site's millimetres. A point snaps to
+  the straight distance and dx, dy and dz in the site's millimetres. On a piece of the
+  universe's sphere, where the site's frame is the layout's, a point is given in its
+  part's own frame, and two points on one piece their dx, dy and dz in it too. A point snaps to
   the nearest vertex of the face under it within 12 pixels of the pointer, and the
   reading says *vertex* where it did and *surface* where it did not, so a person
   knows how exact it is. A third click starts again from that point, and Escape lets
@@ -379,8 +381,8 @@ printed part differs by what the printer does. Every number says where it comes 
   drawn, which every part has (`apothecary/static/measure_features.js`), and says what it
   fitted and how well. What it reads is decided by the face under the pointer: a curved
   face reads a diameter, a flat face a wall, and the status line says in a line what was
-  read and how to read the others, the whole reading in the Layers window. There is no
-  mode to choose.
+  read and how to read the others (two points: the distance), never more than one line,
+  the whole reading in the Layers window. There is no mode to choose.
   - *A curved face reads a round.* The faces around the click that turn about one axis,
     each beside the next across an edge that runs along it, are the round's facets. The
     axis is the direction every facet's normal makes one angle with: a right angle for a
@@ -399,8 +401,11 @@ printed part differs by what the printer does. Every number says where it comes 
     the line across it, labelled with its diameter.
   - *A flat face reads its wall.* From the click along the face's inward normal to the
     face that closes the piece behind it: the wall's thickness, and whether that face is
-    parallel or how many degrees it is off. Outward, across open space, to a face of the
-    same piece that faces it: the gap, a slot's width. Each is drawn as a line, labelled.
+    parallel or how many degrees it is off. By the face's edge that cast can run down a
+    wall that meets the face there (a hollow cube's top, by its corner, reads its side's
+    height): where a step in toward the face's middle reads thinner, that is read and
+    drawn beside it. Outward, across open space, to a face of the same piece that faces
+    it: the gap, a slot's width. Each is drawn as a line, labelled.
   - *Two points read an edge and an angle.* Two points snapped to the two ends of one
     edge of the mesh, a line of mesh edges whose faces on either side do not lie in one
     plane, read as that edge, with the angle its faces meet at. Two flat faces clicked in
@@ -427,6 +432,10 @@ printed part differs by what the printer does. Every number says where it comes 
   and the move arrows are as they were, and unticked, a click selects as before. The
   point goes where a click would pick, through the one pick path, so a layer a click
   passes through (a wall, a shell not selectable) is passed through by a measurement too.
+
+Every line of a measurement is drawn where the eye sees it, and faint where something
+drawn stands in front of it: a hole's circle seen through its part's outside, a wall's line
+through the wall, read as behind. Its labels are drawn over everything.
 
 The readings are text in the Layers window, under its rows, to read and copy, and each
 change is said on the status line.

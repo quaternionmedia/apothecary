@@ -374,3 +374,42 @@ def test_the_alignment_grids_row_says_what_it_draws_in_its_colour_and_what_it_do
     windows.from_the_windows_menu(page, "layers")
     hint = page.locator(".panel[data-panel='layers'] tr[data-row='grid'] th").get_attribute("title")
     assert "build volumes, drawn in this colour" in hint and "faint greys" in hint
+
+
+def _clear(a: dict, b: dict) -> bool:
+    return a["r"] <= b["l"] or b["r"] <= a["l"] or a["b"] <= b["t"] or b["b"] <= a["t"]
+
+
+@pytest.mark.e2e
+def test_the_selected_pieces_name_stands_off_its_measurements_labels(page: Page, url: str):
+    """Measured in the universe, the selected piece's name badge rises above any label of
+    its sizes it would cover: both are read."""
+    _universe(page, url)
+    piece = page.evaluate(A_NAMED_PIECE)
+    assert piece, "no piece stands clear on the side of the sphere the eye sees"
+    page.evaluate("(k) => window.fractalViewer.selectChild(k)", piece["key"])
+    page.evaluate("() => window.fractalViewer.fitSelected()")
+    page.evaluate("() => window.fractalViewer.pickScope.setShown('measure', true)")
+    page.wait_for_function("() => window.fractalViewer.measure.labelBoxes().length >= 3", timeout=10000)
+    page.wait_for_timeout(500)
+    badge = page.evaluate("() => window.fractalViewer.anchors.drawn('piece-name:selected')")
+    labels = page.evaluate("() => window.fractalViewer.measure.labelBoxes()")
+    assert badge, "the selected piece wears no name"
+    for label in labels:
+        assert _clear(badge, label), (badge, label)
+    # A label laid just where the name stands: the name rises above it.
+    page.evaluate(PUT_A_LABEL_UNDER_THE_NAME)
+    page.wait_for_timeout(400)
+    badge = page.evaluate("() => window.fractalViewer.anchors.drawn('piece-name:selected')")
+    (label,) = page.evaluate("() => window.fractalViewer.measure.labelBoxes()")
+    assert _clear(badge, label) and badge["b"] <= label["t"], (badge, label)
+
+
+# The measurement's labels said to be one, laid across where the selected piece's name
+# stands, as a size's label can fall.
+PUT_A_LABEL_UNDER_THE_NAME = """() => {
+    const v = window.fractalViewer, at = v.anchors.at('piece-name:selected');
+    const box = { l: at.x - 60, r: at.x + 60, t: at.y - 44, b: at.y - 20 };
+    v.measure.labelBoxes = () => [box];
+    v.anchors.touch(); v.invalidate();
+}"""

@@ -212,6 +212,11 @@ def test_the_selection_reads_its_size_and_where_it_comes_from(page: Page, url: s
     )
     text = _reading(page)
     assert re.search(r"along its own axes " + SOURCES, text), text
+    # Reset stands above the reading, where it stood before there was one: however long
+    # the reading grows, the button under the hand stays put.
+    reset = page.locator(".panel[data-panel='layers'] .layers-reset-all").bounding_box()
+    reading = page.locator(".panel[data-panel='layers'] .layers-reading").bounding_box()
+    assert reset["y"] + reset["height"] <= reading["y"], (reset, reading)
     # Framed, as `f` frames the selection, so its three dimension lines stand apart.
     page.locator("#viewer-canvas").focus()
     page.keyboard.press("f")

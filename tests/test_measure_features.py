@@ -153,6 +153,12 @@ const declared = [
     { name: "across", type: "bolt_hole", source: "drawn", position: { x: 0, y: 0, z: 10 }, normal: { x: 1, y: 0, z: 0 }, diameter: 16 },
     { name: "flat", type: "slot", source: "stub", position: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, width: 3, length: 9 },
 ];
+// A hollow box ten on a side, its walls two thick, as the calibration cube is: by a corner
+// of its top the cast runs down a side wall; at the top's middle it meets the hollow.
+const hollow = prism(rect(0, 0, 10, 10), 0, 10);
+prism(rect(2, 2, 8, 8).reverse(), 2, 8, hollow);
+out.hollowCorner = read(hollow, [0.5, 0.5, 10], [0, 0, 1]);
+out.hollowMiddle = read(hollow, [5, 5, 10], [0, 0, 1]);
 out.declaredHole = f.declaredOn(out.hole, declared);
 out.declaredBoss = f.declaredOn(out.boss, declared);
 out.declaredNone = f.declaredOn(out.hole, declared.filter((i) => i.name !== "port"));
@@ -325,3 +331,21 @@ def test_the_declared_hole_on_the_same_axis_is_found_beside_the_reading(result):
     # Off the axis, across it, or the other way round: not this round's.
     assert result["declaredNone"] == {"round": 3, "match": None}
     assert result["declaredFlat"] == {"round": 0, "match": None}
+
+
+def test_by_a_corner_of_a_hollow_boxs_top_the_wall_is_read_a_step_in_too(result):
+    """The calibration cube is hollow, its walls 2 mm: at its top's middle the cast meets
+    the hollow 2 mm down; by a corner it runs down a side wall, 10 mm to the floor, and a
+    step in toward the face's middle reads the top's own 2 mm beside it."""
+    corner, middle = result["hollowCorner"]["wall"], result["hollowMiddle"]["wall"]
+    assert middle["thickness"] == pytest.approx(2, abs=1e-9) and "stepIn" not in middle
+    assert corner["thickness"] == pytest.approx(10, abs=1e-9)
+    step = corner["stepIn"]
+    assert step["thickness"] == pytest.approx(2, abs=1e-9)
+    assert step["far"][2] == pytest.approx(8, abs=1e-9)
+
+
+def test_a_wall_as_thick_across_its_face_has_no_step_in(result):
+    """A plate, a slot's side and a tube's end read the same a step in: nothing said."""
+    for name in ("plate", "slot", "annulus", "besideFillet"):
+        assert "stepIn" not in result[name]["wall"], name
