@@ -1465,7 +1465,7 @@ def test_leveling_job_homes_probes_reads_and_saves(fake_arduino_cli, scripted_li
         devices.printer_query(port, "M105", links=scripted_links)
     with pytest.raises(PortHeld, match="bed reading holds the port"):
         devices.printer_control(port, "G28", links=scripted_links)
-    with pytest.raises(PortHeld, match="already probing"):
+    with pytest.raises(PortHeld, match="holds the port"):
         devices.start_leveling(port, probe=False, links=scripted_links)
     gate.set()
     job.thread.join(5)
@@ -1712,7 +1712,7 @@ def test_print_job_streams_pauses_resumes_and_polls_between_lines(fake_arduino_c
     assert st.state == "printing" and 0 < st.job["progress"] < 1
     # A second print, a bed reading, a release, a reset: all refused; a query and a
     # heater change wait their turn; motion is the job's.
-    with pytest.raises(PortHeld, match="already holds the port"):
+    with pytest.raises(PortHeld, match="holds the port"):
         devices.start_print(port, kept.id, links=scripted_links)
     with pytest.raises(PortHeld, match="a print holds the port"):
         devices.start_leveling(port, probe=False, links=scripted_links)

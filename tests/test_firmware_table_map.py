@@ -231,7 +231,7 @@ def test_a_table_map_is_the_router_s_reading_kept_and_listed_as_a_printer_s_is(
         devices.printer_query(PORT, "$G")
     with pytest.raises(PortHeld, match="a table map holds the port"):
         devices.printer_control(PORT, "$H")
-    with pytest.raises(PortHeld, match="already probing"):
+    with pytest.raises(PortHeld, match="holds the port"):
         devices.start_leveling(PORT, probe=True)
     gate.set()
     job.thread.join(10)

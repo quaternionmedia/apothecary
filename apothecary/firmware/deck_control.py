@@ -86,7 +86,7 @@ from typing import Callable, Deque, Dict, List, Optional, Tuple
 from .. import jobs
 from . import deck as decks
 from . import deck_screens as screens
-from . import devices, gcode, grbl
+from . import can, devices, gcode, grbl
 from .toolchains import PortHeld, ToolchainError
 
 CONTROL_ENV = "APOTHECARY_DECK_CONTROL"
@@ -508,7 +508,7 @@ class DeckController:
             )
             if not held or not fresh:
                 return None
-        return f"{port}: {devices.what_holds(held)} holds the port ({held.get('stage')})"
+        return can.holding(port, devices.what_holds(held), held.get("stage"))
 
     # -- chosen from the page -----------------------------------------------------------
 

@@ -27,6 +27,44 @@ from . import gcode, grbl
 from .toolchains import PortHeld, ToolchainError
 
 
+_NAMES: Dict[Any, str] = {}
+
+
+def who(port: str) -> str:
+    """What a reason calls the machine on ``port``: the name of the machine its board is
+    pinned to (``printer_1`` for a board pinned to ``printer_1.frame_system.mainboard``),
+    else the port, for a board nothing is pinned to. A reason says which machine, as the
+    windows do, and not which path the kernel gave its socket."""
+    from . import devices
+    from .bindings import same_device
+
+    try:
+        state = devices.get_state()
+        stat = state.path.stat()
+        key = (str(state.path), stat.st_mtime_ns, stat.st_size, port)
+    except OSError:
+        return port
+    if key not in _NAMES:
+        name = port
+        try:
+            device = state.cached_device(port)
+            for pin in state.bindings():
+                if same_device(pin.identity, port, device, pin.kind):
+                    name = pin.path.split(".")[0]
+        except Exception:  # a name is a courtesy: a reason is never lost for want of one
+            name = port
+        _NAMES.clear() if len(_NAMES) > 64 else None
+        _NAMES[key] = name
+    return _NAMES[key]
+
+
+def holding(port: str, what: str, stage: Optional[str] = None) -> str:
+    """The one wording of a job's hold: ``printer_1: a print holds the port (printing) --
+    cancel it first``."""
+    at = f" ({stage})" if stage else ""
+    return f"{who(port)}: {what} holds the port{at} -- cancel it first"
+
+
 class Refusal(NamedTuple):
     kind: str
     why: str
@@ -59,14 +97,14 @@ def task_holds(port: str, active: Any) -> Optional[str]:
     """A running task (an upload, a flash) writes to ``port``. A compile or an install
     holds no port."""
     if active is not None and active.port == port:
-        return f"task {active.id} ({active.title}) holds {port}"
+        return f"{who(port)}: task {active.id} ({active.title}) holds the port"
     return None
 
 
 def print_holds(port: str, job: Any) -> Optional[str]:
     """A host print is running on ``port``."""
     if job is not None and job.finished is None:
-        return f"{port}: a print holds the port -- cancel it first"
+        return holding(port, "a print", getattr(job, "stage", None))
     return None
 
 
@@ -76,12 +114,12 @@ def query_held(port: str, job: Optional[dict]) -> Optional[str]:
     from . import devices
 
     if job is not None and job.get("kind") not in devices.STREAMED:
-        return f"{port}: {devices.what_holds(job)} holds the port ({job['stage']})"
+        return holding(port, devices.what_holds(job), job.get("stage"))
     return None
 
 
 def not_armed(port: str, armed: bool, saying: str = "control is not armed -- arm it first"):
-    return None if armed else f"{port}: {saying}"
+    return None if armed else f"{who(port)}: {saying}"
 
 
 def job_refusal(job: Optional[dict], cmd: str) -> Optional[str]:
@@ -96,19 +134,19 @@ def job_refusal(job: Optional[dict], cmd: str) -> Optional[str]:
     if op is not None and op.kind in devices.STREAMED:
         if dialects.BY_MACHINE[op.machine].job_allows.match(cmd):
             return None
-    return f"{devices.port_of(job)}: {devices.what_holds(job)} holds the port ({job.get('stage')})"
+    return holding(devices.port_of(job), devices.what_holds(job), job.get("stage"))
 
 
 def misfit(file: Any, port: str, kind: Optional[str]) -> Optional[str]:
     """A kept file is for one kind of machine; ``kind`` is the one on ``port``."""
     if kind is None:
         return (
-            f"{port}: the board there has not said what kind of machine it drives -- "
+            f"{who(port)}: the board there has not said what kind of machine it drives -- "
             f"{file.name} is sent to the kind it was kept for alone"
         )
     if file.machine != kind:
         return (
-            f"{file.name} was kept for a {file.machine}, and {port} holds a {kind}: "
+            f"{file.name} was kept for a {file.machine}, and {who(port)} holds a {kind}: "
             f"it is never sent to a {kind}"
         )
     return None
@@ -130,23 +168,23 @@ def print_start_blocked(port: str, printing: Any, leveling: Any, tuning: Any = N
     for running in (printing, leveling):
         if running and running.finished is None:
             what = running.op.kind if running is printing else "bed reading"
-            return f"{port}: a {what} already holds the port ({running.stage})"
+            return holding(port, f"a {what}", running.stage)
     return tune_holds(port, tuning)
 
 
 def level_start_blocked(port: str, leveling: Any, printing: Any, tuning: Any = None) -> Optional[str]:
     running = leveling
     if running and running.finished is None:
-        return f"{port}: {running.what} is already {running.stage}"
+        return holding(port, running.what, running.stage)
     if printing and printing.finished is None:
-        return f"{port}: a print holds the port ({printing.stage})"
+        return holding(port, "a print", printing.stage)
     return tune_holds(port, tuning)
 
 
 def tune_holds(port: str, tuning: Any) -> Optional[str]:
     """A loop's experiment holds the port (firmware/loops.py)."""
     if tuning is not None and tuning.finished is None:
-        return f"{port}: {tuning.what} holds the port ({tuning.stage}) -- cancel it first"
+        return holding(port, tuning.what, tuning.stage)
     return None
 
 
@@ -158,14 +196,14 @@ def save_unasked(port: str, asked: bool) -> Optional[str]:
     if asked:
         return None
     return (
-        f"{port}: M500 writes the board's memory, and the gains with it: it is sent only when "
+        f"{who(port)}: M500 writes the board's memory, and the gains with it: it is sent only when "
         f"asked for by name ({SAVE_FLAG})"
     )
 
 
 def card_printing(port: str, last: Any) -> Optional[str]:
     if last is not None and last.sd_printing:
-        return f"{port}: the card is printing -- pause or abort that first"
+        return f"{who(port)}: the card is printing -- pause or abort that first"
     return None
 
 
@@ -176,7 +214,7 @@ def controller_flash(port: str, kind: Optional[str], firmware: Optional[str], re
     if kind is None or replace:
         return None
     return (
-        f"{port} holds a {kind}'s controller ({firmware or 'its firmware'}): a flash replaces "
+        f"{who(port)} holds a {kind}'s controller ({firmware or 'its firmware'}): a flash replaces "
         f"the firmware that runs the {kind}. Not flashed. To replace it on purpose, ask for it "
         f"by name ({REPLACE_FLAG})"
     )
@@ -261,7 +299,7 @@ def facts_of(port: str, state=None, links=None, runner=None) -> Facts:
 
 def _offline(f: Facts) -> Optional[Refusal]:
     if f.link is None and f.last is not None and f.last.state == "offline":
-        return Refusal("offline", f"{f.port}: no printer link -- the last poll said it is offline")
+        return Refusal("offline", f"{who(f.port)}: no printer link -- the last poll said it is offline")
     return None
 
 
@@ -269,7 +307,7 @@ def _kind_has(f: Facts, verb: str) -> Optional[Refusal]:
     """A verb a dialect has no line for: a hotend's on a router, a spindle's on a printer."""
     lines = LINES[verb]
     if f.kind is not None and f.kind not in lines:
-        return Refusal("kind", f"{f.port}: a {f.kind} has no {verb}")
+        return Refusal("kind", f"{who(f.port)}: a {f.kind} has no {verb}")
     return None
 
 
@@ -314,7 +352,7 @@ def jog_refusal(f: Facts) -> Optional[Refusal]:
         return why
     if f.last is not None and f.last.dialect == grbl.DIALECT and f.last.machine_state == "Alarm":
         # The controller's own refusal, not the server's: nothing moves, a jog included.
-        return Refusal("alarm", f"{f.port}: in alarm -- nothing moves until Unlock or a home")
+        return Refusal("alarm", f"{who(f.port)}: in alarm -- nothing moves until Unlock or a home")
     return None
 
 
@@ -348,13 +386,13 @@ def start_refusal(f: Facts, file: Any = None, file_id: Optional[str] = None):
     if f.kind == grbl.MACHINE and f.link is not None:
         why = grbl.not_placed(f.link)
         if why:
-            return Refusal("placed", f"{f.port}: {why}")
+            return Refusal("placed", f"{who(f.port)}: {why}")
     return None
 
 
 def _running(f: Facts) -> Optional[Refusal]:
     if f.printing is None or f.printing.finished is not None:
-        return Refusal("idle", f"{f.port}: no print is running")
+        return Refusal("idle", f"{who(f.port)}: no print is running")
     return None
 
 
@@ -383,7 +421,7 @@ def level_refusal(f: Facts, probe: bool) -> Optional[Refusal]:
     if not probe and f.kind == grbl.MACHINE:
         return Refusal(
             "kind",
-            f"{f.port}: a stored mesh is a printer's to read, and {f.port} holds a router, "
+            f"{who(f.port)}: a stored mesh is a printer's to read, and this is a router, "
             "whose reading probes the table",
         )
     return None
@@ -423,7 +461,7 @@ def tune_refusal(f: Facts) -> Optional[Refusal]:
     if why:
         return Refusal("held", why)
     if f.kind is not None and f.kind != "printer":
-        return Refusal("kind", f"{f.port}: a {f.kind} has no heater loop")
+        return Refusal("kind", f"{who(f.port)}: a {f.kind} has no heater loop")
     why = not_armed(f.port, f.armed, "an experiment heats the machine -- arm control first")
     if why:
         return Refusal("armed", why)
@@ -446,14 +484,14 @@ def tune_cancel_refusal(f: Facts) -> Optional[Refusal]:
 
 def _tune_running(f: Facts) -> Optional[Refusal]:
     if f.tuning is None or f.tuning.finished is not None:
-        return Refusal("idle", f"{f.port}: no experiment is running")
+        return Refusal("idle", f"{who(f.port)}: no experiment is running")
     return None
 
 
 def read_refusal(f: Facts) -> Optional[Refusal]:
     """The gains read (M503, a printer's report-only query)."""
     if f.kind is not None and f.kind != "printer":
-        return Refusal("kind", f"{f.port}: a {f.kind} has no heater loop")
+        return Refusal("kind", f"{who(f.port)}: a {f.kind} has no heater loop")
     return _query(f)
 
 
@@ -541,7 +579,7 @@ def can_tune(
         return {**_verdict(refusal), "plan": None}
     made, why = loops.planned(**figures)
     if made is None:
-        return {**_no("plan", f"{port}: {why}"), "plan": None}
+        return {**_no("plan", f"{who(port)}: {why}"), "plan": None}
     return {**dict(OK), "plan": loops.plan_view(made)}
 
 

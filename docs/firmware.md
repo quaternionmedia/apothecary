@@ -703,7 +703,9 @@ machine's controller a flash would replace) and `file` (the file does not fit).
 
 Every refusal the seam raises is a predicate in `firmware/can.py` that returns the
 reason, and the routes raise from the same predicates `can_now` reads, so the answer
-and the refusal are one check. `tests/test_can_now.py` puts a simulated printer and
+and the refusal are one check. A reason begins with the machine's name, the node its board is pinned to
+(`printer_1`), and with the port only for a board nothing is pinned to; a job's hold is
+worded one way wherever it is refused (`can.holding`). `tests/test_can_now.py` puts a simulated printer and
 router in each condition and requires `ok: false` exactly where the route answers 4xx
 or 5xx. A router's `home` is judged from the settings last read from its controller
 (it does not ask for them again for a poll); a line the board objects to after it is

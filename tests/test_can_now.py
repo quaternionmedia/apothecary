@@ -295,6 +295,25 @@ def test_a_stop_is_always_ok(rig):
 
 
 @pytest.mark.parametrize("rig", KINDS, indirect=True)
+def test_a_reason_names_the_machine_and_not_the_port(rig):
+    """A board pinned to a machine's node is that machine's name in every reason, and one
+    job's hold is worded one way wherever it is refused."""
+    rig.poll()
+    assert can.who(PORT) == PORT  # nothing pinned: the port is all there is to call it
+    assert can.can_now(PORT)["jog"]["why"].startswith(f"{PORT}: ")
+    board = devices.known_device(PORT)
+    pin = sorted(board.names)[0] if board is not None and board.names else PORT
+    devices.get_state().set_binding("site", "printer_1.frame_system.mainboard", pin)
+    assert can.who(PORT) == "printer_1"
+    down = can.can_now(PORT)
+    assert down["jog"]["why"].startswith("printer_1: ")
+    assert PORT not in "".join(v["why"] or "" for v in down.values())
+    assert can.holding(PORT, "a print", "printing") == (
+        "printer_1: a print holds the port (printing) -- cancel it first"
+    )
+
+
+@pytest.mark.parametrize("rig", KINDS, indirect=True)
 def test_the_kinds_say_what_stands_in_the_way(rig):
     rig.poll()
     down = can.can_now(PORT)

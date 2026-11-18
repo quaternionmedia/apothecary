@@ -1479,7 +1479,9 @@ def job_holds_link(port: str, job: Optional[dict]) -> Optional[str]:
     """Why a link may not be dropped: a job holds it, and only the job lets go."""
     if job is None:
         return None
-    return f"{port}: a {job.get('kind')} holds the port -- cancel it first"
+    from . import can
+
+    return can.holding(port, f"a {job.get('kind')}", job.get("stage"))
 
 
 class PrinterLinks:
