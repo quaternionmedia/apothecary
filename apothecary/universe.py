@@ -23,7 +23,8 @@ navigating down to it and a site by stepping into its piece:
 
 The layout is the whole answer to where anything stands: it is made again, from the
 footprints and depths, whenever the universe is drawn, so a piece moved by hand
-returns, and a site added moves only what is on the outermost shell.
+returns, and a site added that nests no part moves only what is on the outermost shell, and one that
+nests a part in another moves that one to the shell its depth then gives it.
 
 A site's piece is not a level: a step into it goes to its site. The universe does not
 hold itself.
@@ -32,10 +33,12 @@ hold itself.
 from __future__ import annotations
 
 import math
-from typing import List, Mapping, NamedTuple, Optional, Set
+from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Set
 
-from .composition import part_children
-from .hierarchy import Assembly, LayoutReport, Site
+from pydantic import PrivateAttr
+
+from .composition import nesting_fingerprint, nesting_of, scad_children, with_nesting
+from .hierarchy import Assembly, LayoutReport
 from .models.bounds import BoundingBox3D
 from .models.vectors import Vector3D
 from .orbitals import composition_depths, dense_shells, lay_out, turned
@@ -220,6 +223,41 @@ def arrange(universe: Assembly) -> None:
         )
 
 
+class Universe(Assembly):
+    """The universe's root: an ``Assembly`` that also keeps what its leaves' composition
+    was read from, so the depths can follow the sites as they stand (``represent``).
+    Not part of what is sent: a private attribute is no field."""
+
+    _own: Dict[str, Set[str]] = PrivateAttr(default_factory=dict)
+    _explicit: Set[str] = PrivateAttr(default_factory=set)
+    _nesting: Any = PrivateAttr(default=None)
+
+
+def follow_nesting(universe: Assembly, sites: Mapping[str, Assembly]) -> bool:
+    """Read each leaf's depth from the sites as they stand now, when what they nest has
+    changed since it was last read. True when it was read again.
+
+    Walking the sites for the parts they hold costs a pass over their nodes, which a
+    fetch pays each time; the depths, the leaves' ``built_from`` and so the layout change
+    only when that fingerprint does, so a site that nests nothing new moves no part.
+    A universe not made by ``create_universe_site`` has no composition to read and keeps
+    the depths it was given."""
+    if not isinstance(universe, Universe) or not universe._own:
+        return False
+    nesting = nesting_of(sites.values())
+    fingerprint = nesting_fingerprint(nesting)
+    if fingerprint == universe._nesting:
+        return False
+    children = with_nesting(universe._own, universe._explicit, nesting)
+    depths = composition_depths(children)
+    for leaf in universe.children:
+        if leaf.part_ref in children:
+            leaf.depth = depths[leaf.part_ref]
+            leaf.built_from = children[leaf.part_ref] or None
+    universe._nesting = fingerprint
+    return True
+
+
 def represent(universe: Assembly, sites: Mapping[str, Assembly]) -> None:
     """One piece in ``universe`` for each of ``sites``, drawn from it as it stands.
 
@@ -228,6 +266,7 @@ def represent(universe: Assembly, sites: Mapping[str, Assembly]) -> None:
     the universe is arranged (``arrange``): the pieces on the outermost shell, wherever
     a piece stood before. The pieces come first among the universe's own, by their
     sites' names."""
+    follow_nesting(universe, sites)
     standing = {child.site_ref: child for child in universe.children if child.site_ref}
     pieces: List[Assembly] = []
     for name in sorted(sites):
@@ -242,8 +281,8 @@ def create_universe_site(sites: Optional[Mapping[str, Assembly]] = None) -> Asse
     """The universe: one leaf for each registered ``parts/`` entry, on the shell its
     composition depth gives it, and one piece for each of ``sites``, the other
     registered sites by their names, outside them. A building one of ``sites`` holds
-    is that site's, and no leaf. The depths are read when the universe is built: what
-    a site nests is what ``sites`` holds then."""
+    is that site's, and no leaf. The depths follow the sites each time the universe is
+    arranged (``follow_nesting``)."""
     sites = sites or {}
     theirs = set().union(*(parts_held(site) for site in sites.values())) if sites else set()
     # A part that does not load is left off the grid; `apothecary problems` reports it.
@@ -252,7 +291,9 @@ def create_universe_site(sites: Optional[Mapping[str, Assembly]] = None) -> Asse
         for item, part in load_parts(ROOT).parts
         if not (part.category in NOT_ON_THE_BENCH and item.name in theirs)
     }
-    children = part_children(parts, sites.values())
+    own = scad_children(parts)
+    explicit = {name for name, part in parts.items() if part.parts is not None}
+    children = with_nesting(own, explicit, nesting_of(sites.values()))
     depths = composition_depths(children)
     leaves = [
         Assembly(
@@ -266,7 +307,9 @@ def create_universe_site(sites: Optional[Mapping[str, Assembly]] = None) -> Asse
         )
         for name in sorted(parts)
     ]
-    universe = Site(name=UNIVERSE_SHOWN, structures=leaves)
+    universe = Universe(name=UNIVERSE_SHOWN, role="site", children=leaves)
+    universe._own, universe._explicit = own, explicit
+    universe._nesting = nesting_fingerprint(nesting_of(sites.values()))
     represent(universe, sites)
     return universe
 

@@ -147,3 +147,21 @@ def test_the_registered_parts_depths():
     assert parts["matboard_cutter_mount"].parts == ["v_slot"]
     assert children["matboard_cutter_mount"] == ["v_slot"] and depths["matboard_cutter_mount"] == 1
     assert {n for n, p in parts.items() if p.parts is not None} == {"matboard_cutter_mount"}
+
+
+def test_a_fingerprint_is_equal_for_equal_nesting_whatever_the_order_and_ignores_empty():
+    from apothecary.composition import nesting_fingerprint
+
+    a = {"x": {"b", "a"}, "y": set(), "z": {"q"}}
+    b = {"z": {"q"}, "x": {"a", "b"}}
+    assert nesting_fingerprint(a) == nesting_fingerprint(b)
+    assert nesting_fingerprint(a) != nesting_fingerprint({"x": {"a"}, "z": {"q"}})
+
+
+def test_nesting_is_added_to_a_parts_own_children_unless_it_says_its_list():
+    from apothecary.composition import with_nesting
+
+    own = {"a": set(), "b": {"a"}, "c": set(), "d": set()}
+    nesting = {"c": {"a", "ghost"}, "d": {"a"}, "a": {"a"}}
+    got = with_nesting(own, ["d"], nesting)
+    assert got == {"a": [], "b": ["a"], "c": ["a"], "d": []}

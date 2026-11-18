@@ -340,6 +340,80 @@ def test_a_site_added_to_the_register_gets_its_piece_and_one_taken_off_loses_it(
     assert {c.name: (c.position, c.turn, c.shell) for c in _leaves(store.get("all"))} == leaves
 
 
+def _nester(outer: str, inner: str) -> Assembly:
+    """A site with a node of ``outer`` that holds a node of ``inner``."""
+    return Site(
+        "nester",
+        structures=[
+            Assembly(
+                name="holder",
+                part_ref=outer,
+                footprint=BoundingBox3D.for_cube(40.0),
+                children=[Assembly(name="held", part_ref=inner)],
+            )
+        ],
+    )
+
+
+def _shells(universe: Assembly):
+    return {c.name: c.shell for c in _leaves(universe)}
+
+
+def test_depths_follow_the_sites_as_they_stand_with_no_restart():
+    store = _store()
+    before = _shells(store.get("all"))
+    assert before["dryerknob"] == before["solderfan"] == 0
+    leaves = {c.name: (c.position, c.turn) for c in _leaves(store.get("all"))}
+
+    store.add("nester", lambda: _nester("dryerknob", "solderfan"), lambda _s: LayoutReport())
+    nested = store.get("all")
+    shells = _shells(nested)
+    assert shells["dryerknob"] == 1 and shells["solderfan"] == 0
+    knob = next(c for c in _leaves(nested) if c.name == "dryerknob")
+    assert knob.depth == 1 and knob.built_from == ["solderfan"]
+    # Only what the nesting touches changed shell.
+    assert {n for n in shells if shells[n] != before[n]} == {"dryerknob"}
+
+    store.remove("nester")
+    again = store.get("all")
+    assert _shells(again) == before
+    assert next(c for c in _leaves(again) if c.name == "dryerknob").built_from is None
+    assert {c.name: (c.position, c.turn) for c in _leaves(again)} == leaves
+
+
+def test_a_site_that_nests_no_part_in_another_moves_no_part():
+    store = _store()
+    leaves = {c.name: (c.position, c.turn, c.shell, c.depth) for c in _leaves(store.get("all"))}
+    store.add("flat", _bench, lambda _s: LayoutReport())
+    after = {c.name: (c.position, c.turn, c.shell, c.depth) for c in _leaves(store.get("all"))}
+    assert after == leaves
+
+
+def test_depths_are_read_again_only_when_what_the_sites_nest_changes(monkeypatch):
+    from apothecary import universe as module
+
+    store = _store()
+    store.get("all")
+    reads = []
+    real = module.with_nesting
+    monkeypatch.setattr(module, "with_nesting", lambda *a: reads.append(1) or real(*a))
+    store.get("all")
+    store.add("flat", _bench, lambda _s: LayoutReport())
+    store.get("all")
+    assert reads == []
+    store.add("nester", lambda: _nester("dryerknob", "solderfan"), lambda _s: LayoutReport())
+    store.get("all")
+    store.get("all")
+    assert reads == [1]
+
+
+def test_a_part_that_says_its_own_list_ignores_a_sites_nesting():
+    store = _store()
+    store.add("nester", lambda: _nester("matboard_cutter_mount", "solderfan"), lambda _s: LayoutReport())
+    mount = next(c for c in _leaves(store.get("all")) if c.name == "matboard_cutter_mount")
+    assert mount.built_from == ["v_slot"]
+
+
 def test_a_site_that_cannot_be_built_now_has_no_piece():
     """A photo arrangement whose picture left the shelf since the names were read."""
 

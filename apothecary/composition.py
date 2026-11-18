@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Optional, Set
+from typing import Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
 from .hierarchy import Assembly
 from .projects.parts.base import BasePart
@@ -83,23 +83,56 @@ def nested_parts(site: Assembly) -> Dict[str, Set[str]]:
     return held
 
 
+def nesting_of(sites: Iterable[Assembly]) -> Dict[str, Set[str]]:
+    """``nested_parts`` over every one of ``sites``, merged by the part's name."""
+    nesting: Dict[str, Set[str]] = {}
+    for site in sites:
+        for name, held in nested_parts(site).items():
+            nesting.setdefault(name, set()).update(held)
+    return nesting
+
+
+def nesting_fingerprint(nesting: Mapping[str, Set[str]]) -> Tuple[Tuple[str, Tuple[str, ...]], ...]:
+    """What ``nesting`` says, as a value that is equal when the nesting is: the same
+    parts holding the same parts, whatever order the sites gave them in."""
+    return tuple(sorted((name, tuple(sorted(held))) for name, held in nesting.items() if held))
+
+
+def scad_children(parts: Mapping[str, BasePart]) -> Dict[str, Set[str]]:
+    """What each part is built from by itself: the explicit ``parts`` of one that says
+    so, else what its SCAD includes or uses, kept to the registered. Reads files."""
+    registered = {_key(p.source_file): name for name, p in parts.items() if p.source_file}
+    found: Dict[str, Set[str]] = {}
+    for name, part in parts.items():
+        if part.parts is not None:
+            found[name] = set(part.parts)
+        elif part.source_file:
+            found[name] = scad_uses(part.source_file, registered)
+        else:
+            found[name] = set()
+    return found
+
+
+def with_nesting(
+    own: Mapping[str, Set[str]],
+    explicit: Iterable[str],
+    nesting: Mapping[str, Set[str]],
+) -> Dict[str, List[str]]:
+    """Each name's children: ``own``, plus what ``nesting`` says it holds unless it is in
+    ``explicit`` (a part that says its own list is built from exactly that); kept to
+    the names of ``own``, never the name itself."""
+    said = set(explicit)
+    children: Dict[str, List[str]] = {}
+    for name, chosen in own.items():
+        chosen = set(chosen) if name in said else set(chosen) | set(nesting.get(name, ()))
+        children[name] = sorted(c for c in chosen if c in own and c != name)
+    return children
+
+
 def part_children(
     parts: Mapping[str, BasePart], sites: Optional[Iterable[Assembly]] = None
 ) -> Dict[str, List[str]]:
     """Each registered part's children, by name: the explicit ``parts`` of one that
     says so, else what its SCAD uses and ``sites`` nest, kept to the registered."""
-    registered = {_key(p.source_file): name for name, p in parts.items() if p.source_file}
-    nesting: Dict[str, Set[str]] = {}
-    for site in sites or ():
-        for name, held in nested_parts(site).items():
-            nesting.setdefault(name, set()).update(held)
-    children: Dict[str, List[str]] = {}
-    for name, part in parts.items():
-        if part.parts is not None:
-            chosen = set(part.parts)
-        else:
-            chosen = set(nesting.get(name, ()))
-            if part.source_file:
-                chosen |= scad_uses(part.source_file, registered)
-        children[name] = sorted(c for c in chosen if c in parts and c != name)
-    return children
+    explicit = [name for name, part in parts.items() if part.parts is not None]
+    return with_nesting(scad_children(parts), explicit, nesting_of(sites or ()))
