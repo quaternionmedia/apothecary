@@ -1052,7 +1052,8 @@ def test_the_worlds_ring_shows_when_tab_brings_the_focus_and_not_after_a_press(
 ):
     _open(page, url)
     outline = "() => getComputedStyle(document.getElementById('viewer-canvas')).outlineStyle"
-    page.locator("#ring-open").focus()
+    # The header's last control the keyboard reaches is the Layout valid chip.
+    page.locator("#validity-indicator").focus()
     page.keyboard.press("Tab")
     assert page.evaluate("() => document.activeElement.id") == "viewer-canvas"
     assert page.evaluate(outline) == "solid"
