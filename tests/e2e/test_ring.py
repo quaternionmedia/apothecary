@@ -847,7 +847,7 @@ def test_panels_machine_greys_the_loops_and_the_knobs_as_their_windows_do(
 
 @pytest.mark.e2e
 def test_print_tune_is_greyed_on_the_ring_as_its_buttons_are(page: Page, ring_url: str):
-    """Print › Tune › Apply and Undo turn are the printer's tuning document's, not its
+    """Print › Tune › Take turn and Undo turn are the printer's tuning document's, not its
     port's: with no file a slice made for the printer chosen, the ring greys both, as the
     Machine refuses them, rather than offering them live."""
     page.goto(f"{ring_url}/firmware/monitor?port={PRINTER}")

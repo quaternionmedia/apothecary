@@ -2385,12 +2385,13 @@ def control_options(device: Device) -> List[Option]:
                 # turn of the printer's tuning, or the first field, with nothing read.
                 Option(id="print:measure", label="Measure", action="print:measure"),
                 # The printer's tuning: the last turn's changes into its next slices, or
-                # the last turn dropped with what it applied (slicer/tuning.py).
+                # the last turn dropped with what it applied (slicer/tuning.py). Worded
+                # as the Print window's buttons are: Take turn, Undo turn.
                 Option(
                     id="print:tune",
                     label="Tune",
                     children=[
-                        Option(id="print:tune-apply", label="Apply", action="print:tune-apply"),
+                        Option(id="print:tune-apply", label="Take turn", action="print:tune-apply"),
                         Option(id="print:tune-undo", label="Undo turn", action="print:tune-undo"),
                     ],
                 ),

@@ -13,6 +13,7 @@ script to regenerate it.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -43,6 +44,7 @@ from apothecary.menu import (
     control_options,
     nearest,
     resolve,
+    router_control_options,
     shorten,
 )
 from apothecary.primitives import Cube
@@ -740,6 +742,38 @@ def test_the_control_ring_offers_every_allowlisted_verb():
 
 
 ROUTER = Device(port="/dev/ttyUSB1", printer=True, machine="router", armed=False, bound=True)
+STATIC = Path(__file__).parents[1] / "apothecary" / "static"
+
+
+def _labels_by_action(options) -> dict:
+    out = {}
+    for o in options:
+        if o.action:
+            out[o.action] = o.label
+        out.update(_labels_by_action(o.children or []))
+    return out
+
+
+def test_the_control_ring_says_what_the_machine_s_windows_say():
+    """A job's acts are worded once: the Print window's Take turn, Undo turn and Abort, and
+    a printer's Pause where a router's is Hold (static/machine_words.js pauseWord), are
+    what the control ring's cells say too."""
+    machine = (STATIC / "widgets" / "machine.js").read_text(encoding="utf-8")
+    words = (STATIC / "machine_words.js").read_text(encoding="utf-8")
+
+    def button(name: str) -> str:
+        text = re.search(rf'id="{name}"[^>]*>([^<]+)</button>', machine)[1]
+        return re.sub(r"^\W+", "", text)
+
+    pause = dict(re.findall(r'verb: "(\w+)".*?pauseWord: "(\w+)"', words))
+    printer = _labels_by_action(control_options(PRINTER))
+    router = _labels_by_action(router_control_options(ROUTER))
+    assert printer["print:tune-apply"] == button("print-tune-apply") == "Take turn"
+    assert printer["print:tune-undo"] == button("print-tune-undo") == "Undo turn"
+    assert printer["control:sd-abort"] == router["control:job-abort"] == button("print-cancel")
+    assert button("print-cancel") == "Abort"
+    assert printer["control:sd-pause"] == pause["Print"] == "Pause"
+    assert router["control:job-hold"] == pause["Cut"] == "Hold"
 
 
 def test_a_machine_drawn_as_a_part_has_no_slice_and_its_ring_holds():

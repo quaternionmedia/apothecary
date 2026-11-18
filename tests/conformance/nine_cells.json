@@ -1183,7 +1183,7 @@
               "children": [
                 {
                   "id": "print:tune-apply",
-                  "label": "Apply",
+                  "label": "Take turn",
                   "action": "print:tune-apply",
                   "enabled": true,
                   "why": null,
@@ -1992,7 +1992,7 @@
                   "children": [
                     {
                       "id": "print:tune-apply",
-                      "label": "Apply",
+                      "label": "Take turn",
                       "action": "print:tune-apply",
                       "enabled": true,
                       "why": null,
@@ -2858,7 +2858,7 @@
                       "children": [
                         {
                           "id": "print:tune-apply",
-                          "label": "Apply",
+                          "label": "Take turn",
                           "action": "print:tune-apply",
                           "enabled": true,
                           "why": null,

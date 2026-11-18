@@ -237,7 +237,7 @@ carries -- so the turn after it knows what it measured.
 In the page, under the chosen file in the Print window, **measured** has a row for
 each feature the slice's plan names (or its box), each a field for what it reads,
 repeats a space apart; **Keep** keeps the turn and says what it implies, **Take turn** and
-**Undo turn** (Print › Tune on the control ring, where Take turn is the cell Apply) are greyed with the reason where the
+**Undo turn** (Print › Tune › Take turn and Undo turn on the control ring) are greyed with the reason where the
 server would refuse them, and the turns and each setting's trend are listed beneath.
 *Print a part*'s last step, Measure, stands there on the footpedal's file, says that a
 box's sizes separate nothing and that the coupon is the piece made to be measured, and
