@@ -185,7 +185,7 @@ PARTS = _parts_with_motion()
 def test_the_parts_that_declare_a_motion_are_these_and_no_machine_is_among_them():
     """A machine's pieces ride its axes (``kinematics``); a motion is a part's own."""
     names = sorted(p.values[0].name for p in PARTS)
-    assert names == ["flexure_rotor", "rolling_rotor"]
+    assert names == ["cycloidal_disc", "flexure_rotor", "rolling_rotor"]
     for item in scan_projects(ROOT):
         if item.kind == "part" and item.has_part:
             part = load_part(item)

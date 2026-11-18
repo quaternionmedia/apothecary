@@ -37,6 +37,7 @@ from apothecary.gap_geometry import (
     radial_gap,
     sagitta,
     separation,
+    to_boundary,
     wrap,
 )
 
@@ -84,6 +85,13 @@ class TestTheShapes:
         assert not any(inside(p, across) for p in upright)
         assert crosses(across, upright) and overlaps(across, upright)
         assert separation(across, upright) < 0
+
+    def test_a_point_is_its_distance_from_the_nearest_edge_and_the_foot_is_on_it(self):
+        square = [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)]
+        (d0, f0), (d1, f1), (d2, f2) = to_boundary([(1.0, 2.0), (6.0, 2.0), (7.0, 8.0)], square)
+        assert (d0, f0) == (pytest.approx(1.0), pytest.approx((0.0, 2.0)))
+        assert (d1, f1) == (pytest.approx(2.0), pytest.approx((4.0, 2.0)))
+        assert (d2, f2) == (pytest.approx(5.0), pytest.approx((4.0, 4.0)))
 
     def test_two_squares_apart_are_their_gap_apart(self):
         a = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]

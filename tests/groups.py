@@ -197,6 +197,7 @@ GROUPS = {
             "test_camera_parts.py",
             "test_contested_values.py",
             "test_customizer_params.py",
+            "test_cycloidal_disc_part.py",
             "test_datum_core_site.py",
             "test_defaults_are_the_scad.py",
             "test_dust_parts.py",

@@ -183,6 +183,13 @@ def _to_boundary(points: Polygon, polygon: Polygon) -> List[Tuple[float, Point]]
     return out
 
 
+def to_boundary(points: Sequence[Point], polygon: Polygon) -> List[Tuple[float, Point]]:
+    """For each of ``points``, its distance to ``polygon``'s boundary and the nearest
+    point there: what a round pin's gap is read from, its centre's distance less its
+    radius."""
+    return _to_boundary(points, polygon)
+
+
 def _closest(a: Polygon, b: Polygon) -> Tuple[float, Point, Point]:
     """The closest pair of points of the two boundaries: from each point of either to
     the other's edges, reading only edges nearer than the best pair found so far."""
@@ -578,5 +585,6 @@ __all__ = [
     "radial_gap",
     "sagitta",
     "separation",
+    "to_boundary",
     "wrap",
 ]
