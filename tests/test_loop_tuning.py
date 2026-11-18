@@ -13,6 +13,7 @@ not a board to them.
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 from datetime import datetime, timezone
@@ -24,6 +25,7 @@ from firmware_helpers import REPLIES, ScriptedTransport
 
 from apothecary import control_loops as cl
 from apothecary import jobs
+from apothecary import loop_document as loop_document_module
 from apothecary.api import app
 from apothecary.firmware import api as firmware_api
 from apothecary.firmware import can, devices, gcode, loops, tasks
@@ -1136,3 +1138,87 @@ def test_a_board_whose_power_stands_still_identifies_nothing_and_says_why(
         assert "no plant is identified" in loops._loop_of(job.experiment.id)["error"]
     finally:
         links.stop_all()
+
+
+# ---- a plant whose dead time is under one sample ------------------------------------------
+
+
+def _kept_quick_plant() -> str:
+    """A kept experiment of a heater whose real dead time (0.1 s) is a tenth of the
+    second it is read at: a closed-loop step, as a board would have reported it."""
+    from apothecary.stamped import claim
+
+    plant = cl.FOPDT(2.0, 60.0, 0.1)
+    pid = cl.PID(kp=1.875, ki=0.03125, dt=1.0)
+    tr = cl.closed_loop(
+        plant, pid, lambda s: 200.0 if s < 100 else 205.0, 600, ambient=25.0, substeps=100
+    )
+    exp = loop_document_module.Experiment(
+        id="quick",
+        kind="step",
+        started_at=datetime.now(timezone.utc).isoformat(),
+        sample_period_s=1.0,
+        ceiling_c=215.0,
+        max_duration_s=900.0,
+        parameters={"heater": "hotend", "index": 0, "settle_s": 100.0},
+        outcome="done",
+        samples=loop_document_module.Samples(t=tr.t, target=tr.r, actual=tr.y, power=tr.u),
+    )
+    path = claim(private_folder(loops.loops_dir()), "quick", ".json")
+    body = exp.model_dump(mode="json") | {"id": path.name.removesuffix(".json"), "port": PORT}
+    path.write_text(json.dumps(body), encoding="utf-8")
+    return body["id"]
+
+
+class TestAnUnresolvedDeadTime:
+    def test_the_document_says_the_dead_time_is_a_bound_and_designs_with_the_sample(
+        self, fake_arduino_cli, fresh_task_runner
+    ):
+        doc = loops.document(_kept_quick_plant(), rule="simc", kind="pi")
+        assert doc.plant.dead_time == 1.0 and doc.plant.dead_time_is_bound
+        figure = doc.get("plant.dead_time")
+        assert figure.value == 1.0 and figure.basis == "identified"
+        assert "upper bound" in figure.label and "below one sample" in figure.note
+        gains = doc.controller.designed
+        assert "sample period as the dead time" in gains.note
+        assert doc.get("controller.kp_designed").note.endswith(gains.note)
+        # SIMC's PI with its tau_c the dead time: tau / (K (2 theta)), theta one sample.
+        assert gains.kp == pytest.approx(60.0 / (2.0 * 2.0), rel=1e-3)
+        assert gains.kp <= loops.gcode.GAIN_MAX["P"]
+        loops.gains_line("hotend", 0, gains.kp, gains.ki, gains.kd)  # the board's line takes it
+
+    @pytest.mark.parametrize("rule", ["zn_reaction", "cohen_coon", "amigo"])
+    def test_a_rule_that_cannot_design_from_it_is_refused_with_why_by_the_route(
+        self, rule, fake_arduino_cli, fresh_task_runner
+    ):
+        experiment_id = _kept_quick_plant()
+        client = TestClient(app)
+        said = client.post(
+            "/firmware/printers/loops/document", json={"experiment_id": experiment_id, "rule": rule}
+        )
+        assert said.status_code == 422, said.text
+        assert "below one sample" in said.json()["detail"] and "SIMC" in said.json()["detail"]
+        again = client.post(
+            "/firmware/printers/loops/document",
+            json={"experiment_id": experiment_id, "rule": "imc", "kind": "pid"},
+        )
+        assert again.status_code == 200, again.text
+        assert again.json()["plant"]["dead_time_is_bound"] is True
+
+    def test_an_absurd_gain_cannot_reach_a_board(self, board):
+        """The gain a rule would give a dead time of nothing, divided by it, is past what
+        the board's line allows, and the line is refused whole before anything is sent: not
+        at the seam's line alone but through ``set_gains``, which sends nothing."""
+        absurd = cl.design("cohen_coon", plant=cl.FOPDT(2.0, 60.0, 1e-9), kind="pi").pid
+        assert absurd.kp > 1e9
+        for kp, ki, kd in ((absurd.kp, 0.0, 0.0), (1.0, absurd.ki, 0.0), (1.0, 1.0, 20000.0)):
+            with pytest.raises(ValueError):
+                loops.gains_line("hotend", 0, kp, ki, kd)
+        board.links.control.arm(PORT)
+        before = list(board.sim.sent)
+        with pytest.raises(gcode.OutOfBounds, match="P above 1000"):
+            loops.set_gains(PORT, "hotend", 0, 1500.0, 1.0, 1.0)
+        with pytest.raises(ValueError):
+            loops.set_gains(PORT, "bed", 0, absurd.kp, absurd.ki, absurd.kd)
+        assert board.sim.sent == before
+        assert board.sim.heaters["T"].gains != (1500.0, 1.0, 1.0)

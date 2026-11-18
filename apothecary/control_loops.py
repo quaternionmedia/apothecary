@@ -15,6 +15,12 @@ over each step, by the exact discretization of its lags: with a dead time that i
 whole number of steps it agrees with ``step`` to rounding; otherwise the dead time is
 rounded to a whole step, which it says (``dead_time_used``).
 
+**Dead time below a sample.** An identification cannot resolve a dead time shorter
+than the period its data was sampled at. One that finds less reports the sample period
+as the dead time, flagged as an upper bound (``dead_time_is_bound``), never a number near
+zero; and a rule whose gains divide by the dead time refuses it or designs with the
+sample period, as each rule's docstring says (``design``).
+
 **A PID** is ``PID``: the parallel form a firmware's ``M301``/``M304`` takes, ``u = kp
 e + ki * integral(e) + kd * de/dt``, with ``ki`` per second and ``kd`` in seconds, a
 sample time ``dt`` and a first-order filter on the derivative of time constant
@@ -66,6 +72,9 @@ class FOPDT:
     gain: float
     time_constant: float
     dead_time: float = 0.0
+    # The dead time is an upper bound, not a measurement: an identification found it below
+    # one sample and ``dead_time`` is that sample (``resolved_dead_time``).
+    dead_time_is_bound: bool = False
 
     model = "fopdt"
 
@@ -104,6 +113,7 @@ class SOPDT:
     time_constant: float
     second_time_constant: float
     dead_time: float = 0.0
+    dead_time_is_bound: bool = False
 
     model = "sopdt"
 
@@ -431,6 +441,23 @@ def fopdt_relay_exact(plant: FOPDT, amplitude: float) -> Tuple[float, float]:
 # ---- identification -----------------------------------------------------------------------
 
 
+def resolved_dead_time(theta: float, period: float) -> Tuple[float, bool]:
+    """A fitted dead time as far as ``period``, the sample period of the data, can resolve
+    it: ``(theta, False)`` from one sample up, else ``(period, True)``: below one sample
+    the dead time is only known to be under it, so the sample is its upper bound. A dead
+    time of exactly one sample is resolved: a fit of one reads it a part in a million short,
+    which is the fit's own precision."""
+    if period > 0 and theta < period * (1 - 1e-6):
+        return period, True
+    return theta, False
+
+
+def _spacing(t: Sequence[float]) -> float:
+    """The usual gap between a record's samples: the median."""
+    gaps = sorted(b - a for a, b in zip(t, t[1:], strict=False) if b > a)
+    return gaps[len(gaps) // 2] if gaps else 0.0
+
+
 @dataclass(frozen=True)
 class Identified:
     """A plant identified from data, by a named method, with what it rests on."""
@@ -493,8 +520,8 @@ def two_point(
     if t28 is None or t63 is None:
         raise ValueError("the response never reached 63.2 % of its change")
     tau = 1.5 * (t63 - t28)
-    theta = max(0.0, t63 - step_time - tau)
-    plant = FOPDT(change / input_change, tau, theta)
+    theta, bound = resolved_dead_time(max(0.0, t63 - step_time - tau), _spacing(t))
+    plant = FOPDT(change / input_change, tau, theta, bound)
     return Identified(plant, "smith_two_point", initial, final, input_change)
 
 
@@ -531,8 +558,8 @@ def areas(
         upto.append((a0, v0 + (v1 - v0) * (a0 - s0) / (s1 - s0)))
     a1 = _trapezoid([s for s, _ in upto], [v for _, v in upto])
     tau = math.e * a1
-    theta = max(0.0, a0 - tau)
-    plant = FOPDT(change / input_change, tau, theta)
+    theta, bound = resolved_dead_time(max(0.0, a0 - tau), _spacing(t))
+    plant = FOPDT(change / input_change, tau, theta, bound)
     return Identified(plant, "areas", initial, final, input_change)
 
 
@@ -777,13 +804,17 @@ def fit_fopdt(
             best = other
     tau, theta = math.exp(best[0]), best[1]
     gain, offset, rms = _output_error(u, y, dt, tau, theta)
+    theta, bound = resolved_dead_time(max(0.0, theta), dt)
+    said = f"output error; offset {offset:.4g}"
+    if bound:
+        said += f"; dead time below one sample ({dt:g} s), reported as that sample, an upper bound"
     return Identified(
-        FOPDT(gain, tau, max(0.0, theta)),
+        FOPDT(gain, tau, theta, bound),
         "fit_fopdt",
         offset,
         offset,
         0.0,
-        note=f"output error; offset {offset:.4g}",
+        note=said,
         fit_rms=rms,
     )
 
@@ -947,6 +978,10 @@ class Rule:
     assumes: str
     relation: str
     design: Callable[..., Standard] = field(repr=False, compare=False)
+    # What the rule does with a dead time its plant's identification could not resolve
+    # (below one sample): "refuse" with a reason, or design with "sample", the sample
+    # period as the dead time.
+    unresolved: str = "refuse"
 
 
 def _zn_ultimate(u: Ultimate, kind: str, **_) -> Standard:
@@ -958,6 +993,10 @@ def _zn_ultimate(u: Ultimate, kind: str, **_) -> Standard:
 
 
 def _zn_reaction(p: FOPDT, kind: str, **_) -> Standard:
+    """Refuses an unresolved dead time: every gain is ``tau/(K L)`` times a constant and
+    the source reads ``L`` off a tangent to the step response, a measured quantity; a dead
+    time known only to be under a sample would give a gain with no bound but the sample
+    period's, which the source does not offer."""
     a = p.gain * p.dead_time / p.time_constant
     L = p.dead_time
     if a <= 0:
@@ -976,6 +1015,9 @@ def _tyreus_luyben(u: Ultimate, kind: str, **_) -> Standard:
 
 
 def _cohen_coon(p: FOPDT, kind: str, **_) -> Standard:
+    """Refuses an unresolved dead time: its gain is ``tau/(K theta)`` times a constant, and
+    the source states it for a measured ``theta/tau`` in a range (about 0.1 to 1) that a
+    dead time under a sample leaves, so there is no dead time to design with."""
     k, tau, th = p.gain, p.time_constant, p.dead_time
     if th <= 0:
         raise ValueError("Cohen-Coon needs a dead time")
@@ -990,6 +1032,10 @@ def _cohen_coon(p: FOPDT, kind: str, **_) -> Standard:
 
 
 def _simc(p: Plant, kind: str, closed_loop_time: Optional[float] = None, **_) -> Standard:
+    """Designs with the sample period as the dead time when it is unresolved (``design``
+    does it, and says so): the source takes an effective dead time that includes the
+    delay of sampling, and a longer dead time gives gentler gains, so the sample period
+    as an upper bound errs towards a safe loop."""
     th = p.dead_time
     tc = th if closed_loop_time is None else closed_loop_time
     if tc <= 0:
@@ -1009,6 +1055,10 @@ def _simc(p: Plant, kind: str, closed_loop_time: Optional[float] = None, **_) ->
 
 
 def _imc(p: FOPDT, kind: str, closed_loop_time: Optional[float] = None, **_) -> Standard:
+    """Designs with the sample period as the dead time when it is unresolved (``design``
+    does it, and says so): the rule's Pade approximation of the dead time is as good for
+    the upper bound as for a measurement, its gain falls as the dead time grows, and the
+    closed-loop time defaults to that dead time, so the default is gentle."""
     k, tau, th = p.gain, p.time_constant, p.dead_time
     # The dead time by default, as SIMC's tau_c: this module's choice, not the source's.
     lam = closed_loop_time if closed_loop_time is not None else th
@@ -1018,6 +1068,9 @@ def _imc(p: FOPDT, kind: str, closed_loop_time: Optional[float] = None, **_) -> 
 
 
 def _amigo(p: FOPDT, kind: str, **_) -> Standard:
+    """Refuses an unresolved dead time: its gains grow as ``T/(K L)`` and the source
+    chooses its constants for a maximum sensitivity over plants whose ``L`` is a measured
+    share of ``T``; with ``L`` unknown below a sample that share is unknown too."""
     k, T, L = p.gain, p.time_constant, p.dead_time
     if L <= 0:
         raise ValueError("AMIGO needs a dead time")
@@ -1044,6 +1097,7 @@ RULES: Dict[str, Rule] = {
             "overshoots and rings, and its margins are small",
             "PID: kc = 0.6 Ku, ti = Tu/2, td = Tu/8; PI: 0.45 Ku, Tu/1.2; P: 0.5 Ku",
             _zn_ultimate,
+            unresolved="sample",
         ),
         Rule(
             "zn_reaction",
@@ -1066,6 +1120,7 @@ RULES: Dict[str, Rule] = {
             "the ultimate point is the plant's; a detuned Ziegler-Nichols, slower and with more margin",
             "PI: kc = Ku/3.2, ti = 2.2 Tu; PID: kc = Ku/2.2, ti = 2.2 Tu, td = Tu/6.3",
             _tyreus_luyben,
+            unresolved="sample",
         ),
         Rule(
             "cohen_coon",
@@ -1093,6 +1148,7 @@ RULES: Dict[str, Rule] = {
             "kc = tau1/(K (tau_c + theta)), ti = min(tau1, 4 (tau_c + theta)), and for a SOPDT "
             "td = tau2 in the series form, turned into the ideal form exactly",
             _simc,
+            unresolved="sample",
         ),
         Rule(
             "imc",
@@ -1106,6 +1162,7 @@ RULES: Dict[str, Rule] = {
             "kc = (2 tau + theta)/(K (2 lambda + theta)), ti = tau + theta/2, td = tau theta/(2 "
             "tau + theta)",
             _imc,
+            unresolved="sample",
         ),
         Rule(
             "amigo",
@@ -1145,6 +1202,10 @@ class Design:
     standard: Standard
     pid: PID
     closed_loop_time: Optional[float] = None
+    # The dead time the rule designed with, when it is not the plant's: the sample period,
+    # for a dead time the identification could not resolve; and the sentence saying so.
+    dead_time_used: Optional[float] = None
+    note: str = ""
 
 
 def design(
@@ -1156,16 +1217,48 @@ def design(
     dt: float = 0.1,
     filter: float = 0.0,
     closed_loop_time: Optional[float] = None,
+    dead_time_resolution: Optional[float] = None,
 ) -> Design:
     """The PID ``rule`` gives, of ``kind`` (p, pi, pid), from a plant or an ultimate point
     as the rule takes; in the parallel form at sample time ``dt`` with the derivative
     filter ``filter``. A rule that takes an ultimate point is given one from a plant by
-    ``ultimate_of`` when only a plant is at hand."""
+    ``ultimate_of`` when only a plant is at hand.
+
+    A plant's dead time is *unresolved* when it is flagged an upper bound
+    (``dead_time_is_bound``) or is under ``dead_time_resolution``, the shortest dead time
+    its identification could tell from none (the sample period). A rule marked
+    ``unresolved="sample"`` then designs with the sample period as the dead time (the
+    larger of the two) and says so in ``note`` and ``dead_time_used``; any other refuses
+    with the reason: each rule's docstring says which and why."""
     found = RULES.get(rule)
     if found is None:
         raise ValueError(f"no rule {rule!r}; the rules are {', '.join(RULES)}")
     if kind not in found.kinds:
         raise ValueError(f"{found.title} gives {', '.join(found.kinds)}, not {kind}")
+    used: Optional[float] = None
+    note = ""
+    if plant is not None and (
+        plant.dead_time_is_bound
+        or (dead_time_resolution is not None and plant.dead_time < dead_time_resolution)
+    ):
+        floor = max(plant.dead_time, dead_time_resolution or 0.0)
+        if found.takes == "ultimate" and ultimate is not None:
+            pass  # the ultimate point is given: the plant's dead time is not used
+        elif found.unresolved == "sample" and floor > 0:
+            used = floor
+            plant = replace(plant, dead_time=floor, dead_time_is_bound=True)
+            note = (
+                f"the dead time is below one sample ({floor:g} s), which an identification "
+                f"cannot resolve: {found.title} is designed with the sample period as the "
+                "dead time, which gives gentler gains than a shorter one"
+            )
+        else:
+            raise ValueError(
+                f"{found.title} cannot design from a dead time below one sample "
+                f"({floor:g} s): its gains divide by the dead time and an identification "
+                "cannot resolve one that short; SIMC and IMC-PID design with the sample "
+                "period as the dead time"
+            )
     if found.takes == "ultimate":
         if ultimate is None:
             if plant is None:
@@ -1178,7 +1271,7 @@ def design(
         if found.takes == "fopdt" and not isinstance(plant, FOPDT):
             raise ValueError(f"{found.title} takes a FOPDT")
         std = found.design(plant, kind, closed_loop_time=closed_loop_time)
-    return Design(rule, kind, std, std.parallel(dt, filter), closed_loop_time)
+    return Design(rule, kind, std, std.parallel(dt, filter), closed_loop_time, used, note)
 
 
 def ultimate_of(plant: Plant, hi: float = 1e3) -> Ultimate:

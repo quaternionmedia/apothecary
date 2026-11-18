@@ -77,6 +77,15 @@ dead times the tests run, and the period within a few percent. A firmware's
 autotune that computes its gains from the describing function carries that error
 into them.
 
+**A dead time under one sample is not measured.** An identification cannot resolve a
+dead time shorter than the period its data was sampled at, and a heater is read about
+once a second. A fit, a two-point read or an area read that finds less reports the
+sample period as the dead time and flags it an upper bound (`dead_time_is_bound`), never
+a number near zero; a dead time of one sample or more is a measurement. The document
+carries that flag on its plant, and its `plant.dead_time` figure is labelled "dead time,
+upper bound" with a note saying the dead time is somewhere under it, on the basis
+`identified` as every fitted figure is.
+
 A heater is read about once a second. That sets what a frequency response can say:
 
 - Half the sampling rate is the last frequency there is; a harmonic at or above it is
@@ -121,6 +130,27 @@ A rule that takes the ultimate point is given a plant's when only a plant is at 
 default is this module's, not the source's. The tests hold each rule to its formula,
 SIMC's PI to the margins its source gives, IMC-PID to the IMC controller it is derived
 from, and AMIGO's PID to the sensitivity peak it was chosen for.
+
+A rule whose gains divide by the dead time is given a plant whose dead time is
+unresolved: flagged a bound, or under the sample period a document passes as
+`dead_time_resolution`. What each does, from what its source supports:
+
+| Rule | With a dead time under one sample | Why |
+|---|---|---|
+| `simc` | designs with the sample period as the dead time, and says so | the source's dead time is an effective one that includes the delay of sampling, and a longer dead time gives gentler gains |
+| `imc` | designs with the sample period as the dead time, and says so | the Pade approximation is as good for the upper bound as for a measurement, and its gain falls as the dead time grows |
+| `zn_ultimate`, `tyreus_luyben` from a plant | find the plant's ultimate point with the sample period as the dead time, and say so | a longer dead time puts the ultimate gain lower; given an ultimate point, they take no dead time |
+| `zn_reaction` | refuses, with the reason | its gains are `tau/(K L)` times a constant and `L` is a tangent's measurement; there is no gain to give for a dead time known only to be under a sample |
+| `cohen_coon` | refuses, with the reason | its gain is `tau/(K theta)` times a constant, stated for a measured `theta/tau` in a range a dead time under a sample leaves |
+| `amigo` | refuses, with the reason | its gains grow as `T/(K L)` and its constants are chosen for a measured share of `L` in `T` |
+
+A refusal is a `ValueError` naming the rule and the sample period and pointing at SIMC
+and IMC-PID; the document's route answers it with a 422 and that reason. A design that used
+the sample period carries `dead_time_used` and a `note`, and the document puts the note
+beside the designed gains. Gains the board's line would refuse (`GAIN_MAX` of
+`apothecary/firmware/gcode.py`: 1000 for Kp and Ki, 10000 for Kd, each a plain decimal of
+five digits and four places) carry that refusal and its words as their note too, and
+"Set on machine" is refused by the same line before anything is sent.
 
 Left out, because their constants are not stated here with confidence:
 Chien-Hrones-Reswick's tables, Astrom and Hagglund's kappa-tau curves, Pessen's

@@ -551,3 +551,112 @@ class TestStepMeasures:
         )
         m = step_measures(trace.t, trace.y, step_time=1.0, setpoint=trace.r)
         assert m.steady_error == pytest.approx(1.0, rel=1e-3)
+
+
+# ---- a dead time under one sample ---------------------------------------------------------
+
+
+GAIN_BOUND = {"kp": 1000.0, "ki": 1000.0, "kd": 10000.0}  # the M301 line's (firmware/gcode.py)
+
+
+def _fitted(dead_time: float):
+    """A plant of this dead time in a loop sampled once a second, noise-free, fitted."""
+    pid = PID(kp=1.875, ki=0.03125, dt=1.0)
+    plant = FOPDT(2.0, 60.0, dead_time)
+    trace = closed_loop(
+        plant, pid, lambda s: 200.0 if s < 50 else 205.0, 600, ambient=25.0, substeps=100
+    )
+    return fit_fopdt(trace.u, trace.y, 1.0)
+
+
+class TestADeadTimeUnderOneSample:
+    @pytest.mark.parametrize("dead_time", [0.0, 0.1, 0.5])
+    def test_a_fit_reports_less_than_a_sample_as_that_sample_and_a_bound(self, dead_time):
+        found = _fitted(dead_time)
+        assert found.plant.dead_time == 1.0 and found.plant.dead_time_is_bound
+        assert "below one sample" in found.note
+        assert found.plant.gain == pytest.approx(2.0, rel=1e-6)
+
+    @pytest.mark.parametrize("dead_time", [1.0, 2.5])
+    def test_a_fit_reports_one_sample_and_more_as_a_measurement(self, dead_time):
+        found = _fitted(dead_time)
+        assert found.plant.dead_time == pytest.approx(dead_time, rel=1e-6)
+        assert not found.plant.dead_time_is_bound and "below" not in found.note
+
+    def test_a_step_read_by_smith_or_the_areas_says_it_as_well(self):
+        t = [float(i) for i in range(400)]
+        for th in (0.0, 0.2):
+            y = [2.0 * (1 - math.exp(-(s - th) / 50)) if s > th else 0.0 for s in t]
+            for method in (two_point, areas):
+                p = method(t, y, 1.0).plant
+                assert p.dead_time == 1.0 and p.dead_time_is_bound, method.__name__
+        y = [2.0 * (1 - math.exp(-(s - 5) / 50)) if s > 5 else 0.0 for s in t]
+        assert not two_point(t, y, 1.0).plant.dead_time_is_bound
+
+    @pytest.mark.parametrize("fraction", [0.0, 0.1, 1.0])
+    @pytest.mark.parametrize("rule", ["zn_reaction", "cohen_coon", "amigo", "simc", "imc"])
+    def test_a_rule_given_a_dead_time_and_the_sample_period_never_designs_an_absurd_gain(
+        self, rule, fraction
+    ):
+        """Each rule at a dead time of nothing, a tenth of a sample and one sample, the
+        sample a second: it refuses with the reason or designs with the sample period, and
+        either way no gain it returns is past the bound the board's gain line has."""
+        plant = FOPDT(2.0, 60.0, fraction * 1.0)
+        kind = "pid" if rule == "imc" else "pi"
+        try:
+            d = design(rule, plant=plant, kind=kind, dt=1.0, dead_time_resolution=1.0)
+        except ValueError as exc:
+            assert fraction < 1.0 and RULES[rule].unresolved == "refuse"
+            assert "below one sample" in str(exc) and "SIMC" in str(exc)
+            return
+        for name, bound in GAIN_BOUND.items():
+            assert 0 <= getattr(d.pid, name) <= bound, (rule, name)
+        if fraction < 1.0:
+            assert RULES[rule].unresolved == "sample"
+            assert d.dead_time_used == 1.0 and "sample period as the dead time" in d.note
+        else:
+            assert d.dead_time_used is None and d.note == ""
+
+    def test_a_rule_that_designs_with_the_sample_designs_what_a_plant_of_one_sample_gets(self):
+        for rule, kind in (("simc", "pi"), ("imc", "pid")):
+            unresolved = design(
+                rule, plant=FOPDT(2.0, 60.0, 0.1), kind=kind, dt=1.0, dead_time_resolution=1.0
+            )
+            sample = design(rule, plant=FOPDT(2.0, 60.0, 1.0), kind=kind, dt=1.0)
+            assert unresolved.pid == sample.pid
+            bound = design(rule, plant=FOPDT(2.0, 60.0, 1.0, True), kind=kind, dt=1.0)
+            assert bound.pid == sample.pid and bound.dead_time_used == 1.0
+
+    def test_the_ultimate_rules_from_a_plant_design_with_the_sample_and_say_so(self):
+        d = design(
+            "zn_ultimate", plant=FOPDT(2.0, 60.0, 0.0), dt=1.0, dead_time_resolution=1.0
+        )
+        assert d.dead_time_used == 1.0 and "sample period" in d.note
+        assert d.standard.kc == pytest.approx(0.6 * ultimate_of(FOPDT(2.0, 60.0, 1.0)).gain)
+        given = design("zn_ultimate", ultimate=Ultimate(10.0, 40.0), dt=1.0)
+        assert given.dead_time_used is None
+
+    def test_a_dead_time_the_rule_divides_by_and_the_gain_it_would_give(self):
+        """What the guard prevents: the same rules at a dead time of a billionth of a
+        second, handed no resolution, give gains past the board's bound by orders of
+        magnitude; handed the sample period they refuse."""
+        tiny = FOPDT(2.0, 60.0, 1e-9)
+        for rule in ("zn_reaction", "cohen_coon", "amigo"):
+            assert design(rule, plant=tiny, kind="pi", dt=1.0).pid.kp > 1e6, rule
+            with pytest.raises(ValueError, match="below one sample"):
+                design(rule, plant=tiny, kind="pi", dt=1.0, dead_time_resolution=1.0)
+
+    def test_every_rule_says_what_it_does_with_one(self):
+        from apothecary import control_loops
+
+        assert {r.name: r.unresolved for r in RULES.values()} == {
+            "zn_ultimate": "sample",
+            "zn_reaction": "refuse",
+            "tyreus_luyben": "sample",
+            "cohen_coon": "refuse",
+            "simc": "sample",
+            "imc": "sample",
+            "amigo": "refuse",
+        }
+        for name in ("_zn_reaction", "_cohen_coon", "_simc", "_imc", "_amigo"):
+            assert "unresolved" in (getattr(control_loops, name).__doc__ or ""), name

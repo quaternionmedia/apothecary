@@ -248,6 +248,39 @@ class TestTheBuilder:
             build(still, Machine(kind="printer", port="x"), LoopName(heater="hotend"))
         assert build(exp, Machine(kind="printer", port="x"), LoopName(heater="hotend")).plant
 
+    def test_a_dead_time_under_a_sample_is_a_bound_with_its_basis_and_designs_with_the_sample(self):
+        """A heater whose real dead time is a tenth of the second it is read at: the
+        document's dead time is that second, an identified upper bound whose figure says
+        so, and the rule designed with it says that too; a rule that cannot is refused."""
+        quick = cl.FOPDT(2.0, 60.0, 0.1)
+        pid = cl.PID(kp=1.875, ki=0.03125, dt=1.0)
+        tr = cl.closed_loop(
+            quick, pid, lambda s: 200.0 if s < 100.5 else 205.0, 600, ambient=25.0, substeps=100
+        )
+        exp = Experiment(
+            id="step-1",
+            kind="step",
+            started_at=now(),
+            sample_period_s=1.0,
+            parameters={"settle_s": 100.0},
+            samples=Samples(t=tr.t, target=tr.r, actual=tr.y, power=tr.u),
+        )
+        where = (Machine(kind="printer", port="x"), LoopName(heater="hotend"))
+        doc = build(exp, *where, refused=lambda g: "no" if g.kp > 100 else None)
+        dead = doc.get("plant.dead_time")
+        assert (dead.value, dead.unit, dead.basis, dead.source) == (1.0, "s", "identified", "step-1")
+        assert "upper bound" in dead.label and "below one sample" in dead.note
+        assert doc.plant.dead_time_is_bound and doc.plant.plant().dead_time_is_bound
+        assert doc.get("plant.gain").note == "fit_fopdt"  # a resolved figure's note is its method alone
+        kp = doc.get("controller.kp_designed")
+        assert "sample period as the dead time" in kp.note and "refuses" not in kp.note
+        assert "sample period" in render_markdown(doc)
+        why = build(exp, *where, rule="simc", refused=lambda g: "P above 1000")
+        assert "the board's line refuses them: P above 1000" in why.get("controller.kp_designed").note
+        with pytest.raises(ValueError, match="below one sample"):
+            build(exp, *where, rule="amigo")
+        assert not build(exp, *where, rule=None).controller.designed
+
     def test_a_perturbation_carries_its_frequency_response(self):
         def square(s):
             if s < 600.5:

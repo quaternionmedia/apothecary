@@ -116,6 +116,7 @@ def identify_cmd(path, method, sample_period, step_time, input_change, as_json):
                     "gain": p.gain,
                     "time_constant": p.time_constant,
                     "dead_time": p.dead_time,
+                    "dead_time_is_bound": p.dead_time_is_bound,
                     "method": found.method,
                     "fit_rms": found.fit_rms,
                     "offset": found.initial,

@@ -32,7 +32,7 @@ import json
 import math
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Sequence, Union
+from typing import Callable, Dict, List, Literal, Optional, Sequence, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -172,6 +172,9 @@ class PlantModel(BaseModel):
     time_constant: float = Field(..., gt=0)
     second_time_constant: Optional[float] = Field(None, gt=0)
     dead_time: float = Field(0.0, ge=0)
+    # True when ``dead_time`` is an upper bound, the sample period of the experiment it was
+    # identified from, because the fit found less than one sample and cannot resolve it.
+    dead_time_is_bound: bool = False
     ambient: Optional[float] = None
     basis: Literal["identified", "computed"]
     source: str
@@ -186,9 +189,13 @@ class PlantModel(BaseModel):
     def plant(self) -> cl.Plant:
         if self.model == "sopdt":
             return cl.SOPDT(
-                self.gain, self.time_constant, self.second_time_constant, self.dead_time
+                self.gain,
+                self.time_constant,
+                self.second_time_constant,
+                self.dead_time,
+                self.dead_time_is_bound,
             )
-        return cl.FOPDT(self.gain, self.time_constant, self.dead_time)
+        return cl.FOPDT(self.gain, self.time_constant, self.dead_time, self.dead_time_is_bound)
 
 
 class Gains(BaseModel):
@@ -205,6 +212,10 @@ class Gains(BaseModel):
     source: str
     rule: Optional[str] = None
     parameters: Dict[str, float] = Field(default_factory=dict)
+    # What a reader should know of these gains beyond their rule: that the rule designed
+    # with the sample period as an unresolved dead time, or that the board's line refuses
+    # them.
+    note: str = ""
 
     def pid(self, dt: float = 0.1) -> cl.PID:
         return cl.PID(self.kp, self.ki, self.kd, dt=self.dt or dt, filter=self.filter or 0.0)
@@ -339,6 +350,7 @@ def plant_model(found: cl.Identified, source: str, ambient: Optional[float] = No
         time_constant=p.time_constant,
         second_time_constant=getattr(p, "second_time_constant", None),
         dead_time=p.dead_time,
+        dead_time_is_bound=p.dead_time_is_bound,
         ambient=ambient,
         basis="identified",
         source=source,
@@ -386,9 +398,15 @@ def figures(
             ("ambient", "ambient", pm.ambient, doc.units.get("temperature", "°C")),
         ):
             if value is not None:
-                groups["plant"].append(
-                    _figure(key, label, value, unit, pm.basis, pm.source, pm.method)
-                )
+                said = pm.method
+                if key == "dead_time" and pm.dead_time_is_bound:
+                    label = "dead time, upper bound"
+                    said += (
+                        f"; below one sample: an identification cannot resolve less than its "
+                        f"sample period, so {value:g} s is a bound and the dead time is "
+                        "somewhere under it"
+                    )
+                groups["plant"].append(_figure(key, label, value, unit, pm.basis, pm.source, said))
     for name in ("designed", "on_machine"):
         g = getattr(doc.controller, name)
         if g is None:
@@ -407,7 +425,7 @@ def figures(
                     unit,
                     g.basis,
                     g.source,
-                    g.rule or "",
+                    "; ".join(x for x in (g.rule or "", g.note) if x),
                 )
             )
         if g.kp:
@@ -586,6 +604,7 @@ def build(
     read: Optional[Experiment] = None,
     autotune: Optional[Dict[str, float]] = None,
     units: Optional[Dict[str, str]] = None,
+    refused: Optional[Callable[[Gains], Optional[str]]] = None,
 ) -> LoopDocument:
     """A document of one experiment, its figures computed here.
 
@@ -595,7 +614,9 @@ def build(
     response at the odd harmonics of its period, against its target; a step adds its step
     measures. An autotune's own gains (``autotune``, as the firmware said them) are the
     designed controller, identified from it. ``on_machine`` and ``read`` are the gains the
-    board answered with and the read they rest on."""
+    board answered with and the read they rest on. ``refused`` answers, for gains, why the
+    board's line would refuse them, or None; the designed gains carry the answer as their
+    note."""
     exps = [experiment] + ([read] if read is not None else [])
     doc = LoopDocument(
         generated_at=now(),
@@ -664,12 +685,21 @@ def build(
         # gains carry none, and the margins are of the continuous controller, as the
         # board's own gains' are.
         d = cl.design(
-            rule, plant=doc.plant.plant(), kind=kind, dt=dt, closed_loop_time=closed_loop_time
+            rule,
+            plant=doc.plant.plant(),
+            kind=kind,
+            dt=dt,
+            closed_loop_time=closed_loop_time,
+            dead_time_resolution=dt,
         )
         designed = gains_of(
             d.pid, "computed", "plant", rule=rule, closed_loop_time=closed_loop_time
         )
         designed.dt = None
+        designed.note = d.note
+        why = refused(designed) if refused is not None else None
+        if why:
+            designed.note = "; ".join(x for x in (d.note, f"the board's line refuses them: {why}") if x)
     doc.controller = Controller(designed=designed, on_machine=on_machine)
     step_time = float(p["settle_s"]) if experiment.kind == "step" and "settle_s" in p else None
     doc.groups = figures(doc, step_of=experiment.id, step_time=step_time)

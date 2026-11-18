@@ -959,6 +959,16 @@ def document(
             on_machine = loop_document.Gains(
                 kp=got["kp"], ki=got["ki"], kd=got["kd"], basis="measured", source=read.id
             )
+
+    def refused(g: loop_document.Gains) -> Optional[str]:
+        """Why the board's line refuses designed gains, so the document says it beside
+        them rather than at "Set on machine" alone."""
+        try:
+            gains_line(loop.heater, loop.index, g.kp, g.ki, g.kd)
+        except ValueError as exc:
+            return str(exc)
+        return None
+
     return loop_document.build(
         exp,
         machine,
@@ -969,6 +979,7 @@ def document(
         on_machine=on_machine,
         read=read,
         autotune=body.get("result"),
+        refused=refused,
     )
 
 
