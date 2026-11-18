@@ -450,11 +450,11 @@ def test_the_deck_window_and_a_control_pad_show_and_steer_the_same_knobs(page: P
     sent = (_control(url)["sent"], _router(url)["position"])
     rings.on_world(page, "Panels", "Machine", "Knobs", "Screen", "Status")
     shown = knobs.locator(".deck-screen-to[aria-pressed='true']")
-    expect(shown).to_have_text("status", timeout=10000)
-    expect(knobs.locator(".deck-screen")).to_contain_text("strip screen: status (3/3)")
+    expect(shown).to_have_text("Status", timeout=10000)
+    expect(knobs.locator(".deck-screen")).to_contain_text("strip screen: Status (3/3)")
     _until(lambda: (_drawn(url)["strip_drawn"]["small"] or "").endswith("· 3/3"), "Status drawn")
     knobs.locator(".deck-screen-to[data-screen='knobs']").click()
-    expect(shown).to_have_text("knobs", timeout=10000)
+    expect(shown).to_have_text("Knobs", timeout=10000)
     assert _control(url)["screen"] == "knobs"
     assert (_control(url)["sent"], _router(url)["position"]) == sent
 
