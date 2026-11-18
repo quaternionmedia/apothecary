@@ -4931,7 +4931,9 @@
                         // part's own text included (which the server answers as the part).
                         const scad = this.scadStages[`part:${ref}`];
                         const tied = Boolean(this.partStages[`part:${ref}`]?.tied);
-                        const draft = scad && scad.text !== null && (tied || scad.text !== scad.own) ? scad.text : null;
+                        // A SCAD that is not the part's source (its geometry is Python) is never
+                        // sent: its parameters are, and the server generates its SCAD from them.
+                        const draft = scad && scad.editable !== false && scad.text !== null && (tied || scad.text !== scad.own) ? scad.text : null;
                         const version = scad ? scad.version ?? 0 : null;
                         const url = draft === null
                             ? `${base}/stl/generate?page=${encodeURIComponent(PAGE_ID)}&${AS_IT_RESTS}`
@@ -7179,6 +7181,7 @@
                         if (drawn?.ok) scad.text = await drawn.text();
                     }
                     const editable = Boolean(target.part) && target.editable !== false;
+                    scad.editable = editable;
                     // SCAD only read follows what it is read from: a made piece rebuilt reads anew.
                     if (scad.text === null || !editable) scad.text = own;
                     scad.drawnText ??= scad.text;

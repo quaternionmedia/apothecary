@@ -317,3 +317,25 @@ def test_a_generated_part_stays_one_way_its_scad_following_its_controls(page: Pa
         "(was) => window.fractalViewer.scadEditor.text() === was", arg=text, timeout=15000
     )
     assert asked == [], asked
+
+
+@pytest.mark.e2e
+def test_a_part_built_by_python_is_applied_from_its_numbers_never_its_scad(page: Page, url):
+    """Its SCAD follows what is staged, read only, and Apply sends the numbers: never
+    that text as a draft, which the server refuses for a part whose geometry is Python
+    (the dust port; the snowplow is the same)."""
+    drafts = []
+    page.on("request", lambda r: drafts.append(r.url) if "/draft/" in r.url else None)
+    _open(page, url)
+    _edit(page, "dust_port")
+    text = _text(page)
+    _param(page, "diameter").locator(".param-number").fill("25")
+    expect(_summary(page)).to_contain_text("1 change staged, valid", timeout=10000)
+    page.wait_for_function(
+        "(was) => window.fractalViewer.scadEditor.text() !== was", arg=text, timeout=15000
+    )
+    page.locator("#apply-btn").click()
+    expect(_status(page)).to_contain_text(
+        re.compile(r"dust_port (regenerated|from the cache)"), timeout=120000
+    )
+    assert drafts == [], drafts
