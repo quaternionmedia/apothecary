@@ -147,8 +147,11 @@ def test_the_site_crumb_goes_to_the_sites_own_level_and_chooses_another_site(
     assert _focus(page) == ""
     assert crumbs(page) == [FIRST, "garage"]
     expect(menu.locator(".site-menu-body")).to_be_hidden()
-    # At that level it has nowhere to go up to: it opens the sites, as its ▾ does.
-    expect(level).to_have_attribute("title", "garage, at its own level: choose another site")
+    # At that level it has nowhere to go up to: it opens the sites, as its ▾ does, and
+    # wears the address of the ring's Site, which does the same.
+    expect(level).to_have_attribute(
+        "title", re.compile(r"^garage, at its own level: choose another site · ⌗\d+$")
+    )
     level.click()
     expect(menu.locator(".site-menu-body")).to_be_visible()
     # A press anywhere else folds it away.

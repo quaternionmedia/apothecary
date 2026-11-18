@@ -458,7 +458,7 @@ def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
     """At 1024 px wide the header is one row, at the top of the site and deep in it: the
     view banner (the universe, the site and its ▾, the trail), ⚙ View, ⊞ (Windows, its
     sign alone), the ring and the problems' count. No pill says prototype: the banner's
-    first crumb says it in its tooltip."""
+    first crumb says it in its tooltip, before the address of the ring's cell it is."""
     page.set_viewport_size({"width": 1024, "height": 700})
     _open(page, bench)
     for gone in ("#load-btn", "#zoom-out-btn"):
@@ -466,7 +466,7 @@ def test_the_header_is_one_row_at_1024_px(page: Page, bench: str):
     for gone in (".toolbar .badge", "#site-select"):
         expect(page.locator(gone)).to_have_count(0)
     expect(page.locator("#universe-crumb")).to_have_attribute(
-        "title", re.compile("FRACTAL VIEWER — unratified prototype$")
+        "title", re.compile(r"FRACTAL VIEWER — unratified prototype · ⌗\d+$")
     )
     row = page.evaluate(ONE_ROW)
     assert row["spread"] < 4 and row["height"] < 60, row

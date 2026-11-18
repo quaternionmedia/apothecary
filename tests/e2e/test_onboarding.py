@@ -204,7 +204,10 @@ def test_the_headers_docs_and_panels_docs_open_the_docs_and_the_walkthrough(page
     docs = page.locator("#docs-link")
     expect(docs).to_be_visible()
     expect(docs).to_have_attribute("data-address", "41", timeout=15000)
-    expect(docs).to_have_attribute("title", re.compile(r"Panels › Docs.* · ⌗41$"))
+    # Its tip says what it opens, then the address once: no path spelled out beside it.
+    expect(docs).to_have_attribute(
+        "title", re.compile(r"^The documentation in a new tab: [^⌗›]* · ⌗41$")
+    )
     tops = page.evaluate(
         "() => [...document.querySelectorAll('.toolbar > *')]"
         ".filter((el) => el.getBoundingClientRect().width > 0)"
