@@ -788,6 +788,27 @@ class LoopRequest(ProbeRequest):
     index: int = Field(0, ge=0, le=7)
 
 
+class LoopPlanRequest(LoopRequest):
+    """An experiment on a loop as a page has it so far, to ask whether it would start
+    (``can.can_tune``): its ceiling and its longest time may not be stated yet, and the
+    answer says so; every bound is ``firmware.loops.plan``'s to say."""
+
+    kind: Literal["step", "autotune", "perturbation"]
+    ceiling_c: Optional[float] = None
+    max_duration_s: Optional[float] = None
+    sample_period_s: Optional[float] = None
+    base_c: Optional[int] = None
+    step_c: Optional[int] = None
+    settle_s: Optional[float] = None
+    after_s: Optional[float] = None
+    target_c: Optional[int] = None
+    cycles: Optional[int] = None
+    centre_c: Optional[int] = None
+    amplitude_c: Optional[int] = None
+    period_s: Optional[float] = None
+    periods: Optional[int] = None
+
+
 class LoopExperimentRequest(LoopRequest):
     """An experiment on a loop. The ceiling and the longest it may run are said by the
     caller, every time; what each kind takes is ``firmware.loops.plan``'s."""

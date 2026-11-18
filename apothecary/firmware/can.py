@@ -12,8 +12,9 @@ task holds the port), ``homed`` (a home the port has not shown its switch for),
 ``placed`` (a cut with the tool's place unknown), ``busy`` (another task runs),
 ``idle`` (nothing to act on), ``offline`` (no link, and the last poll said so),
 ``alarm`` (the controller is in alarm), ``kind`` (the wrong kind of machine),
-``file`` (the file does not fit the machine) and ``asked`` (an act that writes the board's
-memory, not asked for by name).
+``file`` (the file does not fit the machine), ``asked`` (an act that writes the board's
+memory, not asked for by name) and ``plan`` (an experiment's figures that make no plan: its
+ceiling or its longest time not stated, a target over the ceiling).
 
 The emergency stop has no predicate: it is always ok.
 """
@@ -524,3 +525,21 @@ def can_start(port: str, file_id: str, state=None, links=None, runner=None) -> D
 
     f = facts_of(port, state, links, runner)
     return _verdict(start_refusal(f, devices.print_file(file_id), file_id))
+
+
+def can_tune(
+    port: str, figures: Dict[str, Any], state=None, links=None, runner=None
+) -> Dict[str, Any]:
+    """Whether an experiment of these figures (``loops.planned``'s) could be started on
+    ``port`` now: what ``tune.start`` answers of the machine, then whether the figures make
+    a plan, kind ``plan``; with the plan (``loops.plan_view``) when it could. Nothing is
+    asked of the port."""
+    from . import loops
+
+    refusal = tune_refusal(facts_of(port, state, links, runner))
+    if refusal is not None:
+        return {**_verdict(refusal), "plan": None}
+    made, why = loops.planned(**figures)
+    if made is None:
+        return {**_no("plan", f"{port}: {why}"), "plan": None}
+    return {**dict(OK), "plan": loops.plan_view(made)}

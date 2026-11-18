@@ -1009,3 +1009,95 @@ def test_two_starts_at_once_are_one_experiment(board):
     for t in threads:
         t.join(10)
     assert sum(isinstance(r, loops.LoopJob) for r in results) == 1
+
+
+# ---- what a page asks before it starts one --------------------------------------------------
+
+
+@pytest.mark.parametrize("condition", list(CONDITIONS))
+def test_can_start_answers_as_the_start_route_would(board, monkeypatch, condition):
+    """An experiment's figures asked of ``can-start`` (``can.can_tune``) are refused when
+    the start route would refuse them, and taken when it would take them; the machine's
+    refusal first, then the plan's; and nothing is sent to the board by the asking."""
+    CONDITIONS[condition](board, monkeypatch)
+    client = TestClient(app)
+    sent = len(board.sim.sent)
+    verdict = client.post("/firmware/printers/loops/can-start", json=STEP_BODY).json()
+    assert len(board.sim.sent) == sent
+    answer = _ask(client, "tune.start")
+    said = f"{condition}: can-start said {verdict}, start said {answer.status_code} {answer.text[:200]}"
+    if verdict["ok"]:
+        assert answer.status_code < 400, said
+        assert verdict["plan"]["changes"] == [[0.0, 180], [300.0, 185]]
+        assert verdict["plan"]["end_s"] == 540.0 and verdict["plan"]["what"] == "a step of hotend 0"
+    else:
+        assert answer.status_code >= 400 and verdict["why"] and verdict["kind"], said
+        assert verdict["kind"] == can.can_now(PORT)["tune.start"]["kind"]
+        assert verdict["plan"] is None
+
+
+@pytest.mark.parametrize(
+    "unsaid, says",
+    [
+        (("ceiling_c",), "its ceiling"),
+        (("max_duration_s",), "its longest time"),
+        (("ceiling_c", "max_duration_s"), "its ceiling and its longest time"),
+    ],
+)
+def test_a_ceiling_or_a_longest_time_not_stated_is_the_plan_s_refusal(board, unsaid, says):
+    """With the machine ready, figures with no ceiling or no longest time are refused,
+    kind ``plan``, in words that say which; the start route refuses them too."""
+    board.links.control.arm(PORT)
+    body = {k: v for k, v in STEP_BODY.items() if k not in unsaid}
+    client = TestClient(app)
+    verdict = client.post("/firmware/printers/loops/can-start", json=body).json()
+    assert (verdict["ok"], verdict["kind"], verdict["plan"]) == (False, "plan", None)
+    assert verdict["why"] == f"{PORT}: {loops.UNSTATED}: {says} not stated"
+    assert client.post("/firmware/printers/loops/start", json=body).status_code == 422
+    assert loops.tuning_job(PORT) is None or loops.tuning_job(PORT).finished is not None
+
+
+def test_a_plan_s_own_refusal_is_said_as_plan_says_it(board):
+    board.links.control.arm(PORT)
+    body = {**STEP_BODY, "ceiling_c": 182}
+    verdict = TestClient(app).post("/firmware/printers/loops/can-start", json=body).json()
+    assert verdict["kind"] == "plan"
+    assert verdict["why"] == f"{PORT}: the step's target, 185 degC, is above the ceiling, 182 degC"
+
+
+@pytest.mark.parametrize("kind", loops.KINDS, ids=[k.name for k in loops.KINDS])
+@pytest.mark.parametrize("heater", ["hotend", "bed"])
+def test_each_kind_lists_exactly_what_its_plan_needs(kind, heater):
+    """A page asks for the figures ``GET /firmware/loops/kinds`` lists: with each one's
+    value to start from, the plan is made; without any one of them, ``plan`` names it."""
+    figures = {p.name: p.start[heater] for p in kind.parameters}
+    cap = gcode.BED_MAX_C if heater == "bed" else gcode.HOTEND_MAX_C
+    made = loops.plan(heater, 0, kind.name, cap, loops.MAX_DURATION_S, **figures)
+    assert made.kind == kind.name
+    for name in figures:
+        with pytest.raises(ValueError, match=f"needs {name}"):
+            loops.plan(
+                heater,
+                0,
+                kind.name,
+                cap,
+                loops.MAX_DURATION_S,
+                **{k: v for k, v in figures.items() if k != name},
+            )
+
+
+def test_the_rules_and_the_kinds_are_listed_for_a_page():
+    client = TestClient(app)
+    rules = client.get("/firmware/loops/rules").json()
+    assert [r["name"] for r in rules["rules"]] == list(cl.RULES)
+    assert rules["rules"][-1]["kinds"] == list(cl.RULES["amigo"].kinds)
+    assert rules["default"] == {"rule": "simc", "kind": "pi"}
+    assert set(rules["left_out"]) == set(cl.LEFT_OUT)
+    kinds = client.get("/firmware/loops/kinds").json()
+    assert [k["kind"] for k in kinds["kinds"]] == ["step", "autotune", "perturbation"]
+    assert [p["name"] for p in kinds["kinds"][0]["parameters"]] == list(loops.NEEDS["step"])
+    assert kinds["caps"] == {"hotend": gcode.HOTEND_MAX_C, "bed": gcode.BED_MAX_C}
+    assert kinds["max_duration_s"] == loops.MAX_DURATION_S and kinds["sample_period_s"] == 1.0
+    for kind in kinds["kinds"]:
+        for p in kind["parameters"]:
+            assert p["name"] not in ("ceiling_c", "max_duration_s"), p

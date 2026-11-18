@@ -93,6 +93,62 @@ class Plan:
         return gcode.normalise_control(f"{code} S{int(target)}")
 
 
+@dataclass(frozen=True)
+class Parameter:
+    """One figure an experiment takes beside its ceiling and its longest time: its name
+    in ``plan``'s words, what a page calls it, its unit, and a value to start from for
+    each heater. The ceiling and the longest time have none: the caller states them."""
+
+    name: str
+    label: str
+    unit: str
+    start: Dict[str, float]
+
+
+@dataclass(frozen=True)
+class Kind:
+    name: str
+    label: str
+    parameters: Tuple[Parameter, ...]
+
+
+# What each experiment takes (``plan``), as a page asks for it (GET /firmware/loops/kinds).
+# The values to start from are the simulated heaters' scale: a hotend's lag a minute and a
+# half, a bed's four minutes.
+KINDS: Tuple[Kind, ...] = (
+    Kind(
+        "step",
+        "A step",
+        (
+            Parameter("base_c", "Base", "°C", {"hotend": 180, "bed": 50}),
+            Parameter("step_c", "Step", "°C", {"hotend": 5, "bed": 5}),
+            Parameter("settle_s", "Settle", "s", {"hotend": 600, "bed": 900}),
+            Parameter("after_s", "After the step", "s", {"hotend": 400, "bed": 900}),
+        ),
+    ),
+    Kind(
+        "autotune",
+        "An autotune",
+        (
+            Parameter("target_c", "Target", "°C", {"hotend": 200, "bed": 60}),
+            Parameter("cycles", "Cycles", "", {"hotend": 5, "bed": 5}),
+        ),
+    ),
+    Kind(
+        "perturbation",
+        "A perturbation",
+        (
+            Parameter("centre_c", "Centre", "°C", {"hotend": 200, "bed": 60}),
+            Parameter("amplitude_c", "Amplitude", "°C", {"hotend": 2, "bed": 2}),
+            Parameter("period_s", "Period", "s", {"hotend": 60, "bed": 240}),
+            Parameter("periods", "Periods", "", {"hotend": 4, "bed": 3}),
+            Parameter("settle_s", "Settle", "s", {"hotend": 600, "bed": 900}),
+        ),
+    ),
+)
+NEEDS = {kind.name: tuple(p.name for p in kind.parameters) for kind in KINDS}
+
+
 def _need(p: dict, *names: str) -> None:
     missing = [n for n in names if p.get(n) is None]
     if missing:
@@ -145,8 +201,9 @@ def plan(
             raise ValueError(f"{what}, {target} degC, is above the ceiling, {ceiling_c:g} degC")
         return int(target)
 
+    if kind in NEEDS:
+        _need(p, *NEEDS[kind])
     if kind == "step":
-        _need(p, "base_c", "step_c", "settle_s", "after_s")
         b = under(int(p["base_c"]), "the base")
         s = under(int(p["base_c"]) + int(p["step_c"]), "the step's target")
         if int(p["step_c"]) == 0:
@@ -156,7 +213,6 @@ def plan(
         end = float(p["settle_s"]) + float(p["after_s"])
         changes = ((0.0, b), (float(p["settle_s"]), s))
     elif kind == "perturbation":
-        _need(p, "centre_c", "amplitude_c", "period_s", "periods", "settle_s")
         c, a = int(p["centre_c"]), int(p["amplitude_c"])
         if a < 1:
             raise ValueError("the amplitude is a degree at least")
@@ -177,7 +233,6 @@ def plan(
         changes.append((end, c))
         changes = tuple(changes)
     elif kind == "autotune":
-        _need(p, "target_c", "cycles")
         t = under(int(p["target_c"]), "the target")
         if t + AUTOTUNE_HEADROOM_C > ceiling_c:
             raise ValueError(
@@ -195,6 +250,51 @@ def plan(
     for _, target in changes:
         Plan(**base).target_line(target)  # bounded by the dialect too
     return Plan(**base, changes=changes, end_s=end, parameters={k: float(v) for k, v in p.items()})
+
+
+# Nothing states an experiment's ceiling and its longest time for its caller, not even a
+# value to start from: a plan without them is no plan.
+UNSTATED = "an experiment states its ceiling and its longest time, every time"
+
+
+def planned(
+    heater: str = "hotend",
+    index: int = 0,
+    kind: str = "step",
+    ceiling_c: Optional[float] = None,
+    max_duration_s: Optional[float] = None,
+    sample_period_s: Optional[float] = None,
+    **p,
+) -> Tuple[Optional[Plan], Optional[str]]:
+    """``plan`` asked of figures a person may not have finished stating: the plan, or why
+    there is none -- the ceiling and the longest time first, then what ``plan`` says."""
+    unstated = [
+        what
+        for what, value in (("its ceiling", ceiling_c), ("its longest time", max_duration_s))
+        if value is None
+    ]
+    if unstated:
+        return None, f"{UNSTATED}: {' and '.join(unstated)} not stated"
+    try:
+        period = 1.0 if sample_period_s is None else sample_period_s
+        return plan(heater, index, kind, ceiling_c, max_duration_s, period, **p), None
+    except ValueError as exc:
+        return None, str(exc)
+
+
+def plan_view(made: Plan) -> dict:
+    """A plan as a page shows it before anything is sent: what it is, its limits, the
+    targets it sets and when (seconds from its start) and its end, or the autotune line."""
+    return {
+        "what": made.what,
+        "kind": made.kind,
+        "ceiling_c": made.ceiling_c,
+        "max_duration_s": made.max_duration_s,
+        "sample_period_s": made.sample_period_s,
+        "changes": [list(change) for change in made.changes],
+        "end_s": made.end_s if made.changes else None,
+        "autotune": made.autotune,
+    }
 
 
 # ---- the job ------------------------------------------------------------------------------

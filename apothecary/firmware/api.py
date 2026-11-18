@@ -27,7 +27,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from fastapi.routing import APIRoute
 
-from .. import loop_document
+from .. import control_loops, loop_document
 from . import can, devices, gcode, loops, service
 from .installer import InstallSpec, env_for_arduino
 from .models import (
@@ -41,6 +41,7 @@ from .models import (
     LoopDocumentRequest,
     LoopExperimentRequest,
     LoopGainsRequest,
+    LoopPlanRequest,
     LoopSaveRequest,
     ModuleInstallRequest,
     PlateRequest,
@@ -623,6 +624,16 @@ def firmware_loops_start(body: LoopExperimentRequest):
     return loops.start(body.port, plan).snapshot()
 
 
+@router.post("/printers/loops/can-start")
+def firmware_loops_can_start(body: LoopPlanRequest):
+    """Whether an experiment of these figures would be started on ``port`` now: the
+    machine's verdict (``tune.start``), then the plan's -- a ceiling and a longest time
+    stated, every target under the ceiling, the schedule within the longest time -- as
+    ``{ok, why, kind, plan}``, with the plan (the targets and when, or the autotune line)
+    when it would. Nothing is sent."""
+    return can.can_tune(body.port, body.model_dump(exclude={"port"}))
+
+
 @router.get("/printers/loops/job")
 async def firmware_loops_job(port: Port, series: bool = False):
     """The current (or last) experiment on ``port``, with its samples so far when
@@ -692,6 +703,56 @@ def firmware_loops_curves(body: LoopDocumentRequest):
         body.experiment_id, body.rule, body.kind, body.closed_loop_time, body.read_board
     )
     return loop_document.curves(doc)
+
+
+@router.get("/loops/rules")
+async def firmware_loops_rules():
+    """The rules a controller is designed by (``control_loops.RULES``): each one's name,
+    title, source, what it takes, the kinds of controller it gives, what it assumes and
+    its relation; the rule and the kind a document is designed by when none is named;
+    and the rules left out, with why."""
+    fields = LoopDocumentRequest.model_fields
+    return {
+        "rules": [
+            {
+                "name": r.name,
+                "title": r.title,
+                "source": r.source,
+                "takes": r.takes,
+                "kinds": list(r.kinds),
+                "assumes": r.assumes,
+                "relation": r.relation,
+            }
+            for r in control_loops.RULES.values()
+        ],
+        "default": {"rule": fields["rule"].default, "kind": fields["kind"].default},
+        "left_out": control_loops.LEFT_OUT,
+    }
+
+
+@router.get("/loops/kinds")
+async def firmware_loops_kinds():
+    """The experiments a loop is run through and what each takes beside its ceiling and
+    its longest time (``loops.KINDS``), each figure with a value to start from for a
+    hotend and for the bed; the caps the ceiling stands under; the longest time any
+    experiment may be given; the sample period when none is said. The ceiling and the
+    longest time have no value to start from: the caller states them."""
+    return {
+        "kinds": [
+            {
+                "kind": k.name,
+                "label": k.label,
+                "parameters": [
+                    {"name": p.name, "label": p.label, "unit": p.unit, "start": p.start}
+                    for p in k.parameters
+                ],
+            }
+            for k in loops.KINDS
+        ],
+        "caps": {"hotend": gcode.HOTEND_MAX_C, "bed": gcode.BED_MAX_C},
+        "max_duration_s": loops.MAX_DURATION_S,
+        "sample_period_s": LoopExperimentRequest.model_fields["sample_period_s"].default,
+    }
 
 
 @router.get("/loops/schema")
