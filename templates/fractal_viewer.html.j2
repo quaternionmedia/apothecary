@@ -1357,6 +1357,9 @@
                     fallbackColour: DEFAULT_COLOR, dispose: disposeDeep,
                     setStatus: (words, kind) => this.setStatus(words, kind), invalidate: () => this.invalidate(),
                     refresh: () => { if (this.layersWidget) this.layersWidget.refresh(); },
+                    raycaster: () => this.raycaster,
+                    interfacesOf: (ref) => fetch(`${BASE_URL}/parts/${encodeURIComponent(ref)}/interfaces`)
+                        .then((r) => (r.ok ? r.json() : null)).then((body) => (body ? body.interfaces : null)).catch(() => null),
                 });
                 // What the layers do to what the world draws (layers_world.js).
                 this.layersWorld = mountLayersWorld({
@@ -10523,8 +10526,13 @@
                         (geometry) => {
                             applyScadAxisTurn(geometry);
                             geometry.computeVertexNormals();
+                            // Where the STL's box stood in the part's own frame, before the mesh
+                            // is centred on it: what a reading of the mesh says its places in.
+                            geometry.computeBoundingBox();
+                            const centredFrom = siteAt(geometry.boundingBox.getCenter(new THREE.Vector3()));
                             geometry.center();
                             const mesh = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ ...FACE_BEHIND_ITS_EDGES, flatShading: false }));
+                            mesh.userData.centredFrom = centredFrom;
                             // Drop the real mesh into the same world slot the
                             // placeholder box already occupied -- same fallback
                             // chain as boundsFor, so a composite node without

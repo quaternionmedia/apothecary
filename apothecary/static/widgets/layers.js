@@ -9,7 +9,8 @@
  * category (walls among them: Select walls in View is this row's Selectable), and the
  * world's own, the alignment grid, the machines' buttons and the measurement, only Shown.
  * With Measure shown, what it reads (the selection's size, the distance between two points,
- * the gap between two pieces, each with its source) is written below the rows as text.
+ * the gap between two pieces, the diameter or wall under a click, each with its source) is
+ * written below the rows as text.
  *
  * Each row wears its layer's colour (colourOf: the one table, static/layer_colours.js),
  * the colour the world draws the layer in and its cells of the ring wear: the legend. A
@@ -94,7 +95,7 @@ export function mountLayers(root, { scope, shells = () => [], categories = () =>
 ${section("Parts, by shell", shellRows)}${section("Categories", categoryRows)}${section("The world", [
             row(GRID, layerLabel(GRID), "The machines' build volumes, drawn in this colour, and the floor grid, drawn in the faint greys a floor wears: this layer shows or hides both", false),
             row(MACHINE_BUTTONS, layerLabel(MACHINE_BUTTONS), "The badges a machine wears in the world", false),
-            row(MEASURE, layerLabel(MEASURE), "While shown, a click in the world drops a point to measure between and selects nothing; the selection reads its size", false),
+            row(MEASURE, layerLabel(MEASURE), "While shown, a click in the world drops a point to measure between and selects nothing, and reads the diameter or the wall under it; the selection reads its size", false),
         ])}</table>
 ${reading()}
 <div class="layers-reset"><button type="button" class="layers-reset-all" data-act="reset" title="Depth 1, every layer shown, every layer selectable but walls${taught("layer:reset")}">Reset</button></div>`;

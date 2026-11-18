@@ -1,8 +1,11 @@
 """The measurement layer (apothecary/static/measure.js, the Layers window's Measure row):
 off, the page is as it was; shown, the selection reads its size with where the number
 comes from, a click in the world drops a point and selects nothing, two points read a
-distance, two pieces a gap, and Escape starts again. A measurement is a reading of the
-model and of the mesh drawn, not of a made part. Walkthrough page 42 is what it writes.
+distance, two pieces a gap, and Escape starts again. A click also reads the shape under
+it from the mesh drawn (measure_features.js): inside a dust port's bore a hole's diameter,
+beside the socket the part declares there; on a plate's top the wall behind it; on a
+steep cone that it cannot tell, and why. A measurement is a reading of the model and of
+the mesh drawn, not of a made part. Walkthrough page 42 is what it writes.
 
 Runs against a server of its own, so the site it draws is the code's whatever ran before.
 """
@@ -21,6 +24,11 @@ from viewer_ready import settled
 
 UNIVERSE = "apothecary"
 PART = "calibration_cube"
+# A dust port: a 32 mm bore its part.json declares as a socket, port. A plate 10 mm thick.
+# A hose adapter, its flare a cone at 45 degrees.
+PORT = "dust_port_32"
+PLATE = "router_coupon"
+CONE = "hose_adapter"
 CHANGING = tuple(moments(".panel", "#status"))
 
 # What the page holds of the measurement, and of the selection.
@@ -65,6 +73,54 @@ PICKING = """(key) => {
     const mx = over.reduce((s, p) => s + p.x, 0) / over.length, my = over.reduce((s, p) => s + p.y, 0) / over.length;
     return over.reduce((b, p) => (Math.hypot(p.x - mx, p.y - my) < Math.hypot(b.x - mx, b.y - my) ? p : b));
 }"""
+
+# A point where a click lands on `key`'s mesh on a face of the kind asked, of those a grid
+# finds the one nearest their middle. In the mesh's own frame, its axis upright: 'bore' a
+# face standing upright and facing the middle (inside a hole), 'top' a face looking straight
+# up at the mesh's top, 'cone' a face leaning 37 to 53 degrees from upright.
+FACE = """([key, want]) => {
+    const v = window.fractalViewer, r = v.canvas.getBoundingClientRect(), mesh = v.meshByName[key];
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+    const top = mesh.geometry.boundingBox.max.y;
+    const over = [];
+    for (let i = 1; i < 64; i++) for (let j = 1; j < 64; j++) {
+        const at = { clientX: r.left + (r.width * i) / 64, clientY: r.top + (r.height * j) / 64 };
+        if (document.elementFromPoint(at.clientX, at.clientY) !== v.canvas) continue;
+        const hit = v.raycastHits(at).find((h) => v.renderNodeByKey[h.object.userData.key]);
+        if (!hit || hit.object.userData.key !== key || !hit.face) continue;
+        const p = hit.object.worldToLocal(hit.point.clone()), n = hit.face.normal;
+        const ok = want === 'bore' ? Math.abs(n.y) < 0.05 && n.x * p.x + n.z * p.z < 0
+            : want === 'top' ? n.y > 0.999 && Math.abs(p.y - top) < 1e-3
+            : want === 'cone' ? Math.abs(n.y) > 0.6 && Math.abs(n.y) < 0.8 : false;
+        if (ok) over.push({ x: at.clientX, y: at.clientY });
+    }
+    if (!over.length) return null;
+    const mx = over.reduce((s, p) => s + p.x, 0) / over.length, my = over.reduce((s, p) => s + p.y, 0) / over.length;
+    return over.reduce((b, p) => (Math.hypot(p.x - mx, p.y - my) < Math.hypot(b.x - mx, b.y - my) ? p : b));
+}"""
+
+
+def _into(page: Page, key: str) -> None:
+    """Up to the universe's own level, if not there, and into ``key``, framed and at rest."""
+    page.evaluate("() => { const v = window.fractalViewer; if (v.focusPath.length) v.goUpTo(0, 'test'); }")
+    page.wait_for_function("() => window.fractalViewer.focusPath.length === 0")
+    settled(page)
+    page.evaluate("(k) => window.fractalViewer.stepIn(k, 'test')", key)
+    page.wait_for_function("(k) => window.fractalViewer.focusPath.join('.') === k", arg=key)
+    settled(page)
+    page.wait_for_function(
+        "(k) => { const m = window.fractalViewer.meshByName[k]; return !!m && !m.userData.isPlaceholder; }",
+        arg=key,
+        timeout=60000,
+    )
+    settled(page)
+
+
+def _click_on(page: Page, key: str, want: str) -> None:
+    spot = page.evaluate(FACE, [key, want])
+    assert spot, f"no point of the world where a click lands on {key}'s {want}"
+    page.mouse.click(spot["x"], spot["y"])
+
 
 SOURCES = r"\((declared footprint|envelope of its pieces|the drawn mesh, as loaded|a stand-in box, no size declared)\)"
 
@@ -128,8 +184,9 @@ def test_the_selection_reads_its_size_and_where_it_comes_from(page: Page, url: s
         intro=(
             "The Measure layer, ticked in the Layers window, makes the selection read its "
             "size along its own axes, each number with where it comes from, and a click in "
-            "the world drops a point to measure between rather than selecting. A reading is "
-            "of the model and of the mesh drawn, not of a made part. "
+            "the world drops a point to measure between rather than selecting, and reads the "
+            "shape under it from the mesh drawn: a curved face a diameter, a flat face a wall. "
+            "A reading is of the model and of the mesh drawn, not of a made part. "
             "[docs/viewer.md](../docs/viewer.md#layers) is the reference."
         ),
         runtime=(
@@ -138,7 +195,11 @@ def test_the_selection_reads_its_size_and_where_it_comes_from(page: Page, url: s
         ),
         does_not_show=[
             "**A made part.** A reading is of the model's declared bounds and of the mesh "
-            "drawn; a printed part differs by what the printer does.",
+            "drawn; a printed part differs by what the printer does, and a printed hole is "
+            "smaller than its mesh's.",
+            "**What it cannot tell.** A steep cone, a sphere drawn as triangles, a face too "
+            "small for the pointer: the reading says why and gives no number "
+            "(`test_a_face_that_cannot_decide_says_why_and_gives_no_number`).",
             "**What changes on every run.** Moments are blanked in the pictures.",
         ],
         browser_suite_only=True,
@@ -196,6 +257,59 @@ def test_the_selection_reads_its_size_and_where_it_comes_from(page: Page, url: s
     assert page.evaluate(STATE)["selected"] == before
     assert "between point" not in _reading(page)
 
+    # Inside a dust port's bore: a hole's diameter, beside the socket its part declares.
+    _into(page, PORT)
+    before = page.evaluate(STATE)["selected"]
+    _click_on(page, PORT, "bore")
+    reading = page.locator(".panel[data-panel='layers'] .layers-reading")
+    expect(reading).to_contain_text(f"point 1 on {PORT}: a hole ⌀ 32.00 mm across its vertices")
+    expect(reading).to_contain_text(
+        f"point 1 on {PORT}, declared: port, a socket ⌀ 32.00 mm (its bore at the mouth; "
+        "the part's interface, source stub); the mesh reads ⌀ 32.00 mm there, the same"
+    )
+    said(
+        page,
+        f"Measure: point 1 on {PORT}: a hole ⌀ 32.00 mm across its vertices; a flat face reads its "
+        "wall, a second click the distance",
+    )
+    state = page.evaluate(STATE)
+    assert state["selected"] == before, "a click while measuring selected something"
+    assert state["points"][0]["key"] == PORT
+    # The reading in view, under the Layers window's rows, as the caption reads it.
+    reading.scroll_into_view_if_needed()
+    settled(page)
+    story.shows(
+        "A click inside a bore reads its diameter, beside the declared socket",
+        "The dust port stepped into and framed, a click on the far side of its bore: the "
+        "circle fitted to the bore's facets, drawn round its axis at the click with the line "
+        "across it, labelled. The reading under the Layers window's rows says it is a hole, "
+        "what it was fitted to and how well, and the socket the part declares on the same "
+        "axis, with how far apart the two are; the status line says it in a line, and how to "
+        "read the others.",
+        blank=CHANGING,
+    )
+
+    # On a plate's top: the wall behind it, cast through to the face beneath.
+    page.keyboard.press("Escape")
+    _into(page, PLATE)
+    before = page.evaluate(STATE)["selected"]
+    _click_on(page, PLATE, "top")
+    expect(reading).to_contain_text(
+        f"point 1 on {PLATE}: a flat face, its wall 10.00 mm thick (cast from the click along "
+        "the face's inward normal to the face behind it, parallel to it; the drawn mesh)"
+    )
+    said(page, f"Measure: point 1 on {PLATE}: a wall 10.00 mm thick; a curved face reads its diameter")
+    assert page.evaluate(STATE)["selected"] == before
+    reading.scroll_into_view_if_needed()
+    settled(page)
+    story.shows(
+        "A click on a flat face reads the wall behind it",
+        "The router coupon, a plate, stepped into and framed, a click on its top: the line "
+        "from the click through the plate to the face beneath, labelled with the wall's "
+        "thickness; the reading under the Layers window's rows says the two faces are parallel.",
+        blank=CHANGING,
+    )
+
 
 @pytest.mark.e2e
 def test_two_pieces_read_the_gap_between_their_bounds(page: Page, url: str):
@@ -211,3 +325,22 @@ def test_two_pieces_read_the_gap_between_their_bounds(page: Page, url: str):
         r"gap between workbench and printer_1: (\d+\.\d\d mm|overlap|touching)", text
     ), text
     assert page.evaluate(STATE)["selected"] is None
+
+
+@pytest.mark.e2e
+def test_a_face_that_cannot_decide_says_why_and_gives_no_number(page: Page, url: str):
+    """A click on the hose adapter's flare, a cone at 45 degrees: too few of its faces turn
+    about one axis to fit a round, and it is not flat, so the reading says it cannot tell,
+    and why, with no diameter and no wall; the click selects nothing."""
+    _measuring(page, url)
+    _into(page, CONE)
+    before = page.evaluate(STATE)["selected"]
+    _click_on(page, CONE, "cone")
+    expect(page.locator(".panel[data-panel='layers'] .layers-reading")).to_contain_text(
+        f"point 1 on {CONE}: cannot tell a diameter or a wall here: the faces around the click "
+        "turn about no one axis"
+    )
+    line = next(text for text in _reading(page).splitlines() if text.startswith(f"point 1 on {CONE}:"))
+    assert "⌀" not in line and "thick" not in line, line
+    said(page, f"Measure: point 1 on {CONE}: cannot tell; a curved face reads a diameter, a flat face a wall")
+    assert page.evaluate(STATE)["selected"] == before

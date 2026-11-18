@@ -297,7 +297,7 @@ Selectable (and showing it restores what was chosen), ticking Selectable shows i
 | A category | The pieces of that category, walls among them | Shown, Selectable (walls start unselectable: View › Select walls is this tick) |
 | Alignment grid | The machines' build-volume boxes, drawn in the layer's colour, and the floor grid, drawn in faint greys that are no layer's colour; Shown hides both | Shown |
 | Machine buttons | The badges a machine wears in the world | Shown |
-| Measure | Dimension lines on the selection, and a click that drops a point to measure between ([below](#measure)) | Shown (off at first) |
+| Measure | Dimension lines on the selection, and a click that drops a point to measure between and reads the diameter or the wall under it ([below](#measure)) | Shown (off at first) |
 
 **Each layer has one colour**, from one table (`apothecary/layer_colours.py`) the
 server sends with the site (`layer_colours`, beside `tree`), so the page writes none of
@@ -369,6 +369,49 @@ printed part differs by what the printer does. Every number says where it comes 
   gives the clear distance between their declared bounds (the bounds of the box that
   contains each, in the site's axes), which is *touching* when they meet and *overlap*
   when they share volume. It answers whether one fits beside the other.
+- **What is under the click.** A click also reads the shape under it, from the mesh
+  drawn, which every part has (`apothecary/static/measure_features.js`), and says what it
+  fitted and how well. What it reads is decided by the face under the pointer: a curved
+  face reads a diameter, a flat face a wall, and the status line says in a line what was
+  read and how to read the others, the whole reading in the Layers window. There is no
+  mode to choose.
+  - *A curved face reads a round.* The faces around the click that turn about one axis,
+    each beside the next across an edge that runs along it, are the round's facets. The
+    axis is the direction every facet's normal makes one angle with: a right angle for a
+    cylinder. The circle is fitted to the facets' vertices, seen along the axis. The
+    reading says *hole* where the faces face the axis and *boss* where they face away;
+    the diameter; how many vertices of how many facets it was fitted to, and whether they
+    are the whole round or an arc of it; the axis and a point on it in the part's own
+    frame; and the *residual*, how far the vertices stand from the circle, root mean
+    square, 0.00 mm for a mesh drawn from a true cylinder. A faceted round's vertices lie
+    on the circle and its flats inside it, so the diameter is *across its vertices*; where
+    the figure across its flats, the regular polygon's inscribed circle, differs at two
+    places, the reading gives that too, and a printed hole is nearer it. A round whose
+    faces lean to its axis is a taper: the reading gives its diameter at each end, and the
+    figure at its middle. It also reads the round's wall, from the click into what it is
+    made of to the face beyond. The world draws a circle round the axis at the click and
+    the line across it, labelled with its diameter.
+  - *A flat face reads its wall.* From the click along the face's inward normal to the
+    face that closes the piece behind it: the wall's thickness, and whether that face is
+    parallel or how many degrees it is off. Outward, across open space, to a face of the
+    same piece that faces it: the gap, a slot's width. Each is drawn as a line, labelled.
+  - *Two points read an edge and an angle.* Two points snapped to the two ends of one
+    edge of the mesh, a line of mesh edges whose faces on either side do not lie in one
+    plane, read as that edge, with the angle its faces meet at. Two flat faces clicked in
+    turn read the angle between them, as a wedge's, and their normals'.
+  - *Beside what the part declares.* A part that declares its interfaces
+    ([connections](connections.md)), a socket's bore, a bolt hole, a spigot's outside,
+    has the one on the same axis and the same way round read beside the mesh's: its name,
+    type, figure and source, and how far the mesh's diameter at that place stands from it.
+    The interfaces are declared in the part's own frame at its defaults: a mesh drawn from
+    a variant says so, and a part drawn as it rests finds none on the axis.
+  - *It cannot tell* where too few faces around the click turn about one axis (a steep
+    cone, a sphere drawn as triangles, a blend), where the face under the pointer is narrower than
+    two pixels at that distance, where a cast meets no face because the mesh is open, on a
+    stand-in box, and on a machine drawn as its pieces where which piece was hit cannot be
+    told. It says which, and gives no number.
+  - *What a mesh cannot tell* is a printed part's real size: a printer closes a hole and
+    swells a boss by what it does, and only the made part, measured, says by how much.
 - **A click measures while the layer is shown.** Measure is a mode: the layer being
   shown is the whole of the choice, because a click that sometimes selected and sometimes
   measured would be a surprise at the moment it matters, and a modifier would be a

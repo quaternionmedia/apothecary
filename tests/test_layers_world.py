@@ -115,8 +115,8 @@ def test_each_change_is_said_in_its_own_words(result):
         "Depth: 1 level below this one, drawn and reached by a click",
         "Depth: 3 levels below this one, drawn and reached by a click",
         "Select walls: on",
-        "Measure: on. A click in the world drops a point and selects nothing, a second reads "
-        "the distance, a third starts again (Escape too); the selection reads its size",
+        "Measure: on. A click drops a point and reads the diameter or the wall under it, selecting "
+        "nothing; a second reads the distance, a third starts again (Escape too)",
         "Measure: off, a click selects again",
         "Shell 2 alone of its kind shown: the others hidden, and a click passes through them",
         "Every one shown: Alignment grid, Machine buttons",

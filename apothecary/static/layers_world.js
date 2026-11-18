@@ -65,7 +65,7 @@ export function layersSaid(what, { wallsSaid }) {
     if (what.layer === WALL && what.selectable !== undefined) return wallsSaid();
     if (what.layer === MEASURE && what.shown !== undefined) {
         return what.shown
-            ? "Measure: on. A click in the world drops a point and selects nothing, a second reads the distance, a third starts again (Escape too); the selection reads its size"
+            ? "Measure: on. A click drops a point and reads the diameter or the wall under it, selecting nothing; a second reads the distance, a third starts again (Escape too)"
             : "Measure: off, a click selects again";
     }
     if (what.only) return `${layerLabel(what.layer)} alone of its kind shown: the others hidden, and a click passes through them`;
