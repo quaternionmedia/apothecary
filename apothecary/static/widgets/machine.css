@@ -98,6 +98,9 @@
 #print-card .bar { margin-top: 0.3rem; }
 #print-card .bar.print i { background: var(--tx); }
 #print-history { font-size: 0.74rem; color: var(--ink-2); max-height: 6rem; overflow: auto; margin-top: 0.3rem; }
+/* The Print window's acts -- Print, Pause, Resume, Abort -- stand at its foot while what is
+   above them is taller than the window, so a small screen reaches them unscrolled. */
+#print-verbs { position: sticky; bottom: 0; z-index: 1; background: var(--panel); padding: 0.3rem 0; margin-bottom: -0.3rem; }
 #print-history a { color: var(--tx); margin-left: 0.4rem; }
 #print-history .cancelled, #print-history .failed { color: var(--warn); }
 /* Slicing, in Print from here: the slice's task log while it runs, then what it used.

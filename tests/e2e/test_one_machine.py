@@ -461,6 +461,43 @@ def test_the_pad_s_tab_is_not_the_machine_s(page: Page, url: str):
     expect(machine.locator("#control")).to_be_hidden(timeout=5000)
 
 
+@pytest.mark.e2e
+def test_at_1100_by_700_the_print_window_s_acts_are_in_view_unscrolled(page: Page, url: str):
+    """In the Machine view on a small screen the Print window is shorter than what it
+    holds: its acts -- Print, Pause, Resume, Abort -- stand at its foot all the same, in
+    view without scrolling it."""
+    kept = httpx.post(
+        f"{url}/firmware/printers/prints",
+        params={"name": "square.gcode", "machine": "printer"},
+        content=b"G21\nG90\nG28\nG1 X10 Y10 F3000\nG1 X20 Y10\nG1 X20 Y20\n",
+        headers={"Content-Type": "text/plain"},
+        timeout=15.0,
+    )
+    kept.raise_for_status()
+    page.set_viewport_size({"width": 1100, "height": 700})
+    open_garage(page, url, settle=False)
+    page.locator(".world-badge[data-path='printer_1']").click()
+    windows.machine_ready(page, "printer")
+    windows.show(page, "machine-print")
+    expect(windows.panel(page, "machine-print")).to_be_visible(timeout=5000)
+    # The footpedal under makes and a kept file chosen: the window holds more than it shows.
+    windows.in_machine(page, "#print-part").select_option("footpedal")
+    windows.in_machine(page, "#print-pick").select_option(kept.json()["id"])
+    expect(windows.in_machine(page, "#print-verbs")).to_be_visible(timeout=5000)
+    seen = page.evaluate(
+        """() => {
+            const row = document.querySelector('#print-verbs');
+            let box = row.parentElement;
+            while (box && !['auto', 'scroll'].includes(getComputedStyle(box).overflowY)) box = box.parentElement;
+            const r = row.getBoundingClientRect(), c = box.getBoundingClientRect();
+            return { taller: box.scrollHeight > box.clientHeight + 4, scrolled: box.scrollTop,
+                     inView: r.height > 0 && r.top >= c.top - 1 && r.bottom <= c.bottom + 1 };
+        }"""
+    )
+    assert seen == {"taller": True, "scrolled": 0, "inView": True}, seen
+    expect(windows.in_machine(page, "#print-start")).to_be_in_viewport()
+
+
 PORT_OPENERS = (
     "/firmware/devices/stream",
     "/firmware/devices/listen",

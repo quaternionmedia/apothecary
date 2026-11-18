@@ -190,7 +190,9 @@ Slice is a step of the loop from a picture to a print
   the apothecary by its name. **Slice**, beside it once a part is chosen
   there, slices it for this printer -- the cell does the same. While it runs the card
   shows the slicer's log with **Cancel**; when it ends, the G-code it kept is
-  chosen in the card's files, so ▶ Print follows, and the card says what the
+  chosen in the card's files, so ▶ Print follows -- the row of ▶ Print, Pause,
+  Resume and Abort stands at the window's foot when the card is taller than the
+  window, so a small screen reaches it unscrolled -- and the card says what the
   slice used: each value, with `declared` (the part's own, in bold) or
   `printer` beside it and its source on hover, the slicer's estimate, and its
   errors and warnings by line. A kept file a slice made says, in the card's
