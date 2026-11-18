@@ -22,7 +22,7 @@ family's members found stand on every surface alike (`apothecary/routes/surfaces
 | Surface | Frame | Owner | Read with | Said changed when |
 |---|---|---|---|---|
 | `machine_status` | `bed_mm` | `apothecary/firmware/devices.py` | `port` | a poll is kept, whoever made it (`notify_status`): the poll, its raw lines left out |
-| `jobs` | `none` | `apothecary/jobs.py` | `site`, `port` | a job begins and ends; its progress between is its machine's polls' |
+| `jobs` | `none` | `apothecary/jobs.py` | `site`, `port` | a job begins and ends, and while it runs when its stage changes or its progress passes a whole percent (below) |
 | `projector` | `bed_mm` | `apothecary/routes/projector.py` | `site` and `path`, both needed | a poll of the machine's board, a job of it begun or ended, a calibration kept or forgotten: its picture's `key` and what moves |
 | `lighting` | `none` | `apothecary/routes/lighting.py` | `site`, needed | levels or slots are put; what a console's own feed sets between puts is read, not said |
 | `pictures` | `none` | `apothecary/routes/pictures.py` | | a picture is kept or forgotten here, and a pile is gathered |
@@ -76,6 +76,28 @@ says has changed is silent however long a reader follows it; a machine's polls a
 relayed only as someone makes them -- its Machine, the world, the projector's page.
 `tests/test_surfaces.py` holds that a reader following every surface, with a link held
 and nobody polling, writes not a byte to the port, makes no poll and opens no port.
+
+## A job's stages
+
+A job on the stream is a change of `jobs` keyed by the job's id, whose `body` is the job as
+`GET /jobs/{id}` has it, less its `log`. One is told when the job begins (`outcome`
+`running`, `detail.stage` `starting`), when its stage changes -- a print's `printing`,
+`paused`, `printing` again, `finishing` and `cancelling`; a router's cut says `running`; a
+tune's `running` -- when its `progress` passes another whole percent, and when it ends (`outcome` `done`, `cancelled`
+or `failed`, `detail.stage` the same). Between those it is silent: not on every line, and
+no timer of its own, the job's own thread says it as it sends. Each stage holds for as
+long as it holds, so a reader that follows from the start hears them in order:
+
+```text
+event: change
+data: {"format": "apothecary.surface-change/1", "seq": 43, "surface": "jobs", "frame": "none",
+       "key": "20261118T101500123Z-dev_ttyUSB0", "at": "2026-11-18T10:15:03+00:00",
+       "body": {"id": "20261118T101500123Z-dev_ttyUSB0", "kind": "print", "outcome": "running",
+                "progress": 0.31, "detail": {"stage": "paused", "sent": 1240, "total": 4000}}}
+```
+
+The stream still polls nothing: what is told is what the job's thread already holds, and
+no job's state is built while no reader follows the jobs.
 
 ## Contributed
 

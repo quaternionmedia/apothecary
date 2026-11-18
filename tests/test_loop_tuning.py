@@ -444,6 +444,36 @@ class TestExperiments:
         assert jobs.get(job.job.id).outcome == "done"
         assert loops.experiment(job.experiment.id)["kind"] == "step"
 
+    def test_a_step_s_stages_and_progress_reach_a_follower_of_the_jobs(self, board):
+        import asyncio
+
+        from apothecary import surfaces
+
+        board.links.control.arm(PORT)
+
+        async def follow():
+            following = surfaces.subscribe(["jobs"])
+            try:
+                job = await asyncio.to_thread(
+                    _run, board, loops.plan("hotend", 0, "step", 200, 900, **STEP)
+                )
+                got, _ = await following.next(0.2)
+                return job, got
+            finally:
+                following.close()
+
+        job, told = asyncio.run(follow())
+        stages = [e["body"]["detail"]["stage"] for e in told]
+        assert {e["key"] for e in told} == {job.job.id}
+        assert [s for n, s in enumerate(stages) if n == 0 or stages[n - 1] != s] == [
+            "starting",
+            "running",
+            "done",
+        ]
+        progress = [e["body"]["progress"] for e in told]
+        assert progress == sorted(progress) and 3 < len(told) <= 105
+        assert told[-1]["body"]["outcome"] == "done"
+
     def test_a_step_s_document_finds_the_simulated_plant(self, board):
         """The fit of a closed-loop step read once a (simulated) second finds the
         simulator's own plant within 15 % in its gain and time constant and 2 s in its dead

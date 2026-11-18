@@ -315,6 +315,7 @@ class LoopJob:
         link = self.links.get(self.port)
         if link is not None and self.finished is None:
             link.job = self.snapshot()
+            jobs.moved(self.job.id, self.now)
 
     # -- ending -------------------------------------------------------------------------
     def cancel(self, quiet: bool = False) -> None:

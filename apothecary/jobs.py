@@ -258,8 +258,38 @@ def _tell(job: Job) -> None:
     surfaces.changed(JOBS, key=job.id, body=lambda: job.model_dump(mode="json", exclude={"log"}))
 
 
+# What each running job's change was last told as, (its stage, its whole percent): a job
+# says it has moved (``moved``) at every line it sends, and only a change of stage or of a
+# whole percent is a change to a reader. No timer is kept; the job's own thread is the clock.
+_TOLD: Dict[str, Tuple[Any, int]] = {}
+
+
+def _where(job: Job) -> Tuple[Any, int]:
+    return job.detail.get("stage"), int(job.progress * 100)
+
+
+def moved(job_id: str, now: Callable[[], Job]) -> Optional[Dict[str, Any]]:
+    """The running job ``job_id`` says it has moved: ``now`` is the job as it stands.
+    Told to the readers of ``jobs`` when its stage has changed since it was last told, or
+    its progress has passed another whole percent -- and only while a reader follows,
+    when ``now`` is not called at all. The event sent, or None. It asks nothing of the
+    machine: ``now`` is what the job's own thread already holds."""
+    if job_id not in _LIVE or not surfaces.listening(JOBS):
+        return None
+    try:
+        job = now()
+        if not job.running or _TOLD.get(job_id) == _where(job):
+            return None
+        _TOLD[job_id] = _where(job)
+        return surfaces.changed(
+            JOBS, key=job_id, body=lambda: job.model_dump(mode="json", exclude={"log"})
+        )
+    except Exception:  # the job's own thread says it; relaying it is not worth its failure
+        return None
+
+
 # The jobs, as a surface (apothecary/surfaces.py): read from the store, said changed as each
-# begins and ends. A running job's progress is its machine's polls'.
+# begins and ends, and as a running one's stage changes or its progress passes a whole percent.
 JOBS = "jobs"
 
 
@@ -303,6 +333,7 @@ def begin(job: Job, live: Callable[[], Job]) -> Job:
             kept.unlink(missing_ok=True)
             raise
         _LIVE[job.id] = live
+        _TOLD[job.id] = _where(job)
     _tell(job)
     return job
 
@@ -314,6 +345,7 @@ def end(job: Job) -> Job:
     with _LOCK:
         _write(job)
         _LIVE.pop(job.id, None)
+        _TOLD.pop(job.id, None)
     _tell(job)
     return job
 

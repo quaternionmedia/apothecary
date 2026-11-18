@@ -9,6 +9,7 @@ import asyncio
 import json
 import re
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -438,3 +439,161 @@ def test_a_calibration_kept_is_told_as_the_projector_s_change(fake_arduino_cli, 
         client.delete(f"/sites/garage/nodes/{BOARD}/device")
     assert [e["key"] for e in told] == ["garage/printer_1"]
     assert told[0]["body"]["key"] == put["picture"]["key"] != was["picture"]["key"]
+
+
+# --- a job's stages ---------------------------------------------------------------------------
+
+
+def _stages(told: list) -> list:
+    """The stages the jobs' changes carry, each once for as long as it held."""
+    stages = [e["body"]["detail"]["stage"] for e in told]
+    return [s for n, s in enumerate(stages) if n == 0 or stages[n - 1] != s]
+
+
+def _a_print_followed(links, lines: int, steer):
+    """A print of ``lines`` lines on a scripted board, run while the jobs are followed:
+    ``steer(job, gate)`` drives it. The changes the reader heard."""
+    from firmware_helpers import ScriptedTransport
+
+    kept = devices.save_print_file("long.gcode", ("G1 X1\n" * lines).encode(), machine="printer")
+    gate = threading.Event()
+    gate.set()
+
+    class Gated(ScriptedTransport):
+        def write(self, data):
+            if data.decode().strip() == "G1 X1":
+                gate.wait(5)
+                time.sleep(0.001)
+            super().write(data)
+
+    links.factory = Gated
+    links.control.arm(PORT)
+
+    async def follow():
+        following = surfaces.subscribe(["jobs"])
+        try:
+            def run():
+                job = devices.start_print(PORT, kept.id, links=links)
+                steer(job, gate)
+                job.thread.join(10)
+                return job
+
+            job = await asyncio.to_thread(run)
+            got, missed = await following.next(0.2)
+            return job, got, missed
+        finally:
+            following.close()
+
+    return asyncio.run(follow())
+
+
+@pytest.fixture
+def scripted_links(monkeypatch):
+    from firmware_helpers import ScriptedTransport
+
+    ScriptedTransport.instances.clear()
+    links = gcode.PrinterLinks(factory=ScriptedTransport)
+    monkeypatch.setattr(gcode, "_LINKS", links)
+    yield links
+    links.stop_all()
+
+
+def _wait_for(test, seconds=5.0):
+    end = time.monotonic() + seconds
+    while time.monotonic() < end and not test():
+        time.sleep(0.005)
+    assert test()
+
+
+def test_a_print_s_stages_arrive_in_order_on_a_follower(fake_arduino_cli, scripted_links):
+    """A print begun, paused, resumed and run to its end, heard by a follower of the jobs:
+    each stage as it held, in order, the same job's id on each, and the last the record."""
+
+    def steer(job, gate):
+        gate.clear()  # a line held at the board
+        _wait_for(lambda: job.stage == "printing")
+        job.pause()
+        gate.set()
+        time.sleep(0.1)
+        job.resume()
+
+    job, told, missed = _a_print_followed(scripted_links, 60, steer)
+    assert job.record.outcome == "done" and missed == 0
+    assert {e["key"] for e in told} == {job.record.id} and all(e["surface"] == "jobs" for e in told)
+    assert _stages(told) == ["starting", "printing", "paused", "printing", "done"]
+    assert [e["body"]["outcome"] for e in told][0] == "running"
+    assert told[-1]["body"]["outcome"] == "done" and told[-1]["body"]["progress"] == 1.0
+    progress = [e["body"]["progress"] for e in told]
+    assert progress == sorted(progress)
+
+
+def test_a_cancel_is_told_as_cancelling_and_then_cancelled(fake_arduino_cli, scripted_links):
+    def steer(job, gate):
+        _wait_for(lambda: job.sent >= 2)
+        job.cancel()
+
+    job, told, _ = _a_print_followed(scripted_links, 300, steer)
+    assert job.record.outcome == "cancelled"
+    assert _stages(told)[-2:] == ["cancelling", "cancelled"]
+    assert _stages(told)[:2] == ["starting", "printing"]
+
+
+def test_progress_is_told_at_each_whole_percent_and_no_oftener(fake_arduino_cli, scripted_links, monkeypatch):
+    monkeypatch.setattr(devices, "PRINT_PROGRESS_EVERY", 1)  # the job speaks at every line
+    job, told, _ = _a_print_followed(scripted_links, 400, lambda job, gate: None)
+    percents = [int(e["body"]["progress"] * 100) for e in told]
+    assert len(percents) == len(set(zip(percents, (e["body"]["detail"]["stage"] for e in told))))
+    assert len(told) <= 100 + 5 and percents[0] == 0 and percents[-1] == 100
+    assert len(told) > 5  # the progress between is told, at some rate
+
+
+def test_nobody_following_a_job_means_nothing_of_it_is_made(fake_arduino_cli, scripted_links):
+    """``moved`` asks the job for its state only while a reader follows the jobs."""
+    asked = []
+    at = datetime.now(timezone.utc)
+    job = jobs.Job(
+        id=jobs.new_id(at, "/dev/ttyQUIET"),
+        kind="print",
+        machine=jobs.JobMachine(kind="printer", port="/dev/ttyQUIET"),
+        input=jobs.JobInput(name="q.gcode"),
+        started_at=at,
+        detail={"stage": "starting"},
+    )
+
+    def now():
+        asked.append(1)
+        return job.model_copy(update={"detail": {"stage": "printing"}})
+
+    jobs.begin(job, live=now)
+    try:
+        assert not surfaces.listening("jobs") and jobs.moved(job.id, now) is None
+        assert asked == []
+
+        async def follow():
+            following = surfaces.subscribe(["jobs"])
+            try:
+                return jobs.moved(job.id, now), jobs.moved(job.id, now), jobs.moved("gone", now)
+            finally:
+                following.close()
+
+        first, again, unknown = asyncio.run(follow())
+        assert first["body"]["detail"]["stage"] == "printing"
+        assert again is None and unknown is None  # told once for as long as it held
+    finally:
+        jobs.end(job.model_copy(update={"outcome": "done", "finished_at": at}))
+    assert jobs._TOLD.get(job.id) is None
+
+
+def test_the_job_change_docs_surfaces_md_shows_has_the_keys_a_real_one_has(
+    fake_arduino_cli, scripted_links
+):
+    """The stage event written by hand in docs/surfaces.md carries keys a real one has."""
+    text = DOCS.read_text(encoding="utf-8")
+    shown = re.findall(r"```text\n(.*?)\n```", text, re.S)[1]
+    written = json.loads(" ".join(shown.split("event: change\ndata: ", 1)[1].splitlines()))
+    job, told, _ = _a_print_followed(scripted_links, 30, lambda job, gate: None)
+    real = told[0]
+    assert set(written) == set(real) and written["surface"] == "jobs"
+    assert set(written["body"]) <= set(real["body"])
+    assert set(written["body"]["detail"]) <= set(real["body"]["detail"])
+    assert jobs.JOB_ID_RE.match(written["key"]) and "log" not in real["body"]

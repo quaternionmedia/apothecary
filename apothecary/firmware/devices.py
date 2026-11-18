@@ -1980,6 +1980,8 @@ class PrintJob:
         link = self.links.get(self.port)
         if link is not None and (self.finished is None):
             link.job = self.snapshot()
+            # Told to the jobs' readers when the stage or the whole percent has changed.
+            jobs.moved(self.job.id, self.now)
 
     def _end(self, outcome: str, tail: List[str]) -> jobs.Job:
         """The job as it ended, kept; a store that cannot be written does not stop the end."""
