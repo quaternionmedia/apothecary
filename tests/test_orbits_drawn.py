@@ -24,7 +24,7 @@ NODE = shutil.which("node") or str(Path.home() / ".local" / "bin" / "node")
 pytestmark = pytest.mark.skipif(not Path(NODE).exists(), reason="node is not installed")
 
 SCRIPT = """
-import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf } from "%(module)s";
+import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf, shellLabel, facesEye, pieceNear } from "%(module)s";
 import { readFileSync } from "node:fs";
 const tree = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const nodes = tree.children.map((n) => ({ key: n.name, ...n }));
@@ -46,6 +46,13 @@ const behind = far.map((p) => ({ ...p, off: true }));
 out.near = [nearestLoop([square, far], 50, 3, 6), nearestLoop([square, far], 302, 50, 6),
     nearestLoop([square, far], 200, 50, 6), nearestLoop([square, behind], 302, 50, 6),
     nearestLoop([square, far], 50, 50, 6)];
+out.labels = out.shells.map((s) => shellLabel(s.shell, nodes));
+out.faces = [facesEye([10, 0, 0], [1, 0, 0]), facesEye([10, 0, 0], [-1, 0, 0]), facesEye([10, 0, 0], [0.05, 1, 0]),
+    facesEye([0.5, 0, 0], [-1, 0, 0]), facesEye([10, 0, 0], [0.1, 0.99, 0]), facesEye([10, 0, 0], [0.09, 0.99, 0])];
+const seen = [{ key: "a", sx: 100, sy: 100, depth: 5 }, { key: "b", sx: 102, sy: 100, depth: 9 },
+    { key: "c", sx: 300, sy: 300, depth: 1, off: true }, { key: "d", sx: 98, sy: 101, depth: 2 }];
+out.pieces = [pieceNear(seen, 101, 100, 10), pieceNear(seen, 300, 300, 10), pieceNear(seen, 200, 200, 10),
+    pieceNear([{ key: "p", sx: 0, sy: 0, depth: 9 }, { key: "q", sx: 3, sy: 0, depth: 1 }], 1, 0, 10)];
 console.log(JSON.stringify(out));
 """
 
@@ -153,3 +160,32 @@ def test_outlines_on_one_shell_overlap_only_where_large_parts_make_them(drawn):
             overlapping += between < a["angle"] + b["angle"]
     assert pairs > 20
     assert overlapping <= pairs // 4
+
+
+def test_a_shell_says_what_it_is_in_the_docs_words(drawn):
+    words = [label.split(" \u00b7 ")[1] for label in drawn["labels"]]
+    assert words[0] == "built from nothing"
+    assert words[-1] == "sites"
+    assert all(w == "built from those inside" for w in words[1:-1])
+    assert [label.split(" ")[1] for label in drawn["labels"]] == [
+        str(s["shell"]) for s in drawn["shells"]
+    ]
+
+
+def test_a_label_is_hung_only_from_the_side_of_the_sphere_the_eye_sees(drawn):
+    near, far, edge, inside, limb, beyond = drawn["faces"]
+    # In front: seen. Behind: not. Past the horizon (the unit sphere seen from 10 away
+    # shows points whose x exceeds 0.1): a point at x = 0.05 or 0.09 is hidden, 0.1 just seen.
+    assert near is True and far is False and edge is False
+    assert inside is True
+    assert limb is True and beyond is False
+
+
+def test_the_piece_under_the_pointer_is_named_at_any_distance(drawn):
+    # Of a, b and d near (101, 100): d is nearest-ish? a and b are 1 and 1 away; d is
+    # about 3 away. The nearest is a (first of the tie), and the one nearer the eye among
+    # those about as near, d, takes it; one behind the eye is never named; none within reach.
+    named, behind, nothing, eye = drawn["pieces"]
+    assert named == "d"
+    assert behind is None and nothing is None
+    assert eye == "q"

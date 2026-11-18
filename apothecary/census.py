@@ -1222,6 +1222,16 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         NOTHING,
         "how far a press has travelled, so one that wandered and came back is no click",
     ),
+    "canvas:pointermove:onHoverName": (
+        AUTOMATIC,
+        NOTHING,
+        "the pointer's nearest piece named in a small badge at the universe's own level, selecting nothing",
+    ),
+    "canvas:pointerleave:invalidate": (
+        AUTOMATIC,
+        NOTHING,
+        "the pointer leaving the world, so the name it showed goes",
+    ),
     "canvas:pointerup:onRelease": (
         GESTURE,
         WHAT_YOU_SEE,

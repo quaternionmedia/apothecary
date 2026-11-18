@@ -16,6 +16,12 @@
  *   capOutline(cluster, segments)  the cap's edge, a closed loop on its shell
  *   linksOf(nodes)                 [{ from, to }]: a node's key to each node it is built
  *                                  from, both drawn
+ *   shellLabel(shell, nodes)       what a shell is, in a few words: built from nothing, built
+ *                                  from those inside it, or the sites
+ *   facesEye(eye, point)           whether a point of a sphere is on the side the eye sees
+ *   pieceNear(points, x, y, px)    of pieces on screen ({ key, sx, sy, off, depth }), the one
+ *                                  nearest (x, y) within `px`; of those about as near, the
+ *                                  one nearer the eye
  *   nearestLoop(loops, x, y, px)   of loops of points on screen ({ sx, sy }, `off` where
  *                                  a point is behind the eye), the index of the one that
  *                                  passes nearest (x, y) within `px`, or -1
@@ -25,6 +31,8 @@
 // is drawn (radians), so it stands clear of them.
 export const RING_TILT = (60 * Math.PI) / 180;
 export const CLUSTER_MARGIN = 0.03;
+
+import { nearestWithin } from "./measure.js";
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -149,4 +157,37 @@ export function nearestLoop(loops, x, y, px) {
         }
     });
     return best;
+}
+
+/* What a shell is, as the docs say it: the innermost holds parts built from no other, each
+ * shell out holds those built from the shells inside it, and the outermost, where the
+ * sites stand, is the sites. */
+export function shellLabel(shell, nodes) {
+    const here = nodes.filter((n) => n.shell === shell);
+    const sites = here.length > 0 && here.every((n) => n.site_ref);
+    const what = sites ? "sites" : shell === 0 ? "built from nothing" : "built from those inside";
+    return `shell ${shell} \u00b7 ${what}`;
+}
+
+/* Whether a point of the sphere is on the side an eye sees (both as [x, y, z] about the
+ * sphere's middle): past the horizon from the eye a point is behind the sphere; an eye
+ * inside the sphere, or on it, sees every point. */
+export function facesEye(eye, point) {
+    const reach = dot(point, point);
+    return dot(eye, eye) <= reach || dot(point, eye) > reach;
+}
+
+/* The piece a pointer is on, at any distance: of `points` ({ key, sx, sy, off, depth }),
+ * those not `off` within `px` of (x, y), the nearest, a nearer-the-eye one taking it
+ * from one that is only a pixel or two nearer the pointer. null when none. */
+export function pieceNear(points, x, y, px, slack = 3) {
+    const seen = points.filter((p) => !p.off);
+    const first = nearestWithin(seen, x, y, px);
+    if (!first) return null;
+    const reach = Math.hypot(first.sx - x, first.sy - y) + slack;
+    let best = first;
+    for (const p of seen) {
+        if (Math.hypot(p.sx - x, p.sy - y) <= Math.min(px, reach) && p.depth < best.depth) best = p;
+    }
+    return best.key;
 }

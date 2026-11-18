@@ -441,6 +441,11 @@
             opacity: var(--popover-opacity);
         }
         .world-badge.cluster .badge-words { pointer-events: auto; }
+        /* A piece's name at the universe's opening view: the piece under the pointer and the
+           one selected, a pill with the name, over the world and never a target. */
+        .world-badge.piece-name { min-width: 0; height: 20px; font: 600 12px/1 system-ui, sans-serif; white-space: nowrap; cursor: default; pointer-events: none; }
+        .world-badge.piece-name .badge-words { display: none; }
+        .world-badge.piece-name.hover { border-color: #b8c4b8; }
         .world-badge .badge-words .sub { color: #8a9a8a; font-size: 0.64rem; }
         .world-badge.open { z-index: 3; opacity: 1; }
         .world-badge.open .badge-words { display: block; }
@@ -887,7 +892,7 @@
         import { mountAnchors } from '/static/anchors.js';
         import { makePickScope, kindOf, WALL as WALL_LAYER, GRID as GRID_LAYER, MACHINE_BUTTONS as BUTTONS_LAYER, MEASURE as MEASURE_LAYER } from '/static/pick_scope.js';
         import { takeLayerColours, layerColour, layerHex, categoriesInOrder } from '/static/layer_colours.js';
-        import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf } from '/static/orbits.js';
+        import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf, shellLabel, facesEye, pieceNear } from '/static/orbits.js';
         import { ownExtents, sizeFromSceneBox, turnedExtents, turnRowsInScene, turnedBounds, between, gap as gapBetween, nearestWithin, length as mmText, fieldMm, layLabels } from '/static/measure.js';
         import { ADAPTER, presetStaged, endOf, betweenBody, paramsKey, label as endLabel } from '/static/ends.js';
         import { mountPanels } from '/static/panels.js';
@@ -1119,6 +1124,12 @@
         const ORBIT_LINK_OPACITY = 0.5;
         const ORBIT_LINK_COLOR = 0xb8c4b8;
         const ORBIT_PICK_PX = 6;
+        // What names the sphere at the opening view: a shell's and a cluster's label, in pixels
+        // of text whatever the distance (laid by measure.js's layLabels), how near the pointer
+        // must be to a piece to name it, and how faint a shell's translucent sphere is drawn.
+        const ORBIT_LABEL_PX = 12;
+        const ORBIT_NAME_PX = 14;
+        const ORBIT_SPHERE_OPACITY = 0.05;
         const BED_GRID_LIFT_MM = 0.3;
         // How often the world polls a machine it draws while no Machine is open on it
         // (followMachines): a Machine's own default.
@@ -2085,6 +2096,8 @@
                 // Settings' modifier, the right button is the ring's (ring.js hears it first).
                 this.canvas.addEventListener('pointerdown', (e) => this.onPress(e));
                 this.canvas.addEventListener('pointermove', (e) => this.onTravel(e));
+                this.canvas.addEventListener('pointermove', (e) => this.onHoverName(e));
+                this.canvas.addEventListener('pointerleave', () => { if (this.hoverName) { this.hoverName = null; this.invalidate(); } });
                 this.canvas.addEventListener('pointerup', (e) => this.onRelease(e));
                 // A badge passes the right button to what it stands for.
                 this.anchors.layer.addEventListener('pointerdown', (e) => this.onPress(e));
@@ -2258,6 +2271,7 @@
                 if (byItself && !held) this.frameWanted = true;
                 this.sizeCameraHandles();
                 this.placeMeasure();
+                this.placeOrbitLabels();
                 if (this.frameWanted || (!held && this.sceneChanged())) {
                     this.frameWanted = false;
                     this.anchors.update();
@@ -2920,17 +2934,52 @@
                     group.add(line);
                     return line;
                 };
-                const loops = [];
+                const loops = [], spheres = [], labels = [];
+                // A name hung on a loop of the sphere: its text in its layer's colour, a sprite
+                // the size of the page's text (placeOrbitLabels), never hit, drawn for the layers
+                // its loop is.
+                const label = (text, layer, layers, loopPoints, from) => {
+                    const hex = layerHex(layer) || '#ffffff';
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const font = `600 ${ORBIT_LABEL_PX * 2}px sans-serif`;
+                    ctx.font = font;
+                    canvas.width = Math.ceil(ctx.measureText(text).width) + 16;
+                    canvas.height = ORBIT_LABEL_PX * 2 + 10;
+                    ctx.font = font;
+                    ctx.fillStyle = 'rgba(16,18,16,0.82)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.strokeStyle = hex; ctx.lineWidth = 2; ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+                    ctx.fillStyle = hex; ctx.textBaseline = 'middle'; ctx.fillText(text, 8, canvas.height / 2 + 1);
+                    const texture = new THREE.CanvasTexture(canvas);
+                    texture.colorSpace = THREE.SRGBColorSpace;
+                    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, sizeAttenuation: false }));
+                    sprite.renderOrder = 10;
+                    sprite.raycast = () => {};
+                    sprite.userData = { w: canvas.width / 2, h: canvas.height / 2, text };
+                    group.add(sprite);
+                    labels.push({ layers, text, sprite, loop: loopPoints.map((p) => sceneAt(...p)), from: sceneAt(...from) });
+                };
                 for (const { shell, radius } of shellsOf(nodes)) {
                     const layer = `shell:${shell}`;
-                    for (const ring of ringsOf(radius)) {
+                    const rings = ringsOf(radius);
+                    for (const ring of rings) {
                         loops.push({ layer, layers: [layer], points: ring, object: draw(ring, layerColour(layer, DEFAULT_COLOR), ORBIT_RING_OPACITY, true) });
                     }
+                    // The shell as a faint sphere, to be seen through.
+                    const sphere = new THREE.Mesh(
+                        new THREE.SphereGeometry(radius, 48, 24),
+                        new THREE.MeshBasicMaterial({ color: layerColour(layer, DEFAULT_COLOR), transparent: true, opacity: ORBIT_SPHERE_OPACITY, depthWrite: false, side: THREE.DoubleSide }));
+                    sphere.raycast = () => {};
+                    group.add(sphere);
+                    spheres.push({ layers: [layer], object: sphere });
+                    label(shellLabel(shell, nodes), layer, [layer], rings.flat(), [0, 0, 0]);
                 }
                 for (const cluster of clustersOf(nodes)) {
                     const layer = `category:${cluster.category}`;
                     const outline = capOutline(cluster);
                     loops.push({ layer, layers: [`shell:${cluster.shell}`, layer], points: outline, object: draw(outline, layerColour(layer, DEFAULT_COLOR), ORBIT_OUTLINE_OPACITY, true) });
+                    label(cluster.category, layer, [`shell:${cluster.shell}`, layer], outline,
+                        cluster.centre.map((c) => c * cluster.radius * Math.cos(cluster.angle)));
                 }
                 const links = linksOf(nodes).map((link) => ({
                     ...link,
@@ -2938,7 +2987,7 @@
                 }));
                 group.name = 'orbits';
                 this.scene.add(group);
-                this.orbits = { group, loops, links };
+                this.orbits = { group, loops, links, spheres, labels };
                 this.applyOrbits();
             }
 
@@ -2954,6 +3003,98 @@
                 const scope = this.pickScope;
                 for (const loop of this.orbits.loops) loop.object.visible = loop.layers.every((id) => scope.isShown(id));
                 for (const link of this.orbits.links) link.object.visible = [link.from, link.to].every((key) => scope.drawn(this.renderNodeByKey[key]));
+                for (const sphere of this.orbits.spheres) sphere.object.visible = sphere.layers.every((id) => scope.isShown(id));
+                for (const label of this.orbits.labels) label.shown = label.layers.every((id) => scope.isShown(id));
+            }
+
+            // Each frame, at the universe's own level: each label of a shell or a cluster hung
+            // from its loop, on the side of the sphere that faces the eye, the size of the
+            // page's text, laid clear of the others by measure.js's layLabels; and the names
+            // of the piece under the pointer and the one selected (syncPieceNames).
+            placeOrbitLabels() {
+                this.syncPieceNames();
+                const o = this.orbits;
+                if (!o || !o.labels.length) return;
+                const cam = this.camera, h = this.canvas.clientHeight || 1, w = this.canvas.clientWidth || 1;
+                const screen = (v) => { const s = v.clone().project(cam); return { x: ((s.x + 1) / 2) * w, y: ((1 - s.y) / 2) * h, z: s.z }; };
+                const shown = [], ends = [];
+                for (const label of o.labels) {
+                    label.sprite.visible = false;
+                    if (!label.shown) continue;
+                    // Hung from the top of its loop as the eye sees it: the highest point (up is
+                    // y in the scene) of the loop on the side that faces the eye.
+                    let top = null;
+                    for (const p of label.loop) if (this.facesEye(p) && (top === null || p.y > top.y)) top = p;
+                    if (!top) continue;
+                    const at = screen(top);
+                    if (at.z > 1 || at.z < -1) continue;
+                    const from = screen(label.from);
+                    shown.push(label);
+                    ends.push({ x: at.x, y: at.y, dx: at.x - from.x, dy: at.y - from.y, w: label.sprite.userData.w, h: label.sprite.userData.h, z: at.z });
+                }
+                const laid = layLabels(ends, { width: w, height: h, gap: 6 });
+                const k = (2 * Math.tan((cam.fov * Math.PI) / 360)) / h;
+                shown.forEach((label, i) => {
+                    const sprite = label.sprite;
+                    sprite.visible = true;
+                    sprite.position.copy(new THREE.Vector3((laid[i].cx / w) * 2 - 1, 1 - (laid[i].cy / h) * 2, Math.min(0.999, ends[i].z)).unproject(cam));
+                    sprite.scale.set(sprite.userData.w * k, sprite.userData.h * k, 1);
+                });
+            }
+
+            // Whether a point of the sphere (scene coordinates) is on the side the eye sees:
+            // past the horizon from the eye it is behind the sphere; an eye inside sees all.
+            facesEye(point) {
+                const eye = this.camera.position;
+                return facesEye([eye.x, eye.y, eye.z], [point.x, point.y, point.z]);
+            }
+
+            // The top-level piece under the pointer at any distance, by key: the one nearest it on
+            // screen within ORBIT_NAME_PX, among those drawn that face the eye. Null elsewhere.
+            // It selects nothing and is no hit.
+            nameAt(event) {
+                if (!this.orbits) return null;
+                const rect = this.canvas.getBoundingClientRect();
+                const points = [];
+                for (const [key, node] of Object.entries(this.renderNodeByKey)) {
+                    const middle = key.includes('.') ? null : middleOf(node);
+                    if (!middle || !this.pickScope.drawn(node)) continue;
+                    const at = sceneAt(...middle);
+                    const v = at.clone().project(this.camera);
+                    points.push({ key, sx: ((v.x + 1) / 2) * rect.width, sy: ((1 - v.y) / 2) * rect.height, depth: v.z,
+                        off: v.z > 1 || v.z < -1 || !this.facesEye(at) });
+                }
+                return pieceNear(points, event.clientX - rect.left, event.clientY - rect.top, ORBIT_NAME_PX);
+            }
+
+            onHoverName(event) {
+                if (!this.orbits || this.press || this.measureOn()) { if (this.hoverName) { this.hoverName = null; this.invalidate(); } return; }
+                const now = performance.now();
+                if (now - (this.hoverAt || 0) < 40) return;
+                this.hoverAt = now;
+                const key = this.nameAt(event);
+                if (key !== (this.hoverName || null)) { this.hoverName = key; this.invalidate(); }
+            }
+
+            // The name of the piece under the pointer and of the one selected, each a small
+            // badge on the piece at any distance, drawn at the universe's own level only (anchors.js:
+            // the page's badges, kept out of each other's way); never pickable.
+            syncPieceNames() {
+                const marks = this.nameMarks || (this.nameMarks = {});
+                const top = (key) => (key && !String(key).includes('.') && this.renderNodeByKey[key] ? key : null);
+                const selected = this.orbits ? top(this.selectedName) : null;
+                const wanted = { selected, hover: this.orbits && this.hoverName !== selected ? top(this.hoverName) : null };
+                for (const [slot, key] of Object.entries(wanted)) {
+                    if ((marks[slot] || null) === key) continue;
+                    const mark = `piece-name:${slot}`;
+                    marks[slot] = key;
+                    if (!key) { this.anchors.remove(mark); continue; }
+                    const node = this.renderNodeByKey[key];
+                    const at = () => { const m = middleOf(this.renderNodeByKey[key] || node); return m ? sceneAt(...m) : null; };
+                    const el = this.anchors.badge(mark, at, { className: `piece-name ${slot}`, occlude: false, selected: slot === 'selected' ? () => true : null });
+                    el.style.pointerEvents = 'none';
+                    this.anchors.say(mark, { icon: node.site_ref ? `${node.site_ref} · site` : (node.part_ref || node.name), words: '' });
+                }
             }
 
             // The layer of the drawn ring or outline under the pointer, within ORBIT_PICK_PX

@@ -249,3 +249,116 @@ def test_the_rings_cell_the_windows_tick_and_the_world_read_one_choice(page: Pag
 
 def _rgb(colour: str) -> str:
     return "rgb({}, {}, {})".format(*(int(colour[i : i + 2], 16) for i in (1, 3, 5)))
+
+
+# What the world labels the sphere with at the universe's level: each label's text,
+# the layers it belongs to, whether it is drawn now, and whether it is a piece or a hit.
+LABELS = """() => {
+    const v = window.fractalViewer, o = v.orbits;
+    if (!o) return null;
+    const pieces = new Set(Object.values(v.meshByName));
+    return o.labels.map((l) => ({ text: l.text, layers: l.layers, drawn: l.sprite.visible,
+        piece: pieces.has(l.sprite), inScene: !!l.sprite.parent }));
+}"""
+
+# The piece, by key, whose middle shows on the canvas clear of the edges on the side the
+# eye sees and which a pointer on its middle names; and where on the page that is.
+A_NAMED_PIECE = """() => {
+    const v = window.fractalViewer, r = v.canvas.getBoundingClientRect();
+    for (const [key, node] of Object.entries(v.renderNodeByKey)) {
+        if (key.includes('.') || !node.part_ref || !v.pickScope.drawn(node)) continue;
+        const b = node.world_bounds;
+        const m = [0, 1, 2].map((i) => (b.min[i] + b.max[i]) / 2);
+        const at = v.sceneAt(...m);
+        if (!v.facesEye(at)) continue;
+        const s = at.clone().project(v.camera);
+        if (s.z > 1 || s.z < -1) continue;
+        const x = r.left + (s.x + 1) / 2 * r.width, y = r.top + (1 - s.y) / 2 * r.height;
+        if (x < r.left + 40 || x > r.right - 40 || y < r.top + 40 || y > r.bottom - 40) continue;
+        if (v.nameAt({ clientX: x, clientY: y }) !== key) continue;
+        return { key, x, y, name: node.part_ref };
+    }
+    return null;
+}"""
+
+
+@pytest.mark.e2e
+def test_each_shell_and_cluster_is_labelled_at_the_universes_level_and_hidden_with_its_layer(
+    page: Page, url: str
+):
+    """A label for each shell, in the docs' words, and one for each cluster, naming its
+    category; each is of its loop's layers, no piece and no hit, and gone where the
+    orbitals are (a part stepped into)."""
+    _universe(page, url)
+    windows.from_the_windows_menu(page, "layers")
+    page.wait_for_timeout(400)
+    labels = page.evaluate(LABELS)
+    shells = [lab for lab in labels if lab["text"].startswith("shell ")]
+    assert [lab["text"].split(" · ")[1] for lab in shells][0] == "built from nothing"
+    assert [lab["text"].split(" · ")[1] for lab in shells][-1] == "sites"
+    categories = {lab["text"] for lab in labels} - {lab["text"] for lab in shells}
+    assert {"machine", "camera"} <= categories
+    assert not any(lab["piece"] for lab in labels) and all(lab["inScene"] for lab in labels)
+    drawn = [lab for lab in labels if lab["drawn"]]
+    assert drawn, "no label is drawn at the opening view"
+    # Hiding shell 0 hides its label and the labels of the clusters on it, and no other shell's.
+    _tick(page, "shell:0", "shown").uncheck()
+    said(page, "Shell 0: hidden")
+    page.wait_for_timeout(400)
+    after = {(lab["text"], tuple(lab["layers"])): lab["drawn"] for lab in page.evaluate(LABELS)}
+    for lab in labels:
+        if lab["layers"][0] == "shell:0":
+            assert after[(lab["text"], tuple(lab["layers"]))] is False, lab
+    # The labels of the other shells are untouched by it: still drawn as before.
+    others = [lab for lab in labels if lab["layers"][0] != "shell:0" and lab["drawn"]]
+    assert all(after[(lab["text"], tuple(lab["layers"]))] for lab in others)
+    _tick(page, "shell:0", "shown").check()
+    # Never a hit: a ray through a label's middle meets no piece for it.
+    where = page.evaluate(
+        """() => { const v = window.fractalViewer, r = v.canvas.getBoundingClientRect();
+            const l = v.orbits.labels.find((x) => x.sprite.visible);
+            const s = l.sprite.position.clone().project(v.camera);
+            return [r.left + (s.x + 1) / 2 * r.width, r.top + (1 - s.y) / 2 * r.height]; }"""
+    )
+    assert "label" not in " ".join(str(k) for k in page.evaluate(HITS, where))
+    # Stepped into a part, the sphere's labels are gone with its orbitals.
+    page.evaluate("() => window.fractalViewer.stepIn('datum_core', 'test')")
+    page.wait_for_function("() => !window.fractalViewer.orbits", timeout=20000)
+    assert page.evaluate(LABELS) is None
+
+
+@pytest.mark.e2e
+def test_the_piece_under_the_pointer_and_the_selected_piece_are_named_and_neither_is_a_hit(
+    page: Page, url: str
+):
+    _universe(page, url)
+    piece = page.evaluate(A_NAMED_PIECE)
+    assert piece, "no piece stands clear on the side of the sphere the eye sees"
+    pieces_before = sorted(page.evaluate("() => Object.keys(window.fractalViewer.meshByName)"))
+    page.mouse.move(piece["x"], piece["y"])
+    page.mouse.move(piece["x"] + 1, piece["y"])
+    badge = page.locator("[data-anchor='piece-name:hover']")
+    expect(badge).to_be_visible(timeout=5000)
+    expect(badge).to_contain_text(piece["name"])
+    assert badge.evaluate("(el) => getComputedStyle(el).pointerEvents") == "none"
+    # Off the piece, it goes; selected, it is named and stays, whatever the pointer does.
+    page.mouse.move(1, 1)
+    expect(badge).to_have_count(0, timeout=5000)
+    page.evaluate("(k) => window.fractalViewer.selectChild(k)", piece["key"])
+    selected = page.locator("[data-anchor='piece-name:selected']")
+    expect(selected).to_be_visible(timeout=5000)
+    expect(selected).to_contain_text(piece["name"])
+    page.mouse.move(piece["x"], piece["y"])
+    page.mouse.move(piece["x"] + 1, piece["y"])
+    expect(page.locator("[data-anchor='piece-name:hover']")).to_have_count(0)
+    assert sorted(page.evaluate("() => Object.keys(window.fractalViewer.meshByName)")) == pieces_before
+
+
+@pytest.mark.e2e
+def test_the_alignment_grids_row_says_what_it_draws_in_its_colour_and_what_it_does_not(
+    page: Page, url: str
+):
+    _universe(page, url)
+    windows.from_the_windows_menu(page, "layers")
+    hint = page.locator(".panel[data-panel='layers'] tr[data-row='grid'] th").get_attribute("title")
+    assert "build volumes, drawn in this colour" in hint and "faint greys" in hint
