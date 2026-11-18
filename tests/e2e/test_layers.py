@@ -296,11 +296,16 @@ def test_depth_two_lets_a_click_select_a_piece_of_a_piece(page: Page, url: str):
     windows.from_the_windows_menu(page, "layers")
     less = page.locator(".panel[data-panel='layers'] button[data-act='depth-less']")
     more = page.locator(".panel[data-panel='layers'] button[data-act='depth-more']")
-    # At depth 1 the stepper's − is greyed as every control of the page is, saying why.
+    # At depth 1 the stepper's − is greyed as every control of the page is, saying why;
+    # the window's buttons wear the page's controls, not the browser's own.
     expect(less).to_be_disabled()
     expect(less).to_have_attribute("aria-disabled", "true")
     expect(less).to_have_attribute("title", re.compile(r"^Disabled: the depth is 1, .*One level less"))
     expect(less).to_have_css("opacity", "0.45")
+    for button in (more, page.locator(".panel[data-panel='layers'] button[data-act='reset']")):
+        expect(button).to_have_css("background-color", "rgb(35, 40, 35)")
+        expect(button).to_have_css("border-radius", "4px")
+        expect(button).to_have_css("cursor", "pointer")
     more.click()
     said(page, "Depth: 2 levels")
     expect(less).to_be_enabled()

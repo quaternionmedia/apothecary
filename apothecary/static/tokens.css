@@ -30,6 +30,23 @@
 [data-group="Airgap"] { --group: var(--group-airgap); }
 [data-group="Family"] { --group: var(--group-family); }
 
+/* A window's controls, said once: every button, drop-down and box in a window
+ * (section.panel, panels.js) wears the page's dark controls, the look the Machine's head
+ * and the template's panel-ui have, whichever widget drew it. Under :where(), so it
+ * weighs nothing: a widget's own rule for its controls, however light, says otherwise. */
+:where(.panel) :where(button, select, textarea, input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"])) {
+    font: inherit; font-size: 0.78rem; background: #232823; color: var(--ink);
+    border: 1px solid #3a443a; border-radius: 4px; padding: 0.2rem 0.45rem;
+}
+:where(.panel) :where(button, select) { cursor: pointer; }
+:where(.panel) :where(button:not(:disabled, [aria-disabled="true"]):hover) { background: #2f382f; }
+:where(.panel) :where(input[type="range"]) { accent-color: #4a9eff; }
+:where(.panel) :where(input[type="file"]) { font-size: 0.72rem; color: var(--ink-2); max-width: 100%; }
+:where(.panel) :where(input[type="file"])::file-selector-button {
+    font: inherit; background: #232823; color: var(--ink); border: 1px solid #3a443a;
+    border-radius: 4px; padding: 0.15rem 0.45rem; margin-right: 0.4rem; cursor: pointer;
+}
+
 /* A control the server would refuse (or that something else holds) is greyed, the same
  * wherever it is: can.js's setReason and applyCan set `disabled` and `aria-disabled` and
  * say "Disabled: <why>. <its tip>" in its title, and nothing else greys a control. A
