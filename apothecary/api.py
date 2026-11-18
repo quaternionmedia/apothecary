@@ -142,6 +142,7 @@ from .routes.jobs import router as jobs_router
 from .routes.lighting import router as lighting_router
 from .routes.machines import router as machines_router
 from .routes.marks import router as marks_router
+from .routes.motion import router as motion_router
 from .routes.part_edits import router as part_edits_router
 from .routes.pictures import router as pictures_router
 from .routes.procedures import router as procedures_router
@@ -333,6 +334,8 @@ app.include_router(projector_router)
 app.include_router(part_edits_router)
 # A part's interfaces, and how two fit (docs/connections.md).
 app.include_router(interfaces_router)
+# A part's motion, sampled into the table the page plays (apothecary/motion.py).
+app.include_router(motion_router)
 app.include_router(lighting_router)
 # The Airgap panel's metrics document: its schema, and a copied document read back.
 app.include_router(airgap_router)
@@ -464,12 +467,26 @@ def _render_part_include(part, params_json: str) -> str:
     return renderer.render_template(template_str, ctx)
 
 
+def _motion_summary(part) -> Optional[Dict[str, Any]]:
+    """A part's motion as its metadata says it (``Motion.summary``), at its own values;
+    None for a part without one, or whose own values give none."""
+    if not part.has_motion:
+        return None
+    motion = part.motion(None)
+    return motion.summary() if motion is not None else None
+
+
 def _part_metadata(part) -> Dict[str, object]:
     metadata = {
         "name": part.name,
         "description": part.description,
         "category": part.category,
         "kinematics": part.kinematics,
+        # How its pieces move as one of its parameters goes, at its own values: what
+        # GET /parts/{name}/motion samples; None for a part drawn as one.
+        "motion": _motion_summary(part),
+        # What it needs and does not print, at its own values (BasePart.bought).
+        "bought": [b.model_dump() for b in part.bought()],
         "tags": part.tags,
         "readme": (
             _repo_relative_path(part.readme_path)

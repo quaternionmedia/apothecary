@@ -13,7 +13,9 @@ from apothecary.models import (
     Color,
     PrintSettings,
 )
+from apothecary.models.bought import Bought
 from apothecary.models.interfaces import InterfaceBase
+from apothecary.motion import Motion
 
 from .stl_renderer import find_openscad, openscad_meets, parse_openscad_version, scad_definitions
 
@@ -332,6 +334,28 @@ class BasePart(BaseModel):
                 return i
         names = ", ".join(i.name for i in found) or "none"
         raise KeyError(f"{self.name} has no interface {name!r}; its interfaces: {names}")
+
+    def bought(self, params: Optional[Mapping[str, Any]] = None) -> List[Bought]:
+        """What the part needs and does not print, for already-validated ``params``
+        (``apothecary.models.bought``): each kind with its count, its size and the
+        interfaces it goes in. Never part of its STL. Empty for a part that is all
+        printed, or whose wrapper does not say."""
+        return []
+
+    def motion(self, params: Optional[Mapping[str, Any]] = None) -> Optional[Motion]:
+        """How the part's pieces move against one another as one of its parameters
+        goes, for already-validated ``params`` (``apothecary.motion``): the parameter
+        and its range, the piece that stands still and those that move, each drawn by
+        the SCAD alone in its own frame, and the wrapper's own pose function, which
+        ``GET /parts/{name}/motion`` samples into the table the page plays. None for a
+        part drawn as one, which is most of them; a machine whose pieces ride its axes
+        says so in ``kinematics`` instead."""
+        return None
+
+    @property
+    def has_motion(self) -> bool:
+        """Whether this part says how its pieces move: its wrapper defines ``motion``."""
+        return type(self).motion is not BasePart.motion
 
     def geometry(self, params: Mapping[str, Any]) -> Optional[OpenSCADObject]:
         """The part built in Python for already-validated ``params``, or None:
