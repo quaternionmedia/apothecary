@@ -488,16 +488,17 @@ def test_a_part_target_builds_the_parts_own_stl(fake_orcaslicer, monkeypatch, tm
 
 def test_the_start_is_composed_from_the_pieces_the_printer_names(fake_orcaslicer):
     """printer_1's start is `home` -- its profile's own start, which homes and does no
-    levelling -- and its filament the printer's one; the answer says both and why."""
+    levelling -- and its filament the one loaded on it, its profile's own until one is
+    said; the answer says both and why."""
     profile = load_profile("ender3")
     assert profile.start.modules == ["home"] and "owner" in profile.start.source
-    assert profile.filament.modules == ["printer"]
+    assert profile.filament.modules == ["choose"] and "owner" in profile.filament.source
     resolved = get_module("orcaslicer").settings(profile, Declared(by="part x"))
     shown = _by_name(resolved)
     assert shown["start"].value == ["home"] and shown["start"].origin == "printer"
     assert "home: the printer's own start" in shown["start"].note
     assert "no levelling" in shown["start"].note
-    assert shown["filament"].value == ["printer"]
+    assert shown["filament"].value == ["choose"]
     assert shown["filament"].note.endswith(": Creality Generic PLA")
     start = resolved.configs["machine"]["machine_start_gcode"]
     assert "G28 ; home all axis" in start and "M420" not in start and "G29" not in start
@@ -525,7 +526,7 @@ def test_the_composed_start_reaches_the_gcode(fake_orcaslicer):
         ("start", ["home", "probe-each-print", "probe-each-print"], "a start piece is named once"),
         ("start", [], "a start begins with 'home'"),
         ("start", ["home", "levelling"], "no start piece 'levelling'"),
-        ("filament", ["choose"], "the filament piece 'choose' is a stub"),
+        ("filament", ["choose", "printer"], "one filament piece, not 2"),
         ("filament", [], "one filament piece, not 0"),
     ],
 )
@@ -558,10 +559,10 @@ def test_every_piece_says_what_it_does_and_the_stubs_are_the_ones_decided():
         ("start", "stored-mesh"),
         ("start", "probe-each-print"),
         ("filament", "printer"),
+        ("filament", "choose"),
     ]
     assert {(p.kind, p.id) for p in compose.pieces() if p.stub} == {
         ("start", "first-layer-offset"),
-        ("filament", "choose"),
         ("declared", "word-print-settings"),
     }
     assert all(p.does for p in compose.pieces())

@@ -38,11 +38,23 @@ and the task carries the slice's answer once it ends:
   for the slice's filament and process (``tuning.py``): solved, and each setting's
   change proposed, nothing applied. A reading that is not of that piece is a 422
   saying why, and nothing is kept.
+- ``POST /slicer/slices/{file_id}/seen`` ``{seen, where, note}``: the same piece read
+  by eye -- each fault seen (``seen``: a fault's id and its severity, 0 none to 3
+  bad; ``where``: where one shows) -- kept as the next look of that printer's tuning:
+  the one setting's change it implies proposed, nothing applied
+  (apothecary/print_faults.py).
+- ``GET /slicer/faults``: the faults a look reads, each with what it looks like, the
+  settings that govern it in the order they are tried, and what to look at when none
+  does; and the severities.
 - ``GET /slicer/tuning?site=&printer=``: the printer's tuning documents, one per
-  filament and process, each with its terms' trends.
+  filament and process, each with its terms' trends and each fault's over its looks.
 - ``POST /slicer/tuning/apply``, ``POST /slicer/tuning/undo`` ``{site, printer,
-  filament, process}``: the last turn's changes taken into the printer's next
-  slices; the last turn dropped, with what it applied.
+  filament, process}``: the last turn's or look's changes taken into the printer's
+  next slices; the last turn or look dropped, with what it applied.
+- ``GET /slicer/filaments?site=&printer=``: the filament loaded on that printer, and
+  every filament it can load (the slicer's profiles of its vendor that fit its
+  machine); ``POST /slicer/filaments/loaded`` ``{site, printer, filament, note}``:
+  another loaded, its next slices made with it (slicer/filaments.py).
 - ``GET /slicer/tuning/schema``, ``POST /slicer/tuning/validate``: ``print/tuning/1``'s
   JSON Schema, and a document read back.
 
@@ -59,9 +71,10 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
 
+from .. import print_faults as pf
 from ..firmware.models import Port
 from ..firmware.tasks import Running, TaskBusy, TaskRunner
-from . import compose, service, tuning
+from . import compose, filaments, service, tuning
 from .models import SliceRecord, SlicerStatus
 from .modules import NotInstalled, SlicerError, chosen_id, get_module, modules, reset_modules
 from .profiles import printers
@@ -139,6 +152,21 @@ class TuningRequest(BaseModel):
 
     def applies(self) -> tuning.AppliesTo:
         return tuning.AppliesTo(filament=self.filament, process=self.process)
+
+
+class SeenRequest(BaseModel):
+    # Each fault seen on the piece, by its id: 0 none, 1 slight, 2 clear, 3 bad.
+    seen: Dict[str, int] = Field(..., max_length=32)
+    # Where a fault shows, in words: a height, a feature.
+    where: Dict[str, str] = Field(default_factory=dict, max_length=32)
+    note: str = Field("", max_length=2000)
+
+
+class FilamentRequest(BaseModel):
+    site: str = Field(..., pattern=SITE_NAME)
+    printer: str = Field(..., pattern=NODE_PATH)
+    filament: str = Field(..., min_length=1, max_length=200)
+    note: str = Field("", max_length=200)  # the spool: its brand, its colour
 
 
 class Piece(BaseModel):
@@ -288,6 +316,100 @@ def slicer_slice_measured(file_id: str, body: MeasuredRequest):
     return _tuned(doc) | {"turn": turn.id, "said": tuning.said(turn)}
 
 
+@router.post("/slices/{file_id}/seen")
+def slicer_slice_seen(file_id: str, body: SeenRequest):
+    """The piece the slice ``file_id`` made, read by eye: kept as the next look of its
+    printer's tuning, and the one setting's change it implies proposed; nothing is
+    applied."""
+    record = service.get_record(file_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="no slice made that file, or it is not kept")
+    try:
+        doc, look = tuning.add_look(record, body.seen, body.where, body.note)
+    except tuning.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _tuned(doc) | {"look": look.id, "said": tuning.said_look(look)}
+
+
+@router.get("/faults")
+def slicer_faults():
+    """The faults a look reads, and the severities."""
+    return {
+        "severity": {str(k): v for k, v in pf.SEVERITY.items()},
+        "faults": [
+            {
+                "id": f.id,
+                "name": f.name,
+                "looks_like": f.looks_like,
+                "otherwise": f.otherwise,
+                "levers": [
+                    {
+                        "setting": lv.key,
+                        "kind": lv.kind,
+                        "unit": lv.unit,
+                        "step": lv.step,
+                        "least": lv.least,
+                        "most": lv.most,
+                        "why": lv.why,
+                    }
+                    for lv in f.levers
+                ],
+            }
+            for f in pf.FAULTS
+        ],
+    }
+
+
+def _printer_profile(site: str, printer: str):
+    """The slicer profile of ``printer`` standing in ``site``: 422 where it is none."""
+    try:
+        chosen = None
+        for answer in service.PRINTERS:
+            at = answer(None, site, printer)
+            if at is not None:
+                chosen = at
+                break
+        if chosen is None:
+            raise SlicerError(f"{printer} in {site}: no printer that keeps a slicer profile")
+        return service.load_profile(chosen.part)
+    except SlicerError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/filaments")
+def slicer_filaments(
+    site: str = Query(..., pattern=SITE_NAME), printer: str = Query(..., pattern=NODE_PATH)
+):
+    """The filament loaded on ``printer`` and every filament it can load."""
+    profile = _printer_profile(site, printer)
+    try:
+        found = filaments.choices(profile)
+    except NotInstalled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except SlicerError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    kept = filaments.loaded(site, printer)
+    return {
+        "chooses": filaments.chooses(profile),
+        "profile": (profile.sections.get("orcaslicer") or {}).get("filament"),
+        "loaded": kept.model_dump(mode="json") if kept else None,
+        "choices": [c.model_dump() for c in found],
+    }
+
+
+@router.post("/filaments/loaded")
+def slicer_filament_loaded(body: FilamentRequest):
+    """Another filament loaded on the printer: its next slices are made with it."""
+    profile = _printer_profile(body.site, body.printer)
+    try:
+        kept = filaments.load(profile, body.site, body.printer, body.filament, body.note)
+    except filaments.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except NotInstalled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return kept.model_dump(mode="json")
+
+
 def _tuned(doc: "tuning.TuningDocument") -> dict:
     return {
         "document": doc.model_dump(mode="json", by_alias=True),
@@ -295,6 +417,7 @@ def _tuned(doc: "tuning.TuningDocument") -> dict:
             key: {"term": t.term, "state": t.state, "stop": t.stop, "said": t.said}
             for key, t in tuning.trends(doc).items()
         },
+        "faults": tuning.fault_trends(doc),
     }
 
 
@@ -318,7 +441,7 @@ def slicer_tuning_apply(body: TuningRequest):
 
 @router.post("/tuning/undo")
 def slicer_tuning_undo(body: TuningRequest):
-    """The last turn dropped, with what it applied."""
+    """The last turn or look dropped, with what it applied."""
     try:
         doc, gone = tuning.undo(body.site, body.printer, body.applies())
     except tuning.Refused as exc:
@@ -339,4 +462,9 @@ def slicer_tuning_validate(body: dict):
         doc = tuning.TuningDocument.model_validate(body)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"ok": True, "turns": len(doc.turns), "settings": sorted(doc.settings)}
+    return {
+        "ok": True,
+        "turns": len(doc.turns),
+        "looks": len(doc.looks),
+        "settings": sorted(doc.settings),
+    }

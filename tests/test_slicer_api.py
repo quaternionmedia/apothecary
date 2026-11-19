@@ -84,9 +84,9 @@ def test_the_status_says_each_slicer_the_one_used_and_the_printers(fake_orcaslic
     # What a slice can be composed from: each piece says what it does; the stubs say so.
     pieces = {(p["kind"], p["id"]): p for p in body["pieces"]}
     assert not pieces[("start", "home")]["stub"] and not pieces[("filament", "printer")]["stub"]
+    assert not pieces[("filament", "choose")]["stub"]
     for stub in (
         ("start", "first-layer-offset"),
-        ("filament", "choose"),
         ("declared", "word-print-settings"),
     ):
         assert pieces[stub]["stub"] and pieces[stub]["does"], stub

@@ -34,8 +34,8 @@ names (``compose.py``): printer_1's names ``home``, OrcaSlicer's own start for
 the printer, which homes and does no levelling; ``stored-mesh`` and
 ``probe-each-print`` are named there by a person after the bench's levelling
 boxes, each refused where its precondition fails, and a measured first-layer
-offset is a stub. The filament is the printer's one, named in its profile;
-choosing another is a stub.
+offset is a stub. The filament is the one its profile names, or with ``choose`` the
+one loaded on the printer (``filaments.py``), said in the ``filament`` setting's note.
 
 The three are written as user profiles of the system ones they start from
 (``"from": "user"``, ``inherits``), so OrcaSlicer's own check that the process
@@ -58,6 +58,7 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from ... import print_faults as pf
 from ...firmware.toolchains import Tool
 from ...stays_local import subprocess_env
 from .. import compose
@@ -111,6 +112,14 @@ SHOWN: Dict[str, Tuple[str, ...]] = {
         "cool_plate_temp",
     ),
 }
+
+# And every setting a fault's lever moves or reads (apothecary/print_faults.py): what a
+# look at the piece is decided from.
+for _lever in (lv for f in pf.FAULTS for lv in f.levers):
+    for _kind, _key in ((_lever.kind, _lever.key), ("machine", _lever.falls_back_to)):
+        if _key and _key not in SHOWN[_kind]:
+            SHOWN[_kind] += (_key,)
+SHOWN["filament"] += tuple(k for k in pf.NOZZLE_RANGE if k not in SHOWN["filament"])
 
 # What OrcaSlicer itself fills when a profile leaves a value out (PrintConfig.cpp).
 ORCA_DEFAULTS = {"z_offset": "0", "xy_contour_compensation": "0"}
@@ -424,7 +433,8 @@ class OrcaSlicerModule(SlicerModule):
                 value=[p.id for p in filament],
                 origin="printer",
                 source=f"{profile.file}: {profile.filament.source}",
-                note=f"{compose.describe(filament)}: {section.get('filament')}",
+                note=f"{compose.describe(filament)}: {section.get('filament')}"
+                + (f", {section['filament_chosen']}" if section.get("filament_chosen") else ""),
             )
         )
 
