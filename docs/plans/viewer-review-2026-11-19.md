@@ -136,22 +136,52 @@ Counted in the page on the day:
    (variants, presets, sites) is split into as few runs of near-equal length as fit, each
    named for its letters (`a–k`). Nothing is dropped. One function does both, for every
    list the ring cuts.
+4. **Eight Systems, the machines apart.** A site's words become these:
 
-## Open: groupings
+   | System | The site's word |
+   |---|---|
+   | Building | wall |
+   | Furniture | furniture |
+   | Machines | the printer and the router, out of mechanical |
+   | Mechanical | mechanical: the HVAC |
+   | Electrical | electrical |
+   | Plumbing | fluid |
+   | Lighting | lighting |
+   | Scenery | scenic |
 
-- **The Systems**: eight at most, and one word each for the garage's `mechanical` (the
-  HVAC beside two machines), a part standing in a site (`router_coupon`'s `structure`) and
-  datum_core's `enclosure`.
-- **Colours**: a kind's colour, and its categories' as shades of it; written as tokens,
-  as rad's theme asks, where the ring carries literal colours now.
-- **Names**: Kind and System in the page; the canvas ring's Group cell as Kinds in the
-  universe and Systems in a site; "group" kept for windows alone.
-- **Each window's door under its own group's cell**: the Procedure, the Knobs, and a door
-  for Lighting.
-- **The Group cell's address held still.**
-- **A grouping rule put to rad**: a long list is grouped by a named facet and not cut into
-  runs of a sorted list; until rad takes it, a `Pends on` row naming rad in the host
-  record.
+   A part standing loose in a site, `router_coupon` or a devkit on the bench, has no
+   System and is grouped by its Kind; datum_core's tray takes its part's Kind.
+5. **A kind's colour, its categories shades of it.** The eight kinds are set well apart and
+   each category is a shade of its kind's colour; the Systems have a set of their own. Each
+   is written as a token, as rad's theme asks, and not as a literal in the ring.
+6. **The Group cell becomes Kinds or Systems, at one address.** Kinds in the universe and
+   Systems in a site, at the same address wherever the ring opens. "Group" names a window's
+   group and nothing else, and a long list's runs are named by their letters.
+7. **The rule goes to rad once it is built here**, with this page as its worked example.
+   Until rad takes it, the host record carries a `Pends on` row naming rad.
+
+## Built with them
+
+- Each window's door is under its own group's cell: the Procedure under the Family's, the
+  Knobs beside the Deck, and a door for Lighting.
+- The three lists of categories are read from one function, in one order, scoped to the
+  level in view.
+
+## Slices: groupings
+
+1. **The vocabulary.** One module holds the Kinds over the categories, the Systems over a
+   site's words, and their colours as tokens and shades, sent with a site beside
+   `layer_colours`. A test holds every category to one kind, every site word to one System
+   or none, and every pair of colours apart.
+2. **The sites.** The printer and the router are Machines, a loose part has no System, and
+   a site's words are read as Systems.
+3. **The ring.** One function groups a long list, by facet and then by letters; the Kinds
+   or Systems cell holds one address; no preset is dropped; each window's door is under its
+   group's cell.
+4. **The page.** Site's chips, the Layers window's categories under their kinds, and the
+   sphere's clusters by Kind, from the one list function. The walkthrough's pictures go
+   with the change.
+5. **rad.** The rule proposed, and the `Pends on` row in the host record.
 
 ## Not seen in the page
 
