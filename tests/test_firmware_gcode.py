@@ -2669,8 +2669,20 @@ class _Paced(ScriptedTransport):
         super().write(data)
 
 
-def _stream_with_polls(port, scripted_links, lines=300):
-    scripted_links.factory = _Paced
+class _RunsOut(_Paced):
+    """A board whose runout sensor opens once a hundred lines have been streamed to it."""
+
+    def write(self, data):
+        if data.decode().strip().startswith("G1"):
+            self.streamed = getattr(self, "streamed", 0) + 1
+            if self.streamed == 100:
+                said = [ln for ln in self.replies["M119"] if not ln.startswith("filament:")]
+                self.replies = {**self.replies, "M119": [*said[:-1], "filament: open", "ok"]}
+        super().write(data)
+
+
+def _stream_with_polls(port, scripted_links, lines=300, board=_Paced):
+    scripted_links.factory = board
     devices.get_state().remember_device(
         DeviceInfo(
             port=port,
@@ -2717,6 +2729,24 @@ def test_a_poll_made_while_a_print_streams_reads_the_endstops_and_not_the_card(
     after = devices.printer_status(port, links=scripted_links)
     assert board.sent[before:] == ["M105", "M114", "M27", "M119"]
     assert after.job is None and after.held == {} and after.state == "idle"
+
+
+def test_filament_that_runs_out_while_a_host_print_streams_is_read_by_the_polls_during_it(
+    scripted_links,
+):
+    """The runout sensor answers with the endstops, which a poll made while a job streams
+    still asks for: filament that runs out mid-print is read as out by the next such poll,
+    the print still streaming, and stays out."""
+    first, during, sent, job = _stream_with_polls(
+        "/dev/ttyPOLL", scripted_links, lines=400, board=_RunsOut
+    )
+    assert job.stage == "done" and first.filament_present is True
+    streamed = [s for s in during if s.job is not None and s.raw]
+    out = [i for i, s in enumerate(streamed) if s.filament_present is False]
+    assert out, "no poll made during the print read the sensor once it had opened"
+    assert all(s.filament_present is True for s in streamed[: out[0]])
+    assert all(s.filament_present is False and s.state == "printing" for s in streamed[out[0] :])
+    assert sent.count("M119") >= 2
 
 
 def test_the_card_refusal_still_holds_while_a_host_print_streams(scripted_links):
