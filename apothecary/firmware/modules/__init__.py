@@ -99,7 +99,7 @@ class ToolchainModule(ABC):
 
     id: ClassVar[str]
     label: ClassVar[str]  # what a person reads: "Arduino", "Rust for the ESP32"
-    ring_label: ClassVar[str]  # its cell of Panels › Bench › Install: twelve characters
+    ring_label: ClassVar[str]  # its cell of Panels › Tools › Bench › Install: twelve characters
     short: ClassVar[str]  # a word for a sketch's row: "Arduino", "Rust"
     languages: ClassVar[Tuple[str, ...]]
     families: ClassVar[Tuple[str, ...]]  # the board families it builds for

@@ -315,14 +315,14 @@ def test_a_procedure_through_the_window(page: Page, url: str, walkthrough):
     page.locator(".procedure-again").click()
     _stands(first, "standing by")
     _stands(second, "waiting")
-    rings.on_world(page, "Panels", "Site", "Procedure", "GO")
+    rings.on_world(page, "Panels", "Family", "Procedure", "GO")
     _stands(first, "done")
-    rings.on_world(page, "Panels", "Site", "Procedure", "Start over")
+    rings.on_world(page, "Panels", "Family", "Procedure", "Start over")
     _stands(first, "standing by")
     story.says(
         "Start over counts what came before no more; the ring's GO and Start over do the same",
         "Start over puts every step back, what came before staying in the log. The canvas "
-        "ring's Panels › Site › Procedure › GO fires the step the window offers it on, and "
+        "ring's Panels › Family › Procedure › GO fires the step the window offers it on, and "
         "its Start over is the window's.",
         shown=f"1 {first.locator('.procedure-status').inner_text()}",
     )

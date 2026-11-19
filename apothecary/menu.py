@@ -550,11 +550,14 @@ def resolve(
     picture: Optional[PictureContext] = None,
     sketch: Optional[str] = None,
     can: Optional[Dict[str, Verdict]] = None,
+    rig: bool = False,
 ) -> Ring:
     """Work out which options belong on the ring, and hand them back.
 
     ``part_category`` gives a part's category by its name, for the facets a piece is
     grouped by (``facets.py``): the registry's, unless told another.
+
+    ``rig`` is whether the site has a lighting rig, whose window Panels › Site opens.
 
     ``device`` is what the page knows about the board under the ring: for a
     node ring, the board pinned to that node, if any; for a device ring, the
@@ -570,7 +573,7 @@ def resolve(
     picture = picture or PictureContext()
     category = part_category or _registered_category
     if context.pointing is Pointing.CANVAS:
-        ring = _canvas_ring(context, site, site_names, category, picture)
+        ring = _canvas_ring(context, site, site_names, category, picture, rig)
         if can is not None:
             judged(ring.options, {verb: Verdict.model_validate(v) for verb, v in can.items()})
         return ring
@@ -869,10 +872,13 @@ PANELS: Sequence[Tuple[str, str]] = (
     # acts are a ring of their own under Panels › Machine (_loops).
     ("loops", "Loops"),
     # Motion: the selected part's pieces moved through its motion (widgets/motion.js), a
-    # window in the column registered at start and closed until asked for. Its cell is
-    # the part's own, Part › View › Motion, on a part whose pieces move, not one of
-    # Panels'.
+    # window in the column registered at start and closed until asked for: Panels ›
+    # Part's, beside Selected, and the part's own Part › View › Motion, on a part whose
+    # pieces move.
     ("motion", "Motion"),
+    # Lighting: a rig's legend and its console's levels (static/lighting.js), registered
+    # while the site has a rig: Panels › Site's, greyed on a site without one.
+    ("lighting", "Lighting"),
 )
 # The group each panel's window is registered under, as the page registers it (its
 # markup's data-group, its script's `group:`, a system's entry): a panel's cell wears
@@ -885,8 +891,9 @@ PANEL_GROUPS = {
     "scad": "Site",
     "layers": "Site",
     "working": "Site",
+    "lighting": "Site",
     "procedure": "Family",
-    "selected": "Selected",
+    "selected": "Part",
     "pictures": "Pictures",
     "models": "Pictures",
     "gather": "Pictures",
@@ -909,13 +916,12 @@ VIEWS = tuple((system.id, system.cell) for system in SYSTEMS) + tuple(
     (journey.id, journey.cell) for journey in JOURNEYS if journey.cell
 )
 JOURNEY_IDS = frozenset(journey.id for journey in JOURNEYS)
-# The panels seated before the windows' own cell (Panels › Windows, 49); a panel
-# registered after them is seated after it. Site's cell is a ring of Site and its
-# own windows, Pictures' a ring of Pictures and Gather, and Machine's a ring of the
-# Machine and its control pad.
-_BEFORE_WINDOWS = ("site", "selected", "pictures", "machine")
+# Panels is one cell per group of windows, each a ring of its group's windows and their
+# verbs: Site 8, Part 6, Pictures 2, Machine 4, then the layout's own Windows 9, Tools 3,
+# Family 1 and Airgap 7. These four come before Windows.
+_BEFORE_WINDOWS = ("site", "part", "pictures", "machine")
 _RINGS = {
-    "site": ("site", "problems", "pinned", "jobs", "scad", "working", "procedure", "layers"),
+    "site": ("site", "problems", "pinned", "jobs", "scad", "working", "lighting", "layers"),
     # Models before Gather, so Models keeps its address when Gather goes
     # (docs/plans/ui-coordination-2026-10-31.md).
     # Marks last, so Models and Gather keep their addresses.
@@ -923,7 +929,11 @@ _RINGS = {
 }
 
 
-def _panels() -> Option:
+def _panels(rig: bool = False) -> Option:
+    """Panels, cell 4 of the canvas ring: one cell per group of windows, each a ring of its
+    group's windows, each a toggle, and their verbs, wearing the group's colour. ``rig``:
+    the site has a lighting rig, whose window is Site's; without one its cell is greyed."""
+
     def toggle(pid: str, label: str) -> Option:
         return Option(
             id=f"panel:{pid}",
@@ -934,79 +944,126 @@ def _panels() -> Option:
 
     labels = dict(PANELS)
 
-    def cell(pid: str, label: str) -> Option:
-        if pid == "machine":
-            # A board's Machine, and an armed printer's control pad in a loud window
-            # of its own or put back in its Machine, as the pad's ⧉ Pop out and
-            # ⇥ Put back do (widgets/machine.js); then the knobs, and the heater loops
-            # of the printer whose Machine is open, each after the cells before it.
-            return Option(
-                id="panels:machine",
-                label=label,
-                group=PANEL_GROUPS[pid],
-                children=[
-                    toggle(pid, label),
-                    Option(id="panel:pad", label="Control pad", action="panel:pad"),
-                    _knobs(),
-                    _loops(toggle("loops", labels["loops"])),
-                ],
-            )
-        if pid not in _RINGS:
-            return toggle(pid, label)
-        return Option(
-            id=f"panels:{pid}",
-            label=label,
-            group=PANEL_GROUPS.get(pid),
-            children=[
-                _models(toggle(each, labels[each]))
-                if each == "models"
-                else _marks(toggle(each, labels[each]))
-                if each == "marks"
-                else _procedure(toggle(each, labels[each]))
-                if each == "procedure"
-                else toggle(each, labels[each])
-                for each in _RINGS[pid]
-            ],
-        )
+    def lighting() -> Option:
+        cell = toggle("lighting", labels["lighting"])
+        if not rig:
+            cell.enabled = False
+            cell.why = "this site has no lighting rig"
+        return cell
 
+    def of_site(each: str) -> Option:
+        if each == "lighting":
+            return lighting()
+        return toggle(each, labels[each])
+
+    def of_pictures(each: str) -> Option:
+        if each == "models":
+            return _models(toggle(each, labels[each]))
+        if each == "marks":
+            return _marks(toggle(each, labels[each]))
+        return toggle(each, labels[each])
+
+    family = by_id("family")
+    cells = {
+        "site": Option(
+            id="panels:site",
+            label="Site",
+            group="Site",
+            children=[of_site(each) for each in _RINGS["site"]],
+        ),
+        # Part: Selected, the Part system's main window, and Motion; the part's own
+        # sections are its ring's (Part › Edit, View, History, Variants).
+        "part": Option(
+            id="panels:part",
+            label="Part",
+            group="Part",
+            children=[toggle("selected", labels["selected"]), toggle("motion", labels["motion"])],
+        ),
+        "pictures": Option(
+            id="panels:pictures",
+            label="Pictures",
+            group="Pictures",
+            children=[of_pictures(each) for each in _RINGS["pictures"]],
+        ),
+        # A board's Machine, and an armed printer's control pad in a loud window of its own
+        # or put back in its Machine, as the pad's ⧉ Pop out and ⇥ Put back do
+        # (widgets/machine.js); then the heater loops of the printer whose Machine is open.
+        "machine": Option(
+            id="panels:machine",
+            label="Machine",
+            group="Machine",
+            children=[
+                toggle("machine", labels["machine"]),
+                Option(id="panel:pad", label="Control pad", action="panel:pad"),
+                _loops(toggle("loops", labels["loops"])),
+            ],
+        ),
+    }
+    windows = Option(
+        id="panel:windows",
+        label="Windows",
+        # The layout itself: the world alone (its window maximised) and every window
+        # back, as the tilde key does; the page's own layout again, whatever was dragged,
+        # split or closed; each view; and the Tour, after the views, so no cell before it
+        # moves: its box over the page and its verbs.
+        children=[
+            Option(id="panel:world", label="World alone", action="panel:world:toggle"),
+            Option(id="panel:layout:reset", label="Reset layout", action="panel:layout:reset"),
+            *(
+                Option(
+                    id=f"panel:view:{vid}",
+                    label=label,
+                    group=(journey_by_id(vid) if vid in JOURNEY_IDS else by_id(vid)).group,
+                    action=f"panel:view:{vid}",
+                )
+                for vid, label in VIEWS
+            ),
+            _tour(),
+        ],
+    )
+    # Tools: the Bench and its verbs, Settings (View › Settings opens it too), the Deck
+    # with the Stream Deck +'s knobs, and the documentation and the walkthrough in a tab of
+    # the browser's own, as the header's Docs opens them.
+    tools = Option(
+        id="panels:tools",
+        label="Tools",
+        group="Tools",
+        children=[
+            _bench(toggle("bench", labels["bench"])),
+            toggle("settings", labels["settings"]),
+            _deck(toggle("deck", labels["deck"])),
+            Option(id="panel:docs", label="Docs", action="panel:docs"),
+        ],
+    )
+    # Family: the Procedure and its verbs, then the family system's sections (systems.py).
+    family_cell = Option(
+        id="panels:family",
+        label="Family",
+        group="Family",
+        children=[
+            _procedure(toggle("procedure", labels["procedure"])),
+            *(
+                Option(
+                    id=f"panel:{family.id}-{section.id}",
+                    label=section.title,
+                    group=family.group,
+                    action=f"panel:toggle:{family.id}-{section.id}",
+                )
+                for section in family.sections
+            ),
+        ],
+    )
     return Option(
         id="panels",
         label="Panels",
-        children=[cell(pid, label) for pid, label in PANELS if pid in _BEFORE_WINDOWS]
-        # The layout itself: the world alone (its window maximised) and every window
-        # back, as the tilde key does; the page's own layout again, whatever was
-        # dragged, split or closed; and each view.
-        + [
-            Option(
-                id="panel:windows",
-                label="Windows",
-                children=[
-                    Option(id="panel:world", label="World alone", action="panel:world:toggle"),
-                    Option(
-                        id="panel:layout:reset", label="Reset layout", action="panel:layout:reset"
-                    ),
-                ]
-                + [
-                    Option(
-                        id=f"panel:view:{vid}",
-                        label=label,
-                        group=(journey_by_id(vid) if vid in JOURNEY_IDS else by_id(vid)).group,
-                        action=f"panel:view:{vid}",
-                    )
-                    for vid, label in VIEWS
-                ]
-                # The Tour, after the views, so no cell before it moves: its box over
-                # the page and its verbs.
-                + [_tour()],
-            )
-        ]
-        + [_bench(toggle("bench", "Bench"))]
-        # The documentation and the walkthrough, in a tab of the browser's own, as
-        # the header's Docs opens them. After the others, so no cell before it moves.
-        + [Option(id="panel:docs", label="Docs", action="panel:docs")]
-        # The Airgap, a group of its own: the panel and its verbs. The eighth cell,
-        # the ring's last.
-        + [_airgap(toggle("airgap", "Airgap"))],
+        children=[
+            *(cells[pid] for pid in _BEFORE_WINDOWS),
+            windows,
+            tools,
+            family_cell,
+            # The Airgap, a group of its own: the panel and its verbs. The eighth cell.
+            _airgap(toggle("airgap", labels["airgap"])),
+        ],
     )
 
 
@@ -1166,7 +1223,7 @@ def _colours(words: Sequence[str]) -> List[Option]:
 
 
 def _procedure(toggle: Option) -> Option:
-    """Panels › Site › Procedure: the window, then its verbs, which the page hands to it
+    """Panels › Family › Procedure: the window, then its verbs, which the page hands to it
     (widgets/procedure.js). Seated after the window's own cell."""
     return Option(
         id="panels:procedure",
@@ -1179,18 +1236,19 @@ def _procedure(toggle: Option) -> Option:
     )
 
 
-def _knobs() -> Option:
-    """Panels › Machine › Knobs: the Stream Deck +'s knobs, the server's layout on the deck
-    (firmware/deck_control.py), which the page hands each verb to -- on or off, the machine
-    they move, their step, and the machine of the Machine that is open -- then the Deck
-    window, which shows them, and the screen the deck's strip shows. Seated after the
-    Machine's own two cells, so neither moves."""
+def _deck(toggle: Option) -> Option:
+    """Panels › Tools › Deck: the Deck window, then the Stream Deck +'s knobs, the server's
+    layout on the deck (firmware/deck_control.py), which the page hands each verb to -- on
+    or off, the machine they move, their step, and the machine of the Machine that is open
+    -- and the screen the deck's strip shows."""
     from .firmware.deck_control import MACHINES, STEPS_MM
 
     return Option(
-        id="panels:knobs",
-        label="Knobs",
+        id="panels:deck",
+        label="Deck",
+        group="Tools",
         children=[
+            toggle,
             Option(id="deck:knobs", label="On / off", action="deck:knobs"),
             Option(
                 id="deck:machine",
@@ -1213,10 +1271,8 @@ def _knobs() -> Option:
                 ],
             ),
             Option(id="deck:here", label="Here", action="deck:here"),
-            Option(id="panel:deck", label="Deck", action="panel:toggle:deck"),
             # The strip's screen, by its name or a step either way as a swipe along the
-            # strip takes it (firmware/deck_screens.py). After the Deck window, so no
-            # cell before it moves.
+            # strip takes it (firmware/deck_screens.py).
             Option(
                 id="deck:screen",
                 label="Screen",
@@ -1229,7 +1285,7 @@ def _knobs() -> Option:
     )
 
 
-# The cells of Knobs › Screen: each screen of the strip in its order, then a step back and on.
+# The cells of Deck › Screen: each screen of the strip in its order, then a step back and on.
 SCREEN_CELLS = (
     ("knobs", "Knobs"),
     ("progress", "Progress"),
@@ -1940,6 +1996,7 @@ def _canvas_ring(
     site_names: Sequence[str],
     part_category,
     picture: PictureContext,
+    rig: bool = False,
 ) -> Ring:
     """The ring on empty canvas: the pieces at this level, the rest, and the way out.
 
@@ -1973,7 +2030,7 @@ def _canvas_ring(
                 shown={UNIVERSE: UNIVERSE_SHOWN},
             ),
             _view(site),
-            _panels(),
+            _panels(rig),
             _pictures(picture),
             Option(id="reset", label="Rebuild", action="reset", destructive=True, twice=True),
             Option(

@@ -85,7 +85,7 @@ Left to right, one row:
   front.
 - **Docs** opens the documentation in a new tab, the world left where it
   was: the guides, and from its bar the walkthrough's index (`/walkthrough`),
-  its pages in order; the bar of every page links the README, served at `/README.md`. The ring's Panels › Docs opens the same.
+  its pages in order; the bar of every page links the README, served at `/README.md`. The ring's Panels › Tools › Docs opens the same.
 - **⌗ Ring** opens the ring for the chosen piece, as `m` does; its tooltip names
   the key and the modifier Settings gives the ring.
 - **The validity count**, "Layout valid" or the number of violations: a click
@@ -604,23 +604,27 @@ greyed at the universe's own, nothing being above it) and Systems 7, Kinds in th
 category; greyed where the site has none). Every cell is there wherever the ring opens, so
 none moves.
 
-- **Panels** › Site › Site, Problems, Pinned, Jobs, SCAD, Workspace and Layers (the
-  Workspace, [working-space.md](working-space.md)); Selected;
+- **Panels** is one cell per group of windows ([below](#the-windows)), each a ring of
+  its group's windows and their verbs: Site › Site, Problems, Pinned, Jobs, SCAD,
+  Workspace ([working-space.md](working-space.md)), Lighting (a rig's, greyed on a site
+  without one, [lighting.md](lighting.md)) and Layers; Part › Selected and Motion;
   Pictures › Pictures, Models (the Models window, then Ask and a person's Colour
   and Material, [models-checklist.md](models-checklist.md)), Gather and Marks (the Marks window, then a person's
   word on the mark chosen in it, Earlier and Later through a whiteboard's history, and
   Place, [pictures.md](pictures.md#the-marks-window)); Machine › Machine (the selected board's),
   Control pad (an armed printer's pad in a loud window of its own or back in its
-  Machine, as the pad's ⧉ Pop out and ⇥ Put back), Knobs (the Stream Deck +'s:
-  On / off, Machine, Step, Here, the Deck window and Screen -- Knobs, Progress,
-  Status, Back and Next, the screen its strip shows -- [stream-deck.md](stream-deck.md)) and
+  Machine, as the pad's ⧉ Pop out and ⇥ Put back) and
   Loops (the Loops window, then Read, Start, Cancel, Set gains, Loop, Experiment and
   Rule, on the printer whose Machine is open, [control-loops.md](control-loops.md#the-loops-window)); Windows › World alone (as
-  `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Print view; Bench › Bench (show it), Install (a cell per toolchain
-  module, then the slicer), Compile, Upload, Raw flash, Cancel, Cores,
-  Libraries; Docs (the documentation in a new tab, as the header's Docs); and
-  Airgap › Airgap (show it), Play, Sweep, To editor, From editor, Copy SCAD,
-  Copy metrics, Reset ([the Airgap](airgap.md)).
+  `~`), Reset layout, Part view, Machine view, Airgap view, Family view and Print view;
+  Tools › Bench (Bench, to show it, Install, a cell per toolchain module, then the
+  slicer, Compile, Upload, Raw flash, Cancel, Cores, Libraries), Settings, Deck (the
+  Deck window, then the Stream Deck +'s knobs: On / off, Machine, Step, Here and Screen
+  -- Knobs, Progress, Status, Back and Next, the screen its strip shows --
+  [stream-deck.md](stream-deck.md)) and Docs (the documentation in a new tab, as the
+  header's Docs); Family › Procedure (the window, GO and Start over), Members and
+  Deliveries ([family.md](family.md)); and Airgap › Airgap (show it), Play, Sweep, To
+  editor, From editor, Copy SCAD, Copy metrics, Reset ([the Airgap](airgap.md)).
 - **Pictures** › Add (a picture pinned at the floor), Floor (the floor's
   Fit, Camera and Picture), Purge and Gather.
 
@@ -683,7 +687,8 @@ layout a person makes is remembered by this browser; Panels › Windows › Rese
 layout puts every window where the page puts it.
 
 Every stack but the world's wears a **+** beside its ☐: it lists every window
-by its group -- Site, Selected, Pictures, Tools, Part, Machine, Airgap, Family -- and a
+by its group -- Site, Part, Pictures, Machine, Tools, Family, Airgap, eight at most, a
+ring's cells, and each a cell of the canvas ring's Panels -- and a
 closed one chosen opens as a tab of that stack; an open one comes in front where
 it is. The header's **⊞ Windows** (⊞ alone on a narrow page) lists the same, a window chosen there opening
 at its place, and above them the **views**: windows laid out together for one

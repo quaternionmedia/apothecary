@@ -13,18 +13,17 @@
  * window's tab, the window itself, and its heading and rows in ⊞ Windows and a stack's
  * +. Each is validated against --bg and kept clear of the colours that mean a state
  * (--ok, --warn, --bad) and of a focused tab's line. A group with no rule here wears
- * --ink-3; tests/test_group_colours.py holds that every group the page registers has one. */
+ * --ink-3; tests/test_group_colours.py holds that every group the page registers has one.
+ * The groups are a ring's eight at most, each a cell of Panels (apothecary/menu.py). */
 :root {
-    --group-site: #58c4b8; --group-selected: #c3a2ec; --group-pictures: #ea96c2;
-    --group-tools: #aab4c4; --group-lighting: #e6dc8c; --group-part: #a9c868;
-    --group-machine: #f0906a; --group-airgap: #8ea2f4; --group-family: #cfa87c;
+    --group-site: #58c4b8; --group-part: #a9c868; --group-pictures: #ea96c2;
+    --group-machine: #f0906a; --group-tools: #aab4c4; --group-family: #cfa87c;
+    --group-airgap: #8ea2f4;
 }
 [data-group] { --group: var(--ink-3); }
 [data-group="Site"] { --group: var(--group-site); }
-[data-group="Selected"] { --group: var(--group-selected); }
 [data-group="Pictures"] { --group: var(--group-pictures); }
 [data-group="Tools"] { --group: var(--group-tools); }
-[data-group="Lighting"] { --group: var(--group-lighting); }
 [data-group="Part"] { --group: var(--group-part); }
 [data-group="Machine"] { --group: var(--group-machine); }
 [data-group="Airgap"] { --group: var(--group-airgap); }

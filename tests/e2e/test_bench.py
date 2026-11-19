@@ -2,7 +2,7 @@
 panel in front of the world.
 
 The Bench is a tab beside Pictures, behind it until pressed; its verbs are cells of
-the canvas ring's Panels › Bench.
+the canvas ring's Panels › Tools › Bench.
 
 Runs against a server of its own from the conftest's ``start_server``: the
 scripted ``arduino-cli`` (version 9.9.9, an Uno on ``/dev/ttyFAKE0``,
@@ -143,7 +143,7 @@ def test_the_bench_lists_the_sketches_and_installs_with_the_scripted_cli(page: P
 
 @pytest.mark.e2e
 def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
-    """Panels › Bench holds the panel and its verbs, and the Bench's buttons wear their
+    """Panels › Tools › Bench holds the panel and its verbs, and the Bench's buttons wear their
     addresses; Compile from the ring compiles what the Bench has chosen."""
     open_garage(page, url, settle=False)
     page.locator("#viewer-canvas").click(
@@ -152,8 +152,10 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     page.keyboard.press(_wedges(page)["Panels"])
     panels = _wedges(page)
-    assert panels["Windows"] == "9" and panels["Bench"] == "3", panels  # Windows keeps its cell
+    assert panels["Windows"] == "9" and panels["Tools"] == "3", panels  # Windows keeps its cell
     page.keyboard.press("3")
+    assert _wedges(page)["Bench"] == "8"
+    page.keyboard.press("8")
     bench_cells = _wedges(page)
     assert bench_cells == {
         "Bench": "8",
@@ -172,12 +174,12 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     expect(bench.locator(".sketch-select option[value='footpedal@arduino']")).to_have_count(
         1, timeout=10000
     )
-    expect(bench.locator(".compile-btn")).to_have_attribute("data-address", "432", timeout=5000)
+    expect(bench.locator(".compile-btn")).to_have_attribute("data-address", "4382", timeout=5000)
     # Install is a ring of the toolchain modules: arduino-cli's install and Rust for the
     # ESP32's each have a cell of their own.
-    expect(bench.locator(".install-btn")).to_have_attribute("data-address", "4368")
+    expect(bench.locator(".install-btn")).to_have_attribute("data-address", "43868")
     expect(bench.locator(".module-install[data-id='rust-esp32']")).to_have_attribute(
-        "data-address", "4366"
+        "data-address", "43866"
     )
     # The Stream Deck + after them: a card of its own, its two tools as found, its Install
     # a cell of Install that cannot be pressed (nothing here fetches a package or hidapi).
@@ -186,34 +188,34 @@ def test_the_bench_s_verbs_are_cells_of_panels_bench(page: Page, url: str):
     expect(deck).to_contain_text(
         "can find decks, draw keys and strip, hear keys, knobs and touches"
     )
-    expect(deck.locator(".module-install")).to_have_attribute("data-address", "4362")
+    expect(deck.locator(".module-install")).to_have_attribute("data-address", "43862")
     expect(deck.locator(".module-install")).to_be_disabled()
     # The slicer after them: OrcaSlicer, none of the person's own found by this server,
     # its Install the last cell of Install.
     slicer = bench.locator(".tc-module[data-slicer='orcaslicer']")
     expect(slicer).to_contain_text("not installed: pinned 2.4.2")
     expect(slicer.locator(".slicer-install")).to_have_text("Install OrcaSlicer")
-    expect(slicer.locator(".slicer-install")).to_have_attribute("data-address", "4364")
+    expect(slicer.locator(".slicer-install")).to_have_attribute("data-address", "43864")
     expect(bench.locator(".core-install[data-id='esp8266:esp8266']")).to_have_attribute(
-        "data-address", re.compile(r"^431\d$")
+        "data-address", re.compile(r"^4381\d$")
     )
     bench.locator(".sketch-select").select_option("footpedal@arduino")
     page.locator("#viewer-canvas").click(
         button="right", modifiers=["Control"], position={"x": 30, "y": 30}
     )
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    for digit in ("4", "3", "2"):  # Panels › Bench › Compile
+    for digit in ("4", "3", "8", "2"):  # Panels › Tools › Bench › Compile
         page.keyboard.press(digit)
     expect(page.locator("#ring-overlay")).to_have_count(0)
     _ended(bench, "Compile footpedal@arduino (arduino:avr:uno)")
-    expect(page.locator("#status")).to_contain_text("⌗432")
+    expect(page.locator("#status")).to_contain_text("⌗4382")
 
 
 @pytest.mark.e2e
 def test_the_firmware_address_opens_the_viewer_with_the_bench(page: Page, url: str):
     """/firmware, the firmware page's address, is the viewer on the default site with
     the Bench open -- on a fresh load, as a link handed out lands -- and the toolbar
-    leads to no page of its own: Panels › Bench and a board's Machine are the way."""
+    leads to no page of its own: Panels › Tools › Bench and a board's Machine are the way."""
     page.goto(f"{url}/firmware")
     expect(page).to_have_url(re.compile(r"/viewer/sites/garage\?panel=bench$"))
     bench = page.locator(BENCH)

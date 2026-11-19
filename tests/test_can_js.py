@@ -265,7 +265,7 @@ def test_every_verb_the_page_names_is_one_the_server_answers(monkeypatch):
 def _machine_rings():
     """Every ring a machine's acts are on: a printer's, a router's and a devkit's device
     ring, latch down and up; and the canvas ring's Panels › Machine, the open Machine's
-    window, its pad, the deck's knobs and its heater loops."""
+    window, its pad and its heater loops, and Panels › Tools › Deck, the deck's knobs."""
     from apothecary.example_hierarchy import create_example_site
     from apothecary.menu import Context, Device, Pointing, Ring, resolve
 
@@ -280,7 +280,9 @@ def _machine_rings():
         yield resolve(Context(pointing=Pointing.DEVICE, targets=[device.port]), device=device)
     canvas = resolve(Context(pointing=Pointing.CANVAS), create_example_site())
     panels = next(o for o in canvas.options if o.id == "panels")
-    yield Ring(options=[next(o for o in panels.children if o.id == "panels:machine")])
+    machine = next(o for o in panels.children if o.id == "panels:machine")
+    tools = next(o for o in panels.children if o.id == "panels:tools")
+    yield Ring(options=[machine, next(o for o in tools.children if o.id == "panels:deck")])
 
 
 def _acts(options) -> set:

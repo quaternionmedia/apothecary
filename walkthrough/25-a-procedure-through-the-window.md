@@ -85,7 +85,7 @@ printer_1 disarmed, its pad gone with its Machine · Opened esp32_blink's Machin
 
 ## 11. Start over counts what came before no more; the ring's GO and Start over do the same
 
-Start over puts every step back, what came before staying in the log. The canvas ring's Panels › Site › Procedure › GO fires the step the window offers it on, and its Start over is the window's.
+Start over puts every step back, what came before staying in the log. The canvas ring's Panels › Family › Procedure › GO fires the step the window offers it on, and its Start over is the window's.
 
 ```
 1 standing by

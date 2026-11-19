@@ -193,10 +193,14 @@ Counted in the page on the day:
      canvas ring's every cell is always there: Step out 1, greyed at the universe's own
      level, and Systems 7, Kinds in the universe, each opening its pieces in place, greyed
      where a site has none. A part's presets are all kept.
-   - **Panels by group.** The window groups become eight: Selected joins Part, Lighting
-     joins Site, and Docs is a tool. Panels is one cell per group, Site, Part, Pictures,
-     Machine, Windows, Tools, Family and Airgap, each holding its group's windows: the
-     Procedure, Members and Deliveries under Family, the Deck and its Knobs under Tools.
+   - **Panels by group** (built). The window groups are seven: Selected joins Part,
+     Lighting joins Site, and Docs is a tool. Panels is one cell per group, Site, Part,
+     Pictures, Machine, then Windows, Tools, Family and Airgap, each holding its group's
+     windows: Lighting in the Procedure's old seat under Site, greyed on a site without a
+     rig; the Procedure, Members and Deliveries under Family; the Bench, Settings, the Deck
+     with its knobs and Docs under Tools. A test holds the groups to a ring and each
+     window's door to its group's cell. The Bench's, Docs', the Deck's and the Loops'
+     addresses move with them.
 4. **The page.** Site's chips, the Layers window's categories under their kinds, and the
    sphere's clusters by Kind, from the one list function. The walkthrough's pictures go
    with the change.

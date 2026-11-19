@@ -811,7 +811,7 @@
                         <ul id="contents-list" class="contents-list contents-tree"></ul>
                     </div>
                 </div>
-                <div class="panel-section" data-panel="selected" data-group="Selected">
+                <div class="panel-section" data-panel="selected" data-group="Part">
                     <div class="panel-header">Selected</div>
                     <div class="panel-body" id="selected-body">
                         <div class="no-selection">Click a piece to select it</div>
@@ -1708,7 +1708,7 @@
                     scene: this.scene, base: BASE_URL,
                     onPanel: (el) => {
                         if (!el) { this.panels.unregister('lighting'); return; }
-                        if (!this.panels.state('lighting')) this.panels.register('lighting', { title: 'Lighting', group: 'Lighting', body: el });
+                        if (!this.panels.state('lighting')) this.panels.register('lighting', { title: 'Lighting', group: 'Site', body: el });
                         this.panels.open('lighting');
                     },
                 });
@@ -9527,7 +9527,7 @@
             // The Bench's body: its three modules over one task log. A task's end asks
             // the toolchain, the sketches and the ports again, and the boards the site
             // binds (an upload changes what a board should run). Each verb is also a
-            // cell of Panels › Bench (act), acting on what the Bench has chosen.
+            // cell of Panels › Tools › Bench (act), acting on what the Bench has chosen.
             mountBench(slot) {
                 slot.classList.add('bench-ui');
                 slot.innerHTML = '<div class="bench-toolchain-slot"></div><div class="k">Build &amp; upload</div><div class="bench-build-slot"></div>'
@@ -9559,7 +9559,7 @@
                     toolchain, build, raw, tasks,
                     load: () => (ready = load()),
                     ready: () => ready,
-                    // A verb of Panels › Bench: what its button does. Null when it was
+                    // A verb of Panels › Tools › Bench: what its button does. Null when it was
                     // refused, which the module has said.
                     async act(verb) {
                         await ready;
@@ -11289,7 +11289,7 @@
                     viewer.systems.airgap.widget().act(action.slice('airgap:'.length));
                     return;
                 }
-                // Panels › Docs: the documentation in a new tab, as the header's Docs opens it.
+                // Panels › Tools › Docs: the documentation in a new tab, as the header's Docs opens it.
                 if (action === 'panel:docs') {
                     const docs = document.getElementById('docs-link');
                     window.open(docs ? docs.href : `${BASE_URL}/docs`, '_blank', 'noopener');
@@ -11594,7 +11594,7 @@
             ['.tour-pop-works', 'tour:works'], ['.tour-pop-off', 'tour:off'], ['.tour-pop-next', 'tour:next'],
             ['.tour-pop-page', 'tour:page'], ['.tour-pop-put', 'tour:put'], ['.tour-pop-by', 'tour:by'],
         ];
-        // The Bench's buttons, by the verb each one is (Panels › Bench).
+        // The Bench's buttons, by the verb each one is (Panels › Tools › Bench).
         const BENCH_VERBS = [
             ['.install-btn', 'bench:install:arduino'], ['.compile-btn', 'bench:compile'], ['.upload-btn', 'bench:upload'],
             ['.esp-flash-btn', 'bench:esptool'], ['.cancel-btn', 'bench:cancel'], ['.lib-btn', 'bench:libraries'],
@@ -11603,7 +11603,7 @@
         // ring's Pieces cell reaches, and the trail's crumb one level up is its Up;
         // the View menu, the cell View (its items, View's cells); the Windows menu,
         // Panels › Windows; the Tour, its box and the Procedure's buttons, their cells;
-        // and the Bench's buttons, its verbs under Panels › Bench.
+        // and the Bench's buttons, its verbs under Panels › Tools › Bench.
         const UNIVERSE_SITE = {{ universe | tojson }};
         let procedureWatched = null;
         function annotateList(ring) {
@@ -11637,12 +11637,12 @@
             pairs.push([viewer.overlayToggle.closest('label'), 'view:outlines']);
             pairs.push([viewer.wallsToggle.closest('label'), 'view:walls']);
             pairs.push([viewer.settingsOpenBtn, 'view:settings']);
-            // The header's Docs: Panels › Docs.
+            // The header's Docs: Panels › Tools › Docs.
             pairs.push([document.getElementById('docs-link'), 'panel:docs']);
             // The header's Tour and the tour's box: Panels › Windows › Tour.
             for (const [selector, action] of TOUR_VERBS) for (const el of document.querySelectorAll(selector)) pairs.push([el, action]);
             // The Procedure's GO (the ring's fires the step offered first) and Start over:
-            // Panels › Site › Procedure. Its steps are drawn again as they change, so the
+            // Panels › Family › Procedure. Its steps are drawn again as they change, so the
             // addresses are written again then.
             const procedure = document.querySelector(".panel[data-panel='procedure']");
             if (procedure) {
@@ -11657,14 +11657,14 @@
             // An armed printer's pad, popped out or put back: Panels › Machine › Control pad.
             const padToggle = document.getElementById('ctl-pop');
             if (padToggle) pairs.push([padToggle, 'panel:pad']);
-            // The Deck window's controls and a pad's Knobs here: Panels › Machine › Knobs.
+            // The Deck window's controls and a pad's Knobs here: Panels › Tools › Deck.
             if (window.apothecaryDeck && window.apothecaryDeck.pairs) pairs.push(...window.apothecaryDeck.pairs());
             for (const el of document.querySelectorAll('#deck-here')) pairs.push([el, 'deck:here']);
             const bench = document.querySelector(".panel[data-panel='bench']");
             if (bench) {
                 for (const [selector, action] of BENCH_VERBS) for (const el of bench.querySelectorAll(selector)) pairs.push([el, action]);
                 for (const el of bench.querySelectorAll('.core-install[data-id]')) pairs.push([el, `bench:core:${el.dataset.id}`]);
-                // Each toolchain module's Install: its cell of Panels › Bench › Install.
+                // Each toolchain module's Install: its cell of Panels › Tools › Bench › Install.
                 for (const el of bench.querySelectorAll('.module-install[data-id]')) pairs.push([el, `bench:install:${el.dataset.id}`]);
                 // Each slicer's Install: its cell of Install, after the toolchain modules'.
                 for (const el of bench.querySelectorAll('.slicer-install[data-slicer]')) pairs.push([el, `bench:install:slicer:${el.dataset.slicer}`]);

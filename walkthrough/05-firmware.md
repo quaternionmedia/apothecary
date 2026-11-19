@@ -19,7 +19,7 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ## 1. The Bench lists both builds of esp32_blink, each with its toolchain
 
-Panels › Bench › Bench on the canvas ring opens the Bench, maximised here from its stack: arduino-cli's status and its cores, and under them the other modules as installed -- Rust for the ESP32, and the slicer, OrcaSlicer, which this run leaves uninstalled -- and the sketches under parts/, each named with its toolchain: the Arduino esp32_blink and the Rust one next to each other in its drop-down, as listed below with the modules. The Arduino one chosen, its board filled in from its firmware.json, and the devkit's port: Compile is next.
+Panels › Tools › Bench › Bench on the canvas ring opens the Bench, maximised here from its stack: arduino-cli's status and its cores, and under them the other modules as installed -- Rust for the ESP32, and the slicer, OrcaSlicer, which this run leaves uninstalled -- and the sketches under parts/, each named with its toolchain: the Arduino esp32_blink and the Rust one next to each other in its drop-down, as listed below with the modules. The Arduino one chosen, its board filled in from its firmware.json, and the devkit's port: Compile is next.
 
 ![The Bench lists both builds of esp32_blink, each with its toolchain](screenshots/05-01-the-bench-lists-both-builds-of-esp32-blink-each-wi.png)
 
@@ -33,7 +33,7 @@ esp32_blink@rust-esp32 · esp32
 
 ## 2. Compile builds it for its board
 
-Panels › Bench › Compile (⌗432) builds what the Bench has chosen, as a task whose output is in the Bench's log; nothing is sent to a board. Upload is next.
+Panels › Tools › Bench › Compile (⌗4382) builds what the Bench has chosen, as a task whose output is in the Bench's log; nothing is sent to a board. Upload is next.
 
 ```
 succeeded — Compile esp32_blink@arduino (esp32:esp32:esp32)
@@ -41,7 +41,7 @@ succeeded — Compile esp32_blink@arduino (esp32:esp32:esp32)
 
 ## 3. Upload writes it to the devkit, after asking
 
-Panels › Bench › Upload (⌗434) asks first, naming the sketch with its toolchain and the port; then it builds again and uploads that fresh build. The garage's esp32_blink, which runs the sketch of that name, now wears the board.
+Panels › Tools › Bench › Upload (⌗4384) asks first, naming the sketch with its toolchain and the port; then it builds again and uploads that fresh build. The garage's esp32_blink, which runs the sketch of that name, now wears the board.
 
 ```
 Compile and upload "esp32_blink@arduino" to /dev/ttyFAKE2?

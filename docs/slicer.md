@@ -207,7 +207,7 @@ Slice is a step of the loop from a picture to a print
 - **Installing it.** The Bench's toolchain card draws the slicer after the
   toolchain modules: what it slices, where it is, the release pinned, and its
   own **Install** (or Update), whose log is the Bench's task log. It is
-  Panels › Bench › Install's last cell, **OrcaSlicer**, beside Arduino and Rust
+  Panels › Tools › Bench › Install's last cell, **OrcaSlicer**, beside Arduino and Rust
   ESP32 -- the ring of modules for installs -- since installing a tool is the
   Bench's, and the Machine's Slice says where to install it when none is found.
 

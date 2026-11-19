@@ -351,7 +351,7 @@ def test_a_simulated_server_with_no_slicer_says_how_to_install_one(
         expect(_status(page)).to_contain_text(
             "OrcaSlicer is not installed: apothecary slicer install", timeout=30000
         )
-        expect(_status(page)).to_contain_text("Panels › Bench › Install › OrcaSlicer installs it")
+        expect(_status(page)).to_contain_text("Panels › Tools › Bench › Install › OrcaSlicer installs it")
     finally:
         context.close()
     touched = Path(simulated_without_a_slicer["env"]["APOTHECARY_TEST_SERIAL_GUARD"])

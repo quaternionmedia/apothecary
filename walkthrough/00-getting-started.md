@@ -131,7 +131,7 @@ Where each starts:
   `examples/pictures/shapes.png` is three shapes the finder
   reads. Each step's message names the next one.
 - **Firmware** starts at the Bench, a tab beside Pictures, or the canvas ring's
-  Panels › Bench › Bench: the sketches under `parts/`, each named with its
+  Panels › Tools › Bench › Bench: the sketches under `parts/`, each named with its
   toolchain.
 - **A whiteboard to a model** starts at the garage's whiteboard, on its south
   wall beside the door: its ring's Picture › Folder pins a photograph of it,

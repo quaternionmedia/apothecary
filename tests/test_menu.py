@@ -1332,26 +1332,47 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [c.destructive for c in pictures.children] == [False, False, True, False]
     assert carried_by("picture:add:@floor").name == "VIEWER"
     assert carried_by("picture:purge").name == "VIEWER"
-    # Site, a ring of Site (its chips and its Contents) and its own windows --
-    # Problems, Pinned, Jobs, SCAD; Selected; Pictures, a ring of Pictures and the
-    # gathering; Machine, a ring of a board's Machine (its log in it) and an armed
-    # printer's control pad, in a loud window of its own or back in its Machine;
-    # then Windows: the world alone and the page's own layout again; then the
-    # Bench, a group of its own: the panel and its verbs. Then Docs: the
-    # documentation and the walkthrough in a new tab, as the header's Docs opens
-    # them; last, the Airgap, the panel and its verbs.
-    assert [(c.label, c.action, c.cell) for c in panels.children] == [
-        ("Site", None, 8),
-        ("Selected", "panel:toggle:selected", 6),
-        ("Pictures", None, 2),
-        ("Machine", None, 4),
-        ("Windows", None, 9),
-        ("Bench", None, 3),
-        ("Docs", "panel:docs", 1),
-        # The Airgap, the eighth cell and the ring's last: the panel and its verbs.
-        ("Airgap", None, 7),
+    # One cell per group of windows, each a ring of its windows and their verbs, then
+    # the layout's own Windows: Site, Part, Pictures and Machine; Windows; Tools,
+    # Family and, last, the Airgap.
+    assert [(c.label, c.action, c.cell, c.group) for c in panels.children] == [
+        ("Site", None, 8, "Site"),
+        ("Part", None, 6, "Part"),
+        ("Pictures", None, 2, "Pictures"),
+        ("Machine", None, 4, "Machine"),
+        ("Windows", None, 9, None),
+        ("Tools", None, 3, "Tools"),
+        ("Family", None, 1, "Family"),
+        ("Airgap", None, 7, "Airgap"),
     ]
-    assert address_of(root, "panel:docs") == "41"
+    part = next(c for c in panels.children if c.label == "Part")
+    assert [(c.label, c.action, c.cell) for c in part.children] == [
+        ("Selected", "panel:toggle:selected", 8),
+        ("Motion", "panel:toggle:motion", 6),
+    ]
+    assert address_of(root, "panel:selected") == "468"
+    tools = next(c for c in panels.children if c.label == "Tools")
+    assert [(c.label, c.action, c.cell) for c in tools.children] == [
+        ("Bench", None, 8),
+        ("Settings", "panel:toggle:settings", 6),
+        ("Deck", None, 2),
+        ("Docs", "panel:docs", 4),
+    ]
+    assert address_of(root, "panel:docs") == "434"
+    family = next(c for c in panels.children if c.label == "Family")
+    assert [(c.label, c.action, c.cell) for c in family.children] == [
+        ("Procedure", None, 8),
+        ("Members", "panel:toggle:family-members", 6),
+        ("Deliveries", "panel:toggle:family-deliveries", 2),
+    ]
+    procedure = family.children[0]
+    assert [(c.label, c.action) for c in procedure.children] == [
+        ("Procedure", "panel:toggle:procedure"),
+        ("GO", "procedure:go"),
+        ("Start over", "procedure:again"),
+    ]
+    assert address_of(root, "procedure:go") == "4186"
+    assert carried_by("procedure:go").name == "VIEWER"
     airgap = next(c for c in panels.children if c.label == "Airgap")
     assert [(c.label, c.action, c.cell) for c in airgap.children] == [
         ("Airgap", "panel:toggle:airgap", 8),
@@ -1374,28 +1395,27 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert [(c.label, c.action, c.cell) for c in machine.children] == [
         ("Machine", "panel:toggle:machine", 8),
         ("Control pad", "panel:pad", 6),
-        # The Stream Deck +'s knobs, seated after the Machine's own two.
-        ("Knobs", None, 2),
-        # The heater loops of the printer whose Machine is open, after the knobs.
-        ("Loops", None, 4),
+        # The heater loops of the printer whose Machine is open.
+        ("Loops", None, 2),
     ]
     assert address_of(root, "panel:pad") == "446"
     assert carried_by("panel:pad").name == "VIEWER"
-    knobs = next(c for c in machine.children if c.label == "Knobs")
-    assert [(c.label, c.action, c.cell) for c in knobs.children] == [
-        ("On / off", "deck:knobs", 8),
-        ("Machine", None, 6),
-        ("Step", None, 2),
-        ("Here", "deck:here", 4),
-        ("Deck", "panel:toggle:deck", 9),
-        # The strip's screen, as a swipe along it changes it: seated after the Deck window.
+    # The Deck, a tool: its window, then the Stream Deck +'s knobs and the strip's screen.
+    deck = next(c for c in tools.children if c.label == "Deck")
+    assert [(c.label, c.action, c.cell) for c in deck.children] == [
+        ("Deck", "panel:toggle:deck", 8),
+        ("On / off", "deck:knobs", 6),
+        ("Machine", None, 2),
+        ("Step", None, 4),
+        ("Here", "deck:here", 9),
+        # The strip's screen, as a swipe along it changes it.
         ("Screen", None, 3),
     ]
-    assert address_of(root, "deck:knobs") == "4428"
-    assert address_of(root, "panel:deck") == "4429"
-    assert address_of(root, "deck:machine:cnc_router") == "44266"
-    assert address_of(root, "deck:step:10") == "44222"
-    screen = next(c for c in knobs.children if c.label == "Screen")
+    assert address_of(root, "deck:knobs") == "4326"
+    assert address_of(root, "panel:deck") == "4328"
+    assert address_of(root, "deck:machine:cnc_router") == "43226"
+    assert address_of(root, "deck:step:10") == "43242"
+    screen = next(c for c in deck.children if c.label == "Screen")
     assert [(c.label, c.action, c.cell) for c in screen.children] == [
         ("Knobs", "deck:screen:knobs", 8),
         ("Progress", "deck:screen:progress", 6),
@@ -1403,7 +1423,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Back", "deck:screen:previous", 4),
         ("Next", "deck:screen:next", 9),
     ]
-    assert address_of(root, "deck:screen:status") == "44232"
+    assert address_of(root, "deck:screen:status") == "43232"
     for action in ("deck:knobs", "deck:machine:printer_1", "deck:step:0.1", "deck:here"):
         assert carried_by(action).name == "VIEWER"
     assert carried_by("deck:screen:next").name == "VIEWER"
@@ -1420,11 +1440,11 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Experiment", None, 1),
         ("Rule", None, 7),
     ]
-    assert address_of(root, "panel:loops") == "4448"
-    assert address_of(root, "loops:start") == "4442"
-    assert address_of(root, "loops:loop:bed") == "44436"
-    assert address_of(root, "loops:kind:perturbation") == "44412"
-    assert address_of(root, "loops:rule:simc:pi") == "444798"
+    assert address_of(root, "panel:loops") == "4428"
+    assert address_of(root, "loops:start") == "4422"
+    assert address_of(root, "loops:loop:bed") == "44236"
+    assert address_of(root, "loops:kind:perturbation") == "44212"
+    assert address_of(root, "loops:rule:simc:pi") == "442798"
     by_label = {c.label: c for c in loops.children}
     assert [(c.label, c.action) for c in by_label["Loop"].children] == [
         ("Hotend 0", "loops:loop:hotend"),
@@ -1454,16 +1474,15 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Jobs", "panel:toggle:jobs", 4),
         ("SCAD", "panel:toggle:scad", 9),
         ("Workspace", "panel:toggle:working", 3),
-        ("Procedure", None, 1),
+        # A rig's Lighting, in the Procedure's old seat so Layers keeps its address; greyed
+        # on a site without a rig.
+        ("Lighting", "panel:toggle:lighting", 1),
         ("Layers", "panel:toggle:layers", 7),
     ]
-    procedure = next(c for c in site.children if c.label == "Procedure")
-    assert [(c.label, c.action) for c in procedure.children] == [
-        ("Procedure", "panel:toggle:procedure"),
-        ("GO", "procedure:go"),
-        ("Start over", "procedure:again"),
-    ]
-    assert carried_by("procedure:go").name == "VIEWER"
+    lighting = site.children[6]
+    assert (lighting.enabled, lighting.why) == (False, "this site has no lighting rig")
+    rigged = resolve(Context(pointing=Pointing.CANVAS), _garage(), rig=True)
+    assert walk(rigged, address_of(rigged, "panel:lighting")).enabled
     assert address_of(root, "panel:site") == "488"  # by the option's id
     assert address_of(root, "panel:problems") == "486"
     pictures = next(c for c in panels.children if c.label == "Pictures")
@@ -1555,7 +1574,7 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     assert carried_by("panel:view:airgap").name == "VIEWER"
     assert carried_by("panel:world:toggle").name == "VIEWER"
     assert carried_by("panel:layout:reset").name == "VIEWER"
-    bench = next(c for c in panels.children if c.label == "Bench")
+    bench = tools.children[0]
     assert [(c.label, c.action, c.cell) for c in bench.children] == [
         ("Bench", "panel:toggle:bench", 8),
         ("Install", None, 6),
@@ -1566,8 +1585,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         ("Cores", None, 1),
         ("Libraries", "bench:libraries", 7),
     ]
-    assert address_of(root, "panel:bench") == "438"
-    assert address_of(root, "bench:compile") == "432"
+    assert address_of(root, "panel:bench") == "4388"
+    assert address_of(root, "bench:compile") == "4382"
     # Install is a ring of the toolchain modules, from their registry: each module's
     # install, arduino-cli's among them, has an address of its own.
     install = bench.children[1]
@@ -1578,14 +1597,14 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         # The slicer's modules after the toolchain's, from their own registry.
         ("OrcaSlicer", "bench:install:slicer:orcaslicer", 4),
     ]
-    assert address_of(root, "bench:install:arduino") == "4368"
-    assert address_of(root, "bench:install:rust-esp32") == "4366"
-    assert address_of(root, "bench:install:stream-deck") == "4362"
-    assert address_of(root, "bench:install:slicer:orcaslicer") == "4364"
+    assert address_of(root, "bench:install:arduino") == "43868"
+    assert address_of(root, "bench:install:rust-esp32") == "43866"
+    assert address_of(root, "bench:install:stream-deck") == "43862"
+    assert address_of(root, "bench:install:slicer:orcaslicer") == "43864"
     # A core by its architecture, one leaf per suggested core.
     cores = bench.children[6]
     assert [c.label for c in cores.children] == ["AVR", "ESP32", "ESP8266", "RP2040", "SAMD"]
-    assert address_of(root, "bench:core:arduino:avr") == "4318"
+    assert address_of(root, "bench:core:arduino:avr") == "43818"
     assert {o.id for o in bench.children if o.destructive} == {"bench:upload", "bench:esptool"}
     for pid in ("site", "pictures", "machine", "bench"):
         assert carried_by(f"panel:toggle:{pid}").name == "VIEWER"
@@ -1614,9 +1633,8 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
     by_systems = re.findall(r"^ {20}([\w-]+): \{\n {24}main:", page, re.M)
     assert by_systems == ["airgap"]
     registered += [by_id(sid).main for sid in by_systems]
-    # An armed printer's control pad is Panels › Control pad's, not a toggle; and a
-    # rig's Lighting is the lighting overlay's, there while the site has a rig.
-    made = ("control", "lighting")
+    # An armed printer's control pad is Panels › Machine › Control pad's, not a toggle.
+    made = ("control",)
     assert all(pid in registered for pid in made)
     registered = [pid for pid in registered if pid not in made]
     assert marked == [pid for pid, _ in PANELS[: len(marked)]]
@@ -3082,10 +3100,9 @@ def test_a_carried_picture_intent_is_refused_with_its_reason_and_never_a_500(car
 
 
 def _panels_machine(can=None) -> dict:
-    """Panels › Machine of the canvas ring on garage, told ``can``: each act under it by
-    its action, Knobs' and Loops' rings walked."""
+    """Panels › Machine and Panels › Tools › Deck of the canvas ring on garage, told
+    ``can``: each act under them by its action, the Loops' and the Deck's rings walked."""
     root = resolve(Context(pointing=Pointing.CANVAS), _garage(), can=can)
-    machine = walk(root, address_of(root, "panels:machine"))
     found = {}
 
     def leaves(options):
@@ -3095,15 +3112,17 @@ def _panels_machine(can=None) -> dict:
             else:
                 found[option.action] = option
 
-    leaves(machine.children)
+    for cell in ("panels:machine", "panels:deck"):
+        leaves(walk(root, address_of(root, cell)).children)
     return found
 
 
 def test_panels_machine_greys_the_loops_and_the_knobs_by_the_answers_the_page_is_told():
     """Told beside the canvas ring's context what the page knows would be refused now --
     the open Machine's port's answer for the heater loops, the deck's for the knobs -- each
-    act of Panels › Machine the answers refuse is greyed with its words, as the Loops and
-    Deck windows grey its button; told nothing, nothing is, and no cell moves."""
+    act of Panels › Machine and Panels › Tools › Deck the answers refuse is greyed with its
+    words, as the Loops and Deck windows grey its button; told nothing, nothing is, and no
+    cell moves."""
     nothing = "no printer's Machine is open: Loops works on the printer whose Machine is open"
     idle = "the knobs are not started on SIMDECK0"
     can = {

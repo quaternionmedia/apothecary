@@ -45,6 +45,7 @@ from ..menu import (
     carried_by,
     resolve,
 )
+from . import lighting
 
 router = APIRouter(prefix="/menu", tags=["menu"])
 
@@ -231,6 +232,7 @@ def resolve_ring(request: ResolveRequest) -> Ring:
             picture=_pictures_known(request.site, request.picture, request.context),
             sketch=request.sketch,
             can=request.can,
+            rig=request.site in lighting.RIG_LOADERS,
         )
     except RingTooFull as too_many:
         # A ring that cannot be built is a design problem, and the answer says so

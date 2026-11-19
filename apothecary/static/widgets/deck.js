@@ -28,7 +28,7 @@ import { armedWords, choose, knobsOf, turn } from "/static/deck_knobs.js";
 const SWIPE_PX = 200; // of the strip's 800: what the server reads as a swipe (deck_screens.py)
 const KEYS = 8, KNOBS = 4, STRIP = [800, 100], EVERY_MS = 1500, HEAR_MS = 250, LIT_MS = 1200, KEPT = 200;
 // The controls the deck's answer greys (firmware/can.py deck_can), each by its route.
-// What the ring's Knobs › Screen calls each screen of the strip (apothecary/menu.py SCREEN_CELLS).
+// What the ring's Deck › Screen calls each screen of the strip (apothecary/menu.py SCREEN_CELLS).
 const SCREEN_LABEL = { knobs: "Knobs", progress: "Progress", status: "Status", previous: "Back", next: "Next" };
 const VERBS = ["knobs.start", "knobs.stop", "knobs.machine", "knobs.step", "knobs.screen", "inject"];
 
@@ -296,7 +296,7 @@ export function mountDeck(root, { base = "", log = null } = {}) {
 
     return {
         load, state: () => ({ deck, drawn, last }),
-        // The controls that are cells of Panels › Machine › Knobs, each by its verb, for the
+        // The controls that are cells of Panels › Tools › Deck, each by its verb, for the
         // ring to write its address on (the page asks, as it does of a Machine's pairs).
         pairs() {
             const out = [];

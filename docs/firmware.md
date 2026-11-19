@@ -168,7 +168,7 @@ several it refuses to guess.
 ### In the viewer: the Bench
 
 The **Bench** is the same toolchain in front of the world: a tab beside
-Pictures (the ring's Panels › Bench; `/firmware` opens the viewer with it). It holds arduino-cli and esptool as installed,
+Pictures (the ring's Panels › Tools › Bench; `/firmware` opens the viewer with it). It holds arduino-cli and esptool as installed,
 with **Install** or **Update** (*force* downloads it again); every other
 toolchain module under them -- Rust for the ESP32 (its cargo and espflash as
 found) and the [Stream Deck +](stream-deck.md) (a Python package and the system's
@@ -188,7 +188,7 @@ and the task log -- the running task's output with **Cancel**, and the recent
 tasks, each row showing its output again. Each is a task (`POST
 /firmware/install`, `/cores/install`, `/libraries/install`,
 `/sketches/{name}/compile` and `/upload`, `/esptool/flash`), and each verb is
-a cell of Panels › Bench, acting on what the Bench has chosen. Its body is
+a cell of Panels › Tools › Bench, acting on what the Bench has chosen. Its body is
 filled the first time its tab is shown, so a page that never shows it asks
 nothing of the toolchain. A board's own flashing is in its Machine
 ([below](#in-the-viewer-one-machine-per-board)); the Bench is for any sketch

@@ -20,7 +20,7 @@
  * /slicer/install, the pinned release checked against GitHub's digest and put in
  * the tools dir -- a task of the slicer's runner, followed in the same task log
  * (GET /slicer/tasks/{id}). Each is the same Install as a toolchain module's,
- * and Panels › Bench › Install's cell for it.
+ * and Panels › Tools › Bench › Install's cell for it.
  *
  * mountToolchain(root, { base, tasks, say, onStatus }) renders into `root` and
  * returns { load(), status(), slicers(), install(), core(id), libraries(),

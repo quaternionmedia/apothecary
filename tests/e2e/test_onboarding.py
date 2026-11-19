@@ -1,7 +1,7 @@
 """What a newcomer meets, through the page: a printer's own Pin pinning its mainboard,
 where its Device, its Machine and Slice find it, and Slice's refusals saying which
 of "not pinned" and "pinned, not connected" it is; no Slice on a devkit's ring; the
-header's Docs and Panels › Docs opening the documentation and the walkthrough's
+header's Docs and Panels › Tools › Docs opening the documentation and the walkthrough's
 index; and the banner's site crumb keeping the address, so a reload, Back and Forward
 land where they should.
 
@@ -197,16 +197,16 @@ def test_a_devkits_ring_has_no_slice(page: Page, url: str):
 def test_the_headers_docs_and_panels_docs_open_the_docs_and_the_walkthrough(page: Page, url: str):
     """Docs in the header, beside the ring's button and on one row at 1024 px, opens
     /docs in a new tab, the world left as it was; its bar reaches the walkthrough's
-    index, every page of it in order. The canvas ring's Panels › Docs opens the same,
+    index, every page of it in order. The canvas ring's Panels › Tools › Docs opens the same,
     and the header's Docs wears its address."""
     page.set_viewport_size({"width": 1024, "height": 768})
     _open(page, url)
     docs = page.locator("#docs-link")
     expect(docs).to_be_visible()
-    expect(docs).to_have_attribute("data-address", "41", timeout=15000)
+    expect(docs).to_have_attribute("data-address", "434", timeout=15000)
     # Its tip says what it opens, then the address once: no path spelled out beside it.
     expect(docs).to_have_attribute(
-        "title", re.compile(r"^The documentation in a new tab: [^⌗›]* · ⌗41$")
+        "title", re.compile(r"^The documentation in a new tab: [^⌗›]* · ⌗434$")
     )
     tops = page.evaluate(
         "() => [...document.querySelectorAll('.toolbar > *')]"
@@ -236,7 +236,9 @@ def test_the_headers_docs_and_panels_docs_open_the_docs_and_the_walkthrough(page
 
     _canvas_ring(page)
     _press(page, "Panels")
-    assert _labels(page)[-2:] == ["Docs", "Airgap"], _labels(page)
+    assert _labels(page)[-3:] == ["Tools", "Family", "Airgap"], _labels(page)
+    _press(page, "Tools")
+    assert _labels(page)[-1] == "Docs", _labels(page)
     with page.context.expect_page() as opened:
         _press(page, "Docs")
     again = opened.value
