@@ -474,7 +474,9 @@ def test_pictures_are_grouped_by_the_camera_that_took_them(
         expect(groups.first.locator(".picture-tile img")).to_have_count(1)
         loose = groups.last
         expect(loose).to_have_attribute("data-camera", "")
-        expect(loose.locator(".picture-group-title")).to_contain_text("No camera")
+        expect(loose.locator(".picture-group-title")).to_have_text(
+            re.compile(r"^No camera: added by hand, or the folder's own \d+$")
+        )
         expect(loose.locator(".picture-tile", has_text="loose_on_the_bench.png")).to_have_count(1)
     finally:
         (picture_folder / "loose_on_the_bench.png").unlink(missing_ok=True)
