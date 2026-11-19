@@ -268,7 +268,8 @@ def test_a_system_opens_its_main_window_and_each_section_opened_from_windows_sho
 ):
     """Opened, its main window shows with the one section it is opened for, and every
     other section of its subject's kind is a window closed until asked for; then each,
-    opened from ⊞ Windows, shows its part of the subject."""
+    opened from ⊞ Windows, shows its part of the subject, in the page's own dark controls
+    rather than the browser's."""
     _opened(page, url, case)
     system, sections = _sections(case)
     if case in WITH:
@@ -294,6 +295,7 @@ def test_a_system_opens_its_main_window_and_each_section_opened_from_windows_sho
         expect(windows.panel(page, window).locator(SHOWS[window]).first, window).to_be_visible(
             timeout=RING_MS
         )
+        assert windows.light_controls(page, window) == [], window
 
 
 @pytest.mark.e2e

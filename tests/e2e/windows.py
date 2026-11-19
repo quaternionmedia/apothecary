@@ -129,6 +129,35 @@ def close(page: Page, pid: str) -> None:
     tab(page, pid).locator(".lm_close_tab").click()
 
 
+def light_controls(page: Page, pid: str) -> list[str]:
+    """The controls shown in a window that wear a light ground -- the browser's own button,
+    drop-down or box -- where the page's are dark (tokens.css, a window's controls): each
+    as its tag, its id or first words, and its colour. Ticks, ranges, file pickers and
+    colour wells are the browser's by design, and a control drawn with no ground of its own
+    stands on the window's."""
+    return page.evaluate(
+        """(id) => {
+            const root = document.querySelector(`.panel[data-panel='${id}']`);
+            if (!root) return [`no window ${id}`];
+            const own = 'input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="hidden"])';
+            const light = [];
+            for (const el of root.querySelectorAll(`button, select, textarea, ${own}`)) {
+                const box = el.getBoundingClientRect();
+                if (!box.width || !box.height || !el.checkVisibility()) continue;
+                const ground = getComputedStyle(el).backgroundColor;
+                const [r, g, b, a = 1] = (ground.match(/[\\d.]+/g) || []).map(Number);
+                if (a === 0 || r == null) continue;
+                if ((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.6) {
+                    const said = el.id ? `#${el.id}` : (el.textContent || el.value || el.name || '').trim().slice(0, 24);
+                    light.push(`${el.tagName.toLowerCase()} ${said} ${ground}`);
+                }
+            }
+            return light;
+        }""",
+        pid,
+    )
+
+
 def state(page: Page, pid: str) -> dict | None:
     """What panels.js says of a window: open, shown, home, loud, its stack."""
     return page.evaluate("(id) => window.apothecaryPanels.state(id)", pid)
