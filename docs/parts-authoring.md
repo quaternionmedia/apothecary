@@ -161,7 +161,10 @@ its wrapper (`apothecary.projects.parts.base.Preset`). Each is a set of the
 part's parameters over its defaults, and what it stands for in words. A preset
 that names a parameter the part has not got, or a value its model refuses, is
 refused when the part loads, and a preset's name is letters, digits, `_` and
-`-`, since `part@preset.interface` names one. `dust_port` is one part for every
+`-`, since `part@preset.interface` names one. Part › Presets on the ring offers
+each by its name; a name longer than a ring cell's twelve characters needs a
+`label=` that says it in twelve or fewer (`hose_adapter`'s `stepped_40_32_25` is
+"40 → 32/25" there), or the part is refused when it loads. `dust_port` is one part for every
 round end of a dust system, a 40 mm hose's and a 32 mm port's among them, so its
 sizes are its presets (`hose_40`, `port_32`, `port_25`, `outlet_35`) and not
 parts of their own.
