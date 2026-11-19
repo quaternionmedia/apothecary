@@ -219,7 +219,8 @@ def test_the_garage_printers_are_ender_3s_drawn_as_they_are(monkeypatch):
         assert printer.footprint.min_point == Vector3D(x=-2, y=-41, z=0)
         box = next(c for c in printer.children if c.name == "frame_system")
         board = next(c for c in box.children if c.name == "mainboard")
-        assert board.part_ref == "creality_v422" and board.category == "electrical"
+        # A board in a machine sets no word of its own: it is in its machine's System.
+        assert board.part_ref == "creality_v422" and board.category is None
         gantry = next(c for c in printer.children if c.name == "gantry_system")
         assert {a.name for a in gantry.additions} == {"left_post", "right_post", "gantry_bar"}
     by_name = {s.name: s for s in site.children}
@@ -260,7 +261,7 @@ def test_the_garage_router_is_an_anolex_4060_drawn_as_it_is(monkeypatch):
     assert box.position == anolex.CONTROL_BOX.min_point
     controller = next(c for c in box.children if c.name == "controller")
     assert controller.part_ref == "anolex_grbl_esp32" and controller.base is None
-    assert controller.category == "electrical" and "pin the router's port" in controller.comment
+    assert controller.category is None and "pin the router's port" in controller.comment
     board = part_named("anolex_grbl_esp32", ROOT)
     assert controller.footprint.max_point == board.get_bounds().max_point
     gantry = next(c for c in router.children if c.name == "gantry_system")

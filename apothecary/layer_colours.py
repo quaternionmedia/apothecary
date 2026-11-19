@@ -37,8 +37,8 @@ CATEGORY = "category:"
 TOKENS = Path(__file__).resolve().parent / "static" / "tokens.css"
 
 
-def _group_colour(variable: str) -> str:
-    """A group's colour as ``static/tokens.css`` says it, so it is said once."""
+def _token(variable: str) -> str:
+    """A colour as ``static/tokens.css`` says it, so it is said once."""
     found = re.search(rf"{re.escape(variable)}:\s*(#[0-9a-f]{{6}})", TOKENS.read_text("utf-8"))
     if found is None:
         raise LookupError(f"{variable} is not in {TOKENS}")
@@ -49,7 +49,7 @@ WORLD: Dict[str, str] = {
     # The machines' build volumes are drawn in it; the floor grid's lines stay the faint
     # greys a floor is drawn in.
     GRID: "#33ffdd",
-    MACHINE_BUTTONS: _group_colour("--group-machine"),
+    MACHINE_BUTTONS: _token("--group-machine"),
     MEASURE: "#ff2fd0",
 }
 
@@ -72,7 +72,9 @@ CATEGORIES: Dict[str, str] = {
     "scenic": "#8f7bb5",
     "structure": "#b27774",
     "electromechanical": "#bb44aa",
-    "machine": "#447744",
+    # The Machines kind's and System's, a machine part's category and a site's word for
+    # a machine (apothecary/facets.py).
+    "machine": _token("--kind-machines"),
     "calibration": "#777700",
     "misc": "#bb4411",
     "enclosure": "#aa5566",

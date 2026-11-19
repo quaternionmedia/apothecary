@@ -144,14 +144,14 @@ def test_tree_category_is_set_on_top_level_structures_and_inherited_below():
 
     by_name = {s["name"]: s for s in tree["children"]}
     assert by_name["workbench"]["category"] == "furniture"
-    assert by_name["printer_1"]["category"] == "mechanical"
+    assert by_name["printer_1"]["category"] == "machine"
     assert by_name["garage_building"]["category"] == "wall"
     assert by_name["lighting"]["category"] == "electrical"
     assert by_name["hvac"]["category"] == "mechanical"
     assert by_name["electrical"]["category"] == "electrical"
     assert by_name["fluids"]["category"] == "fluid"
     assert by_name["storage_shelving"]["category"] == "furniture"
-    assert by_name["cnc_router"]["category"] == "mechanical"
+    assert by_name["cnc_router"]["category"] == "machine"
 
     garage_building = by_name["garage_building"]
     north_wall = next(s for s in garage_building["children"] if s["name"] == "north_wall")
@@ -162,7 +162,7 @@ def test_tree_category_is_set_on_top_level_structures_and_inherited_below():
     belt_tensioner_system = next(
         s for s in gantry_system["children"] if s["name"] == "belt_tensioner_system"
     )
-    assert belt_tensioner_system["category"] == "mechanical"
+    assert belt_tensioner_system["category"] == "machine"
 
 
 def test_get_the_universe():

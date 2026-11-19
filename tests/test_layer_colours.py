@@ -162,14 +162,16 @@ def test_the_garage_has_its_categories_and_the_worlds_layers_and_no_shell():
     garage = sites.store.get("garage")
     shells, categories = layers_in(garage)
     assert shells == []
-    assert {"wall", "furniture", "electrical", "structure"} <= set(categories)
+    assert {"wall", "furniture", "electrical", "machine"} <= set(categories)
     # Those written down first, in the table's order, the rest by name.
     written = [c for c in categories if c in CATEGORIES]
     assert written == [c for c in CATEGORIES if c in written]
     assert categories[len(written) :] == sorted(categories[len(written) :])
     colours = colours_for(garage)
     assert colours["category:wall"] == "#9c8f7a"
-    assert colours["category:structure"] == CATEGORIES["structure"]
+    # A machine's word wears the Machines token's colour (apothecary/facets.py).
+    machines = re.search(r"--kind-machines: (#[0-9a-f]{6})", TOKENS).group(1)
+    assert colours["category:machine"] == CATEGORIES["machine"] == machines
     assert list(colours)[-3:] == ["grid", "machine-buttons", "measure"]
 
 

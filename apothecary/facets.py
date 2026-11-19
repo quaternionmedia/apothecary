@@ -5,9 +5,11 @@ Site window's chips, the Layers window, the universe's clusters and the lanes re
   ``part.json`` gives it (``category``), so a part's kind is its category's. The universe
   groups by Kind.
 - **A System** is the part of its place a site's piece serves. It holds a site's words, the
-  ``category`` a site's node is given (``hierarchy.py``). A word no System holds is loose: a
-  part standing in a site, or a site built round one part, is grouped by its Kind instead.
-  A site groups by System.
+  ``category`` a site's node is given (``hierarchy.py``); a piece with no word of its own
+  takes the nearest above it, so a machine's board is in its machine's System. A part
+  standing loose in a site carries no word, and a site built round one part carries a
+  kind's word (datum_core's ``enclosure``): each is grouped by its Kind instead. A site
+  groups by System.
 
 Each facet has at most eight values, a ring's cells (``menu.MOST_OPTIONS``), and a value
 holds its words whole: no word is in two values of a facet.
@@ -27,9 +29,7 @@ from __future__ import annotations
 import math
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-
-from .layer_colours import layers_in
+from typing import Callable, Dict, Iterable, Iterator, List, Optional, Tuple
 
 KIND = "kind"
 SYSTEM = "system"
@@ -172,38 +172,102 @@ def category_shade(category: str) -> Optional[str]:
     return shades(colour(KIND, kind), len(words))[words.index(category)]
 
 
-# --- what a site is sent ------------------------------------------------------------------
+# --- a site's pieces ---------------------------------------------------------------------
+
+
+def _composed(node) -> list:
+    return [
+        *getattr(node, "children", ()),
+        *getattr(node, "additions", ()),
+        *getattr(node, "subtractions", ()),
+    ]
+
+
+def _pieces(site) -> Iterator[Tuple[object, Optional[str]]]:
+    """Every node beneath ``site``'s root with its word: its own, else the nearest above it
+    that has one. A site's piece in the universe is one node: what it is drawn as is no
+    level (``layer_colours.layers_in`` reads a tree the same way)."""
+
+    def visit(node, inherited: Optional[str]) -> Iterator[Tuple[object, Optional[str]]]:
+        own = getattr(node, "category", None)
+        word = own if own is not None else inherited
+        yield node, word
+        if getattr(node, "site_ref", None) is None:
+            for child in _composed(node):
+                yield from visit(child, word)
+
+    for child in _composed(site):
+        yield from visit(child, getattr(site, "category", None))
 
 
 def facet_of(site) -> str:
     """The facet ``site`` is grouped by: Kind in the universe, whose pieces lie on its
     shells, and System in a site, whose pieces lie on none."""
-    shells, _ = layers_in(site)
-    return KIND if shells else SYSTEM
+    on_shells = any(getattr(node, "shell", None) is not None for node, _ in _pieces(site))
+    return KIND if on_shells else SYSTEM
 
 
-def facets_of(site) -> Dict[str, object]:
-    """What the page groups ``site``'s pieces by, sent with it beside ``layer_colours``: the
-    facet (``by``); each of its values the site has, in the vocabulary's order, with its
-    token, its colour and its words the site has, each with its colour; and the words the
-    site has that no value holds (``loose``), by name."""
+def kind_and_system(
+    by: str, word: Optional[str], part_category: Optional[str]
+) -> Tuple[Optional[str], Optional[str]]:
+    """A piece's Kind and System, from its word (its own or inherited) and, for a piece
+    that is a part, its part's category. In the universe a piece has its part's kind and
+    no System. In a site it has its word's System, and its part's kind where it is a part;
+    a piece whose word no System holds is grouped by its kind, its part's or, where its
+    word is a kind's category (datum_core's tray, an enclosure), its word's."""
+    if by == KIND:
+        return kind_of(part_category or word), None
+    system = system_of(word)
+    if part_category:
+        return kind_of(part_category), system
+    return (kind_of(word) if system is None else None), system
+
+
+# --- what a site is sent ------------------------------------------------------------------
+
+
+def _value(facet: str, name: str, words_present: Iterable[str]) -> Dict[str, object]:
+    words = FACETS[facet][name]
+    own = colour(facet, name)
+    tints = shades(own, len(words)) if facet == KIND else [own] * len(words)
+    here = set(words_present)
+    return {
+        "name": name,
+        "token": token(facet, name),
+        "colour": own,
+        "words": [{"word": w, "colour": tints[i]} for i, w in enumerate(words) if w in here],
+    }
+
+
+def facets_of(
+    site, part_category: Callable[[str], Optional[str]] = lambda _: None
+) -> Dict[str, object]:
+    """What the page groups ``site``'s pieces by, sent with it beside ``layer_colours``:
+
+    - ``by``, the facet: ``kind`` in the universe, ``system`` in a site;
+    - ``values``, each of its values the site has, in the vocabulary's order, with its
+      token, its colour and its words the site has, each with its colour;
+    - ``loose``, the words the site has that no value holds, by name;
+    - ``kinds``, in a site, the kinds its pieces with no System are grouped by, each as a
+      value is, its words the categories those pieces are of.
+
+    ``part_category`` gives a part's category by its name, for a piece that is a part."""
     by = facet_of(site)
-    _, present = layers_in(site)
-    words_present = set(present)
-    values = []
-    for name, words in FACETS[by].items():
-        here = [w for w in words if w in words_present]
-        if not here:
-            continue
-        own = colour(by, name)
-        tints = shades(own, len(words)) if by == KIND else [own] * len(words)
-        values.append(
-            {
-                "name": name,
-                "token": token(by, name),
-                "colour": own,
-                "words": [{"word": w, "colour": tints[words.index(w)]} for w in here],
-            }
-        )
-    loose = sorted(w for w in words_present if _holder(by, w) is None)
-    return {"by": by, "values": values, "loose": loose}
+    words: set = set()
+    loose_kinds: Dict[str, set] = {}
+    for node, word in _pieces(site):
+        if word:
+            words.add(word)
+        ref = getattr(node, "part_ref", None)
+        category = part_category(ref) if ref else None
+        kind, system = kind_and_system(by, word, category)
+        if by == SYSTEM and system is None and kind is not None:
+            loose_kinds.setdefault(kind, set()).add(category or word)
+    values = [_value(by, name, words) for name, held in FACETS[by].items() if words & set(held)]
+    kinds = [_value(KIND, name, loose_kinds[name]) for name in KINDS if name in loose_kinds]
+    return {
+        "by": by,
+        "values": values,
+        "loose": sorted(w for w in words if _holder(by, w) is None),
+        "kinds": kinds,
+    }

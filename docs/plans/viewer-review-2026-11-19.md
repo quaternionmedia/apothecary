@@ -177,8 +177,13 @@ Counted in the page on the day:
    `tests/test_facets.py` holds every registered part's category to one kind, every word a
    site uses to one System or named loose, each colour apart from the others, the states,
    the shells and the world's own, and at 3:1 against the ground.
-2. **The sites.** The printer and the router are Machines, a loose part has no System, and
-   a site's words are read as Systems.
+2. **The sites** (built). The printer and the router are `machine`, the Machines System;
+   the router's stand is furniture; a machine's board sets no word and is in its machine's
+   System; a part standing loose in a site (the boards, the Stream Deck and the footpedal on
+   the bench, `router_coupon`, the whiteboard) carries no word and is grouped by its part's
+   kind. Each piece of the tree is sent with its `kind` and `system`, and a site's
+   `facets` with the kinds its pieces without a System are grouped by. A site's `machine`
+   word wears the Machines token's colour.
 3. **The ring.** One function groups a long list, by facet and then by letters; the Kinds
    or Systems cell holds one address; no preset is dropped; each window's door is under its
    group's cell.

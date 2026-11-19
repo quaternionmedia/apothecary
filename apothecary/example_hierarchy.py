@@ -306,15 +306,13 @@ ELECTRONICS_BOX = ender3.ELECTRONICS_BOX  # the box, in the printer's frame
 
 
 def _build_mainboard() -> Assembly:
-    board = Substructure(
+    return Substructure(
         name="mainboard",
         position=MAINBOARD_POSITION,
         footprint=BoundingBox3D(min_point=Vector3D(), max_point=MAINBOARD_SIZE),
         part_ref="creality_v422",
         comment="Controller board -- pin the printer's port here",
     )
-    board.category = "electrical"
-    return board
 
 
 def _build_printer(name: str, *, x: float, y: float, status: str = "idle") -> Assembly:
@@ -406,7 +404,7 @@ def _build_printer(name: str, *, x: float, y: float, status: str = "idle") -> As
         build_volume=ender3.BUILD,
         build_origin=ender3.BUILD_ORIGIN,
         status=status,
-        category="mechanical",
+        category="machine",
         part_ref="ender3",
         substructures=[frame_system, gantry_system],
     )
@@ -653,7 +651,7 @@ def _build_cnc_stand() -> Assembly:
         material="Steel, powder-coated",
         position=CNC_STAND_POSITION,
         footprint=BoundingBox3D(min_point=Vector3D(), max_point=CNC_STAND_SIZE),
-        category="mechanical",
+        category="furniture",
         substructures=[Substructure(name="frame", additions=[*legs, top])],
     )
 
@@ -673,15 +671,13 @@ CONTROL_BOX = anolex.CONTROL_BOX  # the box, in the router's frame
 
 
 def _build_controller() -> Assembly:
-    board = Substructure(
+    return Substructure(
         name="controller",
         position=CONTROLLER_POSITION,
         footprint=BoundingBox3D(min_point=Vector3D(), max_point=CONTROLLER_SIZE),
         part_ref="anolex_grbl_esp32",
         comment="Controller (Grbl_ESP32) -- pin the router's port here",
     )
-    board.category = "electrical"
-    return board
 
 
 def _build_gantry() -> Assembly:
@@ -826,7 +822,7 @@ def _build_cnc_router() -> Assembly:
         build_volume=anolex.WORK,
         build_origin=anolex.WORK_ORIGIN,
         status="idle",
-        category="mechanical",
+        category="machine",
         part_ref="anolex_4060_evo_ultra_2",
         substructures=[frame_system, _build_gantry()],
     )
@@ -843,7 +839,6 @@ def _build_esp32_blink() -> Assembly:
         role="structure",
         position=ESP32_BLINK_POSITION,
         footprint=BoundingBox3D(min_point=Vector3D(), max_point=ESP32_BLINK_SIZE),
-        category="electrical",
         part_ref="esp32_devkitc",
         sketch_ref="esp32_blink",
     )
@@ -856,7 +851,6 @@ def _build_bench_board(name: str, part: str, position: Vector3D, size: Vector3D)
         role="structure",
         position=position,
         footprint=BoundingBox3D(min_point=Vector3D(), max_point=size),
-        category="electrical",
         part_ref=part,
     )
 
@@ -892,7 +886,6 @@ def _build_router_coupon() -> Assembly:
             size=ROUTER_COUPON_SIZE, comment="router coupon envelope (real STL in the viewer)"
         ),
         footprint=BoundingBox3D(min_point=Vector3D(), max_point=ROUTER_COUPON_SIZE),
-        category="structure",
         part_ref="router_coupon",
     )
 
@@ -908,7 +901,6 @@ def _build_footpedal() -> Assembly:
         position=FOOTPEDAL_POSITION,
         base=Cube(size=FOOTPEDAL_SIZE, comment="footpedal envelope (real STL in the viewer)"),
         footprint=BoundingBox3D(min_point=Vector3D(), max_point=FOOTPEDAL_SIZE),
-        category="electrical",
         part_ref="footpedal",
     )
 
@@ -922,7 +914,6 @@ def _build_stream_deck() -> Assembly:
         role="structure",
         position=STREAM_DECK_POSITION,
         footprint=BoundingBox3D(min_point=Vector3D(), max_point=STREAM_DECK_SIZE),
-        category="electrical",
         part_ref="stream_deck_plus",
     )
 
@@ -934,7 +925,6 @@ def _build_whiteboard() -> Assembly:
         role="structure",
         position=WHITEBOARD_POSITION,
         footprint=BoundingBox3D(min_point=Vector3D(), max_point=WHITEBOARD_SIZE),
-        category="furniture",
         part_ref="whiteboard",
     )
 

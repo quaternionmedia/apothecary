@@ -20,6 +20,7 @@ from apothecary.facets import (
     SYSTEMS,
     category_shade,
     colour,
+    kind_and_system,
     kind_of,
     shades,
     system_of,
@@ -34,10 +35,10 @@ TOKENS = (ROOT / "apothecary" / "static" / "tokens.css").read_text(encoding="utf
 
 client = TestClient(api.app)
 
-# The words a site uses that no System holds, each decided: a part standing loose in a site
-# (the garage's router_coupon) and a site built round one part (datum_core's tray). A new
-# word is given a System here or named loose here.
-LOOSE = {"structure", "enclosure"}
+# The words a site uses that no System holds, each decided: a site built round one part
+# (datum_core's tray and lid, an enclosure, grouped by that word's kind). A part standing
+# loose in a site carries no word. A new word is given a System or named loose here.
+LOOSE = {"enclosure"}
 
 
 def _lab(colour: str):
@@ -135,6 +136,7 @@ def test_the_garages_words_take_their_systems():
     assert system_of("wall") == "Building"
     assert system_of("fluid") == "Plumbing"
     assert system_of("mechanical") == "Mechanical"
+    assert system_of("machine") == "Machines"
     assert system_of("structure") is None
     assert kind_of("coupon") == "Test pieces"
     assert kind_of("building") == "Housings"
@@ -238,7 +240,7 @@ def test_every_colour_of_a_facet_stands_out_on_the_pages_ground():
 @pytest.mark.parametrize("name", ["apothecary", "garage", "theatre", "datum_core"])
 def test_a_site_is_sent_with_its_facets(name):
     body = client.get(f"/sites/{name}").json()
-    assert body["facets"] == facets.facets_of(sites.store.get(name))
+    assert body["facets"] == facets.facets_of(sites.store.get(name), api.part_category)
 
 
 def test_the_universe_is_grouped_by_kind_every_part_in_one():
@@ -263,10 +265,83 @@ def test_a_site_is_grouped_by_system_its_loose_words_named():
     assert [v["name"] for v in sent["values"]] == [
         "Building",
         "Furniture",
+        "Machines",
         "Mechanical",
         "Electrical",
         "Plumbing",
     ]
-    assert sent["loose"] == ["structure"]
+    assert sent["loose"] == []
     for value in sent["values"]:
         assert all(w["colour"] == value["colour"] for w in value["words"])
+    # The parts standing loose, by their kinds: the boards, the Stream Deck and the
+    # footpedal on the bench, router_coupon, the whiteboard.
+    assert [(v["name"], [w["word"] for w in v["words"]]) for v in sent["kinds"]] == [
+        ("Electronics", ["electrical", "electronics"]),
+        ("Test pieces", ["coupon"]),
+        ("Things", ["furniture"]),
+    ]
+    for value in sent["kinds"]:
+        assert all(w["colour"] == category_shade(w["word"]) for w in value["words"])
+
+
+def test_a_site_built_round_one_part_is_grouped_by_its_words_kind():
+    sent = client.get("/sites/datum_core").json()["facets"]
+    assert sent["values"] == [] and sent["loose"] == ["enclosure"]
+    assert [v["name"] for v in sent["kinds"]] == ["Housings"]
+
+
+# --- each piece's kind and System --------------------------------------------------------
+
+
+def test_a_pieces_kind_and_system_come_from_its_word_and_its_part():
+    # The universe: a part's kind, no System, whatever its word.
+    assert kind_and_system(KIND, "furniture", "furniture") == ("Things", None)
+    assert kind_and_system(KIND, None, None) == (None, None)
+    # A site: its word's System; a part's kind beside it.
+    assert kind_and_system(SYSTEM, "machine", "machine") == ("Machines", "Machines")
+    assert kind_and_system(SYSTEM, "machine", "electrical") == ("Electronics", "Machines")
+    assert kind_and_system(SYSTEM, "mechanical", None) == (None, "Mechanical")
+    # Loose: a part with no word, by its part's kind; a piece whose word no System holds,
+    # by its word's kind; a word nobody wrote down, neither.
+    assert kind_and_system(SYSTEM, None, "coupon") == ("Test pieces", None)
+    assert kind_and_system(SYSTEM, "enclosure", None) == ("Housings", None)
+    assert kind_and_system(SYSTEM, "cup", None) == (None, None)
+
+
+def _pieces(tree, path=""):
+    for child in tree["children"]:
+        here = f"{path}.{child['name']}" if path else child["name"]
+        yield here, child
+        yield from _pieces(child, here)
+
+
+def test_each_piece_of_the_garage_is_sent_with_its_kind_and_system():
+    pieces = dict(_pieces(client.get("/sites/garage").json()["tree"]))
+    expected = {
+        "printer_1": ("Machines", "Machines"),
+        "printer_1.frame_system": (None, "Machines"),
+        "printer_1.frame_system.mainboard": ("Electronics", "Machines"),
+        "cnc_router.frame_system.controller": ("Electronics", "Machines"),
+        "cnc_stand": (None, "Furniture"),
+        "hvac": (None, "Mechanical"),
+        "garage_building.north_wall": (None, "Building"),
+        "fluids": (None, "Plumbing"),
+        "router_coupon": ("Test pieces", None),
+        "arduino_uno": ("Electronics", None),
+        "stream_deck": ("Electronics", None),
+        "whiteboard": ("Things", None),
+    }
+    for path, facet in expected.items():
+        assert (pieces[path]["kind"], pieces[path]["system"]) == facet, path
+
+
+@pytest.mark.parametrize("name", ["garage", "theatre", "datum_core", "apothecary"])
+def test_every_piece_is_grouped_by_a_system_or_a_kind(name):
+    """No piece falls outside the groups: a site's every piece has a System or a kind, and
+    the universe's every piece but a site's has a kind."""
+    ungrouped = [
+        path
+        for path, node in _pieces(client.get(f"/sites/{name}").json()["tree"])
+        if node["kind"] is None and node["system"] is None and node["site_ref"] is None
+    ]
+    assert ungrouped == []

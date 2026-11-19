@@ -48,7 +48,8 @@ def test_the_garage_hangs_it_on_the_south_wall_clear_of_everything():
     router's coupon on its table."""
     site = create_example_site()
     hung = next(s for s in site.children if s.name == "whiteboard")
-    assert hung.part_ref == "whiteboard" and hung.category == "furniture"
+    # A part standing loose in the garage: no System, grouped by its kind.
+    assert hung.part_ref == "whiteboard" and hung.category is None
     assert "whiteboard" not in BENCH_MOUNTED_STRUCTURES
     bounds = hung.world_bounds()
     assert bounds.max_point.y == GARAGE_MAX.y - WALL_THICKNESS
