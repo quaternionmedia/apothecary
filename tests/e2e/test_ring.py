@@ -899,6 +899,89 @@ def test_an_open_ring_is_greyed_again_as_the_latch_goes_down_and_up(page: Page, 
 
 
 @pytest.mark.e2e
+def test_a_ring_answer_overtaken_on_its_way_is_not_drawn(page: Page, ring_url: str):
+    """The ring's cells are asked for again as the latch is taken, and the latch is let go
+    before that answer comes: the answer is of a moment already past when it lands, so the
+    jogs stay greyed with the let-go latch's reason, never offered live."""
+
+    def latch(armed: bool) -> None:
+        httpx.post(
+            f"{ring_url}/firmware/printers/control",
+            json={"port": PRINTER, "armed": armed},
+            timeout=15.0,
+        ).raise_for_status()
+
+    def frames(n: int = 2) -> None:
+        page.evaluate(
+            "(n) => new Promise((done) => {"
+            " const step = (k) => (k ? requestAnimationFrame(() => step(k - 1)) : done());"
+            " step(n); })",
+            n,
+        )
+
+    def armed_in(route) -> bool:
+        return '"armed":true' in (route.request.post_data or "").replace(" ", "")
+
+    # A bed corner is greyed from the page's own answer of what the server would refuse, the
+    # answer the ring is resolved with: it says when the page knows the latch has changed.
+    corner = page.locator("#level-card button[data-corner='FL']")
+    latch(True)
+    page.goto(f"{ring_url}/firmware/monitor?port={PRINTER}")
+    windows.machine_ready(page, "printer")
+    expect(corner).to_be_enabled(timeout=10000)
+    page.locator(f"{windows.MACHINE_WINDOWS} #ident").click(button="right", modifiers=["Control"])
+    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
+    page.keyboard.press("7")
+    page.keyboard.press("2")
+    expect(page.locator("#ring-overlay .title")).to_have_text("Jog")
+    jogs = page.locator("#ring-overlay .wedge.disabled")
+    held: list = []
+    holding = [True]
+
+    def hold(route) -> None:
+        if holding[0]:
+            held.append(route)
+        else:
+            route.continue_()
+
+    try:
+        latch(False)
+        expect(jogs).to_have_count(6, timeout=10000)
+        expect(corner).to_be_disabled(timeout=10000)
+        page.route("**/menu/resolve", hold)
+        latch(True)
+        expect(corner).to_be_enabled(timeout=10000)
+        for _ in range(100):  # the ring asks for its cells for the latch taken; held
+            if any(armed_in(route) for route in held):
+                break
+            page.wait_for_timeout(50)
+        assert any(armed_in(route) for route in held), "the ring did not ask again when armed"
+        expect(jogs).to_have_count(6)
+        latch(False)
+        expect(corner).to_be_disabled(timeout=10000)
+        frames(3)  # the page's look at the latch let go again has reached the open ring
+        holding[0] = False
+        late = held[:]
+        held.clear()
+        for route in late:
+            route.continue_()
+        for route in late:
+            answer = route.request.response()
+            assert answer is not None and answer.ok
+            assert answer.finished() is None  # the whole answer is in the page
+        frames()
+        expect(page.locator("#ring-overlay .title")).to_have_text("Jog")
+        assert len(greyed(page)) == 6, greyed(page)
+        assert all("not armed" in why for why in greyed(page).values()), greyed(page)
+    finally:
+        holding[0] = False
+        for route in held:
+            route.continue_()
+        page.unroute("**/menu/resolve")
+        latch(False)
+
+
+@pytest.mark.e2e
 def test_the_headers_menus_the_tour_and_the_procedure_wear_their_cells_addresses(
     page: Page, ring_url: str
 ):

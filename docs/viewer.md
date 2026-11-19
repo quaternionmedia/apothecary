@@ -585,7 +585,9 @@ is, the reason under it, and the status line says it as a refused verb is said,
 its port, the one its Machine's buttons are greyed from, and Panels › Machine's Loops
 and Knobs from what the Loops and Deck windows grey theirs for
 ([firmware.md](firmware.md#what-a-command-would-be-refused-for)); the stop never is. A
-ring left open is greyed again as those answers change.
+ring left open is greyed again as those answers change, and an answer still on its
+way when a newer one has come -- the latch taken and let go again before it lands --
+is dropped when it does.
 
 **The canvas ring** lists Pieces 8 (each piece at this level; at a site's top
 the pieces made from pictures are one more cell, Made; at a leaf, the leaf
