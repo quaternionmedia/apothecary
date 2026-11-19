@@ -1,5 +1,5 @@
 """Windows a person opened are open again after a reload, where they were: Models, Marks,
-the Working space and the Deck, each registered closed and opened from ⊞ Windows, laid
+the Workspace and the Deck, each registered closed and opened from ⊞ Windows, laid
 out again in the stack it was in, and the world as wide as it was. No window of the page
 is one panels.js says a reload closes. Walkthrough page 33 is what it writes.
 
@@ -16,7 +16,7 @@ from playwright.sync_api import expect
 from viewer_ready import settled
 
 # Windows the page's own layout leaves closed, each opened from ⊞ Windows by a person:
-# Models, Marks and the Deck in the one stack beside the world, Working space among the
+# Models, Marks and the Deck in the one stack beside the world, Workspace among the
 # tabs.
 OPENED = ("models", "marks", "working", "deck")
 
@@ -37,7 +37,7 @@ def url(start_server):
 
 @pytest.mark.e2e
 def test_windows_a_person_opened_are_open_after_a_reload_where_they_were(page, url, walkthrough):
-    """Models, Marks, Working space and the Deck, opened from ⊞ Windows, are open again
+    """Models, Marks, Workspace and the Deck, opened from ⊞ Windows, are open again
     after a reload, each in the stack it was in, and the world keeps the width it had:
     none is dropped from the remembered layout, its room kept from the world. And no
     window of the page is one panels.js says a reload closes."""
@@ -79,10 +79,10 @@ def test_windows_a_person_opened_are_open_after_a_reload_where_they_were(page, u
     width = windows.world_width(page)
     settled(page)
     story.shows(
-        "Models, Marks, the Working space and the Deck, opened from ⊞ Windows",
+        "Models, Marks, the Workspace and the Deck, opened from ⊞ Windows",
         "The header's ⊞ Windows, four times: Models, Marks and the Deck tabs of the one "
         "stack beside the world, Models taking its room from the world's and each after it "
-        "in front as it opens, and the Working space a tab of the "
+        "in front as it opens, and the Workspace a tab of the "
         "stack under Selected, beside Pictures, Bench and Settings, each in front as it "
         "opens. The browser remembers the layout a moment after each change.",
         blank=CHANGING,
@@ -102,7 +102,7 @@ def test_windows_a_person_opened_are_open_after_a_reload_where_they_were(page, u
         "Reloaded, each is open where it was, and the world as wide",
         "The page reloaded: the four are open again, each in the stack it was in, and "
         "the world has the room it had. No window of the page is one a reload closes. "
-        "The Working space's tab comes back last in its stack, where the remembered "
+        "The Workspace's tab comes back last in its stack, where the remembered "
         "layout holds it; before the reload the tab row drew it ahead of Settings.",
         blank=CHANGING,
     )

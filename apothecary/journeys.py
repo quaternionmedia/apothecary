@@ -81,7 +81,7 @@ class Step:
 #   edit      a part's editor opened, as Part › Edit does
 #   scad      a part's SCAD in its window, as Part › SCAD does
 #   bench     the Bench opened on a piece's sketch, as Device › Flash sketch does
-#   working   the Working space opened on a machine, or on the site ("")
+#   working   the Workspace opened on a machine, or on the site ("")
 #   picture   a picture of the folder pinned at a piece, ``piece:file``, and framed
 #             where it lies
 #   shapes    the shapes of the picture drawn at a piece found, ``piece:finder``
@@ -562,14 +562,14 @@ BRING_UP = Journey(
 )
 
 
-# Watch a site: the Working space, the site as its evidence has it, then one
+# Watch a site: the Workspace, the site as its evidence has it, then one
 # machine's hour of it.
 WATCH = Journey(
     id="watch",
     title="Watch",
     group="Site",
     requires="working",
-    opened_by="⊞ Windows › Working space",
+    opened_by="⊞ Windows › Workspace",
     view={
         "row": [
             {"world": True, "size": 40},

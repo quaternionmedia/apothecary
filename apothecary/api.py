@@ -347,7 +347,7 @@ app.include_router(family_hub.router())
 for _hosted in family_members.routers():
     app.include_router(_hosted)
 app.include_router(procedures_router)
-# A working space seen from every kind of evidence: the log's document for a site.
+# A workspace seen from every kind of evidence: the log's document for a site.
 app.include_router(evidence_router)
 # Image models through qmcp, and the plain reader beside them: asked only when a person asks.
 app.include_router(vision_router)

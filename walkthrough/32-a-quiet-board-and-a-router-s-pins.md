@@ -9,7 +9,7 @@ opening, the notes under it and the list of what the page does not show
 are the test's fixed words. Editing the page by hand is editing the output
 of a program: the next run puts it back.
 
-Two values as the Working space's table reads them from the site's evidence. A board that has not answered lately is last heard at its last answer, and each of its values is last known then, not at the poll that last changed it: every answer says a value again. A value that is a list -- the pins a router's poll says are on, its `Pn:` -- reads as its items, or none. [Page 18](18-the-working-space.md) is the window from each of its doors; [docs/working-space.md](../docs/working-space.md#the-window) is the reference.
+Two values as the Workspace's table reads them from the site's evidence. A board that has not answered lately is last heard at its last answer, and each of its values is last known then, not at the poll that last changed it: every answer says a value again. A value that is a list -- the pins a router's poll says are on, its `Pn:` -- reads as its items, or none. [Page 18](18-the-working-space.md) is the window from each of its doors; [docs/working-space.md](../docs/working-space.md#the-window) is the reference.
 
 **Runtime-bound.** It drives a real browser against a real server of its own, page 18's: the simulated Ender, printing and answering every poll, and no router. So the site's document, as the page reads it, is given what neither can say: a printer_1 whose board last answered ten minutes ago and whose state last changed two hours ago, and a cnc_router whose pins are X and Z, then none. What the window makes of that document is its own. It needs no network and opens no serial port.
 
@@ -19,7 +19,7 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ## 1. printer_1 not heard for ten minutes: last heard, and its state last known, then
 
-⊞ Windows › Working space, maximised by a double-click on its tab. printer_1's board last answered ten minutes ago: its row says last heard then, and its state's row under it says last known at that same moment, not two hours ago when a poll last changed the state, since each answer says the state again. Its other rows were heard now.
+⊞ Windows › Workspace, maximised by a double-click on its tab. printer_1's board last answered ten minutes ago: its row says last heard then, and its state's row under it says last known at that same moment, not two hours ago when a poll last changed the state, since each answer says the state again. Its other rows were heard now.
 
 ![printer_1 not heard for ten minutes: last heard, and its state last known, then](screenshots/32-01-printer-1-not-heard-for-ten-minutes-last-heard-and.png)
 

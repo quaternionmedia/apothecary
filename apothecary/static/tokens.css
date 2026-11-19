@@ -1,4 +1,4 @@
-/* The page's palette, said once: the Machine (widgets/machine.css), the Working space
+/* The page's palette, said once: the Machine (widgets/machine.css), the Workspace
  * (widgets/working_space.css) and the control pad read these; a host that sets them
  * differently recolours all of them together. The two series, a hotend and a bed, are
  * validated against --bg (dark). The Airgap keeps a palette of its own, its charts'. */

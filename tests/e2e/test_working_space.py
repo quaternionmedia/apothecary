@@ -1,6 +1,6 @@
-"""The Working space, as a person goes through it, from each of its doors.
+"""The Workspace, as a person goes through it, from each of its doors.
 
-⊞ Windows › Working space opens it on the site: a row per pinned printer, each
+⊞ Windows › Workspace opens it on the site: a row per pinned printer, each
 with its hour's button, and its first line naming the next step. printer_1's
 hour has no camera yet, so that line offers to add one above it; three added,
 each chooses its device in its own row, and a frame set is kept with the next
@@ -109,7 +109,7 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
     story = walkthrough(
         ordinal="18",
         slug="the-working-space",
-        title="The working space",
+        title="The workspace",
         intro=(
             "A site as its evidence has it, and a printer's hour in it: its state, its "
             "heaters, a frame from each camera that looks at it, kept with its polls, and "
@@ -148,7 +148,7 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
     said_first = lead.locator("span").first  # its words, without its buttons
     open_garage(page, url)
 
-    # 1. ⊞ Windows › Working space: the site, a row per pinned printer.
+    # 1. ⊞ Windows › Workspace: the site, a row per pinned printer.
     windows.from_the_windows_menu(page, "working")
     expect(lead).to_contain_text("Choose a machine to see its hour")
     printer = window.locator(".ws-printer[data-printer='printer_1']")
@@ -158,8 +158,8 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
     # Maximised, as a double-click on its tab does: every step after is the window's own.
     windows.tab(page, "working").dblclick()
     story.shows(
-        "⊞ Windows › Working space opens it on the site",
-        "The header's ⊞ Windows, Working space under Site: the window opens on the "
+        "⊞ Windows › Workspace opens it on the site",
+        "The header's ⊞ Windows, Workspace under Site: the window opens on the "
         "garage, maximised here by a double-click on its tab. Its first line names the "
         "next step: choose a printer. printer_1's row says what it is doing, that it is "
         "answering now and that no camera looks at it, and its button opens its hour. "
@@ -171,7 +171,7 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
 
     # 2. printer_1's hour: its state and heaters, and no camera yet.
     printer.get_by_role("button", name="printer_1's hour ›").click()
-    said(page, "printer_1's hour in the Working space: No camera looks at printer_1 yet")
+    said(page, "printer_1's hour in the Workspace: No camera looks at printer_1 yet")
     expect(window.locator(".ws-title")).to_have_text("garage › printer_1")
     expect(window.locator("rect.ws-state.ws-printing")).to_have_count(1)
     expect(window.locator("path.ws-hotend")).to_have_count(1)
@@ -288,7 +288,7 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
 
     # 8. ‹ garage: the site again, printer_1 with its cameras.
     window.get_by_role("button", name="‹ garage").click()
-    said(page, "the Working space of garage: Choose a machine")
+    said(page, "the Workspace of garage: Choose a machine")
     expect(printer).to_contain_text(f"{CAMERAS} cameras")
     expect(window.locator(".ws-subject", has_text="printer_1 › bed heater")).to_be_visible()
     story.shows(
@@ -303,11 +303,11 @@ def test_the_working_space_from_each_of_its_doors(page, url, walkthrough):
     # 9. The other doors: printer_1's ring, and the canvas ring.
     windows.tab(page, "working").dblclick()
     on_row(page, "printer_1", "Camera", "Workspace")
-    said(page, f"printer_1's hour in the Working space: Frames from {', '.join(names)} are kept")
+    said(page, f"printer_1's hour in the Workspace: Frames from {', '.join(names)} are kept")
     expect(window.locator(".ws-title")).to_have_text("garage › printer_1")
     hour = _words(status(page).inner_text())
     on_world(page, "Panels", "Site", "Workspace")
-    said(page, "the Working space of garage: Choose a machine")
+    said(page, "the Workspace of garage: Choose a machine")
     expect(window.locator(".ws-title")).to_have_text("garage")
     story.says(
         "Camera › Workspace on printer_1's ring, and Panels › Site › Workspace",
@@ -399,7 +399,7 @@ def test_before_its_first_read_it_says_it_is_reading_not_that_none_is_pinned(pag
 
 @pytest.mark.e2e
 def test_opened_again_from_the_windows_menu_it_is_the_site_and_read_again(page, url):
-    """⊞ Windows › Working space, after the window was closed on printer_1, opens it on
+    """⊞ Windows › Workspace, after the window was closed on printer_1, opens it on
     the site, as it does the first time, and the site is read again on its timer."""
     page.clock.install()
     _on_printer_1(page, url)
@@ -453,7 +453,7 @@ def test_a_quiet_board_and_a_router_s_pins_as_the_site_reads_them(page, url, wal
         slug="a-quiet-board-and-a-router-s-pins",
         title="A quiet board, and a router's pins",
         intro=(
-            "Two values as the Working space's table reads them from the site's evidence. "
+            "Two values as the Workspace's table reads them from the site's evidence. "
             "A board that has not answered lately is last heard at its last answer, and "
             "each of its values is last known then, not at the poll that last changed it: "
             "every answer says a value again. A value that is a list -- the pins a "
@@ -543,7 +543,7 @@ def test_a_quiet_board_and_a_router_s_pins_as_the_site_reads_them(page, url, wal
     expect(row.locator("td").nth(3)).to_have_text(f"last known {answered}")
     story.shows(
         "printer_1 not heard for ten minutes: last heard, and its state last known, then",
-        "⊞ Windows › Working space, maximised by a double-click on its tab. printer_1's "
+        "⊞ Windows › Workspace, maximised by a double-click on its tab. printer_1's "
         "board last answered ten minutes ago: its row says last heard then, and its "
         "state's row under it says last known at that same moment, not two hours ago "
         "when a poll last changed the state, since each answer says the state again. "

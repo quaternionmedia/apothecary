@@ -111,8 +111,8 @@ PICTURED = {
     ),
     "watch": (
         "space",
-        "Watch a site: the Working space, then one machine's hour",
-        "A site that is up is watched. Space is the Working space on the garage; Hour "
+        "Watch a site: the Workspace, then one machine's hour",
+        "A site that is up is watched. Space is the Workspace on the garage; Hour "
         "chooses printer_1 and opens its hour there: its state poll by poll, and where "
         "a camera over it would keep its frames. The picture is Space.",
     ),
@@ -293,9 +293,9 @@ DID = {
     "hands": ["stream_deck chosen", "printer_1's Machine opened"],
     "bring-up": ["printer_1's Machine closed: Start a site has no machine in it"],
     "watch": [
-        "the Working space opened: the Working space of garage",
+        "the Workspace opened: the Workspace of garage",
         "printer_1 framed in the world, as f does",
-        "the Working space opened: printer_1's hour in the Working space",
+        "the Workspace opened: printer_1's hour in the Workspace",
     ],
     "drawing": [
         "whiteboard chosen",

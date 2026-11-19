@@ -16,7 +16,7 @@ command line. These routes give the world's page the same, and no more:
   by its camera too, which the listing reads back as ``camera``), or, with
   ``kept=upload``, a file a person chose under ``uploads/`` (named as the
   person named it). It stays on this machine; nothing is sent anywhere. With
-  ``poll`` too, it is a frame the Working space keeps with a printer's poll:
+  ``poll`` too, it is a frame the Workspace keeps with a printer's poll:
   recorded beside that poll (``apothecary/evidence/frames.py``), and never the
   camera's view.
 - ``DELETE /photos/pictures/{path}`` forgets one kept picture and
@@ -212,7 +212,7 @@ def keep_picture(
     wall or the sky) and keeping how the camera stood. A host that cannot hold a
     view, or a camera that is not there, is refused before anything is kept.
 
-    With ``site``, ``camera`` and ``poll`` -- the Working space keeping a frame
+    With ``site``, ``camera`` and ``poll`` -- the Workspace keeping a frame
     set with a printer's poll -- it is kept and named as Take picture names it,
     recorded as evidence beside that poll, and is not the camera's view. The
     printer's kept frames past its budget are forgotten, the oldest first, and

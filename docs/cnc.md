@@ -253,7 +253,7 @@ under it. The ring's Control
 on a router is its own (`menu.router_control_options`): Home (All, X, Y, Z), Unlock, Jog
 (with Stop jog), Spindle, Zero (with Probe Z), Cut (with Measure), Stop, Arm. The router's badge
 in the world and its row on Site's tree say 🪚 and its state, its spindle while
-it turns and the cut's progress, its hour in the Working space charts the spindle,
+it turns and the cut's progress, its hour in the Workspace charts the spindle,
 and its marks stand on the table:
 the working area, the table and the tool, placed from the controller's
 machine coordinates and the working area (`mpos + travel`, a Grbl machine

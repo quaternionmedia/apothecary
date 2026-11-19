@@ -145,9 +145,9 @@ What crosses between the stages of each loop, where its form is stated, and what
 
 | From, to | What crosses | Stated in | Held by |
 |---|---|---|---|
-| a poll, the log | a printer's status, through the status listeners in `apothecary/api.py`, kept by `apothecary/evidence/printers.py` as observations in the state folder | [The Working space](working-space.md) | `tests/test_evidence.py` |
-| a picture, a frame | `apothecary/evidence/frames.py` keeps it with the poll it was taken beside, under a budget | [The Working space](working-space.md) | `walkthrough/18-the-working-space.md` |
-| the log, the page | `apothecary/evidence/view.py`, at `GET /sites/{site}/evidence` | [The Working space](working-space.md) | `tests/test_evidence.py` |
+| a poll, the log | a printer's status, through the status listeners in `apothecary/api.py`, kept by `apothecary/evidence/printers.py` as observations in the state folder | [The Workspace](working-space.md) | `tests/test_evidence.py` |
+| a picture, a frame | `apothecary/evidence/frames.py` keeps it with the poll it was taken beside, under a budget | [The Workspace](working-space.md) | `walkthrough/18-the-working-space.md` |
+| the log, the page | `apothecary/evidence/view.py`, at `GET /sites/{site}/evidence` | [The Workspace](working-space.md) | `tests/test_evidence.py` |
 
 ### Two poses for a part
 

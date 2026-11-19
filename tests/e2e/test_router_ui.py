@@ -691,7 +691,7 @@ def test_a_part_changed_in_its_editor_gets_its_toolpath_from_the_variant_drawn(
 def test_the_page_says_a_router_in_a_router_s_words(page: Page, url: str):
     """What a printer's words would get wrong, on a router: its row and its badge say its
     state once, its facts call its volume its working area, a negative position never
-    breaks inside a number, and its hour in the Working space names the states it was in
+    breaks inside a number, and its hour in the Workspace names the states it was in
     and the spindle, with no printer's words among them."""
     open_garage(page, url, settle=False)
     wears(page, "cnc_router")

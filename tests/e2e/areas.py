@@ -274,7 +274,7 @@ AREAS = {
         ),
         "tests": ("test_carlos_concert.py", "test_carlos_bench.py"),
     },
-    "working space": {
+    "workspace": {
         "sources": (
             "apothecary/evidence/*",
             "apothecary/routes/evidence.py",

@@ -2238,7 +2238,7 @@ def test_a_made_piece_and_a_part_slice_for_a_printer_pinned_in_their_site():
 
 def test_a_printer_a_board_drives_opens_its_working_space_under_its_camera():
     """Workspace is under a printer's Camera, beside Add here: the page opens the
-    Working space on it (widgets/working_space.js), where the frames its cameras keep
+    Workspace on it (widgets/working_space.js), where the frames its cameras keep
     with its polls are. Only a printer a board drives has it, so no cell of the
     ring moves, whether the printer's own Device is there or its board's pin is
     below it; another host's Camera holds Add here alone."""

@@ -592,7 +592,7 @@ def test_a_pinned_poll_is_kept_as_evidence(
 def test_frames_kept_with_a_poll_are_its_evidence_under_the_printers_budget(
     fake_arduino_cli, fresh_task_runner, scripted_links, world
 ):
-    """The Working space keeps a frame set with a printer's poll: each frame is kept as
+    """The Workspace keeps a frame set with a printer's poll: each frame is kept as
     its camera's, recorded beside the poll and never the camera's view; the printer's
     kept frames past its budget are forgotten oldest first, and a picture taken by
     hand is never counted."""

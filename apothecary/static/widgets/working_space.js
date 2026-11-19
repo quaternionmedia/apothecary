@@ -1,10 +1,10 @@
-/* Working space: a site as every kind of evidence has it (apothecary/evidence/,
+/* Workspace: a site as every kind of evidence has it (apothecary/evidence/,
  * GET /sites/{s}/evidence), and a printer's timeline in it.
  *
  * Its first line, under the title, always names the next step, with the button
  * that takes it: whichever door opened the window, it says what to do.
  *
- * Opened on the site (Panels › Site › Workspace, or ⊞ Windows › Working space) it
+ * Opened on the site (Panels › Site › Workspace, or ⊞ Windows › Workspace) it
  * is a row per printer a board pinned here drives, each with what it is doing and
  * the button that opens its hour, then every subject the log has said of: each
  * property's value, how it is known and when. Opened on a printer (Camera ›
@@ -339,8 +339,8 @@ export function mountWorkingSpace(root, { base = "", boards, pictures, siteName,
 
     // --- what a person does here ------------------------------------------------------------------
     async function act(what, el) {
-        if (what === "site") { await open(null); say(`the Working space of ${site()}: ${state.next}`); return; }
-        if (what === "hour") { await open(el.dataset.path); say(`${state.path}'s hour in the Working space: ${state.next}`); return; }
+        if (what === "site") { await open(null); say(`the Workspace of ${site()}: ${state.next}`); return; }
+        if (what === "hour") { await open(el.dataset.path); say(`${state.path}'s hour in the Workspace: ${state.next}`); return; }
         if (what === "close") { q(".ws-evidence").innerHTML = ""; return; }
         if (what === "keep") {
             const done = await keepSet(state.last, { now: true });

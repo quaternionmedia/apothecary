@@ -123,16 +123,16 @@ The machines one at a time become a site brought up in order. No machine is in t
     Start a site › 3 Audit (the tour): the hub's deliveries, newest first: each step, its member, and how it answered
 ```
 
-## 7. Watch a site: the Working space, then one machine's hour
+## 7. Watch a site: the Workspace, then one machine's hour
 
-A site that is up is watched. Space is the Working space on the garage; Hour chooses printer_1 and opens its hour there: its state poll by poll, and where a camera over it would keep its frames. The picture is Space.
+A site that is up is watched. Space is the Workspace on the garage; Hour chooses printer_1 and opens its hour there: its state poll by poll, and where a camera over it would keep its frames. The picture is Space.
 
-![Watch a site: the Working space, then one machine's hour](screenshots/39-07-watch-a-site-the-working-space-then-one-machine-s-.png)
+![Watch a site: the Workspace, then one machine's hour](screenshots/39-07-watch-a-site-the-workspace-then-one-machine-s-hour.png)
 
 ```
-1 Space: the Working space opened: the Working space of garage: Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on.; Watch a site entered, its windows laid out
+1 Space: the Workspace opened: the Workspace of garage: Choose a machine to see its hour: its state, its readings, the frames its cameras keep, and what each value rests on.; Watch a site entered, its windows laid out
     Watch a site › 1 Space (⊞ Windows › Watch a site): the site as its evidence has it: each machine's state, heard or quiet, and its pins
-2 Hour: printer_1 framed in the world, as f does; the Working space opened: printer_1's hour in the Working space: No camera looks at printer_1 yet: add one above it, and choose which of this browser's cameras it is.
+2 Hour: printer_1 framed in the world, as f does; the Workspace opened: printer_1's hour in the Workspace: No camera looks at printer_1 yet: add one above it, and choose which of this browser's cameras it is.
     Watch a site › 2 Hour (the tour): one machine's hour: its state and heaters poll by poll, and the cameras over it
 ```
 

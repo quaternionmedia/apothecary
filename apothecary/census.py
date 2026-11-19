@@ -838,7 +838,7 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "a link to the first walkthrough page the stage names",
     ),
-    # ---- the Working space, apothecary/static/widgets/working_space.js ---------
+    # ---- the Workspace, apothecary/static/widgets/working_space.js ---------
     # Its first line's buttons take the step it names; a printer's hour has a row
     # per camera, a camera's device chosen there, and its frames' budget set.
     "ws-back": (WIDGET, WHAT_YOU_SEE, "a button that goes back from a printer's hour to the site"),
@@ -1107,7 +1107,7 @@ RING_BACKED: Dict[str, str] = {
     "cam-take": "camera:take-picture",
     "takeBtn:click:takePictureWith": "camera:take-picture",
     "window:keydown:onPictureKey": "camera:take-picture",
-    # the Working space: ‹ back is Panels › Site › Workspace, a printer's hour its
+    # the Workspace: ‹ back is Panels › Site › Workspace, a printer's hour its
     # Camera › Workspace, Add a camera its Camera › Add here, and a camera row's
     # device and Allow the camera's own Device (whose leaves are camera:device:<id>)
     "ws-back": "panel:toggle:working",
@@ -1884,11 +1884,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         WHAT_YOU_SEE,
         "Bought ticked or not, what is bought shown or hidden",
     ),
-    # ---- the Working space ------------------------------------------------------
+    # ---- the Workspace ------------------------------------------------------
     "root:click:closest": (
         WIDGET,
         WHAT_YOU_SEE,
-        "a Working space button doing what it names, or a frame, dot or row opening its evidence",
+        "a Workspace button doing what it names, or a frame, dot or row opening its evidence",
     ),
     "root:change:closest": (WIDGET, WHAT_IS_THERE, "a camera's device chosen in its row"),
 }

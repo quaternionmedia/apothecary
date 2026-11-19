@@ -595,7 +595,7 @@ Step out 1 (when stepped in) and Group (each category of the site's pieces:
 expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
 
 - **Panels** › Site › Site, Problems, Pinned, Jobs, SCAD, Workspace and Layers (the
-  Working space, [working-space.md](working-space.md)); Selected;
+  Workspace, [working-space.md](working-space.md)); Selected;
   Pictures › Pictures, Models (the Models window, then Ask and a person's Colour
   and Material, [models-checklist.md](models-checklist.md)), Gather and Marks (the Marks window, then a person's
   word on the mark chosen in it, Earlier and Later through a whiteboard's history, and
@@ -732,7 +732,7 @@ which the page, the ring and the tests all read.
 | Part | The world; Selected over Parameters, Variants, History and Readiness; the SCAD window over Site, Problems and SCAD |
 | Machine | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
 | Airgap | The Airgap and each of its sections in a window, the world among them |
-| Family | The world; the Procedure tall beside it; Members and Deliveries under it, with Jobs and Working space, and Selected, in the column |
+| Family | The world; the Procedure tall beside it; Members and Deliveries under it, with Jobs and Workspace, and Selected, in the column |
 | Print | The windows a part is made through on a machine (`apothecary/journeys.py`): the world; beside it Site with Problems, Pinned, Jobs and SCAD, then Selected, Parameters, and the board's Machine sharing a stack with its Print window, Print in front, with Pictures, the Bench and Settings behind them |
 
 A view needs its main window. The Machine view, and the Print view, open the Machine
@@ -860,7 +860,7 @@ full; the others are entered from ⊞ Windows › Journeys and from the
 
 A window the page makes for the moment -- a Machine and its sections, the pad --
 is left out of the layout this browser remembers. Every other window is kept in
-it: one opened from ⊞ Windows -- Models, Marks, the Working space, the Deck, Loops -- is
+it: one opened from ⊞ Windows -- Models, Marks, the Workspace, the Deck, Loops -- is
 open again after a reload, where it was, and the world as wide as it was
 ([walkthrough 33](../walkthrough/33-windows-kept-over-a-reload.md)).
 
@@ -1168,7 +1168,7 @@ editor, is that box's own undo.
 
 One form each, from `apothecary/static/format.js`, so the Machine's cards, the Print window,
 Loops, the Deck, Selected's footprint and envelope, and every moment a window writes (Jobs,
-a task, a part's history, the Working space, Marks, a word kept on the tour) read alike: a heater `23.1/200°` (actual over target) and a lone reading
+a task, a part's history, the Workspace, Marks, a word kept on the tour) read alike: a heater `23.1/200°` (actual over target) and a lone reading
 `23.1°`; a time of day `11:53:53` (24 hours) and a day with it `2026-11-18 11:53:53`; how long
 a time takes `4:52` (`1:02:09` past an hour); a size in millimetres with its unit, no
 trailing zeros and at most three places (`101.5 mm`, `46 × 46 × 101.5 mm`); a position

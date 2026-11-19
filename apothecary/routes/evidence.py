@@ -1,13 +1,13 @@
-"""A working space as the evidence log has it (``apothecary/evidence/``).
+"""A workspace as the evidence log has it (``apothecary/evidence/``).
 
 - ``GET /sites/{s}/evidence?at=&since=``: the ``apothecary.evidence`` document
   for the site: every subject the log has said of, each property's value at
   ``at`` (now, unless given) with its sources, origins and evidence, and what
   moved since ``since`` (an hour before ``at``, unless given). A moment with no
   time zone is UTC.
-- ``GET /sites/{s}/evidence/printers``: the printers the Working space opens on,
+- ``GET /sites/{s}/evidence/printers``: the printers the Workspace opens on,
   each a board pinned in the site drives, as the next door answers each.
-- ``GET /sites/{s}/evidence/printers/{path}``: what the Working space watches
+- ``GET /sites/{s}/evidence/printers/{path}``: what the Workspace watches
   for a printer: the port its board answers on (null when none does), the
   cameras that look at it, each with the browser device it was told, so the
   page keeps a frame set from those of its own with each poll, and how much
@@ -111,7 +111,7 @@ def _printer_or_404(name: str, path: str):
 @router.get("/sites/{name}/evidence/printers")
 def printers_watched(name: str) -> Dict[str, Any]:
     """Each machine a board pinned in the site drives -- its printers and its routers,
-    sorted -- as the Working space opens on one."""
+    sorted -- as the Workspace opens on one."""
     from ..api import printers_in, routers_in
 
     site = sites.store.get(name)

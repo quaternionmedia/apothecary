@@ -17,15 +17,15 @@ Its pictures draw every part that OpenSCAD version 2021.01, the OpenSCAD its ser
 
 ---
 
-## 1. Models, Marks, the Working space and the Deck, opened from ⊞ Windows
+## 1. Models, Marks, the Workspace and the Deck, opened from ⊞ Windows
 
-The header's ⊞ Windows, four times: Models, Marks and the Deck tabs of the one stack beside the world, Models taking its room from the world's and each after it in front as it opens, and the Working space a tab of the stack under Selected, beside Pictures, Bench and Settings, each in front as it opens. The browser remembers the layout a moment after each change.
+The header's ⊞ Windows, four times: Models, Marks and the Deck tabs of the one stack beside the world, Models taking its room from the world's and each after it in front as it opens, and the Workspace a tab of the stack under Selected, beside Pictures, Bench and Settings, each in front as it opens. The browser remembers the layout a moment after each change.
 
-![Models, Marks, the Working space and the Deck, opened from ⊞ Windows](screenshots/33-01-models-marks-the-working-space-and-the-deck-opened.png)
+![Models, Marks, the Workspace and the Deck, opened from ⊞ Windows](screenshots/33-01-models-marks-the-workspace-and-the-deck-opened-fro.png)
 
 ## 2. Reloaded, each is open where it was, and the world as wide
 
-The page reloaded: the four are open again, each in the stack it was in, and the world has the room it had. No window of the page is one a reload closes. The Working space's tab comes back last in its stack, where the remembered layout holds it; before the reload the tab row drew it ahead of Settings.
+The page reloaded: the four are open again, each in the stack it was in, and the world has the room it had. No window of the page is one a reload closes. The Workspace's tab comes back last in its stack, where the remembered layout holds it; before the reload the tab row drew it ahead of Settings.
 
 ![Reloaded, each is open where it was, and the world as wide](screenshots/33-02-reloaded-each-is-open-where-it-was-and-the-world-a.png)
 

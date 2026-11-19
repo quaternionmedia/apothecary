@@ -734,10 +734,9 @@ PANELS: Sequence[Tuple[str, str]] = (
     # (widgets/layers.js), a window beside the world registered by the page's script
     # and closed until asked for. View › Layers opens it too.
     ("layers", "Layers"),
-    # Working space: the site as every kind of evidence has it (apothecary/evidence/),
+    # Workspace: the site as every kind of evidence has it (apothecary/evidence/),
     # a tab of Site's ring registered by the page's script, closed until asked for;
-    # a printer's ring opens it on that printer. A ring's label holds twelve
-    # characters, so its cells say Workspace.
+    # a printer's ring opens it on that printer.
     ("working", "Workspace"),
     # Procedure: the steps that bring a site into working order, each fired through the
     # family's hub on GO, a tab of Site's ring registered by the page's script.
@@ -1498,7 +1497,7 @@ def _is_host(site: Optional[Assembly], path: str, not_hosts: Sequence[str]) -> b
 def _camera_group(floor: bool, printer: bool = False, machine: bool = False) -> Option:
     """Camera at a host or the floor: Add here, a camera part standing above the
     middle of this place, looking straight down. The server adds it. On a printer a
-    board drives, Workspace too: the Working space opened on it, where the frames its
+    board drives, Workspace too: the Workspace opened on it, where the frames its
     cameras keep with its polls are (widgets/working_space.js). On a machine -- a printer
     a board drives, or a router, planned or driven -- Projector last: the light that goes
     the other way from a camera's, the projector's page for this machine opened in a
@@ -2560,7 +2559,7 @@ CARRIED_BY: Dict[str, Carries] = {
     "toolpath": Carries.VIEWER,
     # Opening and closing the windows beside the world (panels.js).
     "panel": Carries.VIEWER,
-    # A printer's Working space: the page opens the window on the printer, watches
+    # A printer's Workspace: the page opens the window on the printer, watches
     # its board and keeps frames with its polls (widgets/working_space.js).
     "working": Carries.VIEWER,
     # A machine's projector: the page opens the projector's page for it in a window of

@@ -63,7 +63,7 @@ thing only where it is not so already:
   | `edit` | a part's editor opened | Part › Edit |
   | `scad` | a part's SCAD in its window | Part › SCAD |
   | `bench` | the Bench opened on a piece's sketch | Device › Flash sketch |
-  | `working` | the Working space opened on the site, or on a machine | ⊞ Windows › Working space, Camera › Workspace |
+  | `working` | the Workspace opened on the site, or on a machine | ⊞ Windows › Workspace, Camera › Workspace |
   | `picture` | a picture of the folder pinned at a piece, and framed where it lies | Picture › Folder |
   | `shapes` | the shapes of the picture drawn at a piece found (on a reload, not found: ↻ finds them) | Picture › Find shapes |
 
