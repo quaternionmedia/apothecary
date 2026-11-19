@@ -132,7 +132,7 @@ def test_a_look_keeps_one_change_which_apply_takes_into_the_next_slice(fake_orca
     )
     look = body["document"]["looks"][0]
     assert look["slice"]["used"]["retraction_length"] == 4.0
-    assert body["faults"] == {"stringing": "clear at look-1", "warping": "none at look-1"}
+    assert body["faults"] == {"stringing": "clear at look-1"}  # warping, seen none, is left out
 
     # The same piece is looked at again only once its look is undone.
     twice = client.post(f"/slicer/slices/{first['file_id']}/seen", json={"seen": {"stringing": 1}})

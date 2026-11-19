@@ -64,6 +64,7 @@ at page 00.
 | [46 — A printer tuned from its prints](../walkthrough/46-a-printer-tuned-from-its-prints.md) | A made-up printer's coupon read with made-up calipers, its errors solved and what a cube cannot separate said, half of each taken out, the next coupon's errors smaller, and the turn kept as a document whose figures say what they rest on |
 | [48 — A heater's loop in the page](../walkthrough/48-a-heater-s-loop-in-the-page.md) | The Loops window beside a simulated printer's Machine: a kept step's document and curves, the board's gains read beside the controller SIMC designs, Start greyed in the server's words until a ceiling and a longest time are typed, the designed gains set and read back, and a step run and followed from the stream; written by the browser suite |
 | [49 — A disc on its pins](../walkthrough/49-a-disc-on-its-pins.md) | The cycloidal disc: its flank the parallel of the curve its pins run on, every pin its clearance from it through a turn of the crank, its ratio held by the pins, its pitch circles rolling while a pin's contact slides, and the motion table the viewer plays |
+| [50 — A printer tuned from what its prints show](../walkthrough/50-a-printer-tuned-from-what-it-shows.md) | The faults a person sees and the settings that govern each; a cube's stringing looked at and kept as a look of the printer's tuning, its one change applied, a piece sliced before it saying nothing, a lever that did not govern put back and the next stepped, and the fault shrinking |
 
 ## The checklists
 

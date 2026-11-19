@@ -1177,9 +1177,11 @@ def add_look(
 
 def fault_trends(doc: TuningDocument) -> Dict[str, str]:
     """Each fault seen over the document's looks: its severity at each, and the change
-    applied after it."""
+    applied after it. A fault no look saw is left out, though each said none of it."""
     out: Dict[str, str] = {}
     for f in pf.FAULTS:
+        if not any(lk.severity(f.id) for lk in doc.looks):
+            continue
         marks = []
         for lk in doc.looks:
             sev = lk.severity(f.id)

@@ -2387,7 +2387,8 @@ def control_options(device: Device) -> List[Option]:
                 Option(id="print:preview", label="Preview", action="print:preview"),
                 Option(id="print:plan", label="Keep as plan", action="print:plan"),
                 # The piece printed, read: what is read under measured kept as the next
-                # turn of the printer's tuning, or the first field, with nothing read.
+                # turn of the printer's tuning; a fault chosen under seen, the next look;
+                # or the first field, with neither.
                 Option(id="print:measure", label="Measure", action="print:measure"),
                 # The printer's tuning: the last turn's changes into its next slices, or
                 # the last turn dropped with what it applied (slicer/tuning.py). Worded

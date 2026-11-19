@@ -12,9 +12,12 @@ Three modules hold it:
 | `apothecary/print_tuning.py` | The maths, standard library only: the error model, the least squares and what it cannot separate, a reading's uncertainty, the step, the trend over turns |
 | `apothecary/slicer/tuning.py` | `print/tuning/1`, a printer's turns for one filament and process: the settings each term moves, the document and its validator, where it is kept, and what the next slice takes |
 | `parts/print_coupon` | The piece made to be measured, its measurement plan in its wrapper |
+| `apothecary/print_faults.py` | What a piece shows that calipers do not: the faults a person sees, the settings that govern each, and the one change a look makes |
+| `apothecary/slicer/filaments.py` | The filament loaded on a printer, chosen among the slicer's profiles that fit it: what its next slices, and so its tuning, are for |
 
 [Walkthrough page 46](../walkthrough/46-a-printer-tuned-from-its-prints.md) tunes a
-made-up printer from its coupon, in doctests.
+made-up printer from its coupon, in doctests; [page 50](../walkthrough/50-a-printer-tuned-from-what-it-shows.md)
+from what its pieces show.
 
 ## The error model
 
@@ -243,6 +246,77 @@ server would refuse them, and the turns and each setting's trend are listed bene
 box's sizes separate nothing and that the coupon is the piece made to be measured, and
 gives this page's walkthrough to try.
 
+## The filament loaded
+
+A printer whose profile names the filament piece `choose` (printer_1's, the owner's
+decision of 2026-11-19) slices with the filament loaded on it: chosen in the Print
+window's **filament** row, or `POST /slicer/filaments/loaded` `{site, printer,
+filament, note}`, among OrcaSlicer's filament profiles of the printer's vendor that
+can be chosen and whose `compatible_printers` names its machine (or names none), read
+from the installed release (`GET /slicer/filaments?site=&printer=`). The note is a
+person's words for the spool. It is kept in the state folder's
+`filaments/<site>/<printer>.json` with every filament loaded before it; until one is
+loaded the profile's own is taken. A slice's `filament` setting says which, and from
+where. Each filament has its own document, so loading another filament takes that
+filament's corrections and looks, and loading the first one back takes its own again.
+
+## What a piece shows: looks
+
+A **look** is a piece read by eye: each fault a person sees on it, none (0), slight
+(1, seen up close), clear (2, at arm's length) or bad (3, the piece is not usable),
+and where it shows. The faults, each with what it looks like and its **levers** --
+the OrcaSlicer settings that govern it, in the order they are tried, each with the
+step that takes the fault out and its limits -- are `print_faults.FAULTS`
+(`GET /slicer/faults`):
+
+| Fault | Levers, in order | When none governs it |
+|---|---|---|
+| Stringing | `filament_retraction_length` +0.5 mm (the machine's `retraction_length` where the filament says nil); `nozzle_temperature` -5 °C; `travel_speed` +20 mm/s | dry the spool |
+| First layer does not hold | `cool_plate_temp_initial_layer` +5 °C; `nozzle_temperature_initial_layer` +5 °C | the Z offset on the printer's screen, a clean bed |
+| Corners lift | `cool_plate_temp` +5 °C; `brim_width` +3 mm; `close_fan_the_first_x_layers` +1 | a draught, a cold room |
+| Too little plastic | `filament_flow_ratio` +0.02; `nozzle_temperature` +5 °C; `filament_max_volumetric_speed` -2 mm³/s | a clog, the extruder, the e-steps |
+| Too much plastic | `filament_flow_ratio` -0.02; `nozzle_temperature` -5 °C | the e-steps, the filament's diameter |
+| Overhangs sag | `nozzle_temperature` -5 °C; `slow_down_layer_time` +2 s | the fan and its duct, supports |
+| Layers split | `nozzle_temperature` +5 °C; `fan_max_speed` -10 % | a draught, wet filament |
+| Ripples beside corners | `outer_wall_speed` -10 mm/s | a loose belt or wheel |
+| A layer shifted | `travel_speed` -30 mm/s | a belt, a pulley, a collision: not a slicer's |
+
+The bed's keys are the cool plate's: the Ender 3's profiles name no bed type, and
+OrcaSlicer's own is the cool plate (`curr_bed_type = Cool Plate` in the G-code's
+configuration). A temperature stays inside the filament's own printable range
+(`nozzle_temperature_range_low` .. `_high`) where the slice recorded it.
+
+A look proposes **one** setting's change, for the worst fault it saw (ties in the
+table's order), so the next look can say what that change did
+(`print_faults.next_step`):
+
+- a fault never stepped: its first lever that can move, one step;
+- a fault stepped, read on a piece sliced with that step: less than when it was
+  stepped, the same lever again; the same or worse, the lever put back where it was
+  and the next one stepped in the same look -- a value already printed with adds no
+  second unknown -- and a lever put back is not tried again for that fault;
+- a piece sliced before the last look's change was taken: no change at all;
+- every lever put back or at its limit: nothing, and what to look at instead is said.
+
+Looks are kept in the same `print/tuning/1` document as the caliper turns, under
+`looks`, each with the slice it read and the values that slice used, what was seen
+(basis `seen`), the steps proposed and the changes applied; **Take turn** and **Undo
+turn** take the newest turn or look. The settings held are each the last change any
+turn or look applied, in the order they were kept. A look is read with any piece: a
+cube read with calipers proposes nothing, but what it shows does.
+
+| Route | |
+|---|---|
+| `POST /slicer/slices/{file_id}/seen` | `{seen, where, note}`: the piece that slice made, looked at, kept as the next look; nothing applied |
+| `GET /slicer/faults` | The faults, their levers, the severities |
+| `GET /slicer/filaments`, `POST /slicer/filaments/loaded` | The filament loaded and the choices; another loaded |
+
+In the page, the Print window's **seen** row, under **measured**, has a choice of none
+to bad for each fault and **Keep look**; Print › Measure on the ring keeps the look too,
+when a fault is chosen and nothing is read. The history beneath lists turns and looks
+in the order they were kept, and each fault seen over the looks. The **filament** row
+loads the filament chosen; a note of the spool is the route's alone.
+
 ## The command line
 
 ```bash
@@ -263,7 +337,7 @@ instrument. Nothing here opens a port or slices: a turn names a slice already ke
 | Read here | Not here |
 |---|---|
 | A scale per axis, the outer faces' and the holes' offsets, the first layer's spread and its height, each from sizes and tops | Flow, from a wall's thickness: see [the flow](#the-flow) |
-| Whether a setting's change took the error out, over turns | Temperature, retraction, pressure advance: judged by eye or other instruments |
+| Whether a setting's change took the error out, over turns | Temperature, retraction, cooling, flow: judged by eye, as a look ([above](#what-a-piece-shows-looks)); pressure advance, by nothing here |
 | An axis's steps per millimetre, as X and Y disagreeing | Which of steps per millimetre and the material's shrinkage a common scale is |
 | | A round hole's polygon facets, a seam's bump, a corner's bulge: the coupon is square to keep them out of its readings |
 

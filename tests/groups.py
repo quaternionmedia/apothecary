@@ -149,6 +149,7 @@ GROUPS = {
             "walkthrough/20-*",
             "walkthrough/21-*",
             "walkthrough/46-*",
+            "walkthrough/50-*",
         ),
         "tests": (
             "test_slicer.py",

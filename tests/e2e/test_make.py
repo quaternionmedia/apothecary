@@ -270,3 +270,58 @@ def test_the_part_made_read_is_a_turn_of_the_printers_tuning(page: Page, url: st
     windows.in_machine(page, "#print-tune-undo").click()
     expect(page.locator("#status")).to_contain_text("turn-1 undone", timeout=10000)
     assert errors == []
+
+
+@pytest.mark.e2e
+def test_the_filament_loaded_and_a_fault_seen_tune_the_printers_next_slices(page: Page, url: str):
+    """printer_1's Print window says the filament loaded on it, the profile's own until
+    one is chosen; another chosen is what its next slice is made with. The footpedal
+    made, then looked at: stringing seen clear is kept as the first look of its
+    tuning, which steps the retraction; Take turn takes it, and Undo turn drops it."""
+    errors: list = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    open_garage(page, url, settle=False)
+    _machines_known(page)
+    select(page, "footpedal")
+    expect(page.locator("#make-here")).to_have_text(re.compile("on printer_1"), timeout=15000)
+    page.locator("#make-here").click()
+    expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=SLICED_MS)
+    filament = windows.in_machine(page, "#print-filament")
+    expect(filament).to_have_value("Creality Generic PLA", timeout=10000)
+    expect(windows.in_machine(page, "#print-filament-said")).to_have_text(
+        "the profile's own: choose what is loaded"
+    )
+    filament.select_option("Creality Generic PETG")
+    expect(page.locator("#status")).to_contain_text(
+        "Creality Generic PETG loaded on printer_1", timeout=10000
+    )
+    windows.in_machine(page, "#print-slice").click()
+    expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=SLICED_MS)
+    expect(windows.in_machine(page, "#print-slice-said")).to_contain_text("Creality Generic PETG")
+    filament.select_option("Creality Generic PLA")
+    expect(page.locator("#status")).to_contain_text("Creality Generic PLA loaded", timeout=10000)
+    windows.in_machine(page, "#print-slice").click()
+    expect(page.locator("#status")).to_contain_text("kept and chosen", timeout=SLICED_MS)
+
+    seen = windows.in_machine(page, '#print-seen-faults select[data-fault="stringing"]')
+    expect(seen).to_be_visible(timeout=10000)
+    seen.select_option("2")
+    windows.in_machine(page, "#print-seen-keep").click()
+    expect(page.locator("#status")).to_contain_text(
+        "look-1 kept for printer_1: footpedal looked at: stringing clear; proposed: "
+        "filament_retraction_length 4 mm -> 4.5 mm",
+        timeout=10000,
+    )
+    expect(seen).to_have_value("0")
+    history = windows.in_machine(page, "#print-tune-history")
+    expect(history).to_contain_text("look-1, footpedal, seen: stringing clear")
+    windows.in_machine(page, "#print-tune-apply").click()
+    expect(page.locator("#status")).to_contain_text(
+        "Taken for printer_1's next slices: filament_retraction_length", timeout=10000
+    )
+    expect(history).to_contain_text(
+        "stringing: clear at look-1 (then filament_retraction_length 4.5)"
+    )
+    windows.in_machine(page, "#print-tune-undo").click()
+    expect(page.locator("#status")).to_contain_text("look-1 undone", timeout=10000)
+    assert errors == []
