@@ -184,9 +184,19 @@ Counted in the page on the day:
    kind. Each piece of the tree is sent with its `kind` and `system`, and a site's
    `facets` with the kinds its pieces without a System are grouped by. A site's `machine`
    word wears the Machines token's colour.
-3. **The ring.** One function groups a long list, by facet and then by letters; the Kinds
-   or Systems cell holds one address; no preset is dropped; each window's door is under its
-   group's cell.
+3. **The ring.** Built in two parts.
+   - **Lists and the facet cell** (built). One function, `_fit`, cuts every long list the
+     ring holds, nothing dropped: a plain list of names into as few lettered runs as fit,
+     near-equal; a list kept in its own order in that order, each run named for its first.
+     Pieces and Inside are cut by facet first: a site's Systems, its loose parts under one
+     more ring, Parts, by kind; the universe's kinds, its sites left to the Site cell. The
+     canvas ring's every cell is always there: Step out 1, greyed at the universe's own
+     level, and Systems 7, Kinds in the universe, each opening its pieces in place, greyed
+     where a site has none. A part's presets are all kept.
+   - **Panels by group.** The window groups become eight: Selected joins Part, Lighting
+     joins Site, and Docs is a tool. Panels is one cell per group, Site, Part, Pictures,
+     Machine, Windows, Tools, Family and Airgap, each holding its group's windows: the
+     Procedure, Members and Deliveries under Family, the Deck and its Knobs under Tools.
 4. **The page.** Site's chips, the Layers window's categories under their kinds, and the
    sphere's clusters by Kind, from the one list function. The walkthrough's pictures go
    with the change.

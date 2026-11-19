@@ -183,27 +183,29 @@ def _composed(node) -> list:
     ]
 
 
-def _pieces(site) -> Iterator[Tuple[object, Optional[str]]]:
-    """Every node beneath ``site``'s root with its word: its own, else the nearest above it
-    that has one. A site's piece in the universe is one node: what it is drawn as is no
-    level (``layer_colours.layers_in`` reads a tree the same way)."""
+def _pieces(site) -> Iterator[Tuple[str, object, Optional[str]]]:
+    """Every node beneath ``site``'s root with its dotted path and its word: its own, else
+    the nearest above it that has one. A site's piece in the universe is one node: what it
+    is drawn as is no level (``layer_colours.layers_in`` reads a tree the same way)."""
 
-    def visit(node, inherited: Optional[str]) -> Iterator[Tuple[object, Optional[str]]]:
+    def visit(
+        node, path: str, inherited: Optional[str]
+    ) -> Iterator[Tuple[str, object, Optional[str]]]:
         own = getattr(node, "category", None)
         word = own if own is not None else inherited
-        yield node, word
+        yield path, node, word
         if getattr(node, "site_ref", None) is None:
             for child in _composed(node):
-                yield from visit(child, word)
+                yield from visit(child, f"{path}.{child.name}", word)
 
     for child in _composed(site):
-        yield from visit(child, getattr(site, "category", None))
+        yield from visit(child, child.name, getattr(site, "category", None))
 
 
 def facet_of(site) -> str:
     """The facet ``site`` is grouped by: Kind in the universe, whose pieces lie on its
     shells, and System in a site, whose pieces lie on none."""
-    on_shells = any(getattr(node, "shell", None) is not None for node, _ in _pieces(site))
+    on_shells = any(getattr(node, "shell", None) is not None for _, node, _ in _pieces(site))
     return KIND if on_shells else SYSTEM
 
 
@@ -221,6 +223,19 @@ def kind_and_system(
     if part_category:
         return kind_of(part_category), system
     return (kind_of(word) if system is None else None), system
+
+
+def kinds_and_systems(
+    site, part_category: Callable[[str], Optional[str]] = lambda _: None
+) -> Dict[str, Tuple[Optional[str], Optional[str]]]:
+    """Each piece of ``site`` by its dotted path: its Kind and its System
+    (``kind_and_system``), ``part_category`` giving a part's category by its name."""
+    by = facet_of(site)
+    found: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
+    for path, node, word in _pieces(site):
+        ref = getattr(node, "part_ref", None)
+        found[path] = kind_and_system(by, word, part_category(ref) if ref else None)
+    return found
 
 
 # --- what a site is sent ------------------------------------------------------------------
@@ -255,7 +270,7 @@ def facets_of(
     by = facet_of(site)
     words: set = set()
     loose_kinds: Dict[str, set] = {}
-    for node, word in _pieces(site):
+    for _, node, word in _pieces(site):
         if word:
             words.add(word)
         ref = getattr(node, "part_ref", None)

@@ -474,10 +474,10 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     page.keyboard.press("m")
     expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
     wedges = _wedges(page)
-    assert wedges["8"] == "Pieces" and "Step out" not in wedges.values()
-    # The garage's pieces, grouped in small lettered groups, each named for its
-    # first piece in name order. The page knows the address; the test asks
-    # rather than guesses.
+    # Step out is there at the site's own level too, to the universe, at its one address.
+    assert wedges["8"] == "Pieces" and wedges["1"] == "Step out" and wedges["7"] == "Systems"
+    # The garage's pieces, cut by System, its loose parts under Parts by kind. The page
+    # knows the address; the test asks rather than guesses.
     address = page.evaluate(
         "() => window.apothecaryRing.addressOf("
         "window.apothecaryRing.current().root, 'select:printer_1')"
@@ -485,7 +485,7 @@ def test_pieces_are_chosen_and_the_tree_walked_by_digits(page: Page, ring_url: s
     assert address.startswith("8") and len(address) == 3 and "5" not in address
     page.keyboard.press("8")
     groups = _wedges(page)
-    assert len(groups) >= 2 and groups["8"].startswith("arduino")  # sorted, named for the first
+    assert groups["8"] == "Building" and "Parts" in groups.values()  # the vocabulary's order
     for digit in address[1:]:
         page.keyboard.press(digit)
     expect(page.locator("#ring-overlay")).to_have_count(0)

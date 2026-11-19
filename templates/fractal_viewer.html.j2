@@ -1451,6 +1451,7 @@
                                               // hierarchy tree (not just what's rendered),
                                               // rebuilt each renderFocus()
                 this.expandedCategories = new Set();  // categories rendered at full depth
+                this.facets = null;  // the site's Kinds or Systems, as its payload sends them
                 this.treeExpanded = new Set();  // paths expanded for *browsing* in the
                                                  // hierarchy tree -- independent of whether
                                                  // that subtree is actually rendered
@@ -2687,6 +2688,7 @@
                     this.lighting.setSite(name);
                     this.tree = data.tree;
                     takeLayerColours(data);
+                    this.facets = data.facets ?? null;  // what its pieces are grouped by (facets.py)
                     this.maxDepthValue = maxDepth(this.tree);
                     this.violations = data.violations;
                     this.isValid = data.is_valid;
@@ -8122,6 +8124,7 @@
                     const data = await response.json();
                     this.tree = data.tree;
                     takeLayerColours(data);
+                    this.facets = data.facets ?? null;  // what its pieces are grouped by (facets.py)
                     this.violations = data.violations;
                     this.isValid = data.is_valid;
                     if (data.scad) this.codeContentEl.textContent = data.scad;
@@ -10255,6 +10258,7 @@
                 const data = await response.json();
                 this.tree = data.tree;
                 takeLayerColours(data);
+                this.facets = data.facets ?? null;  // what its pieces are grouped by (facets.py)
                 this.violations = data.violations;
                 this.isValid = data.is_valid;
                 if (data.scad) this.codeContentEl.textContent = data.scad;
@@ -10450,6 +10454,7 @@
             applyPieceRebuilt(payload, path) {
                 this.tree = payload.tree;
                 takeLayerColours(payload);
+                this.facets = payload.facets ?? null;  // what its pieces are grouped by (facets.py)
                 this.violations = payload.violations;
                 this.isValid = payload.is_valid;
                 if (payload.scad) this.codeContentEl.textContent = payload.scad;
@@ -10466,6 +10471,7 @@
             applySite(payload) {
                 this.tree = payload.tree;
                 takeLayerColours(payload);
+                this.facets = payload.facets ?? null;  // what its pieces are grouped by (facets.py)
                 this.violations = payload.violations;
                 this.isValid = payload.is_valid;
                 if (payload.scad) this.codeContentEl.textContent = payload.scad;
@@ -11461,11 +11467,17 @@
                     viewer.setStatus(node ? `${path}: a ${node.role}${node.category ? ' in ' + node.category : ''}${node.part_ref ? ', from part ' + node.part_ref : ''}, ${node.children.length} inside${tail}` : `${path}: not on screen${tail}`, 'success');
                 } else if (action.startsWith('site:')) {
                     viewer.chooseSite(action.slice(5));
-                } else if (action.startsWith('group:')) {
-                    const group = action.slice(6);
-                    if (viewer.expandedCategories.has(group)) viewer.expandedCategories.delete(group); else viewer.expandedCategories.add(group);
+                } else if (action.startsWith('facet:')) {
+                    // Kinds or Systems (apothecary/facets.py): a value's words, each opened in
+                    // its place as Site's chip for it opens it, or all closed again.
+                    const [, by, name] = action.match(/^facet:([a-z]+):(.+)$/) ?? [];
+                    const sent = viewer.facets;
+                    const value = sent ? (sent.by === by ? sent.values : sent.kinds ?? []).find((v) => v.name === name) : null;
+                    const words = value ? value.words.map((w) => w.word) : [];
+                    const opening = words.some((w) => !viewer.expandedCategories.has(w));
+                    for (const w of words) { if (opening) viewer.expandedCategories.add(w); else viewer.expandedCategories.delete(w); }
                     viewer.renderFocus();
-                    viewer.setStatus(`${viewer.expandedCategories.has(group) ? 'Expanded' : 'Collapsed'} ${group}${tail}`, 'success');
+                    viewer.setStatus(words.length ? `${opening ? 'Expanded' : 'Collapsed'} ${name}${tail}` : `${name}: nothing here to open${tail}`, words.length ? 'success' : 'error');
                 } else if (action === 'device:open') {
                     // The board's Machine, in front of the world.
                     if (viewer.openMachine(path)) viewer.setStatus(`Opened ${path}${tail}`, 'success');

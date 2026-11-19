@@ -128,6 +128,7 @@ from .projects.parts.variants import wants as request_wants
 from .projects.registry import (
     PartLoadError,
     ProjectInfo,
+    category_of,
     load_part,
     part_names,
     sanitize_module_name,
@@ -406,7 +407,6 @@ def load_part_wrapper(name: str):
 
 _BOARDS: Dict[str, bool] = {}
 _BOUGHT: Dict[str, bool] = {}
-_CATEGORIES: Dict[str, Optional[str]] = {}
 
 
 def is_board(part_ref: Optional[str]) -> bool:
@@ -437,15 +437,8 @@ def is_bought(part_ref: Optional[str]) -> bool:
 
 def part_category(part_ref: Optional[str]) -> Optional[str]:
     """A part's category, the word its kind holds (facets.py); None for no part, or one
-    that is not registered. Asked once per part."""
-    if not part_ref:
-        return None
-    if part_ref not in _CATEGORIES:
-        try:
-            _CATEGORIES[part_ref] = load_part_wrapper(part_ref).category
-        except HTTPException:
-            _CATEGORIES[part_ref] = None
-    return _CATEGORIES[part_ref]
+    that is not registered (``projects.registry.category_of``, asked once per part)."""
+    return category_of(part_ref, ROOT) if part_ref else None
 
 
 def _available_part_names() -> List[str]:

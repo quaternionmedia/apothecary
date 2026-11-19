@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from functools import lru_cache
 from importlib import import_module
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from .parts.base import BasePart
@@ -124,6 +125,17 @@ def part_named(name: str, root: Path) -> "BasePart":
         if item.kind == "part" and item.name == name and item.has_part:
             return load_part(item)
     raise KeyError(name)
+
+
+@lru_cache(maxsize=None)
+def category_of(name: str, root: Path) -> Optional[str]:
+    """The category of the registered part called ``name``, the word its kind holds
+    (``apothecary/facets.py``); None for no such part, or one that will not load. Asked
+    once per part and root."""
+    try:
+        return part_named(name, root).category
+    except (KeyError, PartLoadError):
+        return None
 
 
 def load_parts(root: Path) -> LoadedParts:

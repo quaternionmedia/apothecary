@@ -279,7 +279,6 @@ def _every_ring():
     """One ring of each kind the resolver can build, over a real arrangement."""
     site = sites.store.get(SITE)
     names = sorted(sites.store.names())
-    groups = sorted({child.category for child in site.children if child.category})
     printer = Device(port="/dev/ttyUSB0", printer=True, armed=False, bound=True)
     armed = Device(port="/dev/ttyUSB0", printer=True, armed=True, bound=True)
     board = Device(port="/dev/ttyACM0", printer=False, bound=False)
@@ -312,7 +311,6 @@ def _every_ring():
             Context(pointing=pointing, targets=targets),
             site,
             site_names=names,
-            groups=groups,
             device=device,
         )
         for pointing, targets, device in (

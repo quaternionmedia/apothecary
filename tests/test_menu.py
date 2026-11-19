@@ -214,14 +214,69 @@ def test_a_long_single_word_is_cut_rather_than_left_over_length():
 # ---------------------------------------------------------------- what is offered
 
 
-def test_the_canvas_ring_offers_the_sites_and_the_groups():
-    ring = resolve(
-        Context(pointing=Pointing.CANVAS),
-        _photo_site(),
-        site_names=["bench", "garage"],
-        groups=["plate", "disc"],
+def test_the_canvas_ring_offers_the_sites_and_the_sites_systems():
+    """Systems, cell 7: each System the site has, opening its pieces in place as Site's
+    chips do; greyed, saying why, on a site whose pieces are in none."""
+    garage = resolve(Context(pointing=Pointing.CANVAS), _garage(), site_names=["garage"])
+    systems = garage.options[-1]
+    assert (systems.label, systems.cell) == ("Systems", 7)
+    assert [(c.label, c.action) for c in systems.children] == [
+        (name, f"facet:system:{name}")
+        for name in ("Building", "Furniture", "Machines", "Mechanical", "Electrical", "Plumbing")
+    ]
+    assert carried_by("facet:system:Building").name == "VIEWER"
+
+    photos = resolve(
+        Context(pointing=Pointing.CANVAS), _photo_site(), site_names=["bench", "garage"]
     )
-    assert every_action([ring]).keys() >= {"site:bench", "group:plate", "fit", "reset"}
+    assert every_action([photos]).keys() >= {"site:bench", "fit", "reset"}
+    none = photos.options[-1]
+    assert (none.label, none.cell, none.enabled) == ("Systems", 7, False)
+    assert none.why == "nothing in bench is in one of the Systems"
+
+
+def test_the_universe_lists_its_parts_by_kind_and_has_nothing_above_it():
+    """In the universe Pieces is its parts cut by kind, every part kept and no site among
+    them (Site opens those); its cell 7 is Kinds; and Step out, at the top of everything, is
+    greyed and says why."""
+    from apothecary import sites
+    from apothecary.facets import KINDS
+
+    universe = sites.store.get("apothecary")
+    ring = resolve(Context(pointing=Pointing.CANVAS), universe, site_names=["garage"])
+    pieces, out, kinds = ring.options[0], ring.options[-2], ring.options[-1]
+    assert [c.label for c in pieces.children] == list(KINDS)
+
+    def leaves(option):
+        return [option] if option.action else [x for c in option.children for x in leaves(c)]
+
+    parts = sorted(c.name for c in universe.children if c.part_ref)
+    assert sorted(x.action for x in leaves(pieces)) == [f"select:{p}" for p in parts]
+    assert (out.label, out.cell, out.enabled) == ("Step out", 1, False)
+    assert "nothing to step out to" in out.why
+    assert (kinds.label, kinds.cell) == ("Kinds", 7)
+    assert [c.label for c in kinds.children] == list(KINDS)
+
+
+def test_a_long_plain_list_is_cut_into_as_few_lettered_runs_as_fit():
+    """Nine names are two runs, five and four, each named for its letters; a list kept in
+    its own order is cut in that order, each run named for its first; nothing is dropped."""
+    from apothecary.menu import _fit
+
+    names = ["arch", "bolt", "cog", "disc", "eye", "fin", "gear", "hub", "pin"]
+    leaves = [Option(id=n, label=n, action=n) for n in reversed(names)]
+    runs = _fit("x", leaves)
+    assert [(r.label, [c.label for c in r.children]) for r in runs] == [
+        ("a–e", names[:5]),
+        ("f–p", names[5:]),
+    ]
+    same = [Option(id=f"p{i}", label=f"plate {i}", action=f"p{i}") for i in range(10)]
+    told = _fit("y", same)
+    assert [r.label for r in told] == ["plate 0", "plate 5"]
+    kept = _fit("z", leaves, by_name=False)
+    assert [r.label for r in kept] == ["pin", "disc"]
+    assert [c.label for r in kept for c in r.children] == list(reversed(names))
+    assert _fit("w", leaves[:8]) == leaves[:8]
 
 
 def test_a_ring_with_nothing_to_group_simply_does_not_offer_it():
@@ -265,7 +320,6 @@ def test_every_kind_of_ring_obeys_both_limits(pointing):
         Context(pointing=pointing, targets=["plate_1"]),
         _photo_site(),
         site_names=["bench", "garage"],
-        groups=["plate", "disc"],
     )
     assert 1 <= len(ring.options) <= MOST_OPTIONS
     for option in ring.options:
@@ -1130,37 +1184,54 @@ def _garage():
 
 
 def test_the_canvas_ring_lists_the_pieces_at_this_level_and_the_way_out():
-    """At the root, Pieces and no Step out; stepped in, Pieces of the focus and Step out,
-    seated after every cell the ring always has, so none of them moves; at a leaf, its
-    Pieces is the leaf itself, the one piece drawn there."""
+    """Every cell is there wherever the ring opens, at one address: Step out 1 and the
+    level's Systems 7 too, Step out at a site's own level going to the universe. Pieces cuts
+    the garage's pieces by System, its loose parts under Parts by kind, nothing lost;
+    stepped in, Pieces of the focus; at a leaf, the leaf itself, the one piece drawn."""
     from apothecary.menu import carried_by
 
-    root = resolve(Context(pointing=Pointing.CANVAS), _garage())
-    labels = [o.label for o in root.options]
-    assert labels[0] == "Pieces" and "Step out" not in labels
-    pieces = root.options[0]
-    assert pieces.cell == 8 and pieces.children is not None
-    # Every piece of the garage, in lettered groups, nothing lost.
+    asked = {"site_names": ["apothecary", "garage"]}
+    top = resolve(Context(pointing=Pointing.CANVAS), _garage(), **asked)
+    nested = resolve(Context(pointing=Pointing.CANVAS, targets=["printer_1"]), _garage(), **asked)
+    for ring in (top, nested):
+        assert [(o.label, o.cell) for o in ring.options] == [
+            ("Pieces", 8),
+            ("Site", 6),
+            ("View", 2),
+            ("Panels", 4),
+            ("Pictures", 9),
+            ("Rebuild", 3),
+            ("Step out", 1),
+            ("Systems", 7),
+        ]
+        out = ring.options[6]
+        assert out.action == "zoom-out" and out.enabled
+    pieces = top.options[0]
+    assert [c.label for c in pieces.children] == [
+        "Building",
+        "Furniture",
+        "Machines",
+        "Mechanical",
+        "Electrical",
+        "Plumbing",
+        "Parts",
+    ]
+    assert [c.label for c in pieces.children[-1].children] == [
+        "Electronics",
+        "Test pieces",
+        "Things",
+    ]
+
+    def leaves(option):
+        return [option] if option.action else [x for c in option.children for x in leaves(c)]
+
     names = sorted(c.name for c in _garage().children)
-    leaves = [leaf for group in pieces.children for leaf in group.children]
-    assert [leaf.action for leaf in leaves] == [f"select:{n}" for n in names]
-    assert all(len(leaf.label) <= LONGEST_LABEL for leaf in leaves)
+    assert sorted(x.action for x in leaves(pieces)) == [f"select:{n}" for n in names]
+    assert all(len(x.label) <= LONGEST_LABEL for x in leaves(pieces))
     assert carried_by("select:printer_1").name == "VIEWER"
 
     zoomed = resolve(Context(pointing=Pointing.CANVAS, targets=["printer_1"]), _garage())
-    labels = [o.label for o in zoomed.options]
-    assert labels[0] == "Pieces"
-    # As the page asks for it, with the sites and the site's groups.
-    asked = {"site_names": ["apothecary", "garage"], "groups": ["wall"]}
-    top = resolve(Context(pointing=Pointing.CANVAS), _garage(), **asked)
-    nested = resolve(Context(pointing=Pointing.CANVAS, targets=["printer_1"]), _garage(), **asked)
-    out = next(o for o in nested.options if o.label == "Step out")
-    assert out.action == "zoom-out" and out.cell == 1
-    assert [(o.label, o.cell) for o in nested.options][-2:] == [("Step out", 1), ("Group", 7)]
-    for at_root, stepped_in in zip(top.options, nested.options, strict=False):
-        if at_root.label == "Group":
-            break
-        assert (at_root.label, at_root.cell) == (stepped_in.label, stepped_in.cell)
+    assert zoomed.options[0].label == "Pieces"
     inside = zoomed.options[0].children
     assert [o.action for o in inside] == [
         "select:printer_1.frame_system",
@@ -1247,7 +1318,6 @@ def test_the_canvas_ring_opens_and_closes_the_panels_the_page_registers():
         Context(pointing=Pointing.CANVAS),
         _garage(),
         site_names=["apothecary", "garage"],
-        groups=["wall", "furniture"],
     )
     panels = next(o for o in root.options if o.label == "Panels")
     assert panels.cell == 4 and panels.children is not None  # after Pieces, Site, View
@@ -1570,7 +1640,6 @@ def test_view_is_a_top_level_cell_of_the_canvas_ring_with_fit_inside_it():
             Context(pointing=Pointing.CANVAS, targets=targets),
             _garage(),
             site_names=["apothecary", "garage"],
-            groups=["wall", "furniture"],
         )
         assert len(root.options) <= 8
         assert "fit" not in [o.id for o in root.options]
@@ -2713,7 +2782,6 @@ def test_the_fullest_context_holds_every_ring_to_eight_and_says_how_deep_it_goes
         Context(pointing=Pointing.CANVAS),
         _garage(),
         site_names=["apothecary", "garage", "datum_core"],
-        groups=["wall", "furniture"],
         picture=told,
     )
     for ring in (node, canvas):

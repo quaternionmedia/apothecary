@@ -102,13 +102,10 @@ def _site(name: Optional[str]):
 
 
 def _catalogue(name: Optional[str]) -> Dict[str, List[str]]:
-    """The lists a ring is built from, read fresh on every call: the
-    arrangements that exist now, and the groups in this one."""
-    groups: List[str] = []
-    site = _site(name)
-    if site is not None:
-        groups = sorted({child.category for child in site.children if child.category})
-    return {"site_names": sorted(sites.store.names()), "groups": groups}
+    """The lists a ring is built from, read fresh on every call: the arrangements that
+    exist now. What a site's pieces are grouped by the ring reads from the site itself
+    (``facets.py``)."""
+    return {"site_names": sorted(sites.store.names())}
 
 
 def _pictures_known(
@@ -230,7 +227,6 @@ def resolve_ring(request: ResolveRequest) -> Ring:
             request.context,
             _site(request.site),
             site_names=lists["site_names"],
-            groups=lists["groups"],
             device=_named(request.device, request.context),
             picture=_pictures_known(request.site, request.picture, request.context),
             sketch=request.sketch,

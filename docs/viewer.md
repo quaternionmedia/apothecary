@@ -556,8 +556,13 @@ so Ctrl+click opens the ring there.
 Its cells are a numeric keypad, `7 8 9 / 4 5 6 / 1 2 3`. A ring holds up to
 eight options, seated in the order it lists them: 8, 6, 2 and 4 first, then
 9, 3, 1 and 7. **5** is the hub: it backs out one ring, and closes the first.
-A label ending `›` opens a ring of its own. The digits pressed through nested
-rings are the option's **address**, shown in the hub as you go and after
+A label ending `›` opens a ring of its own. **A list longer than its ring is cut,
+nothing dropped** (`apothecary/menu.py`'s `_fit`): pieces by what they are grouped by
+(a site's Systems, its loose parts under Parts by kind; the universe's kinds,
+`apothecary/facets.py`), and a plain list of names into as few runs as fit, of near-equal
+length, each named for its letters (`a–e`, `f–p`); a list kept in its own order, the
+newest pictures first, is cut in that order, each run named for its first. The digits
+pressed through nested rings are the option's **address**, shown in the hub as you go and after
 every verb in the status line: `(⌗98)` is 9, then 8. The ring is drawn on a
 ground of its own, so nothing it is opened over shows through a wedge, and a
 ring opened near the screen's edge stands far enough in that no label is cut.
@@ -590,11 +595,14 @@ way when a newer one has come -- the latch taken and let go again before it land
 is dropped when it does.
 
 **The canvas ring** lists Pieces 8 (each piece at this level; at a site's top
-the pieces made from pictures are one more cell, Made; at a leaf, the leaf
-itself), Site 6 (every site, Apothecary among them), View 2, Panels 4, Pictures 9 and Rebuild 3 (the
-site built again from its factory, as it was first built: chosen twice); then
-Step out 1 (when stepped in) and Group (each category of the site's pieces:
-expand it, as its chip in Site does; 7 when stepped in, 1 at the top).
+the pieces made from pictures are one more cell, Made; in the universe its parts, its
+sites being Site's; at a leaf, the leaf itself), Site 6 (every site, Apothecary among
+them), View 2, Panels 4, Pictures 9, Rebuild 3 (the site built again from its factory, as
+it was first built: chosen twice), Step out 1 (at a site's own level, to the universe;
+greyed at the universe's own, nothing being above it) and Systems 7, Kinds in the universe
+(each System or kind the site has: its pieces opened in place, as Site's chips open a
+category; greyed where the site has none). Every cell is there wherever the ring opens, so
+none moves.
 
 - **Panels** › Site › Site, Problems, Pinned, Jobs, SCAD, Workspace and Layers (the
   Workspace, [working-space.md](working-space.md)); Selected;

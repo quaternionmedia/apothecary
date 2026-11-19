@@ -920,9 +920,9 @@ def _canvas_ring(page: Page) -> dict:
 
 @pytest.mark.e2e
 def test_the_canvas_rings_constant_cells_keep_one_address_everywhere(page: Page, url: str):
-    """Pieces 8, Site 6, View 2, Panels 4, Pictures 9 and Rebuild 3 at the garage's root,
-    stepped into a piece, in the universe, whose parts' categories are its groups, and at
-    a leaf of it; Step out and Group, which come and go, after them."""
+    """Pieces 8, Site 6, View 2, Panels 4, Pictures 9, Rebuild 3, Step out 1 and the level's
+    groups 7 -- Systems in a site, Kinds in the universe -- at the garage's root, stepped
+    into a piece, in the universe, and at a leaf of it."""
     constant = {
         "Pieces": "8",
         "Site": "6",
@@ -930,23 +930,23 @@ def test_the_canvas_rings_constant_cells_keep_one_address_everywhere(page: Page,
         "Panels": "4",
         "Pictures": "9",
         "Rebuild": "3",
+        "Step out": "1",
     }
     _open(page, url)
     root = _canvas_ring(page)
-    assert {k: root[k] for k in constant} == constant and "Step out" not in root
+    assert {k: root[k] for k in constant} == constant and root["Systems"] == "7"
     page.locator(ROW.format("printer_1")).dblclick()
     page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'printer_1'")
     nested = _canvas_ring(page)
-    assert {k: nested[k] for k in constant} == constant and nested["Step out"] == "1"
+    assert {k: nested[k] for k in constant} == constant and nested["Systems"] == "7"
     page.goto(f"{url}/viewer/sites/apothecary")
     expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=15000)
     library = _canvas_ring(page)
-    assert {k: library[k] for k in constant} == constant and library["Group"] == "1"
-    assert "Step out" not in library
+    assert {k: library[k] for k in constant} == constant and library["Kinds"] == "7"
     page.locator(ROW.format("calibration_cube")).dblclick()
     page.wait_for_function("() => window.fractalViewer.focusPath.join('.') === 'calibration_cube'")
     leaf = _canvas_ring(page)
-    assert {k: leaf[k] for k in constant} == constant and leaf["Step out"] == "1"
+    assert {k: leaf[k] for k in constant} == constant and leaf["Kinds"] == "7"
 
 
 @pytest.mark.e2e

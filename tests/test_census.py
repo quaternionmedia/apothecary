@@ -552,7 +552,7 @@ def test_the_header_is_one_row_with_its_view_menu_on_the_ring():
         for table in (census.CONTROLS, census.LISTENING, census.RING_BACKED):
             assert gone not in table
     by_name = {f.name: f for f in taken.controls_of_its_own()}
-    ring = resolve(Context(pointing=Pointing.CANVAS), site_names=["garage"], groups=["wall"])
+    ring = resolve(Context(pointing=Pointing.CANVAS), site_names=["garage"])
     produced = set()
 
     def walk(options):
@@ -594,7 +594,7 @@ def test_settings_rows_are_counted_and_unbacked_and_its_view_item_is_view_settin
         assert by_name[name].source == "settings.js", name
         assert by_name[name].ring_action is None and by_name[name].taken_back is None, name
     assert by_name["settings-open"].ring_action == "view:settings"
-    ring = resolve(Context(pointing=Pointing.CANVAS), site_names=["garage"], groups=["wall"])
+    ring = resolve(Context(pointing=Pointing.CANVAS), site_names=["garage"])
     view = next(o for o in ring.options if o.label == "View")
     assert "view:settings" in [c.action for c in view.children]
     listening = {f.key: f for f in taken.found if f.how == "listening"}
