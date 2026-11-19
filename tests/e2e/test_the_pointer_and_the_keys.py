@@ -1062,3 +1062,50 @@ def test_the_worlds_ring_shows_when_tab_brings_the_focus_and_not_after_a_press(
     page.mouse.click(empty["x"], empty["y"])
     assert page.evaluate("() => document.activeElement.id") == "viewer-canvas"
     assert page.evaluate(outline) == "none"
+
+
+# Where the keyboard's focus is, and whether a person can see it there: shown, with a size,
+# on the page, and under nothing drawn over it. Null while it is on the page's body.
+FOCUS = """() => {
+    const el = document.activeElement;
+    if (!el || el === document.body) return null;
+    const r = el.getBoundingClientRect();
+    const onPage = r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0
+        && r.left < innerWidth && r.top < innerHeight;
+    const x = Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2));
+    const y = Math.min(innerHeight - 1, Math.max(0, r.top + r.height / 2));
+    const at = onPage ? document.elementFromPoint(x, y) : null;
+    const panel = el.closest('.panel');
+    return {
+        name: el.id || (el.getAttribute('aria-label') || el.title || el.textContent || '').trim().slice(0, 30),
+        window: panel ? panel.dataset.panel : null,
+        shown: el.checkVisibility({ visibilityProperty: true, opacityProperty: true }),
+        onPage,
+        clear: !!at && (at === el || el.contains(at) || at.contains(el)),
+    };
+}"""
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("size", [(1600, 1000), (1100, 700)], ids=["1600x1000", "1100x700"])
+def test_tab_goes_round_the_header_the_world_and_the_windows_and_each_stop_is_seen(
+    page: Page, url: str, size: tuple[int, int]
+):
+    """Tab pressed from the top of the page, again and again, goes through the header, into
+    the world and on into the windows in front, and comes round to the header: every
+    control it stops at is shown, on the page and under nothing drawn over it, at a
+    desktop's size and at 1100 by 700."""
+    page.set_viewport_size({"width": size[0], "height": size[1]})
+    _open(page, url)
+    stops = []
+    for _ in range(60):
+        page.keyboard.press("Tab")
+        stops.append(page.evaluate(FOCUS))
+    reached = [stop for stop in stops if stop]
+    names = [stop["name"] for stop in reached]
+    for control in ("universe-crumb", "validity-indicator", "viewer-canvas"):
+        assert control in names, names
+    assert any(stop["window"] for stop in reached), names
+    assert names.count("universe-crumb") >= 2, names  # round, and round again
+    unseen = [stop for stop in reached if not (stop["shown"] and stop["onPage"] and stop["clear"])]
+    assert unseen == [], unseen
