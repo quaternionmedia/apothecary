@@ -128,7 +128,7 @@ Counted in the page on the day:
    | Motors | electromechanical |
    | Test pieces | calibration, coupon |
    | Shop | dust, tooling, hardware, storage |
-   | Housings | enclosure |
+   | Housings | enclosure, building (the theatre's part, which the universe leaves out) |
    | Things | appliance, furniture, cookie-cutter, music, rc, misc |
 
 3. **A list of more than eight is grouped by its facet, then by letters.** Entries with a
@@ -169,10 +169,14 @@ Counted in the page on the day:
 
 ## Slices: groupings
 
-1. **The vocabulary.** One module holds the Kinds over the categories, the Systems over a
-   site's words, and their colours as tokens and shades, sent with a site beside
-   `layer_colours`. A test holds every category to one kind, every site word to one System
-   or none, and every pair of colours apart.
+1. **The vocabulary** (built). `apothecary/facets.py` holds the Kinds over the categories
+   and the Systems over a site's words; each value's colour is a token of
+   `static/tokens.css`, a category's a shade of its kind's in L*a*b* lightness, and the
+   Systems keep the colours the site's words had. A site is sent with its `facets`: the
+   facet it is grouped by, its values with their tokens and colours, and its loose words.
+   `tests/test_facets.py` holds every registered part's category to one kind, every word a
+   site uses to one System or named loose, each colour apart from the others, the states,
+   the shells and the world's own, and at 3:1 against the ground.
 2. **The sites.** The printer and the router are Machines, a loose part has no System, and
    a site's words are read as Systems.
 3. **The ring.** One function groups a long list, by facet and then by letters; the Kinds

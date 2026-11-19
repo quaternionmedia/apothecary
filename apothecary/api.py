@@ -51,6 +51,7 @@ from .core import OpenSCADObject
 from .docs_site import router as docs_router
 from .evidence import printers as evidence_printers
 from .example_hierarchy import MACHINE_STATUSES, PRINTER_STATUSES
+from .facets import facets_of
 from .family import hub as family_hub
 from .family import members as family_members
 from .firmware import deck_control
@@ -1771,6 +1772,9 @@ def site_payload(site, report) -> Dict[str, object]:
         # The colour of each layer the site has, the one table (layer_colours.py): the
         # page draws a layer, its ring cells and its row in it.
         "layer_colours": layer_colours(site),
+        # What the page groups the site's pieces by, and each group's colour (facets.py):
+        # Kind in the universe, System in a site.
+        "facets": facets_of(site),
         "violations": [v.model_dump() for v in report.violations],
         "is_valid": report.is_valid,
         "scad": scad,

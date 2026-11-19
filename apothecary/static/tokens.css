@@ -30,6 +30,20 @@
 [data-group="Airgap"] { --group: var(--group-airgap); }
 [data-group="Family"] { --group: var(--group-family); }
 
+/* A facet's colour, said once (apothecary/facets.py): a part's Kind, what it is, and a
+ * site's System, what part of the place it serves. A kind's categories are shades of its
+ * colour, made from it; a System that is a kind's same thing names the kind's token. Each
+ * is held at 3:1 against --bg and kept clear of the colours that mean a state, of the
+ * shells' and of the world's own (tests/test_facets.py). */
+:root {
+    --kind-electronics: #3a9e5c; --kind-cameras: #d47ad0; --kind-machines: #e07a5f;
+    --kind-motors: #7a8fd0; --kind-test-pieces: #b8b030; --kind-shop: #3aa0a0;
+    --kind-housings: #b85060; --kind-things: #bc9668;
+    --system-building: #9c8f7a; --system-furniture: #8a5a3c; --system-machines: var(--kind-machines);
+    --system-mechanical: #5b7a99; --system-electrical: #d8c11a; --system-plumbing: #2f8fbf;
+    --system-lighting: #e8a33a; --system-scenery: #8f7bb5;
+}
+
 /* A window's controls, said once: every button, drop-down and box in a window
  * (section.panel, panels.js) wears the page's dark controls, the look the Machine's head
  * and the template's panel-ui have, whichever widget drew it. Under :where(), so it
