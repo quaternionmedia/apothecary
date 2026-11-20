@@ -1795,7 +1795,11 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
         return c && c.site ? { site: c.site, printer: printerName() } : null;
     }
     function renderFilament(force) {
-        const at = state.kind === "printer" ? printerAt() : null, row = $("print-filament-row");
+        const row = $("print-filament-row");
+        // A Machine gone has no row: an answer or a wait that lands after it draws nothing
+        // and asks nothing again.
+        if (!row) return;
+        const at = state.kind === "printer" ? printerAt() : null;
         const key = at ? `${at.site}:${at.printer}` : null;
         if (key !== fil.shown) {
             fil.shown = null; fil.answer = null;
