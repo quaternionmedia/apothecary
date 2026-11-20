@@ -71,6 +71,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
 
+from .. import cabinet
 from .. import print_faults as pf
 from ..firmware.models import Port
 from ..firmware.tasks import Running, TaskBusy, TaskRunner
@@ -304,16 +305,19 @@ def slicer_slice_measured(file_id: str, body: MeasuredRequest):
     for name, read in values.items():
         if len(read) > 20 or any(not (0 < v <= 2000) for v in read):
             raise HTTPException(status_code=422, detail=f"{name}: up to 20 sizes, each over 0 mm")
+    instrument = tuning.Instrument(resolution=body.resolution, repeatability=body.repeatability)
+    drawer = None
     try:
-        doc, turn = tuning.add_turn(
-            record,
-            values,
-            tuning.Instrument(resolution=body.resolution, repeatability=body.repeatability),
-            body.assume,
-        )
-    except tuning.Refused as exc:
+        # A part's piece is filed in its drawer (apothecary/cabinet.py), which makes the turn.
+        if cabinet.part_of_slice(record):
+            drawer, doc, turn = cabinet.measured(
+                cabinet.for_slice(record), values, instrument, body.assume
+            )
+        else:
+            doc, turn = tuning.add_turn(record, values, instrument, body.assume)
+    except (tuning.Refused, cabinet.Refused) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return _tuned(doc) | {"turn": turn.id, "said": tuning.said(turn)}
+    return _tuned(doc) | {"turn": turn.id, "said": tuning.said(turn), **_filed_in(drawer)}
 
 
 @router.post("/slices/{file_id}/seen")
@@ -324,11 +328,17 @@ def slicer_slice_seen(file_id: str, body: SeenRequest):
     record = service.get_record(file_id)
     if record is None:
         raise HTTPException(status_code=404, detail="no slice made that file, or it is not kept")
+    drawer = None
     try:
-        doc, look = tuning.add_look(record, body.seen, body.where, body.note)
-    except tuning.Refused as exc:
+        if cabinet.part_of_slice(record):
+            drawer, doc, look = cabinet.looked(
+                cabinet.for_slice(record), body.seen, body.where, body.note
+            )
+        else:
+            doc, look = tuning.add_look(record, body.seen, body.where, body.note)
+    except (tuning.Refused, cabinet.Refused) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return _tuned(doc) | {"look": look.id, "said": tuning.said_look(look)}
+    return _tuned(doc) | {"look": look.id, "said": tuning.said_look(look), **_filed_in(drawer)}
 
 
 @router.get("/faults")
@@ -410,15 +420,13 @@ def slicer_filament_loaded(body: FilamentRequest):
     return kept.model_dump(mode="json")
 
 
+def _filed_in(drawer: Optional["cabinet.Drawer"]) -> dict:
+    """Where a filing went: the part's drawer, or nothing for a piece no part's."""
+    return {"drawer": {"part": drawer.part, "id": drawer.id}} if drawer is not None else {}
+
+
 def _tuned(doc: "tuning.TuningDocument") -> dict:
-    return {
-        "document": doc.model_dump(mode="json", by_alias=True),
-        "trends": {
-            key: {"term": t.term, "state": t.state, "stop": t.stop, "said": t.said}
-            for key, t in tuning.trends(doc).items()
-        },
-        "faults": tuning.fault_trends(doc),
-    }
+    return tuning.answer(doc)
 
 
 @router.get("/tuning")
@@ -446,6 +454,8 @@ def slicer_tuning_undo(body: TuningRequest):
         doc, gone = tuning.undo(body.site, body.printer, body.applies())
     except tuning.Refused as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # The filing in the part's cabinet that made it says it was undone.
+    cabinet.undone(gone.slice.part, body.site, body.printer, body.applies(), gone.id)
     return _tuned(doc) | {"undone": gone.id}
 
 

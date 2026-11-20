@@ -130,6 +130,8 @@ class SliceRecord(BaseModel):
     # The model sliced, x, y, z in mm: its STL's box, the way up it prints. A part with
     # no plan, printed from this slice, is read by it (slicer/tuning.py).
     size: Optional[List[float]] = None
+    # The sha256 of the STL sliced: the shape itself, whatever drew it.
+    stl_sha256: Optional[str] = None
     # What a person reads of the part printed, as its wrapper plans it at the parameters
     # sliced (models/measures.py); None for a part that names no plan, which is read by
     # its box (slicer/tuning.py).

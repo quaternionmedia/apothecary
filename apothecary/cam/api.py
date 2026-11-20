@@ -22,7 +22,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from .. import sites
+from .. import cabinet, sites
 from ..hierarchy import find_node_by_path
 from ..projects.parts.skeleton import ROOT
 from ..projects.registry import part_names
@@ -110,12 +110,14 @@ def cut_measured(file_id: str, body: MeasuredRequest):
     if record is None:
         raise HTTPException(status_code=404, detail=f"no toolpath is recorded for {file_id!r}")
     try:
-        kept = measured.measure(record, body.sizes)
-    except measured.Refused as exc:
+        # Filed in the part's drawer (apothecary/cabinet.py), which keeps the allowance.
+        drawer, kept = cabinet.measured_cut(cabinet.for_cut(record), body.sizes)
+    except (measured.Refused, cabinet.Refused) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "correction": kept.model_dump(mode="json"),
         "said": measured.said(kept.measurements[-1]),
+        "drawer": {"part": drawer.part, "id": drawer.id},
     }
 
 
