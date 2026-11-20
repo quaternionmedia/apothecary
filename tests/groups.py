@@ -466,6 +466,7 @@ GROUPS = {
             "test_stamped.py",
             "test_the_port.py",
             "test_unchanged_since_green.py",
+            "test_watch.py",
         ),
     },
     "repository": {

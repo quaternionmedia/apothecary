@@ -36,6 +36,22 @@ uv run apothecary serve --reload     # or --simulated, for a bench with nothing 
 | `docs/` or `walkthrough/` | A browser reload of the page under `/docs` or `/walkthrough`, rendered as it is asked for |
 | `uv.lock` or `pyproject.toml` | `uv sync`, then a restart: `--reload` does not see a new package |
 
+## Watching a bench session
+
+```bash
+uv run apothecary serve > serve.log 2>&1 &
+uv run apothecary watch --log serve.log --site garage --printer printer_1 --events bench.log
+```
+
+`watch` reads a running server while a person drives its page and says one line
+per thing that changed: a slice kept, a cut, a tuning turn and what it applied, a
+job started and its progress, a board's state, temperature targets, the commands
+sent to it by hand and every error on its serial link. With `--log` it follows the
+server's output too, the page's polling taken out: each request that is not a GET,
+each 4xx and 5xx, a traceback folded to one line, a restart. It only reads, and
+polls no board itself. `--events` keeps the same lines in a file; `--site` and
+`--printer` name whose tuning is followed.
+
 ## Two loops at once
 
 The viewer's server listens on 6283, tau: each server of the estate sits on a
@@ -49,7 +65,7 @@ APOTHECARY_PORT=6284 uv run apothecary serve   # the same, for every command in 
 
 `APOTHECARY_PORT` is read by every command that starts the server or talks to a
 running one: `serve`, `photo view` and `photo gather --view`, `slicer slice` for a
-site's piece, and `lighting simulate`. The tests use neither: each browser test
+site's piece, `lighting simulate` and `watch`. The tests use neither: each browser test
 starts a server of its own on a free port, and so does `apothecary docs generate`.
 Each worktree has its own `.venv`; run `uv sync` in it once.
 

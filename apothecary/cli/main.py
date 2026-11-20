@@ -25,6 +25,7 @@ from .system import check
 from .testing import test
 from .tuning import tuning
 from .vision import vision
+from .watch import watch
 
 # Commands for working on this repository rather than with it: its tests, its CI
 # run here, its generated docs and its own measures. Listed after the rest.
@@ -85,6 +86,7 @@ cli.add_command(render_scene_jscad)
 cli.add_command(template_generate)
 cli.add_command(validate)
 cli.add_command(serve)
+cli.add_command(watch)
 
 # Register command groups
 cli.add_command(parts)
