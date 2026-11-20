@@ -202,6 +202,8 @@ here: run `apothecary problems`.
   span led by `python -m`, `.venv/bin/` or `$ `, AGENTS.md, `templates/*.md`, the
   tests' READMEs and the changelog, words after a command that takes none, a
   command joined from JS strings, and a word run on into `_` or `:`.
+- `tests/e2e/test_working_space.py::test_the_working_space_from_each_of_its_doors` fails now and then: opened from printer_1's ring, it waits for the status line to say the Workspace's hour, and the next poll's own line (`printer_1 printing: a frame … kept with the poll at …`) can be written over it first. Waiting on the Workspace's own content, or the page keeping the Workspace's line, would settle it.
+- Walkthrough page 03's pictures of the Pictures window (03-03, 03-04, 03-05, 03-10) caption each thumbnail with the capture's time, so each run of `tests/e2e/test_docs_photo_walkthrough.py::test_photographs_into_pieces` redraws them though nothing on the page changed; `tests/e2e/moves_by_itself.json` does not list them. Blanking the caption, as the other captures blank what changes, would hold them still.
 
 ## Next round
 
