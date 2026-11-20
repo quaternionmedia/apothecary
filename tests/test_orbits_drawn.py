@@ -1,5 +1,5 @@
 """What the world draws of the universe's orbitals (apothecary/static/orbits.js): each
-shell's rings on its sphere, an outline round each category's cluster that holds its
+shell's rings on its sphere, an outline round each Kind's cluster that holds its
 pieces, a line from a part to each part it is built from, and which drawn loop a click
 lands nearest. The module has no DOM, so node runs it here on the universe as the
 server sends it."""
@@ -47,7 +47,7 @@ out.near = [nearestLoop([square, far], 50, 3, 6), nearestLoop([square, far], 302
     nearestLoop([square, far], 200, 50, 6), nearestLoop([square, behind], 302, 50, 6),
     nearestLoop([square, far], 50, 50, 6)];
 out.labels = out.shells.map((s) => shellLabel(s.shell, nodes));
-out.clusterLabels = out.clusters.map((c) => ({ shell: c.shell, category: c.category, label: clusterLabel(c, out.clusters) }));
+out.clusterLabels = out.clusters.map((c) => ({ shell: c.shell, kind: c.kind, label: clusterLabel(c, out.clusters) }));
 // A sphere of radius 3 seen from 5 away along x, and from inside it.
 out.limbs = [limbOf(3, [5, 0, 0]), limbOf(3, [0, 0, 2]), limbOf(3, [0, 3, 0])];
 out.faces = [facesEye([10, 0, 0], [1, 0, 0]), facesEye([10, 0, 0], [-1, 0, 0]), facesEye([10, 0, 0], [0.05, 1, 0]),
@@ -112,24 +112,27 @@ def test_a_shells_rings_are_three_great_circles_on_its_sphere_nested_in_the_next
 def test_a_clusters_outline_is_on_its_shell_and_holds_every_one_of_its_pieces(drawn):
     clusters = drawn["clusters"]
     tree = drawn["tree"]["children"]
-    pairs = {(c["shell"], c["category"]) for c in tree if c["category"]}
-    assert {(c["shell"], c["category"]) for c in clusters} == pairs
+    pairs = {(c["shell"], c["kind"]) for c in tree if c["kind"]}
+    assert {(c["shell"], c["kind"]) for c in clusters} == pairs
     by_key = {c["name"]: c for c in tree}
     for cluster, outline in zip(clusters, drawn["outlines"], strict=True):
         assert all(r == pytest.approx(cluster["radius"], rel=1e-9) for r, _ in outline)
         assert all(a == pytest.approx(cluster["angle"], abs=1e-9) for _, a in outline)
         for key in cluster["members"]:
             node = by_key[key]
-            assert node["shell"] == cluster["shell"] and node["category"] == cluster["category"]
+            assert node["shell"] == cluster["shell"] and node["kind"] == cluster["kind"]
             low, high = node["footprint"]["min"], node["footprint"]["max"]
             reach = math.hypot(*(h - lo for h, lo in zip(high, low, strict=True))) / 2
             inside = _angle(drawn["middles"][key], cluster["centre"]) + math.asin(
                 min(1, reach / cluster["radius"])
             )
             assert inside < cluster["angle"], (key, inside, cluster["angle"])
-    # The two machines, the electrical boards under them: clusters of more than one.
-    sizes = {(c["shell"], c["category"]): len(c["members"]) for c in clusters}
-    assert sizes[(1, "machine")] == 2 and sizes[(0, "electrical")] >= 4
+    # The two machines, the boards under them: clusters of more than one. A kind holds
+    # its categories' parts in one cluster on a shell: fewer clusters than categories.
+    sizes = {(c["shell"], c["kind"]): len(c["members"]) for c in clusters}
+    assert sizes[(1, "Machines")] == 2 and sizes[(0, "Electronics")] >= 4
+    on_shells = {(c["shell"], c["category"]) for c in tree if c["kind"]}
+    assert len(clusters) < len(on_shells)
 
 
 def test_a_part_is_joined_to_each_part_it_is_built_from(drawn):
@@ -149,9 +152,11 @@ def test_a_click_picks_the_drawn_loop_it_lands_nearest_within_its_reach(drawn):
 
 
 def test_outlines_on_one_shell_overlap_only_where_large_parts_make_them(drawn):
-    """An outline is as wide as its largest part's sphere needs, so caps of large
-    clusters cross: measured on the registry as it is (about one pair in twelve on the
-    first shell), and the guard is that the layout keeps most pairs apart."""
+    """An outline is a circle as wide as its kind's farthest part and that part's sphere
+    need. The kinds tile the first shell, so their circles are wide and cross: 11 pairs of
+    27 on the registry as it is on 2026-11-19, where the categories' crossed about one in
+    twelve. The guard is that the layout keeps most pairs apart; drawing each kind's own
+    edge is the sphere's to try (docs/plans/viewer-review-2026-11-19.md)."""
     caps = drawn["clusters"]
     pairs = overlapping = 0
     for i, a in enumerate(caps):
@@ -162,7 +167,7 @@ def test_outlines_on_one_shell_overlap_only_where_large_parts_make_them(drawn):
             between = math.acos(max(-1, min(1, sum(x * y for x, y in zip(a["centre"], b["centre"], strict=True)))))
             overlapping += between < a["angle"] + b["angle"]
     assert pairs > 20
-    assert overlapping <= pairs // 4
+    assert overlapping < pairs / 2, (overlapping, pairs)
 
 
 def test_a_shell_says_what_it_is_in_the_docs_words(drawn):
@@ -194,18 +199,18 @@ def test_the_piece_under_the_pointer_is_named_at_any_distance(drawn):
     assert eye == "q"
 
 
-def test_a_category_on_more_than_one_shell_names_its_shell_in_each_clusters_label(drawn):
-    """The camera's parts stand on two shells, so its two outlines are labelled by shell;
-    a category on one shell is labelled by its name alone."""
+def test_a_kind_on_more_than_one_shell_names_its_shell_in_each_clusters_label(drawn):
+    """The cameras stand on two shells, so the Cameras kind's two outlines are labelled
+    by shell; a kind on one shell is labelled by its name alone."""
     shells_of: dict = {}
     for c in drawn["clusterLabels"]:
-        shells_of.setdefault(c["category"], set()).add(c["shell"])
-    assert len(shells_of["camera"]) > 1
+        shells_of.setdefault(c["kind"], set()).add(c["shell"])
+    assert len(shells_of["Cameras"]) > 1
     for c in drawn["clusterLabels"]:
-        if len(shells_of[c["category"]]) > 1:
-            assert c["label"] == f"{c['category']} \u00b7 shell {c['shell']}"
+        if len(shells_of[c["kind"]]) > 1:
+            assert c["label"] == f"{c['kind']} \u00b7 shell {c['shell']}"
         else:
-            assert c["label"] == c["category"]
+            assert c["label"] == c["kind"]
     labels = [c["label"] for c in drawn["clusterLabels"]]
     assert len(labels) == len(set(labels)), "two outlines wear one label"
 

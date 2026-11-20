@@ -167,8 +167,9 @@ it. Depth is read from a part's SCAD `include` and `use` of another registered
 part and from sites that hold one part in another, and a part's own `parts` list
 in `part.json` wins ([parts-authoring.md](parts-authoring.md#what-a-part-is-built-from)).
 The shells are dense, so none is empty, and each stands clear of the one inside it.
-A leaf carries its part's category, and on a shell the parts of one category sit
-together, a cluster in one piece of the shell; a part stands as nearly under the
+A leaf carries its part's category, and on a shell the parts of one kind -- their
+category's ([facets](#layers), `apothecary/facets.py`) -- sit together, a cluster in one
+piece of the shell; a part stands as nearly under the
 part built from it as its shell allows, and a part several are built from stands
 under the first of them by name, so its cluster gathers under theirs
 (`apothecary/orbitals.py`).
@@ -186,15 +187,15 @@ frames the whole sphere from outside, draws no floor grid there, and the camera 
 travel inside it. At the universe's own level it draws the orbitals
 (`apothecary/static/orbits.js`): each shell's three rings, faint, in the shell's
 colour, the same three planes for every shell so the shells' rings nest; round each
-category's cluster on a shell, an outline in the category's colour, as wide as its
+kind's cluster on a shell, an outline in the kind's colour, as wide as its
 largest part needs, so on a crowded shell two outlines may cross where large parts' clusters
 meet; and from a part to
 each part it is built from, a faint line. None of them is a piece: a click passes
 through them, and they hide nothing. Each shell wears a label at its top, in its
 layer's colour and in the words of this section (`Shell 0 · built from nothing`, `Shell 1 ·
 built from those inside`, and `· sites` outermost), the words its row in Layers says too, and each cluster's outline a label with
-its category's name, and its shell's where the category has clusters on more than one
-(`camera · shell 1`); the labels are the size of the page's text at any distance, hung from
+its kind's name, and its shell's where the kind has clusters on more than one
+(`Cameras · shell 1`); the labels are the size of the page's text at any distance, hung from
 the highest point of their loop on the canvas, laid clear of one another, of the pieces drawn
 and of the hint and the depth ladder as the measurement's are laid (`layLabels`,
 `apothecary/static/measure.js`), and a label with no clear place is left out rather than
@@ -208,9 +209,10 @@ rises above any label of its measurement it would cover. Each shell's sphere is 
 its edge, the circle the eye sees it end at (`limbOf`), faint in its layer's colour, so the
 shells nest at a glance from outside; it is no filled surface, so nothing inside is tinted,
 and from inside a shell its edge is not drawn. Each is drawn while the layers it is drawn for
-are shown, a line while both its parts are; and a still click that meets no piece and
-lands on a ring or an outline opens that layer's ring ([Layers](#layers)) where it
-landed, as Ctrl+right-click there does. A part stepped into is drawn as it is made, upright and not turned
+are shown, an outline while its shell and any of its kind's categories are, a line while
+both its parts are; and a still click that meets no piece and lands on a ring or an
+outline opens that layer's ring ([Layers](#layers)) where it landed, an outline its
+kind's, as Ctrl+right-click there does. A part stepped into is drawn as it is made, upright and not turned
 as the sphere stands it, on a grid laid under it. A site's piece is drawn
 in miniature: its site's top-level pieces as boxes, coloured as the site
 colours them, a wall faded, scaled to fit and never larger than they

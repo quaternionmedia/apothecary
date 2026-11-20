@@ -217,10 +217,12 @@ Counted in the page on the day:
      are, half set when some are, and sets them all; its ring holds Shown and Selectable
      over them, then each category's ring. A chip opens every piece of its System, Kind
      or word.
-   - **The sphere by Kind.** A kind's parts sit together on their shell, one outline
-     round each, in the kind's colour and labelled with its name, drawn while its shell
-     and any of its categories are shown; a click on it opens the kind's ring. The
-     walkthrough's pictures go with the change.
+   - **The sphere by Kind** (built). A kind's parts sit together on their shell, one
+     outline round each, in the kind's colour and labelled with its name, drawn while its
+     shell and any of its categories are shown; a click on it opens the kind's ring. The
+     kinds tile the first shell, so the circle round each is wide and crosses its
+     neighbours; the outlines stay circles, a guard holding fewer than half the pairs on a
+     shell crossing, and each kind's own edge is the sphere's to try (step 4).
 5. **rad.** The rule proposed, and the `Pends on` row in the host record.
 
 ## Not seen in the page

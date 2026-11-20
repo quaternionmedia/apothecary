@@ -3011,12 +3011,14 @@
             //
             // At the universe's own level the world draws what makes the sphere read as
             // nested shells (static/orbits.js): each shell's rings, faint, in its layer's
-            // colour; round each category's cluster on a shell, an outline in the
-            // category's; and from a part to each part it is built from, a faint line. None
-            // is a piece: none is in meshByName, a ray passes through each, and a line
-            // hides nothing inside it. Each is drawn while the layers it is drawn for are
-            // shown (a link while both its pieces are drawn), and a still click that meets
-            // no piece and lands on a ring or an outline opens that layer's ring.
+            // colour; round each Kind's cluster on a shell, an outline in the Kind's
+            // (apothecary/facets.py); and from a part to each part it is built from, a faint
+            // line. None is a piece: none is in meshByName, a ray passes through each, and a
+            // line hides nothing inside it. Each is drawn while the layers it is drawn for
+            // are shown -- an outline while its shell and any of its Kind's categories are,
+            // a link while both its pieces are drawn -- and a still click that meets no
+            // piece and lands on a ring or an outline opens that layer's ring, a Kind's its
+            // heading's.
             // The universe's own pieces, each with its key: what its sphere is drawn from.
             sphereNodes() {
                 return Object.entries(this.renderNodeByKey)
@@ -3039,8 +3041,8 @@
                 const loops = [], spheres = [], labels = [];
                 // A name hung on a loop of the sphere: its text in its layer's colour, a sprite
                 // the size of the page's text (placeOrbitLabels), never hit, drawn for the layers
-                // its loop is.
-                const label = (text, layer, layers, loopPoints, from) => {
+                // its loop is (every one of `layers`, and one of `anyOf` where it is given).
+                const label = (text, layer, layers, loopPoints, from, anyOf = null) => {
                     const hex = layerHex(layer) || '#ffffff';
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
@@ -3059,7 +3061,7 @@
                     sprite.raycast = () => {};
                     sprite.userData = { w: canvas.width / 2, h: canvas.height / 2, text };
                     group.add(sprite);
-                    labels.push({ layers, text, sprite, loop: loopPoints.map((p) => sceneAt(...p)), from: sceneAt(...from) });
+                    labels.push({ layers, anyOf, text, sprite, loop: loopPoints.map((p) => sceneAt(...p)), from: sceneAt(...from) });
                 };
                 for (const { shell, radius } of shellsOf(nodes)) {
                     const layer = `shell:${shell}`;
@@ -3080,13 +3082,19 @@
                     spheres.push({ layers: [layer], object: limb, radius, shown: true });
                     label(shellLabel(shell, nodes), layer, [layer], rings.flat(), [0, 0, 0]);
                 }
+                // A Kind's cluster is drawn in its heading's colour, while its shell and any of
+                // its categories are shown.
+                const kinds = this.facets && this.facets.by === 'kind' ? this.facets.values : [];
                 const clusters = clustersOf(nodes);
                 for (const cluster of clusters) {
-                    const layer = `category:${cluster.category}`;
+                    const kind = kinds.find((k) => k.name === cluster.kind);
+                    if (!kind) continue;
+                    const layer = kind.layer, shell = `shell:${cluster.shell}`;
+                    const anyOf = kind.words.map((word) => word.layer);
                     const outline = capOutline(cluster);
-                    loops.push({ layer, layers: [`shell:${cluster.shell}`, layer], points: outline, object: draw(outline, layerColour(layer, DEFAULT_COLOR), ORBIT_OUTLINE_OPACITY, true) });
-                    label(clusterLabel(cluster, clusters), layer, [`shell:${cluster.shell}`, layer], outline,
-                        cluster.centre.map((c) => c * cluster.radius * Math.cos(cluster.angle)));
+                    loops.push({ layer, layers: [shell], anyOf, points: outline, object: draw(outline, layerColour(layer, DEFAULT_COLOR), ORBIT_OUTLINE_OPACITY, true) });
+                    label(clusterLabel(cluster, clusters), layer, [shell], outline,
+                        cluster.centre.map((c) => c * cluster.radius * Math.cos(cluster.angle)), anyOf);
                 }
                 const links = linksOf(nodes).map((link) => ({
                     ...link,
@@ -3108,11 +3116,12 @@
             applyOrbits() {
                 if (!this.orbits) return;
                 const scope = this.pickScope;
-                for (const loop of this.orbits.loops) loop.object.visible = loop.layers.every((id) => scope.isShown(id));
+                const shownFor = (it) => it.layers.every((id) => scope.isShown(id)) && (!it.anyOf || it.anyOf.some((id) => scope.isShown(id)));
+                for (const loop of this.orbits.loops) loop.object.visible = shownFor(loop);
                 for (const link of this.orbits.links) link.object.visible = [link.from, link.to].every((key) => scope.drawn(this.renderNodeByKey[key]));
                 for (const sphere of this.orbits.spheres) sphere.shown = sphere.layers.every((id) => scope.isShown(id));
                 this.orbits.eye = null;  // the shells' edges placed again
-                for (const label of this.orbits.labels) label.shown = label.layers.every((id) => scope.isShown(id));
+                for (const label of this.orbits.labels) label.shown = shownFor(label);
             }
 
             // Each frame, at the universe's own level: each shell's edge as the eye sees it
