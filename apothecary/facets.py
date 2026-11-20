@@ -14,6 +14,12 @@ Site window's chips, the Layers window, the universe's clusters and the lanes re
 Each facet has at most eight values, a ring's cells (``menu.MOST_OPTIONS``), and a value
 holds its words whole: no word is in two values of a facet.
 
+**Layers.** A piece is on one layer by its facets, beside its shell's: its System's
+(``system:building``), else its category's -- its part's, or its word's where no System holds
+the word (``category:coupon``). A Kind's (``kind:test-pieces``) is a heading over its
+categories' layers, which no piece is on itself. A System's word and a part's category may be
+spelt alike (``electrical``, ``furniture``) and are different layers.
+
 **Colours are tokens** of ``static/tokens.css``: a kind's is ``--kind-<name>``, a System's
 ``--system-<name>``, the name in lower case with a dash for a space. A token may name
 another (``var(--kind-machines)``) where a System is the same thing as a kind. A category's
@@ -61,6 +67,12 @@ SYSTEMS: Dict[str, Tuple[str, ...]] = {
 
 FACETS: Dict[str, Dict[str, Tuple[str, ...]]] = {KIND: KINDS, SYSTEM: SYSTEMS}
 
+# The layers of the world a piece is on by its facets (``layer_colours.py``,
+# ``static/pick_scope.js``).
+SYSTEM_LAYER = "system:"
+KIND_LAYER = "kind:"
+CATEGORY_LAYER = "category:"
+
 # How far apart a kind's categories are in lightness, and across how much at most.
 STEP = 10.0
 SPAN = 40.0
@@ -85,11 +97,36 @@ def system_of(word: Optional[str]) -> Optional[str]:
     return _holder(SYSTEM, word) if word else None
 
 
-def token(facet: str, name: str) -> str:
-    """The token that colours ``name`` of ``facet``: ``--kind-test-pieces``."""
+def _slug(facet: str, name: str) -> str:
     if name not in FACETS[facet]:
         raise KeyError(f"{name!r} is no {facet}: {', '.join(FACETS[facet])}")
-    return f"--{facet}-{name.lower().replace(' ', '-')}"
+    return name.lower().replace(" ", "-")
+
+
+def token(facet: str, name: str) -> str:
+    """The token that colours ``name`` of ``facet``: ``--kind-test-pieces``."""
+    return f"--{facet}-{_slug(facet, name)}"
+
+
+def layer(facet: str, name: str) -> str:
+    """The layer of ``name`` of ``facet``: a System's, ``system:building``, which its pieces
+    are on; a Kind's, ``kind:test-pieces``, a heading over its categories' layers."""
+    return f"{SYSTEM_LAYER if facet == SYSTEM else KIND_LAYER}{_slug(facet, name)}"
+
+
+def named(layer_id: str) -> Optional[Tuple[str, str]]:
+    """The facet and value a System's or a Kind's layer is of, or None for another layer."""
+    for facet, prefix in ((SYSTEM, SYSTEM_LAYER), (KIND, KIND_LAYER)):
+        if layer_id.startswith(prefix):
+            for name in FACETS[facet]:
+                if layer(facet, name) == layer_id:
+                    return facet, name
+    return None
+
+
+def category_layer(word: str) -> str:
+    """The layer of a category, a part's or a word no System holds: ``category:coupon``."""
+    return f"{CATEGORY_LAYER}{word}"
 
 
 def token_colour(variable: str, sheet: Optional[str] = None) -> str:
@@ -183,29 +220,44 @@ def _composed(node) -> list:
     ]
 
 
-def _pieces(site) -> Iterator[Tuple[str, object, Optional[str]]]:
-    """Every node beneath ``site``'s root with its dotted path and its word: its own, else
-    the nearest above it that has one. A site's piece in the universe is one node: what it
-    is drawn as is no level (``layer_colours.layers_in`` reads a tree the same way)."""
+Piece = Tuple[str, object, Optional[str], Optional[str]]
 
-    def visit(
-        node, path: str, inherited: Optional[str]
-    ) -> Iterator[Tuple[str, object, Optional[str]]]:
-        own = getattr(node, "category", None)
-        word = own if own is not None else inherited
-        yield path, node, word
+
+def _own(node, name: str, inherited: Optional[str]) -> Optional[str]:
+    own = getattr(node, name, None)
+    return own if own is not None else inherited
+
+
+def _pieces(site, under: str = "") -> Iterator[Piece]:
+    """Every node beneath the node at dotted path ``under`` (the site's root where it is
+    empty), with its dotted path, its word and its part: each its own, else the nearest
+    above it that has one, so a piece of a part is of that part. A site's piece in the
+    universe is one node: what it is drawn as is no level (``layer_colours.shells_in``
+    reads a tree the same way). Nothing where ``under`` names no node."""
+
+    def visit(node, path: str, word: Optional[str], part: Optional[str]) -> Iterator[Piece]:
+        word, part = _own(node, "category", word), _own(node, "part_ref", part)
+        yield path, node, word, part
         if getattr(node, "site_ref", None) is None:
             for child in _composed(node):
-                yield from visit(child, f"{path}.{child.name}", word)
+                yield from visit(child, f"{path}.{child.name}", word, part)
 
-    for child in _composed(site):
-        yield from visit(child, child.name, getattr(site, "category", None))
+    top, prefix = site, ""
+    word, part = getattr(site, "category", None), None
+    for name in (n for n in under.split(".") if n):
+        top = next((c for c in _composed(top) if c.name == name), None)
+        if top is None or getattr(top, "site_ref", None) is not None:
+            return
+        word, part = _own(top, "category", word), _own(top, "part_ref", part)
+        prefix = f"{prefix}{name}."
+    for child in _composed(top):
+        yield from visit(child, f"{prefix}{child.name}", word, part)
 
 
 def facet_of(site) -> str:
     """The facet ``site`` is grouped by: Kind in the universe, whose pieces lie on its
     shells, and System in a site, whose pieces lie on none."""
-    on_shells = any(getattr(node, "shell", None) is not None for _, node, _ in _pieces(site))
+    on_shells = any(getattr(node, "shell", None) is not None for _, node, _, _ in _pieces(site))
     return KIND if on_shells else SYSTEM
 
 
@@ -225,6 +277,17 @@ def kind_and_system(
     return (kind_of(word) if system is None else None), system
 
 
+def layer_of(by: str, word: Optional[str], part_category: Optional[str]) -> Optional[str]:
+    """The layer a piece is on beside its shell's: its System's, else its category's -- its
+    part's, or its word's where no System holds its word (datum_core's enclosure, a
+    picture's word); None for a piece with neither (a site's piece in the universe)."""
+    _, system = kind_and_system(by, word, part_category)
+    if system is not None:
+        return layer(SYSTEM, system)
+    category = part_category or word
+    return category_layer(category) if category else None
+
+
 def kinds_and_systems(
     site, part_category: Callable[[str], Optional[str]] = lambda _: None
 ) -> Dict[str, Tuple[Optional[str], Optional[str]]]:
@@ -232,9 +295,8 @@ def kinds_and_systems(
     (``kind_and_system``), ``part_category`` giving a part's category by its name."""
     by = facet_of(site)
     found: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
-    for path, node, word in _pieces(site):
-        ref = getattr(node, "part_ref", None)
-        found[path] = kind_and_system(by, word, part_category(ref) if ref else None)
+    for path, _, word, part in _pieces(site):
+        found[path] = kind_and_system(by, word, part_category(part) if part else None)
     return found
 
 
@@ -246,43 +308,59 @@ def _value(facet: str, name: str, words_present: Iterable[str]) -> Dict[str, obj
     own = colour(facet, name)
     tints = shades(own, len(words)) if facet == KIND else [own] * len(words)
     here = set(words_present)
+    held = layer(facet, name)
     return {
         "name": name,
         "token": token(facet, name),
+        "layer": held,
         "colour": own,
-        "words": [{"word": w, "colour": tints[i]} for i, w in enumerate(words) if w in here],
+        "words": [
+            {
+                "word": w,
+                "layer": held if facet == SYSTEM else category_layer(w),
+                "colour": tints[i],
+            }
+            for i, w in enumerate(words)
+            if w in here
+        ],
     }
 
 
 def facets_of(
-    site, part_category: Callable[[str], Optional[str]] = lambda _: None
+    site, part_category: Callable[[str], Optional[str]] = lambda _: None, under: str = ""
 ) -> Dict[str, object]:
-    """What the page groups ``site``'s pieces by, sent with it beside ``layer_colours``:
+    """What the page groups ``site``'s pieces by, sent with it beside ``layer_colours``,
+    and what the ring's cells and the Site and Layers windows list, in this order:
 
     - ``by``, the facet: ``kind`` in the universe, ``system`` in a site;
     - ``values``, each of its values the site has, in the vocabulary's order, with its
-      token, its colour and its words the site has, each with its colour;
-    - ``loose``, the words the site has that no value holds, by name;
+      token, its layer, its colour and its words the site has, each with its layer and
+      its colour;
     - ``kinds``, in a site, the kinds its pieces with no System are grouped by, each as a
-      value is, its words the categories those pieces are of.
+      value is, its words the categories those pieces are of;
+    - ``loose``, the words its pieces are of that neither holds (a picture's word), by
+      name, each with its layer.
 
-    ``part_category`` gives a part's category by its name, for a piece that is a part."""
+    ``part_category`` gives a part's category by its name, for a piece that is a part or
+    in one. ``under`` is the dotted path of the level in view: what lies beneath it."""
     by = facet_of(site)
     words: set = set()
     loose_kinds: Dict[str, set] = {}
-    for _, node, word in _pieces(site):
+    others: set = set()
+    for _, _, word, part in _pieces(site, under):
         if word:
             words.add(word)
-        ref = getattr(node, "part_ref", None)
-        category = part_category(ref) if ref else None
+        category = part_category(part) if part else None
         kind, system = kind_and_system(by, word, category)
         if by == SYSTEM and system is None and kind is not None:
             loose_kinds.setdefault(kind, set()).add(category or word)
+        elif system is None and kind is None and (category or word):
+            others.add(category or word)
     values = [_value(by, name, words) for name, held in FACETS[by].items() if words & set(held)]
     kinds = [_value(KIND, name, loose_kinds[name]) for name in KINDS if name in loose_kinds]
     return {
         "by": by,
         "values": values,
-        "loose": sorted(w for w in words if _holder(by, w) is None),
         "kinds": kinds,
+        "loose": [{"word": w, "layer": category_layer(w)} for w in sorted(others)],
     }

@@ -159,6 +159,13 @@ Counted in the page on the day:
    group and nothing else, and a long list's runs are named by their letters.
 7. **The rule goes to rad once it is built here**, with this page as its worked example.
    Until rad takes it, the host record carries a `Pends on` row naming rad.
+8. **Layers are Systems and categories.** A site's piece with a System is on that
+   System's layer (`system:building` is the walls'); every other piece -- the universe's
+   parts, a site's loose parts, datum_core's tray, a picture's word -- is on its
+   category's (`category:coupon`), a part's or its word's. A Kind is a heading over its
+   categories' layers, its ticks acting on them all. A System's word and a part's
+   category spelt alike (`electrical`, `furniture`) are two layers in two colours. A
+   piece inside a part is of that part.
 
 ## Built with them
 
@@ -201,9 +208,19 @@ Counted in the page on the day:
      with its knobs and Docs under Tools. A test holds the groups to a ring and each
      window's door to its group's cell. The Bench's, Docs', the Deck's and the Loops'
      addresses move with them.
-4. **The page.** Site's chips, the Layers window's categories under their kinds, and the
-   sphere's clusters by Kind, from the one list function. The walkthrough's pictures go
-   with the change.
+4. **The page.** Built in two parts.
+   - **Layers and chips by facet** (built). Each piece is sent with its `layer`; the
+     colours are the facets' and the table of category colours is gone. The Layers
+     window, Site's chips, the ring's View › Layers and its Kinds or Systems cell list
+     what lies beneath the level in view, in the facets' order: Systems, then Kinds each
+     over its categories, then words. A Kind's heading is set when all its categories
+     are, half set when some are, and sets them all; its ring holds Shown and Selectable
+     over them, then each category's ring. A chip opens every piece of its System, Kind
+     or word.
+   - **The sphere by Kind.** A kind's parts sit together on their shell, one outline
+     round each, in the kind's colour and labelled with its name, drawn while its shell
+     and any of its categories are shown; a click on it opens the kind's ring. The
+     walkthrough's pictures go with the change.
 5. **rad.** The rule proposed, and the `Pends on` row in the host record.
 
 ## Not seen in the page

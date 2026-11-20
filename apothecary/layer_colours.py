@@ -2,9 +2,10 @@
 (docs/viewer.md, "Layers").
 
 A layer is named as the pick scope names it (``static/pick_scope.js``): ``shell:N``,
-``category:NAME``, ``grid``, ``machine-buttons``, ``measure``. Its colour is used for what
-it draws in the world -- a shell's rings, a category's pieces and the outline round its
-cluster on a shell, the build volumes, the badges, the measurement -- and for its cells of
+``system:NAME``, ``category:NAME``, ``kind:NAME`` (a heading over its categories' layers,
+``facets.py``), ``grid``, ``machine-buttons``, ``measure``. Its colour is used for what it
+draws in the world -- a shell's rings, a System's or a category's pieces, the outline round
+a cluster on a shell, the build volumes, the badges, the measurement -- and for its cells of
 the ring and its row of the Layers window, so a person who sees a colour in one place knows
 it in the others. The page is told the colours of the layers a site has, with the site
 (``layer_colours``); the ring's cells carry theirs (``apothecary/menu.py``).
@@ -13,12 +14,14 @@ it in the others. The page is told the colours of the layers a site has, with th
   drawn in; the machines' buttons', the Machine group's own (``static/tokens.css``), since
   the badges it draws wear it; the measurement's.
 - **A shell's**, by its number, innermost first, and from the first again past the last.
-- **A category's**, written down below, or for a word nobody wrote down (a picture's word
-  is whatever the vocabulary holds) taken from its name, the same every time.
+- **A System's, a Kind's and a category's** are the facets' (``facets.py``, their tokens):
+  a category a shade of its kind's. A word neither facet holds (a picture's word is
+  whatever the vocabulary holds) takes a colour from its name, the same every time.
 
-Each colour written down is held apart from the others, from the colours that mean a
-state and from the groups' (``tests/test_layer_colours.py``): the badges a machine wears
-are the one place a layer and a group share a colour, being the same thing.
+The shells' and the world's own are held apart from each other, from the colours that mean
+a state and from the groups' (``tests/test_layer_colours.py``), and the facets' from them
+(``tests/test_facets.py``): the badges a machine wears are the one place a layer and a
+group share a colour, being the same thing.
 """
 
 from __future__ import annotations
@@ -26,13 +29,16 @@ from __future__ import annotations
 import math
 import re
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
+
+from .facets import CATEGORY_LAYER as CATEGORY
+from .facets import SYSTEM, category_shade, facets_of, layer_of, named
+from .facets import colour as facet_colour
 
 GRID = "grid"
 MACHINE_BUTTONS = "machine-buttons"
 MEASURE = "measure"
 SHELL = "shell:"
-CATEGORY = "category:"
 
 TOKENS = Path(__file__).resolve().parent / "static" / "tokens.css"
 
@@ -53,42 +59,10 @@ WORLD: Dict[str, str] = {
     MEASURE: "#ff2fd0",
 }
 
-# Innermost first. Bright and saturated, apart from the categories' quieter colours, so
-# a shell's rings are not read as a category's outline; and none the measurement's hue,
+# Innermost first. Bright and saturated, apart from the facets' quieter colours, so
+# a shell's rings are not read as a cluster's outline; and none the measurement's hue,
 # which is drawn over them.
 SHELLS: Tuple[str, ...] = ("#3d7eff", "#b06cff", "#ff6a00", "#f2f2f2", "#c8ff3e", "#0099ff")
-
-# Written down, in the order the Site window's chips list them. The first eight are the
-# sites' subsystems and the theatre's (theatre_site.py); the rest are the parts'
-# categories, the universe's clusters, each chosen apart from every colour above it and
-# from the colours that mean a state, which a piece's row in Site wears beside it.
-CATEGORIES: Dict[str, str] = {
-    "wall": "#9c8f7a",
-    "furniture": "#8a5a3c",
-    "mechanical": "#5b7a99",
-    "fluid": "#2f8fbf",
-    "electrical": "#d8c11a",
-    "lighting": "#e8a33a",
-    "scenic": "#8f7bb5",
-    "structure": "#b27774",
-    "electromechanical": "#bb44aa",
-    # The Machines kind's and System's, a machine part's category and a site's word for
-    # a machine (apothecary/facets.py).
-    "machine": _token("--kind-machines"),
-    "calibration": "#777700",
-    "misc": "#bb4411",
-    "enclosure": "#aa5566",
-    "appliance": "#ff99ff",
-    "music": "#117777",
-    "electronics": "#00bb88",
-    "storage": "#996611",
-    "tooling": "#00ccee",
-    "cookie-cutter": "#8866cc",
-    "coupon": "#cc3344",
-    "rc": "#88bb88",
-    "hardware": "#eeaaaa",
-    "camera": "#558800",
-}
 
 
 def _hsl(hue: float, saturation: float, lightness: float) -> str:
@@ -104,11 +78,13 @@ def _hsl(hue: float, saturation: float, lightness: float) -> str:
 
 
 def category_colour(name: str) -> str:
-    """A category's colour: written down, else from its name -- its UTF-16 units folded
-    as ``hash * 31 + unit`` in 32 bits, the hue that hash's remainder by 360, at 42 %
-    saturation and 55 % lightness."""
-    if name in CATEGORIES:
-        return CATEGORIES[name]
+    """A category's colour: a shade of its kind's (``facets.category_shade``), else, for a
+    word no kind holds, from its name -- its UTF-16 units folded as ``hash * 31 + unit``
+    in 32 bits, the hue that hash's remainder by 360, at 42 % saturation and 55 %
+    lightness."""
+    shade = category_shade(name)
+    if shade is not None:
+        return shade
     folded = 0
     units = name.encode("utf-16-le")
     for i in range(0, len(units), 2):
@@ -129,7 +105,13 @@ def colour_of(layer: str) -> str:
         return shell_colour(int(layer[len(SHELL) :]))
     if layer.startswith(CATEGORY):
         return category_colour(layer[len(CATEGORY) :])
-    raise KeyError(f"{layer!r} names no layer: shell:N, category:NAME, {', '.join(WORLD)}")
+    value = named(layer)
+    if value is not None:
+        return facet_colour(*value)
+    raise KeyError(
+        f"{layer!r} names no layer: shell:N, system:NAME, kind:NAME, category:NAME, "
+        f"{', '.join(WORLD)}"
+    )
 
 
 # A node is read for what it holds: a site's tree is Assemblies, and anything else handed
@@ -146,43 +128,35 @@ def _field(node, name: str):
     return getattr(node, name, None)
 
 
-def layers_in(site) -> Tuple[List[int], List[str]]:
-    """The shells and the categories ``site``'s nodes are on, as the page reads them from
-    its tree: every node beneath the root, a category inherited from the nearest node
-    above that has one, a site's piece in the universe one node (what it is drawn as is
-    no level). Shells innermost first; categories in the order the chips list them."""
+def shells_in(site) -> List[int]:
+    """The shells ``site``'s nodes are on, innermost first, as the page reads them from its
+    tree: every node beneath the root, a site's piece in the universe one node (what it is
+    drawn as is no level)."""
     shells: Set[int] = set()
-    categories: Set[str] = set()
 
-    def visit(node, inherited: Optional[str]) -> None:
-        own = _field(node, "category")
-        category = own if own is not None else inherited
+    def visit(node) -> None:
         if _field(node, "shell") is not None:
             shells.add(node.shell)
-        if category:
-            categories.add(category)
         if _field(node, "site_ref") is None:
             for child in _composed(node):
-                visit(child, category)
+                visit(child)
 
     for child in _composed(site):
-        visit(child, _field(site, "category"))
-    return sorted(shells), _chip_order(categories)
+        visit(child)
+    return sorted(shells)
 
 
-def _chip_order(categories: Iterable[str]) -> List[str]:
-    """Those written down first, in the order they are, then the rest by name."""
-    present = set(categories)
-    return [c for c in CATEGORIES if c in present] + sorted(present - set(CATEGORIES))
-
-
-def _drawn_small(site) -> Set[str]:
-    """The categories of the boxes a site's piece in the universe is drawn as."""
-    found: Set[str] = set()
+def _drawn_small(site) -> List[str]:
+    """The layers of the boxes a site's piece in the universe is drawn as: each box's in
+    its own site, by its word."""
+    found: List[str] = []
 
     def visit(node) -> None:
         if _field(node, "site_ref") is not None:
-            found.update(box.category for box in _composed(node) if _field(box, "category"))
+            for box in _composed(node):
+                layer = layer_of(SYSTEM, _field(box, "category"), None)
+                if layer is not None and layer not in found:
+                    found.append(layer)
             return
         for child in _composed(node):
             visit(child)
@@ -191,14 +165,21 @@ def _drawn_small(site) -> Set[str]:
     return found
 
 
-def layer_colours(site) -> Dict[str, str]:
-    """Every colour the page draws ``site`` with, by layer: its shells, its categories --
-    those of its nodes and those of the boxes a site's piece is drawn as -- in the chips'
-    order, then the world's own."""
-    shells, categories = layers_in(site)
-    named = _chip_order([*categories, *_drawn_small(site)])
-    return {
-        **{f"{SHELL}{n}": shell_colour(n) for n in shells},
-        **{f"{CATEGORY}{c}": category_colour(c) for c in named},
-        **WORLD,
-    }
+def layer_colours(
+    site, part_category: Callable[[str], Optional[str]] = lambda _: None
+) -> Dict[str, str]:
+    """Every colour the page draws ``site`` with, by layer: its shells; then, as the facets
+    list them (``facets.facets_of``), each value and each kind its pieces are grouped by,
+    a heading, and its words' layers; the words neither holds; the layers of the boxes a
+    site's piece in the universe is drawn as; then the world's own."""
+    sent = facets_of(site, part_category)
+    found: Dict[str, str] = {f"{SHELL}{n}": shell_colour(n) for n in shells_in(site)}
+    for group in (*sent["values"], *sent["kinds"]):
+        found[group["layer"]] = group["colour"]
+        for word in group["words"]:
+            found.setdefault(word["layer"], word["colour"])
+    for word in sent["loose"]:
+        found.setdefault(word["layer"], colour_of(word["layer"]))
+    for layer in _drawn_small(site):
+        found.setdefault(layer, colour_of(layer))
+    return {**found, **WORLD}

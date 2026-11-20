@@ -12,7 +12,7 @@ from page_modules import HAVE_NODE, run_module
 pytestmark = pytest.mark.skipif(not HAVE_NODE, reason="node is not installed")
 
 SCRIPT = """
-import { hideFor, gridWanted, layerKinds, redrawsLevel, layersSaid, mountLayersWorld, BY_LAYER } from "/static/layers_world.js";
+import { hideFor, gridWanted, layersInView, pieceLayers, redrawsLevel, layersSaid, mountLayersWorld, BY_LAYER } from "/static/layers_world.js";
 import { makePickScope, GRID, MEASURE, WALL, MACHINE_BUTTONS } from "/static/pick_scope.js";
 const store = () => { const m = new Map(); return {
     getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k) }; };
@@ -34,10 +34,28 @@ out.grid = { universe: at("apothecary", []), stepped: at("apothecary", ["dust_po
 s.setShown(GRID, false);
 out.grid.hidden = [at("garage", []), at("garage", ["printer_1"]), at("apothecary", ["dust_port"])];
 
-out.kinds = layerKinds({ children: [
-    { shell: 2, category: "part", children: [{ shell: 0, category: "bolt", children: [] }] },
-    { category: "wall", children: [] }, { shell: 1, children: [] }] });
-out.noKinds = layerKinds(null);
+// The site's facets as sent (apothecary/facets.py), and the nodes beneath a level.
+const word = (w, layer, colour = "#000000") => ({ word: w, layer, colour });
+const facets = {
+    by: "system",
+    values: [
+        { name: "Building", layer: "system:building", colour: "#9c8f7a", words: [word("wall", "system:building")] },
+        { name: "Machines", layer: "system:machines", colour: "#e07a5f", words: [word("machine", "system:machines")] },
+    ],
+    kinds: [
+        { name: "Electronics", layer: "kind:electronics", colour: "#3a9e5c", words: [word("electrical", "category:electrical"), word("electronics", "category:electronics")] },
+        { name: "Test pieces", layer: "kind:test-pieces", colour: "#b8b030", words: [word("coupon", "category:coupon")] },
+    ],
+    loose: [{ word: "pegboard", layer: "category:pegboard" }, { word: "crate", layer: "category:crate" }],
+};
+const inView = [
+    { layer: "system:machines" }, { layer: "system:machines" }, { layer: "category:electronics" },
+    { layer: "category:pegboard" }, { shell: 2, layer: null }, { shell: 0 },
+];
+out.groups = layersInView(facets, inView);
+out.pieceLayers = pieceLayers(out.groups);
+out.universeGroups = layersInView({ by: "kind", values: facets.kinds, kinds: [], loose: [] }, [{ shell: 1, layer: "category:coupon" }]);
+out.noGroups = layersInView(null, null);
 out.redraws = [{ depth: 2 }, { reset: true }, { loaded: true }, { layer: GRID, shown: false }, { layer: "shell:1", selectable: false }, null].map(redrawsLevel);
 
 const walls = () => "Select walls: on";
@@ -46,6 +64,7 @@ out.said = [
     { layer: MEASURE, shown: true }, { layer: MEASURE, shown: false },
     { layer: "shell:2", only: true }, { layers: [GRID, MACHINE_BUTTONS], all: true },
     { layer: "category:bolt", shown: false }, { layer: "shell:0", shown: true },
+    { layer: "system:machines", shown: false }, { layer: "kind:test-pieces", layers: ["category:coupon"], shown: true },
     { layer: "shell:3", selectable: false }, { layer: "shell:3", selectable: true }, { loaded: true }, null,
 ].map((what) => layersSaid(what, { wallsSaid: walls }));
 
@@ -55,7 +74,7 @@ const meshes = { a: thing(), b: thing(), "a.inner": thing() };
 const overlays = { a: thing() };
 const volumes = { printer_1: thing() };
 const grid = thing();
-const nodes = { a: { shell: 1, category: "part" }, b: { category: "wall" }, "a.inner": { shell: 0, category: "bolt" } };
+const nodes = { a: { shell: 1, layer: "category:part" }, b: { layer: WALL }, "a.inner": { shell: 0, layer: "category:bolt" } };
 const calls = [];
 const scope = makePickScope({ storage: store() });
 let place = { site: "garage", focusPath: [] };
@@ -100,9 +119,22 @@ def test_the_grid_is_wanted_where_there_is_a_floor_and_the_layer_is_shown(result
     assert grid["hidden"] == [False, False, False]
 
 
-def test_the_windows_rows_are_the_shells_and_categories_the_site_has(result):
-    assert result["kinds"] == {"shells": [0, 1, 2], "categories": ["bolt", "part", "wall"]}
-    assert result["noKinds"] == {"shells": [], "categories": []}
+def test_the_windows_rows_are_the_shells_and_facets_beneath_the_level_in_view(result):
+    """A System where a piece in view is on its layer; a Kind with those of its
+    categories pieces are on, where there is one; a word as the System is; in the
+    facets' order, and the shells innermost first."""
+    groups = result["groups"]
+    assert groups["shells"] == [0, 2]
+    assert [value["name"] for value in groups["systems"]] == ["Machines"]
+    assert [(kind["name"], [w["word"] for w in kind["words"]]) for kind in groups["kinds"]] == [
+        ("Electronics", ["electronics"])
+    ]
+    assert [word["word"] for word in groups["words"]] == ["pegboard"]
+    assert result["pieceLayers"] == ["system:machines", "category:electronics", "category:pegboard"]
+    universe = result["universeGroups"]
+    assert universe["systems"] == [] and universe["shells"] == [1]
+    assert [kind["name"] for kind in universe["kinds"]] == ["Test pieces"]
+    assert result["noGroups"] == {"shells": [], "systems": [], "kinds": [], "words": []}
 
 
 def test_a_depth_a_reset_and_a_scope_read_back_draw_the_level_again(result):
@@ -118,10 +150,12 @@ def test_each_change_is_said_in_its_own_words(result):
         "Measure: on. A click drops a point and reads the diameter or the wall under it, selecting "
         "nothing; a second reads the distance, a third starts again (Escape too)",
         "Measure: off, a click selects again",
-        "Shell 2 alone of its kind shown: the others hidden, and a click passes through them",
+        "Shell 2 alone of its set shown: the others hidden, and a click passes through them",
         "Every one shown: Alignment grid, Machine buttons",
         "bolt: hidden, and a click passes through it",
         "Shell 0: shown",
+        "Machines: hidden, and a click passes through it",
+        "Test pieces: shown",
         "Shell 3: a click passes through it",
         "Shell 3: a click picks it",
         None,

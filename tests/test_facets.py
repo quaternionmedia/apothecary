@@ -20,14 +20,18 @@ from apothecary.facets import (
     SYSTEMS,
     category_shade,
     colour,
+    facets_of,
     kind_and_system,
     kind_of,
+    layer,
+    layer_of,
+    named,
     shades,
     system_of,
     token,
     token_colour,
 )
-from apothecary.layer_colours import SHELLS, WORLD, layers_in
+from apothecary.layer_colours import SHELLS, WORLD
 from apothecary.menu import MOST_OPTIONS
 from apothecary.projects.parts.skeleton import ROOT
 
@@ -127,7 +131,7 @@ def test_every_word_a_site_uses_is_a_systems_or_named_loose():
     for name in sites.store.names():
         site = sites.store.get(name)
         if facets.facet_of(site) == SYSTEM:
-            used |= set(layers_in(site)[1])
+            used |= {word for _, _, word, _ in facets._pieces(site) if word}
     assert used
     assert {w for w in used if system_of(w) is None} == LOOSE
 
@@ -286,8 +290,9 @@ def test_a_site_is_grouped_by_system_its_loose_words_named():
 
 def test_a_site_built_round_one_part_is_grouped_by_its_words_kind():
     sent = client.get("/sites/datum_core").json()["facets"]
-    assert sent["values"] == [] and sent["loose"] == ["enclosure"]
+    assert sent["values"] == [] and sent["loose"] == []
     assert [v["name"] for v in sent["kinds"]] == ["Housings"]
+    assert sent["kinds"][0]["words"][0]["layer"] == "category:enclosure"
 
 
 # --- each piece's kind and System --------------------------------------------------------
@@ -319,7 +324,8 @@ def test_each_piece_of_the_garage_is_sent_with_its_kind_and_system():
     pieces = dict(_pieces(client.get("/sites/garage").json()["tree"]))
     expected = {
         "printer_1": ("Machines", "Machines"),
-        "printer_1.frame_system": (None, "Machines"),
+        # A piece inside a part is of that part.
+        "printer_1.frame_system": ("Machines", "Machines"),
         "printer_1.frame_system.mainboard": ("Electronics", "Machines"),
         "cnc_router.frame_system.controller": ("Electronics", "Machines"),
         "cnc_stand": (None, "Furniture"),
@@ -345,3 +351,76 @@ def test_every_piece_is_grouped_by_a_system_or_a_kind(name):
         if node["kind"] is None and node["system"] is None and node["site_ref"] is None
     ]
     assert ungrouped == []
+
+
+# --- layers ---------------------------------------------------------------------------------
+
+
+def test_a_value_is_named_as_a_layer_and_read_back():
+    assert layer(SYSTEM, "Building") == "system:building"
+    assert layer(KIND, "Test pieces") == "kind:test-pieces"
+    assert layer(SYSTEM, "Machines") != layer(KIND, "Machines")
+    for facet, values in ((KIND, KINDS), (SYSTEM, SYSTEMS)):
+        for name in values:
+            assert named(layer(facet, name)) == (facet, name)
+    assert named("category:coupon") is None and named("system:nowhere") is None
+    with pytest.raises(KeyError):
+        layer(SYSTEM, "Plumbing and heating")
+
+
+def test_a_piece_is_on_its_systems_layer_else_its_categorys():
+    # A site: its System's, whatever its part; loose, its part's category's, else its word's.
+    assert layer_of(SYSTEM, "wall", None) == "system:building"
+    assert layer_of(SYSTEM, "machine", "machine") == "system:machines"
+    assert layer_of(SYSTEM, None, "coupon") == "category:coupon"
+    assert layer_of(SYSTEM, "enclosure", None) == "category:enclosure"
+    assert layer_of(SYSTEM, "pegboard", None) == "category:pegboard"
+    assert layer_of(SYSTEM, None, None) is None
+    # The universe: its category's, the word being its part's.
+    assert layer_of(KIND, "furniture", "furniture") == "category:furniture"
+    assert layer_of(KIND, None, None) is None
+
+
+def test_a_systems_word_and_a_part_category_spelt_alike_are_two_layers():
+    """The bench's boards are electrical parts and the wiring the Electrical System's; the
+    whiteboard a furniture part and the workbench the Furniture System's."""
+    pieces = dict(_pieces(client.get("/sites/garage").json()["tree"]))
+    assert pieces["arduino_uno"]["layer"] == "category:electrical"
+    assert pieces["electrical"]["layer"] == "system:electrical"
+    assert pieces["whiteboard"]["layer"] == "category:furniture"
+    assert pieces["workbench"]["layer"] == "system:furniture"
+    assert pieces["printer_1.frame_system.mainboard"]["layer"] == "system:machines"
+    assert pieces["garage_building.north_wall"]["layer"] == "system:building"
+
+
+@pytest.mark.parametrize("name", ["garage", "theatre", "datum_core", "apothecary"])
+def test_every_piece_is_on_a_layer_its_site_sends_a_colour_for(name):
+    body = client.get(f"/sites/{name}").json()
+    for path, node in _pieces(body["tree"]):
+        if node["site_ref"] is None:
+            assert node["layer"] in body["layer_colours"], path
+
+
+def test_a_values_words_carry_their_layers():
+    sent = client.get("/sites/garage").json()["facets"]
+    for value in sent["values"]:
+        assert value["layer"] == layer(SYSTEM, value["name"])
+        assert all(w["layer"] == value["layer"] for w in value["words"])
+    for kind in sent["kinds"]:
+        assert kind["layer"] == layer(KIND, kind["name"])
+        assert all(w["layer"] == f"category:{w['word']}" for w in kind["words"])
+
+
+def test_the_facets_beneath_a_level_are_those_of_what_lies_beneath_it():
+    garage = sites.store.get("garage")
+    inside = facets_of(garage, api.part_category, "printer_1")
+    assert [v["name"] for v in inside["values"]] == ["Machines"]
+    assert inside["kinds"] == [] and inside["loose"] == []
+    stand = facets_of(garage, api.part_category, "cnc_stand")
+    assert [v["name"] for v in stand["values"]] == ["Furniture"] and stand["kinds"] == []
+    # A part with nothing inside it has nothing beneath it.
+    coupon = facets_of(garage, api.part_category, "router_coupon")
+    assert coupon["values"] == [] and coupon["kinds"] == []
+    nowhere = facets_of(garage, api.part_category, "no_such_piece")
+    assert nowhere["values"] == [] and nowhere["kinds"] == [] and nowhere["loose"] == []
+    assert facets_of(garage, api.part_category, "") == facets_of(garage, api.part_category)

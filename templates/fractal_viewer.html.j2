@@ -893,13 +893,13 @@
         import { TransformControls } from 'three/addons/controls/TransformControls.js';
         import { STLLoader } from 'three/addons/loaders/STLLoader.js';
         import { mountAnchors } from '/static/anchors.js';
-        import { makePickScope, kindOf, WALL as WALL_LAYER, GRID as GRID_LAYER, MACHINE_BUTTONS as BUTTONS_LAYER, MEASURE as MEASURE_LAYER } from '/static/pick_scope.js';
-        import { takeLayerColours, layerColour, layerHex, categoriesInOrder } from '/static/layer_colours.js';
+        import { makePickScope, setOf, WALL as WALL_LAYER, GRID as GRID_LAYER, MACHINE_BUTTONS as BUTTONS_LAYER, MEASURE as MEASURE_LAYER } from '/static/pick_scope.js';
+        import { takeLayerColours, layerColour, layerHex } from '/static/layer_colours.js';
         import { shellsOf, ringsOf, clustersOf, capOutline, linksOf, nearestLoop, middleOf, shellLabel, clusterLabel, limbOf, facesEye, pieceNear } from '/static/orbits.js';
         import { ownExtents, sizeFromSceneBox, turnedExtents, turnRowsInScene, turnedBounds, between, gap as gapBetween, nearestWithin, length as mmText, fieldMm, layLabels } from '/static/measure.js';
         import { ADAPTER, presetStaged, endOf, betweenBody, paramsKey, label as endLabel } from '/static/ends.js';
         import { mountMeasureWorld } from '/static/measure_world.js';
-        import { mountLayersWorld, hideFor as hideForReason, BY_LAYER, layerKinds as layerKindsOf, layersSaid as layersSaidOf } from '/static/layers_world.js';
+        import { mountLayersWorld, hideFor as hideForReason, BY_LAYER, layersInView, pieceLayers, layersSaid as layersSaidOf } from '/static/layers_world.js';
         import { mountPanels } from '/static/panels.js';
         import { setReason } from '/static/can.js';
         import { clock, stamp, dims } from '/static/format.js';
@@ -997,19 +997,17 @@
             return 'No parameters declared.';
         }
 
-        // Subsystem colors -- a node's own ``category`` if set, else
-        // whatever the nearest ancestor's was (already resolved server-side,
-        // see api.py's _assembly_tree docstring on category inheritance).
-        // Each is its layer's colour, the one table the server sends with the
-        // site (apothecary/layer_colours.py, static/layer_colours.js): a word
-        // nobody wrote down, a picture's, is given one from its name there, the
-        // same every time. Distinct from PART_COLOR/SUBTRACTION_COLOR/
-        // STATUS_COLORS, which all still take priority over this (see
-        // colorMesh) -- category is what everything *else* falls back to,
-        // before DEFAULT_COLOR.
+        // A piece's System's or category's colour -- its layer's (node.layer, resolved
+        // server-side from its word and its part, apothecary/facets.py), the one table
+        // the server sends with the site (apothecary/layer_colours.py,
+        // static/layer_colours.js): a word nobody wrote down, a picture's, is given one
+        // from its name there, the same every time. Distinct from PART_COLOR/
+        // SUBTRACTION_COLOR/STATUS_COLORS, which all still take priority over this (see
+        // colorMesh) -- the layer is what everything *else* falls back to, before
+        // DEFAULT_COLOR.
         const DEFAULT_COLOR = 0x4488cc;
-        function colorForCategory(category) {
-            return layerColour(`category:${category}`, DEFAULT_COLOR);
+        function colorForLayer(layer) {
+            return layerColour(layer, DEFAULT_COLOR);
         }
         const PART_COLOR = 0x66cc66;
         const SUBTRACTION_COLOR = 0xcc7733;
@@ -1231,18 +1229,18 @@
         }
 
         // The same color-priority chain used for both a rendered mesh
-        // (colorMesh) and a Contents-tree/category-chip swatch: a part's own
-        // color, then a subtraction-composed cutout, then operational status,
-        // then this node's (inherited) subsystem category, finally the flat
-        // default -- see colorForCategory's comment for why category sits below
-        // status instead of above it.
+        // (colorMesh) and a Contents-tree swatch: a part's own color, then a
+        // subtraction-composed cutout, then operational status, then this node's
+        // layer, its System's or its category's, finally the flat default -- see
+        // colorForLayer's comment for why the layer sits below status instead of
+        // above it.
         function baseColorFor(node) {
             const statusColor = node.status ? STATUS_COLORS[node.status] : undefined;
             return node.part_ref
                 ? PART_COLOR
                 : node.composition === 'subtraction'
                 ? SUBTRACTION_COLOR
-                : (statusColor ?? (node.category ? colorForCategory(node.category) : DEFAULT_COLOR));
+                : (statusColor ?? (node.layer ? colorForLayer(node.layer) : DEFAULT_COLOR));
         }
 
         // A node's turn (Assembly.turn in apothecary/hierarchy.py): [rx, ry, rz] degrees, about
@@ -1450,7 +1448,7 @@
                 this.renderNodeByKey = {};    // nodeKey() -> node data for every node in the
                                               // hierarchy tree (not just what's rendered),
                                               // rebuilt each renderFocus()
-                this.expandedCategories = new Set();  // categories rendered at full depth
+                this.expandedLayers = new Set();  // Systems' and categories' layers rendered at full depth
                 this.facets = null;  // the site's Kinds or Systems, as its payload sends them
                 this.treeExpanded = new Set();  // paths expanded for *browsing* in the
                                                  // hierarchy tree -- independent of whether
@@ -1945,8 +1943,7 @@
                     body: (slot) => {
                         this.layersWidget = mountLayers(slot, {
                             scope: this.pickScope,
-                            shells: () => this.layerShells(),
-                            categories: () => this.layerCategories(),
+                            groups: () => this.layerGroups(),
                             readings: () => this.measure.lines,
                             colourOf: (id) => layerHex(id),
                             addressOf: (action) => (this.layersTaught ? this.layersTaught[action] || null : null),
@@ -2878,8 +2875,8 @@
             }
 
             // Each direct child of focus renders collapsed (its own single
-            // box/mesh) unless its (inherited) category is expanded from the
-            // Contents panel's chips, in which case its whole subtree renders
+            // box/mesh) unless its layer, its System's or its category's, is expanded
+            // from Site's chips, in which case its whole subtree renders
             // instead, every leaf at its true global position, at the cost of
             // render time. Every node handed back here carries a
             // full, site-rooted _path (see pathForChild/collectLeaves),
@@ -2905,7 +2902,7 @@
                 };
                 for (const child of focus.children) {
                     const path = pathForChild(focusPrefix, child.name);
-                    if (child.children.length && this.expandedCategories.has(child.category)) {
+                    if (child.children.length && this.expandedLayers.has(child.layer)) {
                         collectLeaves(child, path, nodes);
                     } else {
                         down(child, path, depth);
@@ -3497,11 +3494,11 @@
             layersChanged(what) { this.layersWorld.changed(what); }
             layersSaid(what) { return layersSaidOf(what, { wallsSaid: () => this.wallsSaid() }); }
 
-            // The shells the loaded site's pieces are on, innermost first, and the
-            // categories they are of: the rows of the Layers window.
-            layerShells() { return this.layerKinds().shells; }
-            layerCategories() { return this.layerKinds().categories; }
-            layerKinds() { return layerKindsOf(this.tree); }
+            // What lies beneath the level in view, grouped as the site's facets list it
+            // (layers_world.js layersInView): the shells its pieces are on and its
+            // Systems, Kinds with their categories and words. The rows of the Layers
+            // window and Site's chips.
+            layerGroups() { return layersInView(this.facets, Object.values(this.renderNodeByKey || {})); }
 
             // ---- Measure: the layer's readings and what it draws --------------------------
             //
@@ -3970,15 +3967,28 @@
                 if (rest === 'reset') { scope.reset(); return this.layersSaid({ reset: true }); }
                 const at = rest.indexOf(':');
                 const verb = rest.slice(0, at), id = rest.slice(at + 1);
-                const kind = kindOf(id, { shells: this.layerShells(), categories: this.layerCategories() });
+                const groups = this.layerGroups();
+                const set = setOf(id, { shells: groups.shells, layers: pieceLayers(groups) });
                 const name = layerLabel(id);
+                // A Kind's heading: Shown and Selectable over every one of its categories in
+                // view, all turned on unless all are on already, as its heading's ticks.
+                const kind = groups.kinds.find((k) => k.layer === id);
+                if (kind) {
+                    const ids = kind.words.map((word) => word.layer);
+                    const has = verb === 'shown' ? (x) => scope.isShown(x) : (x) => scope.isSelectable(x);
+                    const on = !ids.every(has);
+                    if (verb === 'shown') scope.setShownEach(ids, on, id);
+                    else if (verb === 'selectable') scope.setSelectableEach(ids, on, id);
+                    else return null;
+                    return this.layersSaid({ layer: id, [verb]: on });
+                }
                 if (verb === 'shown') { scope.setShown(id, !scope.isShown(id)); return this.layersSaid({ layer: id, shown: scope.isShown(id) }); }
                 if (verb === 'selectable') {
                     if (!scope.setSelectable(id, !scope.isSelectable(id))) return `${name}: a click never picks what it draws`;
                     return this.layersSaid({ layer: id, selectable: scope.isSelectable(id) });
                 }
-                if (verb === 'only') return scope.showOnly(id, kind) ? this.layersSaid({ layer: id, only: true }) : `${name}: already the only one of its kind shown`;
-                if (verb === 'all') return scope.showAll(kind) ? this.layersSaid({ layers: kind, all: true }) : `${name}: every one of its kind is shown already`;
+                if (verb === 'only') return scope.showOnly(id, set) ? this.layersSaid({ layer: id, only: true }) : `${name}: already the only one of its set shown`;
+                if (verb === 'all') return scope.showAll(set) ? this.layersSaid({ layers: set, all: true }) : `${name}: every one of its set is shown already`;
                 return null;
             }
 
@@ -4039,46 +4049,44 @@
             // Contents list + selection
             // ---------------------------------------------------------------
 
-            // The category chips above the tree: one per subsystem actually
-            // present anywhere beneath the current focus (not a fixed list --
-            // a site that never uses "fluid" shouldn't show a dead chip for
-            // it), each toggling expandedCategories and triggering a full
-            // renderFocus() (the rendered set genuinely changes).
+            // Site's chips above the tree: one for each System, each Kind and each word
+            // neither holds that has a piece beneath the level in view, in the facets'
+            // order (layerGroups, the Layers window's rows), in its colour. A chip opens
+            // every one of its pieces at any depth beneath this level (expandedLayers) and
+            // draws the level again, or closes them; it is lit while all are open. The
+            // canvas ring's Kinds or Systems (facet:<by>:<value>) does the same.
+            facetChips() {
+                const { systems, kinds, words } = this.layerGroups();
+                return [
+                    ...systems.map((value) => ({ facet: 'system', name: value.name, colour: value.colour, layers: [value.layer] })),
+                    ...kinds.map((kind) => ({ facet: 'kind', name: kind.name, colour: kind.colour, layers: kind.words.map((word) => word.layer) })),
+                    ...words.map((word) => ({ facet: null, name: word.word, colour: layerHex(word.layer), layers: [word.layer] })),
+                ];
+            }
+
+            // Opens a chip's pieces, or closes them where all are open; says which.
+            toggleExpanded(layers) {
+                const opening = layers.some((layer) => !this.expandedLayers.has(layer));
+                for (const layer of layers) { if (opening) this.expandedLayers.add(layer); else this.expandedLayers.delete(layer); }
+                this.renderFocus();
+                return opening;
+            }
+
             renderCategoryFilters() {
                 this.categoryFiltersEl.innerHTML = '';
-                // renderNodeByKey (rebuilt just before this is called --
-                // see renderFocus) already covers every descendant beneath
-                // focus at every depth, so this alone is enough to find
-                // every category present without a second tree walk.
-                const present = new Set();
-                Object.values(this.renderNodeByKey).forEach((node) => {
-                    if (node.category) present.add(node.category);
-                });
-                if (present.size === 0) return;
-
-                // The ones written down first, in the order they were written,
-                // then anything else in alphabetical order. Every group present
-                // gets a chip: a group with no chip cannot be filtered, and a
-                // group that cannot be filtered may as well not be there.
-                const known = categoriesInOrder().filter((c) => present.has(c));
-                const rest = [...present].filter((c) => !known.includes(c)).sort();
-                for (const category of [...known, ...rest]) {
+                for (const value of this.facetChips()) {
                     const chip = document.createElement('span');
-                    const active = this.expandedCategories.has(category);
+                    const active = value.layers.every((layer) => this.expandedLayers.has(layer));
                     chip.className = 'category-chip' + (active ? ' active' : '');
-                    chip.title = `Expand every ${category} piece at any depth beneath this level`;
+                    chip.title = `Expand every ${value.name} piece at any depth beneath this level`;
 
                     const swatch = document.createElement('span');
                     swatch.className = 'chip-swatch';
-                    swatch.style.background = '#' + colorForCategory(category).toString(16).padStart(6, '0');
+                    swatch.style.background = value.colour || '#' + DEFAULT_COLOR.toString(16).padStart(6, '0');
                     chip.appendChild(swatch);
-                    chip.appendChild(document.createTextNode(category));
+                    chip.appendChild(document.createTextNode(value.name));
 
-                    chip.addEventListener('click', () => {
-                        if (active) this.expandedCategories.delete(category);
-                        else this.expandedCategories.add(category);
-                        this.renderFocus();
-                    });
+                    chip.addEventListener('click', () => this.toggleExpanded(value.layers));
                     this.categoryFiltersEl.appendChild(chip);
                 }
             }
@@ -4091,7 +4099,7 @@
             // controls *browsing* (treeExpanded) -- independent of whether
             // that subtree is actually instantiated as a mesh right now
             // (render-dot, driven by meshByName -- see currentRenderNodes/
-            // expandedCategories for what controls that).
+            // expandedLayers for what controls that).
             renderContentsList(focus) {
                 // Rebuilt in place, so a list long enough to scroll (a catalog's)
                 // stays where the person had scrolled it: a click
@@ -11468,16 +11476,14 @@
                 } else if (action.startsWith('site:')) {
                     viewer.chooseSite(action.slice(5));
                 } else if (action.startsWith('facet:')) {
-                    // Kinds or Systems (apothecary/facets.py): a value's words, each opened in
-                    // its place as Site's chip for it opens it, or all closed again.
+                    // Kinds or Systems (apothecary/facets.py): a value's pieces, each opened in
+                    // its place as Site's chip for it opens them, or all closed again.
                     const [, by, name] = action.match(/^facet:([a-z]+):(.+)$/) ?? [];
-                    const sent = viewer.facets;
-                    const value = sent ? (sent.by === by ? sent.values : sent.kinds ?? []).find((v) => v.name === name) : null;
-                    const words = value ? value.words.map((w) => w.word) : [];
-                    const opening = words.some((w) => !viewer.expandedCategories.has(w));
-                    for (const w of words) { if (opening) viewer.expandedCategories.add(w); else viewer.expandedCategories.delete(w); }
-                    viewer.renderFocus();
-                    viewer.setStatus(words.length ? `${opening ? 'Expanded' : 'Collapsed'} ${name}${tail}` : `${name}: nothing here to open${tail}`, words.length ? 'success' : 'error');
+                    const chip = viewer.facetChips().find((c) => c.facet === by && c.name === name);
+                    if (chip) {
+                        const opening = viewer.toggleExpanded(chip.layers);
+                        viewer.setStatus(`${opening ? 'Expanded' : 'Collapsed'} ${name}${tail}`, 'success');
+                    } else viewer.setStatus(`${name}: nothing here to open${tail}`, 'error');
                 } else if (action === 'device:open') {
                     // The board's Machine, in front of the world.
                     if (viewer.openMachine(path)) viewer.setStatus(`Opened ${path}${tail}`, 'success');

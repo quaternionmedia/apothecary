@@ -33,12 +33,12 @@ from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequenc
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .facets import KIND, KINDS, facet_of, facets_of, kinds_and_systems
+from .facets import KIND, KINDS, SYSTEM_LAYER, facet_of, facets_of, kinds_and_systems
 from .facets import SYSTEMS as SITE_SYSTEMS
 from .hierarchy import Assembly, find_node_by_path
 from .journeys import JOURNEYS
 from .journeys import by_id as journey_by_id
-from .layer_colours import CATEGORY, GRID, MACHINE_BUTTONS, MEASURE, SHELL, colour_of, layers_in
+from .layer_colours import CATEGORY, GRID, MACHINE_BUTTONS, MEASURE, SHELL, colour_of, shells_in
 from .projects.parts.skeleton import ROOT
 from .projects.registry import category_of
 from .site_names import UNIVERSE, UNIVERSE_SHOWN
@@ -1067,7 +1067,11 @@ def _panels(rig: bool = False) -> Option:
     )
 
 
-def _view(site: Optional[Assembly] = None) -> Option:
+def _view(
+    site: Optional[Assembly] = None,
+    part_category: Callable[[str], Optional[str]] = lambda _: None,
+    under: str = "",
+) -> Option:
     """View, cell 2 of the canvas ring: how the world is drawn.
 
     Its cells are the header's ⚙ View menu's items. Fit, first, frames the pieces
@@ -1080,7 +1084,8 @@ def _view(site: Optional[Assembly] = None) -> Option:
     the ring is not told how they stand. Settings opens the Settings panel --
     the shortcuts and automatic zoom -- as the menu's Settings does, so no cell
     before it moves. Layers and Depth come after it, in the two cells left: Layers is
-    a ring of ``site``'s layers, each a ring of its own acts (``_layers``), and Depth
+    a ring of the layers of what lies beneath the level in view (``under``), each a ring
+    of its own acts (``_layers``), and Depth
     is how many levels below this one a click reaches and the world draws, one to four
     by name and one more or less, as the Layers window's stepper (to eight). Select
     walls is the wall layer's Selectable tick.
@@ -1104,7 +1109,7 @@ def _view(site: Optional[Assembly] = None) -> Option:
             Option(id="view:walls", label="Select walls", action="view:walls"),
             Option(id="view:settings", label="Settings", action="view:settings"),
             # After Settings, which keeps its cell: the two cells still free.
-            _layers(site),
+            _layers(site, part_category, under),
             Option(
                 id="view:depth",
                 label="Depth",
@@ -1127,7 +1132,7 @@ def _view(site: Optional[Assembly] = None) -> Option:
 
 
 # The world's own layers, and the words their cells say. The grid and the machines'
-# buttons are a kind of their own, among which Only this and All act; the measurement
+# buttons are a set of their own, among which Only this and All act; the measurement
 # is a mode, so it is only ever shown or not.
 WORLD_LAYERS: Tuple[Tuple[str, str], ...] = (
     (GRID, "Grid"),
@@ -1138,10 +1143,11 @@ WORLD_LAYERS: Tuple[Tuple[str, str], ...] = (
 
 def _layer_ring(layer: str, label: str) -> Option:
     """One layer's ring, in its colour: Shown, then Selectable where a click can pick
-    what it draws (a shell's, a category's), then Only this and All -- this layer shown
-    and the others of its kind hidden, and every one of its kind shown -- where it has
-    a kind (not the measurement). Each does what its row of the Layers window does, or
-    the same over its kind (``layer:<verb>:<layer>``, the page's)."""
+    what it draws (a shell's, a System's, a category's), then Only this and All -- this
+    layer shown and the others of its set hidden, and every one of its set shown -- where
+    it has a set (not the measurement): the shells, the pieces' layers, or the grid and
+    the buttons. Each does what its row of the Layers window does, or the same over its
+    set (``layer:<verb>:<layer>``, the page's)."""
     colour = colour_of(layer)
 
     def act(verb: str, said: str) -> Option:
@@ -1150,7 +1156,7 @@ def _layer_ring(layer: str, label: str) -> Option:
         )
 
     acts = [act("shown", "Shown")]
-    if layer.startswith((SHELL, CATEGORY)):
+    if layer.startswith((SHELL, SYSTEM_LAYER, CATEGORY)):
         acts.append(act("selectable", "Selectable"))
     if layer != MEASURE:
         acts += [act("only", "Only this"), act("all", "All")]
@@ -1163,13 +1169,47 @@ def _in_order(prefix: str, label: str, rings: Sequence[Option]) -> Option:
     return Option(id=prefix, label=label, children=_fit(prefix, rings, by_name=False))
 
 
-def _layers(site: Optional[Assembly]) -> Option:
+def _kind_ring(kind: Dict[str, object]) -> Option:
+    """A Kind's ring, in its colour: Shown and Selectable over every one of its categories
+    at once, as its heading's ticks in the Layers window, then each category's ring
+    (``_layer_ring``)."""
+    layer, colour = str(kind["layer"]), str(kind["colour"])
+    acts = [
+        Option(
+            id=f"layer:{verb}:{layer}", label=said, action=f"layer:{verb}:{layer}", colour=colour
+        )
+        for verb, said in (("shown", "Shown"), ("selectable", "Selectable"))
+    ]
+    words = [str(word["word"]) for word in kind["words"]]  # type: ignore[union-attr]
+    rings = [
+        _layer_ring(f"{CATEGORY}{word}", said)
+        for word, said in zip(words, distinct(words), strict=True)
+    ]
+    return Option(
+        id=f"layer:{layer}",
+        label=str(kind["name"]),
+        colour=colour,
+        children=acts + _fit(f"layer:{layer}:in", rings, MOST_OPTIONS - len(acts), by_name=False),
+    )
+
+
+# What View › Layers names the layers of a level's pieces by, as the Layers window does.
+LAYERS_SYSTEMS, LAYERS_KINDS, LAYERS_WORDS = "Systems", "Kinds", "Words"
+
+
+def _layers(
+    site: Optional[Assembly],
+    part_category: Callable[[str], Optional[str]] = lambda _: None,
+    under: str = "",
+) -> Option:
     """View › Layers: the Layers window, the world's own layers, Reset (depth 1, every
     layer shown and selectable but walls, as the window's Reset), then the layers that
-    come and go with the site -- its shells, then its categories, as the window lists
-    them (``layer_colours.layers_in``) -- each a ring of its acts (``_layer_ring``). A
-    layer's drawn ring in the world opens the ring of its acts here."""
-    shells, categories = layers_in(site) if site is not None else ([], [])
+    come and go with what lies beneath the level in view, as the window lists them: the
+    site's shells, then, as ``facets.facets_of`` lists them, its Systems, each a ring of
+    its acts (``_layer_ring``); its Kinds, each a ring of its categories
+    (``_kind_ring``); and the words neither holds. A layer's drawn ring in the world
+    opens the ring of its acts here."""
+    shells = shells_in(site) if site is not None else []
     children = [
         Option(id="view:layers:window", label="Window", action="view:layers"),
         Option(
@@ -1187,14 +1227,33 @@ def _layers(site: Optional[Assembly]) -> Option:
                 [_layer_ring(f"{SHELL}{n}", f"Shell {n}") for n in shells],
             )
         )
-    if categories:
+    sent = facets_of(site, part_category, under) if site is not None else None
+    if sent is None:
+        return Option(id="view:layers", label="Layers", children=children)
+    by_kind = sent["by"] == KIND
+    systems = [] if by_kind else list(sent["values"])  # type: ignore[arg-type]
+    kinds = list(sent["values"] if by_kind else sent["kinds"])  # type: ignore[arg-type]
+    if systems:
         children.append(
             _in_order(
-                "layers:categories",
-                "Categories",
+                "layers:systems",
+                LAYERS_SYSTEMS,
+                [_layer_ring(str(value["layer"]), str(value["name"])) for value in systems],
+            )
+        )
+    if kinds:
+        children.append(
+            _in_order("layers:kinds", LAYERS_KINDS, [_kind_ring(kind) for kind in kinds])
+        )
+    loose = [str(w["word"]) for w in sent["loose"]]  # type: ignore[index]
+    if loose:
+        children.append(
+            _in_order(
+                "layers:words",
+                LAYERS_WORDS,
                 [
-                    _layer_ring(f"{CATEGORY}{name}", said)
-                    for name, said in zip(categories, distinct(categories), strict=True)
+                    _layer_ring(f"{CATEGORY}{word}", said)
+                    for word, said in zip(loose, distinct(loose), strict=True)
                 ],
             )
         )
@@ -1955,11 +2014,11 @@ def _canvas_pieces(
 GROUPS_LABEL = {"kind": "Kinds", "system": "Systems"}
 
 
-def _facet_cell(site: Optional[Assembly], part_category) -> Option:
-    """Kinds in the universe, Systems in a site: a cell of each value the site has
-    (``facets.facets_of``), each opening what its pieces hold in their places, as Site's
-    chips do (``facet:<facet>:<value>``). Greyed, saying why, where there is none, so its
-    address holds still."""
+def _facet_cell(site: Optional[Assembly], part_category, under: str = "") -> Option:
+    """Kinds in the universe, Systems in a site: a cell of each value what lies beneath
+    the level in view (``under``) has (``facets.facets_of``), in its colour, each opening
+    what its pieces hold in their places, as Site's chips do (``facet:<facet>:<value>``).
+    Greyed, saying why, where there is none, so its address holds still."""
     if site is None:
         return Option(
             id="facets",
@@ -1968,24 +2027,24 @@ def _facet_cell(site: Optional[Assembly], part_category) -> Option:
             enabled=False,
             why="no site is loaded",
         )
-    sent = facets_of(site, part_category)
+    sent = facets_of(site, part_category, under)
     by = str(sent["by"])
     label = GROUPS_LABEL[by]
-    values = [str(value["name"]) for value in sent["values"]]
+    values = [(str(value["name"]), str(value["colour"])) for value in sent["values"]]  # type: ignore[index]
     if not values:
         return Option(
             id="facets",
             label=label,
             action="facet:none",
             enabled=False,
-            why=f"nothing in {site.name} is in one of the {label}",
+            why=f"nothing {'beneath ' + under if under else 'in ' + site.name} is in one of the {label}",
         )
     return Option(
         id="facets",
         label=label,
         children=[
-            Option(id=f"facet:{by}:{name}", label=name, action=f"facet:{by}:{name}")
-            for name in values
+            Option(id=f"facet:{by}:{name}", label=name, action=f"facet:{by}:{name}", colour=colour)
+            for name, colour in values
         ],
     )
 
@@ -2029,7 +2088,7 @@ def _canvas_ring(
                 lambda name: f"site:{name}",
                 shown={UNIVERSE: UNIVERSE_SHOWN},
             ),
-            _view(site),
+            _view(site, part_category, focus_path),
             _panels(rig),
             _pictures(picture),
             Option(id="reset", label="Rebuild", action="reset", destructive=True, twice=True),
@@ -2042,7 +2101,7 @@ def _canvas_ring(
                 if top_of_everything
                 else None,
             ),
-            _facet_cell(site, part_category),
+            _facet_cell(site, part_category, focus_path),
         )
         if option is not None
     ]

@@ -196,7 +196,7 @@ def test_a_click_on_a_shells_ring_opens_that_shells_ring_and_only_this_hides_the
     assert colour == httpx.get(f"{url}/sites/{UNIVERSE}").json()["layer_colours"][f"shell:{outer}"]
 
     rings.press(page, "Only this")
-    said(page, f"Shell {outer} alone of its kind shown")
+    said(page, f"Shell {outer} alone of its set shown")
     hidden = page.evaluate(SCOPE)["hidden"]
     assert sorted(hidden) == sorted(f"shell:{n}" for n in range(outer))
     for n in range(outer):

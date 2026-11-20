@@ -342,16 +342,16 @@ def test_inside_a_machine_a_double_click_on_its_control_box_steps_into_it(
     """Stepped into printer_1, its pieces are drawn inside its part, and a pick takes a
     piece before the part around it: where the printer's own surface is nearest and
     frame_system, the electronics box under the bed, is behind it on the same ray, a
-    double-click steps into frame_system. Site's category chips act there: machine,
-    the category of both its pieces, draws what each holds in its place, and the part
-    stays."""
+    double-click steps into frame_system. Site's chips act there: Machines, the System
+    of both its pieces, draws what each holds in its place, and the part stays."""
     _open(page, f"{base_url}/viewer/sites/garage?focus=printer_1")
     pieces = ["printer_1.frame_system", "printer_1.gantry_system"]
     assert sorted(page.evaluate(LEVEL)["drawn"]) == ["printer_1", *pieces]
 
-    chip = page.locator("#category-filters .category-chip", has_text="machine")
+    chip = page.locator("#category-filters .category-chip", has_text="Machines")
+    expect(page.locator("#category-filters .category-chip")).to_have_text(["Machines"])
     chip.click()
-    expect(page.locator("#category-filters .category-chip.active")).to_have_text("machine")
+    expect(page.locator("#category-filters .category-chip.active")).to_have_text("Machines")
     opened = page.evaluate(LEVEL)["drawn"]
     assert "printer_1" in opened, "the level's own part stays"
     assert "printer_1.frame_system.mainboard" in opened, opened

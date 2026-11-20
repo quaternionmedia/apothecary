@@ -361,7 +361,7 @@ def test_select_walls_is_the_wall_layers_selectable_tick_and_a_click_still_passe
     settled(page)
     spot = page.evaluate(FIND, "wall")
     assert spot, "no point of the world where a wall stands in front of a piece"
-    wall = "category:wall"
+    wall = "system:building"  # the walls are the Building System's
     expect(_tick(page, wall, "selectable")).not_to_be_checked()
     page.mouse.click(spot["x"], spot["y"])
     assert page.evaluate("() => window.fractalViewer.selectedName") == spot["behind"]
@@ -377,6 +377,9 @@ def test_select_walls_is_the_wall_layers_selectable_tick_and_a_click_still_passe
     page.locator("#walls-toggle").uncheck()
     said(page, "Select walls: off")
     expect(_tick(page, wall, "selectable")).not_to_be_checked()
+    # Folded away again: the Building System's row, the first, lies under the open menu.
+    page.keyboard.press("Escape")
+    expect(page.locator("#view-menu")).not_to_have_attribute("open", "")
 
     _tick(page, wall, "selectable").check()
     page.reload()
@@ -408,3 +411,57 @@ def test_the_alignment_grid_hidden_is_no_grid_on_a_machines_bed_either(page: Pag
     _tick(page, "grid", "shown").check()
     seen = page.evaluate(GRID)
     assert seen["bed"] is True and seen["drawn"] is True, seen
+
+
+@pytest.mark.e2e
+def test_the_layers_are_the_systems_and_the_kinds_over_their_categories(page: Page, url: str):
+    """The garage's Layers: its Systems, then the Kinds of its loose parts, each a heading
+    over its categories' rows; the bench's boards (`category:electrical`) a row apart from
+    the wiring's Electrical System. A Kind's Shown tick hides every one of its categories
+    at once, and is half set when one of them alone is shown again. Stepped into the
+    printer, the one System beneath it."""
+    open_garage(page, url)
+    windows.from_the_windows_menu(page, "layers")
+    settled(page)
+    rows = page.locator(".panel[data-panel='layers'] .layers-table tbody tr[data-row]")
+    expect(rows.first).to_be_attached(timeout=10000)
+    listed = rows.evaluate_all("(rows) => rows.map((r) => r.dataset.row)")
+    assert listed[: listed.index("grid")] == [
+        "system:building",
+        "system:furniture",
+        "system:machines",
+        "system:mechanical",
+        "system:electrical",
+        "system:plumbing",
+        "kind:electronics",
+        "category:electrical",
+        "category:electronics",
+        "kind:test-pieces",
+        "category:coupon",
+        "kind:things",
+        "category:furniture",
+    ], listed
+
+    _tick(page, "kind:electronics", "shown").uncheck()
+    said(page, "Electronics: hidden, and a click passes through it")
+    for layer in ("category:electrical", "category:electronics"):
+        expect(_tick(page, layer, "shown")).not_to_be_checked()
+    expect(_tick(page, "system:electrical", "shown")).to_be_checked()
+    hidden = page.evaluate(
+        "() => ['arduino_uno', 'electrical'].map((k) => window.fractalViewer.meshByName[k]?.visible)"
+    )
+    assert hidden == [False, True], hidden
+
+    _tick(page, "category:electrical", "shown").check()
+    heading = _tick(page, "kind:electronics", "shown")
+    assert heading.evaluate("(box) => [box.checked, box.indeterminate]") == [False, True]
+    _tick(page, "kind:electronics", "shown").check()
+    expect(_tick(page, "category:electronics", "shown")).to_be_checked()
+
+    page.goto(f"{url}/viewer/sites/garage?focus=printer_1")
+    expect(page.locator("#contents-list .contents-item").first).to_be_visible(timeout=20000)
+    settled(page)
+    windows.from_the_windows_menu(page, "layers")
+    rows = page.locator(".panel[data-panel='layers'] .layers-table tbody tr[data-row]")
+    listed = rows.evaluate_all("(rows) => rows.map((r) => r.dataset.row)")
+    assert listed[: listed.index("grid")] == ["system:machines"], listed

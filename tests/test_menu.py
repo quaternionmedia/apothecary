@@ -215,8 +215,11 @@ def test_a_long_single_word_is_cut_rather_than_left_over_length():
 
 
 def test_the_canvas_ring_offers_the_sites_and_the_sites_systems():
-    """Systems, cell 7: each System the site has, opening its pieces in place as Site's
-    chips do; greyed, saying why, on a site whose pieces are in none."""
+    """Systems, cell 7: each System beneath the level in view, in its colour, opening its
+    pieces in place as Site's chips do; greyed, saying why, where its pieces are in
+    none."""
+    from apothecary.layer_colours import colour_of
+
     garage = resolve(Context(pointing=Pointing.CANVAS), _garage(), site_names=["garage"])
     systems = garage.options[-1]
     assert (systems.label, systems.cell) == ("Systems", 7)
@@ -224,7 +227,19 @@ def test_the_canvas_ring_offers_the_sites_and_the_sites_systems():
         (name, f"facet:system:{name}")
         for name in ("Building", "Furniture", "Machines", "Mechanical", "Electrical", "Plumbing")
     ]
+    assert systems.children[0].colour == colour_of("system:building")
     assert carried_by("facet:system:Building").name == "VIEWER"
+    inside = resolve(
+        Context(pointing=Pointing.CANVAS, targets=["printer_1"]), _garage(), site_names=["garage"]
+    )
+    assert [c.label for c in inside.options[-1].children] == ["Machines"]
+    coupon = resolve(
+        Context(pointing=Pointing.CANVAS, targets=["router_coupon"]),
+        _garage(),
+        site_names=["garage"],
+    ).options[-1]
+    assert (coupon.label, coupon.enabled) == ("Systems", False)
+    assert coupon.why == "nothing beneath router_coupon is in one of the Systems"
 
     photos = resolve(
         Context(pointing=Pointing.CANVAS), _photo_site(), site_names=["bench", "garage"]
@@ -1726,10 +1741,10 @@ def _layer_ring_of(ring, layer):
 
 
 def test_view_layers_holds_the_window_the_worlds_layers_reset_and_the_sites_own():
-    """View › Layers: Window 8, World 6, Reset 2 always; then the layers the site has,
-    as the Layers window lists them -- the garage's categories at 4, and in the universe
-    its shells at 4 and its categories at 9 -- each a ring of its own acts, every cell
-    wearing its layer's colour."""
+    """View › Layers: Window 8, World 6, Reset 2 always; then the layers of what lies
+    beneath the level in view, as the Layers window lists them -- the garage's Systems
+    at 4 and its loose parts' Kinds at 9, and in the universe its shells at 4 and its
+    Kinds at 9 -- each a ring of its own acts, every cell wearing its layer's colour."""
     from apothecary import sites
     from apothecary.layer_colours import colour_of
     from apothecary.menu import carried_by
@@ -1740,12 +1755,31 @@ def test_view_layers_holds_the_window_the_worlds_layers_reset_and_the_sites_own(
         ("Window", 8),
         ("World", 6),
         ("Reset", 2),
-        ("Categories", 4),
+        ("Systems", 4),
+        ("Kinds", 9),
     ]
     assert layers.children[0].action == "view:layers"
     assert layers.children[2].action == "layer:reset"
     assert [c.label for c in layers.children[1].children] == ["Grid", "Buttons", "Measure"]
-    assert "wall" in [c.label for c in layers.children[3].children]
+    assert [c.id for c in layers.children[3].children] == [
+        "layer:system:building",
+        "layer:system:furniture",
+        "layer:system:machines",
+        "layer:system:mechanical",
+        "layer:system:electrical",
+        "layer:system:plumbing",
+    ]
+    assert [c.label for c in layers.children[4].children] == [
+        "Electronics",
+        "Test pieces",
+        "Things",
+    ]
+
+    # Stepped into the printer: the one System beneath it, and no Kinds.
+    inside = resolve(Context(pointing=Pointing.CANVAS, targets=["printer_1"]), _garage())
+    layers = _group(inside, "View", "Layers")
+    assert [c.label for c in layers.children] == ["Window", "World", "Reset", "Systems"]
+    assert [c.label for c in layers.children[3].children] == ["Machines"]
 
     universe = resolve(
         Context(pointing=Pointing.CANVAS),
@@ -1758,29 +1792,42 @@ def test_view_layers_holds_the_window_the_worlds_layers_reset_and_the_sites_own(
         ("World", 6),
         ("Reset", 2),
         ("Shells", 4),
-        ("Categories", 9),
+        ("Kinds", 9),
     ]
     assert [c.label for c in layers.children[3].children] == ["Shell 0", "Shell 1", "Shell 2"]
     assert address_of(universe, "layer:shown:shell:1") == "21468"
-    # Seventeen categories and more: grouped, nothing lost.
-    listed = [
-        ring.id
-        for group in layers.children[4].children
-        for ring in (group.children if group.children[0].children else [group])
+    # Every category under its kind, nothing lost.
+    kinds = layers.children[4].children
+    assert [k.id for k in kinds] == [
+        "layer:kind:electronics",
+        "layer:kind:cameras",
+        "layer:kind:machines",
+        "layer:kind:motors",
+        "layer:kind:test-pieces",
+        "layer:kind:shop",
+        "layer:kind:housings",
+        "layer:kind:things",
     ]
-    assert "layer:category:machine" in listed and "layer:category:electrical" in listed
-    for layer in ("shell:2", "category:machine", "grid", "measure"):
+    machines = _layer_ring_of(universe, "kind:machines")
+    assert [c.id for c in machines.children] == [
+        "layer:shown:kind:machines",
+        "layer:selectable:kind:machines",
+        "layer:category:machine",
+    ]
+    for layer in ("shell:2", "category:machine", "kind:machines", "grid", "measure"):
         ring = _layer_ring_of(universe, layer)
         assert ring.colour == colour_of(layer)
-        assert {c.colour for c in ring.children} == {colour_of(layer)}
         for cell in ring.children:
-            assert carried_by(cell.action).name == "VIEWER"
+            if cell.action:
+                assert cell.colour == colour_of(layer)
+                assert carried_by(cell.action).name == "VIEWER"
 
 
-def test_a_layers_ring_holds_the_acts_its_kind_has():
-    """A shell's and a category's: Shown, Selectable, Only this, All. The grid's and the
-    buttons': Shown, Only this, All, a click never picking what they draw. The
-    measurement's, a mode: Shown alone."""
+def test_a_layers_ring_holds_the_acts_its_set_has():
+    """A shell's, a System's and a category's: Shown, Selectable, Only this, All. The
+    grid's and the buttons': Shown, Only this, All, a click never picking what they draw.
+    The measurement's, a mode: Shown alone. A Kind's: Shown and Selectable over all its
+    categories, then each category's ring."""
     from apothecary import sites
 
     universe = resolve(Context(pointing=Pointing.CANVAS), sites.store.get("apothecary"))
@@ -1807,6 +1854,25 @@ def test_a_layers_ring_holds_the_acts_its_kind_has():
     ]
     assert [a[0] for a in acts["machine-buttons"]] == ["Shown", "Only this", "All"]
     assert acts["measure"] == [("Shown", "layer:shown:measure", 8)]
+    electronics = _layer_ring_of(universe, "kind:electronics")
+    assert [(c.label, c.action) for c in electronics.children] == [
+        ("Shown", "layer:shown:kind:electronics"),
+        ("Selectable", "layer:selectable:kind:electronics"),
+        ("electrical", None),
+        ("electronics", None),
+    ]
+    garage = resolve(Context(pointing=Pointing.CANVAS), _garage())
+    assert [c.label for c in _layer_ring_of(garage, "system:building").children] == [
+        "Shown",
+        "Selectable",
+        "Only this",
+        "All",
+    ]
+    # A category's name too long for a cell is shortened, its ring's id whole.
+    motors = _layer_ring_of(universe, "kind:motors")
+    assert [(c.id, c.label) for c in motors.children[2:]] == [
+        ("layer:category:electromechanical", "electromecha")
+    ]
 
 
 def test_an_option_wears_a_colour_only_as_the_table_writes_one():

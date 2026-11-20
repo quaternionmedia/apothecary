@@ -1,13 +1,12 @@
 /* The colours of the layers the site in view has, as the server sends them with it
- * (apothecary/layer_colours.py, the one table): a shell's rings, a category's pieces and
- * its cluster's outline, the build volumes, the badges, the measurement, and each one's
- * cells of the ring and row of the Layers window. Read here, never written here.
+ * (apothecary/layer_colours.py, the one table): a shell's rings, a System's or a
+ * category's pieces, a Kind's cluster's outline, the build volumes, the badges, the
+ * measurement, and each one's cells of the ring and row of the Layers window. Read here,
+ * never written here.
  *
  *   takeLayerColours(payload)   the colours a site's payload carries, in place of the last
  *   layerHex(id)                a layer's colour as "#rrggbb", or null
  *   layerColour(id, fallback)   the same as a number, for three.js, or `fallback`
- *   categoriesInOrder()         the categories it has a colour for, in the order the
- *                               Site window's chips list them (those written down first)
  *
  * Plain ES module, no dependencies, so node can hold it (tests/test_layer_colours_page.py).
  */
@@ -30,8 +29,4 @@ export function layerHex(id) {
 export function layerColour(id, fallback) {
     const hex = colours.get(id);
     return hex ? parseInt(hex.slice(1), 16) : fallback;
-}
-
-export function categoriesInOrder() {
-    return [...colours.keys()].filter((id) => id.startsWith("category:")).map((id) => id.slice("category:".length));
 }

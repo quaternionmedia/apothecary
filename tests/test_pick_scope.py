@@ -19,26 +19,26 @@ NODE = shutil.which("node") or str(Path.home() / ".local" / "bin" / "node")
 pytestmark = pytest.mark.skipif(not Path(NODE).exists(), reason="node is not installed")
 
 SCRIPT = """
-import { makePickScope, WALL, GRID, MACHINE_BUTTONS, MEASURE, layersOf, kindOf } from "%(module)s";
+import { makePickScope, WALL, GRID, MACHINE_BUTTONS, MEASURE, layersOf, setOf } from "%(module)s";
 const store = () => { const m = new Map(); return {
     getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k), m }; };
 const out = {};
-const piece = (shell, category) => ({ name: "p", shell, category });
+const piece = (shell, layer) => ({ name: "p", shell, layer });
 const s = makePickScope({ storage: store() });
 out.defaults = {
     depth: s.depth(),
-    part: s.pickable(piece(0, "part")), outer: s.pickable(piece(3, "part")), wall: s.pickable(piece(null, "wall")),
-    drawnWall: s.drawn(piece(null, "wall")), grid: s.isShown(GRID), buttons: s.isShown(MACHINE_BUTTONS),
+    part: s.pickable(piece(0, "category:part")), outer: s.pickable(piece(3, "category:part")), wall: s.pickable(piece(null, WALL)),
+    drawnWall: s.drawn(piece(null, WALL)), wallLayer: WALL, grid: s.isShown(GRID), buttons: s.isShown(MACHINE_BUTTONS),
     bare: s.pickable({ name: "x" }) && s.drawn({ name: "x" }) && s.pickable(null),
     json: s.toJSON(),
 };
 // Selectable within shown.
 s.setShown("shell:3", false);
-out.hidden = { selectable: s.isSelectable("shell:3"), pickable: s.pickable(piece(3, "part")), drawn: s.drawn(piece(3, "part")) };
+out.hidden = { selectable: s.isSelectable("shell:3"), pickable: s.pickable(piece(3, "category:part")), drawn: s.drawn(piece(3, "category:part")) };
 s.setShown("shell:3", true);
-out.reshown = s.pickable(piece(3, "part"));
+out.reshown = s.pickable(piece(3, "category:part"));
 s.setSelectable("shell:3", false);
-out.passed = { drawn: s.drawn(piece(3, "part")), pickable: s.pickable(piece(3, "part")), inner: s.pickable(piece(0, "part")) };
+out.passed = { drawn: s.drawn(piece(3, "category:part")), pickable: s.pickable(piece(3, "category:part")), inner: s.pickable(piece(0, "category:part")) };
 s.setShown("shell:3", false);
 s.setSelectable("shell:3", true);
 out.tickedShows = { shown: s.isShown("shell:3"), selectable: s.isSelectable("shell:3") };
@@ -72,23 +72,36 @@ const c = makePickScope({ storage: bad });
 const throwing = { getItem() { throw new Error("no"); }, setItem() { throw new Error("no"); }, removeItem() { throw new Error("no"); } };
 const d = makePickScope({ storage: throwing }); d.setDepth(2);
 out.damaged = { c: c.toJSON(), d: d.depth() };
-out.layers = layersOf({ shell: 2, category: "part" });
-// Only this and All: among a layer's kind, told once, selectable as it was chosen.
-const site = { shells: [0, 1, 2], categories: ["bolt", "board"] };
-out.kinds = [kindOf("shell:1", site), kindOf("category:board", site), kindOf(GRID, site),
-    kindOf(MACHINE_BUTTONS, site), kindOf(MEASURE, site), kindOf("shell:7", site)];
+out.layers = [layersOf({ shell: 2, layer: "category:part", category: "wall" }), layersOf({ layer: "system:machines" }), layersOf({ category: "wall" })];
+// Only this and All: among a layer's set, told once, selectable as it was chosen.
+const site = { shells: [0, 1, 2], layers: ["system:machines", "category:bolt", "category:board", "kind:shop"] };
+out.sets = [setOf("shell:1", site), setOf("category:board", site), setOf("system:machines", site), setOf(GRID, site),
+    setOf(MACHINE_BUTTONS, site), setOf(MEASURE, site), setOf("shell:7", site), setOf("category:nut", site)];
 const o = makePickScope({ storage: store() });
 let heard = []; o.onChange((what) => heard.push(what));
 o.setSelectable("shell:1", false);
-out.only = { did: o.showOnly("shell:1", kindOf("shell:1", site)), again: o.showOnly("shell:1", kindOf("shell:1", site)),
+out.only = { did: o.showOnly("shell:1", setOf("shell:1", site)), again: o.showOnly("shell:1", setOf("shell:1", site)),
     shown: [0, 1, 2].map((n) => o.isShown(`shell:${n}`)), selectable1: o.isSelectable("shell:1"),
     categories: o.isShown("category:bolt"), json: o.toJSON() };
-out.all = { did: o.showAll(kindOf("shell:0", site)), again: o.showAll(kindOf("shell:0", site)),
+out.all = { did: o.showAll(setOf("shell:0", site)), again: o.showAll(setOf("shell:0", site)),
     shown: [0, 1, 2].map((n) => o.isShown(`shell:${n}`)), selectable1: o.isSelectable("shell:1"),
     selectable0: o.isSelectable("shell:0") };
-o.showOnly(GRID, kindOf(GRID, site));
+o.showOnly(GRID, setOf(GRID, site));
 out.world = { grid: o.isShown(GRID), buttons: o.isShown(MACHINE_BUTTONS), measure: o.isShown(MEASURE) };
 out.heard = heard;
+// A Kind's heading: each of its categories at once, told once, said as the heading.
+const k = makePickScope({ storage: store() });
+let saidK = []; k.onChange((what) => saidK.push(what));
+const cats = ["category:bolt", "category:board"];
+k.setShown("category:bolt", false);
+out.each = {
+    shown: k.setShownEach(cats, false, "kind:shop"), again: k.setShownEach(cats, false, "kind:shop"),
+    hidden: cats.map((c) => k.isShown(c)),
+    selectable: k.setSelectableEach([...cats, GRID], true, "kind:shop"),
+    after: cats.map((c) => [k.isShown(c), k.isSelectable(c)]), grid: k.isSelectable(GRID),
+    off: k.setSelectableEach(cats, false, "kind:shop"), offAfter: cats.map((c) => [k.isShown(c), k.isSelectable(c)]),
+    said: saidK,
+};
 console.log(JSON.stringify(out));
 """
 
@@ -113,6 +126,8 @@ def test_the_defaults_are_what_the_page_did_before(result):
     assert d["part"] and d["outer"]
     assert not d["wall"]
     assert d["drawnWall"] and d["grid"] and d["buttons"] and d["bare"]
+    # The walls are the Building System's (apothecary/facets.py).
+    assert d["wallLayer"] == "system:building"
     assert d["json"] == {"depth": 1, "hidden": [], "unselectable": []}
 
 
@@ -152,7 +167,8 @@ def test_storage_that_is_damaged_or_refused_leaves_the_defaults(result):
         "c": {"depth": 1, "hidden": [], "unselectable": []},
         "d": 2,
     }
-    assert result["layers"] == ["shell:2", "category:part"]
+    # A piece is on its shell's layer and the one it is sent with, never its word's.
+    assert result["layers"] == [["shell:2", "category:part"], ["system:machines"], []]
 
 
 def test_measure_is_off_at_first_shown_only_and_never_kept(result):
@@ -167,16 +183,20 @@ def test_measure_is_off_at_first_shown_only_and_never_kept(result):
     }
 
 
-def test_only_this_and_all_act_among_a_layers_kind(result):
-    """Only this shows one layer of its kind and hides the others; All shows every one;
-    each told once, nothing done twice, and what was chosen selectable kept."""
-    assert result["kinds"] == [
+def test_only_this_and_all_act_among_a_layers_set(result):
+    """Only this shows one layer of its set and hides the others; All shows every one;
+    each told once, nothing done twice, and what was chosen selectable kept. A System's
+    and a category's are one set, the pieces'; a Kind's heading is in none."""
+    pieces = ["system:machines", "category:bolt", "category:board"]
+    assert result["sets"] == [
         ["shell:0", "shell:1", "shell:2"],
-        ["category:bolt", "category:board"],
+        pieces,
+        pieces,
         ["grid", "machine-buttons"],
         ["grid", "machine-buttons"],
         ["measure"],
         ["shell:0", "shell:1", "shell:2", "shell:7"],
+        [*pieces, "category:nut"],
     ]
     assert result["only"] == {
         "did": True,
@@ -199,4 +219,27 @@ def test_only_this_and_all_act_among_a_layers_kind(result):
         {"layer": "shell:1", "only": True},
         {"layers": ["shell:0", "shell:1", "shell:2"], "all": True},
         {"layer": "grid", "only": True},
+    ]
+
+
+def test_a_kinds_heading_sets_each_of_its_categories_at_once(result):
+    """Shown or Selectable over a Kind's categories: each set, told once and said as the
+    Kind, nothing done where all were so, and a layer only ever shown left alone."""
+    each = result["each"]
+    assert each["shown"] is True and each["again"] is False
+    assert each["hidden"] == [False, False]
+    assert each["selectable"] is True
+    assert each["after"] == [[True, True], [True, True]]
+    assert each["grid"] is False
+    assert each["off"] is True
+    assert each["offAfter"] == [[True, False], [True, False]]
+    assert each["said"] == [
+        {"layer": "category:bolt", "shown": False},
+        {"layer": "kind:shop", "layers": ["category:bolt", "category:board"], "shown": False},
+        {
+            "layer": "kind:shop",
+            "layers": ["category:bolt", "category:board", "grid"],
+            "selectable": True,
+        },
+        {"layer": "kind:shop", "layers": ["category:bolt", "category:board"], "selectable": False},
     ]
