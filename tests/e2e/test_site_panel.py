@@ -136,6 +136,21 @@ WITH_KEPT = """() => {
 
 
 @pytest.mark.e2e
+def test_jobs_with_none_says_what_it_lists_and_where_one_comes_from(page, base_url: str):
+    """Site's Jobs at a site whose machines have run nothing says what would be listed
+    there and where a job comes from, and its tab counts none."""
+    _open(page, base_url, "theatre")
+    windows.from_the_windows_menu(page, "jobs")
+    expect(windows.panel(page, "jobs")).to_be_visible(timeout=10000)
+    expect(page.locator("#site-jobs-list li")).to_have_count(1)
+    expect(page.locator("#site-jobs-list li.empty")).to_have_text(
+        "No jobs yet: a print or a cut started from a Machine, or a loop's experiment, "
+        "is listed here"
+    )
+    expect(windows.tab(page, "jobs")).to_have_text("Jobs")
+
+
+@pytest.mark.e2e
 def test_in_a_low_site_the_chips_leave_the_rows_in_view(page, base_url: str):
     """On a page 1100 by 700, the universe's Site: its many category chips take two rows
     at most, scrolled to past those, and the tree's first rows are in the window under

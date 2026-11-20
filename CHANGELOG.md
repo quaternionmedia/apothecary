@@ -271,6 +271,7 @@ change since 0.1.0: what is there now that was not, and what 0.1.0 had that is g
 
 ### Fixed
 
+- A ring left open at a machine's acts, with the latch taken and let go again before the ring's cells for the taken latch came back, drew those cells when they came: Control › Jog offered every jog live with the latch let go. An answer overtaken on its way is dropped. ([doc](docs/viewer.md#the-ring))
 - A site opened while the site before was still scanning its boards took that site's pins for its own once the scan answered, and asked for none of its own, so ⚒ Make or a tour stage opened a connected machine as its plan; a scan is of the site it was asked for, and one for a site left answers nothing. ([doc](docs/viewer.md#the-header))
 - Two sites asked for one after the other -- Back then Forward, a crumb pressed while a site loaded -- landed in the order their answers came, the page drawing one while the address named the other, and a site's planned machines stayed the site before's until its own answered; only the site asked for last lands, its tree, boards and machines changing together. ([doc](docs/viewer.md#the-header))
 - The first crumb, or Page Up at a site's own level, pressed while another site loaded stepped out of the site still drawn, selecting a piece in the universe that Back did not return to; it steps out of the site the address names. ([doc](docs/viewer.md#the-header))

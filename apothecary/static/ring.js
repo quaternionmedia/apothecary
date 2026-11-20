@@ -447,6 +447,7 @@ class RingInstance {
         this.told = told;
         this.again = again;
         this.regreys = 0;
+        this.asking = null; // what a regrey is resolving the ring for, until its answer lands
         this.context = told.context;
         this.site = told.site;
         this.device = told.device;
@@ -699,7 +700,8 @@ class RingInstance {
      * same digits, so the ring stays where it is -- a greyed cell keeps its seat, and an
      * Arm that is a Disarm now is in the same cell. A ring whose cell entered is gone is
      * left at the deepest one still there; a lit or armed cell that cannot be chosen now
-     * is let go. */
+     * is let go. An answer still on its way when the page knows something newer -- the
+     * latch let go and taken again before it comes -- is dropped when it lands. */
     async regrey() {
         if (!this.again || this.done) return;
         let fresh;
@@ -707,11 +709,18 @@ class RingInstance {
         if (!fresh || this.done) return;
         const keys = Object.keys(fresh);
         const said = (from) => JSON.stringify(keys.map((k) => from[k] ?? null));
-        if (said(fresh) === said(this.told)) return;
+        if (this.asking && said(fresh) === said(this.asking)) return;
         const asked = ++this.regreys;
+        this.asking = null;
+        if (said(fresh) === said(this.told)) return;
+        this.asking = fresh;
         let root;
-        try { root = await resolveRing({ ...this.told, ...fresh }); } catch (e) { return; }
+        try { root = await resolveRing({ ...this.told, ...fresh }); } catch (e) {
+            if (asked === this.regreys) this.asking = null;
+            return;
+        }
         if (this.done || asked !== this.regreys) return;
+        this.asking = null;
         Object.assign(this.told, fresh);
         this.device = this.told.device;
         this.root = root;
