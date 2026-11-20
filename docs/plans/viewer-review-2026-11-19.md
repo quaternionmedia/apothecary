@@ -199,7 +199,8 @@ Counted in the page on the day:
      more ring, Parts, by kind; the universe's kinds, its sites left to the Site cell. The
      canvas ring's every cell is always there: Step out 1, greyed at the universe's own
      level, and Systems 7, Kinds in the universe, each opening its pieces in place, greyed
-     where a site has none. A part's presets are all kept.
+     where a site has none; a kind in the universe, whose parts hold nothing to open,
+     opens its ring, as a click on its outline does. A part's presets are all kept.
    - **Panels by group** (built). The window groups are seven: Selected joins Part,
      Lighting joins Site, and Docs is a tool. Panels is one cell per group, Site, Part,
      Pictures, Machine, then Windows, Tools, Family and Airgap, each holding its group's
@@ -216,7 +217,7 @@ Counted in the page on the day:
      over its categories, then words. A Kind's heading is set when all its categories
      are, half set when some are, and sets them all; its ring holds Shown and Selectable
      over them, then each category's ring. A chip opens every piece of its System, Kind
-     or word.
+     or word; a Kind's in the universe opens the kind's ring.
    - **The sphere by Kind** (built). A kind's parts sit together on their shell, one
      outline round each, in the kind's colour and labelled with its name, drawn while its
      shell and any of its categories are shown; a click on it opens the kind's ring. The

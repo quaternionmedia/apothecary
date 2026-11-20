@@ -16,7 +16,7 @@ import httpx
 import pytest
 import rings
 import windows
-from garage import said
+from garage import said, status
 from playwright.sync_api import Page, expect
 from viewer_ready import settled
 
@@ -163,6 +163,28 @@ def test_a_kinds_cluster_is_outlined_on_its_shell_and_hidden_with_its_categories
             return ['ender3', 'anolex_4060_evo_ultra_2'].map((k) => v.meshByName[k].visible); }"""
     )
     assert hidden == [False, False]
+
+
+@pytest.mark.e2e
+def test_a_kind_chosen_in_the_universe_opens_its_ring_as_its_outline_does(page: Page, url: str):
+    """The universe's parts hold no pieces to open in place, so a Kind chosen -- the
+    canvas ring's Kinds › Machines, or Site's Machines chip -- opens the kind's ring, as a
+    click on its outline does: Shown and Selectable over its categories, then each one's.
+    The status line says so, and never that anything was expanded."""
+    _universe(page, url)
+    chip = page.locator("#category-filters .category-chip", has_text="Machines")
+    for choose in (lambda: rings.on_world(page, "Kinds", "Machines"), chip.click):
+        choose()
+        expect(page.locator("#ring-overlay .title")).to_have_text("Machines", timeout=rings.RING_MS)
+        assert [label.rstrip(" ›") for label in rings.labels(page)] == [
+            "Shown",
+            "Selectable",
+            "machine",
+        ]
+        said(page, "Machines: its ring")
+        expect(status(page)).not_to_contain_text("Expanded")
+        page.keyboard.press("Escape")
+        expect(page.locator("#ring-overlay")).to_have_count(0)
 
 
 @pytest.mark.e2e

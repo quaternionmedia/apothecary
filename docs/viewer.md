@@ -614,7 +614,9 @@ them), View 2, Panels 4, Pictures 9, Rebuild 3 (the site built again from its fa
 it was first built: chosen twice), Step out 1 (at a site's own level, to the universe;
 greyed at the universe's own, nothing being above it) and Systems 7, Kinds in the universe
 (each System or kind beneath the level in view, in its colour: its pieces opened in place,
-as Site's chip for it opens them; greyed where there is none). Every cell is there wherever the ring opens, so
+as Site's chip for it opens them -- in the universe, whose parts hold nothing to open, a
+kind's ring instead, View › Layers › Kinds › it, as a click on its outline opens it;
+greyed where there is none). Every cell is there wherever the ring opens, so
 none moves: one with nothing to list is greyed in its cell, saying why -- Pieces with no
 site, a target no longer in it or nothing at its level, Site with no site registered.
 
@@ -842,7 +844,8 @@ full; the others are entered from ⊞ Windows › Journeys and from the
   windows stay where they are.
 
 - **Site**: its chips, one for each System, Kind and word beneath the level in view
-  in the facets' order and colours, each opening its pieces at every depth, and the
+  in the facets' order and colours, each opening its pieces at every depth (a Kind's in
+  the universe, whose parts hold nothing to open, its ring), and the
   **Contents** tree (a click selects a
   row, a double-click steps in, ⚠ marks a piece in a problem). Site's own
   windows are tabs beside it, each reached by Panels › Site too:

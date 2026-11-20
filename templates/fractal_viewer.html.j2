@@ -4062,13 +4062,15 @@
             // neither holds that has a piece beneath the level in view, in the facets'
             // order (layerGroups, the Layers window's rows), in its colour. A chip opens
             // every one of its pieces at any depth beneath this level (expandedLayers) and
-            // draws the level again, or closes them; it is lit while all are open. The
-            // canvas ring's Kinds or Systems (facet:<by>:<value>) does the same.
+            // draws the level again, or closes them; it is lit while all are open. In the
+            // universe a Kind's parts hold nothing to open, so its chip opens the kind's
+            // ring instead (chooseFacet). The canvas ring's Kinds or Systems
+            // (facet:<by>:<value>) does the same.
             facetChips() {
                 const { systems, kinds, words } = this.layerGroups();
                 return [
                     ...systems.map((value) => ({ facet: 'system', name: value.name, colour: value.colour, layers: [value.layer] })),
-                    ...kinds.map((kind) => ({ facet: 'kind', name: kind.name, colour: kind.colour, layers: kind.words.map((word) => word.layer) })),
+                    ...kinds.map((kind) => ({ facet: 'kind', name: kind.name, colour: kind.colour, layer: kind.layer, layers: kind.words.map((word) => word.layer) })),
                     ...words.map((word) => ({ facet: null, name: word.word, colour: layerHex(word.layer), layers: [word.layer] })),
                 ];
             }
@@ -4079,6 +4081,25 @@
                 for (const layer of layers) { if (opening) this.expandedLayers.add(layer); else this.expandedLayers.delete(layer); }
                 this.renderFocus();
                 return opening;
+            }
+
+            // A chip chosen, from Site or the canvas ring's Kinds or Systems: its pieces
+            // opened in place, or closed again (toggleExpanded). A Kind in the universe
+            // whose parts here hold no pieces of their own has nothing to open, so it opens
+            // the kind's ring where `at` says, as a click on its outline does (openLayerAt):
+            // View › Layers › Kinds › it, said in the status line. The words said, or null
+            // where pieces were opened or closed, and whether they were opened.
+            chooseFacet(chip, at = null) {
+                const focus = this.currentFocusNode();
+                const opens = !!focus && focus.children.some((child) => child.children.length && chip.layers.includes(child.layer));
+                const ring = window.apothecaryRing;
+                if (chip.facet === 'kind' && this.facets?.by === 'kind' && !opens && ring?.openLayer) {
+                    ring.openLayer(chip.layer, at);
+                    const said = `${chip.name}: its ring, as View › Layers › Kinds holds it; its parts hold nothing to open`;
+                    this.setStatus(said, 'success');
+                    return { said, opening: false };
+                }
+                return { said: null, opening: this.toggleExpanded(chip.layers) };
             }
 
             renderCategoryFilters() {
@@ -4095,7 +4116,7 @@
                     chip.appendChild(swatch);
                     chip.appendChild(document.createTextNode(value.name));
 
-                    chip.addEventListener('click', () => this.toggleExpanded(value.layers));
+                    chip.addEventListener('click', () => this.chooseFacet(value));
                     this.categoryFiltersEl.appendChild(chip);
                 }
             }
@@ -11490,8 +11511,8 @@
                     const [, by, name] = action.match(/^facet:([a-z]+):(.+)$/) ?? [];
                     const chip = viewer.facetChips().find((c) => c.facet === by && c.name === name);
                     if (chip) {
-                        const opening = viewer.toggleExpanded(chip.layers);
-                        viewer.setStatus(`${opening ? 'Expanded' : 'Collapsed'} ${name}${tail}`, 'success');
+                        const { said, opening } = viewer.chooseFacet(chip, intent.at);
+                        viewer.setStatus(`${said ?? `${opening ? 'Expanded' : 'Collapsed'} ${name}`}${tail}`, 'success');
                     } else viewer.setStatus(`${name}: nothing here to open${tail}`, 'error');
                 } else if (action === 'device:open') {
                     // The board's Machine, in front of the world.

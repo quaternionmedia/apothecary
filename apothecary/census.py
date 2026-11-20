@@ -1431,10 +1431,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
         "a recent apply's row in a part's editor, drawing it again from the cache",
     ),
     # the trails, trees and rows beside the scene
-    "chip:click:toggleExpanded": (
+    "chip:click:chooseFacet": (
         LIST,
         WHAT_YOU_SEE,
-        "a System's, a Kind's or a word's button that opens and closes its pieces",
+        "a System's, a Kind's or a word's button that opens and closes its pieces, "
+        "or opens a Kind's ring in the universe",
     ),
     "caret:click:delete": (LIST, WHAT_YOU_SEE, "an arrow that opens a branch"),
     "li:click:selectChild": (LIST, WHAT_YOU_SEE, "picking a piece from the list"),
