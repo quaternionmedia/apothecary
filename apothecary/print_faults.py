@@ -24,7 +24,8 @@ from the looks before:
   cannot say what that change did, and a second change before it is read would leave
   two unknowns in the next piece;
 - a fault gone: nothing; every lever put back or at its limit: nothing, and what to
-  look at instead is said.
+  look at instead is said. A step never goes against its lever: a value already past
+  its limit is left where it is, and the next lever tried.
 
 A temperature lever stays inside the filament's own printable range as its profile
 states it (``nozzle_temperature_range_low`` .. ``_high``) where the slice recorded it.
@@ -73,6 +74,12 @@ class Lever:
             if hi is not None:
                 high = min(high, hi)
         return min(max(value, low), high)
+
+    def step_from(self, was: float, used: Mapping[str, Optional[float]]) -> Optional[float]:
+        """One step from ``was`` the lever's way, inside its limits; None where it cannot
+        go that way: at its limit, or past it already, where clamping would step back."""
+        new = self.clamp(was + self.step, used)
+        return new if (new - was) / self.step > 1e-9 else None
 
 
 NOZZLE_RANGE = ("nozzle_temperature_range_low", "nozzle_temperature_range_high")
@@ -455,9 +462,13 @@ def next_step(
             if was is None:
                 said.append(f"{f.name.lower()}: {lv.key} is not in what the slice recorded")
                 continue
-            new = lv.clamp(was + lv.step, used)
-            if abs(new - was) < 1e-9:
-                said.append(f"{f.name.lower()}: {lv.key} is at its limit, {_fmt(was, lv.unit)}")
+            new = lv.step_from(was, used)
+            if new is None:
+                past = abs(lv.clamp(was, used) - was) > 1e-9
+                said.append(
+                    f"{f.name.lower()}: {lv.key} is {'past' if past else 'at'} its limit, "
+                    f"{_fmt(was, lv.unit)}"
+                )
                 continue
             moves.append(
                 Move(

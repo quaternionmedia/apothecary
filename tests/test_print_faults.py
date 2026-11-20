@@ -157,6 +157,34 @@ def test_a_temperature_stays_inside_the_filaments_own_range():
     assert "nozzle_temperature is at its limit, 230 °C" in " ".join(d.said)
 
 
+def test_a_step_never_moves_against_its_lever():
+    # PLA's range tops out at 230 °C: a nozzle at 235 has no hotter step, and clamping
+    # into the range would cool it under a lever that says hotter.
+    past = [
+        pf.Past(
+            "look-1",
+            {"under_extrusion": 2},
+            [_stepped("look-1", "under_extrusion", "filament_flow_ratio", 0.98, 1.0, 2)],
+        )
+    ]
+    over = {**USED, "nozzle_temperature": 235.0, "filament_flow_ratio": 1.0}
+    d = pf.next_step({"under_extrusion": 2}, over, past)
+    assert [(m.key, m.new) for m in d.moves] == [
+        ("filament_flow_ratio", 0.98),
+        ("filament_max_volumetric_speed", 10.0),
+    ]
+    assert "nozzle_temperature is past its limit, 235 °C" in " ".join(d.said)
+    # A cooling lever below the range's bottom is past its limit too, not warmed into it.
+    cooler = pf.lever("stringing", "nozzle_temperature")
+    assert cooler.step < 0
+    assert cooler.step_from(185.0, USED) is None
+    assert cooler.step_from(230.0, USED) == 225.0
+    # A part step up to the limit is still a step its way.
+    hotter = pf.lever("under_extrusion", "nozzle_temperature")
+    assert hotter.step_from(228.0, USED) == 230.0
+    assert hotter.step_from(230.0, USED) is None
+
+
 def test_a_fault_with_every_lever_spent_says_what_to_look_at():
     past = [
         pf.Past(
