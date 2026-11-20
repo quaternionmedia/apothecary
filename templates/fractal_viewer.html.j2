@@ -1899,10 +1899,12 @@
                             return {
                                 redraw: () => {
                                     this.scadEditor?.measure(); this.focusEditor();
-                                    // Feedback opened with no part asked for (Panels › Part ›
-                                    // Feedback): the selected piece's part.
-                                    const part = this.nodeByPath(this.selectedName)?.part_ref;
-                                    if (this.feedback && !this.feedback.part() && part) this.feedback.show(part);
+                                    // Feedback itself opened with no part asked for (⊞ Windows
+                                    // › Feedback): the selected piece's part, where a piece is.
+                                    // Another Part window opened leaves it as it was.
+                                    const selected = this.selectedName && this.selectedName !== FLOOR_KEY ? this.nodeByPath(this.selectedName) : null;
+                                    const part = selected?.part_ref;
+                                    if (this.feedback && !this.feedback.part() && part && this.panels.isShown('part-feedback')) this.feedback.show(part).then(() => this.showPartSections());
                                 },
                             };
                         },
@@ -5223,8 +5225,9 @@
                 if (!part) return;
                 const editing = this.partSection && this.selectedBodyEl.contains(this.partSection) ? this.partSection : null;
                 for (const [id, host] of Object.entries(part.sections)) {
-                    // Feedback is filled by its own widget, on the part it was asked for.
-                    if (id === 'feedback') continue;
+                    // Feedback is filled by its own widget, on the part it was asked for: it has
+                    // nothing to show, and its stack gives its room away, until a part is shown.
+                    if (id === 'feedback') { part.setEmpty(id, !this.feedback?.part()); continue; }
                     const block = editing?.parts?.[id];
                     // Nothing to show: its stack gives its room away (panels.js) until it has.
                     part.setEmpty(id, !block);
@@ -8567,6 +8570,7 @@
                 this.systems.part.widget();
                 this.panels.open('part-feedback');
                 const chosen = await this.feedback.show(name, { drawer, job });
+                this.showPartSections();
                 const which = !chosen ? 'nothing made of it yet' : chosen.drawer ? 'a drawer chosen' : 'a piece made elsewhere chosen';
                 return { said: `${name}'s cabinet in Part › Feedback, ${which}` };
             }
