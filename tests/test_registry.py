@@ -1,8 +1,11 @@
+import json
+import os
 from pathlib import Path
 
 from apothecary.projects import registry
 from apothecary.projects.registry import (
     _locate_wrapper_for_part,
+    category_of,
     scan_projects,
     scan_templates,
     summarize_structure,
@@ -70,3 +73,37 @@ def test_a_caller_cannot_change_the_kept_scan(tmp_path):
     _add_part(tmp_path, "kept")
     scan_projects(tmp_path).clear()
     assert "kept" in _names(tmp_path)
+
+
+def _describe(root: Path, name: str, text: str, at_second: int) -> None:
+    """Write a part's part.json, its time set apart from any written before it, as an
+    edit a second later would be."""
+    sidecar = root / "parts" / name / "part.json"
+    sidecar.write_text(text, encoding="utf-8")
+    os.utime(sidecar, ns=(at_second * 10**9, at_second * 10**9))
+
+
+def test_a_parts_category_is_kept_while_its_part_json_is_and_a_failure_never(tmp_path, monkeypatch):
+    """Asked before the part is there: None, and found once it is. A part.json left as it
+    was is not read again, an edited one is, and one that will not load is None and read
+    again when next asked, its time unchanged."""
+    assert category_of("later", tmp_path) is None
+    _add_part(tmp_path, "later")
+    _describe(tmp_path, "later", json.dumps({"category": "coupon"}), 1_000_000)
+    assert category_of("later", tmp_path) == "coupon"
+
+    loads = []
+    real = registry.load_part
+    monkeypatch.setattr(registry, "load_part", lambda item: loads.append(item) or real(item))
+    assert category_of("later", tmp_path) == "coupon"
+    assert loads == []
+
+    _describe(tmp_path, "later", json.dumps({"category": "camera"}), 1_000_001)
+    assert category_of("later", tmp_path) == "camera"
+    _describe(tmp_path, "later", "{ this will not load", 1_000_002)
+    assert category_of("later", tmp_path) is None
+    loads.clear()
+    assert category_of("later", tmp_path) is None
+    assert len(loads) == 1  # a failure is asked again
+    _describe(tmp_path, "later", json.dumps({"category": "machine"}), 1_000_002)
+    assert category_of("later", tmp_path) == "machine"

@@ -437,7 +437,8 @@ def is_bought(part_ref: Optional[str]) -> bool:
 
 def part_category(part_ref: Optional[str]) -> Optional[str]:
     """A part's category, the word its kind holds (facets.py); None for no part, or one
-    that is not registered (``projects.registry.category_of``, asked once per part)."""
+    that is not registered (``projects.registry.category_of``, kept while its part.json is
+    unchanged)."""
     return category_of(part_ref, ROOT) if part_ref else None
 
 
