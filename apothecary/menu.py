@@ -1550,6 +1550,24 @@ def _motion() -> Option:
     )
 
 
+def _feedback() -> Option:
+    """Part › View › Feedback: the part's cabinet in Part › Feedback, a drawer for each
+    piece made of it (apothecary/cabinet.py), then what is done to the piece chosen there
+    (widgets/feedback.js): Measure files what is read or seen, Note a note, and Take turn
+    and Undo turn the turn it makes in its printer's next slices."""
+    return Option(
+        id="feedback",
+        label="Feedback",
+        children=[
+            Option(id="feedback:open", label="Feedback", action="feedback:open"),
+            Option(id="feedback:measure", label="Measure", action="feedback:measure"),
+            Option(id="feedback:note", label="Note", action="feedback:note"),
+            Option(id="feedback:tune-apply", label="Take turn", action="feedback:tune-apply"),
+            Option(id="feedback:tune-undo", label="Undo turn", action="feedback:tune-undo"),
+        ],
+    )
+
+
 def _bench(show: Option) -> Option:
     """The Bench's cell under Panels: the panel itself first, then its verbs.
 
@@ -2196,6 +2214,11 @@ def _node_ring(
     # tilt and field of view (vision/camera_part.py,
     # GET /sites/{s}/cameras/{name}/params).
     made = bool(path and "." not in path and path in picture.made)
+    in_a_printer = any(path == p or path.startswith(p + ".") for p in picture.printers)
+    board = bool(node is not None and (node.sketch_ref or (picture.part and picture.part.board)))
+    # A machine drawn as a part (the router) is no more sliced than a printer is.
+    machine = bool(node is not None and node.build_volume is not None)
+    part = bool(node is not None and node.part_ref and not camera and not board and not machine)
     if node is not None and (node.part_ref or camera or made):
         verbs = [Option(id="part:edit", label="Edit", action="part:edit")]
         # A part from the parts folder: Defaults stages the part's own numbers in its
@@ -2233,6 +2256,11 @@ def _node_ring(
         # (widgets/motion.js). After Fit, so no cell of View moves.
         if seen is not None and seen.motion:
             view.append(_motion())
+        # The part's cabinet, Part › Feedback, on a part that is made -- not a camera, a
+        # board, a machine, or anything inside a printer. After Motion, so no cell of View
+        # moves.
+        if part and not in_a_printer:
+            view.append(_feedback())
         verbs.append(Option(id="part:view", label="View", children=view))
         verbs.append(
             Option(
@@ -2288,11 +2316,6 @@ def _node_ring(
     # devkit is bought and flashed, never printed) -- sliced for a printer pinned
     # there. Appended last, so no cell above moves; with no printer pinned in the
     # site there is nothing to slice for, and no Slice.
-    in_a_printer = any(path == p or path.startswith(p + ".") for p in picture.printers)
-    board = bool(node is not None and (node.sketch_ref or (picture.part and picture.part.board)))
-    # A machine drawn as a part (the router) is no more sliced than a printer is.
-    machine = bool(node is not None and node.build_volume is not None)
-    part = bool(node is not None and node.part_ref and not camera and not board and not machine)
     if (made or part) and picture.printers and not in_a_printer:
         options.append(_slice_option(picture.printers))
     # Toolpath, the same place for a part that says how it is cut, with a router
@@ -2493,12 +2516,6 @@ CAN_VERBS: Dict[str, CanVerb] = {
     "print:start": "print.start",
     "print:preview": None,
     "print:plan": None,
-    "print:measure": None,
-    # The printer's tuning document (slicer/tuning.py apply, undo), not its port: refused by
-    # the tuning's own answer (static/tuning.js canApply, canUndo), as its button is, which
-    # the page tells beside the port's (PAGE_ANSWERS).
-    "print:tune-apply": "tune.apply",
-    "print:tune-undo": "tune.undo",
     "control:unlock": "unlock",
     "control:spindle-on": "spindle",
     "control:spindle-off": "off",
@@ -2534,11 +2551,6 @@ CAN_VERBS: Dict[str, CanVerb] = {
 }
 # What is never greyed, whatever an answer says: the stop, as can.js's NEVER.
 NEVER_GREYED = frozenset({"estop"})
-# Commands the page answers itself and tells in a board's ``can`` beside the server's: the
-# printer's tuning document's Apply and Undo turn, as its Print window's two buttons show
-# them (the template's tuneCan). With its Machine not open the page tells neither, and
-# neither is greyed.
-PAGE_ANSWERS = frozenset({"tune.apply", "tune.undo"})
 
 
 def can_entry(action: str) -> Tuple[bool, CanVerb]:
@@ -2660,21 +2672,6 @@ def control_options(device: Device) -> List[Option]:
                 Option(id="print:start", label="Send file", action="print:start"),
                 Option(id="print:preview", label="Preview", action="print:preview"),
                 Option(id="print:plan", label="Keep as plan", action="print:plan"),
-                # The piece printed, read: what is read under measured kept as the next
-                # turn of the printer's tuning; a fault chosen under seen, the next look;
-                # or the first field, with neither.
-                Option(id="print:measure", label="Measure", action="print:measure"),
-                # The printer's tuning: the last turn's changes into its next slices, or
-                # the last turn dropped with what it applied (slicer/tuning.py). Worded
-                # as the Print window's buttons are: Take turn, Undo turn.
-                Option(
-                    id="print:tune",
-                    label="Tune",
-                    children=[
-                        Option(id="print:tune-apply", label="Take turn", action="print:tune-apply"),
-                        Option(id="print:tune-undo", label="Undo turn", action="print:tune-undo"),
-                    ],
-                ),
             ],
         ),
         Option(
@@ -2757,9 +2754,6 @@ def router_control_options(device: Device) -> List[Option]:
                 Option(id="print:start", label="Send file", action="print:start"),
                 Option(id="print:preview", label="Preview", action="print:preview"),
                 Option(id="print:plan", label="Keep as plan", action="print:plan"),
-                # The piece cut, measured: what is typed under measured kept as the
-                # router's tool allowance, or the field, with nothing typed.
-                Option(id="print:measure", label="Measure", action="print:measure"),
             ],
         ),
         Option(id="control:estop", label="Stop", action="control:estop", destructive=True),
@@ -2827,6 +2821,9 @@ CARRIED_BY: Dict[str, Carries] = {
     # A made piece's Print: the page opens the printer's Machine with the piece
     # chosen under makes; nothing is sent until that card's Print.
     "print:piece": Carries.VIEWER,
+    # Feedback on a part's piece: the page opens Part › Feedback on the part's cabinet and
+    # files what is read, seen or noted through /cabinet; nothing is sent to a machine.
+    "feedback": Carries.VIEWER,
     # Slice, on a made piece or a part: the page opens the printer's Machine with it
     # chosen under makes and starts the slice there (POST /slicer/slice), a task the
     # card follows; nothing is sent to the printer.

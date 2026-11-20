@@ -752,7 +752,7 @@ which the page, the ring and the tests all read.
 
 | System | Main window | Sections |
 |---|---|---|
-| Part | Selected: the piece, its part, what it is drawn from, its envelope, and the staged changes' bar (Apply, Revert, Defaults, Undo, Redo, Ghost) | Parameters (under Selected, sharing a stack with Variants, History and Readiness), SCAD (beside the world) |
+| Part | Selected: the piece, its part, what it is drawn from, its envelope, and the staged changes' bar (Apply, Revert, Defaults, Undo, Redo, Ghost) | Parameters (under Selected, sharing a stack with Variants, History, Readiness and Feedback), SCAD (beside the world) |
 | Machine | The board's head -- its link verbs, the control latch, ⏹ E-STOP -- what it is and its state | Status, Temperature, Print, Bed level (a printer's); Status, Cut, Table map (a router's); Sketch, Flashing (a devkit's); Log -- those of the board's kind, in one stack under the Machine while the column has room, else tabs beside it |
 | Airgap | The machine drawn at its angle, its scrub and its verbs | Metrics, the field, gap map, inductance, torque, harmonics, run-up, orbit, vibration, Rig, Sweep ([airgap.md](airgap.md#the-panel)) |
 | Family | The Procedure: the site's steps and GO | Members (each member, how it is reached, its door), Deliveries (the hub's audit, newest first) -- tabs beside the Procedure ([family.md](family.md#a-procedure)) |
@@ -760,7 +760,7 @@ which the page, the ring and the tests all read.
 | View | |
 |---|---|
 | Default | The page's own layout, as Reset layout puts it |
-| Part | The world; Selected over Parameters, Variants, History and Readiness; the SCAD window over Site, Problems and SCAD |
+| Part | The world; Selected over Parameters, Variants, History, Readiness and Feedback; the SCAD window over Site, Problems and SCAD |
 | Machine | The world; the board's Machine over a printer's Status and Temperature, its Print, Bed level and Log beside them -- a devkit's Sketch and Flashing, its Log beside them; Selected under the board's sections, Site with Jobs and Pinned at the other foot; the path of the file a printer or a router has chosen drawn in the world, and framed |
 | Airgap | The Airgap and each of its sections in a window, the world among them |
 | Family | The world; the Procedure tall beside it; Members and Deliveries under it, with Jobs and Workspace, and Selected, in the column |
@@ -820,7 +820,7 @@ what it made:
 | 3 | **Slice** | the Machine's Print window | the Print window |
 | 4 | **See** | the Print window, the chosen file's path drawn in the world and framed | -- |
 | 5 | **Start** | the Machine, then Jobs | the Machine, Jobs |
-| 6 | **Measure** | the Print window, a file of the part chosen there to measure against | -- |
+| 6 | **Measure** | the part's Feedback window, its cabinet, a piece of it chosen there to measure | the Feedback window |
 
 A journey's view lays its windows out when it is entered. *Print a part*'s is also
 listed in ⊞ Windows › Views and has a cell on the ring's Panels › Windows, which is
@@ -910,7 +910,9 @@ it, the cursor in its first control. Its **SCAD**, **Variants** (every saved
 variant, what can be done to each, the trash, and the compare), **History**
 and **Readiness** (to build) are
 windows of their own, each closed until asked for, laid out together by
-Panels › Windows › Part view. Each
+Panels › Windows › Part view. **Feedback** is the part's cabinet, filled by a widget of
+its own rather than the editor: a drawer for each piece made of the part, and what is
+read, seen or noted of a piece filed there ([cabinet.md](cabinet.md)). Each
 parameter is a control starting from what is drawn, its description as its
 caption; a contested one comes first, with its candidates as buttons.
 

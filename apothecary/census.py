@@ -649,50 +649,11 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a button that slices what makes names for the printer, and chooses its G-code",
     ),
-    "print-measure": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "a field for what the piece a toolpath cut measures, each feature it names",
-    ),
-    "measure-read": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "a field for what one feature of a printed piece reads, one in each row of its"
-        " plan under measured",
-    ),
-    "print-measure-keep": (
-        WIDGET,
-        WHAT_IS_THERE,
-        "a button that checks what was read against what was made and keeps it: the"
-        " printer's next turn of its tuning, or the router's tool allowance",
-    ),
-    "print-tune-apply": (
-        WIDGET,
-        WHAT_IS_THERE,
-        "a button that takes the last turn of the printer's tuning into its next slices",
-    ),
     "print-filament": (
         WIDGET,
         WHAT_IS_THERE,
         "a drop-down of the filaments the printer can load, which loads the one chosen:"
         " its next slices are made with it",
-    ),
-    "seen-read": (
-        WIDGET,
-        WHAT_YOU_SEE,
-        "a drop-down of how badly one fault shows on a printed piece, none to bad, one for"
-        " each fault under seen",
-    ),
-    "print-seen-keep": (
-        WIDGET,
-        WHAT_IS_THERE,
-        "a button that keeps what the piece shows as the printer's next look, which moves"
-        " one setting",
-    ),
-    "print-tune-undo": (
-        WIDGET,
-        WHAT_IS_THERE,
-        "a button that drops the last turn of the printer's tuning, and what it applied",
     ),
     "print-preview": (
         WIDGET,
@@ -708,6 +669,61 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
     "print-pause": (WIDGET, WHAT_IS_THERE, "a button that stops feeding the print from here"),
     "print-resume": (WIDGET, WHAT_IS_THERE, "a button that feeds the print from here again"),
     "print-cancel": (WIDGET, WHAT_IS_THERE, "a button that ends the print from here, heaters off"),
+    # ---- Part › Feedback, apothecary/static/widgets/feedback.js ---------------
+    # A part's cabinet: a drawer for each piece made of it, and what is said of a piece
+    # filed there. Its acts are the cells of a part's piece's Feedback (RING_BACKED).
+    "feedback-piece": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of the pieces made of the part, a drawer each, the newest first, then"
+        " its kept slices and toolpaths made elsewhere",
+    ),
+    "feedback-measure": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a field for what the piece a toolpath cut measures, each feature it names",
+    ),
+    "measure-read": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a field for what one feature of a printed piece reads, one in each row of its"
+        " plan under measured",
+    ),
+    "feedback-measure-keep": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that checks what was read against what was made and files it in the"
+        " piece's drawer: its printer's next turn of its tuning, or its router's allowance",
+    ),
+    "seen-read": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of how badly one fault shows on a printed piece, none to bad, one for"
+        " each fault under seen",
+    ),
+    "feedback-seen-keep": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that files what the piece shows in its drawer as its printer's next look,"
+        " which moves one setting",
+    ),
+    "feedback-note": (WIDGET, WHAT_YOU_SEE, "a field for a note on the piece"),
+    "feedback-note-keep": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that files the note in the piece's drawer",
+    ),
+    "feedback-tune-apply": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that takes the last turn of the tuning of the printer that made the piece"
+        " into its next slices",
+    ),
+    "feedback-tune-undo": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that drops the last turn of that printer's tuning, and what it applied",
+    ),
     # ---- Procedure, apothecary/static/widgets/procedure.js -------------------
     # A site's procedures. GO and Start over are Site › Procedure too (RING_BACKED).
     "procedure-choice": (WIDGET, WHAT_YOU_SEE, "a drop-down of the site's procedures"),
@@ -1048,18 +1064,20 @@ RING_BACKED: Dict[str, str] = {
     "print-preview": "print:preview",
     # Keep as plan keeps the machine's plan, its board connected or not.
     "print-plan": "print:plan",
-    # Print › Measure keeps what is typed under measured, as Keep does, and takes a
-    # person to the field when nothing is typed, as the tour's Who does its name; a
-    # router's Cut › Measure is the same verb on its ring.
-    "print-measure": "print:measure",
-    "measure-read": "print:measure",
-    "print-tune-apply": "print:tune-apply",
-    "print-tune-undo": "print:tune-undo",
-    "print-measure-keep": "print:measure",
-    # A fault chosen under seen and nothing read, Print › Measure keeps the look, as
-    # Keep look does.
-    "seen-read": "print:measure",
-    "print-seen-keep": "print:measure",
+    # A part's piece's Feedback › Measure files what is typed under measured, as Keep does,
+    # and takes a person to the field when nothing is typed; a fault chosen under seen and
+    # nothing read, it files the look, as Keep look does. Note files the note, or takes a
+    # person to its field; Take turn and Undo turn are the buttons'.
+    "feedback-measure": "feedback:measure",
+    "measure-read": "feedback:measure",
+    "feedback-measure-keep": "feedback:measure",
+    "seen-read": "feedback:measure",
+    "feedback-seen-keep": "feedback:measure",
+    "feedback-note": "feedback:note",
+    "feedback-note-keep": "feedback:note",
+    "feedback-tune-apply": "feedback:tune-apply",
+    "feedback-tune-undo": "feedback:tune-undo",
+    "feedback-note:keydown:keepNote": "feedback:note",
     # Slice slices what makes names, as the Slice cell of a made piece's ring or a
     # part's slices that piece or part, chosen under makes first.
     "print-slice": "slice:piece:printer_1",
@@ -1691,6 +1709,11 @@ LISTENING: Dict[str, Tuple[str, str, str]] = {
     ),
     "devPinManual:click:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board"),
     "manualIn:keydown:pinManual": (WIDGET, WHAT_IS_THERE, "pinning the typed board, by Enter"),
+    "feedback-note:keydown:keepNote": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "filing the typed note in the piece's drawer, by Enter",
+    ),
     # the page reacting to itself
     "window:resize:onResize": (AUTOMATIC, NOTHING, "the window changed size on its own"),
     # Render on demand: the move arrows lighting up under the pointer change nothing

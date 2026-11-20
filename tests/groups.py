@@ -145,6 +145,7 @@ GROUPS = {
             "apothecary/cabinet.py",
             "apothecary/routes/cabinet.py",
             "apothecary/cli/cabinet.py",
+            "apothecary/static/widgets/feedback.js",
             "parts/router_coupon/*",
             "parts/router_emoji/*",
             "parts/ender3/*",

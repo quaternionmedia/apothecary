@@ -322,11 +322,7 @@ def test_every_act_on_a_machines_ring_names_a_command_the_server_answers_or_none
     )
     assert not stale, f"menu.CAN_VERBS names acts no machine's ring carries: {stale}"
     named = set().union(*(_named(v) for v in CAN_VERBS.values()))
-    from apothecary.menu import PAGE_ANSWERS
-
-    # The page's own answers are no server's, and none of the server's is the page's.
-    assert PAGE_ANSWERS <= named and not PAGE_ANSWERS & answers
-    unanswered = sorted(named - answers - PAGE_ANSWERS)
+    unanswered = sorted(named - answers)
     assert not unanswered, f"menu.CAN_VERBS names {unanswered}"
 
 
@@ -340,9 +336,8 @@ def test_the_rings_acts_are_greyed_by_the_commands_the_machines_buttons_are():
     """menu.CAN_VERBS and the Machine name each act by one command: a pad's line by the
     verb verbOfLine names it (BY_CMD, the line's act), a job's verb by the job's command
     (HOST_VERBS), and each button the ring's addresses are written on (pairs()) by its
-    data-can -- a button with none, an act with none -- or, for a command the page answers
-    itself (PAGE_ANSWERS), by the button the template reads that answer from."""
-    from apothecary.menu import CAN_VERBS, PAGE_ANSWERS, ByJob
+    data-can -- a button with none, an act with none."""
+    from apothecary.menu import CAN_VERBS, ByJob
 
     text = MACHINE_JS.read_text(encoding="utf-8")
     by_cmd = dict(re.findall(r'"([^"]+)": "(control:[a-z-]+)"', _block(text, "const BY_CMD", "};")))
@@ -389,23 +384,9 @@ def test_the_rings_acts_are_greyed_by_the_commands_the_machines_buttons_are():
         for action, word in host.items()
         if button_half(action) != f"print.{word}"
     ]
-    template = (ROOT / "templates" / "fractal_viewer.html.j2").read_text(encoding="utf-8")
-    read_from = {
-        verb: button
-        for verb, button in re.findall(
-            r"\['(tune\.[a-z]+)', '([a-z-]+)'\]", _block(template, "TUNE_BUTTONS", ";")
-        )
-    }
-    assert set(read_from) == PAGE_ANSWERS, read_from
     for button, action in paired:
         ours = button_half(action)
-        if ours in PAGE_ANSWERS:
-            # Greyed by the page's own answer (setReason), named by no data-can.
-            if read_from.get(ours) != button or tags.get(button) is not None:
-                problems.append(
-                    f"#{button} ({action}): the ring's {ours} is read from #{read_from.get(ours)}"
-                )
-        elif tags.get(button) != ours:
+        if tags.get(button) != ours:
             problems.append(
                 f"#{button} ({action}): its data-can is {tags.get(button)}, the ring's {ours}"
             )

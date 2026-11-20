@@ -848,24 +848,6 @@ def test_panels_machine_greys_the_loops_and_the_knobs_as_their_windows_do(
 
 
 @pytest.mark.e2e
-def test_print_tune_is_greyed_on_the_ring_as_its_buttons_are(page: Page, ring_url: str):
-    """Print › Tune › Take turn and Undo turn are the printer's tuning document's, not its
-    port's: with no file a slice made for the printer chosen, the ring greys both, as the
-    Machine refuses them, rather than offering them live."""
-    page.goto(f"{ring_url}/firmware/monitor?port={PRINTER}")
-    windows.machine_ready(page, "printer")
-    expect(page.locator("#ident")).to_contain_text("Marlin", timeout=8000)
-    expect(page.locator("#print-measure-row")).to_be_hidden()
-    page.locator(f"{windows.MACHINE_WINDOWS} #ident").click(button="right", modifiers=["Control"])
-    expect(page.locator("#ring-overlay")).to_be_visible(timeout=5000)
-    for digit in "797":  # Control › Print › Tune
-        page.keyboard.press(digit)
-    expect(page.locator("#ring-overlay .title")).to_have_text("Tune")
-    why = "Disabled: choose a file a slice made for this printer"
-    assert greyed(page) == {"8": why, "6": why}
-
-
-@pytest.mark.e2e
 def test_an_open_ring_is_greyed_again_as_the_latch_goes_down_and_up(page: Page, ring_url: str):
     """A ring left open at Control › Jog is greyed again from each answer the page applies:
     the latch let go while it is open greys every jog with the server's reason, and armed

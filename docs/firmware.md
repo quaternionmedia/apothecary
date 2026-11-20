@@ -737,11 +737,9 @@ act on a machine's ring, the command the server answers for it: the verb its but
 names in `data-can`, or the one `verbOfLine` names its pad line by
 (`tests/test_can_js.py` holds the two to each other act by act, and a new act with no
 entry fails it). A print's or a cut's Pause, Resume and Abort are the job's while a job
-from here runs and the line's otherwise, as the Machine carries them. Print › Tune ›
-Apply and Undo turn are the printer's tuning document's, not its port's: the page tells
-them beside the port's answer (`menu.PAGE_ANSWERS`), as the Print window's two buttons
-show them, and with no file a slice made for the printer chosen both are refused. The
-canvas ring's Panels › Machine is told the same kind of answer beside its context
+from here runs and the line's otherwise, as the Machine carries them. Take turn and
+Undo turn, the printer's tuning document's, are no machine ring's: they are a part's
+piece's, under Part › View › Feedback ([cabinet.md](cabinet.md)). The canvas ring's Panels › Machine is told the same kind of answer beside its context
 (`can` on the resolve): the heater loops' Read, Start, Cancel and Set gains as the
 Loops window greys them (the open Machine's port's answer when that window is not
 there, and refused with no printer's Machine open), and the knobs' as the deck answers

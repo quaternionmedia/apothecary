@@ -224,6 +224,40 @@ def test_the_simulated_server_goes_round_a_picture_to_a_print(page: Page, simula
 
 
 @pytest.mark.e2e
+def test_a_part_printed_to_its_end_opens_its_drawer_in_feedback(page: Page, simulated):
+    """footpedal sliced from its ring for printer_1 and printed on the simulated printer to
+    its end: the job opened the piece's drawer in footpedal's cabinet as it began, and its
+    end brings Part › Feedback, that drawer chosen, saying how the job ended."""
+    if not get_renderer().is_available:
+        pytest.skip("OpenSCAD not installed")
+    url = simulated["url"]
+    _open_garage(page, url)
+    _ring_on(page, "footpedal")
+    _press(page, "Slice")
+    _said(page, "slicing footpedal for printer_1")
+    machine = windows.machine(page)
+    expect(machine.locator("#print-slice-said")).to_contain_text(
+        "footpedal sliced for printer_1", timeout=180000
+    )
+    kept = _kept(page, url, "footpedal")
+    machine.locator("#ctl").check()
+    expect(machine.locator("#print-start")).to_be_enabled(timeout=10000)
+    page.once("dialog", lambda d: d.accept())
+    machine.locator("#print-start").click()
+    expect(machine.locator("#print-progress")).to_contain_text(
+        "footpedal.gcode · done", timeout=60000
+    )
+    _said(page, "ended: done")
+    _said(page, "its drawer is in Part › Feedback")
+    feedback = windows.panel(page, "part-feedback")
+    expect(feedback.locator("#feedback-title")).to_have_text("Feedback · footpedal", timeout=10000)
+    (drawer,) = page.request.get(f"{url}/cabinet/footpedal").json()["drawers"]
+    assert drawer["file"]["file_id"] == kept["id"] and drawer["job"]["outcome"] == "done"
+    expect(feedback.locator("#feedback-piece")).to_have_value(f"drawer:{drawer['id']}")
+    expect(feedback.locator("#feedback-piece-said")).to_contain_text("job done")
+
+
+@pytest.mark.e2e
 def test_the_simulated_server_goes_round_designing_a_part_and_editing_its_scad(
     page: Page, simulated, shots
 ):

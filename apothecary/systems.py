@@ -214,6 +214,18 @@ PART = System(
             "whether the part is ready to print and check against a real one",
             home="part-parameters",
         ),
+        # The part's cabinet (apothecary/cabinet.py): filled by its own widget
+        # (widgets/feedback.js), not the editor, on the part a piece's ring or a print's
+        # end opened it on.
+        Section(
+            "feedback",
+            "Feedback",
+            "the part's cabinet: a drawer for each piece made of it, and what is said of a "
+            "piece filed there -- what calipers read, the faults it shows, a note -- with "
+            "the turn it makes taken into its printer's next slices, or undone",
+            home="part-parameters",
+            verbs=("feedback:",),
+        ),
     ),  # fmt: skip
     view={
         "row": [
@@ -227,6 +239,7 @@ PART = System(
                             "part-variants",
                             "part-history",
                             "part-readiness",
+                            "part-feedback",
                         ],
                         "size": 62,
                         "active": "part-parameters",

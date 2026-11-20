@@ -532,9 +532,6 @@
       "94": "print:start",
       "99": "print:preview",
       "93": "print:plan",
-      "91": "print:measure",
-      "978": "print:tune-apply",
-      "976": "print:tune-undo",
       "38": "control:motors-off",
       "36": "control:quickstop",
       "32": "control:break-wait",
@@ -582,9 +579,6 @@
       "794": "print:start",
       "799": "print:preview",
       "793": "print:plan",
-      "791": "print:measure",
-      "7978": "print:tune-apply",
-      "7976": "print:tune-undo",
       "738": "control:motors-off",
       "736": "control:quickstop",
       "732": "control:break-wait",
@@ -635,9 +629,6 @@
       "4794": "print:start",
       "4799": "print:preview",
       "4793": "print:plan",
-      "4791": "print:measure",
-      "47978": "print:tune-apply",
-      "47976": "print:tune-undo",
       "4738": "control:motors-off",
       "4736": "control:quickstop",
       "4732": "control:break-wait",
@@ -1154,63 +1145,6 @@
               "colour": null,
               "children": null,
               "cell": 3
-            },
-            {
-              "id": "print:measure",
-              "label": "Measure",
-              "action": "print:measure",
-              "enabled": true,
-              "why": null,
-              "destructive": false,
-              "twice": false,
-              "marked": false,
-              "group": null,
-              "colour": null,
-              "children": null,
-              "cell": 1
-            },
-            {
-              "id": "print:tune",
-              "label": "Tune",
-              "action": null,
-              "enabled": true,
-              "why": null,
-              "destructive": false,
-              "twice": false,
-              "marked": false,
-              "group": null,
-              "colour": null,
-              "children": [
-                {
-                  "id": "print:tune-apply",
-                  "label": "Take turn",
-                  "action": "print:tune-apply",
-                  "enabled": true,
-                  "why": null,
-                  "destructive": false,
-                  "twice": false,
-                  "marked": false,
-                  "group": null,
-                  "colour": null,
-                  "children": null,
-                  "cell": 8
-                },
-                {
-                  "id": "print:tune-undo",
-                  "label": "Undo turn",
-                  "action": "print:tune-undo",
-                  "enabled": true,
-                  "why": null,
-                  "destructive": false,
-                  "twice": false,
-                  "marked": false,
-                  "group": null,
-                  "colour": null,
-                  "children": null,
-                  "cell": 6
-                }
-              ],
-              "cell": 7
             }
           ],
           "cell": 9
@@ -1963,63 +1897,6 @@
                   "colour": null,
                   "children": null,
                   "cell": 3
-                },
-                {
-                  "id": "print:measure",
-                  "label": "Measure",
-                  "action": "print:measure",
-                  "enabled": true,
-                  "why": null,
-                  "destructive": false,
-                  "twice": false,
-                  "marked": false,
-                  "group": null,
-                  "colour": null,
-                  "children": null,
-                  "cell": 1
-                },
-                {
-                  "id": "print:tune",
-                  "label": "Tune",
-                  "action": null,
-                  "enabled": true,
-                  "why": null,
-                  "destructive": false,
-                  "twice": false,
-                  "marked": false,
-                  "group": null,
-                  "colour": null,
-                  "children": [
-                    {
-                      "id": "print:tune-apply",
-                      "label": "Take turn",
-                      "action": "print:tune-apply",
-                      "enabled": true,
-                      "why": null,
-                      "destructive": false,
-                      "twice": false,
-                      "marked": false,
-                      "group": null,
-                      "colour": null,
-                      "children": null,
-                      "cell": 8
-                    },
-                    {
-                      "id": "print:tune-undo",
-                      "label": "Undo turn",
-                      "action": "print:tune-undo",
-                      "enabled": true,
-                      "why": null,
-                      "destructive": false,
-                      "twice": false,
-                      "marked": false,
-                      "group": null,
-                      "colour": null,
-                      "children": null,
-                      "cell": 6
-                    }
-                  ],
-                  "cell": 7
                 }
               ],
               "cell": 9
@@ -2829,63 +2706,6 @@
                       "colour": null,
                       "children": null,
                       "cell": 3
-                    },
-                    {
-                      "id": "print:measure",
-                      "label": "Measure",
-                      "action": "print:measure",
-                      "enabled": true,
-                      "why": null,
-                      "destructive": false,
-                      "twice": false,
-                      "marked": false,
-                      "group": null,
-                      "colour": null,
-                      "children": null,
-                      "cell": 1
-                    },
-                    {
-                      "id": "print:tune",
-                      "label": "Tune",
-                      "action": null,
-                      "enabled": true,
-                      "why": null,
-                      "destructive": false,
-                      "twice": false,
-                      "marked": false,
-                      "group": null,
-                      "colour": null,
-                      "children": [
-                        {
-                          "id": "print:tune-apply",
-                          "label": "Take turn",
-                          "action": "print:tune-apply",
-                          "enabled": true,
-                          "why": null,
-                          "destructive": false,
-                          "twice": false,
-                          "marked": false,
-                          "group": null,
-                          "colour": null,
-                          "children": null,
-                          "cell": 8
-                        },
-                        {
-                          "id": "print:tune-undo",
-                          "label": "Undo turn",
-                          "action": "print:tune-undo",
-                          "enabled": true,
-                          "why": null,
-                          "destructive": false,
-                          "twice": false,
-                          "marked": false,
-                          "group": null,
-                          "colour": null,
-                          "children": null,
-                          "cell": 6
-                        }
-                      ],
-                      "cell": 7
                     }
                   ],
                   "cell": 9

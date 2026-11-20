@@ -60,6 +60,7 @@ thing only where it is not so already:
   | `fit` | a piece chosen and framed in the world | `f` |
   | `makes` | the piece named under makes in the open Machine's Print window, and the file kept made from it chosen, where one is kept: nothing is sliced | the card's makes, and its files |
   | `file` | the open Machine's file made from a part: the one chosen, else the newest kept chosen, else one made (on a reload, not made: ↻ makes it); another part's file chosen before is not the stage's | the card's file, Slice, or a router's Toolpath |
+  | `feedback` | a piece chosen, and its part's cabinet in the Feedback window, where another part's or none is shown | Part › View › Feedback |
   | `edit` | a part's editor opened | Part › Edit |
   | `scad` | a part's SCAD in its window | Part › SCAD |
   | `bench` | the Bench opened on a piece's sketch | Device › Flash sketch |
