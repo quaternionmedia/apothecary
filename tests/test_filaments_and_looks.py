@@ -8,10 +8,12 @@ from __future__ import annotations
 import time
 
 import pytest
+from click.testing import CliRunner
 from fastapi.testclient import TestClient
 
 from apothecary import sites
 from apothecary.api import app
+from apothecary.cli import cli
 from apothecary.slicer import service, tuning
 from apothecary.slicer.profiles import load_part
 
@@ -201,6 +203,40 @@ def test_a_look_that_is_not_one_keeps_nothing(fake_orcaslicer, built, seen, said
     r = client.post(f"/slicer/slices/{record['file_id']}/seen", json={"seen": seen})
     assert r.status_code == 422 and said in r.json()["detail"]
     assert client.get("/slicer/tuning", params=WHERE).json()["documents"] == []
+
+
+def _apply_at_the_command_line():
+    return CliRunner().invoke(
+        cli, ["tuning", "apply", "--site", WHERE["site"], "--printer", WHERE["printer"]]
+    )
+
+
+def test_tuning_apply_at_the_command_line_says_the_look_it_took_and_each_unit(
+    fake_orcaslicer, built
+):
+    first = _slice()
+    r = client.post(f"/slicer/slices/{first['file_id']}/seen", json={"seen": {"stringing": 2}})
+    assert r.status_code == 200, r.text
+    out = _apply_at_the_command_line()
+    assert out.exit_code == 0, out.output
+    assert out.output.splitlines() == [
+        "filament_retraction_length: 4 -> 4.5 mm",
+        "printer_1's next slices for Creality Generic PLA take them (look-1)",
+    ]
+
+
+def test_tuning_apply_at_the_command_line_names_the_look_after_a_turn(fake_orcaslicer, built):
+    first = _slice()
+    r = client.post(f"/slicer/slices/{first['file_id']}/measured", json={"readings": {"x": 10.1}})
+    assert r.status_code == 200, r.text
+    r = client.post(f"/slicer/slices/{first['file_id']}/seen", json={"seen": {"ringing": 3}})
+    assert r.status_code == 200, r.text
+    out = _apply_at_the_command_line()
+    assert out.exit_code == 0, out.output
+    assert out.output.splitlines() == [
+        "outer_wall_speed: 40 -> 30 mm/s",
+        "printer_1's next slices for Creality Generic PLA take them (look-1)",
+    ]
 
 
 def test_a_figure_of_a_look_that_rests_on_nothing_is_refused(fake_orcaslicer, built):
