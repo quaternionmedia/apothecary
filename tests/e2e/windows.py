@@ -46,6 +46,10 @@ def from_the_windows_menu(page: Page, pid: str) -> None:
 # A board's Machine: its main window, and every window of it -- the Machine and each
 # of its sections (``machine-<section>``), which live while it is open.
 MACHINE = ".panel[data-panel='machine']"
+# The Machine in front's own root, in its window's body: the body scrolls, and the root,
+# which moves to a window of its own when the Machine is kept, is inside it.
+MACHINE_ROOT = f"{MACHINE} > .panel-body-slot > .machine"
+MACHINE_BODY = f"{MACHINE} > .panel-body-slot"
 MACHINE_WINDOWS = ".panel[data-panel^='machine']"
 # The Bench: every toolchain's sketches, built and flashed from one window.
 BENCH = ".panel[data-panel='bench']"
@@ -86,7 +90,7 @@ def machine_ready(
     ``by_hand`` lays it out as a person does, the world's ring's Panels › Windows ›
     Machine view: for a walk, whose pictures show what a person pressed."""
     known = f".kind-{kind}" if kind else ":is(.kind-printer, .kind-router, .kind-devkit)"
-    expect(page.locator(f"{MACHINE} > .machine{known}")).to_be_attached(timeout=timeout)
+    expect(page.locator(f"{MACHINE_ROOT}{known}")).to_be_attached(timeout=timeout)
     if by_hand:
         rings.on_world(page, "Panels", "Windows", by_id("machine").cell)
         page.wait_for_function("() => window.apothecaryPanels.isOpen('machine-log')")

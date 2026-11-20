@@ -13,6 +13,8 @@ that no more.
 
 from __future__ import annotations
 
+import re
+
 import httpx
 import pytest
 import rings
@@ -115,7 +117,7 @@ def _stands(step, status: str, timeout: int = WITHIN) -> None:
 
 def _machine_of_kind(page: Page, kind: str) -> None:
     """The open board's Machine once it is of this kind, however it was laid out."""
-    expect(page.locator(f"{windows.MACHINE} > .machine.kind-{kind}")).to_be_attached(timeout=WITHIN)
+    expect(page.locator(f"{windows.MACHINE_ROOT}.kind-{kind}")).to_be_attached(timeout=WITHIN)
 
 
 @pytest.mark.e2e
@@ -254,10 +256,10 @@ def test_a_procedure_through_the_window(page: Page, url: str, walkthrough):
     _machine_of_kind(page, "printer")
     machine = windows.machine(page)
     machine.locator("#ctl").check()
-    expect(page.locator("#control")).to_be_visible(timeout=5000)
+    expect(windows.panel(page, "control").locator("#control")).to_be_visible(timeout=5000)
     story.shows(
         "The door opens the printer's Machine; ⚙ Control armed there",
-        "The printer's Machine takes the devkit's place, one Machine at a time. ⚙ Control "
+        "The printer's Machine comes in front, the devkit's kept open beside it. ⚙ Control "
         "arms the latch for five minutes of activity and opens the control pad: GO never "
         "does.",
         blank=CHANGING,
@@ -302,12 +304,13 @@ def test_a_procedure_through_the_window(page: Page, url: str, walkthrough):
     # 9b. A member's name: the window of the node its next step names.
     members.locator("button.family-member[data-member='board']").click()
     _machine_of_kind(page, "devkit")
+    expect(windows.tab(page, "kept-machine-1")).to_have_text(re.compile("🔓 printer_1"))
     story.says(
         "A member's name is a door: board's opens the devkit's Machine",
         "A member hosted here leads to the window of the node its next step names, the last "
         "it worked on when none is left: board's name opens esp32_blink's Machine. The "
-        "printer's Machine goes, and with it the pad of the printer armed since step 7, so "
-        "the printer is disarmed, said first.",
+        "printer's Machine is kept open beside it, a red tab of its own with the pad of the "
+        "printer armed since step 7, which stays armed.",
         shown=page.locator("#status").inner_text(),
     )
 

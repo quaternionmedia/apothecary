@@ -72,8 +72,8 @@ PICTURED = {
     "cut": (
         "see",
         "Cut a part: its toolpath written for the router, drawn on the table",
-        "The same path through another machine. cnc_router's Machine is opened in "
-        "printer_1's place and the router_coupon chosen, a part that says how it is "
+        "The same path through another machine. cnc_router's Machine is opened in front, "
+        "printer_1's kept open beside it, and the router_coupon chosen, a part that says how it is "
         "cut; Toolpath's stage is the router's Cut window; See writes the coupon's "
         "toolpath where none is kept and draws it on the table; Needs is the router's "
         "Status, where it says what it needs before it moves; Cut is the Machine and "
@@ -292,7 +292,10 @@ DID = {
         "the Bench opened on esp32_blink@arduino",
     ],
     "hands": ["stream_deck chosen", "printer_1's Machine opened"],
-    "bring-up": ["printer_1's Machine closed: Start a site has no machine in it"],
+    "bring-up": [
+        "printer_1's, cnc_router's and esp32_blink's Machines closed: Start a site has no "
+        "machine in it"
+    ],
     "watch": [
         "the Workspace opened: the Workspace of garage",
         "printer_1 framed in the world, as f does",

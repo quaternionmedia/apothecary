@@ -53,13 +53,13 @@ The part goes to a machine. printer_1's Machine is opened and the footpedal chos
     Print a part › 4 See (the tour): footpedal.gcode's path is drawn on printer_1 and framed, all of it: the preview slider in its Print goes through each layer
 5 Start: footpedal chosen
     Print a part › 5 Start (the tour): control armed in the Machine, ▶ Print, the job in Jobs
-6 Measure: footpedal chosen
+6 Measure: footpedal chosen; footpedal's cabinet in Part › Feedback, a piece made elsewhere chosen, as Part › View › Feedback does
     Print a part › 6 Measure (the tour): the piece made, in its part's cabinet, Part › Feedback, a drawer a print, opened on it as its print ends: read under measured a feature a row and filed as the next turn of the printer's tuning, which says what the readings imply -- a box's sizes separate nothing, and print_coupon is the piece made to be measured; or looked at under seen, each fault none to bad, a look that moves one setting; Take turn takes either into the printer's next slices, for the filament the piece used
 ```
 
 ## 3. Cut a part: its toolpath written for the router, drawn on the table
 
-The same path through another machine. cnc_router's Machine is opened in printer_1's place and the router_coupon chosen, a part that says how it is cut; Toolpath's stage is the router's Cut window; See writes the coupon's toolpath where none is kept and draws it on the table; Needs is the router's Status, where it says what it needs before it moves; Cut is the Machine and Jobs; Measure is the coupon's cabinet in Part › Feedback, its toolpath among its pieces and what it names to measure under measured. The picture is See.
+The same path through another machine. cnc_router's Machine is opened in front, printer_1's kept open beside it, and the router_coupon chosen, a part that says how it is cut; Toolpath's stage is the router's Cut window; See writes the coupon's toolpath where none is kept and draws it on the table; Needs is the router's Status, where it says what it needs before it moves; Cut is the Machine and Jobs; Measure is the coupon's cabinet in Part › Feedback, its toolpath among its pieces and what it names to measure under measured. The picture is See.
 
 ![Cut a part: its toolpath written for the router, drawn on the table](screenshots/39-03-cut-a-part-its-toolpath-written-for-the-router-dra.png)
 
@@ -115,7 +115,7 @@ The machines one at a time become a site brought up in order. No machine is in t
 ![Start a site: the procedure, the family's members, the hub's audit](screenshots/39-06-start-a-site-the-procedure-the-family-s-members-th.png)
 
 ```
-1 Steps: printer_1's Machine closed: Start a site has no machine in it; Start a site entered, its windows laid out
+1 Steps: printer_1's, cnc_router's and esp32_blink's Machines closed: Start a site has no machine in it; Start a site entered, its windows laid out
     Start a site › 1 Steps (⊞ Windows › Start a site): the site's procedure: each step a member's, fired through the family's hub on GO
 2 Members: nothing more to do
     Start a site › 2 Members (the tour): each member of the family: how it is reached, and its door to where its step works
