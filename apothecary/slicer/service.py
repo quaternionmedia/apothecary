@@ -46,7 +46,7 @@ from ..firmware import devices
 from ..meshes import MeshError, read_stl
 from ..models.measures import MeasurePlan
 from ..state_folder import private_folder, state_dir, write_whole
-from . import tuning
+from . import filaments, tuning
 from .models import Bounds, Estimate, Made, Setting, SlicedFor, SliceRecord, SlicerMessage
 from .modules import Log, NotInstalled, SlicerError, chosen_id, get_module
 from .profiles import Declared, PrinterProfile, load_part, load_profile, printers
@@ -297,7 +297,10 @@ def slice_into(
         f"({printer.profile.file}) with {module.label} {status.tool.version}"
     )
     # The settings the printer's tuning holds, fed back from pieces it made, over its profile.
-    profile = tuning.applied(printer.profile, printer.at.site, printer.at.path, module.id)
+    # The filament loaded on the printer, where its profile chooses one, then the
+    # settings its tuning holds for that filament, fed back from pieces it made.
+    profile = filaments.chosen(printer.profile, printer.at.site, printer.at.path, module.id)
+    profile = tuning.applied(profile, printer.at.site, printer.at.path, module.id)
     resolved = module.settings(profile, target.declared, port=printer.at.port)
     if target.declared.note:
         resolved.settings.insert(

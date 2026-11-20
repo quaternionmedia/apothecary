@@ -95,6 +95,18 @@ FAKE_ORCASLICER = textwrap.dedent(r"""
                              (filament, "filament_shrinkage_compensation_z", "100%")):
         value = config.get(key, own)
         lines.append(f"; {key} = {value[0] if isinstance(value, list) else value}")
+    # What a look at the piece steps (apothecary/print_faults.py), as the profiles set it.
+    for config, keys in ((machine, ("retraction_length",)),
+                         (process, ("travel_speed", "brim_width", "outer_wall_speed")),
+                         (filament, ("filament_retraction_length", "nozzle_temperature",
+                                     "nozzle_temperature_initial_layer", "cool_plate_temp",
+                                     "cool_plate_temp_initial_layer", "filament_flow_ratio",
+                                     "filament_max_volumetric_speed", "fan_max_speed",
+                                     "close_fan_the_first_x_layers", "slow_down_layer_time"))):
+        for key in keys:
+            if key in config:
+                value = config[key]
+                lines.append(f"; {key} = {value[0] if isinstance(value, list) else value}")
     lines.append("; CONFIG_BLOCK_END")
     (out / "plate_1.gcode").write_text("\n".join(lines) + "\n")
     (out / "result.json").write_text(json.dumps({"return_code": 0, "error_string": "Success.",
@@ -115,6 +127,7 @@ CREALITY = {
             "gcode_flavor": "marlin",
             "max_layer_height": ["0.32"],
             "min_layer_height": ["0.08"],
+            "retraction_length": ["4"],
         },
         "fdm_creality_common": {
             "type": "machine",
@@ -151,6 +164,9 @@ CREALITY = {
             "bottom_shell_layers": "3",
             "sparse_infill_density": "15%",
             "enable_support": "0",
+            "travel_speed": "150",
+            "brim_width": "0",
+            "outer_wall_speed": "40",
         },
         "0.20mm Standard @Creality Ender3": {
             "type": "process",
@@ -168,17 +184,49 @@ CREALITY = {
             "type": "filament",
             "name": "fdm_filament_pla",
             "from": "system",
+            "instantiation": "false",
             "filament_type": ["PLA"],
             "nozzle_temperature": ["220"],
             "nozzle_temperature_initial_layer": ["220"],
+            "nozzle_temperature_range_low": ["190"],
+            "nozzle_temperature_range_high": ["230"],
             "cool_plate_temp": ["60"],
             "cool_plate_temp_initial_layer": ["60"],
+            "filament_flow_ratio": ["0.98"],
+            "filament_retraction_length": ["nil"],
+            "filament_max_volumetric_speed": ["12"],
+            "fan_max_speed": ["100"],
+            "close_fan_the_first_x_layers": ["1"],
+            "slow_down_layer_time": ["8"],
         },
         "Creality Generic PLA": {
             "type": "filament",
             "name": "Creality Generic PLA",
             "inherits": "fdm_filament_pla",
             "from": "system",
+            "instantiation": "true",
+            "compatible_printers": ["Creality Ender-3 0.4 nozzle"],
+        },
+        "Creality Generic PETG": {
+            "type": "filament",
+            "name": "Creality Generic PETG",
+            "inherits": "fdm_filament_pla",
+            "from": "system",
+            "instantiation": "true",
+            "filament_type": ["PETG"],
+            "nozzle_temperature": ["255"],
+            "nozzle_temperature_range_low": ["220"],
+            "nozzle_temperature_range_high": ["260"],
+            "cool_plate_temp": ["70"],
+            "compatible_printers": ["Creality Ender-3 0.4 nozzle"],
+        },
+        "Creality Generic PLA @K1": {
+            "type": "filament",
+            "name": "Creality Generic PLA @K1",
+            "inherits": "fdm_filament_pla",
+            "from": "system",
+            "instantiation": "true",
+            "compatible_printers": ["Creality K1 0.4 nozzle"],
         },
     },
 }

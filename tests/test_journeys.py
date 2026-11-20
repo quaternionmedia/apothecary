@@ -148,7 +148,10 @@ def test_make_a_thing_goes_from_the_part_to_the_job_and_back_to_the_printer():
     # of it there whose plan (or box) gives the rows to read.
     assert make.steps[-1].forward == ("machine-print",) and make.steps[-1].owns == ()
     assert make.steps[-1].puts == (("file", "footpedal"),)
-    assert make.steps[-1].shown_by == ("46-a-printer-tuned-from-its-prints.md",)
+    assert make.steps[-1].shown_by == (
+        "46-a-printer-tuned-from-its-prints.md",
+        "50-a-printer-tuned-from-what-it-shows.md",
+    )
 
 
 def test_join_a_hose_stands_in_the_universe_on_the_port_and_the_adapter():

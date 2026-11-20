@@ -3098,3 +3098,44 @@ def test_the_stream_decks_ring_opens_the_deck_window_where_a_device_would_stand(
     full = PictureContext(part=PartSeen(editable=False, deck=True), printers=["printer_1"])
     pinned = resolve(context, _garage(), picture=full, device=PRINTER)
     assert len(pinned.options) <= 8 and "Device" in [o.label for o in pinned.options]
+
+
+def test_every_part_with_presets_has_a_ring_that_builds():
+    """Part › Presets on each registered part with presets, through the route the page
+    asks: each cell's label fits, the part's own label where its name is longer. A
+    preset named past a cell's label once made hose_adapter's ring a 500."""
+    from fastapi.testclient import TestClient
+
+    from apothecary.api import app
+    from apothecary.menu import LONGEST_LABEL
+    from apothecary.projects.parts.base import RING_LABEL
+    from apothecary.projects.parts.skeleton import ROOT
+    from apothecary.projects.registry import load_parts
+    from apothecary.site_names import UNIVERSE
+
+    assert RING_LABEL == LONGEST_LABEL
+    client = TestClient(app)
+    with_presets = [part for _item, part in load_parts(ROOT).parts if part.presets]
+    assert {"dust_port", "hose_adapter"} <= {p.name for p in with_presets}
+    for part in with_presets:
+        r = client.post(
+            "/menu/resolve",
+            json={"context": {"pointing": "node", "targets": [part.name]}, "site": UNIVERSE},
+        )
+        assert r.status_code == 200, (part.name, r.text[:300])
+    from apothecary.routes.menu import _part_seen
+
+    adapter = _part_seen("apothecary", "hose_adapter")
+    assert adapter.preset_labels == {"stepped_40_32_25": "40 → 32/25", "plain_40_32": "40 → 32"}
+
+
+def test_a_preset_named_past_a_cell_s_label_is_refused_when_its_part_loads():
+    import pytest as _pytest
+
+    from apothecary.projects.parts.base import Preset
+    from apothecary.projects.parts.hose_adapter import DEFAULT as ADAPTER
+
+    with _pytest.raises(ValueError, match="give it a label that says it in 12 or fewer"):
+        ADAPTER.model_copy().model_validate(
+            {**ADAPTER.__dict__, "presets": {"stepped_40_32_25": Preset(params={})}}
+        )

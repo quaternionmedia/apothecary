@@ -263,11 +263,12 @@ PRESETS = {
     "stepped_40_32_25": Preset(
         description="a 40 mm hose onto a 32 mm or a 25 mm port, one at a time: its defaults",
         params={},
+        label="40 → 32/25",
     ),
     "plain_40_32": Preset(
-        description="a 40 mm hose onto a 32 mm port, no step: the stepped one sawn at "
-        "the shoulder",
+        description="a 40 mm hose onto a 32 mm port, no step: the stepped one sawn at the shoulder",
         params={"step": False, "b_d": 32.0, "b_length": 25.0},
+        label="40 → 32",
     ),
 }
 

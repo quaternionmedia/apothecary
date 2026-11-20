@@ -78,8 +78,8 @@ what it will do, before anything is built. The printer's profile names its piece
 | start | `stored-mesh` | After the last G28, turn on the stored bed mesh (M420 S1); refused unless the newest bed reading of the printer's board is a probe whose range is under the profile's bound | built; a person names it |
 | start | `probe-each-print` | After the last G28 and the wait for the bed, probe the bed before each print (G29); refused without the probe whose offset the profile holds | built; a person names it |
 | start | `first-layer-offset` | A first-layer Z offset measured at the bench, added to every Z | stub |
-| filament | `printer` | The printer's one filament, named in its profile: Creality Generic PLA | printer_1's |
-| filament | `choose` | A slice names another filament the printer has loaded | stub |
+| filament | `printer` | The printer's one filament, named in its profile | built |
+| filament | `choose` | The filament loaded on the printer, chosen among OrcaSlicer's profiles of its vendor that fit its machine (`GET /slicer/filaments`, the Print window's filament row); the profile's own until one is loaded | printer_1's |
 | declared | `word-print-settings` | A word declares print settings for the pieces made as it, in the shape a part declares them | stub |
 
 **Levelling is named, never assumed.** printer_1's start stays `home`: a

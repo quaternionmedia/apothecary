@@ -44,11 +44,17 @@ class Preset(BaseModel):
 
     params: Dict[str, Any] = Field(default_factory=dict)
     description: str = ""
+    # Its cell's words on the ring (Part › Presets), where its name is longer than a ring
+    # cell's label holds (RING_LABEL); the name otherwise.
+    label: str = ""
 
 
 # A preset's name: what `part@preset` names at the command line and over HTTP, so
 # never a dot (which names an interface) or an @.
 PRESET_NAME = re.compile(r"[A-Za-z0-9_-]+")
+# The longest label a ring cell holds: menu.LONGEST_LABEL (tests/test_menu.py holds
+# the two the same; the parts layer does not import the ring's).
+RING_LABEL = 12
 
 
 def address(spec: str) -> Tuple[str, Optional[str], Optional[str]]:
@@ -180,6 +186,15 @@ class BasePart(BaseModel):
                 raise ValueError(
                     f"preset {name!r}: a preset's name is letters, digits, _ and -, "
                     "since part@preset.interface names one"
+                )
+            # Part › Presets offers each by its label, else its name: one too long for a
+            # cell would leave the part's ring unbuildable.
+            words = preset.label or name
+            if len(words) > RING_LABEL:
+                raise ValueError(
+                    f"preset {name!r}: {words!r} is {len(words)} characters and a ring "
+                    f"cell's label has {RING_LABEL}: give it a label that says it in "
+                    f"{RING_LABEL} or fewer"
                 )
             try:
                 self.validate_overrides(preset.params)

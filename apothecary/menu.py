@@ -195,8 +195,10 @@ class PartSeen(BaseModel):
     # offered on such a part, as Slice is on a printed one.
     cuts: bool = False
     # Its presets by name (``BasePart.presets``), on a part whose numbers drive its model:
-    # Part › Presets stages one, as the Preset drop-down in its Parameters does.
+    # Part › Presets stages one, as the Preset drop-down in its Parameters does. Each
+    # cell says its label where the part gives one (a name longer than a cell holds).
     presets: List[str] = Field(default_factory=list)
+    preset_labels: Dict[str, str] = Field(default_factory=dict)
     # Whether it has one round interface, a spigot or a socket, so it is an end an
     # adapter is made between: Part › Adapter does what ⇄ Adapter in Selected does.
     end: bool = False
@@ -1996,7 +1998,11 @@ def _node_ring(
                     id="part:presets",
                     label="Presets",
                     children=[
-                        Option(id=f"part:preset:{name}", label=name, action=f"part:preset:{name}")
+                        Option(
+                            id=f"part:preset:{name}",
+                            label=seen.preset_labels.get(name) or name,
+                            action=f"part:preset:{name}",
+                        )
                         for name in seen.presets[:MOST_OPTIONS]
                     ],
                 )
@@ -2387,7 +2393,8 @@ def control_options(device: Device) -> List[Option]:
                 Option(id="print:preview", label="Preview", action="print:preview"),
                 Option(id="print:plan", label="Keep as plan", action="print:plan"),
                 # The piece printed, read: what is read under measured kept as the next
-                # turn of the printer's tuning, or the first field, with nothing read.
+                # turn of the printer's tuning; a fault chosen under seen, the next look;
+                # or the first field, with neither.
                 Option(id="print:measure", label="Measure", action="print:measure"),
                 # The printer's tuning: the last turn's changes into its next slices, or
                 # the last turn dropped with what it applied (slicer/tuning.py). Worded

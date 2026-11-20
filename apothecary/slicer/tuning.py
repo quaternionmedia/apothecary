@@ -52,6 +52,7 @@ from typing import Dict, List, Literal, Mapping, Optional, Sequence, Tuple
 
 from pydantic import BaseModel, Field, model_validator
 
+from .. import print_faults as pf
 from .. import print_tuning as pt
 from ..models.measures import MeasurePlan, box_plan
 from ..state_folder import state_dir, write_whole
@@ -63,16 +64,19 @@ GENERATOR = "apothecary.print_tuning"
 MODULE = "orcaslicer"
 NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,199}$")
 TURN_ID = r"^turn-[1-9][0-9]{0,5}$"
+LOOK_ID = r"^look-[1-9][0-9]{0,5}$"
 # A reading further than this share of its nominal, or NEAR mm, whichever is more, is
 # not of this piece's feature: measured across something else, or another piece.
 WITHIN = 0.05
 NEAR = 1.0
 # A caliper's resolution taken for a turn that states none: a digital caliper's step.
 RESOLUTION = 0.01
+# The most a look says of where a fault shows, in characters.
+WHERE_MOST = 200
 # The older shape's rule assumed these none: what its turns are solved with.
 EARLIER_ASSUMED = {"scale_x": 0.0, "scale_y": 0.0, "foot": 0.0}
 
-Basis = Literal["measured", "solved", "assumed", "computed"]
+Basis = Literal["measured", "solved", "assumed", "computed", "seen"]
 Kind = Literal["process", "filament", "machine"]
 
 
@@ -337,8 +341,54 @@ class Turn(BaseModel):
         return next((p for p in self.proposed if p.setting == key), None)
 
 
+class Seen(BaseModel):
+    """One fault as a person read it on a piece (apothecary/print_faults.py)."""
+
+    fault: str
+    severity: int = Field(..., ge=0, le=3)
+    where: str = Field("", max_length=WHERE_MOST)  # a height, a feature: where it shows
+    basis: Literal["seen"] = "seen"
+    source: str
+
+
+class LookStep(BaseModel):
+    """A setting a look changes for a fault: a step, or a lever put back."""
+
+    setting: str
+    kind: Kind
+    unit: str
+    fault: str
+    used: Optional[float]  # what the looked-at slice used
+    new: float
+    back: bool  # put back where it was: the lever did not govern the fault here
+    why: str
+    applies: bool = True
+    basis: Literal["computed"] = "computed"
+    source: str
+
+
+class Look(BaseModel):
+    """A piece a printer made, read by eye: each fault's severity, and the one
+    setting's change it proposes (print_faults.next_step)."""
+
+    id: str = Field(..., pattern=LOOK_ID)
+    at: datetime
+    slice: SliceRef
+    seen: List[Seen]
+    note: str = Field("", max_length=2000)
+    proposed: List[LookStep] = Field(default_factory=list)
+    said: List[str] = Field(default_factory=list)
+    applied: List[Change] = Field(default_factory=list)
+
+    def proposal(self, key: str) -> Optional[LookStep]:
+        return next((p for p in self.proposed if p.setting == key), None)
+
+    def severity(self, fault_id: str) -> Optional[int]:
+        return next((x.severity for x in self.seen if x.fault == fault_id), None)
+
+
 class Held(BaseModel):
-    """A setting the printer's next slices take, and the turn whose change set it."""
+    """A setting the printer's next slices take, and the turn or look whose change set it."""
 
     kind: Kind
     unit: str
@@ -356,13 +406,14 @@ class TuningDocument(BaseModel):
     printer: Printer
     applies_to: AppliesTo
     turns: List[Turn] = Field(default_factory=list)
+    looks: List[Look] = Field(default_factory=list)
     settings: Dict[str, Held] = Field(default_factory=dict)
 
     model_config = {"populate_by_name": True}
 
     @model_validator(mode="after")
     def _rests_on_its_turns(self) -> "TuningDocument":
-        ids = [t.id for t in self.turns]
+        ids = [t.id for t in self.turns] + [lk.id for lk in self.looks]
         dup = {i for i in ids if ids.count(i) > 1}
         if dup:
             raise ValueError(f"duplicate turns: {sorted(dup)}")
@@ -406,10 +457,30 @@ class TuningDocument(BaseModel):
                     raise ValueError(
                         f"{turn.id} applies {c.setting} {c.after:g}, which it did not propose"
                     )
+        for look in self.looks:
+            own(look, "its slice", look.slice.source)
+            for x in look.seen:
+                own(look, f"what it saw of {x.fault}", x.source)
+                if x.fault not in pf.BY_ID:
+                    raise ValueError(f"{look.id} saw {x.fault!r}, which is no fault")
+            for st in look.proposed:
+                own(look, f"the step of {st.setting}", st.source)
+                seen = look.severity(st.fault)
+                if not st.back and not seen:
+                    raise ValueError(
+                        f"{look.id} steps {st.setting} for {st.fault}, which it did not see"
+                    )
+            for c in look.applied:
+                own(look, f"the change of {c.setting}", c.source)
+                st = look.proposal(c.setting)
+                if st is None or abs(st.new - c.after) > 1e-9:
+                    raise ValueError(
+                        f"{look.id} applies {c.setting} {c.after:g}, which it did not propose"
+                    )
         last: Dict[str, Tuple[str, float]] = {}
-        for turn in self.turns:
-            for c in turn.applied:
-                last[c.setting] = (turn.id, c.after)
+        for entry in entries(self.turns, self.looks):
+            for c in entry.applied:
+                last[c.setting] = (entry.id, c.after)
         for key, held in self.settings.items():
             if held.source not in ids:
                 raise ValueError(
@@ -434,17 +505,28 @@ class TuningDocument(BaseModel):
                 return t
         raise KeyError(turn_id)
 
+    def entry(self, entry_id: str) -> "Turn | Look":
+        for e in entries(self.turns, self.looks):
+            if e.id == entry_id:
+                return e
+        raise KeyError(entry_id)
+
+
+def entries(turns: Sequence[Turn], looks: Sequence[Look] = ()) -> List["Turn | Look"]:
+    """Turns and looks in the order they were kept: a document's history."""
+    return sorted([*turns, *looks], key=lambda e: e.at)
+
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def held_of(turns: Sequence[Turn]) -> Dict[str, Held]:
-    """The settings the next slices take: each the last change a turn applied."""
+def held_of(turns: Sequence[Turn], looks: Sequence[Look] = ()) -> Dict[str, Held]:
+    """The settings the next slices take: each the last change a turn or look applied."""
     out: Dict[str, Held] = {}
-    for turn in turns:
-        for c in turn.applied:
-            out[c.setting] = Held(kind=c.kind, unit=c.unit, value=c.after, source=turn.id)
+    for entry in entries(turns, looks):
+        for c in entry.applied:
+            out[c.setting] = Held(kind=c.kind, unit=c.unit, value=c.after, source=entry.id)
     return out
 
 
@@ -475,7 +557,7 @@ def _read(path: Path) -> Optional[TuningDocument]:
 
 def _write(doc: TuningDocument) -> TuningDocument:
     doc.generated_at = now()
-    doc.settings = held_of(doc.turns)
+    doc.settings = held_of(doc.turns, doc.looks)
     checked = TuningDocument.model_validate(doc.model_dump(by_alias=True))
     write_whole(
         kept_at(doc.printer.site, doc.printer.node, doc.applies_to),
@@ -552,9 +634,10 @@ def applies_of(record: SliceRecord) -> AppliesTo:
 
 
 def used_by(record: SliceRecord) -> Dict[str, Optional[float]]:
-    """Each tuned setting and layer height as the slice recorded it; None where it did not."""
+    """Each tuned setting, layer height and setting a fault's lever reads, as the slice
+    recorded it; None where it did not."""
     named = {s.name: s.value for s in record.settings}
-    return {key: _number(named.get(key)) for key in (*TUNED, *LAYERS)}
+    return {key: _number(named.get(key)) for key in dict.fromkeys((*TUNED, *LAYERS, *pf.READ_KEYS))}
 
 
 def plan_of(record: SliceRecord) -> MeasurePlan:
@@ -862,9 +945,10 @@ def trends(doc: TuningDocument) -> Dict[str, pt.Trend]:
     return {s.key: pt.trend(s.term, points(doc.turns, s)) for s in SETTINGS}
 
 
-def next_id(doc: TuningDocument) -> str:
-    n = max((int(t.id.split("-")[1]) for t in doc.turns), default=0)
-    return f"turn-{n + 1}"
+def next_id(doc: TuningDocument, prefix: str = "turn") -> str:
+    kept = doc.turns if prefix == "turn" else doc.looks
+    n = max((int(t.id.split("-")[1]) for t in kept), default=0)
+    return f"{prefix}-{n + 1}"
 
 
 def add_turn(
@@ -921,15 +1005,36 @@ def add_turn(
 
 
 def apply(site: str, printer: str, applies: AppliesTo) -> Tuple[TuningDocument, List[Change]]:
-    """The last turn's proposed changes taken into the printer's next slices."""
+    """The last turn's or look's proposed changes taken into the printer's next slices."""
     with _LOCK:
         doc = load(site, printer, applies)
-        if doc is None or not doc.turns:
-            raise Refused(f"{printer} has no turn to apply for {applies.filament}")
-        last = doc.turns[-1]
+        if doc is None or not (doc.turns or doc.looks):
+            raise Refused(f"{printer} has no turn or look to apply for {applies.filament}")
+        last = entries(doc.turns, doc.looks)[-1]
         if last.applied:
             raise Refused(f"{last.id} is applied already")
-        held = held_of(doc.turns)
+        held = held_of(doc.turns, doc.looks)
+        if isinstance(last, Look):
+            looked = [
+                Change(
+                    setting=st.setting,
+                    kind=st.kind,
+                    unit=st.unit,
+                    before=held[st.setting].value if st.setting in held else st.used,
+                    after=st.new,
+                    at=datetime.now(timezone.utc),
+                    source=last.id,
+                )
+                for st in last.proposed
+                if st.applies
+            ]
+            if not looked:
+                raise Refused(
+                    f"{last.id} proposes no change: " + "; ".join(last.said or ["nothing seen"])
+                )
+            last.applied = looked
+            doc = _write(doc)
+            return doc, looked
         changes = [
             Change(
                 setting=p.setting,
@@ -954,15 +1059,181 @@ def _why_none(turn: Turn) -> List[str]:
     return [f"{p.setting}: {p.why}" for p in turn.proposed]
 
 
-def undo(site: str, printer: str, applies: AppliesTo) -> Tuple[TuningDocument, Turn]:
-    """The last turn dropped, and what it applied with it: the next slices take what the
-    turns before it applied."""
+def undo(site: str, printer: str, applies: AppliesTo) -> Tuple[TuningDocument, "Turn | Look"]:
+    """The last turn or look dropped, and what it applied with it: the next slices take
+    what the ones before it applied."""
     with _LOCK:
         doc = load(site, printer, applies)
-        if doc is None or not doc.turns:
-            raise Refused(f"{printer} has no turn to undo for {applies.filament}")
-        gone = doc.turns.pop()
+        if doc is None or not (doc.turns or doc.looks):
+            raise Refused(f"{printer} has no turn or look to undo for {applies.filament}")
+        gone = entries(doc.turns, doc.looks)[-1]
+        if isinstance(gone, Look):
+            doc.looks.remove(gone)
+        else:
+            doc.turns.remove(gone)
         return _write(doc), gone
+
+
+def add_look(
+    record: SliceRecord,
+    seen: Mapping[str, int],
+    where: Optional[Mapping[str, str]] = None,
+    note: str = "",
+) -> Tuple[TuningDocument, Look]:
+    """A piece printed from ``record``'s slice, read by eye: each fault's severity
+    checked, the one setting's change it implies decided (print_faults.next_step), and
+    kept as the next look of its printer's document. ``Refused`` says why, and nothing
+    is kept."""
+    at = record.printer
+    if not at.site or not at.path:
+        raise Refused(
+            f"{record.name} was sliced for {at.name}, a printer of no site: a printer's "
+            "tuning is kept for a printer standing in one"
+        )
+    if not seen:
+        raise Refused(
+            "say what the piece shows: each fault seen, none to bad ("
+            + ", ".join(f.id for f in pf.FAULTS)
+            + ")"
+        )
+    for fault_id, severity in seen.items():
+        if fault_id not in pf.BY_ID:
+            raise Refused(f"no fault {fault_id!r}: there are {', '.join(f.id for f in pf.FAULTS)}")
+        if not isinstance(severity, int) or isinstance(severity, bool) or not 0 <= severity <= 3:
+            raise Refused(f"{fault_id}: a severity is 0 (none) to 3 (bad), not {severity!r}")
+    where = dict(where or {})
+    for fault_id, text in where.items():
+        if fault_id not in seen:
+            raise Refused(f"{fault_id}: where it shows is said for a fault seen")
+        if len(str(text)) > WHERE_MOST:
+            raise Refused(
+                f"{fault_id}: where it shows is at most {WHERE_MOST} characters, "
+                f"not {len(str(text))}"
+            )
+    applies = applies_of(record)
+    used = used_by(record)
+    with _LOCK:
+        doc = load(at.site, at.path, applies, at.part) or TuningDocument(
+            generated_at=now(),
+            printer=Printer(site=at.site, node=at.path, part=at.part),
+            applies_to=applies,
+        )
+        if any(lk.slice.file_id == record.file_id for lk in doc.looks[-1:]):
+            raise Refused(
+                f"the last look already reads the piece {record.file_id} made: undo it to look again"
+            )
+        look_id = next_id(doc, "look")
+        past = [
+            pf.Past(
+                lk.id,
+                {x.fault: x.severity for x in lk.seen},
+                [
+                    pf.Stepped(
+                        lk.id,
+                        st.fault,
+                        c.setting,
+                        c.before if c.before is not None else st.used or c.after,
+                        c.after,
+                        lk.severity(st.fault) or 0,
+                        back=st.back,
+                    )
+                    for c in lk.applied
+                    for st in [lk.proposal(c.setting)]
+                    if st is not None
+                ],
+            )
+            for lk in doc.looks
+        ]
+        decided = pf.next_step(dict(seen), used, past)
+        look = Look(
+            id=look_id,
+            at=datetime.now(timezone.utc),
+            slice=SliceRef(
+                file_id=record.file_id,
+                part=record.made.name,
+                variant=record.made.variant,
+                params=dict(record.made.params),
+                used=used,
+                source=look_id,
+            ),
+            seen=[
+                Seen(fault=f, severity=v, where=str(where.get(f, "")), source=look_id)
+                for f, v in seen.items()
+            ],
+            note=note,
+            proposed=[
+                LookStep(
+                    setting=m.key,
+                    kind=m.kind,  # type: ignore[arg-type]
+                    unit=m.unit,
+                    fault=m.fault,
+                    used=m.used,
+                    new=m.new,
+                    back=m.back,
+                    why=m.why,
+                    source=look_id,
+                )
+                for m in decided.moves
+            ],
+            said=decided.said,
+        )
+        doc.looks.append(look)
+        doc = _write(doc)
+        return doc, doc.looks[-1]
+
+
+def fault_trends(doc: TuningDocument) -> Dict[str, str]:
+    """Each fault seen over the document's looks: its severity at each, and the change
+    applied after it. A fault no look saw is left out, though each said none of it."""
+    out: Dict[str, str] = {}
+    for f in pf.FAULTS:
+        if not any(lk.severity(f.id) for lk in doc.looks):
+            continue
+        marks = []
+        for lk in doc.looks:
+            sev = lk.severity(f.id)
+            if sev is None:
+                continue
+            mark = f"{pf.SEVERITY[sev].split(':')[0]} at {lk.id}"
+            moved = [
+                c
+                for c in lk.applied
+                if (st := lk.proposal(c.setting)) is not None and st.fault == f.id
+            ]
+            if moved:
+                mark += " (then " + ", ".join(f"{c.setting} {c.after:g}" for c in moved) + ")"
+            marks.append(mark)
+        if marks:
+            out[f.id] = "; ".join(marks)
+    return out
+
+
+def said_look(look: Look) -> str:
+    """A look in one line: what it saw, and the change it proposes."""
+    seen = [
+        f"{pf.BY_ID[x.fault].name.lower()} {pf.SEVERITY[x.severity].split(':')[0]}"
+        + (f" ({x.where})" if x.where else "")
+        for x in look.seen
+        if x.severity
+    ]
+    out = f"{look.slice.part} looked at: " + (", ".join(seen) if seen else "nothing wrong")
+    moves = [
+        f"{st.setting} {_plain_value(st.used, st.unit)} -> {_plain_value(st.new, st.unit)}"
+        + (" (put back)" if st.back else "")
+        for st in look.proposed
+    ]
+    out += "; proposed: " + ("; ".join(moves) if moves else "nothing")
+    if look.said:
+        out += "; " + "; ".join(look.said)
+    return out
+
+
+def _plain_value(v: Optional[float], unit: str) -> str:
+    if v is None:
+        return "-"
+    return f"{round(v, 4):g}" + (
+        f" {unit}" if unit and unit != "%" else ("%" if unit == "%" else "")
+    )
 
 
 # ---- the older shape, read once -------------------------------------------------------------
@@ -1061,12 +1332,15 @@ def applied(
         return profile
     section = json.loads(json.dumps(section))
     for key, held in doc.settings.items():
-        turn = doc.turn(held.source)
-        value = f"{held.value:g}" + ("%" if held.unit == "%" else "")
+        entry = doc.entry(held.source)
+        # OrcaSlicer writes a percentage with its sign only for the shrinkages.
+        written = key in TUNED and TUNED[key].unit == "%"
+        value = f"{held.value:g}" + ("%" if written else "")
+        how = "seen on" if isinstance(entry, Look) else "read from"
         section.setdefault("set", {}).setdefault(held.kind, {})[key] = {
             "value": [value] if held.kind == "filament" else value,
-            "source": f"{site}'s {printer}, tuned: {turn.id} of its {applies.filament} "
-            f"tuning, read from {turn.slice.part} ({turn.at:%Y-%m-%d})",
+            "source": f"{site}'s {printer}, tuned: {entry.id} of its {applies.filament} "
+            f"tuning, {how} {entry.slice.part} ({entry.at:%Y-%m-%d})",
             "origin": "measured",
         }
     return profile.model_copy(update={"sections": {**profile.sections, MODULE: section}})
@@ -1189,6 +1463,22 @@ def render_markdown(doc: TuningDocument, explain: bool = False) -> str:
             ]
             for line in turn.fit.said:
                 out.append(f"- {line}")
+        out.append("")
+    for look in doc.looks:
+        out += [f"## {look.id}: {look.slice.part} ({look.at:%Y-%m-%d %H:%M}), seen", ""]
+        out += [f"Slice `{look.slice.file_id}`" + (f"; {look.note}" if look.note else ""), ""]
+        out += ["| Fault | Seen | Where |", "|---|---|---|"]
+        for x in look.seen:
+            out.append(f"| {pf.BY_ID[x.fault].name} | {pf.SEVERITY[x.severity]} | {x.where} |")
+        out += ["", "| Setting | Used | Proposed | Why |", "|---|---|---|---|"]
+        for st in look.proposed:
+            done = " (applied)" if any(c.setting == st.setting for c in look.applied) else ""
+            out.append(
+                f"| `{st.setting}` | {_plain_value(st.used, st.unit)} | "
+                f"{_plain_value(st.new, st.unit)}{done} | {st.why} |"
+            )
+        for line in look.said:
+            out.append(f"- {line}")
         out.append("")
     if doc.turns:
         out += ["## Convergence", "", "| Setting | Term | State | Said |", "|---|---|---|---|"]

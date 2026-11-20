@@ -6,8 +6,8 @@
     "source": "the owner's decision of 2026-10-10 (docs/plans/slicer-2026-10-10.md): the start of a print is composed from modules as they are wanted; homing, with no levelling -- stored-mesh (M420 S1 after G28) or probe-each-print (G29) is named here by a person after the bench's levelling boxes (docs/validation/2026-11-07-machine-setup.md), and a measured first-layer offset is a stub"
   },
   "filament": {
-    "modules": ["printer"],
-    "source": "the owner's decision of 2026-10-10 (docs/plans/slicer-2026-10-10.md): the printer's one filament, Creality Generic PLA, named below; choosing another is a stub"
+    "modules": ["choose"],
+    "source": "the owner's decision of 2026-11-19: the filament loaded on the printer, chosen in its Print window among OrcaSlicer's Creality profiles that fit the Ender-3 0.4 nozzle (slicer/filaments.py); Creality Generic PLA, named below, until one is loaded"
   },
   "orcaslicer": {
     "vendor": "Creality",

@@ -137,3 +137,60 @@ def test_the_measured_row_reads_the_servers_document(tmp_path, monkeypatch):
     )
     assert out["history"][0].endswith("(applied)")
     assert out["history"][1].startswith("xy_contour_compensation: one turn")
+
+
+LOOKS = """
+import * as t from "%(module)s";
+const entry = %(entry)s, applied = %(applied)s;
+const out = {};
+out.order = t.entries(applied.document).map((e) => e.id);
+out.apply = t.canApply(entry);
+out.again = t.canApply(applied);
+out.undo = t.canUndo(applied);
+out.line = t.lookLine(entry.document.looks[0]);
+out.history = t.historyLines(applied);
+out.seen = t.seenOf([["stringing", "2"], ["warping", "0"], ["ringing", "5"], ["x", "a"]]);
+console.log(JSON.stringify(out));
+"""
+
+
+def test_the_seen_row_reads_a_look_beside_a_turn(tmp_path, monkeypatch):
+    """A turn, then a look of the same document: the look is the newest, which Apply and
+    Undo name; its line says what was seen and the one change; the history keeps them in
+    the order they were kept, and the fault's trend after the settings'."""
+    monkeypatch.setenv("APOTHECARY_STATE_DIR", str(tmp_path / "state"))
+    record = _record()
+    record.settings.append(
+        Setting(name="retraction_length", value=["4"], origin="printer", source="p")
+    )
+    tuning.add_turn(record, {"plate_x": [54.1]})
+    doc, _look = tuning.add_look(record, {"stringing": 2, "warping": 0}, {"stringing": "on top"})
+    entry = _entry(doc) | {"faults": tuning.fault_trends(doc)}
+    applied, _ = tuning.apply("garage", "printer_1", tuning.AppliesTo(**PLA))
+    script = tmp_path / "looks.mjs"
+    script.write_text(
+        LOOKS
+        % {
+            "module": MODULE.as_uri(),
+            "entry": json.dumps(entry),
+            "applied": json.dumps(_entry(applied) | {"faults": tuning.fault_trends(applied)}),
+        }
+    )
+    done = subprocess.run([NODE, str(script)], capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0, done.stderr
+    out = json.loads(done.stdout)
+    assert out["order"] == ["turn-1", "look-1"]
+    assert out["apply"] == {
+        "ok": True,
+        "why": "take look-1's filament_retraction_length into this printer's next slices",
+    }
+    assert out["again"]["ok"] is False and out["undo"]["why"] == "drop look-1, and what it applied"
+    assert out["line"] == (
+        "look-1, print_coupon, seen: stringing clear (on top); proposed: "
+        "filament_retraction_length 4 mm → 4.5 mm"
+    )
+    assert out["history"][1].startswith("look-1, print_coupon") and out["history"][1].endswith(
+        "(applied)"
+    )
+    assert out["history"][-1] == "stringing: clear at look-1 (then filament_retraction_length 4.5)"
+    assert out["seen"] == {"stringing": 2, "warping": 0}

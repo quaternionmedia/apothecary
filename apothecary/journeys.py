@@ -297,9 +297,14 @@ MAKE = Journey(
             "the part made, read under measured a feature a row and kept as the next turn "
             "of the printer's tuning, which says what the readings imply -- a box's sizes "
             "separate nothing, and print_coupon under makes is the piece made to be "
-            "measured; Apply takes a turn into the printer's next slices",
+            "measured; or looked at under seen, each fault none to bad, a look that moves "
+            "one setting; Take turn takes either into the printer's next slices, for the "
+            "filament loaded on it",
             forward=("machine-print",),
-            shown_by=("46-a-printer-tuned-from-its-prints.md",),
+            shown_by=(
+                "46-a-printer-tuned-from-its-prints.md",
+                "50-a-printer-tuned-from-what-it-shows.md",
+            ),
             puts=(("file", "footpedal"),),
         ),
     ),

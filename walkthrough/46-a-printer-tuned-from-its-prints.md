@@ -121,6 +121,7 @@ would say it, here made by hand:
     >>> from datetime import datetime, timezone
     >>> from apothecary.slicer import tuning
     >>> from apothecary.slicer.models import Made, Setting, SlicedFor, SliceRecord
+    >>> before = os.environ.get("APOTHECARY_STATE_DIR")
     >>> os.environ["APOTHECARY_STATE_DIR"] = tempfile.mkdtemp(prefix="walkthrough-46-")
     >>> used = {"filament profile": "Creality Generic PLA", "process profile": "0.20mm Standard @Creality Ender3",
     ...         "xy_contour_compensation": "0", "xy_hole_compensation": "0", "elefant_foot_compensation": "0",
@@ -153,4 +154,4 @@ Every later slice for printer_1 with that filament and process takes those four,
 each with the turn it came from; `apothecary tuning` does all of this from the
 shell, and the Print window's **measured** row from the page.
 
-    >>> del os.environ["APOTHECARY_STATE_DIR"]
+    >>> _ = os.environ.pop("APOTHECARY_STATE_DIR") if before is None else os.environ.update(APOTHECARY_STATE_DIR=before)

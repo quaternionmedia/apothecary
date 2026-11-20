@@ -194,6 +194,10 @@ const CARDS = `
             <button type="button" id="print-slice">Slice</button>
             <span class="s" id="print-where"></span>
         </div>
+        <div class="row" id="print-filament-row" hidden><label for="print-filament">filament</label>
+            <select id="print-filament" title="The filament loaded on this printer: its next slices are made with it, and take its own tuning"></select>
+            <span class="s" id="print-filament-said"></span>
+        </div>
         <div class="row"><label for="print-pick">file</label>
             <select id="print-pick" title="The files kept on the host, newest first"><option value="">— no files kept —</option></select>
             <button type="button" id="print-delete" title="Forget the chosen file">✕</button>
@@ -215,6 +219,11 @@ const CARDS = `
             <span class="s" id="print-measure-said"></span>
         </div>
         <div class="row" id="print-measure-plan" hidden></div>
+        <div class="row" id="print-seen-row" hidden><label for="print-seen-keep">seen</label>
+            <span id="print-seen-faults" class="seen-faults"></span>
+            <button type="button" id="print-seen-keep" title="Keep what the piece shows as the printer's next look: the one setting's change it implies is said, and Take turn takes it into the next slices. Nothing is sent to the machine">Keep look</button>
+            <span class="s" id="print-seen-said"></span>
+        </div>
         <div class="row s" id="print-tune-history" style="white-space: pre-line" hidden></div>
         <div class="row" id="print-verbs">
             <button type="button" id="print-start" data-can="print.start" class="warm">▶ Send</button>
@@ -1651,8 +1660,10 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             + (held.length ? ` · ${m.at.path} holds ${held.map(([k, h]) => `${k} ${h.unit === "%" ? `${h.value}%` : signed(h.value)}`).join(", ")}` : "");
     }
     function renderMeasure() {
+        renderFilament();
         const m = measuring(), row = $("print-measure-row"), printer = state.kind === "printer";
         row.hidden = !m;
+        renderSeen(m);
         $("print-measure-plan").hidden = !m || !printer;
         $("print-tune-history").hidden = !m || !printer;
         $("print-measure").hidden = printer;
@@ -1748,10 +1759,14 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
             : `${answer.undone} undone: ${m.at.path}'s next slices take what the turns before it applied`);
         return true;
     }
-    // Print › Measure, or a router's Cut › Measure: what is read kept, as Keep does;
-    // with nothing read, the first field.
+    // Print › Measure, or a router's Cut › Measure: what is read kept, as Keep does; a
+    // fault chosen under seen and nothing read, the look kept, as Keep look does; with
+    // neither, the first field.
+    const seenSomething = () => state.kind === "printer"
+        && [...$("print-seen-faults").querySelectorAll("select.seen-read")].some((el) => el.value !== "0");
     function measureVerb() {
         if (typedSomething()) return keepMeasured();
+        if (seenSomething()) return keepSeen();
         const m = measuring();
         if (!m) { refuse(`measure: choose ${state.kind === "router" ? "the file the piece was cut from, a toolpath that names what to measure" : "the file the part was printed from, a slice that says its size"}`); return false; }
         const first = state.kind === "printer" ? $("print-measure-plan").querySelector("input.measure-read") : $("print-measure");
@@ -1765,6 +1780,119 @@ export function mountMachine(root, { base = "", port = "", host = "world", board
     $("print-measure-keep").onclick = () => keepMeasured();
     $("print-tune-apply").onclick = () => tuneVerb("apply");
     $("print-tune-undo").onclick = () => tuneVerb("undo");
+
+    // --- the filament loaded, and what a piece shows -------------------------------------
+    // The filament on the printer's spool holder, chosen among those its slicer profile can
+    // load (slicer/filaments.py): its next slices are made with it and take its own tuning.
+    // And a look at the piece the chosen file made: each fault seen, none to bad, kept as the
+    // printer's next look (print_faults.py), whose one change Take turn takes.
+    // shown: the printer whose filaments the row holds; loading: the one asked, or the one
+    // whose ask failed until it is asked again; drawn: the options the drop-down holds.
+    const fil = { shown: null, answer: null, loading: null, failing: null, fails: 0, drawn: null, faults: null, asking: false };
+    function printerAt() {
+        if (machineAt && machineAt.site && machineAt.path) return { site: machineAt.site, printer: machineAt.path };
+        const c = prt.choices;
+        return c && c.site ? { site: c.site, printer: printerName() } : null;
+    }
+    function renderFilament(force) {
+        const row = $("print-filament-row");
+        // A Machine gone has no row: an answer or a wait that lands after it draws nothing
+        // and asks nothing again.
+        if (!row) return;
+        const at = state.kind === "printer" ? printerAt() : null;
+        const key = at ? `${at.site}:${at.printer}` : null;
+        if (key !== fil.shown) {
+            fil.shown = null; fil.answer = null;
+            if (key && fil.loading !== key) askFilaments(key, at);
+        }
+        const a = fil.answer;
+        row.hidden = !(a && a.chooses);
+        if (row.hidden) return;
+        const sel = $("print-filament"), now = a.loaded ? a.loaded.loaded.filament : a.profile;
+        // Drawn again only when what it offers or holds changed, and never while a person
+        // has it: a print renders this once a second, and would reset it under them.
+        if (force || document.activeElement !== sel) {
+            const options = a.choices.map((c) => `<option value="${esc(c.name)}">${esc(c.name)}${c.nozzle_temperature ? ` · ${esc(c.nozzle_temperature)} °C` : ""}</option>`).join("");
+            if (fil.drawn !== options) { sel.innerHTML = options; fil.drawn = options; }
+            if (sel.value !== now) sel.value = now;
+        }
+        $("print-filament-said").textContent = a.loaded
+            ? `loaded ${a.loaded.loaded.at.slice(0, 16).replace("T", " ")} UTC${a.loaded.loaded.note ? ` (${a.loaded.loaded.note})` : ""}`
+            : "the profile's own: choose what is loaded";
+    }
+    // A printer's filaments are asked once; an ask that failed (no slicer installed, a
+    // printer with no profile, the server away) leaves no row and is asked again, each
+    // wait twice the last, up to a minute.
+    function askFilaments(key, at) {
+        if (fil.failing !== key) fil.fails = 0;
+        fil.loading = key;
+        api(`/slicer/filaments?site=${encodeURIComponent(at.site)}&printer=${encodeURIComponent(at.printer)}`)
+            .then((a) => {
+                if (fil.loading !== key) return;
+                fil.loading = fil.failing = null; fil.fails = 0;
+                fil.shown = key; fil.answer = a;
+                renderFilament();
+            })
+            .catch(() => {
+                if (fil.loading !== key) return;
+                fil.failing = key;
+                const wait = Math.min(60000, 2000 * 2 ** fil.fails++);
+                setTimeout(() => { if (fil.loading === key) { fil.loading = null; renderFilament(); } }, wait);
+            });
+    }
+    async function loadFilament() {
+        const at = printerAt();
+        if (!at) { refuse("filament: this printer stands in no site"); return false; }
+        const filament = $("print-filament").value;
+        let kept;
+        try { kept = await post("/slicer/filaments/loaded", { ...at, filament }); }
+        catch (e) { refuse(`filament: ${e.message}`); renderFilament(true); return false; }
+        fil.answer = { ...fil.answer, loaded: kept };
+        renderFilament();
+        tell(`${filament} loaded on ${at.printer}: its next slices are made with it, and take its own tuning`);
+        return true;
+    }
+    $("print-filament").onchange = () => loadFilament();
+    $("print-filament").addEventListener("blur", () => renderFilament());
+
+    function renderSeen(m) {
+        const row = $("print-seen-row");
+        row.hidden = !m || state.kind !== "printer" || !m.applies;
+        if (row.hidden) return;
+        if (!fil.faults) {
+            if (!fil.asking) {
+                fil.asking = true;
+                api("/slicer/faults").then((a) => { fil.faults = a.faults; renderSeen(measuring()); })
+                    .catch(() => {}).finally(() => { fil.asking = false; });
+            }
+            return;
+        }
+        const box = $("print-seen-faults");
+        if (box.dataset.for !== m.id) {
+            box.dataset.for = m.id;
+            box.innerHTML = fil.faults.map((f) => `<label class="seen-fault" title="${esc(f.name)}: ${esc(f.looks_like)}">${esc(f.name)}
+                <select class="seen-read" data-fault="${esc(f.id)}">${["none", "slight", "clear", "bad"].map((w, i) => `<option value="${i}">${w}</option>`).join("")}</select></label>`).join(" ");
+            if (window.apothecaryRing && window.apothecaryRing.annotateMachine) window.apothecaryRing.annotateMachine();
+        }
+        const entry = tuned(m), looks = (entry && entry.document.looks) || [];
+        $("print-seen-said").textContent = looks.length
+            ? `${looks.length} look${looks.length > 1 ? "s" : ""} kept for ${m.applies.filament}`
+            : `what the piece shows, for ${m.applies.filament}`;
+    }
+    // Keep look: every fault's severity, none included, kept as the printer's next look.
+    async function keepSeen() {
+        const m = measuring();
+        if (!m || state.kind !== "printer" || !m.applies) { refuse("seen: choose the file the piece was printed from, a slice made for this printer"); return false; }
+        const choices = [...$("print-seen-faults").querySelectorAll("select.seen-read")].map((el) => [el.dataset.fault, el.value]);
+        let answer;
+        try { answer = await post(`/slicer/slices/${encodeURIComponent(m.id)}/seen`, { seen: tuning.seenOf(choices) }); }
+        catch (e) { refuse(`seen: ${e.message}`); return false; }
+        await reloadTuning(m);
+        for (const el of $("print-seen-faults").querySelectorAll("select.seen-read")) el.value = "0";
+        tell(`${answer.look} kept for ${m.at.path}: ${answer.said}`);
+        return true;
+    }
+    $("print-seen-keep").onclick = () => keepSeen();
 
     // What a kept file's slice or toolpath was made from: the piece's path in its
     // site and the part's name, or nothing for a file no slice or toolpath made.

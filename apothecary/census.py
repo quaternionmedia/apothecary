@@ -671,6 +671,24 @@ CONTROLS: Dict[str, Tuple[str, str, str]] = {
         WHAT_IS_THERE,
         "a button that takes the last turn of the printer's tuning into its next slices",
     ),
+    "print-filament": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a drop-down of the filaments the printer can load, which loads the one chosen:"
+        " its next slices are made with it",
+    ),
+    "seen-read": (
+        WIDGET,
+        WHAT_YOU_SEE,
+        "a drop-down of how badly one fault shows on a printed piece, none to bad, one for"
+        " each fault under seen",
+    ),
+    "print-seen-keep": (
+        WIDGET,
+        WHAT_IS_THERE,
+        "a button that keeps what the piece shows as the printer's next look, which moves"
+        " one setting",
+    ),
     "print-tune-undo": (
         WIDGET,
         WHAT_IS_THERE,
@@ -1038,6 +1056,10 @@ RING_BACKED: Dict[str, str] = {
     "print-tune-apply": "print:tune-apply",
     "print-tune-undo": "print:tune-undo",
     "print-measure-keep": "print:measure",
+    # A fault chosen under seen and nothing read, Print › Measure keeps the look, as
+    # Keep look does.
+    "seen-read": "print:measure",
+    "print-seen-keep": "print:measure",
     # Slice slices what makes names, as the Slice cell of a made piece's ring or a
     # part's slices that piece or part, chosen under makes first.
     "print-slice": "slice:piece:printer_1",

@@ -194,6 +194,7 @@ def _part_seen(site: str, path: str) -> Optional[PartSeen]:
         cuts=part.has_cuts,
         # A part whose SCAD is its source keeps its values in its text: none offered yet.
         presets=[] if own else list(part.presets),
+        preset_labels={} if own else {n: p.label for n, p in part.presets.items() if p.label},
         end=len(round_ends) == 1,
         motion=part.has_motion,
         deck="streamdeck" in part.tags,

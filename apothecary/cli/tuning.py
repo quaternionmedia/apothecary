@@ -235,16 +235,22 @@ def _explain(doc: tn.TuningDocument) -> str:
 @tuning.command("apply")
 @_with(where)
 def apply_cmd(site, printer, filament, process):
-    """Take the last turn's proposed changes into the printer's next slices."""
+    """Take the last turn's or look's proposed changes into the printer's next slices."""
     applies = _applies(site, printer, filament, process)
     try:
-        doc, changes = tn.apply(site, printer, applies)
+        _doc, changes = tn.apply(site, printer, applies)
     except tn.Refused as exc:
         raise click.ClickException(str(exc)) from exc
     for c in changes:
         before = "the profile's" if c.before is None else f"{c.before:g}"
-        click.echo(f"{c.setting}: {before} -> {c.after:g}{'%' if c.unit == '%' else ' mm'}")
-    click.echo(f"{printer}'s next slices for {applies.filament} take them ({doc.turns[-1].id})")
+        click.echo(f"{c.setting}: {before} -> {c.after:g}{_unit(c.unit)}")
+    taken = ", ".join(dict.fromkeys(c.source for c in changes))
+    click.echo(f"{printer}'s next slices for {applies.filament} take them ({taken})")
+
+
+def _unit(unit: str) -> str:
+    """A setting's own unit after its value: ``%`` written on, a ratio bare."""
+    return "%" if unit == "%" else f" {unit}" if unit else ""
 
 
 @tuning.command("undo")
